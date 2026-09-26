@@ -22,7 +22,7 @@ def validate_source(data, expected):
 
 
 def read_manifest(root):
-    manifest = json.loads((root / 'assets/manifest.json').read_text())
+    manifest = json.loads((root / 'assets/manifest.json').read_text(encoding="utf-8"))
     if manifest['format_version'] != 1:
         raise ValueError('unsupported manifest version')
     return manifest
@@ -38,7 +38,7 @@ def check_assets(root):
             raise ValueError(f"{entry['id']}: size or face index mismatch")
         if data[:4] not in (b'OTTO', b'\x00\x01\x00\x00'):
             raise ValueError(f"{entry['id']}: not a standalone sfnt")
-        if 'OFL' not in (root / entry['license']).read_text():
+        if 'OFL' not in (root / entry['license']).read_text(encoding="utf-8"):
             raise ValueError(f"{entry['id']}: license notice missing")
     print('Pinned fixture checksums, sizes, indices, and licenses verified.')
 
@@ -86,7 +86,7 @@ def subset_font(data, entry, cases):
 
 def rebuild(root, sources_dir=None, update=False):
     manifest = read_manifest(root)
-    cases = json.loads((root / 'assets/cases.json').read_text())
+    cases = json.loads((root / 'assets/cases.json').read_text(encoding="utf-8"))
     outputs = []
     # Stage every source and result before touching any checked-in file.
     for entry in manifest['fonts']:
@@ -109,7 +109,7 @@ def rebuild(root, sources_dir=None, update=False):
                 name = staged.name
             os.replace(name, destination)
             entry['sha256'], entry['size'] = digest(data), len(data)
-        (root / 'assets/manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+        (root / 'assets/manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     print('All pinned subsets reproduced' + (' and explicitly updated.' if update else ' without modifying assets.'))
 
 
