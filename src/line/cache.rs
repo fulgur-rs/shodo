@@ -325,37 +325,39 @@ mod tests {
         use crate::node::{NodeId, OutOfFlowKind, TextSource};
         use crate::style::{LineOptions, ParagraphStyle};
         use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult, ParagraphBuilder};
-        let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
-        for n in 0..32 {
-            b.push_text(TextSource::Generated { node: NodeId(1) }, "a")
-                .push_out_of_flow(NodeId(n + 2), OutOfFlowKind::Float);
+        for count in [32, 64] {
+            let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+            for n in 0..count {
+                b.push_text(TextSource::Generated { node: NodeId(1) }, "a")
+                    .push_out_of_flow(NodeId(n + 2), OutOfFlowKind::Float);
+            }
+            let p = b
+                .build(
+                    &mut LayoutContext::new(),
+                    &crate::font::FontCollection::new(&Limits::default()),
+                )
+                .unwrap();
+            let weak = std::sync::Arc::downgrade(&p.data);
+            let mut cx = LayoutContext::new();
+            let mut c = LineConstraint::new(10000.0);
+            for _ in 0..count {
+                let LineResult::FloatEncountered { float_cursor, .. } = p.next_line(
+                    &mut cx,
+                    p.start_token(),
+                    &LineOptions::default(),
+                    &c,
+                    &AtomicSizes::EMPTY,
+                ) else {
+                    panic!()
+                };
+                c.floats_placed_through = Some(float_cursor);
+            }
+            assert!(cx.partial.is_some());
+            assert!(cx.cache_visits <= count as usize * 2);
+            drop(p);
+            assert!(weak.upgrade().is_some());
+            cx.shrink_to(0);
+            assert!(weak.upgrade().is_none());
         }
-        let p = b
-            .build(
-                &mut LayoutContext::new(),
-                &crate::font::FontCollection::new(&Limits::default()),
-            )
-            .unwrap();
-        let weak = std::sync::Arc::downgrade(&p.data);
-        let mut cx = LayoutContext::new();
-        let mut c = LineConstraint::new(10000.0);
-        for _ in 0..32 {
-            let LineResult::FloatEncountered { float_cursor, .. } = p.next_line(
-                &mut cx,
-                p.start_token(),
-                &LineOptions::default(),
-                &c,
-                &AtomicSizes::EMPTY,
-            ) else {
-                panic!()
-            };
-            c.floats_placed_through = Some(float_cursor);
-        }
-        assert!(cx.partial.is_some());
-        assert!(cx.cache_visits <= 64);
-        drop(p);
-        assert!(weak.upgrade().is_some());
-        cx.shrink_to(0);
-        assert!(weak.upgrade().is_none());
     }
 }

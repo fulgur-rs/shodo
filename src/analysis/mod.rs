@@ -7,7 +7,7 @@ use std::ops::Range;
 
 use crate::node::{InlineEdges, NodeId, OutOfFlowKind};
 
-pub(crate) use whitespace::{Processed, process};
+pub(crate) use whitespace::process;
 
 /// An item of the processed paragraph. `text` indexes the processed text.
 #[derive(Clone, Debug)]
@@ -26,6 +26,8 @@ pub(crate) enum ItemKind {
     },
     CloseInline,
     Atomic {
+        // Retained for atomic decoration output when real box painting is wired.
+        #[allow(dead_code)]
         edges: InlineEdges,
         parent_style: u32,
     },

@@ -10,17 +10,16 @@ pub(crate) mod metrics;
 mod plan;
 mod reshape;
 mod scan;
-use scan::scan;
 
-use crate::analysis::units::{BreakClass, Unit, UnitKind};
+use crate::analysis::units::UnitKind;
 use crate::context::LayoutContext;
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::limits::WarningKind;
 use crate::output::{BreakReason, Line};
 use crate::paragraph::{
-    AtomicSizes, BreakToken, FloatCursor, LineConstraint, LineResult, Paragraph, ParagraphData,
+    AtomicSizes, BreakToken, FloatCursor, LineConstraint, LineResult, Paragraph,
 };
-use crate::style::{LineOptions, TabSize};
+use crate::style::LineOptions;
 
 /// Result of scanning one line.
 #[derive(Clone, Debug)]

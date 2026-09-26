@@ -138,6 +138,7 @@ pub(crate) fn shape_line_edge(
     let mut store = GlyphStore::default();
     let mut runs = Vec::new();
     let shaped = &data.runs[*run as usize];
+    debug_assert!(unit.text.start >= shaped.text.start && unit.text.end <= shaped.text.end);
     if shape_item(
         &mut store,
         &mut runs,

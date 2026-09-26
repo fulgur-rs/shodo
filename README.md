@@ -10,7 +10,10 @@ shodo is in early development. Paragraph construction, whitespace processing, bi
 - `RichText` for styled text without a DOM.
 - Whitespace processing across nodes and mapping back to UTF-8 byte offsets in the source text with `OffsetMapping`.
 - Bidirectional text analysis using `unicode-bidi` and visual ordering within lines.
-- Basic line breaking, tabs, indentation, and line height calculation through `Paragraph::next_line`.
+- Greedy line breaking, tabs, indentation, participating inline/atomic line boxes, vertical alignment, and height-limit retries through `Paragraph::next_line`.
+- Alignment and justification without copying shared glyphs, plus cluster views with adjusted advances.
+- Incremental float reporting and withdrawal, with a single bounded partial-line cache.
+- Fixed-width `break_all`, callback-driven `lines`, intrinsic widths with atomic/float inputs, and `balance` / `pretty` break plans.
 - Read access to glyph runs, inline boxes, atomic inlines, and anchors for out-of-flow elements.
 - Logical coordinates (inline / block axes) and conversion to physical coordinates with `PhysicalConverter`.
 - Resource limits for input, glyph counts, and font data through `Limits`, plus diagnostic warnings.
@@ -21,7 +24,9 @@ Shaping is a placeholder: it generally produces one glyph per character with a 1
 
 Soft line break opportunities are currently limited to spaces, tabs, and atomic inlines. Unicode line breaking (UAX #14) and Japanese line breaking restrictions are not yet supported.
 
-Some style and result types reserve future functionality. Alignment and justification, `::first-line`, float placement integration, line height constraints, and `balance` / `pretty` break planning are not yet available. APIs described in the design documents are not necessarily implemented.
+Some style and result types reserve future functionality. `::first-line`, real shaping/font matching, full CSS spacing, hyphenation, hit testing, vertical shaping, and ruby are not implemented. Line-edge reshaping currently uses the stub shaper; it does not provide real-script contextual shaping. APIs described in the design documents are not necessarily implemented.
+
+Float placement remains the caller's responsibility. The protocol reports anchors and displaced floats; it is not a BFC or a production renderer integration. A `BreakPlan` is ignored when its paragraph, width, options, atomic revision, or float constraints do not match.
 
 ## Getting started
 
@@ -95,6 +100,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 Once built, a `Paragraph` is immutable, and clones share its data. As long as the text, paragraph style, inline styles, and font generations remain unchanged, you can reuse the paragraph with different widths and line layout constraints. A `BreakToken` is valid only for the paragraph that produced it.
+
+For fixed-width content without float placement, the loop can be replaced with:
+
+```rust,ignore
+let lines = paragraph.break_all(&mut cx, &options, 160.0, &AtomicSizes::EMPTY);
+for line in &lines {
+    println!("{}", &paragraph.text()[line.text_range()]);
+}
+```
+
+`break_all` keeps floats as zero-width anchors and splits at block boundaries. For incremental float layout, retain the cursor across lines, retry from `line_start`, and withdraw displaced floats in reverse order, one at a time. Re-reported withdrawn floats must be deferred for that line. Accept only lines with no displaced floats, and save/restore token, cursor, placements, deferred floats, and withdrawal records together when discarding lookahead or moving to another page.
+
+`lines` handles `FloatEncountered` and `BlockSizeExceeded` through its constraint callback. The callback must change the constraint to make progress; retry an over-tall first-page line with `max_block_size: None`. `LayoutContext::shrink_to(0)` releases the retained partial line.
 
 For DOM integration, pass `NodeId` and `TextSource` values to `ParagraphBuilder`. The caller computes sizes and baselines for images and other atomic inlines and supplies them through `AtomicSizes`. Rendering is also the caller's responsibility; use `Line::fragments()` to read the layout output.
 

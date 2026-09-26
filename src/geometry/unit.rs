@@ -88,6 +88,7 @@ impl LayoutUnit {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn mul_i32(self, rhs: i32, sat: &mut Saturation) -> Self {
         match self.0.checked_mul(rhs) {
             Some(v) => Self(v),

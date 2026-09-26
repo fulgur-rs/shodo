@@ -39,7 +39,6 @@ pub struct Line {
     pub(crate) break_token: BreakToken,
     pub(crate) reason: BreakReason,
     pub(crate) units: Range<u32>,
-    pub(crate) origin: LayoutUnit,
     pub(crate) inline_size: LayoutUnit,
     pub(crate) block_size: LayoutUnit,
     pub(crate) baseline: LayoutUnit,
@@ -107,7 +106,6 @@ impl Line {
             },
             reason: scan.reason,
             units: token.unit..scan.end as u32,
-            origin,
             inline_size: scan.content,
             block_size: if scan.reason == BreakReason::Forced && metrics.empty {
                 LayoutUnit::from_f32_ceil(line_height, sat)
@@ -429,7 +427,8 @@ impl Line {
         self.data.fonts.font_data(id)
     }
 
-    /// True when the line has no glyphs and no atomic inlines.
+    /// True when the line has no glyphs, atomic inlines, or painted inline
+    /// edges. An empty line before a block has zero line advance.
     pub fn is_empty(&self) -> bool {
         self.empty
     }

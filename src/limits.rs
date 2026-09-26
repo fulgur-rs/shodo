@@ -233,6 +233,7 @@ impl WarningSink {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn as_slice(&self) -> &[Warning] {
         &self.warnings
     }

@@ -38,6 +38,32 @@ fn opening_edges_stay_with_atomic_after_soft_break() {
 }
 
 #[test]
+fn central_atomic_baseline_aligns_to_parent_central_baseline() {
+    let mut root = style();
+    root.writing_mode = shodo::geometry::WritingMode::VerticalRl;
+    let p = build(&root, |b| {
+        b.push_atomic(NodeId(2), &root.root, InlineEdges::default());
+    });
+    assert_eq!(p.required_baseline(NodeId(2)), Some(BaselineKind::Central));
+    let mut sizes = AtomicSizes::new();
+    sizes.insert(
+        NodeId(2),
+        AtomicSize {
+            inline_size: 10.0,
+            block_size: 30.0,
+            ..Default::default()
+        },
+    );
+    let l = first_line(&p, 100.0, &LineOptions::default(), &sizes);
+    let Fragment::Atomic(a) = l.fragments().next().unwrap() else {
+        panic!()
+    };
+    assert_eq!(a.baseline, l.baseline(BaselineKind::Central));
+    assert_eq!(a.margin_rect.block_start, 0.0);
+    assert_eq!(l.block_size(), 30.0);
+}
+
+#[test]
 fn height_limit_is_pure_and_can_be_retried() {
     let p = paragraph("a");
     let mut cx = shodo::LayoutContext::new();

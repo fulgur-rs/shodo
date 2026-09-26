@@ -132,6 +132,11 @@ pub(crate) fn measure(
                 let baseline = size
                     .baseline
                     .unwrap_or(if central { height / 2.0 } else { height });
+                let dominant_shift = if central {
+                    -0.3 * parent.font_size
+                } else {
+                    0.0
+                };
                 let own = if group.is_none() {
                     match s.vertical_align {
                         VerticalAlign::Top => Some(false),
@@ -144,7 +149,13 @@ pub(crate) fn measure(
                 (
                     baseline,
                     height - baseline,
-                    base + shift(s, parent, baseline, height - baseline),
+                    base + dominant_shift
+                        + shift(
+                            s,
+                            parent,
+                            baseline - dominant_shift,
+                            height - baseline + dominant_shift,
+                        ),
                     group,
                     own,
                 )
