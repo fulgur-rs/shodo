@@ -20,6 +20,10 @@ pub(crate) struct Scan {
     pub(crate) widths: Vec<LayoutUnit>,
     /// Content width, excluding text-indent and hanging trailing spaces.
     pub(crate) content: LayoutUnit,
+    /// Index of the first hanging trailing space of the line (`end` when
+    /// there is none). Units from here on are hanging spaces, inline box
+    /// ends, bidi controls, out-of-flow anchors or a forced break.
+    pub(crate) hang_start: usize,
 }
 
 impl Paragraph {
@@ -183,9 +187,13 @@ fn scan(
         .iter()
         .fold(LayoutUnit::ZERO, |acc, w| acc.add(*w, sat));
     let mut trailing = LayoutUnit::ZERO;
+    let mut hang_start = i;
     for (k, unit) in units[start..i].iter().enumerate().rev() {
         match unit.kind {
-            UnitKind::Cluster { space: true, .. } => trailing = trailing.add(widths[k], sat),
+            UnitKind::Cluster { space: true, .. } => {
+                trailing = trailing.add(widths[k], sat);
+                hang_start = start + k;
+            }
             UnitKind::Close { .. }
             | UnitKind::BidiControl
             | UnitKind::Float { .. }
@@ -199,6 +207,7 @@ fn scan(
         reason,
         widths,
         content: total.sub(trailing, sat),
+        hang_start,
     }
 }
 

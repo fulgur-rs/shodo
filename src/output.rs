@@ -85,7 +85,14 @@ impl Line {
             _ => 0,
         };
         let origin_units = token.unit as usize..scan.end;
-        let records = fragments::build(data, origin_units, &scan.widths, origin, atomics);
+        let records = fragments::build(
+            data,
+            origin_units,
+            scan.hang_start,
+            &scan.widths,
+            origin,
+            atomics,
+        );
         Line {
             data: Arc::clone(&para.data),
             break_token: BreakToken {

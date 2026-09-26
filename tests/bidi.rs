@@ -308,3 +308,104 @@ fn nested_closes_after_an_isolate_stay_on_the_line() {
     assert!(first.iter().all(|b| b.has_start_edge && b.has_end_edge));
     assert!(boxes(&lines[1]).is_empty(), "{:?}", boxes(&lines[1]));
 }
+
+#[test]
+fn trailing_whitespace_takes_the_paragraph_level() {
+    let lines = all_lines(Direction::Ltr, 45.0, |b| {
+        b.push_text(dom(1), "\u{5D0}\u{5D1}\u{5D2} \u{5D3}\u{5D4}\u{5D5}");
+    });
+    assert_eq!(lines.len(), 2);
+    let first = runs(&lines[0]);
+    assert_eq!(first.len(), 2);
+    // UAX #9 L1: the hanging space is reset to the paragraph level, so it
+    // sits after the Hebrew run at the line end instead of before it.
+    assert_eq!(
+        (first[0].inline_start(), first[0].inline_size()),
+        (0.0, 30.0)
+    );
+    assert_eq!(positions(&first[0]), [20.0, 10.0, 0.0]);
+    assert_eq!((first[1].inline_start(), first[1].bidi_level()), (30.0, 0));
+    assert_eq!(lines[0].inline_size(), 30.0);
+    let second = runs(&lines[1]);
+    assert_eq!(positions(&second[0]), [20.0, 10.0, 0.0]);
+}
+
+#[test]
+fn tabs_take_the_paragraph_level() {
+    let pre = InlineStyle {
+        font_size: 10.0,
+        white_space_collapse: shodo::style::WhiteSpaceCollapse::Preserve,
+        tab_size: shodo::style::TabSize::Px(40.0),
+        ..InlineStyle::default()
+    };
+    let line = one_line(Direction::Ltr, |b| {
+        b.open_inline(NodeId(1), &pre, InlineEdges::default())
+            .push_text(dom(2), "\u{5D0}\t\u{5D1}")
+            .close_inline();
+    });
+    // UAX #9 L1: a segment separator splits the right-to-left text into
+    // two runs, each on its own side of the tab.
+    let runs = runs(&line);
+    assert_eq!(
+        runs.iter().map(|r| r.inline_start()).collect::<Vec<_>>(),
+        [0.0, 40.0]
+    );
+    assert_eq!(runs[0].text_range(), 0..2);
+}
+
+#[test]
+fn an_rtl_isolate_keeps_its_edges_around_its_content_before_a_hanging_space() {
+    let lines = all_lines(Direction::Ltr, 55.0, |b| {
+        b.open_inline(NodeId(1), &rtl_isolate(), padded_3_7())
+            .push_text(dom(2), "\u{5D0}\u{5D1}\u{5D2} ")
+            .close_inline()
+            .push_text(dom(3), "def");
+    });
+    assert_eq!(lines.len(), 2);
+    let first = boxes(&lines[0]);
+    assert_eq!(first.len(), 1);
+    let b = first[0];
+    assert_eq!((b.has_start_edge, b.has_end_edge), (true, true));
+    // Visual order: [end edge 7][content 30][start edge 3][hanging space].
+    assert_eq!((b.rect.inline_start, b.rect.inline_size), (0.0, 40.0));
+    assert_eq!(
+        (b.content_rect.inline_start, b.content_rect.inline_size),
+        (7.0, 30.0)
+    );
+    let runs = runs(&lines[0]);
+    assert_eq!(runs.len(), 2);
+    assert_eq!(runs[0].inline_start(), 7.0);
+    assert_eq!(positions(&runs[0]), [27.0, 17.0, 7.0]);
+    assert_eq!(runs[1].inline_start(), 40.0);
+    assert!(boxes(&lines[1]).is_empty());
+}
+
+#[test]
+fn a_hanging_space_does_not_split_an_isolate_of_deeper_content() {
+    // Latin text in a right-to-left isolate is at level 2 while the space
+    // before the isolate's end resolves to level 1 before L1. The box must
+    // come out exactly as it does without the space, followed by the space.
+    let with_space = all_lines(Direction::Ltr, 55.0, |b| {
+        b.open_inline(NodeId(1), &rtl_isolate(), padded_3_7())
+            .push_text(dom(2), "abc ")
+            .close_inline()
+            .push_text(dom(3), "def");
+    });
+    let without = one_line(Direction::Ltr, |b| {
+        b.open_inline(NodeId(1), &rtl_isolate(), padded_3_7())
+            .push_text(dom(2), "abc")
+            .close_inline();
+    });
+    assert_eq!(with_space.len(), 2);
+    let rects = |line: &Line| {
+        boxes(line)
+            .iter()
+            .map(|b| (b.rect, b.content_rect, b.has_start_edge, b.has_end_edge))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(rects(&with_space[0]), rects(&without));
+    let (a, b) = (runs(&with_space[0]), runs(&without));
+    assert_eq!(a.len(), 2);
+    assert_eq!(positions(&a[0]), positions(&b[0]));
+    assert_eq!((a[1].inline_start(), a[1].bidi_level()), (40.0, 0));
+}

@@ -4,7 +4,7 @@ use std::ops::Range;
 
 use unicode_bidi::{BidiInfo, Level};
 
-use crate::analysis::units::UnitKind;
+use crate::analysis::units::{Unit, UnitKind};
 use crate::geometry::LayoutUnit;
 use crate::node::{NodeId, OutOfFlowKind};
 use crate::paragraph::{AtomicSize, AtomicSizes, ParagraphData};
@@ -196,10 +196,13 @@ fn build_logical(
     out
 }
 
-/// Builds the records of one line in visual order (UAX #9 L2).
+/// Builds the records of one line in visual order (UAX #9 L2). Units from
+/// `hang_start` on are the line's hanging trailing spaces and what follows
+/// them (see `Scan::hang_start`).
 pub(crate) fn build(
     data: &ParagraphData,
     units: Range<usize>,
+    hang_start: usize,
     widths: &[LayoutUnit],
     origin: LayoutUnit,
     atomics: &AtomicSizes,
@@ -208,7 +211,7 @@ pub(crate) fn build(
     if data.units[units.clone()].iter().all(|u| u.level == base) {
         return build_logical(data, units, widths, origin, atomics);
     }
-    build_bidi(data, units, widths, origin, atomics)
+    build_bidi(data, units, hang_start, widths, origin, atomics)
 }
 
 /// A reorderable piece of a line: a glyph run segment, an atomic, an
@@ -233,77 +236,127 @@ fn inside(data: &ParagraphData, mut b: Option<u32>, target: u32) -> bool {
     false
 }
 
+/// Appends a cluster to `list`, extending the last glyph piece when it
+/// continues the same run, item, level and owner.
+fn push_cluster(
+    list: &mut Vec<Piece>,
+    unit: &Unit,
+    width: LayoutUnit,
+    level: u8,
+    owner: Option<u32>,
+) {
+    let UnitKind::Cluster { run, glyphs, .. } = &unit.kind else {
+        return;
+    };
+    let (run, item, text) = (*run, unit.item, &unit.text);
+    if let Some(last) = list.last_mut()
+        && last.level == level
+        && last.owner == owner
+        && let Some(FragmentRecord {
+            kind:
+                RecordKind::Glyphs {
+                    run: r,
+                    glyphs: g,
+                    item: it,
+                    text: t,
+                },
+            inline_size,
+            ..
+        }) = &mut last.record
+        && *r == run
+        && *it == item
+        && g.end == glyphs.start
+    {
+        g.end = glyphs.end;
+        t.end = text.end;
+        *inline_size = *inline_size + width;
+        last.width = last.width + width;
+        return;
+    }
+    list.push(Piece {
+        record: Some(FragmentRecord {
+            kind: RecordKind::Glyphs {
+                run,
+                glyphs: glyphs.clone(),
+                item,
+                text: text.clone(),
+            },
+            inline_start: LayoutUnit::ZERO,
+            inline_size: width,
+            level,
+        }),
+        width,
+        level,
+        owner,
+        edge: None,
+    });
+}
+
 fn build_bidi(
     data: &ParagraphData,
     units: Range<usize>,
+    hang_start: usize,
     widths: &[LayoutUnit],
     origin: LayoutUnit,
     atomics: &AtomicSizes,
 ) -> Vec<FragmentRecord> {
     let base = data.base_level;
     let mut pieces: Vec<Piece> = Vec::new();
+    // Hanging trailing spaces, placed after everything else on the line.
+    let mut hanging: Vec<Piece> = Vec::new();
+    // Level and owner of the last piece that is neither a hanging space nor
+    // an out-of-flow anchor.
+    let mut last_kept: Option<(u8, Option<u32>)> = None;
     for (k, i) in units.clone().enumerate() {
         let unit = &data.units[i];
         let w = widths[k];
+        let trailing = i >= hang_start;
+        // UAX #9 L1: trailing whitespace and segment separators (tabs) take
+        // the paragraph embedding level. `BidiInfo` levels are resolved
+        // before L1, so it is applied here, per line and per unit.
+        let level = match &unit.kind {
+            UnitKind::Cluster { space: true, .. } if trailing => base,
+            UnitKind::Tab => base,
+            // A box end after the hanging spaces stays with the box's
+            // content: it takes the level of the box's last piece before
+            // them rather than the pre-L1 level of the spaces.
+            UnitKind::Close { box_index } if trailing => match last_kept {
+                Some((level, owner)) if inside(data, owner, *box_index) => level,
+                _ => unit.level,
+            },
+            _ => unit.level,
+        };
         let record = |kind: RecordKind| FragmentRecord {
             kind,
             inline_start: LayoutUnit::ZERO,
             inline_size: w,
-            level: unit.level,
+            level,
         };
         let piece = match &unit.kind {
             UnitKind::Open { box_index } => Piece {
                 record: None,
                 width: w,
-                level: unit.level,
+                level,
                 owner: Some(*box_index),
                 edge: Some((*box_index, true)),
             },
             UnitKind::Close { box_index } => Piece {
                 record: None,
                 width: w,
-                level: unit.level,
+                level,
                 owner: Some(*box_index),
                 edge: Some((*box_index, false)),
             },
-            UnitKind::Cluster { run, glyphs, .. } => {
-                if let Some(last) = pieces.last_mut()
-                    && last.level == unit.level
-                    && last.owner == unit.parent_box
-                    && let Some(FragmentRecord {
-                        kind:
-                            RecordKind::Glyphs {
-                                run: r,
-                                glyphs: g,
-                                item,
-                                text,
-                            },
-                        inline_size,
-                        ..
-                    }) = &mut last.record
-                    && *r == *run
-                    && *item == unit.item
-                    && g.end == glyphs.start
-                {
-                    g.end = glyphs.end;
-                    text.end = unit.text.end;
-                    *inline_size = *inline_size + w;
-                    last.width = last.width + w;
-                    continue;
+            UnitKind::Cluster { space, .. } => {
+                if trailing && *space {
+                    // Hanging spaces belong to no box on this line, so box
+                    // fragments end with the box's content and edges.
+                    push_cluster(&mut hanging, unit, w, level, None);
+                } else {
+                    push_cluster(&mut pieces, unit, w, level, unit.parent_box);
+                    last_kept = Some((level, unit.parent_box));
                 }
-                let kind = RecordKind::Glyphs {
-                    run: *run,
-                    glyphs: glyphs.clone(),
-                    item: unit.item,
-                    text: unit.text.clone(),
-                };
-                Piece {
-                    record: Some(record(kind)),
-                    width: w,
-                    level: unit.level,
-                    owner: unit.parent_box,
-                    edge: None,
-                }
+                continue;
             }
             UnitKind::Atomic { node } => {
                 let size = atomics.get(*node).copied().unwrap_or_default();
@@ -311,7 +364,7 @@ fn build_bidi(
                 Piece {
                     record: Some(record(kind)),
                     width: w,
-                    level: unit.level,
+                    level,
                     owner: unit.parent_box,
                     edge: None,
                 }
@@ -324,18 +377,19 @@ fn build_bidi(
                 };
                 let mut r = record(RecordKind::Anchor { node: *node, kind });
                 r.inline_size = LayoutUnit::ZERO;
-                Piece {
+                pieces.push(Piece {
                     record: Some(r),
                     width: LayoutUnit::ZERO,
-                    level: unit.level,
+                    level,
                     owner: unit.parent_box,
                     edge: None,
-                }
+                });
+                continue;
             }
             UnitKind::Tab => Piece {
                 record: None,
                 width: w,
-                level: unit.level,
+                level,
                 owner: unit.parent_box,
                 edge: None,
             },
@@ -343,8 +397,10 @@ fn build_bidi(
                 continue;
             }
         };
+        last_kept = Some((piece.level, piece.owner));
         pieces.push(piece);
     }
+    pieces.append(&mut hanging);
 
     // Visual order, left to right; from the inline-start edge that is the
     // reverse order when the paragraph is right-to-left.
