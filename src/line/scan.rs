@@ -20,7 +20,8 @@ pub(super) fn scan(
 ) -> Scan {
     let units = &data.units;
     let mut widths = Vec::new();
-    let mut pos = indent;
+    let prefix = super::decoration::width(data, start, true, sat);
+    let mut pos = indent.add(prefix, sat);
     let mut last_break: Option<usize> = None;
     let mut overflowing = false;
     let mut i = start;
@@ -40,7 +41,8 @@ pub(super) fn scan(
         let w = unit_width(data, unit, offset.add(pos, sat), atomics, cx, sat);
         // Trailing spaces hang and never cause a break (CSS Text 3 §4.1.3).
         let hangs = matches!(unit.kind, UnitKind::Cluster { space: true, .. });
-        if !hangs && !overflowing && i > start && pos.add(w, sat) > available {
+        let suffix = super::decoration::width(data, i + 1, false, sat);
+        if !hangs && !overflowing && i > start && pos.add(w, sat).add(suffix, sat) > available {
             if let Some(b) = last_break {
                 widths.truncate(b - start);
                 i = b;
@@ -94,7 +96,10 @@ pub(super) fn scan(
         end: i,
         reason,
         widths,
-        content: total.sub(trailing, sat),
+        content: total
+            .sub(trailing, sat)
+            .add(prefix, sat)
+            .add(super::decoration::width(data, i, false, sat), sat),
         hang_start,
     }
 }

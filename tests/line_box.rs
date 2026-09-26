@@ -1,0 +1,245 @@
+mod common;
+use common::*;
+use shodo::geometry::BaselineKind;
+use shodo::node::{InlineEdges, NodeId, Sides, TextSource};
+use shodo::style::{LineOptions, VerticalAlign};
+use shodo::{AtomicSize, AtomicSizes, Fragment};
+
+#[test]
+fn larger_inline_expands_line_height() {
+    let root = style();
+    let mut child = root.root.clone();
+    child.font_size = 20.0;
+    let p = build(&root, |b| {
+        b.open_inline(NodeId(2), &child, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(3) }, "ab")
+            .close_inline();
+    });
+    let l = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(l.block_size(), 20.0);
+    assert_eq!(l.baseline(BaselineKind::Alphabetic), 16.0);
+}
+
+#[test]
+fn atomic_baseline_and_height_expand_line() {
+    let root = style();
+    let p = build(&root, |b| {
+        b.push_atomic(NodeId(2), &root.root, InlineEdges::default());
+    });
+    let mut a = AtomicSizes::new();
+    a.insert(
+        NodeId(2),
+        AtomicSize {
+            inline_size: 10.0,
+            block_size: 30.0,
+            baseline: Some(20.0),
+            ..AtomicSize::default()
+        },
+    );
+    let l = first_line(&p, 100.0, &LineOptions::default(), &a);
+    assert_eq!(l.block_size(), 30.0);
+    assert_eq!(l.baseline(BaselineKind::Alphabetic), 20.0);
+}
+
+#[test]
+fn inline_block_padding_is_paint_geometry_only() {
+    let root = style();
+    let p = build(&root, |b| {
+        b.open_inline(
+            NodeId(2),
+            &root.root,
+            InlineEdges {
+                padding: Sides {
+                    block_start: 100.0,
+                    ..Sides::default()
+                },
+                ..InlineEdges::default()
+            },
+        )
+        .push_text(TextSource::Generated { node: NodeId(3) }, "a")
+        .close_inline();
+    });
+    let l = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(l.block_size(), 10.0);
+    let box_ = l
+        .fragments()
+        .find_map(|f| {
+            if let Fragment::InlineBox(v) = f {
+                Some(v)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+    assert_eq!(box_.rect.block_size, 110.0);
+}
+
+#[test]
+fn empty_before_block_has_zero_height_but_edges_are_content() {
+    let root = style();
+    for (edge, expected_empty) in [(0.0, true), (2.0, false)] {
+        let p = build(&root, |b| {
+            b.open_inline(
+                NodeId(2),
+                &root.root,
+                InlineEdges {
+                    border: Sides {
+                        inline_start: edge,
+                        ..Sides::default()
+                    },
+                    ..InlineEdges::default()
+                },
+            )
+            .push_block_in_inline(NodeId(3))
+            .close_inline();
+        });
+        let l = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(l.is_empty(), expected_empty);
+        assert_eq!(l.block_size(), if expected_empty { 0.0 } else { 10.0 });
+        assert_ne!(l.break_token(), p.start_token());
+    }
+}
+
+#[test]
+fn vertical_align_length_moves_child_baseline_and_expands_height() {
+    let root = style();
+    let mut child = root.root.clone();
+    child.vertical_align = VerticalAlign::Length(5.0);
+    let p = build(&root, |b| {
+        b.open_inline(NodeId(2), &child, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(3) }, "a")
+            .close_inline();
+    });
+    let l = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(l.block_size(), 15.0);
+    assert_eq!(l.baseline(BaselineKind::Alphabetic), 13.0);
+    let r = l
+        .fragments()
+        .find_map(|f| {
+            if let Fragment::GlyphRun(r) = f {
+                Some(r)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+    assert_eq!(r.baseline(), 8.0);
+}
+
+#[test]
+fn nested_alignment_accumulates_and_top_bottom_align_to_line_edges() {
+    let root = style();
+    for (align, expected) in [(VerticalAlign::Top, 8.0), (VerticalAlign::Bottom, 28.0)] {
+        let mut large = root.root.clone();
+        large.font_size = 30.0;
+        let mut small = root.root.clone();
+        small.vertical_align = align;
+        let p = build(&root, |b| {
+            b.open_inline(NodeId(2), &large, InlineEdges::default())
+                .push_text(TextSource::Generated { node: NodeId(3) }, "a")
+                .close_inline()
+                .open_inline(NodeId(4), &small, InlineEdges::default())
+                .push_text(TextSource::Generated { node: NodeId(5) }, "b")
+                .close_inline();
+        });
+        let l = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(l.block_size(), 30.0);
+        let baselines: Vec<_> = l
+            .fragments()
+            .filter_map(|f| match f {
+                Fragment::GlyphRun(r) => Some(r.baseline()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(baselines, vec![24.0, expected]);
+    }
+    let mut raised = root.root.clone();
+    raised.vertical_align = VerticalAlign::Length(5.0);
+    let p = build(&root, |b| {
+        b.open_inline(NodeId(2), &raised, InlineEdges::default())
+            .open_inline(NodeId(3), &raised, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(4) }, "a")
+            .close_inline()
+            .close_inline();
+    });
+    let l = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(l.block_size(), 20.0);
+    assert_eq!(l.baseline(BaselineKind::Alphabetic), 18.0);
+}
+
+#[test]
+fn forced_empty_line_keeps_strut_and_direct_block_is_not_a_line() {
+    let root = style();
+    let p = build(&root, |b| {
+        b.push_forced_break(NodeId(2));
+    });
+    assert_eq!(
+        first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY).block_size(),
+        10.0
+    );
+    let p = build(&root, |b| {
+        b.push_block_in_inline(NodeId(2));
+    });
+    assert!(matches!(
+        p.next_line(
+            &mut shodo::LayoutContext::new(),
+            p.start_token(),
+            &LineOptions::default(),
+            &shodo::LineConstraint::new(100.0),
+            &AtomicSizes::EMPTY
+        ),
+        shodo::LineResult::BlockInInline { .. }
+    ));
+}
+
+#[test]
+fn cloned_edges_are_reserved_and_painted_on_continuations() {
+    let root = style();
+    let mut child = root.root.clone();
+    child.box_decoration_break = shodo::style::BoxDecorationBreak::Clone;
+    let p = build(&root, |b| {
+        b.open_inline(
+            NodeId(2),
+            &child,
+            InlineEdges {
+                padding: Sides {
+                    inline_start: 2.0,
+                    inline_end: 3.0,
+                    ..Sides::default()
+                },
+                ..InlineEdges::default()
+            },
+        )
+        .push_text(TextSource::Generated { node: NodeId(3) }, "a b c")
+        .close_inline();
+    });
+    let mut token = p.start_token();
+    let mut count = 0;
+    loop {
+        match p.next_line(
+            &mut shodo::LayoutContext::new(),
+            token,
+            &LineOptions::default(),
+            &shodo::LineConstraint::new(20.0),
+            &AtomicSizes::EMPTY,
+        ) {
+            shodo::LineResult::Line(l) => {
+                token = l.break_token();
+                count += 1;
+                assert_eq!(l.inline_size(), 15.0);
+                let b = l
+                    .fragments()
+                    .find_map(|f| match f {
+                        Fragment::InlineBox(b) => Some(b),
+                        _ => None,
+                    })
+                    .unwrap();
+                assert!(b.has_start_edge && b.has_end_edge);
+                assert_eq!(glyphs(&l)[0].inline_position, 2.0);
+            }
+            shodo::LineResult::Done => break,
+            other => panic!("{other:?}"),
+        }
+    }
+    assert_eq!(count, 3);
+}

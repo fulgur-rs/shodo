@@ -1,6 +1,8 @@
 //! Line breaking.
 
+mod decoration;
 pub(crate) mod fragments;
+pub(crate) mod metrics;
 mod scan;
 use scan::scan;
 

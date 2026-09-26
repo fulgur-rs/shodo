@@ -46,6 +46,8 @@ pub struct Line {
     pub(crate) block_offset: f32,
     pub(crate) displaced: Vec<(NodeId, FloatCursor)>,
     pub(crate) fragments: Vec<FragmentRecord>,
+    pub(crate) block_shifts: Vec<LayoutUnit>,
+    pub(crate) empty: bool,
 }
 
 impl fmt::Debug for Line {
@@ -77,8 +79,6 @@ impl Line {
             LineHeight::Px(v) => v,
             LineHeight::Number(n) => n * size,
         };
-        // CSS 2.1 §10.8.1: half the leading goes above the ascent.
-        let half_leading = (line_height - (m.ascent + m.descent)) / 2.0;
         let flags = match scan.reason {
             BreakReason::Forced => BreakToken::AFTER_FORCED,
             _ => 0,
@@ -92,6 +92,8 @@ impl Line {
             origin,
             atomics,
         );
+        let metrics =
+            crate::line::metrics::measure(data, token.unit as usize..scan.end, &records, sat);
         Line {
             data: Arc::clone(&para.data),
             break_token: BreakToken {
@@ -103,13 +105,19 @@ impl Line {
             units: token.unit..scan.end as u32,
             origin,
             inline_size: scan.content,
-            block_size: LayoutUnit::from_f32_ceil(line_height, sat),
-            baseline: LayoutUnit::from_f32_round(half_leading + m.ascent, sat),
+            block_size: if scan.reason == BreakReason::Forced && metrics.empty {
+                LayoutUnit::from_f32_ceil(line_height, sat)
+            } else {
+                metrics.block_size
+            },
+            baseline: metrics.baseline,
             ascent: LayoutUnit::from_f32_round(m.ascent, sat),
             descent: LayoutUnit::from_f32_round(m.descent, sat),
             block_offset,
             displaced: Vec::new(),
             fragments: records,
+            block_shifts: metrics.shifts,
+            empty: metrics.empty,
         }
     }
 
@@ -222,6 +230,7 @@ pub struct AnchorFragment {
 /// A run of glyphs from one font, one element and one bidi level.
 #[derive(Clone, Copy, Debug)]
 pub struct GlyphRunView<'a> {
+    block_shift: LayoutUnit,
     line: &'a Line,
     record: &'a FragmentRecord,
     run: u32,
@@ -280,7 +289,7 @@ impl<'a> GlyphRunView<'a> {
 
     /// Alphabetic baseline from the top of the line box.
     pub fn baseline(&self) -> f32 {
-        self.line.baseline.to_f32()
+        (self.line.baseline + self.block_shift).to_f32()
     }
 
     pub fn glyphs(&self) -> Glyphs<'a> {
@@ -368,12 +377,7 @@ impl Line {
 
     /// True when the line has no glyphs and no atomic inlines.
     pub fn is_empty(&self) -> bool {
-        !self.fragments.iter().any(|r| {
-            matches!(
-                r.kind,
-                RecordKind::Glyphs { .. } | RecordKind::Atomic { .. }
-            )
-        })
+        self.empty
     }
 
     fn view(&self, index: usize) -> Fragment<'_> {
@@ -391,6 +395,7 @@ impl Line {
                 item,
                 text,
             } => Fragment::GlyphRun(GlyphRunView {
+                block_shift: self.block_shifts[index],
                 line: self,
                 record,
                 run: *run,
@@ -413,7 +418,7 @@ impl Line {
                     Some(BaselineKind::Central) => height / 2.0,
                     _ => height,
                 });
-                let line_baseline = self.baseline.to_f32();
+                let line_baseline = (self.baseline + self.block_shifts[index]).to_f32();
                 let top = line_baseline - baseline_from_top;
                 let start = record.inline_start.to_f32();
                 let width = record.inline_size.to_f32();
@@ -456,7 +461,7 @@ impl Line {
                 };
                 let border_start = record.inline_start.to_f32() + lead_margin;
                 let border_size = record.inline_size.to_f32() - lead_margin - trail_margin;
-                let content_top = self.baseline.to_f32() - m.ascent;
+                let content_top = (self.baseline + self.block_shifts[index]).to_f32() - m.ascent;
                 let content_height = m.ascent + m.descent;
                 let above = e.padding.block_start + e.border.block_start;
                 let below = e.padding.block_end + e.border.block_end;
