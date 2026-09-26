@@ -1,6 +1,8 @@
 //! Fonts: registration, identity and metrics.
 
 mod check;
+mod descriptor;
+pub use descriptor::FontFaceDescriptor;
 pub(crate) mod sfnt;
 
 pub use check::FontError;
@@ -57,6 +59,8 @@ struct Layer {
 struct LayerState {
     faces: Vec<FontData>,
     blob_bytes: u64,
+    descriptors: Vec<Option<FontFaceDescriptor>>,
+    native: fontique::Collection,
 }
 
 /// A layer of fonts. The shared layer (created with [`FontCollection::new`])
@@ -101,6 +105,11 @@ impl FontCollection {
                 limits: limits.clone(),
                 generation: AtomicU64::new(0),
                 state: Mutex::new(LayerState {
+                    descriptors: vec![None; faces.len()],
+                    native: fontique::Collection::new(fontique::CollectionOptions {
+                        shared: false,
+                        system_fonts: false,
+                    }),
                     faces,
                     blob_bytes: 0,
                 }),
@@ -135,7 +144,9 @@ impl FontCollection {
         state.blob_bytes = bytes;
         let first = state.faces.len() as u32;
         let blob = Blob::from(data);
+        state.native.register_fonts(blob.clone(), None);
         for index in 0..faces {
+            state.descriptors.push(None);
             state.faces.push(FontData::new(blob.clone(), index));
         }
         self.layer.generation.fetch_add(1, Ordering::SeqCst);
@@ -143,6 +154,62 @@ impl FontCollection {
             layer: self.layer.id,
             index: first,
         })
+    }
+
+    /// Registers one selected sfnt/TTC face with CSS descriptors. The whole
+    /// blob is checked and budgeted, but only the selected face is retained.
+    /// An invalid descriptor, index or font leaves the layer unchanged.
+    pub fn register_face(
+        &self,
+        data: Vec<u8>,
+        index: u32,
+        descriptor: FontFaceDescriptor,
+    ) -> Result<FontId, FontError> {
+        descriptor.validate()?;
+        let limits = &self.layer.limits;
+        let count = check::check_font(&data, limits)?;
+        if index >= count {
+            return Err(FontError::Malformed("face index out of bounds"));
+        }
+        let blob = Blob::from(data);
+        // Unlike the S0 stub, a CSS face must have a usable cmap.
+        let source = fontique::SourceInfo::new(
+            fontique::SourceId::new(),
+            fontique::SourceKind::Memory(blob.clone()),
+        );
+        fontique::FontInfo::from_source(source, index)
+            .ok_or(FontError::Malformed("face has no usable character map"))?;
+        let mut state = self.state();
+        Limits::check(
+            limits.max_faces_per_layer,
+            LimitKind::FacesPerLayer,
+            state.faces.len() as u64 + 1,
+        )?;
+        let bytes = state.blob_bytes + blob.len() as u64;
+        Limits::check(
+            limits.max_layer_blob_bytes,
+            LimitKind::LayerBlobBytes,
+            bytes,
+        )?;
+        let id = FontId {
+            layer: self.layer.id,
+            index: state.faces.len() as u32,
+        };
+        state.faces.push(FontData::new(blob, index));
+        state.descriptors.push(Some(descriptor));
+        state.blob_bytes = bytes;
+        self.layer.generation.fetch_add(1, Ordering::SeqCst);
+        Ok(id)
+    }
+
+    /// CSS descriptors of an explicitly registered face, including shared
+    /// faces visible through this document layer.
+    pub fn face_descriptor(&self, id: FontId) -> Option<FontFaceDescriptor> {
+        if id.layer == self.layer.id {
+            self.state().descriptors.get(id.index as usize)?.clone()
+        } else {
+            self.layer.parent.as_ref()?.face_descriptor(id)
+        }
     }
 
     /// Font data of a face in this layer or its shared layer.
@@ -297,3 +364,6 @@ mod tests {
         assert_send_sync::<FontCollection>();
     }
 }
+
+#[cfg(test)]
+mod browser_tests;

@@ -11,6 +11,12 @@ readme = "README.md"
 keywords = ["typesetting", "text", "layout", "shaping"]
 categories = ["text-processing", "graphics"]
 
+[features]
+default = ["system-fonts"]
+system-fonts = ["fontique/system"]
+
 [dependencies]
+fontique = { version = "0.11", default-features = false, features = ["std"] }
+skrifa = "0.44"
 peniko = "0.6"
 unicode-bidi = "0.3.18"
