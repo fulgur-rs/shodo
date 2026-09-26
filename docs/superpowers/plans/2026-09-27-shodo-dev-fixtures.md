@@ -28,10 +28,10 @@
 
 **Files:** dev/fixtures/assets/cases.json, assets/manifest.json, assets/fonts/*, assets/licenses/*, tools/regenerate.py, tools/test_regenerate.py.
 **Interfaces:** manifest format_version1, fonts entries with id/family/path/face_index/source_url/source_sha256/sha256/size/license; cases entries id/text/font_ids/lang/direction/font_size/width.
-- [ ] Write Python tests for artifact completeness, manifest source SHA256 mismatch rejection and check-mode immutability; run unittest and observe missing assets/API RED.
-- [ ] Add original Latin/Japanese/Arabic/combining/mixed corpus; download pinned Noto official sources/license, subset with FontTools exact version, rename font names, preserve layout features; save manifest and checksums.
-- [ ] Implement `regenerate.py --check` (verify stored assets without network), `--rebuild` (pinned verified input, compare outputs without modifying repo), `--update` (explicit replacement). All build outputs stage outside assets until every source/output passes validation.
-- [ ] Run unittest and check/rebuild, compare output bytes, full root suite; commit.
+- [x] Write Python tests for artifact completeness, manifest source SHA256 mismatch rejection and check-mode immutability; run unittest and observe missing assets/API RED.
+- [x] Add original Latin/Japanese/Arabic/combining/mixed corpus; download pinned Noto official sources/license, subset with FontTools exact version, rename font names, preserve layout features; save manifest and checksums.
+- [x] Implement `regenerate.py --check` (verify stored assets without network), `--rebuild` (pinned verified input, compare outputs without modifying repo), `--update` (explicit replacement). All build outputs stage outside assets until every source/output passes validation.
+- [x] Run unittest and check/rebuild, compare output bytes, full root suite; commit.
 
 ### Task 2: shared development crate and real consumers
 

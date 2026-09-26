@@ -1,0 +1,86 @@
+{
+  "format_version": 1,
+  "fonttools_version": "4.61.1",
+  "fonts": [
+    {
+      "id": "latin",
+      "family": "Shodo Fixture Latin",
+      "path": "assets/fonts/latin.ttf",
+      "face_index": 0,
+      "source_url": "https://raw.githubusercontent.com/notofonts/noto-fonts/ffebf8c1ee449e544955a7e813c54f9b73848eac/hinted/ttf/NotoSans/NotoSans-Regular.ttf",
+      "source_commit": "ffebf8c1ee449e544955a7e813c54f9b73848eac",
+      "source_file": "latin.ttf",
+      "source_sha256": "b85c38ecea8a7cfb39c24e395a4007474fa5a4fc864f6ee33309eb4948d232d5",
+      "sha256": "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25",
+      "size": 97232,
+      "license": "assets/licenses/noto-fonts-OFL.txt",
+      "license_url": "https://raw.githubusercontent.com/notofonts/noto-fonts/ffebf8c1ee449e544955a7e813c54f9b73848eac/LICENSE",
+      "extra_unicode_ranges": [
+        [
+          32,
+          126
+        ],
+        [
+          160,
+          383
+        ],
+        [
+          768,
+          879
+        ]
+      ]
+    },
+    {
+      "id": "cjk",
+      "family": "Shodo Fixture CJK",
+      "path": "assets/fonts/cjk.otf",
+      "face_index": 0,
+      "source_url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf",
+      "source_commit": "f8d157532fbfaeda587e826d4cd5b21a49186f7c",
+      "source_file": "cjk.otf",
+      "source_sha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
+      "sha256": "29878953ae982e3091aba0102ab5d774094ceb1092f2e3d181a6632bfdd962c3",
+      "size": 209988,
+      "license": "assets/licenses/noto-cjk-OFL.txt",
+      "license_url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/LICENSE",
+      "extra_unicode_ranges": [
+        [
+          32,
+          126
+        ],
+        [
+          12288,
+          12543
+        ],
+        [
+          65281,
+          65374
+        ]
+      ]
+    },
+    {
+      "id": "arabic",
+      "family": "Shodo Fixture Arabic",
+      "path": "assets/fonts/arabic.ttf",
+      "face_index": 0,
+      "source_url": "https://raw.githubusercontent.com/notofonts/noto-fonts/ffebf8c1ee449e544955a7e813c54f9b73848eac/hinted/ttf/NotoSansArabic/NotoSansArabic-Regular.ttf",
+      "source_commit": "ffebf8c1ee449e544955a7e813c54f9b73848eac",
+      "source_file": "arabic.ttf",
+      "source_sha256": "ceea25b464a656dc3b26849bab9356740401af62aedf1bfa8b7f0d9b75925b1b",
+      "sha256": "e9885fbcf3bdbddea94d1679d636a80f7421c6b63632a35c6f884a9ee74067d9",
+      "size": 96900,
+      "license": "assets/licenses/noto-fonts-OFL.txt",
+      "license_url": "https://raw.githubusercontent.com/notofonts/noto-fonts/ffebf8c1ee449e544955a7e813c54f9b73848eac/LICENSE",
+      "extra_unicode_ranges": [
+        [
+          32,
+          126
+        ],
+        [
+          1536,
+          1791
+        ]
+      ]
+    }
+  ]
+}

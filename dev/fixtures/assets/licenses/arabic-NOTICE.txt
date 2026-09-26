@@ -1,0 +1,4 @@
+Copyright 2015-2021 Google LLC. All Rights Reserved.
+
+Font name: Noto Sans Arabic
+Source is recorded in ../manifest.json. Derived subset renamed to Shodo Fixture Arabic.
