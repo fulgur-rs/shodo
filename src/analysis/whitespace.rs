@@ -9,6 +9,7 @@
 use super::{Item, ItemKind};
 use crate::builder::RawItem;
 use crate::geometry::Direction;
+use crate::limits::{LimitExceeded, LimitKind, Limits};
 use crate::mapping::{MappingKind, MappingUnit, OffsetMapping};
 use crate::node::{NodeId, TextSource};
 use crate::style::{InlineStyle, UnicodeBidi, WhiteSpaceCollapse};
@@ -27,7 +28,8 @@ pub(crate) fn process(
     raw: &[RawItem],
     styles: &[InlineStyle],
     with_mapping: bool,
-) -> Processed {
+    limits: &Limits,
+) -> Result<Processed, LimitExceeded> {
     let mut p = Processor {
         out: String::with_capacity(raw_text.len()),
         items: Vec::with_capacity(raw.len()),
@@ -35,6 +37,7 @@ pub(crate) fn process(
         // Collapsible spaces at the start of the paragraph are removed.
         after_space: true,
         open: Vec::new(),
+        limits,
     };
     for item in raw {
         match item {
@@ -44,21 +47,21 @@ pub(crate) fn process(
                 style,
             } => {
                 let text = &raw_text[range.start as usize..range.end as usize];
-                p.text(text, *source, *style, &styles[*style as usize]);
+                p.text(text, *source, *style, &styles[*style as usize])?;
             }
             RawItem::Open { node, style, edges } => {
-                p.marker(ItemKind::OpenInline { edges: *edges }, *style, *node);
+                p.marker(ItemKind::OpenInline { edges: *edges }, *style, *node)?;
                 for &c in bidi_open(&styles[*style as usize]) {
-                    p.generated(ItemKind::BidiControl, c, *style, *node);
+                    p.generated(ItemKind::BidiControl, c, *style, *node)?;
                 }
                 p.open.push((*node, *style));
             }
             RawItem::Close => {
                 if let Some((node, style)) = p.open.pop() {
                     for &c in bidi_close(&styles[style as usize]) {
-                        p.generated(ItemKind::BidiControl, c, style, node);
+                        p.generated(ItemKind::BidiControl, c, style, node)?;
                     }
-                    p.marker(ItemKind::CloseInline, style, node);
+                    p.marker(ItemKind::CloseInline, style, node)?;
                 }
             }
             RawItem::Atomic {
@@ -71,7 +74,7 @@ pub(crate) fn process(
                     edges: *edges,
                     parent_style: *parent_style,
                 };
-                p.generated(kind, OBJECT_REPLACEMENT, *style, *node);
+                p.generated(kind, OBJECT_REPLACEMENT, *style, *node)?;
                 p.after_space = false;
             }
             RawItem::OutOfFlow { node, kind, style } => {
@@ -81,39 +84,60 @@ pub(crate) fn process(
                     OBJECT_REPLACEMENT,
                     *style,
                     *node,
-                );
+                )?;
             }
             RawItem::BlockInInline { node, style } => {
-                p.generated(ItemKind::BlockInInline, PARAGRAPH_SEPARATOR, *style, *node);
+                p.generated(ItemKind::BlockInInline, PARAGRAPH_SEPARATOR, *style, *node)?;
                 p.after_space = true;
             }
             RawItem::ForcedBreak { node, style } => {
-                p.generated(ItemKind::ForcedBreak, '\n', *style, *node);
+                p.generated(ItemKind::ForcedBreak, '\n', *style, *node)?;
                 p.after_space = true;
             }
         }
     }
-    Processed {
+    Ok(Processed {
         text: p.out,
         items: p.items,
         mapping: p.mapping,
-    }
+    })
 }
 
-struct Processor {
+struct Processor<'a> {
     out: String,
     items: Vec<Item>,
     mapping: Option<OffsetMapping>,
     after_space: bool,
     open: Vec<(NodeId, u32)>,
+    limits: &'a Limits,
 }
 
-impl Processor {
+impl Processor<'_> {
+    fn check_item(&self) -> Result<(), LimitExceeded> {
+        Limits::check(
+            Some(u64::from(u32::MAX)),
+            LimitKind::Items,
+            self.items.len() as u64 + 1,
+        )?;
+        Limits::check(
+            self.limits.max_items,
+            LimitKind::Items,
+            self.items.len() as u64 + 1,
+        )
+    }
+    fn append(&mut self, c: char) -> Result<(), LimitExceeded> {
+        let len = (self.out.len() as u64).saturating_add(c.len_utf8() as u64);
+        Limits::check(Some(u64::from(u32::MAX)), LimitKind::TextBytes, len)?;
+        Limits::check(self.limits.max_text_bytes, LimitKind::TextBytes, len)?;
+        self.out.push(c);
+        Ok(())
+    }
     fn pos(&self) -> u32 {
         self.out.len() as u32
     }
 
-    fn marker(&mut self, kind: ItemKind, style: u32, node: NodeId) {
+    fn marker(&mut self, kind: ItemKind, style: u32, node: NodeId) -> Result<(), LimitExceeded> {
+        self.check_item()?;
         let at = self.pos();
         self.items.push(Item {
             kind,
@@ -121,11 +145,19 @@ impl Processor {
             style,
             node: Some(node),
         });
+        Ok(())
     }
 
-    fn generated(&mut self, kind: ItemKind, c: char, style: u32, node: NodeId) {
+    fn generated(
+        &mut self,
+        kind: ItemKind,
+        c: char,
+        style: u32,
+        node: NodeId,
+    ) -> Result<(), LimitExceeded> {
+        self.check_item()?;
         let start = self.pos();
-        self.out.push(c);
+        self.append(c)?;
         let text = start..self.pos();
         if let Some(m) = &mut self.mapping {
             m.push_generated(text.clone(), node);
@@ -136,6 +168,7 @@ impl Processor {
             style,
             node: Some(node),
         });
+        Ok(())
     }
 
     fn map(
@@ -162,7 +195,13 @@ impl Processor {
         }
     }
 
-    fn text(&mut self, s: &str, source: TextSource, style_index: u32, style: &InlineStyle) {
+    fn text(
+        &mut self,
+        s: &str,
+        source: TextSource,
+        style_index: u32,
+        style: &InlineStyle,
+    ) -> Result<(), LimitExceeded> {
         use WhiteSpaceCollapse::*;
         let collapse_spaces = matches!(style.white_space_collapse, Collapse | PreserveBreaks);
         let preserve_breaks = !matches!(style.white_space_collapse, Collapse);
@@ -190,9 +229,10 @@ impl Processor {
                 _ => None,
             };
             if let Some(kind) = control {
-                self.flush(&mut segment, style_index, node);
+                self.flush(&mut segment, style_index, node)?;
+                self.check_item()?;
                 let start = self.pos();
-                self.out.push(c);
+                self.append(c)?;
                 self.map(MappingKind::Identity, node, dom, len, start..self.pos());
                 self.items.push(Item {
                     kind: kind.clone(),
@@ -209,20 +249,29 @@ impl Processor {
                 self.map(MappingKind::Collapsed, node, dom, len, at..at);
                 continue;
             }
+            if segment.is_none() {
+                self.check_item()?;
+            }
             segment.get_or_insert(self.pos());
             let start = self.pos();
             // A collapsible tab or segment break is kept as one space (same length).
-            self.out.push(if collapsible { ' ' } else { c });
+            self.append(if collapsible { ' ' } else { c })?;
             self.map(MappingKind::Identity, node, dom, len, start..self.pos());
             self.after_space = collapsible;
         }
-        self.flush(&mut segment, style_index, node);
+        self.flush(&mut segment, style_index, node)
     }
 
-    fn flush(&mut self, segment: &mut Option<u32>, style: u32, node: NodeId) {
+    fn flush(
+        &mut self,
+        segment: &mut Option<u32>,
+        style: u32,
+        node: NodeId,
+    ) -> Result<(), LimitExceeded> {
         if let Some(start) = segment.take() {
             let end = self.pos();
             if end > start {
+                self.check_item()?;
                 self.items.push(Item {
                     kind: ItemKind::Text,
                     text: start..end,
@@ -231,6 +280,7 @@ impl Processor {
                 });
             }
         }
+        Ok(())
     }
 }
 
@@ -269,7 +319,7 @@ mod tests {
     use crate::style::{InlineStyle, ParagraphStyle, UnicodeBidi, WhiteSpaceCollapse};
 
     fn run(b: &ParagraphBuilder) -> Processed {
-        process(&b.text, &b.items, &b.styles, true)
+        process(&b.text, &b.items, &b.styles, true, &b.limits).unwrap()
     }
 
     fn dom(node: u64) -> TextSource {
@@ -430,7 +480,7 @@ mod tests {
             },
             "abc",
         );
-        let p = process(&b.text, &b.items, &b.styles, true);
+        let p = process(&b.text, &b.items, &b.styles, true, &b.limits).unwrap();
         assert_eq!(p.text, "abc");
         // The mapping itself must not panic either, in both directions.
         let m = p.mapping.unwrap();
@@ -471,7 +521,8 @@ mod tests {
         let mut b = builder();
         b.push_text(dom(1), "a");
         assert!(
-            process(&b.text, &b.items, &b.styles, false)
+            process(&b.text, &b.items, &b.styles, false, &b.limits)
+                .unwrap()
                 .mapping
                 .is_none()
         );

@@ -9,9 +9,11 @@ use peniko::FontData;
 use crate::font::FontId;
 use crate::geometry::{BaselineKind, LayoutUnit, LogicalRect, Saturation};
 use crate::line::Scan;
+use crate::line::fragments::GlyphSource;
 use crate::line::fragments::{self, FragmentRecord, RecordKind};
 use crate::node::{NodeId, OutOfFlowKind};
 use crate::paragraph::{AtomicSizes, BreakToken, FloatCursor, Paragraph, ParagraphData};
+use crate::shape::GlyphStore;
 use crate::style::LineHeight;
 
 /// Why a line ended.
@@ -49,6 +51,7 @@ pub struct Line {
     pub(crate) block_shifts: Vec<LayoutUnit>,
     pub(crate) empty: bool,
     pub(crate) positions: Option<(u32, Vec<LayoutUnit>)>,
+    pub(crate) overlay: Option<Box<GlyphStore>>,
 }
 
 impl fmt::Debug for Line {
@@ -120,6 +123,7 @@ impl Line {
             block_shifts: metrics.shifts,
             empty: metrics.empty,
             positions: None,
+            overlay: None,
         }
     }
 
@@ -232,6 +236,7 @@ pub struct AnchorFragment {
 /// A run of glyphs from one font, one element and one bidi level.
 #[derive(Clone, Copy, Debug)]
 pub struct GlyphRunView<'a> {
+    source: GlyphSource,
     block_shift: LayoutUnit,
     line: &'a Line,
     record: &'a FragmentRecord,
@@ -334,8 +339,14 @@ impl<'a> GlyphRunView<'a> {
     }
 
     fn glyph(&self, g: u32) -> Glyph {
-        let store = &self.data().glyphs;
-        let gi = g as usize;
+        let (store, gi, first) = match self.source {
+            GlyphSource::Shared => (&self.data().glyphs, g as usize, self.glyphs.0 as usize),
+            GlyphSource::Overlay { start } => (
+                self.line.overlay.as_deref().unwrap(),
+                (start + g - self.glyphs.0) as usize,
+                start as usize,
+            ),
+        };
         let (rel, advance) = if let Some((start, positions)) = &self.line.positions {
             let pen = positions[(g - start) as usize];
             let rel = pen - positions[(self.glyphs.0 - start) as usize];
@@ -346,10 +357,7 @@ impl<'a> GlyphRunView<'a> {
             };
             (rel, end - rel)
         } else {
-            (
-                store.pen[gi] - store.pen[self.glyphs.0 as usize],
-                store.advance[gi],
-            )
+            (store.pen[gi] - store.pen[first], store.advance[gi])
         };
         // Runs are stored in logical order and reversed for display here; a
         // real shaper that emits right-to-left runs in visual order must not
@@ -440,7 +448,9 @@ impl Line {
                 glyphs,
                 item,
                 text,
+                source,
             } => Fragment::GlyphRun(GlyphRunView {
+                source: *source,
                 block_shift: self.block_shifts[index],
                 line: self,
                 record,

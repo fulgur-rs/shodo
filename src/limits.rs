@@ -9,23 +9,44 @@ use crate::geometry::Saturation;
 /// never a silent truncation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Limits {
+    /// Raw and processed UTF-8 bytes at build time (16 MiB). Independent of
+    /// the glyph budget: ASCII may reach `max_shaped_glyphs` first.
     pub max_text_bytes: Option<u64>,
+    /// Raw and processed items at build time (2^20).
     pub max_items: Option<u64>,
+    /// Interned inline styles per builder (2^16).
     pub max_styles: Option<u64>,
+    /// Simultaneously open inline boxes at build time (512).
     pub max_nesting_depth: Option<u64>,
+    /// Glyphs per paragraph build and reshape output (2^22).
     pub max_shaped_glyphs: Option<u64>,
+    /// UTF-8 bytes per line-edge reshape window (4096); exceeding it warns
+    /// and preserves shared glyphs rather than failing line layout.
     pub max_reshape_window_bytes: Option<u64>,
+    /// UTF-8 bytes per shaping run (64 KiB); reserved for the real shaper.
     pub max_shaping_run_bytes: Option<u64>,
+    /// Binary-search iterations for balance plans (16). Zero uses greedy.
     pub max_balance_iterations: Option<u64>,
+    /// Lines per Pretty optimization window (4). Zero uses greedy.
     pub max_pretty_window_lines: Option<u64>,
+    /// Retained warnings per build or layout context (1024), plus one
+    /// suppression marker. `take_warnings` clears the context's count.
     pub max_warnings: Option<u64>,
+    /// Bytes per registered font blob (32 MiB), checked before retention.
     pub max_font_blob_bytes: Option<u64>,
+    /// Faces in one registered font collection (64).
     pub max_ttc_faces: Option<u64>,
+    /// Variation axes in a registered font's fvar table (64).
     pub max_font_axes: Option<u64>,
+    /// Layout lookups in each registered GSUB/GPOS table (4096).
     pub max_layout_lookups: Option<u64>,
+    /// Layout subtables in each registered GSUB/GPOS table (65536).
     pub max_layout_subtables: Option<u64>,
+    /// Faces retained in a font layer (256).
     pub max_faces_per_layer: Option<u64>,
+    /// Total registered font-blob bytes retained per layer (256 MiB).
     pub max_layer_blob_bytes: Option<u64>,
+    /// Shaper cache entries (64); reserved for the real shaper.
     pub max_shaper_cache_entries: Option<u64>,
 }
 

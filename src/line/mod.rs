@@ -8,6 +8,7 @@ mod intrinsic;
 mod iter;
 pub(crate) mod metrics;
 mod plan;
+mod reshape;
 mod scan;
 use scan::scan;
 
@@ -184,6 +185,7 @@ impl Paragraph {
         );
         line.positions = alignment.positions;
         line.displaced = displaced;
+        reshape::apply(&mut line, cx, &mut sat);
         cx.warnings.record_saturation(&sat);
         if constraint
             .max_block_size

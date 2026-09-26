@@ -28,6 +28,7 @@ pub(crate) struct FragmentRecord {
 #[derive(Clone, Debug)]
 pub(crate) enum RecordKind {
     Glyphs {
+        source: GlyphSource,
         run: u32,
         glyphs: Range<u32>,
         item: u32,
@@ -50,6 +51,12 @@ pub(crate) enum RecordKind {
         node: NodeId,
         kind: OutOfFlowKind,
     },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum GlyphSource {
+    Shared,
+    Overlay { start: u32 },
 }
 
 /// Whether a box's own `direction` opposes the paragraph's, so its start
@@ -155,6 +162,7 @@ fn build_logical(
                         glyphs: g,
                         item,
                         text,
+                        ..
                     } = &mut last.kind
                     && *r == *run
                     && *item == unit.item
@@ -170,6 +178,7 @@ fn build_logical(
                             glyphs: glyphs.clone(),
                             item: unit.item,
                             text: unit.text.clone(),
+                            source: GlyphSource::Shared,
                         },
                         inline_start: pos,
                         inline_size: w,
@@ -289,6 +298,7 @@ fn push_cluster(
                     glyphs: g,
                     item: it,
                     text: t,
+                    ..
                 },
             inline_size,
             ..
@@ -310,6 +320,7 @@ fn push_cluster(
                 glyphs: glyphs.clone(),
                 item,
                 text: text.clone(),
+                source: GlyphSource::Shared,
             },
             inline_start: LayoutUnit::ZERO,
             inline_size: width,

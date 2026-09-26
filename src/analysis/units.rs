@@ -52,6 +52,8 @@ pub(crate) enum UnitKind {
 
 #[derive(Clone, Debug)]
 pub(crate) struct Unit {
+    pub(crate) unsafe_to_break: bool,
+    pub(crate) unsafe_to_concat: bool,
     pub(crate) kind: UnitKind,
     pub(crate) item: u32,
     pub(crate) text: Range<u32>,
@@ -135,6 +137,8 @@ pub(crate) fn build_units(
         let node = item.node.unwrap_or(NodeId(0));
         let mut push = |kind: UnitKind, break_after: BreakClass, parent_box: Option<u32>| {
             units.push(Unit {
+                unsafe_to_break: false,
+                unsafe_to_concat: false,
                 kind,
                 item: index,
                 text: item.text.clone(),
@@ -166,6 +170,8 @@ pub(crate) fn build_units(
                         }
                         let space = c == ' ';
                         units.push(Unit {
+                            unsafe_to_break: false,
+                            unsafe_to_concat: false,
                             kind: UnitKind::Cluster {
                                 run: run_index as u32,
                                 glyphs: g..g + 1,
@@ -211,12 +217,23 @@ pub(crate) fn build_units(
             }
             ItemKind::Atomic { .. } => {
                 // UAX #14 class CB: break opportunities before and after.
-                if let Some(prev) = units.last_mut()
+                let mut before = units.len();
+                while before > 0
+                    && matches!(
+                        units[before - 1].kind,
+                        UnitKind::Open { .. } | UnitKind::BidiControl
+                    )
+                {
+                    before -= 1;
+                }
+                if let Some(prev) = before.checked_sub(1).and_then(|i| units.get_mut(i))
                     && prev.break_after == BreakClass::Prohibited
                 {
                     prev.break_after = BreakClass::Allowed;
                 }
                 units.push(Unit {
+                    unsafe_to_break: false,
+                    unsafe_to_concat: false,
                     kind: UnitKind::Atomic { node },
                     item: index,
                     text: item.text.clone(),

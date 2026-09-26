@@ -152,7 +152,7 @@ impl Paragraph {
             style.root = root.clone();
         }
         sanitize::items(&mut items, &mut warnings);
-        let processed = process(&text, &items, &styles, offset_mapping);
+        let processed = process(&text, &items, &styles, offset_mapping, &limits)?;
         let mut sat = Saturation::default();
         let font = fonts.primary_font();
         let mut glyphs = GlyphStore::default();

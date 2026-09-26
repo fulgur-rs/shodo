@@ -84,9 +84,14 @@ impl FontCollection {
         Self::with_faces(limits, vec![stub], None)
     }
 
-    /// Creates an empty document layer on top of `shared`.
+    /// Creates an empty document layer on top of the root shared layer.
+    /// Passing a document collection does not expose its private faces.
     pub fn for_document(shared: &FontCollection, limits: &Limits) -> Self {
-        Self::with_faces(limits, Vec::new(), Some(shared.clone()))
+        let mut root = shared;
+        while let Some(parent) = &root.layer.parent {
+            root = parent;
+        }
+        Self::with_faces(limits, Vec::new(), Some(root.clone()))
     }
 
     fn with_faces(limits: &Limits, faces: Vec<FontData>, parent: Option<FontCollection>) -> Self {
@@ -205,6 +210,21 @@ mod tests {
         assert_eq!(id.index(), 0);
         assert!(fonts.font_data(id).is_some());
         assert_eq!(fonts.generations(), (0, None));
+    }
+
+    #[test]
+    fn document_of_document_normalizes_to_root_shared_layer() {
+        let limits = Limits::default();
+        let shared = FontCollection::new(&limits);
+        let first = FontCollection::for_document(&shared, &limits);
+        let private = first.register(font_bytes()).unwrap();
+        let mut doc = first;
+        for _ in 0..100 {
+            doc = FontCollection::for_document(&doc, &limits);
+        }
+        assert_eq!(doc.layer.parent.as_ref().unwrap().layer.id, shared.layer.id);
+        assert!(doc.font_data(private).is_none());
+        assert_eq!(doc.generations(), (0, Some(0)));
     }
 
     #[test]

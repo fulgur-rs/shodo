@@ -114,6 +114,53 @@ pub(crate) fn shape_item(
     Ok(())
 }
 
+pub(crate) fn shape_line_edge(
+    data: &crate::paragraph::ParagraphData,
+    unit: &crate::analysis::units::Unit,
+    cx: &mut crate::LayoutContext,
+    sat: &mut Saturation,
+) -> Option<GlyphStore> {
+    let crate::analysis::units::UnitKind::Cluster { run, glyphs, .. } = &unit.kind else {
+        return None;
+    };
+    let text = &data.text[unit.text.start as usize..unit.text.end as usize];
+    if data
+        .limits
+        .max_reshape_window_bytes
+        .is_some_and(|max| text.len() as u64 > max)
+    {
+        cx.warnings.push(
+            crate::limits::WarningKind::Unsupported,
+            "line edge reshape window exceeded; keeping shared glyphs",
+        );
+        return None;
+    }
+    let mut store = GlyphStore::default();
+    let mut runs = Vec::new();
+    let shaped = &data.runs[*run as usize];
+    if shape_item(
+        &mut store,
+        &mut runs,
+        text,
+        unit.text.start,
+        unit.item,
+        shaped.font,
+        shaped.font_size,
+        &data.limits,
+        sat,
+    )
+    .is_err()
+        || store.len() != (glyphs.end - glyphs.start) as usize
+    {
+        cx.warnings.push(
+            crate::limits::WarningKind::Unsupported,
+            "line edge glyph budget exceeded; keeping shared glyphs",
+        );
+        return None;
+    }
+    Some(store)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

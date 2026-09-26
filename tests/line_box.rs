@@ -6,6 +6,38 @@ use shodo::style::{LineOptions, VerticalAlign};
 use shodo::{AtomicSize, AtomicSizes, Fragment};
 
 #[test]
+fn opening_edges_stay_with_atomic_after_soft_break() {
+    let root = style();
+    let p = build(&root, |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "aa")
+            .open_inline(
+                NodeId(2),
+                &root.root,
+                InlineEdges {
+                    padding: Sides {
+                        inline_start: 2.0,
+                        ..Sides::default()
+                    },
+                    ..InlineEdges::default()
+                },
+            )
+            .push_atomic(NodeId(3), &root.root, InlineEdges::default())
+            .close_inline();
+    });
+    let mut sizes = AtomicSizes::new();
+    sizes.insert(
+        NodeId(3),
+        AtomicSize {
+            inline_size: 20.0,
+            ..Default::default()
+        },
+    );
+    let l = first_line(&p, 25.0, &LineOptions::default(), &sizes);
+    assert_eq!(l.inline_size(), 20.0);
+    assert!(l.fragments().all(|f| !matches!(f, Fragment::InlineBox(_))));
+}
+
+#[test]
 fn height_limit_is_pure_and_can_be_retried() {
     let p = paragraph("a");
     let mut cx = shodo::LayoutContext::new();
