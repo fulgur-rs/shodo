@@ -37,10 +37,10 @@
 
 **Files:** Cargo.toml, dev/fixtures/Cargo.toml, src/lib.rs, tests/fixtures.rs, examples/inspect_fonts.rs, examples/layout_cases.rs.
 **Interfaces:** FontFixture(id,family,bytes,face_index,sha256); FixtureCase(id,text,font_ids,lang,direction,font_size,width); cases(), case(&str), font(&str), load_fonts(&Limits)->Result<FixtureFonts,FontError>, FixtureCase::build(&mut LayoutContext,&FixtureFonts,&Limits)->Result<Paragraph,LimitExceeded>.
-- [ ] Add integration tests for unique IDs, fixed checksums/index, all-case nominal glyph coverage through family chains, accepted font metrics and shaper data, ordered case lookup, offline public paragraph build/line layout, and Arabic GSUB contextual substitution. Run workspace fixture tests and observe missing API RED.
-- [ ] Implement public development APIs and original case loading; disable OS fonts, set fixed generic/locale fallbacks, keep default library dependency graph separate.
-- [ ] Add independent font-inspection and public case-layout examples; execute both and verify shared IDs/settings. Explicitly print paragraph stub limitation.
-- [ ] Run full workspace suite and clippy, commit.
+- [x] Add integration tests for unique IDs, fixed checksums/index, all-case nominal glyph coverage through family chains, accepted font metrics and shaper data, ordered case lookup, offline public paragraph build/line layout, and Arabic GSUB contextual substitution. Run workspace fixture tests and observe missing API RED.
+- [x] Implement public development APIs and original case loading; disable OS fonts, set fixed generic/locale fallbacks, keep default library dependency graph separate.
+- [x] Add independent font-inspection and public case-layout examples; execute both and verify shared IDs/settings. Explicitly print paragraph stub limitation.
+- [x] Run full workspace suite and clippy, commit.
 
 ### Task 3: documentation, CI and final integration
 
