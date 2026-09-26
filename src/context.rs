@@ -7,6 +7,9 @@ use crate::limits::{Warning, WarningSink};
 #[derive(Debug, Default)]
 pub struct LayoutContext {
     pub(crate) warnings: WarningSink,
+    pub(crate) partial: Option<crate::line::cache::PartialLine>,
+    #[cfg(test)]
+    pub(crate) cache_visits: usize,
 }
 
 impl LayoutContext {
@@ -19,7 +22,11 @@ impl LayoutContext {
         self.warnings.take()
     }
 
-    /// Releases retained scratch memory above `bytes`. Nothing is retained
-    /// yet, so this is currently a no-op.
-    pub fn shrink_to(&mut self, _bytes: usize) {}
+    /// Releases the retained partial line when its storage exceeds `bytes`.
+    /// `shrink_to(0)` always releases its paragraph reference as well.
+    pub fn shrink_to(&mut self, bytes: usize) {
+        if self.partial.as_ref().is_some_and(|p| p.bytes() > bytes) {
+            self.partial = None;
+        }
+    }
 }

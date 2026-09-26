@@ -1,6 +1,7 @@
 //! Line breaking.
 
 mod align;
+pub(crate) mod cache;
 mod decoration;
 pub(crate) mod fragments;
 pub(crate) mod metrics;
@@ -18,6 +19,7 @@ use crate::paragraph::{
 use crate::style::{LineOptions, TabSize};
 
 /// Result of scanning one line.
+#[derive(Clone, Debug)]
 pub(crate) struct Scan {
     pub(crate) end: usize,
     pub(crate) reason: BreakReason,
@@ -84,9 +86,29 @@ impl Paragraph {
             &mut sat,
         );
         let indent = text_indent(&options, token.flags, &mut sat);
-        let mut scan = scan(
-            data, start, available, offset, indent, atomics, cx, &mut sat,
-        );
+        let mut scan = match cache::resolve(
+            self,
+            token,
+            &options,
+            &constraint,
+            available,
+            offset,
+            indent,
+            atomics,
+            cx,
+            &mut sat,
+        ) {
+            Ok(scan) => scan,
+            Err((node, ordinal, position)) => {
+                cx.warnings.record_saturation(&sat);
+                return LineResult::FloatEncountered {
+                    node,
+                    line_start: token,
+                    inline_position: position.to_f32(),
+                    float_cursor: FloatCursor(ordinal),
+                };
+            }
+        };
         // Select the break before reporting an anchor: floats do not create
         // opportunities, and a word containing one may belong to the next line.
         let mut float_pos = indent.add(decoration::width(data, start, true, &mut sat), &mut sat);
