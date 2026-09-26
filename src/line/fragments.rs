@@ -9,6 +9,14 @@ use crate::geometry::LayoutUnit;
 use crate::node::{NodeId, OutOfFlowKind};
 use crate::paragraph::{AtomicSize, AtomicSizes, ParagraphData};
 
+fn normalized_size(atomics: &AtomicSizes, node: NodeId) -> AtomicSize {
+    crate::sanitize::atomic(
+        atomics.get(node).copied().unwrap_or_default(),
+        &mut crate::limits::WarningSink::new(Some(0)),
+        &mut crate::geometry::Saturation::default(),
+    )
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct FragmentRecord {
     pub(crate) kind: RecordKind,
@@ -20,6 +28,7 @@ pub(crate) struct FragmentRecord {
 #[derive(Clone, Debug)]
 pub(crate) enum RecordKind {
     Glyphs {
+        source: GlyphSource,
         run: u32,
         glyphs: Range<u32>,
         item: u32,
@@ -42,6 +51,12 @@ pub(crate) enum RecordKind {
         node: NodeId,
         kind: OutOfFlowKind,
     },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum GlyphSource {
+    Shared,
+    Overlay { start: u32 },
 }
 
 /// Whether a box's own `direction` opposes the paragraph's, so its start
@@ -85,11 +100,12 @@ fn build_logical(
         parent = data.boxes[b as usize].parent;
     }
     for &box_index in chain.iter().rev() {
+        let cloned = super::decoration::cloned(data, box_index);
         let parent = open.last().map(|&r| r as u32);
         out.push(FragmentRecord {
             kind: RecordKind::InlineBox {
                 box_index,
-                start_edge: false,
+                start_edge: cloned,
                 end_edge: false,
                 parent,
                 reversed: box_reversed(data, box_index),
@@ -99,6 +115,13 @@ fn build_logical(
             level: level_at_start,
         });
         open.push(out.len() - 1);
+        if cloned {
+            pos = pos
+                + LayoutUnit::from_f32_round(
+                    data.boxes[box_index as usize].edges.inline_start_total(),
+                    &mut Default::default(),
+                );
+        }
     }
 
     for (k, i) in units.enumerate() {
@@ -139,6 +162,7 @@ fn build_logical(
                         glyphs: g,
                         item,
                         text,
+                        ..
                     } = &mut last.kind
                     && *r == *run
                     && *item == unit.item
@@ -154,6 +178,7 @@ fn build_logical(
                             glyphs: glyphs.clone(),
                             item: unit.item,
                             text: unit.text.clone(),
+                            source: GlyphSource::Shared,
                         },
                         inline_start: pos,
                         inline_size: w,
@@ -163,7 +188,7 @@ fn build_logical(
                 pos = pos + w;
             }
             UnitKind::Atomic { node } => {
-                let size = atomics.get(*node).copied().unwrap_or_default();
+                let size = normalized_size(atomics, *node);
                 out.push(FragmentRecord {
                     kind: RecordKind::Atomic { node: *node, size },
                     inline_start: pos,
@@ -190,7 +215,21 @@ fn build_logical(
         }
     }
     // Boxes that continue on the next line end here without their end edge.
-    for r in open {
+    for r in open.into_iter().rev() {
+        if let RecordKind::InlineBox {
+            box_index,
+            end_edge,
+            ..
+        } = &mut out[r].kind
+            && super::decoration::cloned(data, *box_index)
+        {
+            *end_edge = true;
+            pos = pos
+                + LayoutUnit::from_f32_round(
+                    data.boxes[*box_index as usize].edges.inline_end_total(),
+                    &mut Default::default(),
+                );
+        }
         out[r].inline_size = pos - out[r].inline_start;
     }
     out
@@ -259,6 +298,7 @@ fn push_cluster(
                     glyphs: g,
                     item: it,
                     text: t,
+                    ..
                 },
             inline_size,
             ..
@@ -280,6 +320,7 @@ fn push_cluster(
                 glyphs: glyphs.clone(),
                 item,
                 text: text.clone(),
+                source: GlyphSource::Shared,
             },
             inline_start: LayoutUnit::ZERO,
             inline_size: width,
@@ -307,6 +348,22 @@ fn build_bidi(
     // Level and owner of the last piece that is neither a hanging space nor
     // an out-of-flow anchor.
     let mut last_kept: Option<(u8, Option<u32>)> = None;
+    for b in super::decoration::chain(data, units.start)
+        .into_iter()
+        .rev()
+        .filter(|b| super::decoration::cloned(data, *b))
+    {
+        pieces.push(Piece {
+            record: None,
+            width: LayoutUnit::from_f32_round(
+                data.boxes[b as usize].edges.inline_start_total(),
+                &mut Default::default(),
+            ),
+            level: data.units[units.start].level,
+            owner: Some(b),
+            edge: Some((b, true)),
+        });
+    }
     for (k, i) in units.clone().enumerate() {
         let unit = &data.units[i];
         let w = widths[k];
@@ -363,7 +420,7 @@ fn build_bidi(
                 continue;
             }
             UnitKind::Atomic { node } => {
-                let size = atomics.get(*node).copied().unwrap_or_default();
+                let size = normalized_size(atomics, *node);
                 let kind = RecordKind::Atomic { node: *node, size };
                 Piece {
                     record: Some(record(kind)),
@@ -403,6 +460,21 @@ fn build_bidi(
         };
         last_kept = Some((piece.level, piece.owner));
         pieces.push(piece);
+    }
+    for b in super::decoration::chain(data, units.end)
+        .into_iter()
+        .filter(|b| super::decoration::cloned(data, *b))
+    {
+        pieces.push(Piece {
+            record: None,
+            width: LayoutUnit::from_f32_round(
+                data.boxes[b as usize].edges.inline_end_total(),
+                &mut Default::default(),
+            ),
+            level: last_kept.map_or(base, |v| v.0),
+            owner: Some(b),
+            edge: Some((b, false)),
+        });
     }
     pieces.append(&mut hanging);
 

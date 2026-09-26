@@ -316,15 +316,15 @@ fn atomics_sit_on_the_baseline() {
         ),
         (11.0, 20.0)
     );
-    // No baseline given: the bottom of the margin box sits on the baseline (8px).
+    // The atomic's bottom baseline raises the line baseline to fit its height.
     assert_eq!(
         (
             atomic.margin_rect.block_start,
             atomic.margin_rect.block_size
         ),
-        (-22.0, 30.0)
+        (0.0, 30.0)
     );
-    assert_eq!(atomic.baseline, 8.0);
+    assert_eq!(atomic.baseline, 30.0);
 }
 
 #[test]

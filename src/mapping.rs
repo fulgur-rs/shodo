@@ -106,15 +106,19 @@ impl OffsetMapping {
 
     /// Caller offset of a processed-text offset.
     pub fn text_to_dom(&self, offset: u32, affinity: Affinity) -> Option<TextOrigin> {
-        if let Some((_, node)) = self
-            .generated
-            .iter()
-            .find(|(r, _)| r.start <= offset && offset < r.end)
-        {
-            return Some(TextOrigin::Generated { node: *node });
-        }
         let mut downstream = None;
         let mut upstream = None;
+        for (r, node) in &self.generated {
+            if r.start < offset && offset < r.end {
+                return Some(TextOrigin::Generated { node: *node });
+            }
+            if r.start == offset && !r.is_empty() {
+                downstream = Some(TextOrigin::Generated { node: *node });
+            }
+            if r.end == offset && !r.is_empty() {
+                upstream = Some(TextOrigin::Generated { node: *node });
+            }
+        }
         for u in self
             .units
             .iter()
@@ -157,6 +161,40 @@ mod tests {
             dom,
             text,
         }
+    }
+
+    #[test]
+    fn affinity_selects_dom_or_generated_on_both_boundaries() {
+        let mut m = OffsetMapping::default();
+        m.push_unit(unit(MappingKind::Identity, 0..1, 0..1));
+        m.push_generated(1..3, NodeId(9));
+        m.push_unit(unit(MappingKind::Identity, 1..2, 3..4));
+        assert_eq!(
+            m.text_to_dom(1, Affinity::Upstream),
+            Some(TextOrigin::Dom {
+                node: NodeId(1),
+                offset: 1
+            })
+        );
+        assert_eq!(
+            m.text_to_dom(1, Affinity::Downstream),
+            Some(TextOrigin::Generated { node: NodeId(9) })
+        );
+        assert_eq!(
+            m.text_to_dom(3, Affinity::Upstream),
+            Some(TextOrigin::Generated { node: NodeId(9) })
+        );
+        assert_eq!(
+            m.text_to_dom(3, Affinity::Downstream),
+            Some(TextOrigin::Dom {
+                node: NodeId(1),
+                offset: 1
+            })
+        );
+        assert_eq!(
+            m.text_to_dom(2, Affinity::Upstream),
+            Some(TextOrigin::Generated { node: NodeId(9) })
+        );
     }
 
     #[test]

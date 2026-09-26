@@ -5,8 +5,6 @@
 //! atomic inlines. Coordinates are logical (inline / block axes) and are
 //! converted to physical coordinates with [`geometry::PhysicalConverter`].
 #![forbid(unsafe_code)]
-// Internal items are wired up incrementally; removed once all are in use.
-#![allow(dead_code, unused_imports)]
 
 pub mod font;
 pub mod geometry;
@@ -27,10 +25,10 @@ mod shape;
 pub use builder::{ParagraphBuilder, RichText};
 pub use context::LayoutContext;
 pub use output::{
-    AnchorFragment, AtomicFragment, BreakReason, Fragment, Glyph, GlyphRunView, Glyphs,
+    AnchorFragment, AtomicFragment, BreakReason, Cluster, Fragment, Glyph, GlyphRunView, Glyphs,
     InlineBoxFragment, Line,
 };
 pub use paragraph::{
-    AtomicSize, AtomicSizes, BreakPlan, BreakToken, FloatCursor, LineConstraint, LineResult,
-    Paragraph,
+    AtomicIntrinsic, AtomicIntrinsics, AtomicSize, AtomicSizes, BreakPlan, BreakToken, FloatClear,
+    FloatCursor, FloatIntrinsic, FloatSide, IntrinsicSizes, LineConstraint, LineResult, Paragraph,
 };

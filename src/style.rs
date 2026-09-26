@@ -374,6 +374,8 @@ pub enum TextAlign {
     Center,
     Justify,
     JustifyAll,
+    /// Unresolved parent alignment is treated as `Start`; resolve the
+    /// parent's computed value before passing it for full CSS behavior.
     MatchParent,
 }
 

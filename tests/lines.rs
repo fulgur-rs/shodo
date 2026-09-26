@@ -382,7 +382,8 @@ fn non_finite_style_values_become_initial_or_zero() {
         .count();
     assert!(count >= 5, "{:?}", p.warnings());
     let line = &lines(&p, 100.0, &LineOptions::default())[0];
-    assert_eq!(line.block_size(), 0.0);
+    // The child's normal line height contributes despite the zero root strut.
+    assert_eq!(line.block_size(), 10.0);
 }
 
 fn next(p: &Paragraph, token: shodo::BreakToken) -> LineResult {

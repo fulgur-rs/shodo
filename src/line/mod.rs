@@ -1,18 +1,28 @@
 //! Line breaking.
 
+mod align;
+pub(crate) mod cache;
+mod decoration;
 pub(crate) mod fragments;
+mod intrinsic;
+mod iter;
+pub(crate) mod metrics;
+mod plan;
+mod reshape;
+mod scan;
 
-use crate::analysis::units::{BreakClass, Unit, UnitKind};
+use crate::analysis::units::UnitKind;
 use crate::context::LayoutContext;
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::limits::WarningKind;
 use crate::output::{BreakReason, Line};
 use crate::paragraph::{
-    AtomicSizes, BreakToken, LineConstraint, LineResult, Paragraph, ParagraphData,
+    AtomicSizes, BreakToken, FloatCursor, LineConstraint, LineResult, Paragraph,
 };
-use crate::style::{LineOptions, TabSize};
+use crate::style::LineOptions;
 
 /// Result of scanning one line.
+#[derive(Clone, Debug)]
 pub(crate) struct Scan {
     pub(crate) end: usize,
     pub(crate) reason: BreakReason,
@@ -30,6 +40,8 @@ impl Paragraph {
     /// Lays out the line starting at `token`. Pure: the same inputs always
     /// give the same result, so a token can be retried with other
     /// constraints.
+    /// If a line cannot fit even at the top of a page, retry the same token
+    /// with `max_block_size: None` to accept the overflowing line.
     pub fn next_line(
         &self,
         cx: &mut LayoutContext,
@@ -51,11 +63,12 @@ impl Paragraph {
             let token_after = BreakToken {
                 para: data.id,
                 unit: token.unit + 1,
-                flags: BreakToken::AFTER_FORCED,
+                flags: 0,
             };
             return LineResult::BlockInInline { node, token_after };
         }
         let mut sat = Saturation::default();
+        let constraint = crate::sanitize::constraint(*constraint, &mut cx.warnings, &mut sat);
         let available = non_negative(
             constraint.available_inline_size,
             "available_inline_size",
@@ -68,12 +81,103 @@ impl Paragraph {
             cx,
             &mut sat,
         );
-        let indent = text_indent(options, token.flags, &mut sat);
-        let scan = scan(
-            data, start, available, offset, indent, atomics, cx, &mut sat,
+        let mut options = *options;
+        options.text_indent.length = crate::sanitize::layout_length(
+            options.text_indent.length,
+            false,
+            &mut cx.warnings,
+            &mut sat,
         );
-        let origin = offset.add(indent, &mut sat);
-        let line = Line::new(
+        let indent = text_indent(&options, token.flags, &mut sat);
+        let planned_end = constraint.break_plan.and_then(|p| {
+            if plan::matches(p, self, &options, &constraint, atomics) {
+                let index = p.ends.partition_point(|end| *end <= token.unit);
+                let valid_start = token.unit == 0
+                    || index > 0 && p.ends[index - 1] == token.unit
+                    || start > 0
+                        && matches!(data.units[start - 1].kind, UnitKind::BlockInInline { .. })
+                        && p.ends.binary_search(&(token.unit - 1)).is_ok();
+                valid_start
+                    .then(|| p.ends.get(index).copied())
+                    .flatten()
+                    .map(|end| end as usize)
+            } else {
+                cx.warnings.push(
+                    WarningKind::Unsupported,
+                    "break plan inputs mismatch; using greedy layout",
+                );
+                None
+            }
+        });
+        let mut scan = if let Some(end) = planned_end {
+            plan::selected(data, start, end, offset, indent, atomics, cx, &mut sat)
+        } else {
+            match cache::resolve(
+                self,
+                token,
+                &options,
+                &constraint,
+                available,
+                offset,
+                indent,
+                atomics,
+                cx,
+                &mut sat,
+            ) {
+                Ok(scan) => scan,
+                Err((node, ordinal, position)) => {
+                    cx.warnings.record_saturation(&sat);
+                    return LineResult::FloatEncountered {
+                        node,
+                        line_start: token,
+                        inline_position: position.to_f32(),
+                        float_cursor: FloatCursor(ordinal),
+                    };
+                }
+            }
+        };
+        // Select the break before reporting an anchor: floats do not create
+        // opportunities, and a word containing one may belong to the next line.
+        let mut float_pos = indent.add(decoration::width(data, start, true, &mut sat), &mut sat);
+        for (u, w) in data.units[start..scan.end].iter().zip(&scan.widths) {
+            if let UnitKind::Float { node, ordinal } = u.kind
+                && constraint
+                    .floats_placed_through
+                    .is_none_or(|c| ordinal > c.0)
+            {
+                cx.warnings.record_saturation(&sat);
+                return LineResult::FloatEncountered {
+                    node,
+                    line_start: token,
+                    inline_position: float_pos.to_f32(),
+                    float_cursor: FloatCursor(ordinal),
+                };
+            }
+            float_pos = float_pos.add(*w, &mut sat);
+        }
+        let mut displaced = Vec::new();
+        if let Some(cursor) = constraint.floats_placed_through
+            && !data.floats.is_empty()
+        {
+            let begin = data
+                .floats
+                .partition_point(|(unit, _)| *unit < scan.end as u32);
+            let handled = (u64::from(cursor.0) + 1).min(data.floats.len() as u64) as usize;
+            if begin < handled {
+                for (index, (_, node)) in data.floats[begin..handled].iter().enumerate() {
+                    #[cfg(test)]
+                    {
+                        cx.float_search_visits += 1;
+                    }
+                    displaced.push((*node, FloatCursor((begin + index) as u32)));
+                }
+            }
+        }
+        let alignment = align::apply(
+            data, start, &mut scan, &options, available, indent, &mut sat,
+        );
+        let origin = offset.add(indent, &mut sat).add(alignment.shift, &mut sat);
+        let mut line = Line::new(
             self,
             token,
             scan,
@@ -82,7 +186,18 @@ impl Paragraph {
             atomics,
             &mut sat,
         );
+        line.positions = alignment.positions;
+        line.displaced = displaced;
+        reshape::apply(&mut line, cx, &mut sat);
         cx.warnings.record_saturation(&sat);
+        if constraint
+            .max_block_size
+            .is_some_and(|max| line.block_size() > max)
+        {
+            return LineResult::BlockSizeExceeded {
+                needed_block_size: line.block_size(),
+            };
+        }
         LineResult::Line(line)
     }
 }
@@ -119,164 +234,5 @@ fn text_indent(options: &LineOptions, flags: u8, sat: &mut Saturation) -> Layout
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn scan(
-    data: &ParagraphData,
-    start: usize,
-    available: LayoutUnit,
-    offset: LayoutUnit,
-    indent: LayoutUnit,
-    atomics: &AtomicSizes,
-    cx: &mut LayoutContext,
-    sat: &mut Saturation,
-) -> Scan {
-    let units = &data.units;
-    let mut widths = Vec::new();
-    let mut pos = indent;
-    let mut last_break: Option<usize> = None;
-    let mut overflowing = false;
-    let mut i = start;
-    let reason = loop {
-        let Some(unit) = units.get(i) else {
-            break BreakReason::End;
-        };
-        match unit.kind {
-            UnitKind::ForcedBreak => {
-                widths.push(LayoutUnit::ZERO);
-                i += 1;
-                break BreakReason::Forced;
-            }
-            UnitKind::BlockInInline { .. } => break BreakReason::BlockInInline,
-            _ => {}
-        }
-        let w = unit_width(data, unit, offset.add(pos, sat), atomics, cx, sat);
-        // Trailing spaces hang and never cause a break (CSS Text 3 §4.1.3).
-        let hangs = matches!(unit.kind, UnitKind::Cluster { space: true, .. });
-        if !hangs && !overflowing && i > start && pos.add(w, sat) > available {
-            if let Some(b) = last_break {
-                widths.truncate(b - start);
-                i = b;
-                break BreakReason::Regular;
-            }
-            // No opportunity yet: the unbreakable run overflows
-            // (`overflow-wrap: normal`) and the line ends at the next one.
-            overflowing = true;
-        }
-        widths.push(w);
-        pos = pos.add(w, sat);
-        i += 1;
-        if unit.break_after == BreakClass::Allowed {
-            if overflowing {
-                break BreakReason::Regular;
-            }
-            last_break = Some(i);
-        }
-    };
-    // Inline box ends right after a soft break stay on the line that ends
-    // there, together with the zero-width bidi controls (PDI, PDF) that
-    // precede a box's end. Out-of-flow anchors are not pulled.
-    if reason == BreakReason::Regular {
-        while let Some(unit) = units.get(i)
-            && matches!(unit.kind, UnitKind::Close { .. } | UnitKind::BidiControl)
-        {
-            widths.push(unit_width(data, unit, LayoutUnit::ZERO, atomics, cx, sat));
-            i += 1;
-        }
-    }
-    let total = widths
-        .iter()
-        .fold(LayoutUnit::ZERO, |acc, w| acc.add(*w, sat));
-    let mut trailing = LayoutUnit::ZERO;
-    let mut hang_start = i;
-    for (k, unit) in units[start..i].iter().enumerate().rev() {
-        match unit.kind {
-            UnitKind::Cluster { space: true, .. } => {
-                trailing = trailing.add(widths[k], sat);
-                hang_start = start + k;
-            }
-            UnitKind::Close { .. }
-            | UnitKind::BidiControl
-            | UnitKind::Float { .. }
-            | UnitKind::Absolute { .. }
-            | UnitKind::ForcedBreak => {}
-            _ => break,
-        }
-    }
-    Scan {
-        end: i,
-        reason,
-        widths,
-        content: total.sub(trailing, sat),
-        hang_start,
-    }
-}
-
-/// Inline advance of one unit. `content_pos` is the unit's position from the
-/// content edge of the block container (tab stops are measured from it).
-fn unit_width(
-    data: &ParagraphData,
-    unit: &Unit,
-    content_pos: LayoutUnit,
-    atomics: &AtomicSizes,
-    cx: &mut LayoutContext,
-    sat: &mut Saturation,
-) -> LayoutUnit {
-    match &unit.kind {
-        UnitKind::Cluster { glyphs, .. } => glyphs.clone().fold(LayoutUnit::ZERO, |acc, g| {
-            acc.add(data.glyphs.advance[g as usize], sat)
-        }),
-        UnitKind::Open { box_index } => LayoutUnit::from_f32_round(
-            data.boxes[*box_index as usize].edges.inline_start_total(),
-            sat,
-        ),
-        UnitKind::Close { box_index } => LayoutUnit::from_f32_round(
-            data.boxes[*box_index as usize].edges.inline_end_total(),
-            sat,
-        ),
-        UnitKind::Atomic { node } => match atomics.get(*node) {
-            Some(size) => {
-                let inline = if size.inline_size < 0.0 {
-                    cx.warnings.push(
-                        WarningKind::NegativeInput,
-                        "negative atomic inline size replaced with 0",
-                    );
-                    0.0
-                } else {
-                    size.inline_size
-                };
-                LayoutUnit::from_f32_round(inline + size.margins.inline_sum(), sat)
-            }
-            None => {
-                cx.warnings.push(
-                    WarningKind::MissingAtomicSize,
-                    format!("no size for atomic inline {node:?}"),
-                );
-                LayoutUnit::ZERO
-            }
-        },
-        UnitKind::Tab => tab_width(data, unit, content_pos, sat),
-        _ => LayoutUnit::ZERO,
-    }
-}
-
-/// Distance to the next tab stop (CSS Text 3 §4.2). The placeholder shaper
-/// gives the space character a 1em advance.
-fn tab_width(
-    data: &ParagraphData,
-    unit: &Unit,
-    content_pos: LayoutUnit,
-    sat: &mut Saturation,
-) -> LayoutUnit {
-    let style = &data.styles[data.items[unit.item as usize].style as usize];
-    let interval = match style.tab_size {
-        TabSize::Spaces(n) => n * style.font_size,
-        TabSize::Px(v) => v,
-    };
-    let interval = i64::from(LayoutUnit::from_f32_round(interval, sat).raw());
-    if interval <= 0 {
-        return LayoutUnit::ZERO;
-    }
-    let x = i64::from(content_pos.raw());
-    let next = (x.div_euclid(interval) + 1) * interval;
-    LayoutUnit::from_raw((next - x).clamp(0, i64::from(i32::MAX)) as i32)
-}
+#[cfg(test)]
+mod tests;

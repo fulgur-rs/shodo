@@ -1,6 +1,6 @@
 //! Paragraphs: immutable results of `ParagraphBuilder::build`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -19,6 +19,7 @@ use crate::shape::{GlyphStore, ShapedRun, shape_item};
 use crate::style::{InlineStyle, ParagraphStyle, TextOrientation};
 
 static NEXT_PARAGRAPH_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_ATOMIC_REVISION: AtomicU64 = AtomicU64::new(1);
 
 /// Largest accepted font size in px; larger values are clamped.
 const MAX_FONT_SIZE: f32 = 1.0e6;
@@ -50,6 +51,10 @@ impl FloatCursor {
 }
 
 pub(crate) struct ParagraphData {
+    #[cfg(test)]
+    pub(crate) baseline_queries: std::sync::atomic::AtomicUsize,
+    #[cfg(test)]
+    pub(crate) cluster_queries: std::sync::atomic::AtomicUsize,
     pub(crate) id: u64,
     pub(crate) style: ParagraphStyle,
     pub(crate) limits: Limits,
@@ -57,6 +62,11 @@ pub(crate) struct ParagraphData {
     pub(crate) items: Vec<Item>,
     pub(crate) styles: Vec<InlineStyle>,
     pub(crate) glyphs: GlyphStore,
+    /// Unit index for each shaping cluster and cluster index for each glyph.
+    pub(crate) clusters: Vec<u32>,
+    pub(crate) glyph_clusters: Vec<u32>,
+    /// Unit index and node, in float ordinal order.
+    pub(crate) floats: Vec<(u32, NodeId)>,
     pub(crate) runs: Vec<ShapedRun>,
     pub(crate) units: Vec<Unit>,
     pub(crate) boxes: Vec<InlineBoxInfo>,
@@ -66,7 +76,15 @@ pub(crate) struct ParagraphData {
     pub(crate) fonts: FontCollection,
     pub(crate) generations: (u64, Option<u64>),
     pub(crate) warnings: Vec<Warning>,
-    pub(crate) baselines: Vec<(NodeId, BaselineKind)>,
+    pub(crate) baselines: HashMap<NodeId, BaselineKind>,
+}
+
+impl ParagraphData {
+    pub(crate) fn baseline_kind(&self, node: NodeId) -> Option<BaselineKind> {
+        #[cfg(test)]
+        self.baseline_queries.fetch_add(1, Ordering::Relaxed);
+        self.baselines.get(&node).copied()
+    }
 }
 
 /// The analyzed and shaped inline content of one block container.
@@ -120,11 +138,7 @@ impl Paragraph {
     /// Which baseline of atomic inline `node` the caller must supply in
     /// `AtomicSizes`: the dominant baseline of its parent inline box.
     pub fn required_baseline(&self, node: NodeId) -> Option<BaselineKind> {
-        self.data
-            .baselines
-            .iter()
-            .find(|(n, _)| *n == node)
-            .map(|(_, kind)| *kind)
+        self.data.baseline_kind(node)
     }
 
     pub(crate) fn from_builder(
@@ -151,7 +165,7 @@ impl Paragraph {
             style.root = root.clone();
         }
         sanitize::items(&mut items, &mut warnings);
-        let processed = process(&text, &items, &styles, offset_mapping);
+        let processed = process(&text, &items, &styles, offset_mapping, &limits)?;
         let mut sat = Saturation::default();
         let font = fonts.primary_font();
         let mut glyphs = GlyphStore::default();
@@ -191,20 +205,39 @@ impl Paragraph {
             &levels,
             base_level,
         );
-        let baselines = processed
-            .items
-            .iter()
-            .filter_map(|item| match item.kind {
-                ItemKind::Atomic { parent_style, .. } => Some((
-                    item.node?,
-                    baseline_kind(style.writing_mode, &styles[parent_style as usize]),
-                )),
-                _ => None,
-            })
-            .collect();
+        let mut baselines = HashMap::new();
+        for item in &processed.items {
+            if let ItemKind::Atomic { parent_style, .. } = item.kind
+                && let Some(node) = item.node
+            {
+                baselines.entry(node).or_insert_with(|| {
+                    baseline_kind(style.writing_mode, &styles[parent_style as usize])
+                });
+            }
+        }
+        let mut clusters = Vec::new();
+        let mut glyph_clusters = vec![0; glyphs.len()];
+        let mut floats = Vec::new();
+        for (i, u) in units.iter().enumerate() {
+            match &u.kind {
+                crate::analysis::units::UnitKind::Cluster { glyphs, .. } => {
+                    let cluster = clusters.len() as u32;
+                    clusters.push(i as u32);
+                    glyph_clusters[glyphs.start as usize..glyphs.end as usize].fill(cluster);
+                }
+                crate::analysis::units::UnitKind::Float { node, .. } => {
+                    floats.push((i as u32, *node))
+                }
+                _ => {}
+            }
+        }
         warnings.record_saturation(&sat);
         Ok(Paragraph {
             data: Arc::new(ParagraphData {
+                #[cfg(test)]
+                baseline_queries: Default::default(),
+                #[cfg(test)]
+                cluster_queries: Default::default(),
                 id: NEXT_PARAGRAPH_ID.fetch_add(1, Ordering::Relaxed),
                 style,
                 limits,
@@ -212,6 +245,9 @@ impl Paragraph {
                 items: processed.items,
                 styles,
                 glyphs,
+                clusters,
+                glyph_clusters,
+                floats,
                 runs,
                 units,
                 boxes,
@@ -277,12 +313,14 @@ pub struct AtomicSize {
 pub struct AtomicSizes {
     map: BTreeMap<NodeId, AtomicSize>,
     generation: u64,
+    pub(crate) revision: u64,
 }
 
 impl AtomicSizes {
     pub const EMPTY: AtomicSizes = AtomicSizes {
         map: BTreeMap::new(),
         generation: 0,
+        revision: 0,
     };
 
     pub fn new() -> Self {
@@ -291,7 +329,8 @@ impl AtomicSizes {
 
     pub fn insert(&mut self, node: NodeId, size: AtomicSize) {
         self.map.insert(node, size);
-        self.generation += 1;
+        self.generation = self.generation.wrapping_add(1);
+        self.revision = NEXT_ATOMIC_REVISION.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn get(&self, node: NodeId) -> Option<&AtomicSize> {
@@ -303,13 +342,79 @@ impl AtomicSizes {
     }
 }
 
+/// Minimum and maximum intrinsic inline sizes in logical pixels.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct IntrinsicSizes {
+    pub min_content: f32,
+    pub max_content: f32,
+}
+
+/// Intrinsic margin-box widths supplied by the caller; do not add margins again.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct AtomicIntrinsic {
+    pub min_content: f32,
+    pub max_content: f32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FloatSide {
+    Left,
+    Right,
+    #[default]
+    InlineStart,
+    InlineEnd,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FloatClear {
+    #[default]
+    None,
+    Left,
+    Right,
+    Both,
+    InlineStart,
+    InlineEnd,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FloatIntrinsic {
+    pub min_content: f32,
+    pub max_content: f32,
+    pub side: FloatSide,
+    pub clear: FloatClear,
+}
+
+/// Intrinsic margin-box widths of atomic inlines and floats by node.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AtomicIntrinsics {
+    pub(crate) atomics: BTreeMap<NodeId, AtomicIntrinsic>,
+    pub(crate) floats: BTreeMap<NodeId, FloatIntrinsic>,
+}
+impl AtomicIntrinsics {
+    pub const EMPTY: Self = Self {
+        atomics: BTreeMap::new(),
+        floats: BTreeMap::new(),
+    };
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn insert_atomic(&mut self, node: NodeId, value: AtomicIntrinsic) {
+        self.atomics.insert(node, value);
+    }
+    pub fn insert_float(&mut self, node: NodeId, value: FloatIntrinsic) {
+        self.floats.insert(node, value);
+    }
+}
+
 /// A precomputed set of break positions for `text-wrap: balance | pretty`.
-/// Produced by `Paragraph::plan_breaks` (not available yet).
+/// Produced by [`Paragraph::plan_breaks`]; mismatching inputs safely fall
+/// back to greedy layout.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BreakPlan {
     pub(crate) para: u64,
     pub(crate) width: f32,
     pub(crate) atomics_generation: u64,
+    pub(crate) atomics_revision: u64,
+    pub(crate) options: crate::style::LineOptions,
+    pub(crate) ends: Vec<u32>,
 }
 
 /// Space available to one line.
