@@ -158,7 +158,13 @@ fn generated_paragraphs_progress_and_preserve_shared_clusters() {
         let p = b
             .build(
                 &mut LayoutContext::new(),
-                &shodo::font::FontCollection::new(&Limits::default()),
+                &shodo::font::FontCollection::with_options(
+                    &Limits::default(),
+                    shodo::font::FontOptions {
+                        system_fonts: false,
+                        ..Default::default()
+                    },
+                ),
             )
             .unwrap();
         let width = dimension(seed * 17);
@@ -262,7 +268,13 @@ fn generated_small_limits_fail_without_large_allocations() {
         assert_eq!(
             b.build(
                 &mut LayoutContext::new(),
-                &shodo::font::FontCollection::new(&limits)
+                &shodo::font::FontCollection::with_options(
+                    &limits,
+                    shodo::font::FontOptions {
+                        system_fonts: false,
+                        ..Default::default()
+                    }
+                )
             )
             .unwrap_err()
             .kind,

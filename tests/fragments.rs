@@ -36,7 +36,13 @@ fn para(build: impl FnOnce(&mut ParagraphBuilder)) -> Paragraph {
     build(&mut b);
     b.build(
         &mut LayoutContext::new(),
-        &FontCollection::new(&Limits::default()),
+        &FontCollection::with_options(
+            &Limits::default(),
+            shodo::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        ),
     )
     .unwrap()
 }

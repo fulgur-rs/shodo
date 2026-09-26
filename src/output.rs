@@ -351,51 +351,17 @@ impl<'a> GlyphRunView<'a> {
         // real shaper that emits right-to-left runs in visual order must not
         // be reversed twice.
         let reversed = self.record.level % 2 != self.line.data.base_level % 2;
-        let mut pen = if reversed {
+        let pen = if reversed {
             self.record.inline_size - rel - advance
         } else {
             rel
         };
-        // Justification stretches between clusters, never the attachment
-        // positions within a cluster. Locate its base in constant time.
-        let unit = self.data().clusters[self.data().glyph_clusters[g as usize] as usize];
-        let crate::analysis::units::UnitKind::Cluster { glyphs, .. } =
-            &self.data().units[unit as usize].kind
-        else {
-            unreachable!()
+        let offset = if reversed {
+            LayoutUnit::ZERO - store.offset_inline[gi]
+        } else {
+            store.offset_inline[gi]
         };
-        let base = glyphs.start;
-        if g != base {
-            let base_gi = match self.source {
-                GlyphSource::Shared => base as usize,
-                GlyphSource::Overlay { start } => (start + base - self.glyphs.0) as usize,
-            };
-            let (base_rel, base_advance) = if let Some((start, positions)) = &self.line.positions {
-                let base_rel = positions[(base - start) as usize]
-                    - positions[(self.glyphs.0 - start) as usize];
-                let end = if base + 1 < self.glyphs.1 {
-                    positions[(base + 1 - start) as usize]
-                        - positions[(self.glyphs.0 - start) as usize]
-                } else {
-                    self.record.inline_size
-                };
-                (base_rel, end - base_rel)
-            } else {
-                (
-                    store.pen[base_gi] - store.pen[first],
-                    store.advance[base_gi],
-                )
-            };
-            let cluster_rel = store.pen[gi] - store.pen[base_gi];
-            pen = if reversed {
-                self.record.inline_size - base_rel - base_advance + store.advance[base_gi]
-                    - cluster_rel
-                    - store.advance[gi]
-            } else {
-                base_rel + cluster_rel
-            };
-        }
-        let position = self.record.inline_start + pen + store.offset_inline[gi];
+        let position = self.record.inline_start + pen + offset;
         Glyph {
             id: store.id[gi],
             inline_position: position.to_f32(),

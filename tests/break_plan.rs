@@ -86,7 +86,13 @@ fn zero_search_limits_warn_and_nan_empty_inputs_terminate() {
     let p = b
         .build(
             &mut LayoutContext::new(),
-            &shodo::font::FontCollection::new(&limits),
+            &shodo::font::FontCollection::with_options(
+                &limits,
+                shodo::font::FontOptions {
+                    system_fonts: false,
+                    ..Default::default()
+                },
+            ),
         )
         .unwrap();
     for wrap in [TextWrapStyle::Balance, TextWrapStyle::Pretty] {

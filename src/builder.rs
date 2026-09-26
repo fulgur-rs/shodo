@@ -260,7 +260,7 @@ impl ParagraphBuilder {
     /// exceeded; inline boxes left open are closed with a warning.
     pub fn build(
         mut self,
-        _cx: &mut LayoutContext,
+        cx: &mut LayoutContext,
         fonts: &FontCollection,
     ) -> Result<Paragraph, LimitExceeded> {
         while !self.stack.is_empty() && self.error.is_none() {
@@ -279,7 +279,7 @@ impl ParagraphBuilder {
                 "::first-line style is not applied yet",
             );
         }
-        Paragraph::from_builder(self, fonts)
+        Paragraph::from_builder(self, cx, fonts)
     }
 }
 

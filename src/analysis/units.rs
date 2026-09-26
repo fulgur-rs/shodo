@@ -125,10 +125,21 @@ pub(crate) fn build_units(
             ItemKind::Text => {
                 while run_index < runs.len() && runs[run_index].item == index {
                     let run = &runs[run_index];
+                    let mut cluster_ends =
+                        vec![run.text.end; (run.glyphs.end - run.glyphs.start) as usize];
+                    let mut end = run.text.end;
+                    for g in run.glyphs.clone().rev() {
+                        if g + 1 < run.glyphs.end
+                            && glyphs.cluster[(g + 1) as usize] > glyphs.cluster[g as usize]
+                        {
+                            end = glyphs.cluster[(g + 1) as usize];
+                        }
+                        cluster_ends[(g - run.glyphs.start) as usize] = end;
+                    }
                     for g in run.glyphs.clone() {
                         let cluster = glyphs.cluster[g as usize];
                         let c = text[cluster as usize..].chars().next().unwrap_or(' ');
-                        let end = cluster + c.len_utf8() as u32;
+                        let end = cluster_ends[(g - run.glyphs.start) as usize];
                         if (breaks.graphemes.binary_search(&cluster).is_err()
                             || units.last().is_some_and(|u| u.text.start == cluster))
                             && let Some(last) = units.last_mut()
@@ -225,6 +236,28 @@ pub(crate) fn build_units(
             ItemKind::BidiControl => {
                 push(UnitKind::BidiControl, BreakClass::Prohibited, parent_box)
             }
+        }
+    }
+    let glyphs_store_flags = |g: u32| glyphs.flags[g as usize];
+    let mut previous_cluster: Option<usize> = None;
+    for i in 0..units.len() {
+        if let UnitKind::Cluster { ref glyphs, .. } = units[i].kind {
+            let flags = glyphs
+                .clone()
+                .fold(0, |flags, g| flags | glyphs_store_flags(g));
+            units[i].unsafe_to_concat = flags & 2 != 0;
+            if let Some(previous) = previous_cluster {
+                units[previous].unsafe_to_break = flags & 1 != 0;
+            }
+            previous_cluster = Some(i);
+        } else if matches!(
+            units[i].kind,
+            UnitKind::ForcedBreak
+                | UnitKind::Atomic { .. }
+                | UnitKind::BlockInInline { .. }
+                | UnitKind::Tab
+        ) {
+            previous_cluster = None;
         }
     }
     let level_at = |pos: u32| levels.get(pos as usize).copied();

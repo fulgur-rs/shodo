@@ -32,7 +32,13 @@ fn one_line(direction: Direction, build: impl FnOnce(&mut ParagraphBuilder)) -> 
     let p = b
         .build(
             &mut LayoutContext::new(),
-            &FontCollection::new(&Limits::default()),
+            &FontCollection::with_options(
+                &Limits::default(),
+                shodo::font::FontOptions {
+                    system_fonts: false,
+                    ..Default::default()
+                },
+            ),
         )
         .unwrap();
     let r = p.next_line(
@@ -58,7 +64,13 @@ fn all_lines(
     let p = b
         .build(
             &mut LayoutContext::new(),
-            &FontCollection::new(&Limits::default()),
+            &FontCollection::with_options(
+                &Limits::default(),
+                shodo::font::FontOptions {
+                    system_fonts: false,
+                    ..Default::default()
+                },
+            ),
         )
         .unwrap();
     let mut cx = LayoutContext::new();
@@ -427,7 +439,13 @@ fn many_boxes_on_one_reordered_line_are_laid_out() {
     let p = b
         .build(
             &mut LayoutContext::new(),
-            &FontCollection::new(&Limits::default()),
+            &FontCollection::with_options(
+                &Limits::default(),
+                shodo::font::FontOptions {
+                    system_fonts: false,
+                    ..Default::default()
+                },
+            ),
         )
         .unwrap();
     let LineResult::Line(line) = p.next_line(

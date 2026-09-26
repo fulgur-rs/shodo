@@ -16,7 +16,7 @@ use crate::mapping::OffsetMapping;
 use crate::node::{NodeId, Sides};
 use crate::output::Line;
 use crate::sanitize;
-use crate::shape::{GlyphStore, ShapedRun, shape_item};
+use crate::shape::{GlyphStore, ShapedRun, shape_items};
 use crate::style::{InlineStyle, ParagraphStyle, TextOrientation};
 
 static NEXT_PARAGRAPH_ID: AtomicU64 = AtomicU64::new(1);
@@ -85,6 +85,10 @@ pub(crate) struct ParagraphData {
 impl ParagraphData {
     pub(crate) fn bidi_paragraph_at_unit(&self, unit: usize) -> Option<&BidiParagraph> {
         let pos = self.units.get(unit)?.text.start;
+        self.bidi_paragraph_at_text(pos)
+    }
+
+    pub(crate) fn bidi_paragraph_at_text(&self, pos: u32) -> Option<&BidiParagraph> {
         let index = self.bidi_paragraphs.partition_point(|p| p.text.end <= pos);
         self.bidi_paragraphs.get(index)
     }
@@ -152,6 +156,7 @@ impl Paragraph {
 
     pub(crate) fn from_builder(
         b: ParagraphBuilder,
+        cx: &mut crate::LayoutContext,
         fonts: &FontCollection,
     ) -> Result<Paragraph, LimitExceeded> {
         let ParagraphBuilder {
@@ -178,27 +183,18 @@ impl Paragraph {
         let processed = transform(processed, &styles, &limits, &mut warnings)?;
         let breaks = crate::analysis::breaks::analyze_breaks(&processed, &styles, &mut warnings);
         let mut sat = Saturation::default();
-        let font = fonts.primary_font();
-        let mut glyphs = GlyphStore::default();
-        let mut runs = Vec::new();
-        for (index, item) in processed.items.iter().enumerate() {
-            if matches!(item.kind, ItemKind::Text) {
-                let s = &processed.text[item.text.start as usize..item.text.end as usize];
-                let size = styles[item.style as usize].font_size;
-                shape_item(
-                    &mut glyphs,
-                    &mut runs,
-                    s,
-                    item.text.start,
-                    index as u32,
-                    font,
-                    size,
-                    &limits,
-                    &mut sat,
-                )?;
-            }
-        }
         let bidi = analyze_bidi(&processed.text, &style, &styles);
+        let shape_items_input =
+            crate::analysis::itemize::itemize(&processed, &styles, &bidi, fonts);
+        let (glyphs, runs) = shape_items(
+            cx,
+            &shape_items_input,
+            &styles,
+            fonts,
+            &limits,
+            &mut warnings,
+            &mut sat,
+        )?;
         let base_level = u8::from(style.direction == Direction::Rtl);
         let UnitList {
             units,

@@ -40,6 +40,7 @@ pub(super) fn apply(line: &mut Line, cx: &mut LayoutContext, sat: &mut Saturatio
     let mut sources = Vec::new();
     for (range, store) in windows {
         let start = overlay.len() as u32;
+        overlay.flags.extend(store.flags);
         overlay.id.extend(store.id);
         overlay.advance.extend(store.advance);
         overlay.pen.extend(store.pen);

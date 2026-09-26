@@ -6,7 +6,13 @@ use shodo::style::{InlineStyle, ParagraphStyle, TextOrientation};
 use shodo::{LayoutContext, Paragraph, ParagraphBuilder, RichText};
 
 fn fonts() -> FontCollection {
-    FontCollection::new(&Limits::default())
+    FontCollection::with_options(
+        &Limits::default(),
+        shodo::font::FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    )
 }
 
 fn dom(node: u64) -> TextSource {

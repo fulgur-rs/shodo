@@ -116,11 +116,10 @@ pub(super) fn apply(
         for (u, width) in data.units[start..scan.end].iter().zip(&scan.widths) {
             if let UnitKind::Cluster { glyphs, .. } = &u.kind {
                 for g in glyphs.clone() {
-                    positions[(g - first.start) as usize] = if g == glyphs.start {
-                        pos
-                    } else {
-                        pos.add(*width, sat)
-                    };
+                    positions[(g - first.start) as usize] = pos.add(
+                        data.glyphs.pen[g as usize] - data.glyphs.pen[glyphs.start as usize],
+                        sat,
+                    );
                 }
             }
             pos = pos.add(*width, sat);
