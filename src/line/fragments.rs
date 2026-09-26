@@ -419,73 +419,88 @@ fn build_bidi(
         pos = pos + pieces[p].width;
     }
 
-    // Inline boxes: one fragment per visually contiguous group of members.
-    let mut box_ids: Vec<u32> = Vec::new();
-    for piece in &pieces {
-        let mut b = piece.owner;
-        while let Some(x) = b {
-            if !box_ids.contains(&x) {
-                box_ids.push(x);
+    // Inline boxes: one fragment per visually contiguous group of members,
+    // found in a single pass over the visual order. `open` holds the groups
+    // of the boxes enclosing the previous piece, outermost first; a piece
+    // keeps the common prefix of its own box chain open, closes the rest
+    // and opens groups for the boxes it enters.
+    let mut groups: Vec<Group> = Vec::new();
+    let mut open: Vec<usize> = Vec::new();
+    let mut chain: Vec<u32> = Vec::new();
+    let mut end = origin;
+    for &p in &order {
+        let piece = &pieces[p];
+        let top = open.last().map(|&g| groups[g].box_index);
+        if piece.owner != top {
+            chain.clear();
+            let mut b = piece.owner;
+            while let Some(x) = b {
+                chain.push(x);
+                b = data.boxes[x as usize].parent;
             }
-            b = data.boxes[x as usize].parent;
-        }
-    }
-    box_ids.sort_unstable();
-    let mut boxes: Vec<(FragmentRecord, u32)> = Vec::new();
-    for &b in &box_ids {
-        let reversed = box_reversed(data, b);
-        let mut group: Option<(LayoutUnit, LayoutUnit, bool, bool, u8)> = None;
-        let flush = |group: &mut Option<(LayoutUnit, LayoutUnit, bool, bool, u8)>,
-                     boxes: &mut Vec<(FragmentRecord, u32)>| {
-            if let Some((start, size, start_edge, end_edge, level)) = group.take() {
-                let kind = RecordKind::InlineBox {
+            chain.reverse();
+            let keep = open
+                .iter()
+                .zip(&chain)
+                .take_while(|&(&g, &b)| groups[g].box_index == b)
+                .count();
+            for g in open.drain(keep..) {
+                groups[g].size = end - groups[g].start;
+            }
+            for &b in &chain[keep..] {
+                groups.push(Group {
                     box_index: b,
-                    start_edge,
-                    end_edge,
-                    parent: None,
-                    reversed,
-                };
-                boxes.push((
-                    FragmentRecord {
-                        kind,
-                        inline_start: start,
-                        inline_size: size,
-                        level,
-                    },
-                    b,
-                ));
-            }
-        };
-        for &p in &order {
-            let piece = &pieces[p];
-            if inside(data, piece.owner, b) {
-                let g =
-                    group.get_or_insert((starts[p], LayoutUnit::ZERO, false, false, piece.level));
-                g.1 = g.1 + piece.width;
-                g.2 |= piece.edge == Some((b, true));
-                g.3 |= piece.edge == Some((b, false));
-            } else {
-                flush(&mut group, &mut boxes);
+                    start: starts[p],
+                    size: LayoutUnit::ZERO,
+                    start_edge: false,
+                    end_edge: false,
+                    level: piece.level,
+                    parent: open.last().copied(),
+                    depth: open.len() as u32,
+                });
+                open.push(groups.len() - 1);
             }
         }
-        flush(&mut group, &mut boxes);
+        if let Some((b, is_start)) = piece.edge
+            && let Some(&g) = open.last()
+            && groups[g].box_index == b
+        {
+            if is_start {
+                groups[g].start_edge = true;
+            } else {
+                groups[g].end_edge = true;
+            }
+        }
+        end = starts[p] + piece.width;
+    }
+    for g in open.drain(..) {
+        groups[g].size = end - groups[g].start;
     }
 
     // Output: boxes and content sorted by position; a box precedes the
-    // content it starts with, and an outer box precedes an inner one.
-    let depth = |b: u32| {
-        let mut d = 0;
-        let mut x = data.boxes[b as usize].parent;
-        while let Some(p) = x {
-            d += 1;
-            x = data.boxes[p as usize].parent;
-        }
-        d
-    };
-    let mut out: Vec<(FragmentRecord, Option<u32>, u32)> = boxes
-        .into_iter()
-        .map(|(r, b)| (r, Some(b), depth(b)))
-        .collect();
+    // content it starts with, and an outer box precedes an inner one. Among
+    // boxes at the same position and depth, the lower box index comes first.
+    let mut group_order: Vec<usize> = (0..groups.len()).collect();
+    group_order.sort_by_key(|&g| groups[g].box_index);
+    let mut out: Vec<(FragmentRecord, Option<usize>, u32)> =
+        Vec::with_capacity(groups.len() + pieces.len());
+    for g in group_order {
+        let group = &groups[g];
+        let kind = RecordKind::InlineBox {
+            box_index: group.box_index,
+            start_edge: group.start_edge,
+            end_edge: group.end_edge,
+            parent: None,
+            reversed: box_reversed(data, group.box_index),
+        };
+        let record = FragmentRecord {
+            kind,
+            inline_start: group.start,
+            inline_size: group.size,
+            level: group.level,
+        };
+        out.push((record, Some(g), group.depth));
+    }
     for &p in &order {
         if let Some(mut r) = pieces[p].record.clone() {
             r.inline_start = starts[p];
@@ -494,23 +509,33 @@ fn build_bidi(
     }
     out.sort_by_key(|(r, _, d)| (r.inline_start, *d));
 
-    // Parent links: the enclosing box fragment of the parent box.
-    let spans: Vec<(Option<u32>, LayoutUnit, LayoutUnit)> = out
-        .iter()
-        .map(|(r, b, _)| (*b, r.inline_start, r.inline_start + r.inline_size))
-        .collect();
-    for (r, b, _) in &mut out {
-        let Some(b) = *b else { continue };
-        let Some(parent_box) = data.boxes[b as usize].parent else {
-            continue;
-        };
-        let (start, end) = (r.inline_start, r.inline_start + r.inline_size);
-        let parent = spans
-            .iter()
-            .position(|(pb, ps, pe)| *pb == Some(parent_box) && *ps <= start && end <= *pe);
+    // Parent links: the fragment of the group that was open around a group
+    // when it started.
+    let mut index_of_group = vec![0usize; groups.len()];
+    for (i, (_, g, _)) in out.iter().enumerate() {
+        if let Some(g) = g {
+            index_of_group[*g] = i;
+        }
+    }
+    for (r, g, _) in &mut out {
+        let Some(g) = *g else { continue };
         if let RecordKind::InlineBox { parent: slot, .. } = &mut r.kind {
-            *slot = parent.map(|p| p as u32);
+            *slot = groups[g].parent.map(|p| index_of_group[p] as u32);
         }
     }
     out.into_iter().map(|(r, _, _)| r).collect()
+}
+
+/// A visually contiguous part of an inline box on one reordered line.
+struct Group {
+    box_index: u32,
+    start: LayoutUnit,
+    size: LayoutUnit,
+    start_edge: bool,
+    end_edge: bool,
+    level: u8,
+    /// The group of the enclosing box that was open when this one started.
+    parent: Option<usize>,
+    /// Nesting depth of the box among the boxes on the line.
+    depth: u32,
 }

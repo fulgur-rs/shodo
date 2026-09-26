@@ -409,3 +409,82 @@ fn a_hanging_space_does_not_split_an_isolate_of_deeper_content() {
     assert_eq!(positions(&a[0]), positions(&b[0]));
     assert_eq!((a[1].inline_start(), a[1].bidi_level()), (40.0, 0));
 }
+
+#[test]
+fn many_boxes_on_one_reordered_line_are_laid_out() {
+    const SPANS: usize = 20_000;
+    let span = InlineStyle {
+        font_size: 10.0,
+        ..InlineStyle::default()
+    };
+    let mut b = ParagraphBuilder::new(&style(Direction::Ltr), &Limits::default());
+    for n in 0..SPANS {
+        b.open_inline(NodeId(n as u64), &span, InlineEdges::default())
+            .push_text(dom(n as u64), "a")
+            .close_inline();
+    }
+    b.push_text(dom(SPANS as u64), "\u{5D0}");
+    let p = b
+        .build(
+            &mut LayoutContext::new(),
+            &FontCollection::new(&Limits::default()),
+        )
+        .unwrap();
+    let LineResult::Line(line) = p.next_line(
+        &mut LayoutContext::new(),
+        p.start_token(),
+        &LineOptions::default(),
+        &LineConstraint::new(1.0e9),
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!()
+    };
+    let boxes = boxes(&line);
+    assert_eq!(boxes.len(), SPANS);
+    assert_eq!(
+        boxes[SPANS - 1].rect.inline_start,
+        10.0 * (SPANS - 1) as f32
+    );
+    assert!(boxes.iter().all(|b| b.parent.is_none()));
+}
+
+#[test]
+fn nested_boxes_split_by_bidi_point_at_their_enclosing_fragment() {
+    let span = InlineStyle {
+        font_size: 10.0,
+        ..InlineStyle::default()
+    };
+    let line = one_line(Direction::Ltr, |b| {
+        b.open_inline(NodeId(1), &span, InlineEdges::default())
+            .push_text(dom(2), "ab ")
+            .open_inline(NodeId(3), &span, InlineEdges::default())
+            .push_text(dom(4), "c \u{5D0}")
+            .close_inline()
+            .push_text(dom(5), "\u{5D1}")
+            .close_inline()
+            .push_text(dom(6), " \u{5D2}");
+    });
+    let fragments: Vec<_> = line.fragments().collect();
+    for f in &fragments {
+        let Fragment::InlineBox(b) = f else { continue };
+        let Some(parent) = b.parent else {
+            assert_eq!(b.node, NodeId(1));
+            continue;
+        };
+        let Fragment::InlineBox(p) = &fragments[parent] else {
+            panic!("parent is not a box")
+        };
+        assert_eq!((b.node, p.node), (NodeId(3), NodeId(1)));
+        assert!(p.rect.inline_start <= b.rect.inline_start);
+        assert!(
+            b.rect.inline_start + b.rect.inline_size <= p.rect.inline_start + p.rect.inline_size
+        );
+    }
+    assert_eq!(
+        fragments
+            .iter()
+            .filter(|f| matches!(f, Fragment::InlineBox(b) if b.node == NodeId(3)))
+            .count(),
+        2
+    );
+}
