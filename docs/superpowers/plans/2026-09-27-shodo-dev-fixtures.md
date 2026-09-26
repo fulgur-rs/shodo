@@ -45,7 +45,7 @@
 ### Task 3: documentation, CI and final integration
 
 **Files:** dev/fixtures/README.md, root README.md, .github/workflows/ci.yml, plan status.
-- [ ] Document license/source/size/coverage/update procedure, both consumers, fixture API, and stub limitations.
-- [ ] Test/lint workspace in native CI while keeping root default member and wasm library build; validate regular dependency graph excludes shodo-fixtures.
-- [ ] Run fmt, workspace stable/MSRV tests, no-default root tests, wasm, rustdoc, Python asset checks and deterministic rebuild; commit.
+- [x] Document license/source/size/coverage/update procedure, both consumers, fixture API, and stub limitations.
+- [x] Test/lint workspace in native CI while keeping root default member and wasm library build; validate regular dependency graph excludes shodo-fixtures.
+- [x] Run fmt, workspace stable/MSRV tests, no-default root tests, wasm, rustdoc, Python asset checks and deterministic rebuild; commit.
 - [ ] Fresh whole-branch review, one Important/Critical RED→GREEN fix pass, PR/CI-success merge, close issue and remove worktree under user's existing authorization.
