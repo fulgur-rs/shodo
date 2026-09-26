@@ -8,6 +8,7 @@
 // Internal items are wired up incrementally; removed once all are in use.
 #![allow(dead_code, unused_imports)]
 
+pub mod font;
 pub mod geometry;
 pub mod limits;
 pub mod node;
