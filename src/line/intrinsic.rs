@@ -39,12 +39,14 @@ impl Paragraph {
                 u.kind,
                 UnitKind::ForcedBreak | UnitKind::BlockInInline { .. }
             ) {
-                min = min.max(word.sub(trailing, &mut sat));
+                let suffix = super::decoration::width(&self.data, i, false, &mut sat);
+                min = min.max(word.sub(trailing, &mut sat).add(suffix, &mut sat));
                 max = max.max(
                     total
                         .sub(trailing, &mut sat)
                         .add(left, &mut sat)
-                        .add(right, &mut sat),
+                        .add(right, &mut sat)
+                        .add(suffix, &mut sat),
                 );
                 indent = super::text_indent(
                     &options,
@@ -55,8 +57,9 @@ impl Paragraph {
                     },
                     &mut sat,
                 );
-                word = indent;
-                total = indent;
+                let prefix = super::decoration::width(&self.data, i + 1, true, &mut sat);
+                word = indent.add(prefix, &mut sat);
+                total = word;
                 trailing = LayoutUnit::ZERO;
                 left = LayoutUnit::ZERO;
                 right = LayoutUnit::ZERO;

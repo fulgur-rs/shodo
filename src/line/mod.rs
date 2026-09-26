@@ -155,20 +155,24 @@ impl Paragraph {
             }
             float_pos = float_pos.add(*w, &mut sat);
         }
-        let displaced: Vec<_> = data.units[scan.end..]
-            .iter()
-            .filter_map(|u| {
-                if let UnitKind::Float { node, ordinal } = u.kind
-                    && constraint
-                        .floats_placed_through
-                        .is_some_and(|c| ordinal <= c.0)
-                {
-                    Some((node, FloatCursor(ordinal)))
-                } else {
-                    None
+        let mut displaced = Vec::new();
+        if let Some(cursor) = constraint.floats_placed_through
+            && !data.floats.is_empty()
+        {
+            let begin = data
+                .floats
+                .partition_point(|(unit, _)| *unit < scan.end as u32);
+            let handled = (u64::from(cursor.0) + 1).min(data.floats.len() as u64) as usize;
+            if begin < handled {
+                for (index, (_, node)) in data.floats[begin..handled].iter().enumerate() {
+                    #[cfg(test)]
+                    {
+                        cx.float_search_visits += 1;
+                    }
+                    displaced.push((*node, FloatCursor((begin + index) as u32)));
                 }
-            })
-            .collect();
+            }
+        }
         let alignment = align::apply(
             data, start, &mut scan, &options, available, indent, &mut sat,
         );
@@ -229,3 +233,6 @@ fn text_indent(options: &LineOptions, flags: u8, sat: &mut Saturation) -> Layout
         LayoutUnit::ZERO
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,4 +1,25 @@
 mod common;
+#[test]
+fn preserved_tab_and_empty_forced_inline_keep_participating_height() {
+    let mut root = style();
+    root.root.white_space_collapse = shodo::style::WhiteSpaceCollapse::Preserve;
+    let p = build(&root, |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "\t");
+    });
+    let l = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(l.block_size(), 10.0);
+    assert!(!l.is_empty());
+    let mut child = root.root.clone();
+    child.font_size = 20.0;
+    let p = build(&root, |b| {
+        b.open_inline(NodeId(2), &child, InlineEdges::default())
+            .push_forced_break(NodeId(3))
+            .close_inline();
+    });
+    let l = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(l.block_size(), 20.0);
+    assert_eq!(l.baseline(BaselineKind::Alphabetic), 16.0);
+}
 use common::*;
 use shodo::geometry::BaselineKind;
 use shodo::node::{InlineEdges, NodeId, Sides, TextSource};

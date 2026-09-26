@@ -10,6 +10,8 @@ pub struct LayoutContext {
     pub(crate) partial: Option<crate::line::cache::PartialLine>,
     #[cfg(test)]
     pub(crate) cache_visits: usize,
+    #[cfg(test)]
+    pub(crate) float_search_visits: usize,
 }
 
 impl LayoutContext {

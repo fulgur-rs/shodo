@@ -1,6 +1,6 @@
 //! Paragraphs: immutable results of `ParagraphBuilder::build`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -51,6 +51,10 @@ impl FloatCursor {
 }
 
 pub(crate) struct ParagraphData {
+    #[cfg(test)]
+    pub(crate) baseline_queries: std::sync::atomic::AtomicUsize,
+    #[cfg(test)]
+    pub(crate) cluster_queries: std::sync::atomic::AtomicUsize,
     pub(crate) id: u64,
     pub(crate) style: ParagraphStyle,
     pub(crate) limits: Limits,
@@ -58,6 +62,11 @@ pub(crate) struct ParagraphData {
     pub(crate) items: Vec<Item>,
     pub(crate) styles: Vec<InlineStyle>,
     pub(crate) glyphs: GlyphStore,
+    /// Unit index for each shaping cluster and cluster index for each glyph.
+    pub(crate) clusters: Vec<u32>,
+    pub(crate) glyph_clusters: Vec<u32>,
+    /// Unit index and node, in float ordinal order.
+    pub(crate) floats: Vec<(u32, NodeId)>,
     pub(crate) runs: Vec<ShapedRun>,
     pub(crate) units: Vec<Unit>,
     pub(crate) boxes: Vec<InlineBoxInfo>,
@@ -67,7 +76,15 @@ pub(crate) struct ParagraphData {
     pub(crate) fonts: FontCollection,
     pub(crate) generations: (u64, Option<u64>),
     pub(crate) warnings: Vec<Warning>,
-    pub(crate) baselines: Vec<(NodeId, BaselineKind)>,
+    pub(crate) baselines: HashMap<NodeId, BaselineKind>,
+}
+
+impl ParagraphData {
+    pub(crate) fn baseline_kind(&self, node: NodeId) -> Option<BaselineKind> {
+        #[cfg(test)]
+        self.baseline_queries.fetch_add(1, Ordering::Relaxed);
+        self.baselines.get(&node).copied()
+    }
 }
 
 /// The analyzed and shaped inline content of one block container.
@@ -121,11 +138,7 @@ impl Paragraph {
     /// Which baseline of atomic inline `node` the caller must supply in
     /// `AtomicSizes`: the dominant baseline of its parent inline box.
     pub fn required_baseline(&self, node: NodeId) -> Option<BaselineKind> {
-        self.data
-            .baselines
-            .iter()
-            .find(|(n, _)| *n == node)
-            .map(|(_, kind)| *kind)
+        self.data.baseline_kind(node)
     }
 
     pub(crate) fn from_builder(
@@ -192,20 +205,39 @@ impl Paragraph {
             &levels,
             base_level,
         );
-        let baselines = processed
-            .items
-            .iter()
-            .filter_map(|item| match item.kind {
-                ItemKind::Atomic { parent_style, .. } => Some((
-                    item.node?,
-                    baseline_kind(style.writing_mode, &styles[parent_style as usize]),
-                )),
-                _ => None,
-            })
-            .collect();
+        let mut baselines = HashMap::new();
+        for item in &processed.items {
+            if let ItemKind::Atomic { parent_style, .. } = item.kind
+                && let Some(node) = item.node
+            {
+                baselines.entry(node).or_insert_with(|| {
+                    baseline_kind(style.writing_mode, &styles[parent_style as usize])
+                });
+            }
+        }
+        let mut clusters = Vec::new();
+        let mut glyph_clusters = vec![0; glyphs.len()];
+        let mut floats = Vec::new();
+        for (i, u) in units.iter().enumerate() {
+            match &u.kind {
+                crate::analysis::units::UnitKind::Cluster { glyphs, .. } => {
+                    let cluster = clusters.len() as u32;
+                    clusters.push(i as u32);
+                    glyph_clusters[glyphs.start as usize..glyphs.end as usize].fill(cluster);
+                }
+                crate::analysis::units::UnitKind::Float { node, .. } => {
+                    floats.push((i as u32, *node))
+                }
+                _ => {}
+            }
+        }
         warnings.record_saturation(&sat);
         Ok(Paragraph {
             data: Arc::new(ParagraphData {
+                #[cfg(test)]
+                baseline_queries: Default::default(),
+                #[cfg(test)]
+                cluster_queries: Default::default(),
                 id: NEXT_PARAGRAPH_ID.fetch_add(1, Ordering::Relaxed),
                 style,
                 limits,
@@ -213,6 +245,9 @@ impl Paragraph {
                 items: processed.items,
                 styles,
                 glyphs,
+                clusters,
+                glyph_clusters,
+                floats,
                 runs,
                 units,
                 boxes,

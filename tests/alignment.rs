@@ -92,7 +92,7 @@ fn cluster_advances_and_random_access_share_adjusted_positions() {
     assert_eq!(clusters[0].text_range, 0..3);
     assert_eq!(clusters[0].advance, 30.0);
     assert_eq!(clusters[0].shaping_advance, 10.0);
-    assert_eq!(glyphs(&l)[1].inline_position, 25.0);
+    assert_eq!(glyphs(&l)[1].inline_position, 5.0);
 }
 
 #[test]

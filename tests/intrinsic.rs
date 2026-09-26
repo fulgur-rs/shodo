@@ -1,4 +1,33 @@
 mod common;
+#[test]
+fn forced_break_preserves_cloned_start_and_end_edges() {
+    let mut root = style();
+    root.root.white_space_collapse = shodo::style::WhiteSpaceCollapse::Preserve;
+    let mut child = root.root.clone();
+    child.box_decoration_break = shodo::style::BoxDecorationBreak::Clone;
+    let p = build(&root, |b| {
+        b.open_inline(
+            NodeId(2),
+            &child,
+            InlineEdges {
+                padding: shodo::node::Sides {
+                    inline_start: 2.0,
+                    inline_end: 2.0,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .push_text(TextSource::Generated { node: NodeId(3) }, "aa\nbb")
+        .close_inline();
+    });
+    let sizes = p.intrinsic_sizes(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        &AtomicIntrinsics::EMPTY,
+    );
+    assert_eq!((sizes.min_content, sizes.max_content), (24.0, 24.0));
+}
 use common::*;
 use shodo::node::{InlineEdges, NodeId, OutOfFlowKind, TextSource};
 use shodo::style::LineOptions;

@@ -72,7 +72,9 @@ pub(crate) fn measure(
     let mut cache = HashMap::new();
     let mut parents = HashMap::new();
     let mut atomic_styles = HashMap::new();
+    let mut empty = true;
     for u in &data.units[units] {
+        empty &= !matches!(u.kind, UnitKind::Tab | UnitKind::ForcedBreak);
         parents.insert(u.item, u.parent_box);
         if let UnitKind::Atomic { node } = u.kind {
             atomic_styles.insert(node, (u.item, u.parent_box));
@@ -82,7 +84,6 @@ pub(crate) fn measure(
     let mut groups: HashMap<u32, (f32, f32)> = HashMap::new();
     let mut own_groups: HashMap<usize, (f32, f32, bool)> = HashMap::new();
     let mut memberships = Vec::with_capacity(records.len());
-    let mut empty = true;
     for (i, r) in records.iter().enumerate() {
         let (a, d, base, group, own_group) = match &r.kind {
             RecordKind::Glyphs { item, .. } => {
@@ -125,10 +126,7 @@ pub(crate) fn measure(
                 let (base, group) =
                     parent_box.map_or((0.0, None), |b| box_shift(data, b, &mut cache));
                 let height = size.block_size + size.margins.block_start + size.margins.block_end;
-                let central = data
-                    .baselines
-                    .iter()
-                    .any(|(n, k)| n == node && *k == BaselineKind::Central);
+                let central = data.baseline_kind(*node) == Some(BaselineKind::Central);
                 let baseline = size
                     .baseline
                     .unwrap_or(if central { height / 2.0 } else { height });

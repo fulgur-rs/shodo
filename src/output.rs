@@ -14,7 +14,6 @@ use crate::line::fragments::{self, FragmentRecord, RecordKind};
 use crate::node::{NodeId, OutOfFlowKind};
 use crate::paragraph::{AtomicSizes, BreakToken, FloatCursor, Paragraph, ParagraphData};
 use crate::shape::GlyphStore;
-use crate::style::LineHeight;
 
 /// Why a line ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -77,11 +76,6 @@ impl Line {
         let root = &data.styles[0];
         let size = root.font_size;
         let m = data.fonts.metrics(data.fonts.primary_font(), size);
-        let line_height = match root.line_height {
-            LineHeight::Normal => m.ascent + m.descent + m.line_gap,
-            LineHeight::Px(v) => v,
-            LineHeight::Number(n) => n * size,
-        };
         let flags = match scan.reason {
             BreakReason::Forced => BreakToken::AFTER_FORCED,
             _ => 0,
@@ -107,11 +101,7 @@ impl Line {
             reason: scan.reason,
             units: token.unit..scan.end as u32,
             inline_size: scan.content,
-            block_size: if scan.reason == BreakReason::Forced && metrics.empty {
-                LayoutUnit::from_f32_ceil(line_height, sat)
-            } else {
-                metrics.block_size
-            },
+            block_size: metrics.block_size,
             baseline: metrics.baseline,
             ascent: LayoutUnit::from_f32_round(m.ascent, sat),
             descent: LayoutUnit::from_f32_round(m.descent, sat),
@@ -314,25 +304,25 @@ impl<'a> GlyphRunView<'a> {
     }
 
     pub fn clusters(&self) -> impl ExactSizeIterator<Item = Cluster> + '_ {
-        let units: Vec<_> = self.data().units
-            [self.line.units.start as usize..self.line.units.end as usize]
-            .iter()
-            .filter_map(|u| {
-                if let crate::analysis::units::UnitKind::Cluster { glyphs, .. } = &u.kind
-                    && glyphs.start >= self.glyphs.0
-                    && glyphs.end <= self.glyphs.1
-                {
-                    return Some((u.text.clone(), glyphs.clone()));
-                }
-                None
-            })
-            .collect();
-        units.into_iter().map(|(text, glyphs)| Cluster {
-            text_range: text.start as usize..text.end as usize,
-            advance: glyphs.clone().map(|g| self.glyph(g).advance).sum(),
-            shaping_advance: glyphs
-                .map(|g| self.data().glyphs.advance[g as usize].to_f32())
-                .sum(),
+        let data = self.data();
+        let begin = data.glyph_clusters[self.glyphs.0 as usize] as usize;
+        let end = data.glyph_clusters[(self.glyphs.1 - 1) as usize] as usize;
+        data.clusters[begin..=end].iter().map(|unit| {
+            #[cfg(test)]
+            data.cluster_queries
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let u = &data.units[*unit as usize];
+            let crate::analysis::units::UnitKind::Cluster { glyphs, .. } = &u.kind else {
+                unreachable!()
+            };
+            Cluster {
+                text_range: u.text.start as usize..u.text.end as usize,
+                advance: glyphs.clone().map(|g| self.glyph(g).advance).sum(),
+                shaping_advance: glyphs
+                    .clone()
+                    .map(|g| data.glyphs.advance[g as usize].to_f32())
+                    .sum(),
+            }
         })
     }
 
@@ -361,11 +351,50 @@ impl<'a> GlyphRunView<'a> {
         // real shaper that emits right-to-left runs in visual order must not
         // be reversed twice.
         let reversed = self.record.level % 2 != self.line.data.base_level % 2;
-        let pen = if reversed {
+        let mut pen = if reversed {
             self.record.inline_size - rel - advance
         } else {
             rel
         };
+        // Justification stretches between clusters, never the attachment
+        // positions within a cluster. Locate its base in constant time.
+        let unit = self.data().clusters[self.data().glyph_clusters[g as usize] as usize];
+        let crate::analysis::units::UnitKind::Cluster { glyphs, .. } =
+            &self.data().units[unit as usize].kind
+        else {
+            unreachable!()
+        };
+        let base = glyphs.start;
+        if g != base {
+            let base_gi = match self.source {
+                GlyphSource::Shared => base as usize,
+                GlyphSource::Overlay { start } => (start + base - self.glyphs.0) as usize,
+            };
+            let (base_rel, base_advance) = if let Some((start, positions)) = &self.line.positions {
+                let base_rel = positions[(base - start) as usize]
+                    - positions[(self.glyphs.0 - start) as usize];
+                let end = if base + 1 < self.glyphs.1 {
+                    positions[(base + 1 - start) as usize]
+                        - positions[(self.glyphs.0 - start) as usize]
+                } else {
+                    self.record.inline_size
+                };
+                (base_rel, end - base_rel)
+            } else {
+                (
+                    store.pen[base_gi] - store.pen[first],
+                    store.advance[base_gi],
+                )
+            };
+            let cluster_rel = store.pen[gi] - store.pen[base_gi];
+            pen = if reversed {
+                self.record.inline_size - base_rel - base_advance + store.advance[base_gi]
+                    - cluster_rel
+                    - store.advance[gi]
+            } else {
+                base_rel + cluster_rel
+            };
+        }
         let position = self.record.inline_start + pen + store.offset_inline[gi];
         Glyph {
             id: store.id[gi],
@@ -461,12 +490,7 @@ impl Line {
             RecordKind::Atomic { node, size } => {
                 let margin_block = size.margins.block_start + size.margins.block_end;
                 let height = size.block_size + margin_block;
-                let kind = self
-                    .data
-                    .baselines
-                    .iter()
-                    .find(|(n, _)| n == node)
-                    .map(|(_, k)| *k);
+                let kind = self.data.baseline_kind(*node);
                 // Missing baselines are synthesized from the margin box
                 // (CSS Inline 3): bottom for alphabetic, middle for central.
                 let baseline_from_top = size.baseline.unwrap_or(match kind {

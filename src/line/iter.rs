@@ -1,8 +1,5 @@
 use crate::style::LineOptions;
-use crate::{
-    AtomicSizes, BreakToken, FloatCursor, LayoutContext, Line, LineConstraint, LineResult,
-    Paragraph,
-};
+use crate::{AtomicSizes, BreakToken, LayoutContext, Line, LineConstraint, LineResult, Paragraph};
 
 impl Paragraph {
     /// Greedy layout at a fixed width, treating floats as zero-width anchors.
@@ -14,12 +11,15 @@ impl Paragraph {
         width: f32,
         atomics: &AtomicSizes,
     ) -> Vec<Line> {
-        let cursor = self.data.float_count.checked_sub(1).map(FloatCursor);
+        let mut cursor = None;
         self.lines(
             cx,
             self.start_token(),
             options,
-            |_, offset| {
+            |previous, offset| {
+                if let Some(LineResult::FloatEncountered { float_cursor, .. }) = previous {
+                    cursor = Some(*float_cursor);
+                }
                 let mut c = LineConstraint::new(width);
                 c.block_offset = offset;
                 c.floats_placed_through = cursor;

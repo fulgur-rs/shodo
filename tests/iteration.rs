@@ -1,4 +1,18 @@
 mod common;
+#[test]
+fn break_all_does_not_claim_unplaced_floats_are_displaced() {
+    let p = build(&style(), |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "aa bb cc ")
+            .push_out_of_flow(NodeId(2), OutOfFlowKind::Float);
+    });
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        20.0,
+        &AtomicSizes::EMPTY,
+    );
+    assert!(lines.iter().all(|l| l.displaced_floats().is_empty()));
+}
 use common::*;
 use shodo::node::{NodeId, OutOfFlowKind, TextSource};
 use shodo::style::LineOptions;

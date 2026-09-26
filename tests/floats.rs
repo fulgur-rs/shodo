@@ -135,6 +135,76 @@ struct DriverState {
     withdrawn: Vec<NodeId>,
 }
 
+#[test]
+fn page_trial_restores_float_reports_and_replayed_line() {
+    let p = build(&style(), |b| {
+        float(b, 2);
+        text(b, "a");
+        float(b, 3);
+        text(b, "b");
+    });
+    let mut cx = LayoutContext::new();
+    let options = LineOptions::default();
+    let mut state = DriverState::default();
+    let mut token = p.start_token();
+    let checkpoint = (token, state.clone());
+    let mut reports = Vec::new();
+    for pass in 0..2 {
+        for _ in 0..2 {
+            let mut c = LineConstraint::new(100.0);
+            c.floats_placed_through = state.cursor;
+            c.max_block_size = (pass == 0).then_some(5.0);
+            let LineResult::FloatEncountered {
+                node,
+                line_start,
+                inline_position,
+                float_cursor,
+            } = p.next_line(&mut cx, token, &options, &c, &AtomicSizes::EMPTY)
+            else {
+                panic!("expected replayable float report")
+            };
+            reports.push((node, line_start, inline_position, float_cursor));
+            state.cursor = Some(float_cursor);
+            state.placed.push((node, 0.0));
+        }
+        let mut c = LineConstraint::new(100.0);
+        c.floats_placed_through = state.cursor;
+        if pass == 0 {
+            c.max_block_size = Some(5.0);
+            assert!(matches!(
+                p.next_line(&mut cx, token, &options, &c, &AtomicSizes::EMPTY),
+                LineResult::BlockSizeExceeded { .. }
+            ));
+            (token, state) = checkpoint.clone();
+        } else {
+            let lookahead = (token, state.clone());
+            let LineResult::Line(first) =
+                p.next_line(&mut cx, token, &options, &c, &AtomicSizes::EMPTY)
+            else {
+                panic!("expected line after unlimited retry")
+            };
+            token = first.break_token();
+            assert!(matches!(
+                p.next_line(&mut cx, token, &options, &c, &AtomicSizes::EMPTY),
+                LineResult::Done
+            ));
+            (token, state) = lookahead;
+            c.floats_placed_through = state.cursor;
+            let LineResult::Line(replayed) =
+                p.next_line(&mut cx, token, &options, &c, &AtomicSizes::EMPTY)
+            else {
+                panic!("expected replayed line")
+            };
+            assert_eq!(first.text_range(), replayed.text_range());
+            assert_eq!(first.block_size(), replayed.block_size());
+            assert_eq!(first.inline_size(), replayed.inline_size());
+            assert_eq!(first.break_token(), replayed.break_token());
+            assert_eq!(first.displaced_floats(), replayed.displaced_floats());
+        }
+    }
+    assert_eq!(reports[..2], reports[2..]);
+}
+
 fn drive(p: &shodo::Paragraph, width: f32, sizes: &[(NodeId, f32)]) -> Vec<shodo::Line> {
     let mut state = DriverState::default();
     let mut token = p.start_token();
