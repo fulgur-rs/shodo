@@ -4,6 +4,7 @@ mod align;
 pub(crate) mod cache;
 mod decoration;
 pub(crate) mod fragments;
+mod iter;
 pub(crate) mod metrics;
 mod scan;
 use scan::scan;
