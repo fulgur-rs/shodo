@@ -13,7 +13,7 @@ use crate::geometry::{LayoutUnit, Saturation};
 use crate::limits::WarningKind;
 use crate::output::{BreakReason, Line};
 use crate::paragraph::{
-    AtomicSizes, BreakToken, LineConstraint, LineResult, Paragraph, ParagraphData,
+    AtomicSizes, BreakToken, FloatCursor, LineConstraint, LineResult, Paragraph, ParagraphData,
 };
 use crate::style::{LineOptions, TabSize};
 
@@ -87,6 +87,39 @@ impl Paragraph {
         let mut scan = scan(
             data, start, available, offset, indent, atomics, cx, &mut sat,
         );
+        // Select the break before reporting an anchor: floats do not create
+        // opportunities, and a word containing one may belong to the next line.
+        let mut float_pos = indent.add(decoration::width(data, start, true, &mut sat), &mut sat);
+        for (u, w) in data.units[start..scan.end].iter().zip(&scan.widths) {
+            if let UnitKind::Float { node, ordinal } = u.kind
+                && constraint
+                    .floats_placed_through
+                    .is_none_or(|c| ordinal > c.0)
+            {
+                cx.warnings.record_saturation(&sat);
+                return LineResult::FloatEncountered {
+                    node,
+                    line_start: token,
+                    inline_position: float_pos.to_f32(),
+                    float_cursor: FloatCursor(ordinal),
+                };
+            }
+            float_pos = float_pos.add(*w, &mut sat);
+        }
+        let displaced: Vec<_> = data.units[scan.end..]
+            .iter()
+            .filter_map(|u| {
+                if let UnitKind::Float { node, ordinal } = u.kind
+                    && constraint
+                        .floats_placed_through
+                        .is_some_and(|c| ordinal <= c.0)
+                {
+                    Some((node, FloatCursor(ordinal)))
+                } else {
+                    None
+                }
+            })
+            .collect();
         let alignment = align::apply(
             data, start, &mut scan, &options, available, indent, &mut sat,
         );
@@ -101,6 +134,7 @@ impl Paragraph {
             &mut sat,
         );
         line.positions = alignment.positions;
+        line.displaced = displaced;
         cx.warnings.record_saturation(&sat);
         if constraint
             .max_block_size
