@@ -21,7 +21,6 @@
 - Stub font metrics per em: ascent 0.8, descent 0.2, line gap 0, underline offset −0.1 (below baseline is positive downward: offset 0.1), thickness 0.05. `line-height: normal` = ascent + descent + line gap = 1.0em.
 - Test convention: `pub(crate)` internals (`LayoutUnit`, glyph storage, units, the sfnt builder) are tested with `#[cfg(test)] mod tests` inside `src/`. Files under `tests/` use only the public API.
 - Source comments cite specs (CSS sections, UAX numbers) and technical reasons only. Never put issue IDs, milestone names, or review tags (`[C1-M5]` etc.) in source comments.
-- Every commit message ends with the line `Claude-Session: https://claude.ai/code/session_019U3hQq5cT6cQJi2RsosYWA`.
 - Run `cargo fmt` and `cargo clippy --all-targets -- -D warnings` before each commit; both must be clean.
 
 ## Review Focus
@@ -311,9 +310,7 @@ The skeleton is built bottom-up, so some `pub(crate)` items stay unused until la
 ```bash
 cargo fmt && cargo clippy --all-targets -- -D warnings
 git add Cargo.toml src/lib.rs src/geometry
-git commit -m "Add LayoutUnit fixed-point type
-
-Claude-Session: https://claude.ai/code/session_019U3hQq5cT6cQJi2RsosYWA"
+git commit -m "Add LayoutUnit fixed-point type"
 ```
 
 ---
@@ -528,9 +525,7 @@ Expected: PASS (4 tests).
 ```bash
 cargo fmt && cargo clippy --all-targets -- -D warnings
 git add src/geometry/mod.rs tests/geometry.rs
-git commit -m "Add writing modes and PhysicalConverter
-
-Claude-Session: https://claude.ai/code/session_019U3hQq5cT6cQJi2RsosYWA"
+git commit -m "Add writing modes and PhysicalConverter"
 ```
 
 ---
@@ -841,9 +836,7 @@ Expected: PASS (5 tests).
 ```bash
 cargo fmt && cargo clippy --all-targets -- -D warnings
 git add src/limits.rs src/lib.rs
-git commit -m "Add fail-closed Limits and bounded warnings
-
-Claude-Session: https://claude.ai/code/session_019U3hQq5cT6cQJi2RsosYWA"
+git commit -m "Add fail-closed Limits and bounded warnings"
 ```
 
 ---
@@ -1450,9 +1443,7 @@ Expected: PASS (3 tests).
 ```bash
 cargo fmt && cargo clippy --all-targets -- -D warnings
 git add src/node.rs src/style.rs src/lib.rs tests/style.rs
-git commit -m "Add node identity and style types
-
-Claude-Session: https://claude.ai/code/session_019U3hQq5cT6cQJi2RsosYWA"
+git commit -m "Add node identity and style types"
 ```
 
 ---
@@ -1800,9 +1791,7 @@ Expected: PASS (7 tests).
 ```bash
 cargo fmt && cargo clippy --all-targets -- -D warnings
 git add src/font src/lib.rs
-git commit -m "Reject fonts whose layout tables amplify through duplicate references
-
-Claude-Session: https://claude.ai/code/session_019U3hQq5cT6cQJi2RsosYWA"
+git commit -m "Reject fonts whose layout tables amplify through duplicate references"
 ```
 
 ---
@@ -2100,9 +2089,7 @@ Expected: PASS (7 `font::check` tests + 7 `font::tests`).
 ```bash
 cargo fmt && cargo clippy --all-targets -- -D warnings
 git add src/font/mod.rs
-git commit -m "Add FontCollection stub with shared and document layers
-
-Claude-Session: https://claude.ai/code/session_019U3hQq5cT6cQJi2RsosYWA"
+git commit -m "Add FontCollection stub with shared and document layers"
 ```
 
 ---
@@ -2439,9 +2426,7 @@ Expected: PASS (6 tests).
 ```bash
 cargo fmt && cargo clippy --all-targets -- -D warnings
 git add src/builder.rs src/lib.rs
-git commit -m "Add ParagraphBuilder with incremental limit checks
-
-Claude-Session: https://claude.ai/code/session_019U3hQq5cT6cQJi2RsosYWA"
+git commit -m "Add ParagraphBuilder with incremental limit checks"
 ```
 
 ---
@@ -2996,9 +2981,7 @@ Expected: PASS (4 mapping tests + 5 whitespace tests). If `collapses_across_elem
 ```bash
 cargo fmt && cargo clippy --all-targets -- -D warnings
 git add src/mapping.rs src/analysis src/lib.rs
-git commit -m "Collapse white space across elements and build OffsetMapping
-
-Claude-Session: https://claude.ai/code/session_019U3hQq5cT6cQJi2RsosYWA"
+git commit -m "Collapse white space across elements and build OffsetMapping"
 ```
 
 ---
@@ -3195,9 +3178,7 @@ Expected: PASS (4 tests).
 ```bash
 cargo fmt && cargo clippy --all-targets -- -D warnings
 git add src/shape.rs src/lib.rs
-git commit -m "Add placeholder shaper with run-local pen positions
-
-Claude-Session: https://claude.ai/code/session_019U3hQq5cT6cQJi2RsosYWA"
+git commit -m "Add placeholder shaper with run-local pen positions"
 ```
 
 ---
@@ -3884,9 +3865,7 @@ Expected: PASS (11 integration tests; all unit tests including the 2 new `analys
 ```bash
 cargo fmt && cargo clippy --all-targets -- -D warnings
 git add src tests/build.rs
-git commit -m "Build paragraphs: units, bidi levels, required baselines, RichText
-
-Claude-Session: https://claude.ai/code/session_019U3hQq5cT6cQJi2RsosYWA"
+git commit -m "Build paragraphs: units, bidi levels, required baselines, RichText"
 ```
 
 ---
@@ -4589,9 +4568,7 @@ Expected: PASS (12 tests in `tests/lines.rs`; everything else still green).
 ```bash
 cargo fmt && cargo clippy --all-targets -- -D warnings
 git add src tests/lines.rs
-git commit -m "Add greedy next_line with tokens, strut, indent and tab stops
-
-Claude-Session: https://claude.ai/code/session_019U3hQq5cT6cQJi2RsosYWA"
+git commit -m "Add greedy next_line with tokens, strut, indent and tab stops"
 ```
 
 ---
@@ -5229,9 +5206,7 @@ Expected: PASS (7 tests in `tests/fragments.rs`; all earlier tests still green).
 ```bash
 cargo fmt && cargo clippy --all-targets -- -D warnings
 git add src tests/fragments.rs
-git commit -m "Add line fragments: glyph runs, inline boxes, atomics and anchors
-
-Claude-Session: https://claude.ai/code/session_019U3hQq5cT6cQJi2RsosYWA"
+git commit -m "Add line fragments: glyph runs, inline boxes, atomics and anchors"
 ```
 
 ---
@@ -5582,9 +5557,7 @@ Expected: PASS (3 tests in `tests/bidi.rs`; all earlier tests unchanged because 
 ```bash
 cargo fmt && cargo clippy --all-targets -- -D warnings
 git add src tests/bidi.rs
-git commit -m "Reorder line fragments for bidi and split inline boxes into pieces
-
-Claude-Session: https://claude.ai/code/session_019U3hQq5cT6cQJi2RsosYWA"
+git commit -m "Reorder line fragments for bidi and split inline boxes into pieces"
 ```
 
 ---
@@ -5663,9 +5636,7 @@ Expected: all succeed.
 
 ```bash
 git add .github/workflows/ci.yml
-git commit -m "Add CI: fmt, clippy, tests, MSRV and wasm32 build
-
-Claude-Session: https://claude.ai/code/session_019U3hQq5cT6cQJi2RsosYWA"
+git commit -m "Add CI: fmt, clippy, tests, MSRV and wasm32 build"
 ```
 
 ---
