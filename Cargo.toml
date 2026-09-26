@@ -1,0 +1,14 @@
+[package]
+name = "shodo"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.89.0"
+license = "MIT OR Apache-2.0"
+description = "Text typesetting library for raikiri (work in progress)"
+repository = "https://github.com/fulgur-rs/shodo"
+homepage = "https://fulgur.dev/"
+readme = "README.md"
+keywords = ["typesetting", "text", "layout", "shaping"]
+categories = ["text-processing", "graphics"]
+
+[dependencies]
