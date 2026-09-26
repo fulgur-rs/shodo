@@ -34,6 +34,8 @@ impl Paragraph {
     /// Lays out the line starting at `token`. Pure: the same inputs always
     /// give the same result, so a token can be retried with other
     /// constraints.
+    /// If a line cannot fit even at the top of a page, retry the same token
+    /// with `max_block_size: None` to accept the overflowing line.
     pub fn next_line(
         &self,
         cx: &mut LayoutContext,
@@ -55,7 +57,7 @@ impl Paragraph {
             let token_after = BreakToken {
                 para: data.id,
                 unit: token.unit + 1,
-                flags: BreakToken::AFTER_FORCED,
+                flags: 0,
             };
             return LineResult::BlockInInline { node, token_after };
         }
@@ -95,6 +97,14 @@ impl Paragraph {
             &mut sat,
         );
         cx.warnings.record_saturation(&sat);
+        if constraint
+            .max_block_size
+            .is_some_and(|max| line.block_size() > max)
+        {
+            return LineResult::BlockSizeExceeded {
+                needed_block_size: line.block_size(),
+            };
+        }
         LineResult::Line(line)
     }
 }

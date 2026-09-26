@@ -6,6 +6,125 @@ use shodo::style::{LineOptions, VerticalAlign};
 use shodo::{AtomicSize, AtomicSizes, Fragment};
 
 #[test]
+fn height_limit_is_pure_and_can_be_retried() {
+    let p = paragraph("a");
+    let mut cx = shodo::LayoutContext::new();
+    let mut c = shodo::LineConstraint::new(100.0);
+    for limit in [9.0, 9.0, 0.0, -1.0, f32::NAN] {
+        c.max_block_size = Some(limit);
+        assert!(matches!(
+            p.next_line(
+                &mut cx,
+                p.start_token(),
+                &LineOptions::default(),
+                &c,
+                &AtomicSizes::EMPTY
+            ),
+            shodo::LineResult::BlockSizeExceeded {
+                needed_block_size: 10.0
+            }
+        ));
+    }
+    for limit in [Some(10.0), None] {
+        c.max_block_size = limit;
+        assert!(matches!(
+            p.next_line(
+                &mut cx,
+                p.start_token(),
+                &LineOptions::default(),
+                &c,
+                &AtomicSizes::EMPTY
+            ),
+            shodo::LineResult::Line(_)
+        ));
+    }
+}
+
+#[test]
+fn block_boundary_does_not_trigger_each_line_indent() {
+    let p = build(&style(), |b| {
+        b.push_block_in_inline(NodeId(2))
+            .push_text(TextSource::Generated { node: NodeId(3) }, "a");
+    });
+    let mut cx = shodo::LayoutContext::new();
+    let mut o = LineOptions::default();
+    o.text_indent.length = 5.0;
+    o.text_indent.each_line = true;
+    let c = shodo::LineConstraint::new(100.0);
+    let shodo::LineResult::BlockInInline { token_after, .. } =
+        p.next_line(&mut cx, p.start_token(), &o, &c, &AtomicSizes::EMPTY)
+    else {
+        panic!()
+    };
+    let shodo::LineResult::Line(l) = p.next_line(&mut cx, token_after, &o, &c, &AtomicSizes::EMPTY)
+    else {
+        panic!()
+    };
+    assert_eq!(glyphs(&l)[0].inline_position, 0.0);
+}
+
+#[test]
+fn atomic_height_retry_and_zero_height_block_prefix() {
+    let root = style();
+    let p = build(&root, |b| {
+        b.push_atomic(NodeId(2), &root.root, InlineEdges::default());
+    });
+    let mut sizes = AtomicSizes::new();
+    sizes.insert(
+        NodeId(2),
+        AtomicSize {
+            inline_size: 10.0,
+            block_size: 30.0,
+            baseline: Some(20.0),
+            ..AtomicSize::default()
+        },
+    );
+    let mut c = shodo::LineConstraint::new(100.0);
+    c.max_block_size = Some(20.0);
+    let mut cx = shodo::LayoutContext::new();
+    assert!(matches!(
+        p.next_line(
+            &mut cx,
+            p.start_token(),
+            &LineOptions::default(),
+            &c,
+            &sizes
+        ),
+        shodo::LineResult::BlockSizeExceeded {
+            needed_block_size: 30.0
+        }
+    ));
+    c.max_block_size = None;
+    c.available_inline_size = 1.0;
+    assert!(matches!(
+        p.next_line(
+            &mut cx,
+            p.start_token(),
+            &LineOptions::default(),
+            &c,
+            &sizes
+        ),
+        shodo::LineResult::Line(_)
+    ));
+    let p = build(&root, |b| {
+        b.open_inline(NodeId(2), &root.root, InlineEdges::default())
+            .push_block_in_inline(NodeId(3))
+            .close_inline();
+    });
+    c.max_block_size = Some(0.0);
+    let shodo::LineResult::Line(l) = p.next_line(
+        &mut cx,
+        p.start_token(),
+        &LineOptions::default(),
+        &c,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!()
+    };
+    assert_eq!(l.block_size(), 0.0);
+}
+
+#[test]
 fn larger_inline_expands_line_height() {
     let root = style();
     let mut child = root.root.clone();
