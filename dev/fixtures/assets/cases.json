@@ -1,0 +1,137 @@
+[
+  {
+    "id": "latin-short",
+    "text": "A quiet library keeps its doors open. Readers compare words, spaces, and lines.",
+    "font_ids": [
+      "latin"
+    ],
+    "lang": "en",
+    "direction": "ltr",
+    "font_size": 16,
+    "width": 320
+  },
+  {
+    "id": "latin-long",
+    "text": "A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines.",
+    "font_ids": [
+      "latin"
+    ],
+    "lang": "en",
+    "direction": "ltr",
+    "font_size": 16,
+    "width": 420
+  },
+  {
+    "id": "latin-spacing",
+    "text": "One  two\tthree\nFour five soft­hyphen.",
+    "font_ids": [
+      "latin"
+    ],
+    "lang": "en",
+    "direction": "ltr",
+    "font_size": 16,
+    "width": 160
+  },
+  {
+    "id": "latin-case-mapping",
+    "text": "Straße, café, istanbul, IĞDIR, iıİI, ΟΣ ΣΟΣ.",
+    "font_ids": [
+      "latin"
+    ],
+    "lang": "de",
+    "direction": "ltr",
+    "font_size": 16,
+    "width": 320
+  },
+  {
+    "id": "japanese-short",
+    "text": "日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。",
+    "font_ids": [
+      "cjk"
+    ],
+    "lang": "ja",
+    "direction": "ltr",
+    "font_size": 16,
+    "width": 320
+  },
+  {
+    "id": "japanese-long",
+    "text": "日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。",
+    "font_ids": [
+      "cjk"
+    ],
+    "lang": "ja",
+    "direction": "ltr",
+    "font_size": 16,
+    "width": 420
+  },
+  {
+    "id": "japanese-supplementary",
+    "text": "𠮷と吉、ひらがな、カタカナ、ＡＢＣ。",
+    "font_ids": [
+      "cjk",
+      "latin"
+    ],
+    "lang": "ja",
+    "direction": "ltr",
+    "font_size": 16,
+    "width": 200
+  },
+  {
+    "id": "arabic-short",
+    "text": "مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات.",
+    "font_ids": [
+      "arabic"
+    ],
+    "lang": "ar",
+    "direction": "rtl",
+    "font_size": 16,
+    "width": 320
+  },
+  {
+    "id": "arabic-long",
+    "text": "مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات.",
+    "font_ids": [
+      "arabic"
+    ],
+    "lang": "ar",
+    "direction": "rtl",
+    "font_size": 16,
+    "width": 420
+  },
+  {
+    "id": "combining-latin",
+    "text": "Café, ä, ñ, Å, ọ́.",
+    "font_ids": [
+      "latin"
+    ],
+    "lang": "en",
+    "direction": "ltr",
+    "font_size": 16,
+    "width": 220
+  },
+  {
+    "id": "combining-arabic",
+    "text": "السَّلَامُ عَلَيْكُمْ",
+    "font_ids": [
+      "arabic"
+    ],
+    "lang": "ar",
+    "direction": "rtl",
+    "font_size": 16,
+    "width": 220
+  },
+  {
+    "id": "mixed-scripts",
+    "text": "Library 図書館 مكتبة: Café / 日本語 / العربية.",
+    "font_ids": [
+      "latin",
+      "cjk",
+      "arabic"
+    ],
+    "lang": "ja",
+    "direction": "ltr",
+    "font_size": 16,
+    "width": 280
+  }
+]

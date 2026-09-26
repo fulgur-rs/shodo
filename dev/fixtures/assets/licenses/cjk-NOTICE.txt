@@ -1,0 +1,4 @@
+© 2014-2021 Adobe (http://www.adobe.com/).
+
+Font name: Noto Sans CJK JP
+Source is recorded in ../manifest.json. Derived subset renamed to Shodo Fixture CJK.

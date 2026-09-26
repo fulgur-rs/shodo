@@ -29,3 +29,8 @@ unicode-bidi = "0.3.18"
 
 [dev-dependencies]
 brotli = "8"
+
+[workspace]
+members = ["dev/fixtures"]
+default-members = ["."]
+resolver = "3"

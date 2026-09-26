@@ -165,3 +165,13 @@ Licensed under either of the following, at your option:
 
 - Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
 - MIT license ([LICENSE-MIT](LICENSE-MIT))
+
+## Development fixtures
+
+The unpublished [shodo-fixtures crate](dev/fixtures/README.md) provides fixed,
+OFL-licensed Latin/CJK/Arabic subsets and original case inputs for development tools.
+It disables system fonts and records source commits, hashes, face indices and subset
+instructions. Use `cargo test --workspace` to include its checks and
+`cargo run -p shodo-fixtures --example inspect_fonts` to inspect the fixed font set.
+The root library remains the default workspace member; normal shodo builds do not
+include these assets or tooling dependencies.
