@@ -844,6 +844,7 @@ git add src/limits.rs src/lib.rs
 git commit -m "Add fail-closed Limits and bounded warnings
 
 Claude-Session: https://claude.ai/code/session_019U3hQq5cT6cQJi2RsosYWA"
+```
 
 ---
 
