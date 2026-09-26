@@ -1,5 +1,6 @@
 //! Paragraphs: immutable results of `ParagraphBuilder::build`.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -11,7 +12,8 @@ use crate::font::FontCollection;
 use crate::geometry::{BaselineKind, Direction, Saturation, WritingMode};
 use crate::limits::{LimitExceeded, Limits, Warning, WarningKind};
 use crate::mapping::OffsetMapping;
-use crate::node::NodeId;
+use crate::node::{NodeId, Sides};
+use crate::output::Line;
 use crate::shape::{GlyphStore, ShapedRun, shape_item};
 use crate::style::{InlineStyle, ParagraphStyle, TextOrientation};
 
@@ -249,4 +251,109 @@ fn sanitize_font_size(size: f32, warnings: &mut crate::limits::WarningSink) -> f
     } else {
         size
     }
+}
+
+/// Size of an atomic inline (image, inline-block), supplied by the caller
+/// before line layout. `baseline` is measured from the top of the margin box
+/// and must be of the kind reported by [`Paragraph::required_baseline`].
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct AtomicSize {
+    pub inline_size: f32,
+    pub block_size: f32,
+    pub baseline: Option<f32>,
+    pub margins: Sides,
+}
+
+/// Sizes of atomic inlines by node. The generation changes on every insert.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AtomicSizes {
+    map: BTreeMap<NodeId, AtomicSize>,
+    generation: u64,
+}
+
+impl AtomicSizes {
+    pub const EMPTY: AtomicSizes = AtomicSizes {
+        map: BTreeMap::new(),
+        generation: 0,
+    };
+
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn insert(&mut self, node: NodeId, size: AtomicSize) {
+        self.map.insert(node, size);
+        self.generation += 1;
+    }
+
+    pub fn get(&self, node: NodeId) -> Option<&AtomicSize> {
+        self.map.get(&node)
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+}
+
+/// A precomputed set of break positions for `text-wrap: balance | pretty`.
+/// Produced by `Paragraph::plan_breaks` (not available yet).
+#[derive(Clone, Debug, PartialEq)]
+pub struct BreakPlan {
+    pub(crate) para: u64,
+    pub(crate) width: f32,
+    pub(crate) atomics_generation: u64,
+}
+
+/// Space available to one line.
+#[derive(Clone, Copy, Debug)]
+pub struct LineConstraint<'a> {
+    pub available_inline_size: f32,
+    /// Inline-start inset from floats, relative to the content box.
+    pub inline_start_offset: f32,
+    /// Block position of the line within the container; copied to the line.
+    pub block_offset: f32,
+    pub max_block_size: Option<f32>,
+    pub floats_placed_through: Option<FloatCursor>,
+    pub break_plan: Option<&'a BreakPlan>,
+}
+
+impl LineConstraint<'_> {
+    pub fn new(available_inline_size: f32) -> Self {
+        Self {
+            available_inline_size,
+            inline_start_offset: 0.0,
+            block_offset: 0.0,
+            max_block_size: None,
+            floats_placed_through: None,
+            break_plan: None,
+        }
+    }
+}
+
+/// Outcome of [`Paragraph::next_line`].
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum LineResult {
+    Line(Line),
+    /// No content is left.
+    Done,
+    /// The line would be taller than `max_block_size`.
+    BlockSizeExceeded {
+        needed_block_size: f32,
+    },
+    /// A float was reached; place it and call again from `line_start`.
+    FloatEncountered {
+        node: NodeId,
+        line_start: BreakToken,
+        inline_position: f32,
+        float_cursor: FloatCursor,
+    },
+    /// A block-level box inside inline content was reached; lay it out and
+    /// continue from `token_after`.
+    BlockInInline {
+        node: NodeId,
+        token_after: BreakToken,
+    },
+    /// The token belongs to another paragraph or is out of range.
+    InvalidToken,
 }
