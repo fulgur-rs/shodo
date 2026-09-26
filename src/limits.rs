@@ -46,7 +46,7 @@ pub struct Limits {
     pub max_faces_per_layer: Option<u64>,
     /// Total registered font-blob bytes retained per layer (256 MiB).
     pub max_layer_blob_bytes: Option<u64>,
-    /// Shaper cache entries (64); reserved for the real shaper.
+    /// Shared harfrust ShaperData cache entries per layer (64).
     pub max_shaper_cache_entries: Option<u64>,
 }
 

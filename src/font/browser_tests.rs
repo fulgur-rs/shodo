@@ -622,3 +622,157 @@ fn local_aliases_retain_shared_blob_once_and_source_limits_fail_closed() {
     ));
     assert_eq!(doc.generation(), 2);
 }
+
+#[test]
+fn real_font_metrics_replace_stub_values_and_unknown_faces_are_absent() {
+    let fonts = no_system();
+    let id = add_face(&fonts, "Metrics", (400., 400.), &['0', '水']);
+    let m = fonts.metrics_with_coords(id, 10., &[]).unwrap();
+    assert_eq!((m.ascent, m.descent, m.line_gap), (7.5, 2.5, 1.));
+    assert_eq!(fonts.metrics(id, 10.), m);
+    assert!(
+        fonts
+            .metrics_with_coords(
+                FontId {
+                    layer: u32::MAX,
+                    index: 0
+                },
+                10.,
+                &[]
+            )
+            .is_none()
+    );
+    assert!(fonts.metrics_with_coords(id, f32::NAN, &[]).is_none());
+}
+
+#[test]
+fn font_units_report_selected_fallback_face_and_css_missing_defaults() {
+    let fonts = no_system();
+    let zero = fonts
+        .register_face(test_font("Digits", &['0'], 600), 0, descriptor("Digits"))
+        .unwrap();
+    let water = fonts
+        .register_face(test_font("CJK", &['水'], 1000), 0, descriptor("CJK"))
+        .unwrap();
+    let q = query(&["Digits", "CJK"], 400.);
+    let ch = fonts.resolve_ch(&q, 10.);
+    assert_eq!((ch.id, ch.advance), (Some(zero), 6.));
+    let ic = fonts.resolve_ic(&q, 10.);
+    assert_eq!(ic.id, Some(water));
+    assert!((ic.advance - 10.).abs() < 0.0001);
+    let empty = no_system();
+    assert_eq!(
+        (
+            empty.resolve_ch(&q, 10.).id,
+            empty.resolve_ch(&q, 10.).advance
+        ),
+        (None, 5.)
+    );
+    assert_eq!(
+        (
+            empty.resolve_ic(&q, 10.).id,
+            empty.resolve_ic(&q, 10.).advance
+        ),
+        (None, 10.)
+    );
+}
+
+#[test]
+fn shaper_cache_is_shared_bounded_and_zero_capacity_still_returns_data() {
+    let limits = Limits {
+        max_shaper_cache_entries: Some(1),
+        ..Default::default()
+    };
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    let first = add_face(&fonts, "One", (400., 400.), &['a']);
+    let second = add_face(&fonts, "Two", (400., 400.), &['b']);
+    let a = fonts.shaper_data(first).unwrap();
+    assert!(Arc::ptr_eq(&a, &fonts.clone().shaper_data(first).unwrap()));
+    let doc = FontCollection::for_document(&fonts, &Limits::default());
+    assert!(Arc::ptr_eq(&a, &doc.shaper_data(first).unwrap()));
+    let _b = fonts.shaper_data(second).unwrap();
+    assert_eq!(fonts.state().shapers.len(), 1);
+    assert!(!Arc::ptr_eq(&a, &fonts.shaper_data(first).unwrap()));
+    let limits = Limits {
+        max_shaper_cache_entries: Some(0),
+        ..Default::default()
+    };
+    let empty = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    let id = add_face(&empty, "Zero", (400., 400.), &['a']);
+    assert!(empty.shaper_data(id).is_some());
+    assert!(empty.state().shapers.is_empty());
+}
+
+#[test]
+fn weak_layer_handles_observe_release_without_retaining_document_fonts() {
+    let fonts = no_system();
+    let doc = FontCollection::for_document(&fonts, &Limits::default());
+    let id = add_face(&doc, "Document", (400., 400.), &['a']);
+    let handle = doc.layer_handle();
+    assert_eq!(handle.id(), id.layer());
+    let clone = doc.clone();
+    drop(doc);
+    assert!(handle.is_alive());
+    drop(clone);
+    assert!(!handle.is_alive());
+    assert!(fonts.layer_handle().is_alive());
+}
+
+#[test]
+fn shaper_data_and_handles_are_send_sync() {
+    fn check<T: Send + Sync>() {}
+    check::<harfrust::ShaperData>();
+    check::<WeakFontLayer>();
+}
+
+#[test]
+fn layer_allocator_fails_on_exhaustion_instead_of_reusing_an_id() {
+    let counter = AtomicU32::new(u32::MAX - 1);
+    assert_eq!(allocate_layer_id(&counter), Some(u32::MAX - 1));
+    assert_eq!(allocate_layer_id(&counter), None);
+    assert_eq!(counter.load(Ordering::Relaxed), u32::MAX);
+}
+
+#[test]
+fn vertical_font_metrics_use_vhea_and_report_absence() {
+    let fonts = no_system();
+    let plain = test_font("Horizontal", &['a'], 600);
+    let id = fonts
+        .register_face(plain.clone(), 0, descriptor("Horizontal"))
+        .unwrap();
+    assert!(fonts.vertical_metrics(id, 10., &[]).is_none());
+    let count = u16::from_be_bytes([plain[4], plain[5]]) as usize;
+    let mut tables = Vec::new();
+    for n in 0..count {
+        let at = 12 + n * 16;
+        let start = u32::from_be_bytes(plain[at + 8..at + 12].try_into().unwrap()) as usize;
+        let len = u32::from_be_bytes(plain[at + 12..at + 16].try_into().unwrap()) as usize;
+        tables.push((
+            plain[at..at + 4].try_into().unwrap(),
+            plain[start..start + len].to_vec(),
+        ));
+    }
+    let mut vhea = vec![0; 36];
+    vhea[0..4].copy_from_slice(&0x0001_0000u32.to_be_bytes());
+    vhea[4..6].copy_from_slice(&500i16.to_be_bytes());
+    vhea[6..8].copy_from_slice(&(-500i16).to_be_bytes());
+    vhea[8..10].copy_from_slice(&200i16.to_be_bytes());
+    tables.push((*b"vhea", vhea));
+    let id = fonts
+        .register_face(sfnt::build_sfnt(&tables), 0, descriptor("Vertical"))
+        .unwrap();
+    let m = fonts.vertical_metrics(id, 10., &[]).unwrap();
+    assert_eq!((m.ascent, m.descent, m.line_gap), (5., 5., 2.));
+}

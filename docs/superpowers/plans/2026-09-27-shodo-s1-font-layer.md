@@ -56,9 +56,9 @@
 
 **Files:** src/font/metrics.rs, src/font/mod.rs, src/font/tests.rs.
 **Interfaces:** metrics_with_coords(id,size,coords)->Option<FontMetrics>; vertical_metrics(id,size,coords); resolve_ch/resolve_ic(&FontQuery,size)->FontUnit; shaper_data(id)->Option<Arc<harfrust::ShaperData>>; layer_handle()->WeakFontLayer.
-- [ ] Test actual ascent/descent/linegap/decoration, glyph widths and missing-unit defaults, cache sharing/eviction/zero cap, dropped-layer notification and Send+Sync (RED).
-- [ ] Implement skrifa metrics and shared bounded LRU; check layer allocation without ID reuse (GREEN).
-- [ ] Run full suite; commit.
+- [x] Test actual ascent/descent/linegap/decoration, glyph widths and missing-unit defaults, cache sharing/eviction/zero cap, dropped-layer notification and Send+Sync (RED).
+- [x] Implement skrifa metrics and shared bounded LRU; check layer allocation without ID reuse (GREEN).
+- [x] Run full suite; commit.
 
 ### Task 5: font structure and bounded web-font decoding
 

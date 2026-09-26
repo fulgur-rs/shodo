@@ -18,6 +18,7 @@ system-fonts = ["fontique/system"]
 [dependencies]
 fontique = { version = "0.11", default-features = false, features = ["std"] }
 skrifa = "0.44"
+harfrust = "0.12"
 icu_properties = "2.3"
 peniko = "0.6"
 unicode-bidi = "0.3.18"

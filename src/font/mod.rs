@@ -3,9 +3,12 @@
 mod check;
 mod descriptor;
 mod matching;
+mod metrics;
 mod source;
 pub use descriptor::FontFaceDescriptor;
 pub use matching::{FontMatch, FontPresentation, FontQuery};
+pub use metrics::{FontUnit, VerticalFontMetrics};
+pub use skrifa::instance::NormalizedCoord;
 pub use source::FontSource;
 pub(crate) mod sfnt;
 
@@ -20,6 +23,28 @@ use peniko::{Blob, FontData};
 use crate::limits::{LimitKind, Limits};
 
 static NEXT_LAYER_ID: AtomicU32 = AtomicU32::new(0);
+
+fn allocate_layer_id(counter: &AtomicU32) -> Option<u32> {
+    counter
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+        .ok()
+}
+
+/// An observer for invalidating renderer atlas entries after a layer dies.
+/// It never keeps a document or its font blobs alive.
+#[derive(Clone, Debug)]
+pub struct WeakFontLayer {
+    id: u32,
+    layer: std::sync::Weak<Layer>,
+}
+impl WeakFontLayer {
+    pub fn id(&self) -> u32 {
+        self.id
+    }
+    pub fn is_alive(&self) -> bool {
+        self.layer.strong_count() != 0
+    }
+}
 
 /// Identifies a face: the layer it was registered in and its index there.
 /// Stable for the lifetime of the layer; layer ids are never reused.
@@ -91,6 +116,7 @@ struct LayerState {
     generics: std::collections::HashMap<crate::style::GenericFamily, Vec<String>>,
     fallbacks: Vec<matching::FallbackEntry>,
     matches: std::collections::VecDeque<matching::CacheEntry>,
+    shapers: std::collections::VecDeque<(u32, Arc<harfrust::ShaperData>)>,
 }
 
 /// A layer of fonts. The shared layer (created with [`FontCollection::new`])
@@ -146,7 +172,7 @@ impl FontCollection {
     ) -> Self {
         Self {
             layer: Arc::new(Layer {
-                id: NEXT_LAYER_ID.fetch_add(1, Ordering::Relaxed),
+                id: allocate_layer_id(&NEXT_LAYER_ID).expect("font layer identity space exhausted"),
                 limits: limits.clone(),
                 generation: AtomicU64::new(0),
                 state: Mutex::new(LayerState {
@@ -163,6 +189,7 @@ impl FontCollection {
                     generics: Default::default(),
                     fallbacks: Vec::new(),
                     matches: Default::default(),
+                    shapers: Default::default(),
                 }),
                 parent,
             }),
@@ -310,18 +337,47 @@ impl FontCollection {
         }
     }
 
-    /// Metrics of a face at `size` px. Placeholder values per em: ascent 0.8,
-    /// descent 0.2, no line gap.
-    pub fn metrics(&self, _id: FontId, size: f32) -> FontMetrics {
-        FontMetrics {
-            ascent: 0.8 * size,
-            descent: 0.2 * size,
-            line_gap: 0.0,
-            underline_offset: 0.1 * size,
-            underline_thickness: 0.05 * size,
-            strikeout_offset: -0.3 * size,
-            strikeout_thickness: 0.05 * size,
+    /// Weak lifecycle observer for this layer.
+    pub fn layer_handle(&self) -> WeakFontLayer {
+        WeakFontLayer {
+            id: self.layer.id,
+            layer: Arc::downgrade(&self.layer),
         }
+    }
+
+    /// Shared, entry-count-bounded shaping data for a registered face.
+    /// Returned handles remain usable after LRU eviction. Zero disables
+    /// retention without disabling shaping.
+    pub fn shaper_data(&self, id: FontId) -> Option<Arc<harfrust::ShaperData>> {
+        if id.layer != self.layer.id {
+            return self.layer.parent.as_ref()?.shaper_data(id);
+        }
+        let mut state = self.state();
+        if let Some(index) = state
+            .shapers
+            .iter()
+            .position(|(index, _)| *index == id.index)
+        {
+            let entry = state.shapers.remove(index)?;
+            let result = entry.1.clone();
+            state.shapers.push_back(entry);
+            return Some(result);
+        }
+        let data = state.faces.get(id.index as usize)?;
+        let font = harfrust::FontRef::from_index(data.data.as_ref(), data.index).ok()?;
+        let shaper = Arc::new(harfrust::ShaperData::new(&font));
+        let cap = self
+            .layer
+            .limits
+            .max_shaper_cache_entries
+            .unwrap_or(u64::MAX);
+        if cap > 0 {
+            while state.shapers.len() as u64 >= cap {
+                state.shapers.pop_front();
+            }
+            state.shapers.push_back((id.index, shaper.clone()));
+        }
+        Some(shaper)
     }
 }
 
