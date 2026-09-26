@@ -488,3 +488,98 @@ fn nested_boxes_split_by_bidi_point_at_their_enclosing_fragment() {
         2
     );
 }
+
+fn padded_5_5() -> InlineEdges {
+    InlineEdges {
+        padding: Sides {
+            inline_start: 5.0,
+            inline_end: 5.0,
+            ..Sides::default()
+        },
+        ..InlineEdges::default()
+    }
+}
+
+/// Lays out `lead` + box(`text`, padding 5/5) + "def" at 70px and returns the
+/// first line's inline box geometry.
+fn first_line_box_rects(
+    direction: Direction,
+    lead: &str,
+    span: InlineStyle,
+    text: &str,
+) -> Vec<(f32, f32, f32, f32)> {
+    let lines = all_lines(direction, 70.0, |b| {
+        b.push_text(dom(1), lead)
+            .open_inline(NodeId(2), &span, padded_5_5())
+            .push_text(dom(3), text)
+            .close_inline()
+            .push_text(dom(4), "def");
+    });
+    assert_eq!(lines.len(), 2);
+    boxes(&lines[0])
+        .iter()
+        .map(|b| {
+            (
+                b.rect.inline_start,
+                b.rect.inline_size,
+                b.content_rect.inline_start,
+                b.content_rect.inline_size,
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn a_hanging_space_stays_in_a_same_direction_box_whatever_else_is_on_the_line() {
+    let span = InlineStyle {
+        font_size: 10.0,
+        ..InlineStyle::default()
+    };
+    // A right-to-left letter elsewhere on the line must not change the
+    // geometry of a left-to-right box whose trailing space hangs.
+    let latin = first_line_box_rects(Direction::Ltr, "x", span.clone(), "abc ");
+    let hebrew = first_line_box_rects(Direction::Ltr, "\u{5D0}", span, "abc ");
+    assert_eq!(latin, [(10.0, 50.0, 15.0, 40.0)]);
+    assert_eq!(hebrew, latin);
+}
+
+#[test]
+fn an_anchor_between_hanging_spaces_keeps_its_position() {
+    let preserved = InlineStyle {
+        font_size: 10.0,
+        white_space_collapse: shodo::style::WhiteSpaceCollapse::BreakSpaces,
+        ..InlineStyle::default()
+    };
+    let anchor_at = |lead: &str| {
+        let lines = all_lines(Direction::Ltr, 45.0, |b| {
+            b.open_inline(NodeId(1), &preserved, InlineEdges::default())
+                .push_text(dom(2), lead)
+                .push_out_of_flow(NodeId(3), shodo::node::OutOfFlowKind::Absolute)
+                .push_text(dom(4), " xyz")
+                .close_inline();
+        });
+        lines[0]
+            .fragments()
+            .find_map(|f| match f {
+                Fragment::OutOfFlowAnchor(a) => Some(a.inline_position),
+                _ => None,
+            })
+            .unwrap()
+    };
+    assert_eq!(anchor_at("ab "), 30.0);
+    assert_eq!(anchor_at("\u{5D0}\u{5D1} "), 30.0);
+}
+
+#[test]
+fn a_hanging_space_stays_in_a_same_direction_box_in_a_right_to_left_paragraph() {
+    let span = InlineStyle {
+        font_size: 10.0,
+        direction: Direction::Rtl,
+        ..InlineStyle::default()
+    };
+    let text = "\u{5D0}\u{5D1}\u{5D2} ";
+    let hebrew = first_line_box_rects(Direction::Rtl, "\u{5D3}", span.clone(), text);
+    let latin = first_line_box_rects(Direction::Rtl, "x", span, text);
+    assert_eq!(hebrew, [(10.0, 50.0, 15.0, 40.0)]);
+    assert_eq!(latin, hebrew);
+}

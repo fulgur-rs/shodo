@@ -348,9 +348,13 @@ fn build_bidi(
                 edge: Some((*box_index, false)),
             },
             UnitKind::Cluster { space, .. } => {
-                if trailing && *space {
-                    // Hanging spaces belong to no box on this line, so box
-                    // fragments end with the box's content and edges.
+                if trailing && *space && unit.level != base {
+                    // L1 moves a hanging space out of an embedding to the
+                    // paragraph level. Kept inside its box, it would split
+                    // the box around it, so it is placed after everything
+                    // else instead. A space already at the paragraph level
+                    // is unaffected by L1 and stays in its box, exactly as
+                    // on lines without reordering.
                     push_cluster(&mut hanging, unit, w, level, None);
                 } else {
                     push_cluster(&mut pieces, unit, w, level, unit.parent_box);
