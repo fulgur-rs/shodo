@@ -58,6 +58,8 @@ pub struct ParagraphBuilder {
     /// Interned styles; index 0 is the paragraph's root style.
     pub(crate) styles: Vec<InlineStyle>,
     style_index: HashMap<String, u32>,
+    /// Index of the most recently interned or reused style.
+    last_interned: u32,
     /// Style indices of the currently open inline boxes.
     pub(crate) stack: Vec<u32>,
     pub(crate) error: Option<LimitExceeded>,
@@ -74,6 +76,7 @@ impl ParagraphBuilder {
             items: Vec::new(),
             styles: Vec::new(),
             style_index: HashMap::new(),
+            last_interned: 0,
             stack: Vec::new(),
             error: None,
             warnings: WarningSink::new(limits.max_warnings),
@@ -226,8 +229,18 @@ impl ParagraphBuilder {
     }
 
     fn intern(&mut self, style: &InlineStyle) -> Option<u32> {
+        // Consecutive and nested elements usually share a style; compare
+        // with the enclosing box's style and the last interned one before
+        // building the map key, whose cost grows with the style's size.
+        for index in [self.current_style(), self.last_interned] {
+            if self.styles.get(index as usize) == Some(style) {
+                self.last_interned = index;
+                return Some(index);
+            }
+        }
         let key = format!("{style:?}");
         if let Some(&index) = self.style_index.get(&key) {
+            self.last_interned = index;
             return Some(index);
         }
         let count = self.styles.len() as u64 + 1;
@@ -237,6 +250,7 @@ impl ParagraphBuilder {
         let index = self.styles.len() as u32;
         self.styles.push(style.clone());
         self.style_index.insert(key, index);
+        self.last_interned = index;
         Some(index)
     }
 }
@@ -342,6 +356,31 @@ mod tests {
         assert_eq!(b.items.len(), 6);
         assert_eq!(b.styles.len(), 2, "root + one shared bold style");
         assert!(b.stack.is_empty());
+        assert_eq!(b.error(), None);
+    }
+
+    #[test]
+    fn repeated_and_nested_equal_styles_share_one_index() {
+        let big = InlineStyle {
+            font_families: vec![crate::style::FontFamily::Named("x".repeat(100 * 1024))],
+            ..InlineStyle::default()
+        };
+        let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::unlimited());
+        for n in 0..20_000 {
+            b.open_inline(NodeId(n), &big, InlineEdges::default())
+                .close_inline();
+        }
+        // Nested inside a box of the same style, and alternating with another.
+        b.open_inline(NodeId(1), &big, InlineEdges::default())
+            .open_inline(NodeId(2), &big, InlineEdges::default())
+            .push_atomic(NodeId(3), &big, InlineEdges::default())
+            .open_inline(NodeId(4), &bold(), InlineEdges::default())
+            .close_inline()
+            .open_inline(NodeId(5), &big, InlineEdges::default())
+            .close_inline()
+            .open_inline(NodeId(6), &bold(), InlineEdges::default());
+        assert_eq!(b.styles.len(), 3, "root, big and bold");
+        assert_eq!(b.stack, [1, 1, 2]);
         assert_eq!(b.error(), None);
     }
 
