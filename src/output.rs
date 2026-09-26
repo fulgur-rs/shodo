@@ -22,7 +22,7 @@ pub enum BreakReason {
     Regular,
     /// At a forced break (`<br>`, preserved newline).
     Forced,
-    /// Inside a word because of `overflow-wrap` (not produced yet).
+    /// Inside a word because of `overflow-wrap`.
     Emergency,
     /// Before a block-level box inside inline content.
     BlockInInline,
@@ -50,6 +50,9 @@ pub struct Line {
     pub(crate) empty: bool,
     pub(crate) positions: Option<(u32, Vec<LayoutUnit>)>,
     pub(crate) overlay: Option<Box<GlyphStore>>,
+    pub(crate) overlay_clusters: Box<[OverlayCluster]>,
+    pub(crate) overlay_runs: Box<[crate::shape::ShapedRun]>,
+    pub(crate) pending_overlays: Vec<crate::line::reshape::EdgeOverlay>,
 }
 
 impl fmt::Debug for Line {
@@ -81,6 +84,15 @@ impl Line {
             _ => 0,
         };
         let origin_units = token.unit as usize..scan.end;
+        let visible_hyphen = scan
+            .overlays
+            .iter()
+            .find(|edge| {
+                data.text
+                    .get(edge.text.start as usize..edge.text.end as usize)
+                    == Some("\u{ad}")
+            })
+            .map(|edge| edge.text.start);
         let records = fragments::build(
             data,
             origin_units,
@@ -88,6 +100,7 @@ impl Line {
             &scan.widths,
             origin,
             atomics,
+            visible_hyphen,
         );
         let metrics =
             crate::line::metrics::measure(data, token.unit as usize..scan.end, &records, sat);
@@ -112,6 +125,9 @@ impl Line {
             empty: metrics.empty,
             positions: None,
             overlay: None,
+            overlay_clusters: Box::default(),
+            overlay_runs: Box::default(),
+            pending_overlays: scan.overlays,
         }
     }
 
@@ -253,6 +269,12 @@ pub struct Cluster {
     pub shaping_advance: f32,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct OverlayCluster {
+    pub(crate) glyphs: Range<u32>,
+    pub(crate) text: Range<u32>,
+}
+
 impl<'a> GlyphRunView<'a> {
     fn data(&self) -> &'a ParagraphData {
         &self.line.data
@@ -262,36 +284,40 @@ impl<'a> GlyphRunView<'a> {
         self.data().items[self.item as usize].node
     }
 
+    fn run_data(&self) -> &'a crate::shape::ShapedRun {
+        match self.source {
+            GlyphSource::Overlay { run: Some(run), .. } => &self.line.overlay_runs[run as usize],
+            _ => &self.data().runs[self.run as usize],
+        }
+    }
+
     pub fn font(&self) -> FontId {
-        self.data().runs[self.run as usize].font
+        self.run_data().font
     }
 
     pub fn font_size(&self) -> f32 {
-        self.data().runs[self.run as usize].font_size
+        self.run_data().font_size
     }
 
     /// Normalized variation coordinates in the face's axis order.
     pub fn normalized_coords(&self) -> &'a [crate::font::NormalizedCoord] {
-        &self.data().runs[self.run as usize].instance.coords
+        &self.run_data().instance.coords
     }
     pub fn variations(&self) -> &'a [crate::style::FontVariation] {
-        &self.data().runs[self.run as usize].instance.variations
+        &self.run_data().instance.variations
     }
     pub fn embolden(&self) -> bool {
-        self.data().runs[self.run as usize].instance.embolden
+        self.run_data().instance.embolden
     }
     /// Synthetic slant supplied by font matching, in degrees.
     pub fn skew(&self) -> Option<f32> {
-        self.data().runs[self.run as usize].instance.skew
+        self.run_data().instance.skew
     }
     pub fn script(&self) -> [u8; 4] {
-        self.data().runs[self.run as usize].instance.script
+        self.run_data().instance.script
     }
     pub fn language(&self) -> Option<&'a str> {
-        self.data().runs[self.run as usize]
-            .instance
-            .language
-            .as_deref()
+        self.run_data().instance.language.as_deref()
     }
 
     pub fn font_data(&self) -> Option<FontData> {
@@ -329,37 +355,56 @@ impl<'a> GlyphRunView<'a> {
 
     pub fn clusters(&self) -> impl ExactSizeIterator<Item = Cluster> + '_ {
         let data = self.data();
-        let begin = data.glyph_clusters[self.glyphs.0 as usize] as usize;
-        let end = data.glyph_clusters[(self.glyphs.1 - 1) as usize] as usize;
-        data.clusters[begin..=end].iter().map(|unit| {
+        let (begin, count) = match self.source {
+            GlyphSource::Shared if self.glyphs.0 < self.glyphs.1 => {
+                let begin = data.glyph_clusters[self.glyphs.0 as usize] as usize;
+                let end = data.glyph_clusters[(self.glyphs.1 - 1) as usize] as usize;
+                (begin, end + 1 - begin)
+            }
+            GlyphSource::Shared => (0, 0),
+            GlyphSource::Overlay { clusters, .. } => {
+                (clusters.0 as usize, (clusters.1 - clusters.0) as usize)
+            }
+        };
+        (0..count).map(move |i| {
             #[cfg(test)]
             data.cluster_queries
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let u = &data.units[*unit as usize];
-            let crate::analysis::units::UnitKind::Cluster { glyphs, .. } = &u.kind else {
-                unreachable!()
+            let (glyphs, text, store) = match self.source {
+                GlyphSource::Shared => {
+                    let u = &data.units[data.clusters[begin + i] as usize];
+                    let crate::analysis::units::UnitKind::Cluster { glyphs, .. } = &u.kind else {
+                        unreachable!()
+                    };
+                    (glyphs.clone(), u.shaping_text().clone(), &data.glyphs)
+                }
+                GlyphSource::Overlay { .. } => {
+                    let c = &self.line.overlay_clusters[begin + i];
+                    (
+                        c.glyphs.clone(),
+                        c.text.clone(),
+                        self.line.overlay.as_deref().expect("overlay store"),
+                    )
+                }
             };
             Cluster {
-                text_range: u.text.start as usize..u.text.end as usize,
+                text_range: text.start as usize..text.end as usize,
                 advance: glyphs.clone().map(|g| self.glyph(g).advance).sum(),
-                shaping_advance: glyphs
-                    .clone()
-                    .map(|g| data.glyphs.advance[g as usize].to_f32())
-                    .sum(),
+                shaping_advance: glyphs.map(|g| store.advance[g as usize].to_f32()).sum(),
             }
         })
     }
 
     fn glyph(&self, g: u32) -> Glyph {
-        let (store, gi, first) = match self.source {
-            GlyphSource::Shared => (&self.data().glyphs, g as usize, self.glyphs.0 as usize),
-            GlyphSource::Overlay { start } => (
-                self.line.overlay.as_deref().unwrap(),
-                (start + g - self.glyphs.0) as usize,
-                start as usize,
-            ),
+        let store = match self.source {
+            GlyphSource::Shared => &self.data().glyphs,
+            GlyphSource::Overlay { .. } => self.line.overlay.as_deref().expect("overlay store"),
         };
-        let (rel, advance) = if let Some((start, positions)) = &self.line.positions {
+        let gi = g as usize;
+        let first = self.glyphs.0 as usize;
+        let (rel, advance) = if matches!(self.source, GlyphSource::Shared)
+            && let Some((start, positions)) = &self.line.positions
+        {
             let pen = positions[(g - start) as usize];
             let rel = pen - positions[(self.glyphs.0 - start) as usize];
             let end = if g + 1 < self.glyphs.1 {
@@ -369,7 +414,16 @@ impl<'a> GlyphRunView<'a> {
             };
             (rel, end - rel)
         } else {
-            (store.pen[gi] - store.pen[first], store.advance[gi])
+            let rel = store.pen[gi] - store.pen[first];
+            let advance = if matches!(self.source, GlyphSource::Overlay { .. })
+                && self.line.positions.is_some()
+                && g + 1 == self.glyphs.1
+            {
+                self.record.inline_size - rel
+            } else {
+                store.advance[gi]
+            };
+            (rel, advance)
         };
         // Runs are stored in logical order and reversed for display here; a
         // real shaper that emits right-to-left runs in visual order must not
@@ -473,7 +527,10 @@ impl Line {
                 line: self,
                 record,
                 run: *run,
-                glyphs: (glyphs.start, glyphs.end),
+                glyphs: match source {
+                    GlyphSource::Shared => (glyphs.start, glyphs.end),
+                    GlyphSource::Overlay { glyphs, .. } => *glyphs,
+                },
                 item: *item,
                 text: (text.start, text.end),
             }),

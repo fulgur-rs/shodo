@@ -258,11 +258,17 @@ pub(crate) fn shape_items(
                     .partition_point(|s| s.offset <= cluster)
                     .saturating_sub(1);
                 let owner = item.scalars[scalar_index].item;
-                let cluster_end = if end < order.len() {
+                let next_cluster = if end < order.len() {
                     shaped.glyph_infos()[order[end]].cluster
                 } else {
                     item.end
                 };
+                // Transparent anchors do not belong to the preceding cluster.
+                // A cluster spanning an anchor still covers all its real scalars,
+                // while a gap between clusters ends at the last actual scalar.
+                let scalar_end = item.scalars.partition_point(|s| s.offset < next_cluster);
+                let last_scalar = &item.scalars[scalar_end.saturating_sub(1)];
+                let cluster_end = last_scalar.offset + last_scalar.c.len_utf8() as u32;
                 let mut parts = Vec::new();
                 let mut part_start = begin;
                 let mut part_advance = 0i64;
@@ -404,7 +410,11 @@ pub(crate) fn shape_item(
             store.len() as u64 + 1,
         )?;
         let mark = is_mark(c);
-        let advance = if mark { LayoutUnit::ZERO } else { em };
+        let advance = if mark || c == '\u{ad}' {
+            LayoutUnit::ZERO
+        } else {
+            em
+        };
         let cluster = text_start + i as u32;
         let overflows = i64::from(pen.raw()) + i64::from(advance.raw()) > i64::from(RUN_PEN_LIMIT);
         if overflows && store.len() as u32 > run_glyphs {
@@ -453,93 +463,88 @@ pub(crate) fn shape_line_edge(
     cx: &mut crate::LayoutContext,
     sat: &mut Saturation,
 ) -> Option<GlyphStore> {
-    let crate::analysis::units::UnitKind::Cluster { run, glyphs, .. } = &unit.kind else {
-        return None;
-    };
-    let text = &data.text[unit.text.start as usize..unit.text.end as usize];
+    let mut warnings = crate::limits::WarningSink::new(data.limits.max_warnings);
+    let result = shape_window(data, unit, cx, &mut warnings, sat).map(|(store, _)| store);
+    for warning in warnings.take() {
+        cx.warnings.push(warning.kind, warning.message);
+    }
+    result
+}
+
+/// Shape only real scalars from the original itemization. Transparent controls
+/// and anchors remain in source offsets, but are never submitted as glyphs.
+pub(crate) fn shape_window(
+    data: &crate::paragraph::ParagraphData,
+    unit: &crate::analysis::units::Unit,
+    cx: &mut crate::LayoutContext,
+    warnings: &mut crate::limits::WarningSink,
+    sat: &mut Saturation,
+) -> Option<(GlyphStore, Vec<ShapedRun>)> {
     if data
         .limits
         .max_reshape_window_bytes
-        .is_some_and(|max| text.len() as u64 > max)
+        .is_some_and(|max| u64::from(unit.text.end - unit.text.start) > max)
     {
-        cx.warnings.push(
+        warnings.push(
             crate::limits::WarningKind::Unsupported,
             "line edge reshape window exceeded; keeping shared glyphs",
         );
         return None;
     }
-    let shaped = &data.runs[*run as usize];
-    let paragraph = data.bidi_paragraph_at_text(unit.text.start);
-    let para_start = paragraph.map_or(0, |p| p.text.start) as usize;
-    let para_end = paragraph.map_or(data.text.len(), |p| p.text.end as usize);
-    let before: String = data.text[para_start..unit.text.start as usize]
+    let index = data
+        .shape_items
+        .partition_point(|item| item.end <= unit.text.start);
+    let original = data.shape_items.get(index)?;
+    let begin = original
+        .scalars
+        .partition_point(|s| s.offset < unit.text.start);
+    let end = original
+        .scalars
+        .partition_point(|s| s.offset < unit.text.end);
+    if begin == end {
+        return Some((GlyphStore::default(), Vec::new()));
+    }
+    let mut before: Vec<_> = original
+        .before
         .chars()
+        .chain(original.scalars[..begin].iter().map(|s| s.c))
         .rev()
         .take(5)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
         .collect();
-    let after: String = data.text[unit.text.end as usize..para_end]
-        .chars()
-        .take(5)
-        .collect();
+    before.reverse();
     let item = crate::analysis::itemize::ShapeItem {
-        scalars: text
-            .char_indices()
-            .map(|(i, c)| crate::analysis::itemize::Scalar {
-                c,
-                offset: unit.text.start + i as u32,
-                item: unit.item,
-                grapheme_start: i == 0,
-            })
-            .collect(),
+        scalars: original.scalars[begin..end].to_vec(),
         end: unit.text.end,
-        style: data.items[unit.item as usize].style,
+        style: original.style,
         level: unit.level,
-        script: shaped.instance.script,
-        font: data
-            .fonts
-            .shaper_data(shaped.font)
-            .map(|_| crate::font::FontMatch {
-                id: shaped.font,
-                variations: shaped.instance.variations.clone(),
-                embolden: shaped.instance.embolden,
-                skew: shaped.instance.skew,
-            }),
-        before,
-        after,
+        script: original.script,
+        font: original.font.clone(),
+        before: before.into_iter().collect(),
+        after: original.scalars[end..]
+            .iter()
+            .map(|s| s.c)
+            .chain(original.after.chars())
+            .take(5)
+            .collect(),
     };
-    let mut warnings = crate::limits::WarningSink::default();
-    warnings.set_max(data.limits.max_warnings);
-    let result = shape_items(
+    match shape_items(
         cx,
         &[item],
         &data.styles,
         &data.fonts,
         &data.limits,
-        &mut warnings,
+        warnings,
         sat,
-    );
-    for w in warnings.take() {
-        cx.warnings.push(w.kind, w.message);
+    ) {
+        Ok(result) => Some(result),
+        Err(_) => {
+            warnings.push(
+                crate::limits::WarningKind::Unsupported,
+                "line edge glyph budget exceeded; keeping shared glyphs",
+            );
+            None
+        }
     }
-    let Ok((store, _)) = result else {
-        cx.warnings.push(
-            crate::limits::WarningKind::Unsupported,
-            "line edge glyph budget exceeded; keeping shared glyphs",
-        );
-        return None;
-    };
-    if store.len() != (glyphs.end - glyphs.start) as usize {
-        cx.warnings.push(
-            crate::limits::WarningKind::Unsupported,
-            "line edge glyph count changed; keeping shared glyphs until variable overlays",
-        );
-        return None;
-    }
-
-    Some(store)
 }
 
 #[cfg(test)]

@@ -56,7 +56,11 @@ pub(crate) enum RecordKind {
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum GlyphSource {
     Shared,
-    Overlay { start: u32 },
+    Overlay {
+        glyphs: (u32, u32),
+        clusters: (u32, u32),
+        run: Option<u32>,
+    },
 }
 
 /// Whether a box's own `direction` opposes the paragraph's, so its start
@@ -76,7 +80,14 @@ fn build_logical(
     widths: &[LayoutUnit],
     origin: LayoutUnit,
     atomics: &AtomicSizes,
+    visible_hyphen: Option<u32>,
 ) -> Vec<FragmentRecord> {
+    let hidden_hyphen = |unit: &Unit| {
+        data.text
+            .get(unit.text.start as usize..unit.text.end as usize)
+            == Some("\u{ad}")
+            && visible_hyphen != Some(unit.text.start)
+    };
     let mut out: Vec<FragmentRecord> = Vec::new();
     let mut open: Vec<usize> = Vec::new();
     let mut pos = origin;
@@ -155,6 +166,9 @@ fn build_logical(
                 }
             }
             UnitKind::Cluster { run, glyphs, .. } => {
+                if hidden_hyphen(unit) {
+                    continue;
+                }
                 if let Some(last) = out.last_mut()
                     && last.level == unit.level
                     && let RecordKind::Glyphs {
@@ -166,7 +180,10 @@ fn build_logical(
                     } = &mut last.kind
                     && *r == *run
                     && *item == unit.item
-                    && g.end == glyphs.start
+                    && (g.end == glyphs.start
+                        || unit.shared_cluster.as_ref().is_some_and(|shared| {
+                            g.end == shared.glyphs.end && g.start <= shared.glyphs.start
+                        }))
                 {
                     g.end = glyphs.end;
                     text.end = unit.text.end;
@@ -245,12 +262,21 @@ pub(crate) fn build(
     widths: &[LayoutUnit],
     origin: LayoutUnit,
     atomics: &AtomicSizes,
+    visible_hyphen: Option<u32>,
 ) -> Vec<FragmentRecord> {
     let base = data.base_level;
     if data.units[units.clone()].iter().all(|u| u.level == base) {
-        return build_logical(data, units, widths, origin, atomics);
+        return build_logical(data, units, widths, origin, atomics, visible_hyphen);
     }
-    build_bidi(data, units, hang_start, widths, origin, atomics)
+    build_bidi(
+        data,
+        units,
+        hang_start,
+        widths,
+        origin,
+        atomics,
+        visible_hyphen,
+    )
 }
 
 /// A reorderable piece of a line: a glyph run segment, an atomic, an
@@ -305,7 +331,11 @@ fn push_cluster(
         }) = &mut last.record
         && *r == run
         && *it == item
-        && g.end == glyphs.start
+        && (g.end == glyphs.start
+            || unit
+                .shared_cluster
+                .as_ref()
+                .is_some_and(|shared| g.end == shared.glyphs.end && g.start <= shared.glyphs.start))
     {
         g.end = glyphs.end;
         t.end = text.end;
@@ -340,6 +370,7 @@ fn build_bidi(
     widths: &[LayoutUnit],
     origin: LayoutUnit,
     atomics: &AtomicSizes,
+    visible_hyphen: Option<u32>,
 ) -> Vec<FragmentRecord> {
     let base = data
         .bidi_paragraph_at_unit(units.start)
@@ -407,6 +438,14 @@ fn build_bidi(
                 edge: Some((*box_index, false)),
             },
             UnitKind::Cluster { space, .. } => {
+                if data
+                    .text
+                    .get(unit.text.start as usize..unit.text.end as usize)
+                    == Some("\u{ad}")
+                    && visible_hyphen != Some(unit.text.start)
+                {
+                    continue;
+                }
                 if trailing && *space && unit.level != base {
                     // L1 moves a hanging space out of an embedding to the
                     // paragraph level. Kept inside its box, it would split

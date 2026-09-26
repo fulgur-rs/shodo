@@ -20,7 +20,7 @@ pub(super) fn apply(
     indent: LayoutUnit,
     sat: &mut Saturation,
 ) -> Alignment {
-    let last = scan.reason != BreakReason::Regular;
+    let last = !matches!(scan.reason, BreakReason::Regular | BreakReason::Emergency);
     let mut align = options.text_align;
     if last {
         align = match options.text_align_last {
@@ -70,6 +70,9 @@ pub(super) fn apply(
     }
     let clusters: Vec<_> = (start..scan.hang_start)
         .filter(|i| matches!(data.units[*i].kind, UnitKind::Cluster { .. }))
+        .filter(|i| {
+            *i + 1 >= scan.hang_start || !data.units[*i].shares_cluster(&data.units[*i + 1])
+        })
         .collect();
     let mut opportunities: Vec<_> = clusters
         .iter()
@@ -113,8 +116,14 @@ pub(super) fn apply(
     if let (Some(first), Some(last)) = (ranges.first(), ranges.last()) {
         let mut positions = vec![LayoutUnit::ZERO; (last.end - first.start) as usize];
         let mut pos = LayoutUnit::ZERO;
-        for (u, width) in data.units[start..scan.end].iter().zip(&scan.widths) {
-            if let UnitKind::Cluster { glyphs, .. } = &u.kind {
+        for (k, (u, width)) in data.units[start..scan.end]
+            .iter()
+            .zip(&scan.widths)
+            .enumerate()
+        {
+            if let UnitKind::Cluster { glyphs, .. } = &u.kind
+                && (k == 0 || !u.shares_cluster(&data.units[start + k - 1]))
+            {
                 for g in glyphs.clone() {
                     positions[(g - first.start) as usize] = pos.add(
                         data.glyphs.pen[g as usize] - data.glyphs.pen[glyphs.start as usize],

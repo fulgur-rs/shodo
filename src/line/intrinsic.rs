@@ -30,6 +30,7 @@ impl Paragraph {
         let mut min = LayoutUnit::ZERO;
         let mut max = LayoutUnit::ZERO;
         let mut word = indent;
+        let mut word_start = self.data.units.first().map_or(0, |u| u.text.start);
         let mut total = indent;
         let mut trailing = LayoutUnit::ZERO;
         let mut left = LayoutUnit::ZERO;
@@ -59,6 +60,11 @@ impl Paragraph {
                 );
                 let prefix = super::decoration::width(&self.data, i + 1, true, &mut sat);
                 word = indent.add(prefix, &mut sat);
+                word_start = self
+                    .data
+                    .units
+                    .get(i + 1)
+                    .map_or(u.text.end, |next| next.text.start);
                 total = word;
                 trailing = LayoutUnit::ZERO;
                 left = LayoutUnit::ZERO;
@@ -140,7 +146,20 @@ impl Paragraph {
                     cx,
                     &mut sat,
                 );
-                (width, width)
+                let min_width = if u.shared_cluster.is_some() {
+                    super::scan::unit_width_from(
+                        &self.data,
+                        u,
+                        word_start,
+                        word,
+                        &AtomicSizes::EMPTY,
+                        cx,
+                        &mut sat,
+                    )
+                } else {
+                    width
+                };
+                (min_width, width)
             };
             word = word.add(lo, &mut sat);
             total = total.add(hi, &mut sat);
@@ -149,23 +168,33 @@ impl Paragraph {
                 UnitKind::Close { .. } | UnitKind::BidiControl | UnitKind::Absolute { .. } => {}
                 _ => trailing = LayoutUnit::ZERO,
             }
+            let hyphen = if u.break_after == BreakClass::Hyphen {
+                super::hyphen::shape(&self.data, u, cx, &mut sat)
+                    .map(|edge| super::hyphen::width(&edge, &mut sat).sub(lo, &mut sat))
+            } else {
+                None
+            };
             if u.break_after == BreakClass::Allowed
+                || hyphen.is_some()
                 || u.break_after == BreakClass::Emergency && u.emergency_min_content
             {
+                let measured_word = word.add(hyphen.unwrap_or(LayoutUnit::ZERO), &mut sat);
                 min = min.max(
-                    word.sub(
-                        if matches!(u.kind, UnitKind::Cluster { space: true, .. }) {
-                            lo
-                        } else {
-                            LayoutUnit::ZERO
-                        },
-                        &mut sat,
-                    )
-                    .add(
-                        super::decoration::width(&self.data, i + 1, false, &mut sat),
-                        &mut sat,
-                    ),
+                    measured_word
+                        .sub(
+                            if matches!(u.kind, UnitKind::Cluster { space: true, .. }) {
+                                lo
+                            } else {
+                                LayoutUnit::ZERO
+                            },
+                            &mut sat,
+                        )
+                        .add(
+                            super::decoration::width(&self.data, i + 1, false, &mut sat),
+                            &mut sat,
+                        ),
                 );
+                word_start = u.text.end;
                 word = super::text_indent(&options, 0, &mut sat).add(
                     super::decoration::width(&self.data, i + 1, true, &mut sat),
                     &mut sat,

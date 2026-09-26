@@ -69,6 +69,8 @@ pub(crate) struct ParagraphData {
     /// Unit index and node, in float ordinal order.
     pub(crate) floats: Vec<(u32, NodeId)>,
     pub(crate) runs: Vec<ShapedRun>,
+    pub(crate) shape_items: Vec<crate::analysis::itemize::ShapeItem>,
+    pub(crate) breaks: crate::analysis::breaks::BreakAnalysis,
     pub(crate) units: Vec<Unit>,
     pub(crate) boxes: Vec<InlineBoxInfo>,
     pub(crate) float_count: u32,
@@ -219,12 +221,51 @@ impl Paragraph {
                 });
             }
         }
+        let mut data = ParagraphData {
+            #[cfg(test)]
+            baseline_queries: Default::default(),
+            #[cfg(test)]
+            cluster_queries: Default::default(),
+            id: NEXT_PARAGRAPH_ID.fetch_add(1, Ordering::Relaxed),
+            style,
+            limits,
+            text: processed.text,
+            items: processed.items,
+            styles,
+            glyphs,
+            clusters: Vec::new(),
+            glyph_clusters: Vec::new(),
+            floats: Vec::new(),
+            runs,
+            shape_items: shape_items_input,
+            breaks,
+            units,
+            boxes,
+            float_count,
+            base_level,
+            bidi_paragraphs: bidi.paragraphs,
+            mapping: processed.mapping,
+            fonts: fonts.clone(),
+            generations: fonts.generations(),
+            warnings: Vec::new(),
+            baselines,
+        };
+        crate::line::reshape::initialize_slices(&mut data, cx, &mut warnings, &mut sat);
         let mut clusters = Vec::new();
-        let mut glyph_clusters = vec![0; glyphs.len()];
+        let mut glyph_clusters = vec![0; data.glyphs.len()];
         let mut floats = Vec::new();
-        for (i, u) in units.iter().enumerate() {
+        for (i, u) in data.units.iter().enumerate() {
             match &u.kind {
                 crate::analysis::units::UnitKind::Cluster { glyphs, .. } => {
+                    if i > 0
+                        && u.shared_cluster.is_some()
+                        && data.units[i - 1]
+                            .shared_cluster
+                            .as_ref()
+                            .is_some_and(|previous| previous.text == *u.shaping_text())
+                    {
+                        continue;
+                    }
                     let cluster = clusters.len() as u32;
                     clusters.push(i as u32);
                     glyph_clusters[glyphs.start as usize..glyphs.end as usize].fill(cluster);
@@ -235,35 +276,13 @@ impl Paragraph {
                 _ => {}
             }
         }
+        data.clusters = clusters;
+        data.glyph_clusters = glyph_clusters;
+        data.floats = floats;
         warnings.record_saturation(&sat);
+        data.warnings = warnings.take();
         Ok(Paragraph {
-            data: Arc::new(ParagraphData {
-                #[cfg(test)]
-                baseline_queries: Default::default(),
-                #[cfg(test)]
-                cluster_queries: Default::default(),
-                id: NEXT_PARAGRAPH_ID.fetch_add(1, Ordering::Relaxed),
-                style,
-                limits,
-                text: processed.text,
-                items: processed.items,
-                styles,
-                glyphs,
-                clusters,
-                glyph_clusters,
-                floats,
-                runs,
-                units,
-                boxes,
-                float_count,
-                base_level,
-                bidi_paragraphs: bidi.paragraphs,
-                mapping: processed.mapping,
-                fonts: fonts.clone(),
-                generations: fonts.generations(),
-                warnings: warnings.take(),
-                baselines,
-            }),
+            data: Arc::new(data),
         })
     }
 }

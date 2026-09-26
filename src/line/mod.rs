@@ -4,11 +4,12 @@ mod align;
 pub(crate) mod cache;
 mod decoration;
 pub(crate) mod fragments;
+mod hyphen;
 mod intrinsic;
 mod iter;
 pub(crate) mod metrics;
 mod plan;
-mod reshape;
+pub(crate) mod reshape;
 mod scan;
 
 use crate::analysis::units::UnitKind;
@@ -28,6 +29,7 @@ pub(crate) struct Scan {
     pub(crate) reason: BreakReason,
     /// Width of every unit in the line, in order.
     pub(crate) widths: Vec<LayoutUnit>,
+    pub(crate) overlays: Vec<reshape::EdgeOverlay>,
     /// Content width, excluding text-indent and hanging trailing spaces.
     pub(crate) content: LayoutUnit,
     /// Index of the first hanging trailing space of the line (`end` when
@@ -173,6 +175,7 @@ impl Paragraph {
                 }
             }
         }
+        reshape::prepare(data, start, &mut scan, cx, &mut sat);
         let alignment = align::apply(
             data, start, &mut scan, &options, available, indent, &mut sat,
         );
@@ -236,3 +239,19 @@ fn text_indent(options: &LineOptions, flags: u8, sat: &mut Saturation) -> Layout
 
 #[cfg(test)]
 mod tests;
+
+pub(super) fn soft_break_reason(
+    data: &crate::paragraph::ParagraphData,
+    start: usize,
+    end: usize,
+) -> BreakReason {
+    let last = data.units[start..end]
+        .iter()
+        .rev()
+        .find(|u| !matches!(u.kind, UnitKind::Close { .. } | UnitKind::BidiControl));
+    if last.is_some_and(|u| u.break_after == crate::analysis::units::BreakClass::Emergency) {
+        BreakReason::Emergency
+    } else {
+        BreakReason::Regular
+    }
+}

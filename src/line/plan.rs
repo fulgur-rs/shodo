@@ -41,9 +41,36 @@ pub(super) fn selected(
 ) -> Scan {
     let prefix = decoration::width(data, start, true, sat);
     let mut pos = indent.add(prefix, sat);
+    let last_content = (start..end).rev().find(|i| {
+        !matches!(
+            data.units[*i].kind,
+            UnitKind::Close { .. } | UnitKind::BidiControl
+        )
+    });
+    let hyphen = last_content
+        .filter(|i| {
+            data.units[*i].break_after == BreakClass::Hyphen
+                && end < data.units.len()
+                && !matches!(data.units[end].kind, UnitKind::BlockInInline { .. })
+        })
+        .and_then(|i| super::hyphen::shape(data, &data.units[i], cx, sat).map(|edge| (i, edge)));
     let mut widths = Vec::with_capacity(end - start);
-    for u in &data.units[start..end] {
-        let w = super::scan::unit_width(data, u, offset.add(pos, sat), atomics, cx, sat);
+    for (at, u) in data.units[start..end].iter().enumerate() {
+        let w = if let Some((i, edge)) = &hyphen
+            && *i == start + at
+        {
+            super::hyphen::width(edge, sat)
+        } else {
+            super::scan::unit_width_from(
+                data,
+                u,
+                data.units[start].text.start,
+                offset.add(pos, sat),
+                atomics,
+                cx,
+                sat,
+            )
+        };
         pos = pos.add(w, sat);
         widths.push(w);
     }
@@ -70,9 +97,10 @@ pub(super) fn selected(
     } else if matches!(data.units[end].kind, UnitKind::BlockInInline { .. }) {
         BreakReason::BlockInInline
     } else {
-        BreakReason::Regular
+        super::soft_break_reason(data, start, end)
     };
     Scan {
+        overlays: hyphen.into_iter().map(|(_, edge)| edge).collect(),
         end,
         reason,
         widths,
@@ -172,7 +200,13 @@ impl Paragraph {
                                     ..end.saturating_sub(1))
                                     .rev()
                                     .find(|j| {
-                                        self.data.units[*j].break_after == BreakClass::Allowed
+                                        let unit = &self.data.units[*j];
+                                        unit.break_after == BreakClass::Allowed
+                                            || unit.break_after == BreakClass::Hyphen
+                                                && super::hyphen::shape(
+                                                    &self.data, unit, cx, &mut sat,
+                                                )
+                                                .is_some()
                                     })
                             {
                                 let mut alt = j + 1;

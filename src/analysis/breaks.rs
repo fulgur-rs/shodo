@@ -220,7 +220,10 @@ pub(crate) fn analyze_breaks(
         }
     }
     let lb = CodePointMapData::<props::LineBreak>::new();
+    let logical_end = projection.upstream(projection.text.len());
     let mut indivisible_index = 0;
+    let mut following_span = 0;
+    let mut following_item = 0;
     for o in &mut opportunities {
         if o.offset == 0 {
             o.class = BreakClass::Prohibited;
@@ -244,11 +247,36 @@ pub(crate) fn analyze_breaks(
         {
             o.class = BreakClass::Mandatory;
             o.min_content = true;
-        } else if o.offset == input.text.len() as u32 || s.text_wrap_mode == TextWrapMode::NoWrap {
+        } else if o.offset == logical_end || s.text_wrap_mode == TextWrapMode::NoWrap {
             o.class = BreakClass::Prohibited;
             o.min_content = false;
         } else if last == Some('\u{AD}') && s.line_break != LineBreak::Anywhere {
-            o.class = if s.hyphens == Hyphens::None {
+            while projection
+                .spans
+                .get(following_span)
+                .is_some_and(|span| span.original.end <= o.offset)
+            {
+                following_span += 1;
+            }
+            let mandatory_follows = projection.spans.get(following_span).is_some_and(|span| {
+                let pos = span.original.start.max(o.offset);
+                while input
+                    .items
+                    .get(following_item)
+                    .is_some_and(|item| item.text.end <= pos)
+                {
+                    following_item += 1;
+                }
+                input.items.get(following_item).is_some_and(|item| {
+                    matches!(item.kind, ItemKind::ForcedBreak | ItemKind::BlockInInline)
+                }) || input.text[pos as usize..].chars().next().is_some_and(|c| {
+                    matches!(
+                        lb.get(c),
+                        props::LineBreak::MandatoryBreak | props::LineBreak::NextLine
+                    )
+                })
+            });
+            o.class = if s.hyphens == Hyphens::None || mandatory_follows {
                 BreakClass::Prohibited
             } else {
                 BreakClass::Hyphen

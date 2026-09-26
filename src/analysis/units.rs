@@ -2,6 +2,7 @@
 //! (a base character with its combining marks) and one per non-text item.
 
 use std::ops::Range;
+use std::sync::Arc;
 
 use super::breaks::BreakAnalysis;
 use super::{Item, ItemKind};
@@ -49,8 +50,17 @@ pub(crate) enum UnitKind {
     BidiControl,
 }
 
+#[derive(Debug)]
+pub(crate) struct SharedCluster {
+    pub(crate) text: Range<u32>,
+    pub(crate) glyphs: Range<u32>,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct Unit {
+    /// Selectable source slices share one unbroken shaping-cluster owner.
+    pub(crate) shared_cluster: Option<Arc<SharedCluster>>,
+    pub(crate) slice_advance: crate::geometry::LayoutUnit,
     pub(crate) unsafe_to_break: bool,
     pub(crate) unsafe_to_concat: bool,
     pub(crate) kind: UnitKind,
@@ -62,6 +72,21 @@ pub(crate) struct Unit {
     /// Innermost inline box containing the unit (for `Open`/`Close`, the
     /// box's parent).
     pub(crate) parent_box: Option<u32>,
+}
+
+impl Unit {
+    pub(crate) fn shares_cluster(&self, other: &Self) -> bool {
+        self.shared_cluster
+            .as_ref()
+            .zip(other.shared_cluster.as_ref())
+            .is_some_and(|(a, b)| Arc::ptr_eq(a, b))
+    }
+
+    pub(crate) fn shaping_text(&self) -> &Range<u32> {
+        self.shared_cluster
+            .as_ref()
+            .map_or(&self.text, |cluster| &cluster.text)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -110,6 +135,8 @@ pub(crate) fn build_units(
         let node = item.node.unwrap_or(NodeId(0));
         let mut push = |kind: UnitKind, break_after: BreakClass, parent_box: Option<u32>| {
             units.push(Unit {
+                shared_cluster: None,
+                slice_advance: crate::geometry::LayoutUnit::ZERO,
                 unsafe_to_break: false,
                 unsafe_to_concat: false,
                 kind,
@@ -158,6 +185,8 @@ pub(crate) fn build_units(
                         }
                         let space = c == ' ';
                         units.push(Unit {
+                            shared_cluster: None,
+                            slice_advance: crate::geometry::LayoutUnit::ZERO,
                             unsafe_to_break: false,
                             unsafe_to_concat: false,
                             kind: UnitKind::Cluster {
@@ -202,6 +231,8 @@ pub(crate) fn build_units(
             }
             ItemKind::Atomic { .. } => {
                 units.push(Unit {
+                    shared_cluster: None,
+                    slice_advance: crate::geometry::LayoutUnit::ZERO,
                     unsafe_to_break: false,
                     unsafe_to_concat: false,
                     kind: UnitKind::Atomic { node },

@@ -22,7 +22,10 @@ pub(super) fn scan(
     let mut widths = Vec::new();
     let prefix = super::decoration::width(data, start, true, sat);
     let mut pos = indent.add(prefix, sat);
-    let mut last_break: Option<usize> = None;
+    let mut last_break: Option<(usize, Option<super::reshape::EdgeOverlay>)> = None;
+    let mut taken_hyphen = None;
+    let mut first_hyphen = None;
+    let mut last_emergency: Option<usize> = None;
     let mut overflowing = false;
     let mut i = start;
     let reason = loop {
@@ -38,12 +41,32 @@ pub(super) fn scan(
             UnitKind::BlockInInline { .. } => break BreakReason::BlockInInline,
             _ => {}
         }
-        let w = unit_width(data, unit, offset.add(pos, sat), atomics, cx, sat);
+        let w = unit_width_from(
+            data,
+            unit,
+            units[start].text.start,
+            offset.add(pos, sat),
+            atomics,
+            cx,
+            sat,
+        );
         // Trailing spaces hang and never cause a break (CSS Text 3 §4.1.3).
         let hangs = matches!(unit.kind, UnitKind::Cluster { space: true, .. });
         let suffix = super::decoration::width(data, i + 1, false, sat);
         if !hangs && !overflowing && i > start && pos.add(w, sat).add(suffix, sat) > available {
-            if let Some(b) = last_break {
+            if let Some((b, edge)) = last_break.take() {
+                taken_hyphen = edge;
+                widths.truncate(b - start);
+                i = b;
+                break BreakReason::Regular;
+            }
+            if let Some(b) = last_emergency {
+                widths.truncate(b - start);
+                i = b;
+                break BreakReason::Emergency;
+            }
+            if let Some((b, edge)) = first_hyphen.take() {
+                taken_hyphen = Some(edge);
                 widths.truncate(b - start);
                 i = b;
                 break BreakReason::Regular;
@@ -55,23 +78,52 @@ pub(super) fn scan(
         widths.push(w);
         pos = pos.add(w, sat);
         i += 1;
-        if unit.break_after == BreakClass::Allowed {
-            if overflowing {
-                break BreakReason::Regular;
+        match unit.break_after {
+            BreakClass::Mandatory => break BreakReason::Forced,
+            BreakClass::Allowed => {
+                if overflowing {
+                    break BreakReason::Regular;
+                }
+                last_break = Some((i, None));
             }
-            last_break = Some(i);
+            BreakClass::Hyphen => {
+                if let Some(edge) = super::hyphen::shape(data, unit, cx, sat) {
+                    let extra = super::hyphen::width(&edge, sat).sub(w, sat);
+                    if overflowing {
+                        taken_hyphen = Some(edge);
+                        break BreakReason::Regular;
+                    }
+                    if pos.add(extra, sat).add(suffix, sat) <= available {
+                        last_break = Some((i, Some(edge)));
+                    } else if first_hyphen.is_none() {
+                        first_hyphen = Some((i, edge));
+                    }
+                }
+            }
+            BreakClass::Emergency => {
+                if overflowing {
+                    break BreakReason::Emergency;
+                }
+                last_emergency = Some(i);
+            }
+            _ => {}
         }
     };
     // Inline box ends right after a soft break stay on the line that ends
     // there, together with the zero-width bidi controls (PDI, PDF) that
     // precede a box's end. Out-of-flow anchors are not pulled.
-    if reason == BreakReason::Regular {
+    if matches!(reason, BreakReason::Regular | BreakReason::Emergency) {
         while let Some(unit) = units.get(i)
             && matches!(unit.kind, UnitKind::Close { .. } | UnitKind::BidiControl)
         {
             widths.push(unit_width(data, unit, LayoutUnit::ZERO, atomics, cx, sat));
             i += 1;
         }
+    }
+    if let Some(edge) = &taken_hyphen
+        && let Some(k) = units[start..i].iter().position(|u| u.text == edge.text)
+    {
+        widths[k] = super::hyphen::width(edge, sat);
     }
     let total = widths
         .iter()
@@ -93,6 +145,7 @@ pub(super) fn scan(
         }
     }
     Scan {
+        overlays: taken_hyphen.into_iter().collect(),
         end: i,
         reason,
         widths,
@@ -102,6 +155,44 @@ pub(super) fn scan(
             .add(super::decoration::width(data, i, false, sat), sat),
         hang_start,
     }
+}
+
+/// A continuation inside a shaping cluster must use its own exact prefix
+/// shapes, rather than subtracting advances measured from the old line start.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn unit_width_from(
+    data: &ParagraphData,
+    unit: &Unit,
+    line_start: u32,
+    content_pos: LayoutUnit,
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    if let Some(shared) = &unit.shared_cluster
+        && line_start > shared.text.start
+        && line_start < shared.text.end
+    {
+        let measure = |end: u32, cx: &mut LayoutContext, sat: &mut Saturation| {
+            if end <= line_start {
+                return Some(LayoutUnit::ZERO);
+            }
+            let mut prefix = unit.clone();
+            prefix.text = line_start..end;
+            crate::shape::shape_line_edge(data, &prefix, cx, sat).map(|store| {
+                store
+                    .advance
+                    .iter()
+                    .fold(LayoutUnit::ZERO, |p, w| p.add(*w, sat))
+            })
+        };
+        if let Some(end) = measure(unit.text.end, cx, sat)
+            && let Some(begin) = measure(unit.text.start, cx, sat)
+        {
+            return end.sub(begin, sat);
+        }
+    }
+    unit_width(data, unit, content_pos, atomics, cx, sat)
 }
 
 /// Inline advance of one unit. `content_pos` is the unit's position from the
@@ -115,6 +206,7 @@ pub(super) fn unit_width(
     sat: &mut Saturation,
 ) -> LayoutUnit {
     match &unit.kind {
+        UnitKind::Cluster { .. } if unit.shared_cluster.is_some() => unit.slice_advance,
         UnitKind::Cluster { glyphs, .. } => glyphs.clone().fold(LayoutUnit::ZERO, |acc, g| {
             acc.add(data.glyphs.advance[g as usize], sat)
         }),
