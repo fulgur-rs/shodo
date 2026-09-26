@@ -369,3 +369,65 @@ fn out_of_flow_boxes_leave_anchors() {
         (NodeId(2), OutOfFlowKind::Absolute, 20.0)
     );
 }
+
+#[test]
+fn non_finite_edges_become_zero_with_a_warning() {
+    let edges = InlineEdges {
+        padding: Sides {
+            inline_start: f32::NAN,
+            block_start: f32::INFINITY,
+            ..Sides::default()
+        },
+        border: Sides {
+            inline_end: -4.0,
+            ..Sides::default()
+        },
+        margin: Sides {
+            inline_start: -3.0,
+            ..Sides::default()
+        },
+    };
+    let p = para(|b| {
+        b.open_inline(NodeId(1), &span(), edges)
+            .push_text(dom(2), "ab")
+            .close_inline();
+    });
+    let kinds: Vec<_> = p.warnings().iter().map(|w| w.kind).collect();
+    assert!(kinds.contains(&WarningKind::NonFiniteInput), "{kinds:?}");
+    assert!(kinds.contains(&WarningKind::NegativeInput), "{kinds:?}");
+    let line = &all_lines(&p, 100.0, &AtomicSizes::EMPTY, &mut LayoutContext::new())[0];
+    let b = boxes(line)[0];
+    for v in [
+        b.rect.inline_start,
+        b.rect.inline_size,
+        b.rect.block_start,
+        b.rect.block_size,
+        b.content_rect.inline_start,
+        b.content_rect.inline_size,
+    ] {
+        assert!(v.is_finite(), "{b:?}");
+    }
+    // Negative margins are kept; negative borders become 0.
+    assert_eq!((b.rect.inline_start, b.rect.inline_size), (-3.0, 20.0));
+    assert_eq!(b.content_rect.inline_start, -3.0);
+    assert_eq!((b.rect.block_start, b.rect.block_size), (0.0, 10.0));
+}
+
+#[test]
+fn non_finite_atomic_edges_are_sanitized() {
+    let edges = InlineEdges {
+        padding: Sides {
+            inline_start: f32::NAN,
+            ..Sides::default()
+        },
+        ..InlineEdges::default()
+    };
+    let p = para(|b| {
+        b.push_atomic(NodeId(1), &span(), edges);
+    });
+    assert!(
+        p.warnings()
+            .iter()
+            .any(|w| w.kind == WarningKind::NonFiniteInput)
+    );
+}

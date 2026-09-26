@@ -21,6 +21,7 @@ mod context;
 mod line;
 mod output;
 mod paragraph;
+mod sanitize;
 mod shape;
 
 pub use builder::{ParagraphBuilder, RichText};

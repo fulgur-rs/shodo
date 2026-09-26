@@ -14,6 +14,7 @@ use crate::limits::{LimitExceeded, Limits, Warning, WarningKind};
 use crate::mapping::OffsetMapping;
 use crate::node::{NodeId, Sides};
 use crate::output::Line;
+use crate::sanitize;
 use crate::shape::{GlyphStore, ShapedRun, shape_item};
 use crate::style::{InlineStyle, ParagraphStyle, TextOrientation};
 
@@ -131,10 +132,10 @@ impl Paragraph {
         fonts: &FontCollection,
     ) -> Result<Paragraph, LimitExceeded> {
         let ParagraphBuilder {
-            style,
+            mut style,
             limits,
             text,
-            items,
+            mut items,
             mut styles,
             mut warnings,
             offset_mapping,
@@ -142,7 +143,14 @@ impl Paragraph {
         } = b;
         for s in &mut styles {
             s.font_size = sanitize_font_size(s.font_size, &mut warnings);
+            sanitize::style(s, &mut warnings);
         }
+        // The root inline box's interned style (index 0) is the one layout
+        // reads; keep the stored paragraph style consistent with it.
+        if let Some(root) = styles.first() {
+            style.root = root.clone();
+        }
+        sanitize::items(&mut items, &mut warnings);
         let processed = process(&text, &items, &styles, offset_mapping);
         let mut sat = Saturation::default();
         let font = fonts.primary_font();

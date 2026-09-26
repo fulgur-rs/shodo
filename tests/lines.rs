@@ -328,3 +328,59 @@ fn line_is_send_sync_and_static() {
     fn assert_bounds<T: Send + Sync + 'static>() {}
     assert_bounds::<shodo::Line>();
 }
+
+#[test]
+fn negative_line_height_becomes_zero_with_a_warning() {
+    let p = para_with(&root(LineHeight::Px(-20.0)), |b| {
+        b.push_text(
+            TextSource::Dom {
+                node: NodeId(1),
+                offset: 0,
+            },
+            "a",
+        );
+    });
+    assert!(
+        p.warnings()
+            .iter()
+            .any(|w| w.kind == WarningKind::NegativeInput)
+    );
+    let line = &lines(&p, 100.0, &LineOptions::default())[0];
+    assert_eq!(line.block_size(), 0.0);
+    // Zero line height: half the leading (-5px) goes above the 8px ascent.
+    assert_eq!(line.baseline(BaselineKind::Alphabetic), 3.0);
+}
+
+#[test]
+fn non_finite_style_values_become_initial_or_zero() {
+    let p = para_with(&root(LineHeight::Number(f32::NAN)), |b| {
+        b.open_inline(
+            NodeId(1),
+            &InlineStyle {
+                font_size: 10.0,
+                letter_spacing: f32::INFINITY,
+                word_spacing: f32::NAN,
+                font_weight: f32::NAN,
+                tab_size: TabSize::Spaces(f32::NEG_INFINITY),
+                ..InlineStyle::default()
+            },
+            InlineEdges::default(),
+        )
+        .push_text(
+            TextSource::Dom {
+                node: NodeId(2),
+                offset: 0,
+            },
+            "a",
+        )
+        .close_inline();
+    });
+    let count = p
+        .warnings()
+        .iter()
+        .filter(|w| w.kind == WarningKind::NonFiniteInput)
+        .count();
+    assert!(count >= 5, "{:?}", p.warnings());
+    let line = &lines(&p, 100.0, &LineOptions::default())[0];
+    assert_eq!(line.block_size(), 0.0);
+}
