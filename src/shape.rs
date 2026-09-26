@@ -5,6 +5,10 @@
 //! offsets normalized so public output applies bidi reversal once.
 
 pub(crate) mod cache;
+mod features;
+mod instance;
+use instance::RunInstance;
+use std::sync::Arc;
 
 use std::ops::Range;
 
@@ -43,6 +47,7 @@ pub(crate) struct ShapedRun {
     pub(crate) item: u32,
     pub(crate) font: FontId,
     pub(crate) font_size: f32,
+    pub(crate) instance: Arc<RunInstance>,
 }
 
 /// Shapes one compatible style/font/script segment, then assigns each cluster
@@ -57,9 +62,40 @@ pub(crate) fn shape_items(
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
+    cx.bound_shaping_scratch(limits);
     let mut store = GlyphStore::default();
     let mut runs: Vec<ShapedRun> = Vec::new();
     for original in items {
+        let style = &styles[original.style as usize];
+        let font_data = original.font.as_ref().map(|found| {
+            fonts
+                .font_data(found.id)
+                .expect("matched face remains retained")
+        });
+        let resolved = original
+            .font
+            .as_ref()
+            .zip(font_data.as_ref())
+            .map(|(found, data)| {
+                instance::resolve(
+                    data.data.as_ref(),
+                    data.index,
+                    found,
+                    style,
+                    original.script,
+                    warnings,
+                )
+            });
+        let missing_instance = if resolved.is_none() {
+            Some(Arc::new(RunInstance {
+                script: original.script,
+                language: style.lang.clone(),
+                features: features::features(style),
+                ..Default::default()
+            }))
+        } else {
+            None
+        };
         let mut cursor = 0;
         while cursor < original.scalars.len() {
             let start = cursor;
@@ -101,12 +137,12 @@ pub(crate) fn shape_items(
                 after: original.after.clone(),
             };
             let window_run_start = runs.len();
-            let style = &styles[item.style as usize];
             let Some(found) = &item.font else {
                 warnings.push(
                     crate::limits::WarningKind::Unsupported,
                     "missing font; using .notdef glyphs",
                 );
+                let run_instance = missing_instance.as_ref().expect("missing font instance");
                 for scalar in &item.scalars {
                     shape_item(
                         &mut store,
@@ -120,8 +156,10 @@ pub(crate) fn shape_items(
                         sat,
                     )?;
                     *store.id.last_mut().unwrap() = 0;
-                    let current = runs.pop().unwrap();
-                    if let Some(previous) = runs.last_mut()
+                    let mut current = runs.pop().unwrap();
+                    current.instance = Arc::clone(run_instance);
+                    if runs.len() > window_run_start
+                        && let Some(previous) = runs.last_mut()
                         && previous.item == current.item
                         && previous.font == current.font
                         && previous.text.end == current.text.start
@@ -143,24 +181,15 @@ pub(crate) fn shape_items(
                 }
                 continue;
             };
-            let data = fonts
-                .font_data(found.id)
-                .expect("matched face remains retained");
+            let data = font_data.as_ref().expect("matched font data");
             let font = harfrust::FontRef::from_index(data.data.as_ref(), data.index)
                 .expect("registered face");
             let shared = fonts
                 .shaper_data(found.id)
                 .expect("registered shaping data");
-            let variations = found
-                .variations
-                .iter()
-                .chain(&style.font_variations)
-                .map(|v| harfrust::Variation {
-                    tag: harfrust::Tag::new(&v.tag),
-                    value: v.value,
-                });
-            let instance = harfrust::ShaperInstance::from_variations(&font, variations);
-            let shaper = shared.shaper(&font).instance(Some(&instance)).build();
+            let (instance, run_instance, font_size) = resolved.as_ref().expect("matched instance");
+            let font_size = *font_size;
+            let shaper = shared.shaper(&font).instance(Some(instance)).build();
             let mut buffer = cx.scratch.take().unwrap_or_default();
             buffer.clear();
             for scalar in &item.scalars {
@@ -192,19 +221,19 @@ pub(crate) fn shape_items(
             if let Some(language) = style.lang.as_ref().and_then(|l| l.parse().ok()) {
                 buffer.set_language(language);
             }
-            buffer.set_flags(harfrust::BufferFlags::PRODUCE_UNSAFE_TO_CONCAT);
-            let features: Vec<_> = style
-                .font_features
-                .iter()
-                .map(|f| harfrust::Feature::new(harfrust::Tag::new(&f.tag), f.value, ..))
-                .collect();
+            let mut flags = harfrust::BufferFlags::PRODUCE_UNSAFE_TO_CONCAT;
+            if !item.scalars[0].grapheme_start {
+                flags |= harfrust::BufferFlags::DO_NOT_INSERT_DOTTED_CIRCLE;
+            }
+            buffer.set_flags(flags);
+            let features = &run_instance.features;
             let plan = cx
                 .plans
-                .get(found.id, &shaper, &buffer, Some(&instance), &features);
+                .get(found.id, &shaper, &buffer, Some(instance), features);
             let shaped = shaper.shape(
                 buffer,
                 harfrust::ShapeOptions::default()
-                    .features(&features)
+                    .features(features)
                     .plan(Some(&plan)),
             );
             Limits::check(
@@ -212,7 +241,7 @@ pub(crate) fn shape_items(
                 LimitKind::ShapedGlyphs,
                 store.len() as u64 + shaped.len() as u64,
             )?;
-            let scale = style.font_size / shaper.units_per_em() as f32;
+            let scale = font_size / shaper.units_per_em() as f32;
             // Sort clusters into logical order while preserving the shaper's
             // intra-cluster order. Public output positions handle RTL groups.
             let mut order: Vec<_> = (0..shaped.len()).collect();
@@ -234,76 +263,114 @@ pub(crate) fn shape_items(
                 } else {
                     item.end
                 };
-                let run_start = store.len() as u32;
-                let mut pen = LayoutUnit::ZERO;
-                let cluster_advance = order[begin..end]
-                    .iter()
-                    .map(|i| {
-                        LayoutUnit::from_f32_round(
-                            shaped.glyph_positions()[*i].x_advance as f32 * scale,
-                            sat,
-                        )
-                        .raw() as i64
-                    })
-                    .sum::<i64>();
-                for index in &order[begin..end] {
-                    let info = &shaped.glyph_infos()[*index];
-                    let pos = &shaped.glyph_positions()[*index];
-                    let advance = LayoutUnit::from_f32_round(pos.x_advance as f32 * scale, sat);
-                    store.flags.push(
-                        u8::from(info.unsafe_to_break()) | (u8::from(info.unsafe_to_concat()) << 1),
-                    );
-                    store.id.push(info.glyph_id);
-                    store.cluster.push(cluster);
-                    store.advance.push(advance);
-                    store.pen.push(pen);
-                    let offset = LayoutUnit::from_f32_round(pos.x_offset as f32 * scale, sat);
-                    let offset = if item.level % 2 == 1 {
-                        LayoutUnit::from_raw(
-                            cluster_advance.clamp(i32::MIN as i64, i32::MAX as i64) as i32,
-                        )
-                        .sub(pen, sat)
-                        .sub(pen, sat)
-                        .sub(advance, sat)
-                        .sub(offset, sat)
-                    } else {
-                        offset
-                    };
-                    store.offset_inline.push(offset);
-                    store.offset_block.push(LayoutUnit::from_f32_round(
-                        -pos.y_offset as f32 * scale,
+                let mut parts = Vec::new();
+                let mut part_start = begin;
+                let mut part_advance = 0i64;
+                for (at, index) in order.iter().enumerate().take(end).skip(begin) {
+                    let advance = LayoutUnit::from_f32_round(
+                        shaped.glyph_positions()[*index].x_advance as f32 * scale,
                         sat,
-                    ));
-                    pen = pen.add(advance, sat);
-                }
-                if runs.len() > window_run_start
-                    && let Some(run) = runs.last_mut()
-                    && run.item == owner
-                    && run.font == found.id
-                    && run.text.end == cluster
-                {
-                    let old_end = run.glyphs.end as usize;
-                    let old_pen = store.pen[old_end - 1] + store.advance[old_end - 1];
-                    for p in &mut store.pen[run_start as usize..] {
-                        *p = p.add(old_pen, sat);
+                    )
+                    .raw() as i64;
+                    if at > part_start && (part_advance + advance).abs() > i64::from(RUN_PEN_LIMIT)
+                    {
+                        parts.push((part_start..at, part_advance));
+                        part_start = at;
+                        part_advance = 0;
                     }
-                    run.glyphs.end = store.len() as u32;
-                    run.text.end = cluster_end;
-                } else {
-                    runs.push(ShapedRun {
-                        glyphs: run_start..store.len() as u32,
-                        text: cluster..cluster_end,
-                        item: owner,
-                        font: found.id,
-                        font_size: style.font_size,
+                    part_advance += advance;
+                }
+                parts.push((part_start..end, part_advance));
+                if parts.len() > 1 || part_advance.abs() > i64::from(RUN_PEN_LIMIT) {
+                    warnings.push(crate::limits::WarningKind::Unsupported,
+                        "glyph cluster exceeds run pen budget; splitting storage without introducing a break");
+                }
+                // Splitting storage does not reverse a cluster's internal visual
+                // order. Bidi reverses the chunk units, so store RTL chunks in
+                // reverse order while keeping each chunk's glyph order intact.
+                if item.level % 2 == 1 {
+                    parts.reverse();
+                }
+                for (part, part_advance) in parts {
+                    let run_start = store.len() as u32;
+                    let mut pen = LayoutUnit::ZERO;
+                    for index in &order[part.clone()] {
+                        let info = &shaped.glyph_infos()[*index];
+                        let pos = &shaped.glyph_positions()[*index];
+                        let advance = LayoutUnit::from_f32_round(pos.x_advance as f32 * scale, sat);
+                        store.flags.push(
+                            u8::from(info.unsafe_to_break())
+                                | (u8::from(info.unsafe_to_concat()) << 1),
+                        );
+                        store.id.push(info.glyph_id);
+                        store.cluster.push(cluster);
+                        store.advance.push(advance);
+                        store.pen.push(pen);
+                        let offset = LayoutUnit::from_f32_round(pos.x_offset as f32 * scale, sat);
+                        let offset = if item.level % 2 == 1 {
+                            LayoutUnit::from_raw(
+                                part_advance.clamp(i32::MIN as i64, i32::MAX as i64) as i32,
+                            )
+                            .sub(pen, sat)
+                            .sub(pen, sat)
+                            .sub(advance, sat)
+                            .sub(offset, sat)
+                        } else {
+                            offset
+                        };
+                        store.offset_inline.push(offset);
+                        store.offset_block.push(LayoutUnit::from_f32_round(
+                            -pos.y_offset as f32 * scale,
+                            sat,
+                        ));
+                        pen = pen.add(advance, sat);
+                    }
+                    let (part_min, part_max) = store.pen[run_start as usize..].iter().fold(
+                        (part_advance.min(0), part_advance.max(0)),
+                        |(min, max), p| (min.min(i64::from(p.raw())), max.max(i64::from(p.raw()))),
+                    );
+                    let previous_end_pen = runs.last().map_or(0, |r| {
+                        i64::from(store.pen[r.glyphs.end as usize - 1].raw())
+                            + i64::from(store.advance[r.glyphs.end as usize - 1].raw())
                     });
+                    if runs.len() > window_run_start
+                        && let Some(run) = runs.last_mut()
+                        && run.item == owner
+                        && run.font == found.id
+                        && run.text.end == cluster
+                        && previous_end_pen + part_min >= -i64::from(RUN_PEN_LIMIT)
+                        && previous_end_pen + part_max <= i64::from(RUN_PEN_LIMIT)
+                    {
+                        let old_end = run.glyphs.end as usize;
+                        let old_pen = store.pen[old_end - 1] + store.advance[old_end - 1];
+                        for p in &mut store.pen[run_start as usize..] {
+                            *p = p.add(old_pen, sat);
+                        }
+                        run.glyphs.end = store.len() as u32;
+                        run.text.end = cluster_end;
+                    } else {
+                        runs.push(ShapedRun {
+                            glyphs: run_start..store.len() as u32,
+                            text: cluster..cluster_end,
+                            item: owner,
+                            font: found.id,
+                            font_size,
+                            instance: Arc::clone(run_instance),
+                        });
+                    }
                 }
                 begin = end;
             }
-            cx.scratch_bytes = cx
-                .scratch_bytes
-                .max(item.scalars.len().max(shaped.len()).saturating_mul(64));
+            cx.scratch_bytes = cx.scratch_bytes.max(
+                item.scalars
+                    .len()
+                    .max(shaped.len())
+                    .max(4)
+                    .next_power_of_two()
+                    .saturating_mul(128),
+            );
             cx.scratch = Some(shaped.clear());
+            cx.bound_shaping_scratch(limits);
         }
     }
     Ok((store, runs))
@@ -347,6 +414,7 @@ pub(crate) fn shape_item(
                 item,
                 font,
                 font_size,
+                instance: Arc::new(RunInstance::default()),
             });
             run_glyphs = store.len() as u32;
             run_text = cluster;
@@ -373,6 +441,7 @@ pub(crate) fn shape_item(
             item,
             font,
             font_size,
+            instance: Arc::new(RunInstance::default()),
         });
     }
     Ok(())
@@ -400,21 +469,6 @@ pub(crate) fn shape_line_edge(
         return None;
     }
     let shaped = &data.runs[*run as usize];
-    let style = &data.styles[data.items[unit.item as usize].style as usize];
-    let script_map = icu_properties::CodePointMapData::<icu_properties::props::Script>::new();
-    let script = text
-        .chars()
-        .map(|c| script_map.get(c))
-        .find(|s| {
-            !matches!(
-                *s,
-                icu_properties::props::Script::Common
-                    | icu_properties::props::Script::Inherited
-                    | icu_properties::props::Script::Unknown
-            )
-        })
-        .unwrap_or(icu_properties::props::Script::Latin);
-    let script: icu_locale_core::subtags::Script = script.into();
     let paragraph = data.bidi_paragraph_at_text(unit.text.start);
     let para_start = paragraph.map_or(0, |p| p.text.start) as usize;
     let para_end = paragraph.map_or(data.text.len(), |p| p.text.end as usize);
@@ -443,15 +497,15 @@ pub(crate) fn shape_line_edge(
         end: unit.text.end,
         style: data.items[unit.item as usize].style,
         level: unit.level,
-        script: script.as_str().as_bytes().try_into().unwrap(),
+        script: shaped.instance.script,
         font: data
             .fonts
             .shaper_data(shaped.font)
             .map(|_| crate::font::FontMatch {
                 id: shaped.font,
-                variations: style.font_variations.clone(),
-                embolden: false,
-                skew: None,
+                variations: shaped.instance.variations.clone(),
+                embolden: shaped.instance.embolden,
+                skew: shaped.instance.skew,
             }),
         before,
         after,
@@ -592,5 +646,462 @@ mod tests {
         let p = b.build(&mut crate::LayoutContext::new(), &fonts).unwrap();
         assert!(p.data.units.iter().any(|u| u.unsafe_to_break));
         assert!(p.data.units.iter().any(|u| u.unsafe_to_concat));
+    }
+    #[test]
+    fn optical_sizing_and_explicit_variations_survive_public_views() {
+        let bytes = include_bytes!("../dev/fixtures/assets/fonts/latin.ttf");
+        let mut tables = Vec::new();
+        for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
+            let at = 12 + n * 16;
+            let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
+            let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
+            tables.push((
+                bytes[at..at + 4].try_into().unwrap(),
+                bytes[offset..offset + len].to_vec(),
+            ));
+        }
+        let mut fvar = Vec::new();
+        for field in [1u16, 0, 16, 2, 2, 20, 0, 8] {
+            fvar.extend(field.to_be_bytes());
+        }
+        for (tag, values) in [(b"wght", [100i32, 400, 900]), (b"opsz", [8, 12, 72])] {
+            fvar.extend(tag);
+            for value in values {
+                fvar.extend((value << 16).to_be_bytes());
+            }
+            fvar.extend([0, 0, 1, 0]);
+        }
+        tables.push((*b"fvar", fvar));
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register_face(
+                crate::font::sfnt::build_sfnt(&tables),
+                0,
+                crate::font::FontFaceDescriptor {
+                    family: "Variable".into(),
+                    weight: (100.0, 900.0),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        for (optical, explicit, want) in [
+            (true, None, vec![1.0, 1.0]),
+            (false, None, vec![1.0, 0.0]),
+            (true, Some(8.0), vec![1.0, -1.0]),
+        ] {
+            let style = crate::style::ParagraphStyle {
+                root: crate::style::InlineStyle {
+                    font_size: 72.0,
+                    font_families: vec![crate::style::FontFamily::Named("Variable".into())],
+                    font_weight: 900.0,
+                    font_optical_sizing: optical,
+                    font_variations: explicit
+                        .map(|value| crate::style::FontVariation {
+                            tag: *b"opsz",
+                            value,
+                        })
+                        .into_iter()
+                        .collect(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let mut b = crate::ParagraphBuilder::new(&style, &limits);
+            b.push_text(
+                crate::node::TextSource::Generated {
+                    node: crate::node::NodeId(1),
+                },
+                "a",
+            );
+            let p = b.build(&mut crate::LayoutContext::new(), &fonts).unwrap();
+            let crate::LineResult::Line(line) = p.next_line(
+                &mut crate::LayoutContext::new(),
+                p.start_token(),
+                &Default::default(),
+                &crate::LineConstraint::new(1000.0),
+                &crate::AtomicSizes::EMPTY,
+            ) else {
+                panic!()
+            };
+            let run = line
+                .fragments()
+                .find_map(|f| {
+                    if let crate::Fragment::GlyphRun(r) = f {
+                        Some(r)
+                    } else {
+                        None
+                    }
+                })
+                .unwrap();
+            assert_eq!(
+                run.normalized_coords()
+                    .iter()
+                    .map(|c| c.to_f32())
+                    .collect::<Vec<_>>(),
+                want
+            );
+            assert!(
+                run.variations()
+                    .iter()
+                    .any(|v| v.tag == *b"wght" && v.value == 900.0)
+            );
+        }
+    }
+    #[test]
+    fn real_font_pen_splits_before_prefix_overflow() {
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register_face(
+                include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+                0,
+                crate::font::FontFaceDescriptor {
+                    family: "Latin".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let style = crate::style::ParagraphStyle {
+            root: crate::style::InlineStyle {
+                font_size: 1e6,
+                font_families: vec![crate::style::FontFamily::Named("Latin".into())],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut b = crate::ParagraphBuilder::new(&style, &limits);
+        b.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            &"W".repeat(32),
+        );
+        let p = b.build(&mut crate::LayoutContext::new(), &fonts).unwrap();
+        assert!(p.data.runs.len() > 1);
+        assert!(
+            p.data
+                .glyphs
+                .pen
+                .iter()
+                .all(|pen| pen.raw() <= RUN_PEN_LIMIT)
+        );
+        assert_eq!(p.data.glyphs.len(), 32);
+    }
+
+    #[test]
+    fn expanded_single_cluster_pen_splits_without_new_breaks() {
+        use skrifa::MetadataProvider;
+        let bytes = include_bytes!("../dev/fixtures/assets/fonts/latin.ttf");
+        let font = skrifa::FontRef::from_index(bytes, 0).unwrap();
+        let a = font.charmap().map('a').unwrap().to_u32() as u16;
+        let w = font.charmap().map('W').unwrap().to_u32() as u16;
+        // One ccmp MultipleSubst expands a single input cluster to32 glyphs.
+        let mut gsub = Vec::new();
+        for value in [1u16, 0, 10, 30, 44, 1] {
+            gsub.extend(value.to_be_bytes());
+        }
+        gsub.extend(b"latn");
+        for value in [8u16, 4, 0, 0, 0xffff, 1, 0, 1] {
+            gsub.extend(value.to_be_bytes());
+        }
+        gsub.extend(b"ccmp");
+        for value in [8u16, 0, 1, 0, 1, 4, 2, 0, 1, 8, 1, 74, 1, 8, 32] {
+            gsub.extend(value.to_be_bytes());
+        }
+        for _ in 0..32 {
+            gsub.extend(w.to_be_bytes());
+        }
+        for value in [1u16, 1, a] {
+            gsub.extend(value.to_be_bytes());
+        }
+        let mut tables = Vec::new();
+        for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
+            let at = 12 + n * 16;
+            let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
+            let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
+            let tag: [u8; 4] = bytes[at..at + 4].try_into().unwrap();
+            if tag != *b"GSUB" {
+                tables.push((tag, bytes[offset..offset + len].to_vec()));
+            }
+        }
+        tables.push((*b"GSUB", gsub));
+        tables.sort_by_key(|(tag, _)| *tag);
+        let bytes = crate::font::sfnt::build_sfnt(&tables);
+        let font = harfrust::FontRef::from_index(&bytes, 0).unwrap();
+        let direct_data = harfrust::ShaperData::new(&font);
+        let shaper = direct_data.shaper(&font).build();
+        let mut buffer = harfrust::UnicodeBuffer::new();
+        buffer.push_str("a");
+        buffer.guess_segment_properties();
+        let shaped = shaper.shape(buffer, harfrust::ShapeOptions::default());
+        assert_eq!(shaped.len(), 32, "direct test substitution must expand");
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register_face(
+                crate::font::sfnt::build_sfnt(&tables),
+                0,
+                crate::font::FontFaceDescriptor {
+                    family: "Expansion".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let style = crate::style::ParagraphStyle {
+            root: crate::style::InlineStyle {
+                font_size: 1e6,
+                font_families: vec![crate::style::FontFamily::Named("Expansion".into())],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut b = crate::ParagraphBuilder::new(&style, &limits);
+        b.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            "a",
+        );
+        let p = b.build(&mut crate::LayoutContext::new(), &fonts).unwrap();
+        assert_eq!(p.data.glyphs.len(), 32, "test substitution must expand");
+        assert!(
+            p.data
+                .glyphs
+                .pen
+                .iter()
+                .all(|pen| pen.raw() <= RUN_PEN_LIMIT)
+        );
+        assert!(p.data.runs.len() > 1);
+        assert!(
+            p.data.units[..p.data.units.len() - 1]
+                .iter()
+                .all(|u| u.break_after == crate::analysis::units::BreakClass::Prohibited)
+        );
+    }
+
+    #[test]
+    fn negative_positioning_advances_obey_run_pen_budget() {
+        use skrifa::MetadataProvider;
+        let bytes = include_bytes!("../dev/fixtures/assets/fonts/latin.ttf");
+        let glyph = skrifa::FontRef::from_index(bytes, 0)
+            .unwrap()
+            .charmap()
+            .map('W')
+            .unwrap()
+            .to_u32() as u16;
+        let mut gpos = Vec::new();
+        for value in [1u16, 0, 10, 30, 44, 1] {
+            gpos.extend(value.to_be_bytes());
+        }
+        gpos.extend(b"latn");
+        for value in [8u16, 4, 0, 0, 0xffff, 1, 0, 1] {
+            gpos.extend(value.to_be_bytes());
+        }
+        gpos.extend(b"kern");
+        for value in [
+            8u16,
+            0,
+            1,
+            0,
+            1,
+            4,
+            1,
+            0,
+            1,
+            8,
+            1,
+            8,
+            4,
+            (-2000i16) as u16,
+            1,
+            1,
+            glyph,
+        ] {
+            gpos.extend(value.to_be_bytes());
+        }
+        let mut tables = Vec::new();
+        for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
+            let at = 12 + n * 16;
+            let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
+            let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
+            let tag: [u8; 4] = bytes[at..at + 4].try_into().unwrap();
+            if tag != *b"GPOS" {
+                tables.push((tag, bytes[offset..offset + len].to_vec()));
+            }
+        }
+        tables.push((*b"GPOS", gpos));
+        tables.sort_by_key(|(tag, _)| *tag);
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register_face(
+                crate::font::sfnt::build_sfnt(&tables),
+                0,
+                crate::font::FontFaceDescriptor {
+                    family: "Negative".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let style = crate::style::ParagraphStyle {
+            root: crate::style::InlineStyle {
+                font_size: 1e6,
+                font_families: vec![crate::style::FontFamily::Named("Negative".into())],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut b = crate::ParagraphBuilder::new(&style, &limits);
+        b.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            &"W".repeat(64),
+        );
+        let p = b.build(&mut crate::LayoutContext::new(), &fonts).unwrap();
+        assert!(
+            p.data.glyphs.advance.iter().all(|a| a.raw() < 0),
+            "test positioning must make advances negative"
+        );
+        assert!(
+            p.data
+                .glyphs
+                .pen
+                .iter()
+                .all(|p| i64::from(p.raw()).abs() <= i64::from(RUN_PEN_LIMIT))
+        );
+    }
+
+    #[test]
+    fn tiny_run_windows_share_one_resolved_instance() {
+        for real in [false, true] {
+            let limits = Limits {
+                max_shaping_run_bytes: Some(1),
+                ..Default::default()
+            };
+            let fonts = FontCollection::with_options(
+                &limits,
+                crate::font::FontOptions {
+                    system_fonts: false,
+                    ..Default::default()
+                },
+            );
+            if real {
+                fonts
+                    .register_face(
+                        include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+                        0,
+                        crate::font::FontFaceDescriptor {
+                            family: "Latin".into(),
+                            ..Default::default()
+                        },
+                    )
+                    .unwrap();
+            }
+            let style = crate::style::ParagraphStyle {
+                root: crate::style::InlineStyle {
+                    font_families: vec![crate::style::FontFamily::Named("Latin".into())],
+                    font_features: vec![crate::style::FontFeature {
+                        tag: *b"liga",
+                        value: 0,
+                    }],
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let mut b = crate::ParagraphBuilder::new(&style, &limits);
+            b.push_text(
+                crate::node::TextSource::Generated {
+                    node: crate::node::NodeId(1),
+                },
+                &"a".repeat(32),
+            );
+            let p = b.build(&mut crate::LayoutContext::new(), &fonts).unwrap();
+            assert_eq!(p.data.runs.len(), 32);
+            assert!(
+                p.data
+                    .runs
+                    .iter()
+                    .all(|r| Arc::ptr_eq(&r.instance, &p.data.runs[0].instance)),
+                "real={real}"
+            );
+        }
+    }
+
+    #[test]
+    fn smaller_run_budget_automatically_releases_retained_scratch() {
+        let limits = Limits::unlimited();
+        let fonts = FontCollection::with_options(
+            &limits,
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register_face(
+                include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+                0,
+                crate::font::FontFaceDescriptor {
+                    family: "Latin".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let style = crate::style::ParagraphStyle {
+            root: crate::style::InlineStyle {
+                font_families: vec![crate::style::FontFamily::Named("Latin".into())],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut cx = crate::LayoutContext::new();
+        let mut b = crate::ParagraphBuilder::new(&style, &limits);
+        b.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            &"a".repeat(4096),
+        );
+        b.build(&mut cx, &fonts).unwrap();
+        assert!(cx.scratch_bytes > 1000);
+        let limits = Limits {
+            max_shaping_run_bytes: Some(8),
+            ..Default::default()
+        };
+        let mut b = crate::ParagraphBuilder::new(&style, &limits);
+        b.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            "a",
+        );
+        b.build(&mut cx, &fonts).unwrap();
+        assert!(cx.scratch_bytes <= 8 * 128);
     }
 }

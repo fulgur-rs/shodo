@@ -185,7 +185,7 @@ impl Paragraph {
         let mut sat = Saturation::default();
         let bidi = analyze_bidi(&processed.text, &style, &styles);
         let shape_items_input =
-            crate::analysis::itemize::itemize(&processed, &styles, &bidi, fonts);
+            crate::analysis::itemize::itemize(&processed, &styles, &bidi, &breaks, fonts);
         let (glyphs, runs) = shape_items(
             cx,
             &shape_items_input,

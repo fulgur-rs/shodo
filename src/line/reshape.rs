@@ -24,7 +24,8 @@ pub(super) fn apply(line: &mut Line, cx: &mut LayoutContext, sat: &mut Saturatio
             .first()
             .is_some_and(|first| std::ptr::eq(*first, u));
         let last = clusters.last().is_some_and(|last| std::ptr::eq(*last, u));
-        if !(first && (u.unsafe_to_concat || previous_unsafe) || last && u.unsafe_to_break)
+        if !(first && line.units.start > 0 && (u.unsafe_to_concat || previous_unsafe)
+            || last && u.unsafe_to_break)
             || windows.iter().any(|(range, _)| range == glyphs)
         {
             continue;

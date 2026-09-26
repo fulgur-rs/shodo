@@ -46,3 +46,7 @@ pub(crate) enum ItemKind {
     Tab,
     BidiControl,
 }
+
+mod scripts;
+
+pub(crate) mod language;

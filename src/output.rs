@@ -270,6 +270,30 @@ impl<'a> GlyphRunView<'a> {
         self.data().runs[self.run as usize].font_size
     }
 
+    /// Normalized variation coordinates in the face's axis order.
+    pub fn normalized_coords(&self) -> &'a [crate::font::NormalizedCoord] {
+        &self.data().runs[self.run as usize].instance.coords
+    }
+    pub fn variations(&self) -> &'a [crate::style::FontVariation] {
+        &self.data().runs[self.run as usize].instance.variations
+    }
+    pub fn embolden(&self) -> bool {
+        self.data().runs[self.run as usize].instance.embolden
+    }
+    /// Synthetic slant supplied by font matching, in degrees.
+    pub fn skew(&self) -> Option<f32> {
+        self.data().runs[self.run as usize].instance.skew
+    }
+    pub fn script(&self) -> [u8; 4] {
+        self.data().runs[self.run as usize].instance.script
+    }
+    pub fn language(&self) -> Option<&'a str> {
+        self.data().runs[self.run as usize]
+            .instance
+            .language
+            .as_deref()
+    }
+
     pub fn font_data(&self) -> Option<FontData> {
         self.data().fonts.font_data(self.font())
     }

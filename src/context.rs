@@ -29,8 +29,22 @@ impl LayoutContext {
         self.warnings.take()
     }
 
-    /// Releases the retained partial line when its storage exceeds `bytes`.
-    /// `shrink_to(0)` always releases its paragraph reference as well.
+    /// Drops scratch that exceeds the current shaping window's conservative cap.
+    pub(crate) fn bound_shaping_scratch(&mut self, limits: &crate::limits::Limits) {
+        if let Some(bytes) = limits.max_shaping_run_bytes {
+            let cap = usize::try_from(bytes)
+                .unwrap_or(usize::MAX)
+                .max(1)
+                .saturating_mul(128);
+            if self.scratch_bytes > cap {
+                self.scratch = None;
+                self.scratch_bytes = 0;
+            }
+        }
+    }
+
+    /// Releases retained shaping plans and buffers exceeding `bytes`.
+    /// `shrink_to(0)` also releases any partial line's paragraph reference.
     pub fn shrink_to(&mut self, bytes: usize) {
         // Harfrust does not expose a plan's heap size; dropping the bounded
         // cache conservatively releases all of it on an explicit shrink.

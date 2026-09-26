@@ -49,6 +49,85 @@ pub enum FontKerning {
     None,
 }
 
+/// Resolved `font-variant-ligatures` components; `None` leaves that
+/// component at the font's default. `none` disables all optional ligatures.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FontVariantLigatures {
+    pub none: bool,
+    pub common: Option<bool>,
+    pub discretionary: Option<bool>,
+    pub historical: Option<bool>,
+    pub contextual: Option<bool>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FontVariantCaps {
+    #[default]
+    Normal,
+    SmallCaps,
+    AllSmallCaps,
+    PetiteCaps,
+    AllPetiteCaps,
+    Unicase,
+    TitlingCaps,
+}
+
+/// Computed numeric components. Mutually exclusive CSS keywords must be
+/// resolved by the caller before constructing the style.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FontVariantNumeric {
+    pub lining_nums: bool,
+    pub oldstyle_nums: bool,
+    pub proportional_nums: bool,
+    pub tabular_nums: bool,
+    pub diagonal_fractions: bool,
+    pub stacked_fractions: bool,
+    pub ordinal: bool,
+    pub slashed_zero: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FontVariantEastAsianVariant {
+    Jis78,
+    Jis83,
+    Jis90,
+    Jis04,
+    Simplified,
+    Traditional,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FontVariantEastAsianWidth {
+    FullWidth,
+    ProportionalWidth,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FontVariantEastAsian {
+    pub variant: Option<FontVariantEastAsianVariant>,
+    pub width: Option<FontVariantEastAsianWidth>,
+    pub ruby: bool,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FontVariantPosition {
+    #[default]
+    Normal,
+    Sub,
+    Super,
+}
+/// Numeric alternates after the caller resolves CSS `@font-feature-values`.
+/// Selectors apply directly to the chosen font, like `font_features`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FontVariantAlternates {
+    pub historical_forms: bool,
+    pub stylistic: Option<u32>,
+    /// OpenType ss01–ss20; values outside that range are ignored.
+    pub styleset: Vec<u8>,
+    /// OpenType cv01–cv99 and the selected alternate number.
+    pub character_variant: Vec<(u8, u32)>,
+    pub swash: Option<u32>,
+    pub ornaments: Option<u32>,
+    pub annotation: Option<u32>,
+}
+
 /// `font-synthesis`: which faces may be synthesized.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FontSynthesis {
@@ -323,6 +402,12 @@ pub struct InlineStyle {
     pub font_variations: Vec<FontVariation>,
     pub font_features: Vec<FontFeature>,
     pub font_kerning: FontKerning,
+    pub font_variant_ligatures: FontVariantLigatures,
+    pub font_variant_caps: FontVariantCaps,
+    pub font_variant_numeric: FontVariantNumeric,
+    pub font_variant_east_asian: FontVariantEastAsian,
+    pub font_variant_position: FontVariantPosition,
+    pub font_variant_alternates: FontVariantAlternates,
     pub font_optical_sizing: bool,
     pub font_synthesis: FontSynthesis,
     pub font_size_adjust: Option<FontSizeAdjust>,
@@ -363,6 +448,12 @@ impl Default for InlineStyle {
             font_variations: Vec::new(),
             font_features: Vec::new(),
             font_kerning: FontKerning::default(),
+            font_variant_ligatures: Default::default(),
+            font_variant_caps: Default::default(),
+            font_variant_numeric: Default::default(),
+            font_variant_east_asian: Default::default(),
+            font_variant_position: Default::default(),
+            font_variant_alternates: Default::default(),
             font_optical_sizing: true,
             font_synthesis: FontSynthesis::default(),
             font_size_adjust: None,

@@ -38,10 +38,10 @@ pretending that the paragraph pipeline already does so.
 | ID | Derived family | Format / index | Bytes | Upstream source |
 | --- | --- | --- | ---: | --- |
 | latin | Shodo Fixture Latin | TrueType / 0 | 97,232 | Noto Sans Regular |
-| cjk | Shodo Fixture CJK | CFF OpenType / 0 | 209,988 | Noto Sans CJK JP Regular |
+| cjk | Shodo Fixture CJK | CFF OpenType / 0 | 210,332 | Noto Sans CJK JP Regular |
 | arabic | Shodo Fixture Arabic | TrueType / 0 | 96,900 | Noto Sans Arabic Regular |
 
-Total font data: 404,120 bytes (about 395 KiB). The originals total 17,277,400 bytes;
+Total font data: 404,464 bytes (about 395 KiB). The originals total 17,277,400 bytes;
 subsets retain the corpus, useful ASCII/Latin/combining, kana/CJK punctuation/full-width,
 and Arabic ranges rather than shipping that entire set. Other characters are not
 promised. Every visible corpus character is tested against its ordered font chain.
@@ -107,3 +107,5 @@ CI checks the workspace and offline asset integrity/names, and tests Rust 1.89. 
 never downloads font sources, regenerates fonts or updates expected outputs. FontTools
 is development-only; ordinary cargo users do not need Python. The separate
 `--rebuild` maintainer check verifies reproducibility against the original sources.
+
+The CJK subset also retains 水 (U+6C34) for size-adjust metric verification.

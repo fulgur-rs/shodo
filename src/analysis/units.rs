@@ -248,6 +248,12 @@ pub(crate) fn build_units(
             units[i].unsafe_to_concat = flags & 2 != 0;
             if let Some(previous) = previous_cluster {
                 units[previous].unsafe_to_break = flags & 1 != 0;
+                if units[previous].text.start == units[i].text.start {
+                    // A resource split inside one shaping cluster is storage
+                    // only; it must never create a selectable line break.
+                    units[previous].break_after = BreakClass::Prohibited;
+                    units[previous].emergency_min_content = false;
+                }
             }
             previous_cluster = Some(i);
         } else if matches!(
