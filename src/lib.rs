@@ -11,9 +11,11 @@
 pub mod font;
 pub mod geometry;
 pub mod limits;
+pub mod mapping;
 pub mod node;
 pub mod style;
 
+mod analysis;
 mod builder;
 
 pub use builder::ParagraphBuilder;
