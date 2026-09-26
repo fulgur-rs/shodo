@@ -183,4 +183,15 @@ fn an_rtl_box_in_an_ltr_paragraph_has_its_start_edge_on_the_right() {
     // 7px) is on the visual left.
     assert_eq!(b.content_rect.inline_start, b.rect.inline_start + 7.0);
     assert_eq!(b.content_rect.inline_size, b.rect.inline_size - 10.0);
+    // The box's edges are laid out with its content, not split from it by
+    // the outer level UAX #9 assigns to the isolate initiator/terminator:
+    // the run renders inside content_rect, flush with its start.
+    let runs = runs(&line);
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].inline_start(), b.content_rect.inline_start);
+    assert!(
+        positions(&runs[0])
+            .iter()
+            .all(|&p| p >= b.content_rect.inline_start)
+    );
 }

@@ -104,6 +104,18 @@ pub(crate) fn bidi_levels(text: &str, direction: Direction, plaintext: bool) -> 
         .collect()
 }
 
+/// Whether a unit's innermost enclosing box (`b`) is `target` or nested
+/// inside it.
+fn inside(boxes: &[InlineBoxInfo], mut b: Option<u32>, target: u32) -> bool {
+    while let Some(x) = b {
+        if x == target {
+            return true;
+        }
+        b = boxes[x as usize].parent;
+    }
+    false
+}
+
 pub(crate) fn build_units(
     text: &str,
     items: &[Item],
@@ -239,15 +251,70 @@ pub(crate) fn build_units(
         }
     }
     let level_at = |pos: u32| levels.get(pos as usize).copied();
-    for unit in &mut units {
+
+    // An opening or closing box's own unit sits at the text position of an
+    // injected bidi control (LRE/RLE/LRI/RLI/FSI on open, PDF/PDI on
+    // close), which UAX #9 gives the level in effect *outside* the isolate
+    // or embedding, not the level established just inside it (X5a-c, X6a).
+    // Skip past bidi controls (and the box's own matching edge, which
+    // means it has no content) to the next unit and use its level instead:
+    // a following unit's control, if any, sits at the position of *its
+    // own* boundary character, which UAX #9 gives the level in effect just
+    // outside it — exactly the level established inside this box. A box
+    // with no content of its own falls back to the level at the control's
+    // text position, as before.
+    //
+    // A found unit that is itself a nested box's `Close` needs its
+    // boundary character's position, one byte before its marker (built
+    // after the character, unlike `Open`'s marker, built before) — the
+    // same adjustment the fallback below makes for this box's own `Close`.
+    let mut resolved: Vec<u8> = Vec::with_capacity(units.len());
+    for (i, unit) in units.iter().enumerate() {
         let level = match unit.kind {
-            // An opening box takes the level of what follows it, a closing
-            // box the level of what precedes it.
-            UnitKind::Open { .. } => level_at(unit.text.start),
-            UnitKind::Close { .. } => unit.text.start.checked_sub(1).and_then(level_at),
+            UnitKind::Open { box_index } => {
+                let mut content = None;
+                for u in &units[i + 1..] {
+                    match &u.kind {
+                        UnitKind::BidiControl => continue,
+                        UnitKind::Close { box_index: b } if *b == box_index => break,
+                        _ => {
+                            if inside(&boxes, u.parent_box, box_index) {
+                                content = level_at(u.text.start);
+                            }
+                            break;
+                        }
+                    }
+                }
+                content.or_else(|| level_at(unit.text.start))
+            }
+            UnitKind::Close { box_index } => {
+                let mut content = None;
+                for u in units[..i].iter().rev() {
+                    match &u.kind {
+                        UnitKind::BidiControl => continue,
+                        UnitKind::Open { box_index: b } if *b == box_index => break,
+                        UnitKind::Close { .. } => {
+                            if inside(&boxes, u.parent_box, box_index) {
+                                content = u.text.start.checked_sub(1).and_then(level_at);
+                            }
+                            break;
+                        }
+                        _ => {
+                            if inside(&boxes, u.parent_box, box_index) {
+                                content = level_at(u.text.start);
+                            }
+                            break;
+                        }
+                    }
+                }
+                content.or_else(|| unit.text.start.checked_sub(1).and_then(level_at))
+            }
             _ => level_at(unit.text.start),
         };
-        unit.level = level.unwrap_or(base_level);
+        resolved.push(level.unwrap_or(base_level));
+    }
+    for (unit, level) in units.iter_mut().zip(resolved) {
+        unit.level = level;
     }
     UnitList {
         units,
