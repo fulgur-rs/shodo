@@ -19,6 +19,7 @@ use crate::shape::{GlyphStore, ShapedRun, shape_item};
 use crate::style::{InlineStyle, ParagraphStyle, TextOrientation};
 
 static NEXT_PARAGRAPH_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_ATOMIC_REVISION: AtomicU64 = AtomicU64::new(1);
 
 /// Largest accepted font size in px; larger values are clamped.
 const MAX_FONT_SIZE: f32 = 1.0e6;
@@ -277,12 +278,14 @@ pub struct AtomicSize {
 pub struct AtomicSizes {
     map: BTreeMap<NodeId, AtomicSize>,
     generation: u64,
+    pub(crate) revision: u64,
 }
 
 impl AtomicSizes {
     pub const EMPTY: AtomicSizes = AtomicSizes {
         map: BTreeMap::new(),
         generation: 0,
+        revision: 0,
     };
 
     pub fn new() -> Self {
@@ -291,7 +294,8 @@ impl AtomicSizes {
 
     pub fn insert(&mut self, node: NodeId, size: AtomicSize) {
         self.map.insert(node, size);
-        self.generation += 1;
+        self.generation = self.generation.wrapping_add(1);
+        self.revision = NEXT_ATOMIC_REVISION.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn get(&self, node: NodeId) -> Option<&AtomicSize> {

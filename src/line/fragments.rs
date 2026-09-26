@@ -9,6 +9,14 @@ use crate::geometry::LayoutUnit;
 use crate::node::{NodeId, OutOfFlowKind};
 use crate::paragraph::{AtomicSize, AtomicSizes, ParagraphData};
 
+fn normalized_size(atomics: &AtomicSizes, node: NodeId) -> AtomicSize {
+    crate::sanitize::atomic(
+        atomics.get(node).copied().unwrap_or_default(),
+        &mut crate::limits::WarningSink::new(Some(0)),
+        &mut crate::geometry::Saturation::default(),
+    )
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct FragmentRecord {
     pub(crate) kind: RecordKind,
@@ -163,7 +171,7 @@ fn build_logical(
                 pos = pos + w;
             }
             UnitKind::Atomic { node } => {
-                let size = atomics.get(*node).copied().unwrap_or_default();
+                let size = normalized_size(atomics, *node);
                 out.push(FragmentRecord {
                     kind: RecordKind::Atomic { node: *node, size },
                     inline_start: pos,
@@ -363,7 +371,7 @@ fn build_bidi(
                 continue;
             }
             UnitKind::Atomic { node } => {
-                let size = atomics.get(*node).copied().unwrap_or_default();
+                let size = normalized_size(atomics, *node);
                 let kind = RecordKind::Atomic { node: *node, size };
                 Piece {
                     record: Some(record(kind)),

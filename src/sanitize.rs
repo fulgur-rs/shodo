@@ -3,9 +3,61 @@
 //! Replaced values are reported through the bounded warning sink.
 
 use crate::builder::RawItem;
+use crate::geometry::{LayoutUnit, Saturation};
 use crate::limits::{WarningKind, WarningSink};
 use crate::node::{InlineEdges, Sides};
+use crate::paragraph::{AtomicSize, LineConstraint};
 use crate::style::{InlineStyle, LineHeight, TabSize, VerticalAlign};
+
+/// Round every caller length once before layout or geometry reads it.
+pub(crate) fn layout_length(
+    value: f32,
+    non_negative: bool,
+    warnings: &mut WarningSink,
+    sat: &mut Saturation,
+) -> f32 {
+    let v = if non_negative {
+        non_negative_length(value, "layout length", warnings)
+    } else {
+        length(value, "layout length", warnings)
+    };
+    LayoutUnit::from_f32_round(v, sat).to_f32()
+}
+
+pub(crate) fn atomic(
+    mut value: AtomicSize,
+    warnings: &mut WarningSink,
+    sat: &mut Saturation,
+) -> AtomicSize {
+    value.inline_size = layout_length(value.inline_size, true, warnings, sat);
+    value.block_size = layout_length(value.block_size, true, warnings, sat);
+    value.baseline = value
+        .baseline
+        .map(|v| layout_length(v, false, warnings, sat));
+    for v in [
+        &mut value.margins.inline_start,
+        &mut value.margins.inline_end,
+        &mut value.margins.block_start,
+        &mut value.margins.block_end,
+    ] {
+        *v = layout_length(*v, false, warnings, sat);
+    }
+    value
+}
+
+pub(crate) fn constraint<'a>(
+    mut value: LineConstraint<'a>,
+    warnings: &mut WarningSink,
+    sat: &mut Saturation,
+) -> LineConstraint<'a> {
+    value.available_inline_size = layout_length(value.available_inline_size, true, warnings, sat);
+    value.inline_start_offset = layout_length(value.inline_start_offset, true, warnings, sat);
+    value.block_offset = layout_length(value.block_offset, false, warnings, sat);
+    value.max_block_size = value
+        .max_block_size
+        .map(|v| layout_length(v, true, warnings, sat));
+    value
+}
 
 /// Largest accepted magnitude of a length that may be negative (spacing,
 /// margins, `vertical-align` lengths); larger values are clamped.
