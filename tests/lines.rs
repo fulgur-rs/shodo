@@ -384,3 +384,60 @@ fn non_finite_style_values_become_initial_or_zero() {
     let line = &lines(&p, 100.0, &LineOptions::default())[0];
     assert_eq!(line.block_size(), 0.0);
 }
+
+fn next(p: &Paragraph, token: shodo::BreakToken) -> LineResult {
+    p.next_line(
+        &mut LayoutContext::new(),
+        token,
+        &LineOptions::default(),
+        &LineConstraint::new(100.0),
+        &AtomicSizes::EMPTY,
+    )
+}
+
+fn dom(node: u64) -> TextSource {
+    TextSource::Dom {
+        node: NodeId(node),
+        offset: 0,
+    }
+}
+
+#[test]
+fn a_block_in_inline_ends_the_line_and_is_reported_next() {
+    let p = para_with(&root(LineHeight::Normal), |b| {
+        b.push_text(dom(1), "ab")
+            .push_block_in_inline(NodeId(5))
+            .push_text(dom(2), "cd");
+    });
+    let LineResult::Line(first) = next(&p, p.start_token()) else {
+        panic!()
+    };
+    assert_eq!(first.break_reason(), BreakReason::BlockInInline);
+    assert!(first.is_last());
+    assert_eq!(&p.text()[first.text_range()], "ab");
+    let LineResult::BlockInInline { node, token_after } = next(&p, first.break_token()) else {
+        panic!()
+    };
+    assert_eq!(node, NodeId(5));
+    let LineResult::Line(last) = next(&p, token_after) else {
+        panic!()
+    };
+    assert_eq!(&p.text()[last.text_range()], "cd");
+    assert_eq!(last.break_reason(), BreakReason::End);
+    assert!(matches!(next(&p, last.break_token()), LineResult::Done));
+}
+
+#[test]
+fn a_leading_block_in_inline_is_reported_from_the_start_token() {
+    let p = para_with(&root(LineHeight::Normal), |b| {
+        b.push_block_in_inline(NodeId(5)).push_text(dom(2), "cd");
+    });
+    let LineResult::BlockInInline { node, token_after } = next(&p, p.start_token()) else {
+        panic!()
+    };
+    assert_eq!(node, NodeId(5));
+    let LineResult::Line(line) = next(&p, token_after) else {
+        panic!()
+    };
+    assert_eq!(&p.text()[line.text_range()], "cd");
+}
