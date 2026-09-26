@@ -3,3 +3,130 @@
 mod unit;
 
 pub(crate) use unit::{LayoutUnit, Saturation};
+
+/// CSS `writing-mode` (CSS Writing Modes 4 §3.1).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum WritingMode {
+    #[default]
+    HorizontalTb,
+    VerticalRl,
+    VerticalLr,
+    SidewaysRl,
+    SidewaysLr,
+}
+
+impl WritingMode {
+    pub fn is_vertical(self) -> bool {
+        !matches!(self, Self::HorizontalTb)
+    }
+}
+
+/// CSS `direction`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Direction {
+    #[default]
+    Ltr,
+    Rtl,
+}
+
+/// Baseline types used for alignment (CSS Inline 3 §2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum BaselineKind {
+    Alphabetic,
+    Central,
+    Ideographic,
+    Hanging,
+}
+
+/// A rectangle in logical coordinates (inline / block axes).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LogicalRect {
+    pub inline_start: f32,
+    pub block_start: f32,
+    pub inline_size: f32,
+    pub block_size: f32,
+}
+
+/// A rectangle in physical coordinates (x grows right, y grows down).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PhysicalRect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PhysicalSize {
+    pub width: f32,
+    pub height: f32,
+}
+
+/// Converts logical rectangles inside a container to physical ones
+/// (CSS Writing Modes 4 §6).
+#[derive(Clone, Copy, Debug)]
+pub struct PhysicalConverter {
+    writing_mode: WritingMode,
+    direction: Direction,
+    container: PhysicalSize,
+}
+
+impl PhysicalConverter {
+    pub fn new(writing_mode: WritingMode, direction: Direction, container: PhysicalSize) -> Self {
+        Self {
+            writing_mode,
+            direction,
+            container,
+        }
+    }
+
+    pub fn rect(&self, r: LogicalRect) -> PhysicalRect {
+        let PhysicalSize {
+            width: w,
+            height: h,
+        } = self.container;
+        let ltr = self.direction == Direction::Ltr;
+        match self.writing_mode {
+            WritingMode::HorizontalTb => PhysicalRect {
+                x: if ltr {
+                    r.inline_start
+                } else {
+                    w - r.inline_start - r.inline_size
+                },
+                y: r.block_start,
+                width: r.inline_size,
+                height: r.block_size,
+            },
+            WritingMode::VerticalRl | WritingMode::SidewaysRl => PhysicalRect {
+                x: w - r.block_start - r.block_size,
+                y: if ltr {
+                    r.inline_start
+                } else {
+                    h - r.inline_start - r.inline_size
+                },
+                width: r.block_size,
+                height: r.inline_size,
+            },
+            WritingMode::VerticalLr => PhysicalRect {
+                x: r.block_start,
+                y: if ltr {
+                    r.inline_start
+                } else {
+                    h - r.inline_start - r.inline_size
+                },
+                width: r.block_size,
+                height: r.inline_size,
+            },
+            WritingMode::SidewaysLr => PhysicalRect {
+                x: r.block_start,
+                y: if ltr {
+                    h - r.inline_start - r.inline_size
+                } else {
+                    r.inline_start
+                },
+                width: r.block_size,
+                height: r.inline_size,
+            },
+        }
+    }
+}
