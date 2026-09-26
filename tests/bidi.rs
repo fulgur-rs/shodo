@@ -48,6 +48,68 @@ fn one_line(direction: Direction, build: impl FnOnce(&mut ParagraphBuilder)) -> 
     line
 }
 
+fn all_lines(
+    direction: Direction,
+    width: f32,
+    build: impl FnOnce(&mut ParagraphBuilder),
+) -> Vec<Line> {
+    let mut b = ParagraphBuilder::new(&style(direction), &Limits::default());
+    build(&mut b);
+    let p = b
+        .build(
+            &mut LayoutContext::new(),
+            &FontCollection::new(&Limits::default()),
+        )
+        .unwrap();
+    let mut cx = LayoutContext::new();
+    let mut token = p.start_token();
+    let mut out = Vec::new();
+    while let LineResult::Line(line) = p.next_line(
+        &mut cx,
+        token,
+        &LineOptions::default(),
+        &LineConstraint::new(width),
+        &AtomicSizes::EMPTY,
+    ) {
+        token = line.break_token();
+        out.push(line);
+        assert!(out.len() < 100, "no progress");
+    }
+    out
+}
+
+fn boxes(line: &Line) -> Vec<InlineBoxFragment> {
+    line.fragments()
+        .filter_map(|f| {
+            if let Fragment::InlineBox(b) = f {
+                Some(b)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn rtl_isolate() -> InlineStyle {
+    InlineStyle {
+        direction: Direction::Rtl,
+        unicode_bidi: UnicodeBidi::Isolate,
+        font_size: 10.0,
+        ..InlineStyle::default()
+    }
+}
+
+fn padded_3_7() -> InlineEdges {
+    InlineEdges {
+        padding: Sides {
+            inline_start: 3.0,
+            inline_end: 7.0,
+            ..Sides::default()
+        },
+        ..InlineEdges::default()
+    }
+}
+
 fn runs(line: &Line) -> Vec<GlyphRunView<'_>> {
     line.fragments()
         .filter_map(|f| {
@@ -194,4 +256,55 @@ fn an_rtl_box_in_an_ltr_paragraph_has_its_start_edge_on_the_right() {
             .iter()
             .all(|&p| p >= b.content_rect.inline_start)
     );
+}
+
+#[test]
+fn an_isolate_closing_after_a_soft_break_keeps_its_end_edge_on_the_line() {
+    let lines = all_lines(Direction::Ltr, 55.0, |b| {
+        b.open_inline(NodeId(1), &rtl_isolate(), padded_3_7())
+            .push_text(dom(2), "abc ")
+            .close_inline()
+            .push_text(dom(3), "def");
+    });
+    assert_eq!(lines.len(), 2);
+    let first = boxes(&lines[0]);
+    assert_eq!(first.len(), 1);
+    assert_eq!(
+        (
+            first[0].node,
+            first[0].has_start_edge,
+            first[0].has_end_edge
+        ),
+        (NodeId(1), true, true)
+    );
+    assert!(
+        boxes(&lines[1]).iter().all(|b| b.node != NodeId(1)),
+        "{:?}",
+        boxes(&lines[1])
+    );
+}
+
+#[test]
+fn nested_closes_after_an_isolate_stay_on_the_line() {
+    let plain = InlineStyle {
+        font_size: 10.0,
+        ..InlineStyle::default()
+    };
+    let isolate = InlineStyle {
+        unicode_bidi: UnicodeBidi::Isolate,
+        ..plain.clone()
+    };
+    let lines = all_lines(Direction::Ltr, 45.0, |b| {
+        b.open_inline(NodeId(1), &plain, InlineEdges::default())
+            .open_inline(NodeId(2), &isolate, InlineEdges::default())
+            .push_text(dom(3), "ab ")
+            .close_inline()
+            .close_inline()
+            .push_text(dom(4), "cd");
+    });
+    assert_eq!(lines.len(), 2);
+    let first = boxes(&lines[0]);
+    assert_eq!(first.len(), 2);
+    assert!(first.iter().all(|b| b.has_start_edge && b.has_end_edge));
+    assert!(boxes(&lines[1]).is_empty(), "{:?}", boxes(&lines[1]));
 }

@@ -168,10 +168,12 @@ fn scan(
             last_break = Some(i);
         }
     };
-    // Inline box ends right after a soft break stay on the line that ends there.
+    // Inline box ends right after a soft break stay on the line that ends
+    // there, together with the zero-width bidi controls (PDI, PDF) that
+    // precede a box's end. Out-of-flow anchors are not pulled.
     if reason == BreakReason::Regular {
         while let Some(unit) = units.get(i)
-            && matches!(unit.kind, UnitKind::Close { .. })
+            && matches!(unit.kind, UnitKind::Close { .. } | UnitKind::BidiControl)
         {
             widths.push(unit_width(data, unit, LayoutUnit::ZERO, atomics, cx, sat));
             i += 1;
