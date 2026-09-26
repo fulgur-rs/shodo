@@ -66,7 +66,9 @@ file-based examples in the `shodo::font` module documentation.
 Default features are `system-fonts` and `web-fonts`. Disable default features for
 bundled sfnt-only applications; both font matching and metrics still work. The
 system backend is available only on supported native platforms, while wasm builds
-use memory-backed fonts. Compressed input, decoded streams and returned font blobs
+use memory-backed fonts. Linux builds with `system-fonts` require Fontconfig
+development files and pkg-config (on Debian/Ubuntu, `libfontconfig1-dev`).
+Compressed input, decoded streams and returned font blobs
 are checked against font budgets; transformed WOFF2 reconstruction may temporarily
 allocate beyond the retained-blob budget. `wuff` rejects reconstructed output above
 128 MiB. Cache entries and per-face font-cache work have separate limits.
