@@ -31,6 +31,6 @@ pub use output::{
     InlineBoxFragment, Line,
 };
 pub use paragraph::{
-    AtomicSize, AtomicSizes, BreakPlan, BreakToken, FloatCursor, LineConstraint, LineResult,
-    Paragraph,
+    AtomicIntrinsic, AtomicIntrinsics, AtomicSize, AtomicSizes, BreakPlan, BreakToken, FloatClear,
+    FloatCursor, FloatIntrinsic, FloatSide, IntrinsicSizes, LineConstraint, LineResult, Paragraph,
 };

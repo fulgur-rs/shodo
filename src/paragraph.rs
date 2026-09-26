@@ -307,6 +307,68 @@ impl AtomicSizes {
     }
 }
 
+/// Minimum and maximum intrinsic inline sizes in logical pixels.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct IntrinsicSizes {
+    pub min_content: f32,
+    pub max_content: f32,
+}
+
+/// Intrinsic margin-box widths supplied by the caller; do not add margins again.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct AtomicIntrinsic {
+    pub min_content: f32,
+    pub max_content: f32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FloatSide {
+    Left,
+    Right,
+    #[default]
+    InlineStart,
+    InlineEnd,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FloatClear {
+    #[default]
+    None,
+    Left,
+    Right,
+    Both,
+    InlineStart,
+    InlineEnd,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FloatIntrinsic {
+    pub min_content: f32,
+    pub max_content: f32,
+    pub side: FloatSide,
+    pub clear: FloatClear,
+}
+
+/// Intrinsic margin-box widths of atomic inlines and floats by node.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AtomicIntrinsics {
+    pub(crate) atomics: BTreeMap<NodeId, AtomicIntrinsic>,
+    pub(crate) floats: BTreeMap<NodeId, FloatIntrinsic>,
+}
+impl AtomicIntrinsics {
+    pub const EMPTY: Self = Self {
+        atomics: BTreeMap::new(),
+        floats: BTreeMap::new(),
+    };
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn insert_atomic(&mut self, node: NodeId, value: AtomicIntrinsic) {
+        self.atomics.insert(node, value);
+    }
+    pub fn insert_float(&mut self, node: NodeId, value: FloatIntrinsic) {
+        self.floats.insert(node, value);
+    }
+}
+
 /// A precomputed set of break positions for `text-wrap: balance | pretty`.
 /// Produced by `Paragraph::plan_breaks` (not available yet).
 #[derive(Clone, Debug, PartialEq)]
