@@ -47,22 +47,22 @@
 
 **Interfaces:** Consumes Task1 `Processed`; produces `transform(input:Processed,styles:&[InlineStyle],limits:&Limits,warnings:&mut WarningSink)->Result<Processed,LimitExceeded>`. Add combination TextTransform variants while retaining all existing variants. Add internal `OffsetMapping::remap_text(&[TransformSpan])` with `TransformSpan{old:Range<u32>,new:Range<u32>}` scalar ranges.
 
-- [ ] Add tests `turkic_case_cross_node_dot`, `lithuanian_above_marks`, `greek_final_sigma_and_tonos`, `dutch_capitalize_ij_cross_node`, `capitalize_preserves_tail_and_word_context`, `width_kana_combinations`, `halfwidth_kana_voicing`, `expanded_scalar_dom_roundtrip`, `transform_without_mapping`, `invalid_language_warns`, `transform_limits_before_append`.
-- [ ] Exact cases: tr `I\u0307 ıi` lowercase→`i ıi`, uppercase→`I\u0307 Iİ`; lt `I\u0301` lowercase→`i\u0307\u0301`; `ΟΣ ΟΣΑ` lowercase→`ος οσα`; nl capitalize `ijSSEL`→`IJSSEL`; uppercase `ß`→`SS` one indivisible Expanded interval; full-width `A ｶﾞ`→`Ａ　ガ`; full-size-kana U1B132→こ. Check all existing variant combinations and CJK-preserved spacing.
-- [ ] Run targeted test command and observe missing transform APIs/assertion failures.
-- [ ] Add icu_casemap2.3/icu_locale_core2.3/icu_segmenter2.3 and optional needed normalization data; use public ICU scalar APIs and precomputed contextual SpecialCasing conditions, no repeated whole-word scans. Update original-origin mapping after transformed item ranges; append checks before allocation.
-- [ ] Run `cargo test --offline --workspace`, fmt/Clippy; commit `feat: apply locale-sensitive text transforms with mappings`.
+- [x] Add tests `turkic_case_cross_node_dot`, `lithuanian_above_marks`, `greek_final_sigma_and_tonos`, `dutch_capitalize_ij_cross_node`, `capitalize_preserves_tail_and_word_context`, `width_kana_combinations`, `halfwidth_kana_voicing`, `expanded_scalar_dom_roundtrip`, `transform_without_mapping`, `invalid_language_warns`, `transform_limits_before_append`.
+- [x] Exact cases: tr `I\u0307 ıi` lowercase→`i ıi`, uppercase→`I\u0307 Iİ`; lt `I\u0301` lowercase→`i\u0307\u0301`; `ΟΣ ΟΣΑ` lowercase→`ος οσα`; nl capitalize `ijSSEL`→`IJSSEL`; uppercase `ß`→`SS` one indivisible Expanded interval; full-width `A ｶﾞ`→`Ａ　ガ`; full-size-kana U1B132→こ. Check all existing variant combinations and CJK-preserved spacing.
+- [x] Run targeted test command and observe missing transform APIs/assertion failures.
+- [x] Add icu_casemap2.3/icu_locale_core2.3/icu_segmenter2.3 and optional needed normalization data; use public ICU scalar APIs and precomputed contextual SpecialCasing conditions, no repeated whole-word scans. Update original-origin mapping after transformed item ranges; append checks before allocation.
+- [x] Run `cargo test --offline --workspace`, fmt/Clippy; commit `feat: apply locale-sensitive text transforms with mappings`.
 
 ### Task 3: Grapheme, bidi paragraph and CSS break analysis
 
 **Files:** Create `src/analysis/breaks.rs`, `src/analysis/bidi.rs`; Modify `src/analysis/units.rs`, `src/analysis/mod.rs`, `src/paragraph.rs`, `Cargo.toml`.
 
-**Interfaces:** `analyze_breaks(processed:&Processed,styles:&[InlineStyle],warnings:&mut WarningSink)->BreakAnalysis{graphemes:Vec<u32>,opportunities:Vec<BreakOpportunity>}`. `BreakOpportunity{offset:u32,class:BreakClass,min_content:bool}`; extend BreakClass Prohibited/Allowed/Mandatory/Emergency/Hyphen. `analyze_bidi(text:&str,style:&ParagraphStyle)->BidiAnalysis{levels:Vec<u8>,paragraphs:Vec<BidiParagraph>}` with resolved per-paragraph base levels.
+**Interfaces:** `analyze_breaks(processed:&Processed,styles:&[InlineStyle],warnings:&mut WarningSink)->BreakAnalysis{graphemes:Vec<u32>,opportunities:Vec<BreakOpportunity>}`. `BreakOpportunity{offset:u32,class:BreakClass,min_content:bool}`; extend BreakClass Prohibited/Allowed/Mandatory/Emergency/Hyphen. `analyze_bidi(text:&str,style:&ParagraphStyle,styles:&[InlineStyle])->BidiAnalysis{levels:Vec<u8>,paragraphs:Vec<BidiParagraph>}` with resolved per-paragraph base levels and plaintext inline direction; keep block coordinate direction independent.
 
-- [ ] RED tests `strictness_and_locale`, `break_all_keep_all_anywhere`, `nowrap_no_soft_breaks`, `overflow_wrap_intrinsic_distinction`, `manual_soft_hyphen`, `nbsp_word_joiner_zwj_graphemes`, `complex_scripts_feature_modes`, `plaintext_multiple_paragraph_directions`, `bidi_fast_path_conditions`, `many_styles_shared_segmenter_passes`.
-- [ ] ICU options: Auto/Normal→Normal, Loose/Strict/Anywhere matching; ja/zh locale; WordBreak BreakAll/KeepAll. Keep complete graphemes even Anywhere; retain internal transform-expanded ranges independently of optional DOM mapping and prohibit breaks inside them (test ß→SS with mapping on/off). SHY class only for manual/auto. AutoPhrase→Normal+warning and HyphensAuto→Manual+warning.
-- [ ] Configure complex-scripts default on and icu_segmenter auto/LSTM data via feature, compiled_data without auto when off. Group options without rerunning whole IFC once per style; context across boundaries retained.
-- [ ] Run workspace tests with default and no-default features, compare public text/token behavior, commit `feat: analyze graphemes and CSS line break opportunities`.
+- [x] RED tests `strictness_and_locale`, `break_all_keep_all_anywhere`, `nowrap_no_soft_breaks`, `overflow_wrap_intrinsic_distinction`, `manual_soft_hyphen`, `nbsp_word_joiner_zwj_graphemes`, `complex_scripts_feature_modes`, `plaintext_multiple_paragraph_directions`, `bidi_fast_path_conditions`, `many_styles_shared_segmenter_passes`.
+- [x] ICU options: Auto/Normal→Normal, Loose/Strict/Anywhere matching; ja/zh locale; WordBreak BreakAll/KeepAll. Keep complete graphemes even Anywhere; retain internal transform-expanded ranges independently of optional DOM mapping and prohibit breaks inside them (test ß→SS with mapping on/off). SHY class only for manual/auto. AutoPhrase→Normal+warning and HyphensAuto→Manual+warning.
+- [x] Configure complex-scripts default on and icu_segmenter auto/LSTM data via feature, compiled_data without auto when off. Group options without rerunning whole IFC once per style; context across boundaries retained.
+- [x] Run workspace tests with default and no-default features, compare public text/token behavior, commit `feat: analyze graphemes and CSS line break opportunities`.
 
 ### Task 4: Font/script itemization, real shaping and retained context
 
@@ -79,12 +79,12 @@
 
 ### Task 5: CSS break consumption, variable overlays and discretionary hyphens
 
-**Files:** Modify `src/line/scan.rs`, `src/line/cache.rs`, `src/line/intrinsic.rs`, `src/line/plan.rs`, `src/line/reshape.rs`, `src/line/fragments.rs`, `src/output.rs`, `src/hit.rs`, `src/shape.rs`; fixture tests `line_shaping.rs`.
+**Files:** Modify `src/line/scan.rs`, `src/line/cache.rs`, `src/line/intrinsic.rs`, `src/line/plan.rs`, `src/line/reshape.rs`, `src/line/fragments.rs`, `src/output.rs`, `src/shape.rs`; fixture tests `line_shaping.rs`.
 
 **Interfaces:** `GlyphSource::Overlay{glyphs:Range<u32>}` independent from shared glyph range; `reshape_window(data:&ParagraphData,text:Range<u32>,edge:ShapeEdge,cx:&mut LayoutContext)->Option<ReshapedWindow>` complete cluster range/new GlyphStore. RecordKind::Glyphs retains item/run/text and actual-source glyph range. Break consumers use Task3 classes and min_content distinction.
 
-- [ ] RED `emergency_break_only_when_needed`, `break_word_vs_anywhere_min_content`, `soft_hyphen_only_when_taken`, `unsafe_break_reshapes_both_sides`, `overlay_changed_glyph_count_public_iterators`, `overlay_budget_retains_whole_cluster`, `tiny_window_progress_and_warning`, `rtl_overlay_attachments`, `overlay_hit_and_justification_positions`.
-- [ ] Select normal/Hyphen breaks before emergency; include hyphen advance while choosing break. Re-shape unsafe edges to safe boundaries with UNSAFE_TO_CONCAT join validation and bounded expansion. Match default harfrust separate-line results for Arabic/ligatures.
+- [ ] RED `emergency_break_only_when_needed`, `break_word_vs_anywhere_min_content`, `soft_hyphen_only_when_taken`, `unsafe_break_reshapes_both_sides`, `overlay_changed_glyph_count_public_iterators`, `overlay_budget_retains_whole_cluster`, `tiny_window_progress_and_warning`, `rtl_overlay_attachments`, `overlay_source_clusters_and_justification_positions`.
+- [ ] Select normal/Hyphen breaks before emergency; include hyphen advance while choosing break. Re-shape unsafe edges to safe boundaries with UNSAFE_TO_CONCAT join validation and bounded expansion. Match direct harfrust line-window results with original pre/post context for Arabic soft-break joining; forced breaks stop context, and split ligatures are reshaped.
 - [ ] Move glyph/cluster access to actual source, support different overlay glyph count and all public iterators/get/ExactSizeIterator. Keep shared Paragraph unchanged and ownership stable; no missing/duplicate cluster at budget fallback. Intrinsic/balance/pretty/cache recognize all break classes consistently.
 - [ ] Run targeted fixture line tests and workspace suite, commit `feat: consume CSS breaks and reshape bounded line edges`.
 

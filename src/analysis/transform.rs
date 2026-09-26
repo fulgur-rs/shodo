@@ -223,6 +223,11 @@ pub(crate) fn transform(
     if let Some(mapping) = &mut input.mapping {
         mapping.remap_text(&spans);
     }
+    input.indivisible = spans
+        .iter()
+        .filter(|span| span.kind == MappingKind::Expanded)
+        .map(|span| span.new.clone())
+        .collect();
     input.text = output;
     Ok(input)
 }

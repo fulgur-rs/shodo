@@ -5,7 +5,8 @@ use std::fmt;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::analysis::units::{InlineBoxInfo, Unit, UnitList, bidi_levels, build_units};
+use crate::analysis::bidi::{BidiParagraph, analyze_bidi};
+use crate::analysis::units::{InlineBoxInfo, Unit, UnitList, build_units};
 use crate::analysis::{Item, ItemKind, process, transform};
 use crate::builder::ParagraphBuilder;
 use crate::font::FontCollection;
@@ -71,7 +72,9 @@ pub(crate) struct ParagraphData {
     pub(crate) units: Vec<Unit>,
     pub(crate) boxes: Vec<InlineBoxInfo>,
     pub(crate) float_count: u32,
+    /// Coordinate direction of the block; independent of plaintext paragraphs.
     pub(crate) base_level: u8,
+    pub(crate) bidi_paragraphs: Vec<BidiParagraph>,
     pub(crate) mapping: Option<OffsetMapping>,
     pub(crate) fonts: FontCollection,
     pub(crate) generations: (u64, Option<u64>),
@@ -80,6 +83,12 @@ pub(crate) struct ParagraphData {
 }
 
 impl ParagraphData {
+    pub(crate) fn bidi_paragraph_at_unit(&self, unit: usize) -> Option<&BidiParagraph> {
+        let pos = self.units.get(unit)?.text.start;
+        let index = self.bidi_paragraphs.partition_point(|p| p.text.end <= pos);
+        self.bidi_paragraphs.get(index)
+    }
+
     pub(crate) fn baseline_kind(&self, node: NodeId) -> Option<BaselineKind> {
         #[cfg(test)]
         self.baseline_queries.fetch_add(1, Ordering::Relaxed);
@@ -167,6 +176,7 @@ impl Paragraph {
         sanitize::items(&mut items, &mut warnings);
         let processed = process(&text, &items, &styles, offset_mapping, &limits)?;
         let processed = transform(processed, &styles, &limits, &mut warnings)?;
+        let breaks = crate::analysis::breaks::analyze_breaks(&processed, &styles, &mut warnings);
         let mut sat = Saturation::default();
         let font = fonts.primary_font();
         let mut glyphs = GlyphStore::default();
@@ -188,11 +198,7 @@ impl Paragraph {
                 )?;
             }
         }
-        let levels = bidi_levels(
-            &processed.text,
-            style.direction,
-            style.unicode_bidi_plaintext,
-        );
+        let bidi = analyze_bidi(&processed.text, &style, &styles);
         let base_level = u8::from(style.direction == Direction::Rtl);
         let UnitList {
             units,
@@ -203,8 +209,9 @@ impl Paragraph {
             &processed.items,
             &runs,
             &glyphs,
-            &levels,
+            &bidi.levels,
             base_level,
+            &breaks,
         );
         let mut baselines = HashMap::new();
         for item in &processed.items {
@@ -254,6 +261,7 @@ impl Paragraph {
                 boxes,
                 float_count,
                 base_level,
+                bidi_paragraphs: bidi.paragraphs,
                 mapping: processed.mapping,
                 fonts: fonts.clone(),
                 generations: fonts.generations(),

@@ -21,6 +21,7 @@ pub(crate) struct Processed {
     pub(crate) text: String,
     pub(crate) items: Vec<Item>,
     pub(crate) mapping: Option<OffsetMapping>,
+    pub(crate) indivisible: Vec<std::ops::Range<u32>>,
 }
 
 pub(crate) fn process(
@@ -111,6 +112,7 @@ pub(crate) fn process(
         text: p.out,
         items: p.items,
         mapping: p.mapping,
+        indivisible: Vec::new(),
     })
 }
 
@@ -262,6 +264,7 @@ impl Processor<'_> {
                 raw_c
             };
             let control = match c {
+                '\u{2028}' | '\u{2029}' | '\u{0085}' => Some(ItemKind::ForcedBreak),
                 '\n' if preserve_breaks => Some(ItemKind::ForcedBreak),
                 '\t' if !collapse_spaces => Some(ItemKind::Tab),
                 _ => None,

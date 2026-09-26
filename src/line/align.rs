@@ -38,19 +38,26 @@ pub(super) fn apply(
         .sub(indent, sat)
         .sub(scan.content, sat)
         .max(LayoutUnit::ZERO);
+    let inline_level = data
+        .bidi_paragraph_at_unit(start)
+        .map_or(data.base_level, |p| p.inline_level);
+    let reversed_start = inline_level % 2 != data.base_level % 2;
     let end = match align {
-        TextAlign::End => true,
+        TextAlign::End => !reversed_start,
         TextAlign::Left => data.base_level % 2 == 1,
         TextAlign::Right => data.base_level.is_multiple_of(2),
-        _ => false,
+        _ => reversed_start,
     };
-    let shift = if end {
+    let mut shift = if end {
         spare
     } else if align == TextAlign::Center {
         spare.div_i32(2)
     } else {
         LayoutUnit::ZERO
     };
+    if reversed_start {
+        shift = shift.sub(indent, sat);
+    }
     let mut result = Alignment {
         shift,
         positions: None,

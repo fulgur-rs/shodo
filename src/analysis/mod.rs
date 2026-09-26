@@ -1,5 +1,7 @@
 //! Text analysis: white-space processing and the data line breaking uses.
 
+pub(crate) mod bidi;
+pub(crate) mod breaks;
 mod transform;
 mod transform_context;
 pub(crate) mod units;

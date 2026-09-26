@@ -12,7 +12,8 @@ keywords = ["typesetting", "text", "layout", "shaping"]
 categories = ["text-processing", "graphics"]
 
 [features]
-default = ["system-fonts", "web-fonts"]
+default = ["system-fonts", "web-fonts", "complex-scripts"]
+complex-scripts = ["icu_segmenter/auto"]
 web-fonts = ["dep:wuff", "dep:flate2", "dep:brotli-decompressor"]
 system-fonts = ["fontique/system"]
 

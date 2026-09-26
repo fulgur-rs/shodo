@@ -149,7 +149,9 @@ impl Paragraph {
                 UnitKind::Close { .. } | UnitKind::BidiControl | UnitKind::Absolute { .. } => {}
                 _ => trailing = LayoutUnit::ZERO,
             }
-            if u.break_after == BreakClass::Allowed {
+            if u.break_after == BreakClass::Allowed
+                || u.break_after == BreakClass::Emergency && u.emergency_min_content
+            {
                 min = min.max(
                     word.sub(
                         if matches!(u.kind, UnitKind::Cluster { space: true, .. }) {

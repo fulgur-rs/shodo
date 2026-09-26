@@ -3,20 +3,19 @@
 
 use std::ops::Range;
 
-use unicode_bidi::{BidiClass, BidiInfo, Level, bidi_class};
-
+use super::breaks::BreakAnalysis;
 use super::{Item, ItemKind};
-use crate::geometry::Direction;
 use crate::node::{InlineEdges, NodeId, OutOfFlowKind};
-use crate::shape::{GlyphStore, ShapedRun, is_mark};
+use crate::shape::{GlyphStore, ShapedRun};
 
-/// Line break opportunity after a unit. Only spaces, tabs and atomic inlines
-/// provide soft opportunities for now; UAX #14 comes later.
+/// CSS-tailored line break opportunity after a unit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum BreakClass {
     Prohibited,
     Allowed,
     Mandatory,
+    Emergency,
+    Hyphen,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -58,6 +57,7 @@ pub(crate) struct Unit {
     pub(crate) item: u32,
     pub(crate) text: Range<u32>,
     pub(crate) break_after: BreakClass,
+    pub(crate) emergency_min_content: bool,
     pub(crate) level: u8,
     /// Innermost inline box containing the unit (for `Open`/`Close`, the
     /// box's parent).
@@ -76,34 +76,6 @@ pub(crate) struct UnitList {
     pub(crate) units: Vec<Unit>,
     pub(crate) boxes: Vec<InlineBoxInfo>,
     pub(crate) float_count: u32,
-}
-
-/// Bidi embedding level of every byte of `text` (UAX #9). Left-to-right
-/// paragraphs without right-to-left characters or bidi controls skip the
-/// algorithm.
-pub(crate) fn bidi_levels(text: &str, direction: Direction, plaintext: bool) -> Vec<u8> {
-    use BidiClass::*;
-    let needs_bidi = plaintext
-        || direction == Direction::Rtl
-        || text.chars().any(|c| {
-            matches!(
-                bidi_class(c),
-                R | AL | RLE | RLO | RLI | LRE | LRO | LRI | FSI | PDF | PDI
-            )
-        });
-    if !needs_bidi {
-        return vec![0; text.len()];
-    }
-    let base = match (plaintext, direction) {
-        (true, _) => None,
-        (false, Direction::Rtl) => Some(Level::rtl()),
-        (false, Direction::Ltr) => Some(Level::ltr()),
-    };
-    BidiInfo::new(text, base)
-        .levels
-        .iter()
-        .map(|l| l.number())
-        .collect()
 }
 
 /// Whether a unit's innermost enclosing box (`b`) is `target` or nested
@@ -125,6 +97,7 @@ pub(crate) fn build_units(
     glyphs: &GlyphStore,
     levels: &[u8],
     base_level: u8,
+    breaks: &BreakAnalysis,
 ) -> UnitList {
     let mut units: Vec<Unit> = Vec::with_capacity(glyphs.len() + items.len());
     let mut boxes: Vec<InlineBoxInfo> = Vec::new();
@@ -143,6 +116,7 @@ pub(crate) fn build_units(
                 item: index,
                 text: item.text.clone(),
                 break_after,
+                emergency_min_content: false,
                 level: base_level,
                 parent_box,
             });
@@ -155,7 +129,8 @@ pub(crate) fn build_units(
                         let cluster = glyphs.cluster[g as usize];
                         let c = text[cluster as usize..].chars().next().unwrap_or(' ');
                         let end = cluster + c.len_utf8() as u32;
-                        if is_mark(c)
+                        if (breaks.graphemes.binary_search(&cluster).is_err()
+                            || units.last().is_some_and(|u| u.text.start == cluster))
                             && let Some(last) = units.last_mut()
                             && let UnitKind::Cluster {
                                 run: r,
@@ -166,6 +141,8 @@ pub(crate) fn build_units(
                         {
                             range.end = g + 1;
                             last.text.end = end;
+                            last.break_after = breaks.at(end).class;
+                            last.emergency_min_content = breaks.at(end).min_content;
                             continue;
                         }
                         let space = c == ' ';
@@ -179,11 +156,8 @@ pub(crate) fn build_units(
                             },
                             item: index,
                             text: cluster..end,
-                            break_after: if space {
-                                BreakClass::Allowed
-                            } else {
-                                BreakClass::Prohibited
-                            },
+                            break_after: breaks.at(end).class,
+                            emergency_min_content: breaks.at(end).min_content,
                             level: base_level,
                             parent_box,
                         });
@@ -216,28 +190,14 @@ pub(crate) fn build_units(
                 }
             }
             ItemKind::Atomic { .. } => {
-                // UAX #14 class CB: break opportunities before and after.
-                let mut before = units.len();
-                while before > 0
-                    && matches!(
-                        units[before - 1].kind,
-                        UnitKind::Open { .. } | UnitKind::BidiControl
-                    )
-                {
-                    before -= 1;
-                }
-                if let Some(prev) = before.checked_sub(1).and_then(|i| units.get_mut(i))
-                    && prev.break_after == BreakClass::Prohibited
-                {
-                    prev.break_after = BreakClass::Allowed;
-                }
                 units.push(Unit {
                     unsafe_to_break: false,
                     unsafe_to_concat: false,
                     kind: UnitKind::Atomic { node },
                     item: index,
                     text: item.text.clone(),
-                    break_after: BreakClass::Allowed,
+                    break_after: breaks.at(item.text.end).class,
+                    emergency_min_content: breaks.at(item.text.end).min_content,
                     level: base_level,
                     parent_box,
                 });
@@ -261,7 +221,7 @@ pub(crate) fn build_units(
                 parent_box,
             ),
             ItemKind::ForcedBreak => push(UnitKind::ForcedBreak, BreakClass::Mandatory, parent_box),
-            ItemKind::Tab => push(UnitKind::Tab, BreakClass::Allowed, parent_box),
+            ItemKind::Tab => push(UnitKind::Tab, breaks.at(item.text.end).class, parent_box),
             ItemKind::BidiControl => {
                 push(UnitKind::BidiControl, BreakClass::Prohibited, parent_box)
             }
@@ -337,27 +297,5 @@ pub(crate) fn build_units(
         units,
         boxes,
         float_count,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn left_to_right_text_skips_the_algorithm() {
-        assert_eq!(bidi_levels("abc", Direction::Ltr, false), vec![0, 0, 0]);
-    }
-
-    #[test]
-    fn hebrew_gets_odd_levels() {
-        let levels = bidi_levels("a \u{5D0}", Direction::Ltr, false);
-        assert_eq!(levels[0], 0);
-        assert_eq!(*levels.last().unwrap(), 1);
-        assert!(
-            bidi_levels("abc", Direction::Rtl, false)
-                .iter()
-                .all(|&l| l == 2)
-        );
     }
 }

@@ -341,7 +341,9 @@ fn build_bidi(
     origin: LayoutUnit,
     atomics: &AtomicSizes,
 ) -> Vec<FragmentRecord> {
-    let base = data.base_level;
+    let base = data
+        .bidi_paragraph_at_unit(units.start)
+        .map_or(data.base_level, |p| p.base_level);
     let mut pieces: Vec<Piece> = Vec::new();
     // Hanging trailing spaces, placed after everything else on the line.
     let mut hanging: Vec<Piece> = Vec::new();
@@ -485,7 +487,7 @@ fn build_bidi(
         .map(|p| Level::new(p.level).unwrap_or_else(|_| Level::ltr()))
         .collect();
     let mut order = BidiInfo::reorder_visual(&levels);
-    if base % 2 == 1 {
+    if data.base_level % 2 == 1 {
         order.reverse();
     }
     let mut starts = vec![LayoutUnit::ZERO; pieces.len()];
