@@ -1,5 +1,7 @@
 //! Line breaking.
 
+pub(crate) mod fragments;
+
 use crate::analysis::units::{BreakClass, Unit, UnitKind};
 use crate::context::LayoutContext;
 use crate::geometry::{LayoutUnit, Saturation};
@@ -67,7 +69,15 @@ impl Paragraph {
             data, start, available, offset, indent, atomics, cx, &mut sat,
         );
         let origin = offset.add(indent, &mut sat);
-        let line = Line::new(self, token, scan, origin, constraint.block_offset, &mut sat);
+        let line = Line::new(
+            self,
+            token,
+            scan,
+            origin,
+            constraint.block_offset,
+            atomics,
+            &mut sat,
+        );
         cx.warnings.record_saturation(&sat);
         LineResult::Line(line)
     }
