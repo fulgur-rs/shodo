@@ -153,6 +153,48 @@ pub enum TextTransform {
     Lowercase,
     FullWidth,
     FullSizeKana,
+    CapitalizeFullWidth,
+    UppercaseFullWidth,
+    LowercaseFullWidth,
+    CapitalizeFullSizeKana,
+    UppercaseFullSizeKana,
+    LowercaseFullSizeKana,
+    FullWidthFullSizeKana,
+    CapitalizeFullWidthFullSizeKana,
+    UppercaseFullWidthFullSizeKana,
+    LowercaseFullWidthFullSizeKana,
+}
+
+pub(crate) enum CaseTransform {
+    None,
+    Capitalize,
+    Uppercase,
+    Lowercase,
+}
+
+impl TextTransform {
+    pub(crate) fn components(self) -> (CaseTransform, bool, bool) {
+        use CaseTransform as C;
+        use TextTransform::*;
+        match self {
+            None => (C::None, false, false),
+            Capitalize => (C::Capitalize, false, false),
+            Uppercase => (C::Uppercase, false, false),
+            Lowercase => (C::Lowercase, false, false),
+            FullWidth => (C::None, true, false),
+            FullSizeKana => (C::None, false, true),
+            CapitalizeFullWidth => (C::Capitalize, true, false),
+            UppercaseFullWidth => (C::Uppercase, true, false),
+            LowercaseFullWidth => (C::Lowercase, true, false),
+            CapitalizeFullSizeKana => (C::Capitalize, false, true),
+            UppercaseFullSizeKana => (C::Uppercase, false, true),
+            LowercaseFullSizeKana => (C::Lowercase, false, true),
+            FullWidthFullSizeKana => (C::None, true, true),
+            CapitalizeFullWidthFullSizeKana => (C::Capitalize, true, true),
+            UppercaseFullWidthFullSizeKana => (C::Uppercase, true, true),
+            LowercaseFullWidthFullSizeKana => (C::Lowercase, true, true),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

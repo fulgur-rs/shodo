@@ -20,7 +20,7 @@ Rust 1.89.0、edition2024、unsafe禁止、wasm32、Send+SyncのParagraph/Line�
 
 処理後にtext-transform。IFCの語文脈はノード境界で切らず、各文字の実効style/langを使う。ICU casemapの単文字full mappingとUnicode SpecialCasingの条件（前後のcased、case-ignorable、CCC、soft-dotted）を線形で求め、Turkic/Lithuanian/final sigmaの文脈変換を行う。capitalizeはUnicode word境界で最初のtypographic letter unitをtitlecaseし、後続のcaseを保持。Dutch IJ、Greek tonos/diaeresisを含むraikiriのtailoringを継承する。ASCII/halfwidth kanaのfull-width、Unicode small-kanaのfull-size-kana、case/width/kanaの組み合わせも公開TextTransformで表せるよう追加する。
 
-Mappingは元のUTF-8 scalarごとにIdentity（同バイト長）、Expanded（長さ変更）、Collapsed（削除）を持ち、Generatedを維持。変換によってテキスト長が増えるとき、出力確保前にmax_text_bytes/u32を検査。既存Mappingを合成し、ノードやdom offsetを失わない。無効langはroot localeを使いwarningを記録する。
+Mappingは元のUTF-8 scalarごとにIdentity（1 scalar→1 scalarで同バイト長）、Expanded（バイト長またはscalar数の変更）、Collapsed（削除）を持ち、Generatedを維持。変換によってテキスト長が増えるとき、出力確保前にmax_text_bytes/u32を検査。既存Mappingを合成し、ノードやdom offsetを失わない。無効langはroot localeを使いwarningを記録する。
 
 ## 分節、bidi、改行
 

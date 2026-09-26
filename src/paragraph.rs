@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::analysis::units::{InlineBoxInfo, Unit, UnitList, bidi_levels, build_units};
-use crate::analysis::{Item, ItemKind, process};
+use crate::analysis::{Item, ItemKind, process, transform};
 use crate::builder::ParagraphBuilder;
 use crate::font::FontCollection;
 use crate::geometry::{BaselineKind, Direction, Saturation, WritingMode};
@@ -166,6 +166,7 @@ impl Paragraph {
         }
         sanitize::items(&mut items, &mut warnings);
         let processed = process(&text, &items, &styles, offset_mapping, &limits)?;
+        let processed = transform(processed, &styles, &limits, &mut warnings)?;
         let mut sat = Saturation::default();
         let font = fonts.primary_font();
         let mut glyphs = GlyphStore::default();

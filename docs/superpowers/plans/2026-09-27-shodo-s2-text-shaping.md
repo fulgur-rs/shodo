@@ -34,12 +34,12 @@
 
 **Interfaces:** Consumes `RawItem`, `InlineStyle`, Limits/Mapping. Produces existing `process(raw_text:&str,raw:&[RawItem],styles:&[InlineStyle],with_mapping:bool,limits:&Limits)->Result<Processed,LimitExceeded>` with exact scalar origin mappings; helper `whitespace_flags(raw_text:&str,raw:&[RawItem],styles:&[InlineStyle])->Vec<u8>` indexed by raw byte offset, REMOVE flag for discarded scalars.
 
-- [ ] Add failing unit tests: `segment_break_neighbors_cross_nodes` expects `日 \n 本`→`日本` across Open/Close/OOF; `hangul_keeps_segment_space` expects `한\n글`→`한 글`; `zero_width_space_removes_adjacent_break` expects `a\u{200B}\nb`→`a\u{200B}b`; `preserve_breaks_removes_surrounding_collapsible_spaces` expects `a \t\n \tb`→`a\nb`.
-- [ ] Add `dom_carriage_return_is_space` expects Preserve `a\r\nb`→`a \nb`, Collapse→`a b`; `bidi_scopes_restart_at_paragraph_boundaries` expects controls close before LF/U2029 and reopen after; map each generated control to owner node.
-- [ ] Add `segment_mapping_and_limits` checks removed LF/space maps to zero text interval, kept text roundtrip, generated controls exceeding max_text_bytes/item limit return Err; `transparent_boundaries_are_linear` uses 4096 spans/OOF and asserts correct transformed text and bounded item count.
-- [ ] Run `cargo test --offline -p shodo analysis::whitespace` and observe assertion failures against existing code.
-- [ ] Implement context flags in forward/backward linear scans, respecting Atomic/Block/ForcedBreak barriers and default-ignorables; update Processor to use flags, CSS CR→space, preserve collapsing state across controls, and close/reopen scopes at breaks.
-- [ ] Run above targeted tests then `cargo test --offline --workspace`, compare results and commit `feat: process IFC segment breaks and bidi boundaries`.
+- [x] Add failing unit tests: `segment_break_neighbors_cross_nodes` expects `日 \n 本`→`日本` across Open/Close/OOF; `hangul_keeps_segment_space` expects `한\n글`→`한 글`; `zero_width_space_removes_adjacent_break` expects `a\u{200B}\nb`→`a\u{200B}b`; `preserve_breaks_removes_surrounding_collapsible_spaces` expects `a \t\n \tb`→`a\nb`.
+- [x] Add `dom_carriage_return_is_space` expects Preserve `a\r\nb`→`a \nb`, Collapse→`a b`; `bidi_scopes_restart_at_paragraph_boundaries` expects controls close before LF/U2029 and reopen after; map each generated control to owner node.
+- [x] Add `segment_mapping_and_limits` checks removed LF/space maps to zero text interval, kept text roundtrip, generated controls exceeding max_text_bytes/item limit return Err; `transparent_boundaries_are_linear` uses 4096 spans/OOF and asserts correct transformed text and bounded item count.
+- [x] Run `cargo test --offline -p shodo analysis::whitespace` and observe assertion failures against existing code.
+- [x] Implement context flags in forward/backward linear scans, respecting Atomic/Block/ForcedBreak barriers and default-ignorables; update Processor to use flags, CSS CR→space, preserve collapsing state across controls, and close/reopen scopes at breaks.
+- [x] Run above targeted tests then `cargo test --offline --workspace`, compare results and commit `feat: process IFC segment breaks and bidi boundaries`.
 
 ### Task 2: Language-sensitive text transform and offset composition
 
@@ -57,10 +57,10 @@
 
 **Files:** Create `src/analysis/breaks.rs`, `src/analysis/bidi.rs`; Modify `src/analysis/units.rs`, `src/analysis/mod.rs`, `src/paragraph.rs`, `Cargo.toml`.
 
-**Interfaces:** `analyze_breaks(text:&str,items:&[Item],styles:&[InlineStyle],warnings:&mut WarningSink)->BreakAnalysis{graphemes:Vec<u32>,opportunities:Vec<BreakOpportunity>}`. `BreakOpportunity{offset:u32,class:BreakClass,min_content:bool}`; extend BreakClass Prohibited/Allowed/Mandatory/Emergency/Hyphen. `analyze_bidi(text:&str,style:&ParagraphStyle)->BidiAnalysis{levels:Vec<u8>,paragraphs:Vec<BidiParagraph>}` with resolved per-paragraph base levels.
+**Interfaces:** `analyze_breaks(processed:&Processed,styles:&[InlineStyle],warnings:&mut WarningSink)->BreakAnalysis{graphemes:Vec<u32>,opportunities:Vec<BreakOpportunity>}`. `BreakOpportunity{offset:u32,class:BreakClass,min_content:bool}`; extend BreakClass Prohibited/Allowed/Mandatory/Emergency/Hyphen. `analyze_bidi(text:&str,style:&ParagraphStyle)->BidiAnalysis{levels:Vec<u8>,paragraphs:Vec<BidiParagraph>}` with resolved per-paragraph base levels.
 
 - [ ] RED tests `strictness_and_locale`, `break_all_keep_all_anywhere`, `nowrap_no_soft_breaks`, `overflow_wrap_intrinsic_distinction`, `manual_soft_hyphen`, `nbsp_word_joiner_zwj_graphemes`, `complex_scripts_feature_modes`, `plaintext_multiple_paragraph_directions`, `bidi_fast_path_conditions`, `many_styles_shared_segmenter_passes`.
-- [ ] ICU options: Auto/Normal→Normal, Loose/Strict/Anywhere matching; ja/zh locale; WordBreak BreakAll/KeepAll. Keep complete graphemes even Anywhere. SHY class only for manual/auto. AutoPhrase→Normal+warning and HyphensAuto→Manual+warning.
+- [ ] ICU options: Auto/Normal→Normal, Loose/Strict/Anywhere matching; ja/zh locale; WordBreak BreakAll/KeepAll. Keep complete graphemes even Anywhere; retain internal transform-expanded ranges independently of optional DOM mapping and prohibit breaks inside them (test ß→SS with mapping on/off). SHY class only for manual/auto. AutoPhrase→Normal+warning and HyphensAuto→Manual+warning.
 - [ ] Configure complex-scripts default on and icu_segmenter auto/LSTM data via feature, compiled_data without auto when off. Group options without rerunning whole IFC once per style; context across boundaries retained.
 - [ ] Run workspace tests with default and no-default features, compare public text/token behavior, commit `feat: analyze graphemes and CSS line break opportunities`.
 
