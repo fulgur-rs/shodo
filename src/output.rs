@@ -37,7 +37,6 @@ pub struct Line {
     pub(crate) break_token: BreakToken,
     pub(crate) reason: BreakReason,
     pub(crate) units: Range<u32>,
-    pub(crate) widths: Vec<LayoutUnit>,
     pub(crate) origin: LayoutUnit,
     pub(crate) inline_size: LayoutUnit,
     pub(crate) block_size: LayoutUnit,
@@ -102,7 +101,6 @@ impl Line {
             },
             reason: scan.reason,
             units: token.unit..scan.end as u32,
-            widths: scan.widths,
             origin,
             inline_size: scan.content,
             block_size: LayoutUnit::from_f32_ceil(line_height, sat),
@@ -298,6 +296,9 @@ impl<'a> GlyphRunView<'a> {
         let gi = g as usize;
         let rel = store.pen[gi] - store.pen[self.glyphs.0 as usize];
         let advance = store.advance[gi];
+        // Runs are stored in logical order and reversed for display here; a
+        // real shaper that emits right-to-left runs in visual order must not
+        // be reversed twice.
         let reversed = self.record.level % 2 != self.line.data.base_level % 2;
         let pen = if reversed {
             self.record.inline_size - rel - advance

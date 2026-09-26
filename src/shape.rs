@@ -4,6 +4,10 @@
 //! (like the Ahem test font). Combining marks U+0300–U+036F get a zero
 //! advance and a −0.5em inline offset, so that glyph offsets are exercised
 //! separately from pen positions.
+//!
+//! Runs are stored in logical order and reversed for display by
+//! `GlyphRunView`; a real shaper that emits right-to-left runs in visual
+//! order must not be reversed twice.
 
 use std::ops::Range;
 
