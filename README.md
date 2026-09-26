@@ -17,14 +17,16 @@ shodo is in early development. Paragraph construction, whitespace processing, bi
 - Read access to glyph runs, inline boxes, atomic inlines, and anchors for out-of-flow elements.
 - Logical coordinates (inline / block axes) and conversion to physical coordinates with `PhysicalConverter`.
 - Resource limits for input, glyph counts, and font data through `Limits`, plus diagnostic warnings.
+- Shared and document-local font collections with CSS weight/width ranges, unicode-range, ordered local/web sources, locale fallback, and whole-cluster matching.
+- Real horizontal/vertical font metrics, CSS ch/ic queries, and shared bounded harfrust shaping data.
 
 ### Limitations and planned features
 
-Shaping is a placeholder: it generally produces one glyph per character with a 1em advance. Font matching and metrics are also placeholders, so registering a font does not yet affect actual glyph shapes or character widths.
+Shaping is a placeholder: it generally produces one glyph per character with a 1em advance. The independent font APIs provide real matching and metrics, but paragraph construction still uses the S0 primary face and stub shaper. Registering a font does not yet provide actual paragraph glyph shapes or character advances.
 
 Soft line break opportunities are currently limited to spaces, tabs, and atomic inlines. Unicode line breaking (UAX #14) and Japanese line breaking restrictions are not yet supported.
 
-Some style and result types reserve future functionality. `::first-line`, real shaping/font matching, full CSS spacing, hyphenation, hit testing, vertical shaping, and ruby are not implemented. Line-edge reshaping currently uses the stub shaper; it does not provide real-script contextual shaping. APIs described in the design documents are not necessarily implemented.
+Some style and result types reserve future functionality. `::first-line`, real paragraph shaping/font selection, full CSS spacing, hyphenation, hit testing, vertical shaping, and ruby are not implemented. Line-edge reshaping currently uses the stub shaper; it does not provide real-script contextual shaping. APIs described in the design documents are not necessarily implemented.
 
 Float placement remains the caller's responsibility. The protocol reports anchors and displaced floats; it is not a BFC or a production renderer integration. A `BreakPlan` is ignored when its paragraph, width, options, atomic revision, or float constraints do not match.
 
@@ -45,6 +47,31 @@ To try shodo from another local project, add a path dependency to its `Cargo.tom
 [dependencies]
 shodo = { path = "../shodo" }
 ```
+
+## Font collections
+
+`FontCollection::new` lazily enumerates system fonts on the first query. Use
+`FontCollection::with_options` with `system_fonts: false` for deterministic bundled
+fonts. `for_document` creates an isolated layer for CSS faces; `FontQuery` selects
+one font for a supplied grapheme. `set_generic_families` and
+`set_fallback_families` configure shared deterministic family and script/locale
+mappings. `resolve_ch` and `resolve_ic` return the selected face and pixel advance.
+
+`register` accepts structurally checked sfnt/TTC. `register_face` selects one face
+and attaches `FontFaceDescriptor`. `register_sources` tries full/PostScript local
+names and downloaded font data in order. WOFF/WOFF2 decoding is also exposed as
+`decode_web_font`. URL fetching belongs to the caller. See the executable and
+file-based examples in the `shodo::font` module documentation.
+
+Default features are `system-fonts` and `web-fonts`. Disable default features for
+bundled sfnt-only applications; both font matching and metrics still work. The
+system backend is available only on supported native platforms, while wasm builds
+use memory-backed fonts. Linux builds with `system-fonts` require Fontconfig
+development files and pkg-config (on Debian/Ubuntu, `libfontconfig1-dev`).
+Compressed input, decoded streams and returned font blobs
+are checked against font budgets; transformed WOFF2 reconstruction may temporarily
+allocate beyond the retained-blob budget. `wuff` rejects reconstructed output above
+128 MiB. Cache entries and per-face font-cache work have separate limits.
 
 ## Usage
 

@@ -1,6 +1,53 @@
-//! Fonts: registration, identity and metrics.
+//! Browser font collections, document-local CSS faces, cluster matching and metrics.
+//!
+//! System enumeration is lazy; a bundled-only application can disable it:
+//! ```
+//! use shodo::font::{FontCollection, FontOptions, FontQuery};
+//! use shodo::limits::Limits;
+//! let shared = FontCollection::with_options(&Limits::default(), FontOptions {
+//!     system_fonts: false, ..Default::default()
+//! });
+//! let document = FontCollection::for_document(&shared, &Limits::default());
+//! // Without a zero glyph, CSS defines ch as half an em.
+//! assert_eq!(document.resolve_ch(&FontQuery::default(), 16.0).advance, 8.0);
+//! ```
+//!
+//! Register CSS sources without changing the caller's family list:
+//! ```no_run
+//! use shodo::font::{FontCollection, FontFaceDescriptor, FontSource, FontQuery};
+//! use shodo::limits::Limits;
+//! use shodo::style::FontFamily;
+//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let shared = FontCollection::new(&Limits::default());
+//! let document = FontCollection::for_document(&shared, &Limits::default());
+//! let face = document.register_sources(FontFaceDescriptor {
+//!     family: "Document Font".into(), weight: (300.0, 700.0), ..Default::default()
+//! }, vec![FontSource::Local("Installed Font-Regular".into()),
+//!         FontSource::Data(std::fs::read("web-font.woff2")?, 0)])?;
+//! let query = FontQuery { families: vec![FontFamily::Named("Document Font".into())],
+//!     weight: 600.0, ..Default::default() };
+//! if let Some(selected) = document.match_cluster(&query, "水") {
+//!     let data = document.font_data(selected.id).unwrap();
+//!     let metrics = document.metrics(selected.id, 16.0);
+//!     let shaper = document.shaper_data(selected.id).unwrap();
+//! }
+//! # let _ = face;
+//! # Ok(()) }
+//! ```
 
 mod check;
+mod descriptor;
+mod matching;
+mod metrics;
+mod source;
+mod web_font;
+pub use web_font::decode_web_font;
+mod structure;
+pub use descriptor::FontFaceDescriptor;
+pub use matching::{FontMatch, FontPresentation, FontQuery};
+pub use metrics::{FontUnit, VerticalFontMetrics};
+pub use skrifa::instance::NormalizedCoord;
+pub use source::FontSource;
 pub(crate) mod sfnt;
 
 pub use check::FontError;
@@ -14,6 +61,28 @@ use peniko::{Blob, FontData};
 use crate::limits::{LimitKind, Limits};
 
 static NEXT_LAYER_ID: AtomicU32 = AtomicU32::new(0);
+
+fn allocate_layer_id(counter: &AtomicU32) -> Option<u32> {
+    counter
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+        .ok()
+}
+
+/// An observer for invalidating renderer atlas entries after a layer dies.
+/// It never keeps a document or its font blobs alive.
+#[derive(Clone, Debug)]
+pub struct WeakFontLayer {
+    id: u32,
+    layer: std::sync::Weak<Layer>,
+}
+impl WeakFontLayer {
+    pub fn id(&self) -> u32 {
+        self.id
+    }
+    pub fn is_alive(&self) -> bool {
+        self.layer.strong_count() != 0
+    }
+}
 
 /// Identifies a face: the layer it was registered in and its index there.
 /// Stable for the lifetime of the layer; layer ids are never reused.
@@ -46,6 +115,26 @@ pub struct FontMetrics {
     pub strikeout_thickness: f32,
 }
 
+/// Platform access and bounded cache policy. Tests and applications using
+/// bundled fonts can disable all system enumeration.
+#[derive(Clone, Debug)]
+pub struct FontOptions {
+    pub system_fonts: bool,
+    /// Maximum cached cluster queries. Zero disables this cache.
+    pub match_cache_entries: usize,
+    /// Source cache age in calls to `prune`, including failed file loads.
+    pub source_cache_max_age: u64,
+}
+impl Default for FontOptions {
+    fn default() -> Self {
+        Self {
+            system_fonts: cfg!(feature = "system-fonts"),
+            match_cache_entries: 256,
+            source_cache_max_age: 8,
+        }
+    }
+}
+
 struct Layer {
     id: u32,
     limits: Limits,
@@ -57,6 +146,16 @@ struct Layer {
 struct LayerState {
     faces: Vec<FontData>,
     blob_bytes: u64,
+    descriptors: Vec<Option<FontFaceDescriptor>>,
+    native: fontique::Collection,
+    source_cache: fontique::SourceCache,
+    retained_sources: std::collections::HashMap<fontique::SourceId, Blob<u8>>,
+    system_loaded: bool,
+    options: FontOptions,
+    generics: std::collections::HashMap<crate::style::GenericFamily, Vec<String>>,
+    fallbacks: Vec<matching::FallbackEntry>,
+    matches: std::collections::VecDeque<matching::CacheEntry>,
+    shapers: std::collections::VecDeque<(u32, Arc<harfrust::ShaperData>)>,
 }
 
 /// A layer of fonts. The shared layer (created with [`FontCollection::new`])
@@ -80,8 +179,13 @@ impl FontCollection {
     /// Creates the shared layer. It contains a built-in stub face at index 0,
     /// so layout works without any system or bundled fonts.
     pub fn new(limits: &Limits) -> Self {
+        Self::with_options(limits, FontOptions::default())
+    }
+
+    /// Creates a shared collection with explicit platform/cache policy.
+    pub fn with_options(limits: &Limits, options: FontOptions) -> Self {
         let stub = FontData::new(Blob::from(sfnt::build_sfnt(&[])), 0);
-        Self::with_faces(limits, vec![stub], None)
+        Self::with_faces(limits, vec![stub], None, options)
     }
 
     /// Creates an empty document layer on top of the root shared layer.
@@ -91,18 +195,41 @@ impl FontCollection {
         while let Some(parent) = &root.layer.parent {
             root = parent;
         }
-        Self::with_faces(limits, Vec::new(), Some(root.clone()))
+        Self::with_faces(
+            limits,
+            Vec::new(),
+            Some(root.clone()),
+            root.state().options.clone(),
+        )
     }
 
-    fn with_faces(limits: &Limits, faces: Vec<FontData>, parent: Option<FontCollection>) -> Self {
+    fn with_faces(
+        limits: &Limits,
+        faces: Vec<FontData>,
+        parent: Option<FontCollection>,
+        options: FontOptions,
+    ) -> Self {
         Self {
             layer: Arc::new(Layer {
-                id: NEXT_LAYER_ID.fetch_add(1, Ordering::Relaxed),
+                id: allocate_layer_id(&NEXT_LAYER_ID).expect("font layer identity space exhausted"),
                 limits: limits.clone(),
                 generation: AtomicU64::new(0),
                 state: Mutex::new(LayerState {
+                    descriptors: vec![None; faces.len()],
+                    native: fontique::Collection::new(fontique::CollectionOptions {
+                        shared: false,
+                        system_fonts: false,
+                    }),
                     faces,
                     blob_bytes: 0,
+                    source_cache: fontique::SourceCache::default(),
+                    retained_sources: Default::default(),
+                    system_loaded: false,
+                    options,
+                    generics: Default::default(),
+                    fallbacks: Vec::new(),
+                    matches: Default::default(),
+                    shapers: Default::default(),
                 }),
                 parent,
             }),
@@ -135,7 +262,9 @@ impl FontCollection {
         state.blob_bytes = bytes;
         let first = state.faces.len() as u32;
         let blob = Blob::from(data);
+        state.native.register_fonts(blob.clone(), None);
         for index in 0..faces {
+            state.descriptors.push(None);
             state.faces.push(FontData::new(blob.clone(), index));
         }
         self.layer.generation.fetch_add(1, Ordering::SeqCst);
@@ -143,6 +272,91 @@ impl FontCollection {
             layer: self.layer.id,
             index: first,
         })
+    }
+
+    /// Registers one selected sfnt/TTC face with CSS descriptors. The whole
+    /// blob is checked and budgeted, but only the selected face is retained.
+    /// An invalid descriptor, index or font leaves the layer unchanged.
+    pub fn register_face(
+        &self,
+        data: Vec<u8>,
+        index: u32,
+        descriptor: FontFaceDescriptor,
+    ) -> Result<FontId, FontError> {
+        self.register_blob(Blob::from(data), index, descriptor)
+    }
+
+    pub(super) fn register_blob(
+        &self,
+        blob: Blob<u8>,
+        index: u32,
+        descriptor: FontFaceDescriptor,
+    ) -> Result<FontId, FontError> {
+        self.register_source_blob(blob, index, descriptor, None)
+    }
+
+    pub(super) fn register_source_blob(
+        &self,
+        blob: Blob<u8>,
+        index: u32,
+        descriptor: FontFaceDescriptor,
+        source: Option<fontique::SourceId>,
+    ) -> Result<FontId, FontError> {
+        descriptor.validate()?;
+        let mut state = self.state();
+        let blob = source
+            .and_then(|id| state.retained_sources.get(&id).cloned())
+            .unwrap_or(blob);
+        let limits = &self.layer.limits;
+        let count = check::check_font(blob.as_ref(), limits)?;
+        if index >= count {
+            return Err(FontError::Malformed("face index out of bounds"));
+        }
+        // Unlike the S0 stub, a CSS face must have a usable cmap.
+        let info_source = fontique::SourceInfo::new(
+            fontique::SourceId::new(),
+            fontique::SourceKind::Memory(blob.clone()),
+        );
+        fontique::FontInfo::from_source(info_source, index)
+            .ok_or(FontError::Malformed("face has no usable character map"))?;
+        Limits::check(
+            limits.max_faces_per_layer,
+            LimitKind::FacesPerLayer,
+            state.faces.len() as u64 + 1,
+        )?;
+        let additional = if state.faces.iter().any(|face| face.data.id() == blob.id()) {
+            0
+        } else {
+            blob.len() as u64
+        };
+        let bytes = state.blob_bytes + additional;
+        Limits::check(
+            limits.max_layer_blob_bytes,
+            LimitKind::LayerBlobBytes,
+            bytes,
+        )?;
+        let id = FontId {
+            layer: self.layer.id,
+            index: state.faces.len() as u32,
+        };
+        if let Some(source) = source {
+            state.retained_sources.insert(source, blob.clone());
+        }
+        state.faces.push(FontData::new(blob, index));
+        state.descriptors.push(Some(descriptor));
+        state.blob_bytes = bytes;
+        self.layer.generation.fetch_add(1, Ordering::SeqCst);
+        Ok(id)
+    }
+
+    /// CSS descriptors of an explicitly registered face, including shared
+    /// faces visible through this document layer.
+    pub fn face_descriptor(&self, id: FontId) -> Option<FontFaceDescriptor> {
+        if id.layer == self.layer.id {
+            self.state().descriptors.get(id.index as usize)?.clone()
+        } else {
+            self.layer.parent.as_ref()?.face_descriptor(id)
+        }
     }
 
     /// Font data of a face in this layer or its shared layer.
@@ -179,18 +393,47 @@ impl FontCollection {
         }
     }
 
-    /// Metrics of a face at `size` px. Placeholder values per em: ascent 0.8,
-    /// descent 0.2, no line gap.
-    pub fn metrics(&self, _id: FontId, size: f32) -> FontMetrics {
-        FontMetrics {
-            ascent: 0.8 * size,
-            descent: 0.2 * size,
-            line_gap: 0.0,
-            underline_offset: 0.1 * size,
-            underline_thickness: 0.05 * size,
-            strikeout_offset: -0.3 * size,
-            strikeout_thickness: 0.05 * size,
+    /// Weak lifecycle observer for this layer.
+    pub fn layer_handle(&self) -> WeakFontLayer {
+        WeakFontLayer {
+            id: self.layer.id,
+            layer: Arc::downgrade(&self.layer),
         }
+    }
+
+    /// Shared, entry-count-bounded shaping data for a registered face.
+    /// Returned handles remain usable after LRU eviction. Zero disables
+    /// retention without disabling shaping.
+    pub fn shaper_data(&self, id: FontId) -> Option<Arc<harfrust::ShaperData>> {
+        if id.layer != self.layer.id {
+            return self.layer.parent.as_ref()?.shaper_data(id);
+        }
+        let mut state = self.state();
+        if let Some(index) = state
+            .shapers
+            .iter()
+            .position(|(index, _)| *index == id.index)
+        {
+            let entry = state.shapers.remove(index)?;
+            let result = entry.1.clone();
+            state.shapers.push_back(entry);
+            return Some(result);
+        }
+        let data = state.faces.get(id.index as usize)?;
+        let font = harfrust::FontRef::from_index(data.data.as_ref(), data.index).ok()?;
+        let shaper = Arc::new(harfrust::ShaperData::new(&font));
+        let cap = self
+            .layer
+            .limits
+            .max_shaper_cache_entries
+            .unwrap_or(u64::MAX);
+        if cap > 0 {
+            while state.shapers.len() as u64 >= cap {
+                state.shapers.pop_front();
+            }
+            state.shapers.push_back((id.index, shaper.clone()));
+        }
+        Some(shaper)
     }
 }
 
@@ -297,3 +540,6 @@ mod tests {
         assert_send_sync::<FontCollection>();
     }
 }
+
+#[cfg(test)]
+mod browser_tests;
