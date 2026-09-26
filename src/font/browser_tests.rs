@@ -174,3 +174,343 @@ fn css_registration_selects_ttc_face_without_retaining_other_faces() {
 fn fonts_data_index(fonts: &FontCollection, id: FontId) -> u32 {
     fonts.font_data(id).unwrap().index
 }
+
+fn no_system() -> FontCollection {
+    FontCollection::with_options(
+        &Limits::default(),
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    )
+}
+fn query(families: &[&str], weight: f32) -> FontQuery {
+    FontQuery {
+        families: families
+            .iter()
+            .map(|name| crate::style::FontFamily::Named((*name).into()))
+            .collect(),
+        weight,
+        ..Default::default()
+    }
+}
+fn add_face(fonts: &FontCollection, family: &str, weight: (f32, f32), chars: &[char]) -> FontId {
+    let mut desc = descriptor(family);
+    desc.weight = weight;
+    fonts
+        .register_face(test_font(family, chars, 600), 0, desc)
+        .unwrap()
+}
+
+#[test]
+fn family_order_precedes_document_layer_priority() {
+    let shared = no_system();
+    let early = add_face(&shared, "Early", (400., 400.), &['a']);
+    let doc = FontCollection::for_document(&shared, &Limits::default());
+    let late = add_face(&doc, "Late", (400., 400.), &['a']);
+    assert_eq!(
+        doc.match_cluster(&query(&["Early", "Late"], 400.), "a")
+            .unwrap()
+            .id,
+        early
+    );
+    assert_eq!(
+        doc.match_cluster(&query(&["Late", "Early"], 400.), "a")
+            .unwrap()
+            .id,
+        late
+    );
+    let override_id = add_face(&doc, "EARLY", (400., 400.), &['a']);
+    assert_eq!(
+        doc.match_cluster(&query(&["Early"], 400.), "a").unwrap().id,
+        override_id
+    );
+}
+
+#[test]
+fn css_weight_ranges_and_400_to_500_search_order() {
+    let fonts = no_system();
+    let light = add_face(&fonts, "Web", (300., 300.), &['a']);
+    let medium = add_face(&fonts, "Web", (500., 500.), &['a']);
+    let bold = add_face(&fonts, "Web", (700., 900.), &['a']);
+    for (weight, id) in [
+        (200., light),
+        (400., medium),
+        (450., medium),
+        (600., bold),
+        (800., bold),
+        (1000., bold),
+    ] {
+        assert_eq!(
+            fonts
+                .match_cluster(&query(&["Web"], weight), "a")
+                .unwrap()
+                .id,
+            id
+        );
+    }
+    let regular = add_face(&fonts, "Web", (400., 400.), &['a']);
+    assert_eq!(
+        fonts.match_cluster(&query(&["Web"], 400.), "a").unwrap().id,
+        regular
+    );
+}
+
+#[test]
+fn unicode_ranges_and_whole_cluster_cmap_are_required() {
+    let fonts = no_system();
+    let mut desc = descriptor("Web");
+    desc.unicode_ranges = vec![(0x61, 0x61)];
+    let restricted = fonts
+        .register_face(test_font("Internal", &['a', 'b'], 600), 0, desc)
+        .unwrap();
+    let complete = add_face(&fonts, "Fallback", (400., 400.), &['a', 'b', '\u{301}']);
+    assert_eq!(
+        fonts
+            .match_cluster(&query(&["Web", "Fallback"], 400.), "a")
+            .unwrap()
+            .id,
+        restricted
+    );
+    assert_eq!(
+        fonts
+            .match_cluster(&query(&["Web", "Fallback"], 400.), "b")
+            .unwrap()
+            .id,
+        complete
+    );
+    assert_eq!(
+        fonts
+            .match_cluster(&query(&["Web", "Fallback"], 400.), "a\u{301}")
+            .unwrap()
+            .id,
+        complete
+    );
+    assert!(fonts.match_cluster(&query(&["Web"], 400.), "z").is_none());
+    assert!(fonts.match_cluster(&query(&["Web"], 400.), "").is_none());
+}
+
+#[test]
+fn cached_misses_and_generic_results_follow_shared_generation() {
+    let fonts = no_system();
+    let doc = FontCollection::for_document(&fonts, &Limits::default());
+    let q = query(&["Later"], 400.);
+    assert!(doc.match_cluster(&q, "a").is_none());
+    let id = add_face(&fonts, "Later", (400., 400.), &['a']);
+    assert_eq!(doc.match_cluster(&q, "a").unwrap().id, id);
+    fonts.set_generic_families(crate::style::GenericFamily::SansSerif, vec!["Later".into()]);
+    assert_eq!(
+        doc.match_cluster(&FontQuery::default(), "a").unwrap().id,
+        id
+    );
+    let new = add_face(&fonts, "New", (400., 400.), &['a']);
+    fonts.set_generic_families(crate::style::GenericFamily::SansSerif, vec!["New".into()]);
+    assert_eq!(
+        doc.match_cluster(&FontQuery::default(), "a").unwrap().id,
+        new
+    );
+}
+
+#[test]
+fn locale_fallback_selects_cjk_faces_deterministically() {
+    let fonts = no_system();
+    let jp = add_face(&fonts, "Japanese", (400., 400.), &['漢']);
+    let cn = add_face(&fonts, "Chinese", (400., 400.), &['漢']);
+    fonts.set_fallback_families(*b"Hani", Some("ja".into()), vec!["Japanese".into()]);
+    fonts.set_fallback_families(*b"Hani", Some("zh-Hans".into()), vec!["Chinese".into()]);
+    for (language, id) in [("ja-JP", jp), ("zh-Hans-CN", cn)] {
+        let q = FontQuery {
+            families: vec![],
+            script: *b"Hani",
+            language: Some(language.into()),
+            ..Default::default()
+        };
+        assert_eq!(fonts.match_cluster(&q, "漢").unwrap().id, id);
+    }
+}
+
+#[test]
+fn width_and_style_matching_precede_weight() {
+    use crate::style::FontStyle;
+    let fonts = no_system();
+    let normal = add_face(&fonts, "Web", (400., 400.), &['a']);
+    let mut desc = descriptor("Web");
+    desc.width = (75., 75.);
+    desc.style = FontStyle::Italic;
+    desc.weight = (700., 700.);
+    let narrow = fonts
+        .register_face(test_font("Web", &['a'], 600), 0, desc)
+        .unwrap();
+    let mut q = query(&["Web"], 400.);
+    q.width = 80.;
+    q.style = FontStyle::Italic;
+    assert_eq!(fonts.match_cluster(&q, "a").unwrap().id, narrow);
+    q.width = 100.;
+    assert_eq!(fonts.match_cluster(&q, "a").unwrap().id, normal);
+}
+
+#[test]
+fn raw_bundled_fonts_are_matched_by_intrinsic_family() {
+    let fonts = no_system();
+    let id = fonts.register(test_font("Native", &['a'], 600)).unwrap();
+    assert_eq!(
+        fonts
+            .match_cluster(&query(&["Native"], 400.), "a")
+            .unwrap()
+            .id,
+        id
+    );
+}
+
+#[test]
+fn emoji_and_text_presentation_prefer_color_and_monochrome_faces() {
+    let fonts = no_system();
+    let text = add_face(&fonts, "Symbol", (400., 400.), &['☺', '😀']);
+    // Rebuild table directory with a minimal color marker for selection.
+    let plain = test_font("Color", &['☺', '😀'], 600);
+    let count = u16::from_be_bytes([plain[4], plain[5]]) as usize;
+    let mut tables = Vec::new();
+    for n in 0..count {
+        let at = 12 + n * 16;
+        let tag = plain[at..at + 4].try_into().unwrap();
+        let start = u32::from_be_bytes(plain[at + 8..at + 12].try_into().unwrap()) as usize;
+        let len = u32::from_be_bytes(plain[at + 12..at + 16].try_into().unwrap()) as usize;
+        tables.push((tag, plain[start..start + len].to_vec()));
+    }
+    tables.push((*b"COLR", vec![0; 14]));
+    let color = fonts
+        .register_face(sfnt::build_sfnt(&tables), 0, descriptor("Symbol"))
+        .unwrap();
+    for (cluster, id) in [
+        ("☺", text),
+        ("☺\u{fe0f}", color),
+        ("😀", color),
+        ("😀\u{fe0e}", text),
+    ] {
+        assert_eq!(
+            fonts
+                .match_cluster(&query(&["Symbol"], 400.), cluster)
+                .unwrap()
+                .id,
+            id
+        );
+    }
+}
+
+#[test]
+fn css_descriptor_controls_synthesis_instead_of_internal_font_metadata() {
+    let fonts = no_system();
+    let id = add_face(&fonts, "Web", (700., 700.), &['a']);
+    let found = fonts.match_cluster(&query(&["Web"], 700.), "a").unwrap();
+    assert_eq!(found.id, id);
+    assert!(
+        !found.embolden,
+        "a CSS bold face must not be emboldened again"
+    );
+    let mut desc = descriptor("Italic");
+    desc.style = crate::style::FontStyle::Italic;
+    let italic = fonts
+        .register_face(test_font("Internal", &['a'], 600), 0, desc)
+        .unwrap();
+    let mut q = query(&["Italic"], 400.);
+    q.style = crate::style::FontStyle::Italic;
+    let found = fonts.match_cluster(&q, "a").unwrap();
+    assert_eq!(found.id, italic);
+    assert_eq!(found.skew, None);
+}
+
+#[test]
+fn oblique_matching_follows_css_direction_above_and_below_eleven_degrees() {
+    use crate::style::FontStyle;
+    let fonts = no_system();
+    let mut ids = Vec::new();
+    for angle in [5., 10., 20., -5., -10., -20.] {
+        let mut desc = descriptor("Slant");
+        desc.style = FontStyle::Oblique(angle);
+        ids.push(
+            fonts
+                .register_face(test_font("Slant", &['a'], 600), 0, desc)
+                .unwrap(),
+        );
+    }
+    for (angle, index) in [(12., 2), (8., 0), (-12., 5), (-8., 3)] {
+        let mut q = query(&["Slant"], 400.);
+        q.style = FontStyle::Oblique(angle);
+        assert_eq!(fonts.match_cluster(&q, "a").unwrap().id, ids[index]);
+    }
+}
+
+#[test]
+fn later_css_faces_win_identical_descriptors_and_cache_is_bounded() {
+    let fonts = FontCollection::with_options(
+        &Limits::default(),
+        FontOptions {
+            system_fonts: false,
+            match_cache_entries: 1,
+            ..Default::default()
+        },
+    );
+    add_face(&fonts, "Web", (400., 400.), &['a', 'b']);
+    let last = add_face(&fonts, "Web", (400., 400.), &['a', 'b']);
+    let q = query(&["Web"], 400.);
+    assert_eq!(fonts.match_cluster(&q, "a").unwrap().id, last);
+    assert_eq!(fonts.match_cluster(&q, "b").unwrap().id, last);
+    assert_eq!(fonts.state().matches.len(), 1);
+    let unbounded = FontCollection::with_options(
+        &Limits::default(),
+        FontOptions {
+            system_fonts: false,
+            match_cache_entries: 0,
+            ..Default::default()
+        },
+    );
+    add_face(&unbounded, "Web", (400., 400.), &['a']);
+    assert!(unbounded.match_cluster(&q, "a").is_some());
+    assert!(unbounded.state().matches.is_empty());
+}
+
+#[test]
+fn variable_weight_matches_inside_css_range_and_returns_clamped_axis_value() {
+    let plain = test_font("Variable", &['a'], 600);
+    let count = u16::from_be_bytes([plain[4], plain[5]]) as usize;
+    let mut tables = Vec::new();
+    for n in 0..count {
+        let at = 12 + n * 16;
+        let start = u32::from_be_bytes(plain[at + 8..at + 12].try_into().unwrap()) as usize;
+        let len = u32::from_be_bytes(plain[at + 12..at + 16].try_into().unwrap()) as usize;
+        tables.push((
+            plain[at..at + 4].try_into().unwrap(),
+            plain[start..start + len].to_vec(),
+        ));
+    }
+    let mut fvar = Vec::new();
+    for field in [1u16, 0, 16, 2, 1, 20, 0, 8] {
+        fvar.extend_from_slice(&field.to_be_bytes());
+    }
+    fvar.extend_from_slice(b"wght");
+    for value in [100i32, 400, 900] {
+        fvar.extend_from_slice(&(value << 16).to_be_bytes());
+    }
+    fvar.extend_from_slice(&[0, 0, 1, 0]);
+    tables.push((*b"fvar", fvar));
+    let fonts = no_system();
+    let mut desc = descriptor("Web");
+    desc.weight = (600., 800.);
+    let id = fonts
+        .register_face(sfnt::build_sfnt(&tables), 0, desc)
+        .unwrap();
+    for (requested, value) in [(400., 600.), (700., 700.), (900., 800.)] {
+        let found = fonts
+            .match_cluster(&query(&["Web"], requested), "a")
+            .unwrap();
+        assert_eq!(found.id, id);
+        assert_eq!(
+            found.variations,
+            vec![crate::style::FontVariation {
+                tag: *b"wght",
+                value
+            }]
+        );
+        assert!(!found.embolden);
+    }
+}

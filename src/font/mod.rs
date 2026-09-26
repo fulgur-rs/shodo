@@ -2,7 +2,9 @@
 
 mod check;
 mod descriptor;
+mod matching;
 pub use descriptor::FontFaceDescriptor;
+pub use matching::{FontMatch, FontPresentation, FontQuery};
 pub(crate) mod sfnt;
 
 pub use check::FontError;
@@ -48,6 +50,26 @@ pub struct FontMetrics {
     pub strikeout_thickness: f32,
 }
 
+/// Platform access and bounded cache policy. Tests and applications using
+/// bundled fonts can disable all system enumeration.
+#[derive(Clone, Debug)]
+pub struct FontOptions {
+    pub system_fonts: bool,
+    /// Maximum cached cluster queries. Zero disables this cache.
+    pub match_cache_entries: usize,
+    /// Source cache age in calls to `prune`, including failed file loads.
+    pub source_cache_max_age: u64,
+}
+impl Default for FontOptions {
+    fn default() -> Self {
+        Self {
+            system_fonts: cfg!(feature = "system-fonts"),
+            match_cache_entries: 256,
+            source_cache_max_age: 8,
+        }
+    }
+}
+
 struct Layer {
     id: u32,
     limits: Limits,
@@ -61,6 +83,12 @@ struct LayerState {
     blob_bytes: u64,
     descriptors: Vec<Option<FontFaceDescriptor>>,
     native: fontique::Collection,
+    source_cache: fontique::SourceCache,
+    system_loaded: bool,
+    options: FontOptions,
+    generics: std::collections::HashMap<crate::style::GenericFamily, Vec<String>>,
+    fallbacks: Vec<matching::FallbackEntry>,
+    matches: std::collections::VecDeque<matching::CacheEntry>,
 }
 
 /// A layer of fonts. The shared layer (created with [`FontCollection::new`])
@@ -84,8 +112,13 @@ impl FontCollection {
     /// Creates the shared layer. It contains a built-in stub face at index 0,
     /// so layout works without any system or bundled fonts.
     pub fn new(limits: &Limits) -> Self {
+        Self::with_options(limits, FontOptions::default())
+    }
+
+    /// Creates a shared collection with explicit platform/cache policy.
+    pub fn with_options(limits: &Limits, options: FontOptions) -> Self {
         let stub = FontData::new(Blob::from(sfnt::build_sfnt(&[])), 0);
-        Self::with_faces(limits, vec![stub], None)
+        Self::with_faces(limits, vec![stub], None, options)
     }
 
     /// Creates an empty document layer on top of the root shared layer.
@@ -95,10 +128,20 @@ impl FontCollection {
         while let Some(parent) = &root.layer.parent {
             root = parent;
         }
-        Self::with_faces(limits, Vec::new(), Some(root.clone()))
+        Self::with_faces(
+            limits,
+            Vec::new(),
+            Some(root.clone()),
+            root.state().options.clone(),
+        )
     }
 
-    fn with_faces(limits: &Limits, faces: Vec<FontData>, parent: Option<FontCollection>) -> Self {
+    fn with_faces(
+        limits: &Limits,
+        faces: Vec<FontData>,
+        parent: Option<FontCollection>,
+        options: FontOptions,
+    ) -> Self {
         Self {
             layer: Arc::new(Layer {
                 id: NEXT_LAYER_ID.fetch_add(1, Ordering::Relaxed),
@@ -112,6 +155,12 @@ impl FontCollection {
                     }),
                     faces,
                     blob_bytes: 0,
+                    source_cache: fontique::SourceCache::default(),
+                    system_loaded: false,
+                    options,
+                    generics: Default::default(),
+                    fallbacks: Vec::new(),
+                    matches: Default::default(),
                 }),
                 parent,
             }),
