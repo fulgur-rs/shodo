@@ -1,7 +1,7 @@
 use super::*;
 
 /// Repository-owned synthetic font, deliberately independent of installed fonts.
-fn test_font(family: &str, chars: &[char], width: u16) -> Vec<u8> {
+pub(super) fn test_font(family: &str, chars: &[char], width: u16) -> Vec<u8> {
     let mut head = vec![0; 54];
     head[0..4].copy_from_slice(&0x0001_0000u32.to_be_bytes());
     head[18..20].copy_from_slice(&1000u16.to_be_bytes());

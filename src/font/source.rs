@@ -4,7 +4,7 @@ use super::{FontCollection, FontData, FontError, FontFaceDescriptor, FontId};
 use skrifa::{FontRef, MetadataProvider, string::StringId};
 
 /// Sources in CSS `src` order. URL fetching belongs to the caller; Data
-/// supplies the downloaded sfnt/TTC bytes and a selected collection face.
+/// supplies downloaded sfnt/TTC or WOFF/WOFF2 bytes and a selected face.
 #[derive(Clone, Debug)]
 pub enum FontSource {
     /// Installed/bundled face's full or PostScript name, not a family name.
@@ -32,7 +32,8 @@ impl FontCollection {
                     self.register_blob(data.data, data.index, descriptor.clone())
                 }
                 FontSource::Data(bytes, index) => {
-                    self.register_face(bytes, index, descriptor.clone())
+                    super::decode_web_font(&bytes, &self.layer.limits)
+                        .and_then(|bytes| self.register_face(bytes, index, descriptor.clone()))
                 }
             };
             match result {

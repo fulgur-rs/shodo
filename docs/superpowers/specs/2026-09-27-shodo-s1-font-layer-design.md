@@ -61,7 +61,10 @@ WOFF/WOFF2 support: provide a distinct decode_web_font(data,limits) helper using
 wuff, and a source-list registration entry point that calls it. Raw register still
 accepts sfnt/TTC only. Check compressed input and decompressed size budgets; use
 bounded custom decoder callbacks if wuff defaults cannot enforce expansion limits.
-Never trust totalSfntSize alone. Malformed input returns FontError, never a panic.
+Never trust totalSfntSize alone. Malformed input returns FontError, never a panic. wuff 0.2.9 reconstructs
+transformed glyf/loca with its own temporary buffers and rejects final output above
+128 MiB. Those buffers are outside the retained-blob budget; document this bound
+instead of claiming max_font_blob_bytes is a total decoder heap limit.
 
 ## Validation
 

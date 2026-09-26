@@ -1,10 +1,48 @@
-//! Fonts: registration, identity and metrics.
+//! Browser font collections, document-local CSS faces, cluster matching and metrics.
+//!
+//! System enumeration is lazy; a bundled-only application can disable it:
+//! ```
+//! use shodo::font::{FontCollection, FontOptions, FontQuery};
+//! use shodo::limits::Limits;
+//! let shared = FontCollection::with_options(&Limits::default(), FontOptions {
+//!     system_fonts: false, ..Default::default()
+//! });
+//! let document = FontCollection::for_document(&shared, &Limits::default());
+//! // Without a zero glyph, CSS defines ch as half an em.
+//! assert_eq!(document.resolve_ch(&FontQuery::default(), 16.0).advance, 8.0);
+//! ```
+//!
+//! Register CSS sources without changing the caller's family list:
+//! ```no_run
+//! use shodo::font::{FontCollection, FontFaceDescriptor, FontSource, FontQuery};
+//! use shodo::limits::Limits;
+//! use shodo::style::FontFamily;
+//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let shared = FontCollection::new(&Limits::default());
+//! let document = FontCollection::for_document(&shared, &Limits::default());
+//! let face = document.register_sources(FontFaceDescriptor {
+//!     family: "Document Font".into(), weight: (300.0, 700.0), ..Default::default()
+//! }, vec![FontSource::Local("Installed Font-Regular".into()),
+//!         FontSource::Data(std::fs::read("web-font.woff2")?, 0)])?;
+//! let query = FontQuery { families: vec![FontFamily::Named("Document Font".into())],
+//!     weight: 600.0, ..Default::default() };
+//! if let Some(selected) = document.match_cluster(&query, "水") {
+//!     let data = document.font_data(selected.id).unwrap();
+//!     let metrics = document.metrics(selected.id, 16.0);
+//!     let shaper = document.shaper_data(selected.id).unwrap();
+//! }
+//! # let _ = face;
+//! # Ok(()) }
+//! ```
 
 mod check;
 mod descriptor;
 mod matching;
 mod metrics;
 mod source;
+mod web_font;
+pub use web_font::decode_web_font;
+mod structure;
 pub use descriptor::FontFaceDescriptor;
 pub use matching::{FontMatch, FontPresentation, FontQuery};
 pub use metrics::{FontUnit, VerticalFontMetrics};

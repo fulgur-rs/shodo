@@ -42,6 +42,8 @@ pub struct Limits {
     pub max_layout_lookups: Option<u64>,
     /// Layout subtables in each registered GSUB/GPOS table (65536).
     pub max_layout_subtables: Option<u64>,
+    /// Expanded coverage/class glyph visits and AAT cache items per face (2^23).
+    pub max_font_cache_items: Option<u64>,
     /// Faces retained in a font layer (256).
     pub max_faces_per_layer: Option<u64>,
     /// Total registered font-blob bytes retained per layer (256 MiB).
@@ -69,6 +71,7 @@ impl Default for Limits {
             max_font_axes: Some(64),
             max_layout_lookups: Some(4096),
             max_layout_subtables: Some(65_536),
+            max_font_cache_items: Some(1 << 23),
             max_faces_per_layer: Some(256),
             max_layer_blob_bytes: Some(256 * MIB),
             max_shaper_cache_entries: Some(64),
@@ -95,6 +98,7 @@ impl Limits {
             max_font_axes: None,
             max_layout_lookups: None,
             max_layout_subtables: None,
+            max_font_cache_items: None,
             max_faces_per_layer: None,
             max_layer_blob_bytes: None,
             max_shaper_cache_entries: None,
@@ -131,6 +135,7 @@ pub enum LimitKind {
     FontAxes,
     LayoutLookups,
     LayoutSubtables,
+    FontCacheItems,
     FacesPerLayer,
     LayerBlobBytes,
 }

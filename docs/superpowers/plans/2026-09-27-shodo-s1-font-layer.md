@@ -64,9 +64,9 @@
 
 **Files:** src/font/check.rs, src/font/source.rs, src/limits.rs, src/font/tests.rs, Cargo.toml.
 **Interfaces:** decode_web_font(&[u8],&Limits)->Result<Vec<u8>,FontError> plus ordered-source integration.
-- [ ] Test repeated Coverage/ClassDef/GDEF/AAT references, bad signatures, malformed WOFF/WOFF2, valid compressed font and expansion beyond declared size (RED).
-- [ ] Add bounded validation and decompression callbacks; enforce limits before retaining output (GREEN).
-- [ ] Run full suite and no-default-features; commit.
+- [x] Test repeated Coverage/ClassDef/GDEF/AAT references, bad signatures, malformed WOFF/WOFF2, valid compressed font and expansion beyond declared size (RED).
+- [x] Add bounded validation and decompression callbacks; enforce limits before retaining output (GREEN).
+- [x] Run full suite and no-default-features; commit.
 
 ### Task 6: documentation and final verification
 
