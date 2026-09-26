@@ -1,8 +1,8 @@
 use shodo::font::FontCollection;
 use shodo::geometry::Direction;
 use shodo::limits::Limits;
-use shodo::node::{InlineEdges, NodeId, TextSource};
-use shodo::style::{InlineStyle, LineOptions, ParagraphStyle};
+use shodo::node::{InlineEdges, NodeId, Sides, TextSource};
+use shodo::style::{InlineStyle, LineOptions, ParagraphStyle, UnicodeBidi};
 use shodo::{
     AtomicSizes, Fragment, GlyphRunView, InlineBoxFragment, LayoutContext, Line, LineConstraint,
     LineResult, ParagraphBuilder,
@@ -140,4 +140,47 @@ fn an_inline_box_split_by_bidi_becomes_two_fragments() {
         (boxes[1].has_start_edge, boxes[1].has_end_edge),
         (false, true)
     );
+}
+
+#[test]
+fn an_rtl_box_in_an_ltr_paragraph_has_its_start_edge_on_the_right() {
+    let line = one_line(Direction::Ltr, |b| {
+        b.open_inline(
+            NodeId(1),
+            &InlineStyle {
+                direction: Direction::Rtl,
+                unicode_bidi: UnicodeBidi::Isolate,
+                font_size: 10.0,
+                ..InlineStyle::default()
+            },
+            InlineEdges {
+                padding: Sides {
+                    inline_start: 3.0,
+                    inline_end: 7.0,
+                    ..Sides::default()
+                },
+                ..InlineEdges::default()
+            },
+        )
+        .push_text(dom(2), "\u{5D0}\u{5D1}")
+        .close_inline();
+    });
+    let boxes: Vec<InlineBoxFragment> = line
+        .fragments()
+        .filter_map(|f| {
+            if let Fragment::InlineBox(b) = f {
+                Some(b)
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert_eq!(boxes.len(), 1);
+    let b = boxes[0];
+    assert_eq!((b.has_start_edge, b.has_end_edge), (true, true));
+    // The box's own direction is RTL, so its logical start (padding-inline-
+    // start = 3px) is on the visual right and its end (padding-inline-end =
+    // 7px) is on the visual left.
+    assert_eq!(b.content_rect.inline_start, b.rect.inline_start + 7.0);
+    assert_eq!(b.content_rect.inline_size, b.rect.inline_size - 10.0);
 }

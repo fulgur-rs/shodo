@@ -34,14 +34,24 @@ pub(crate) enum RecordKind {
         start_edge: bool,
         end_edge: bool,
         parent: Option<u32>,
-        /// Whether the box's level parity differs from the paragraph's base
-        /// level, so its start edge is on the inline-end side.
+        /// Whether the box's own `direction` opposes the paragraph's, so
+        /// its start edge is on the inline-end side.
         reversed: bool,
     },
     Anchor {
         node: NodeId,
         kind: OutOfFlowKind,
     },
+}
+
+/// Whether a box's own `direction` opposes the paragraph's, so its start
+/// edge (in text order) is on the inline-end side of the rendered box (CSS
+/// Writing Modes 4 §2.4.1). Bidi *levels* are not a reliable proxy: an
+/// isolate or embedding initiator's unit takes the level in effect just
+/// before the isolate (UAX #9), not the level of the box's own content.
+fn box_reversed(data: &ParagraphData, box_index: u32) -> bool {
+    let info = &data.boxes[box_index as usize];
+    data.styles[info.style as usize].direction != data.style.direction
 }
 
 /// Builds the records of one line in logical order.
@@ -82,7 +92,7 @@ fn build_logical(
                 start_edge: false,
                 end_edge: false,
                 parent,
-                reversed: false,
+                reversed: box_reversed(data, box_index),
             },
             inline_start: pos,
             inline_size: LayoutUnit::ZERO,
@@ -103,7 +113,7 @@ fn build_logical(
                         start_edge: true,
                         end_edge: false,
                         parent,
-                        reversed: false,
+                        reversed: box_reversed(data, *box_index),
                     },
                     inline_start: pos,
                     inline_size: LayoutUnit::ZERO,
@@ -367,15 +377,11 @@ fn build_bidi(
     box_ids.sort_unstable();
     let mut boxes: Vec<(FragmentRecord, u32)> = Vec::new();
     for &b in &box_ids {
-        let open_level = pieces
-            .iter()
-            .find(|p| p.edge == Some((b, true)))
-            .map(|p| p.level);
+        let reversed = box_reversed(data, b);
         let mut group: Option<(LayoutUnit, LayoutUnit, bool, bool, u8)> = None;
         let flush = |group: &mut Option<(LayoutUnit, LayoutUnit, bool, bool, u8)>,
                      boxes: &mut Vec<(FragmentRecord, u32)>| {
             if let Some((start, size, start_edge, end_edge, level)) = group.take() {
-                let reversed = open_level.unwrap_or(level) % 2 != base % 2;
                 let kind = RecordKind::InlineBox {
                     box_index: b,
                     start_edge,
