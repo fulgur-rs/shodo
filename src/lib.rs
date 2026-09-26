@@ -1,3 +1,36 @@
-//! shodo — text typesetting library for raikiri.
+//! shodo — inline formatting context engine.
 //!
-//! This crate is under development. The name is reserved; no public API yet.
+//! shodo lays out the inline content of one block container (a paragraph):
+//! white-space processing, bidi, line breaking, alignment, inline boxes and
+//! atomic inlines. Coordinates are logical (inline / block axes) and are
+//! converted to physical coordinates with [`geometry::PhysicalConverter`].
+#![forbid(unsafe_code)]
+// Internal items are wired up incrementally; removed once all are in use.
+#![allow(dead_code, unused_imports)]
+
+pub mod font;
+pub mod geometry;
+pub mod limits;
+pub mod mapping;
+pub mod node;
+pub mod style;
+
+mod analysis;
+mod builder;
+mod context;
+mod line;
+mod output;
+mod paragraph;
+mod sanitize;
+mod shape;
+
+pub use builder::{ParagraphBuilder, RichText};
+pub use context::LayoutContext;
+pub use output::{
+    AnchorFragment, AtomicFragment, BreakReason, Fragment, Glyph, GlyphRunView, Glyphs,
+    InlineBoxFragment, Line,
+};
+pub use paragraph::{
+    AtomicSize, AtomicSizes, BreakPlan, BreakToken, FloatCursor, LineConstraint, LineResult,
+    Paragraph,
+};
