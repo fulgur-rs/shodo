@@ -30,27 +30,27 @@
 
 **Files:** src/font/mod.rs, src/font/descriptor.rs, src/font/tests.rs, Cargo.toml.
 **Interfaces:** FontFaceDescriptor { family, weight: (f32,f32), width: (f32,f32), style, unicode_ranges: Vec<(u32,u32)> }; register_face(data: Vec<u8>, index: u32, descriptor: FontFaceDescriptor) -> Result<FontId,FontError>.
-- [ ] Add synthetic sfnt helper with real head/hhea/maxp/hmtx/cmap/name data and descriptor registration tests: selected TTC index, invalid ranges and budgets leave generation unchanged.
-- [ ] Run `cargo test font::` and confirm new APIs are missing (RED).
-- [ ] Implement descriptor validation, selected face storage, fontique metadata registration; preserve register and stub APIs.
-- [ ] Run font tests and complete suite (GREEN); commit.
+- [x] Add synthetic sfnt helper with real head/hhea/maxp/hmtx/cmap/name data and descriptor registration tests: selected TTC index, invalid ranges and budgets leave generation unchanged.
+- [x] Run `cargo test font::` and confirm new APIs are missing (RED).
+- [x] Implement descriptor validation, selected face storage, fontique metadata registration; preserve register and stub APIs.
+- [x] Run font tests and complete suite (GREEN); commit.
 
 ### Task 2: CSS matcher and fallback configuration
 
 **Files:** src/font/matching.rs, src/font/mod.rs, src/font/tests.rs.
 **Interfaces:** FontQuery, FontMatch, FontCollection::match_cluster(&FontQuery,&str)->Option<FontMatch>; set_generic_families(GenericFamily,Vec<String>); set_fallback_families(script:[u8;4], language:Option<String>,families:Vec<String>).
-- [ ] Add tests for CSS family/weight/width/style priority, unicode-range, whole cluster, locale CJK, emoji presentation, missing match and generations invalidating cached misses.
-- [ ] Run `cargo test font::` (RED).
-- [ ] Implement CSS ranking on descriptors and fontique native family candidates, lazy system enumeration and configurable generics/fallbacks; use bounded cache of query+cluster+generations.
-- [ ] Run font tests and complete suite (GREEN); commit.
+- [x] Add tests for CSS family/weight/width/style priority, unicode-range, whole cluster, locale CJK, emoji presentation, missing match and generations invalidating cached misses.
+- [x] Run `cargo test font::` (RED).
+- [x] Implement CSS ranking on descriptors and fontique native family candidates, lazy system enumeration and configurable generics/fallbacks; use bounded cache of query+cluster+generations.
+- [x] Run font tests and complete suite (GREEN); commit.
 
 ### Task 3: local() and ordered source registration
 
 **Files:** src/font/source.rs, src/font/mod.rs, src/font/tests.rs.
 **Interfaces:** FontSource::{Local(String),Data(Vec<u8>,u32)}; register_sources(descriptor:FontFaceDescriptor,sources:Vec<FontSource>)->Result<FontId,FontError>.
-- [ ] Test PostScript/full-name local resolution, source order, unavailable local fallback, missing source errors and document isolation (RED).
-- [ ] Resolve trusted installed/bundled faces by full/PostScript names; alias selected face with CSS descriptor without family rewriting (GREEN).
-- [ ] Run full suite; commit.
+- [x] Test PostScript/full-name local resolution, source order, unavailable local fallback, missing source errors and document isolation (RED).
+- [x] Resolve trusted installed/bundled faces by full/PostScript names; alias selected face with CSS descriptor without family rewriting (GREEN).
+- [x] Run full suite; commit.
 
 ### Task 4: metrics, units, shaper cache and lifecycle
 

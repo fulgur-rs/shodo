@@ -1,0 +1,97 @@
+//! Ordered CSS font sources and exact local name resolution.
+
+use super::{FontCollection, FontData, FontError, FontFaceDescriptor, FontId};
+use skrifa::{FontRef, MetadataProvider, string::StringId};
+
+/// Sources in CSS `src` order. URL fetching belongs to the caller; Data
+/// supplies the downloaded sfnt/TTC bytes and a selected collection face.
+#[derive(Clone, Debug)]
+pub enum FontSource {
+    /// Installed/bundled face's full or PostScript name, not a family name.
+    Local(String),
+    Data(Vec<u8>, u32),
+}
+
+impl FontCollection {
+    /// Tries sources in order. Unavailable local names and malformed fonts
+    /// fall through; a resource limit immediately fails closed. Only the
+    /// first successful source changes the layer's state or generation.
+    pub fn register_sources(
+        &self,
+        descriptor: FontFaceDescriptor,
+        sources: Vec<FontSource>,
+    ) -> Result<FontId, FontError> {
+        descriptor.validate()?;
+        let mut last_error = FontError::Malformed("no usable font source");
+        for source in sources {
+            let result = match source {
+                FontSource::Local(name) => {
+                    let Some(data) = self.local_font(&name) else {
+                        continue;
+                    };
+                    self.register_blob(data.data, data.index, descriptor.clone())
+                }
+                FontSource::Data(bytes, index) => {
+                    self.register_face(bytes, index, descriptor.clone())
+                }
+            };
+            match result {
+                Ok(id) => return Ok(id),
+                Err(err @ FontError::Limit(_)) => return Err(err),
+                Err(err) => last_error = err,
+            }
+        }
+        Err(last_error)
+    }
+
+    fn local_font(&self, name: &str) -> Option<FontData> {
+        // Document CSS faces aren't installed faces; local() resolves only
+        // against the shared application/platform layer.
+        let root = self.root();
+        let mut state = root.state();
+        if let Some(data) = state
+            .faces
+            .iter()
+            .zip(&state.descriptors)
+            .find_map(|(data, desc)| {
+                (desc.is_none() && has_local_name(data, name)).then(|| data.clone())
+            })
+        {
+            return Some(data);
+        }
+        root.ensure_system(&mut state);
+        let names: Vec<_> = state.native.family_names().map(str::to_owned).collect();
+        let mut result = None;
+        'families: for family_name in names {
+            let Some(family) = state.native.family_by_name(&family_name) else {
+                continue;
+            };
+            for info in family.fonts() {
+                let Some(blob) = info.load(Some(&mut state.source_cache)) else {
+                    continue;
+                };
+                let data = FontData::new(blob, info.index());
+                if has_local_name(&data, name) {
+                    result = Some(data);
+                    break 'families;
+                }
+            }
+        }
+        let age = state.options.source_cache_max_age;
+        state.source_cache.prune(age, true);
+        result
+    }
+}
+
+fn has_local_name(data: &FontData, requested: &str) -> bool {
+    let Ok(font) = FontRef::from_index(data.data.as_ref(), data.index) else {
+        return false;
+    };
+    let requested = requested.to_lowercase();
+    [StringId::FULL_NAME, StringId::POSTSCRIPT_NAME]
+        .into_iter()
+        .any(|id| {
+            font.localized_strings(id)
+                .any(|name| name.to_string().to_lowercase() == requested)
+        })
+}

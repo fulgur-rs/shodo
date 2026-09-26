@@ -3,8 +3,10 @@
 mod check;
 mod descriptor;
 mod matching;
+mod source;
 pub use descriptor::FontFaceDescriptor;
 pub use matching::{FontMatch, FontPresentation, FontQuery};
+pub use source::FontSource;
 pub(crate) mod sfnt;
 
 pub use check::FontError;
@@ -214,13 +216,21 @@ impl FontCollection {
         index: u32,
         descriptor: FontFaceDescriptor,
     ) -> Result<FontId, FontError> {
+        self.register_blob(Blob::from(data), index, descriptor)
+    }
+
+    pub(super) fn register_blob(
+        &self,
+        blob: Blob<u8>,
+        index: u32,
+        descriptor: FontFaceDescriptor,
+    ) -> Result<FontId, FontError> {
         descriptor.validate()?;
         let limits = &self.layer.limits;
-        let count = check::check_font(&data, limits)?;
+        let count = check::check_font(blob.as_ref(), limits)?;
         if index >= count {
             return Err(FontError::Malformed("face index out of bounds"));
         }
-        let blob = Blob::from(data);
         // Unlike the S0 stub, a CSS face must have a usable cmap.
         let source = fontique::SourceInfo::new(
             fontique::SourceId::new(),
@@ -234,7 +244,12 @@ impl FontCollection {
             LimitKind::FacesPerLayer,
             state.faces.len() as u64 + 1,
         )?;
-        let bytes = state.blob_bytes + blob.len() as u64;
+        let additional = if state.faces.iter().any(|face| face.data.id() == blob.id()) {
+            0
+        } else {
+            blob.len() as u64
+        };
+        let bytes = state.blob_bytes + additional;
         Limits::check(
             limits.max_layer_blob_bytes,
             LimitKind::LayerBlobBytes,

@@ -70,7 +70,7 @@ struct Candidate {
 }
 
 impl FontCollection {
-    fn root(&self) -> &Self {
+    pub(super) fn root(&self) -> &Self {
         self.layer.parent.as_ref().unwrap_or(self)
     }
 
@@ -256,7 +256,7 @@ impl FontCollection {
             .collect()
     }
 
-    fn ensure_system(&self, state: &mut LayerState) {
+    pub(super) fn ensure_system(&self, state: &mut LayerState) {
         if state.options.system_fonts && self.layer.parent.is_none() && !state.system_loaded {
             state.native.load_system_fonts();
             state.system_loaded = true;

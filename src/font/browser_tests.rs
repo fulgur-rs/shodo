@@ -514,3 +514,111 @@ fn variable_weight_matches_inside_css_range_and_returns_clamped_axis_value() {
         assert!(!found.embolden);
     }
 }
+
+#[test]
+fn local_resolves_full_and_postscript_names_without_rewriting_css_family() {
+    let shared = no_system();
+    shared.register(test_font("Native", &['a'], 600)).unwrap();
+    let doc = FontCollection::for_document(&shared, &Limits::default());
+    for name in ["Native Regular", "Native-Regular"] {
+        let id = doc
+            .register_sources(descriptor("Alias"), vec![FontSource::Local(name.into())])
+            .unwrap();
+        assert_eq!(doc.face_descriptor(id).unwrap().family, "Alias");
+        assert_eq!(
+            doc.match_cluster(&query(&["Alias"], 400.), "a").unwrap().id,
+            id
+        );
+        assert!(shared.font_data(id).is_none());
+    }
+    assert!(
+        doc.register_sources(descriptor("Bad"), vec![FontSource::Local("Native".into())])
+            .is_err()
+    );
+}
+
+#[test]
+fn font_source_order_and_failed_source_fallback_are_preserved() {
+    let shared = no_system();
+    let native = shared.register(test_font("Native", &['a'], 500)).unwrap();
+    let doc = FontCollection::for_document(&shared, &Limits::default());
+    let data = test_font("Web", &['a'], 900);
+    let local_first = doc
+        .register_sources(
+            descriptor("LocalFirst"),
+            vec![
+                FontSource::Local("Native-Regular".into()),
+                FontSource::Data(data.clone(), 0),
+            ],
+        )
+        .unwrap();
+    assert_eq!(
+        doc.font_data(local_first).unwrap().data.id(),
+        shared.font_data(native).unwrap().data.id()
+    );
+    let data_first = doc
+        .register_sources(
+            descriptor("DataFirst"),
+            vec![
+                FontSource::Data(data.clone(), 0),
+                FontSource::Local("Native-Regular".into()),
+            ],
+        )
+        .unwrap();
+    assert_ne!(
+        doc.font_data(data_first).unwrap().data.id(),
+        shared.font_data(native).unwrap().data.id()
+    );
+    let fallback = doc
+        .register_sources(
+            descriptor("Fallback"),
+            vec![
+                FontSource::Local("Missing-Regular".into()),
+                FontSource::Data(vec![1, 2, 3], 0),
+                FontSource::Data(data, 0),
+            ],
+        )
+        .unwrap();
+    assert_eq!(
+        doc.match_cluster(&query(&["Fallback"], 400.), "a")
+            .unwrap()
+            .id,
+        fallback
+    );
+    assert_eq!(doc.generation(), 3);
+}
+
+#[test]
+fn local_aliases_retain_shared_blob_once_and_source_limits_fail_closed() {
+    let shared = no_system();
+    let bytes = test_font("Native", &['a'], 500);
+    let length = bytes.len() as u64;
+    shared.register(bytes).unwrap();
+    let limits = Limits {
+        max_layer_blob_bytes: Some(length),
+        ..Default::default()
+    };
+    let doc = FontCollection::for_document(&shared, &limits);
+    doc.register_sources(
+        descriptor("One"),
+        vec![FontSource::Local("Native-Regular".into())],
+    )
+    .unwrap();
+    doc.register_sources(
+        descriptor("Two"),
+        vec![FontSource::Local("Native-Regular".into())],
+    )
+    .unwrap();
+    assert_eq!(doc.state().blob_bytes, length);
+    assert!(matches!(
+        doc.register_sources(
+            descriptor("Denied"),
+            vec![
+                FontSource::Data(test_font("Other", &['a'], 600), 0),
+                FontSource::Local("Native-Regular".into())
+            ]
+        ),
+        Err(FontError::Limit(_))
+    ));
+    assert_eq!(doc.generation(), 2);
+}
