@@ -1,4 +1,5 @@
 use super::*;
+use crate::style::FontStyle;
 
 /// Repository-owned synthetic font, deliberately independent of installed fonts.
 pub(super) fn test_font(family: &str, chars: &[char], width: u16) -> Vec<u8> {
@@ -775,4 +776,92 @@ fn vertical_font_metrics_use_vhea_and_report_absence() {
         .unwrap();
     let m = fonts.vertical_metrics(id, 10., &[]).unwrap();
     assert_eq!((m.ascent, m.descent, m.line_gap), (5., 5., 2.));
+}
+
+#[test]
+fn style_selection_precedes_character_coverage() {
+    let fonts = no_system();
+    add_face(&fonts, "First", (400., 400.), &['a']);
+    add_face(&fonts, "First", (700., 700.), &['b']);
+    let fallback = add_face(&fonts, "Second", (400., 400.), &['b']);
+    assert_eq!(
+        fonts
+            .match_cluster(&query(&["First", "Second"], 400.), "b")
+            .unwrap()
+            .id,
+        fallback
+    );
+}
+
+#[test]
+fn css_oblique_maps_to_negative_slnt_and_respects_descriptor() {
+    let plain = test_font("Variable", &['a'], 600);
+    let mut tables = Vec::new();
+    for n in 0..u16::from_be_bytes(plain[4..6].try_into().unwrap()) as usize {
+        let at = 12 + n * 16;
+        let start = u32::from_be_bytes(plain[at + 8..at + 12].try_into().unwrap()) as usize;
+        let len = u32::from_be_bytes(plain[at + 12..at + 16].try_into().unwrap()) as usize;
+        tables.push((
+            plain[at..at + 4].try_into().unwrap(),
+            plain[start..start + len].to_vec(),
+        ));
+    }
+    let mut fvar = Vec::new();
+    for field in [1u16, 0, 16, 2, 1, 20, 0, 8] {
+        fvar.extend_from_slice(&field.to_be_bytes());
+    }
+    fvar.extend_from_slice(b"slnt");
+    for value in [-20i32, 0, 0] {
+        fvar.extend_from_slice(&(value << 16).to_be_bytes());
+    }
+    fvar.extend_from_slice(&[0, 0, 1, 0]);
+    tables.push((*b"fvar", fvar));
+    for (style, expected) in [(FontStyle::Oblique(10.), -10.), (FontStyle::Normal, 0.)] {
+        let fonts = no_system();
+        let mut desc = descriptor("Web");
+        desc.style = style;
+        fonts
+            .register_face(sfnt::build_sfnt(&tables), 0, desc)
+            .unwrap();
+        let mut q = query(&["Web"], 400.);
+        q.style = FontStyle::Oblique(15.);
+        let found = fonts.match_cluster(&q, "a").unwrap();
+        assert_eq!(
+            found.variations,
+            vec![crate::style::FontVariation {
+                tag: *b"slnt",
+                value: expected
+            }]
+        );
+        assert_eq!(found.skew, None);
+    }
+}
+
+#[test]
+fn local_aliases_share_reloaded_source_bytes_within_layer() {
+    let bytes = test_font("Native", &['a'], 600);
+    let limits = Limits {
+        max_layer_blob_bytes: Some(bytes.len() as u64),
+        ..Default::default()
+    };
+    let fonts = no_system();
+    let doc = FontCollection::for_document(&fonts, &limits);
+    let source = fontique::SourceId::new();
+    let first = doc
+        .register_source_blob(
+            Blob::from(bytes.clone()),
+            0,
+            descriptor("One"),
+            Some(source),
+        )
+        .unwrap();
+    let second = doc
+        .register_source_blob(Blob::from(bytes), 0, descriptor("Two"), Some(source))
+        .unwrap();
+    assert_ne!(first, second);
+    assert_eq!(
+        doc.font_data(first).unwrap().data.id(),
+        doc.font_data(second).unwrap().data.id()
+    );
+    assert_eq!(doc.state().retained_sources.len(), 1);
 }

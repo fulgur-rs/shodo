@@ -26,10 +26,10 @@ impl FontCollection {
         for source in sources {
             let result = match source {
                 FontSource::Local(name) => {
-                    let Some(data) = self.local_font(&name) else {
+                    let Some((data, source)) = self.local_font(&name) else {
                         continue;
                     };
-                    self.register_blob(data.data, data.index, descriptor.clone())
+                    self.register_source_blob(data.data, data.index, descriptor.clone(), source)
                 }
                 FontSource::Data(bytes, index) => {
                     super::decode_web_font(&bytes, &self.layer.limits)
@@ -45,7 +45,7 @@ impl FontCollection {
         Err(last_error)
     }
 
-    fn local_font(&self, name: &str) -> Option<FontData> {
+    fn local_font(&self, name: &str) -> Option<(FontData, Option<fontique::SourceId>)> {
         // Document CSS faces aren't installed faces; local() resolves only
         // against the shared application/platform layer.
         let root = self.root();
@@ -58,7 +58,7 @@ impl FontCollection {
                 (desc.is_none() && has_local_name(data, name)).then(|| data.clone())
             })
         {
-            return Some(data);
+            return Some((data, None));
         }
         root.ensure_system(&mut state);
         let names: Vec<_> = state.native.family_names().map(str::to_owned).collect();
@@ -68,12 +68,17 @@ impl FontCollection {
                 continue;
             };
             for info in family.fonts() {
-                let Some(blob) = info.load(Some(&mut state.source_cache)) else {
+                let Some(blob) = state
+                    .retained_sources
+                    .get(&info.source().id())
+                    .cloned()
+                    .or_else(|| info.load(Some(&mut state.source_cache)))
+                else {
                     continue;
                 };
                 let data = FontData::new(blob, info.index());
                 if has_local_name(&data, name) {
-                    result = Some(data);
+                    result = Some((data, Some(info.source().id())));
                     break 'families;
                 }
             }

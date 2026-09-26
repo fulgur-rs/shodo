@@ -1,6 +1,7 @@
 //! Cluster matching, CSS range ranking, and shared fallback configuration.
 
-use super::{FontCollection, FontData, FontFaceDescriptor, FontId, LayerState};
+use super::{FontCollection, FontData, FontFaceDescriptor, FontId, LayerState, check};
+use crate::limits::{LimitKind, Limits};
 use crate::style::{FontFamily, FontStyle, FontSynthesis, FontVariation, GenericFamily};
 use fontique::{FontInfo, SourceId, SourceInfo, SourceKind};
 use skrifa::{FontRef, MetadataProvider};
@@ -216,17 +217,17 @@ impl FontCollection {
             }
         }
         // Last resort is deterministic registration order, still whole-cluster.
-        self.best_match(self.registered_candidates(None), query, cluster)
+        self.best_match(self.registered_candidates(None), query, cluster, false)
             .or_else(|| {
                 self.layer.parent.as_ref().and_then(|parent| {
-                    parent.best_match(parent.registered_candidates(None), query, cluster)
+                    parent.best_match(parent.registered_candidates(None), query, cluster, false)
                 })
             })
     }
 
     fn named_match(&self, name: &str, query: &FontQuery, cluster: &str) -> Option<FontMatch> {
-        self.best_match(self.registered_candidates(Some(name)), query, cluster)
-            .or_else(|| self.best_match(self.native_candidates(name), query, cluster))
+        self.best_match(self.registered_candidates(Some(name)), query, cluster, true)
+            .or_else(|| self.best_match(self.native_candidates(name), query, cluster, true))
             .or_else(|| {
                 self.layer
                     .parent
@@ -305,7 +306,12 @@ impl FontCollection {
         };
         let mut result = Vec::new();
         for info in family.fonts() {
-            let Some(blob) = info.load(Some(&mut state.source_cache)) else {
+            let Some(blob) = state
+                .retained_sources
+                .get(&info.source().id())
+                .cloned()
+                .or_else(|| info.load(Some(&mut state.source_cache)))
+            else {
                 continue;
             };
             let data = FontData::new(blob, info.index());
@@ -345,7 +351,24 @@ impl FontCollection {
         mut candidates: Vec<Candidate>,
         query: &FontQuery,
         cluster: &str,
+        select_style: bool,
     ) -> Option<FontMatch> {
+        let property_rank = |c: &Candidate| {
+            (
+                range_rank(query.width, c.descriptor.width, 100.),
+                style_rank(query.style, c.descriptor.style),
+                weight_rank(query.weight, c.descriptor.weight),
+            )
+        };
+        if select_style {
+            let best = candidates
+                .iter()
+                .map(&property_rank)
+                .min_by(|a, b| a.partial_cmp(b).unwrap())?;
+            // A family selects its style before testing character coverage.
+            // Equal-ranked faces can still form a unicode-range composite.
+            candidates.retain(|c| property_rank(c) == best);
+        }
         let color = prefer_color(query.presentation, cluster);
         candidates.retain(|candidate| covers(candidate, cluster));
         candidates.sort_by(|a, b| {
@@ -365,19 +388,50 @@ impl FontCollection {
         let mut selected = candidates.into_iter().next()?;
         if selected.id.index == u32::MAX {
             let mut state = self.state();
-            let index = state
-                .faces
-                .iter()
-                .position(|face| {
-                    face.data.id() == selected.data.data.id() && face.index == selected.data.index
-                })
-                .unwrap_or_else(|| {
-                    let index = state.faces.len();
-                    state.faces.push(selected.data.clone());
-                    state.descriptors.push(None);
-                    index
-                });
+            let source = selected.info.source().id();
+            if let Some(blob) = state.retained_sources.get(&source) {
+                selected.data.data = blob.clone();
+            }
+            let index = if let Some(index) = state.faces.iter().position(|face| {
+                face.data.id() == selected.data.data.id() && face.index == selected.data.index
+            }) {
+                index
+            } else {
+                let limits = &self.layer.limits;
+                check::check_font(selected.data.data.as_ref(), limits).ok()?;
+                Limits::check(
+                    limits.max_faces_per_layer,
+                    LimitKind::FacesPerLayer,
+                    state.faces.len() as u64 + 1,
+                )
+                .ok()?;
+                let additional = if state
+                    .faces
+                    .iter()
+                    .any(|face| face.data.id() == selected.data.data.id())
+                {
+                    0
+                } else {
+                    selected.data.data.len() as u64
+                };
+                let bytes = state.blob_bytes.checked_add(additional)?;
+                Limits::check(
+                    limits.max_layer_blob_bytes,
+                    LimitKind::LayerBlobBytes,
+                    bytes,
+                )
+                .ok()?;
+                let index = state.faces.len();
+                state.faces.push(selected.data.clone());
+                state.descriptors.push(None);
+                state.blob_bytes = bytes;
+                index
+            };
+            state
+                .retained_sources
+                .insert(source, selected.data.data.clone());
             selected.id.index = index as u32;
+            selected.id.layer = self.layer.id;
         }
         let info = &selected.info;
         let synthesis = info.synthesis(
@@ -395,6 +449,11 @@ impl FontCollection {
             .collect();
         // Emit property axes even when the intrinsic default equals the
         // request: a CSS descriptor may clamp that request to another value.
+        let axis_style = if self.face_descriptor(selected.id).is_some() {
+            selected.descriptor.style
+        } else {
+            query.style
+        };
         for axis in info.axes() {
             let tag = axis.tag.to_be_bytes();
             let property = match &tag {
@@ -408,6 +467,17 @@ impl FontCollection {
                         .width
                         .clamp(selected.descriptor.width.0, selected.descriptor.width.1),
                 ),
+                b"slnt" => Some(match axis_style {
+                    FontStyle::Normal => 0.,
+                    FontStyle::Italic if info.has_italic_axis() => 0.,
+                    FontStyle::Italic => -14.,
+                    FontStyle::Oblique(angle) => -angle,
+                }),
+                b"ital" => Some(if axis_style == FontStyle::Italic {
+                    1.
+                } else {
+                    0.
+                }),
                 _ => None,
             };
             if let Some(value) = property {
@@ -589,5 +659,74 @@ fn style_rank(requested: FontStyle, available: FontStyle) -> (u8, f32) {
             FontStyle::Italic => (3, 0.),
             FontStyle::Normal => (5, 0.),
         },
+    }
+}
+
+#[cfg(test)]
+mod retention_tests {
+    use super::*;
+    fn reloaded(source: SourceId) -> Candidate {
+        let blob = super::super::Blob::from(super::super::browser_tests::test_font(
+            "Native",
+            &['a'],
+            600,
+        ));
+        let info =
+            FontInfo::from_source(SourceInfo::new(source, SourceKind::Memory(blob.clone())), 0)
+                .unwrap();
+        Candidate {
+            id: FontId {
+                layer: 0,
+                index: u32::MAX,
+            },
+            data: FontData::new(blob, 0),
+            descriptor: intrinsic_descriptor(&info, "Native".into()),
+            info,
+        }
+    }
+    #[test]
+    fn reloaded_platform_face_keeps_identity_and_blob() {
+        let fonts = FontCollection::new(&crate::limits::Limits::default());
+        let source = SourceId::new();
+        let first = fonts
+            .best_match(vec![reloaded(source)], &FontQuery::default(), "a", true)
+            .unwrap();
+        let blob = fonts.state().faces[1].data.id();
+        for _ in 0..3 {
+            let next = fonts
+                .best_match(vec![reloaded(source)], &FontQuery::default(), "a", true)
+                .unwrap();
+            assert_eq!(next.id, first.id);
+            assert_eq!(fonts.state().faces.len(), 2);
+            assert_eq!(fonts.state().faces[1].data.id(), blob);
+        }
+        assert!(fonts.state().blob_bytes > 0);
+    }
+    #[test]
+    fn platform_retention_obeys_face_and_blob_limits() {
+        for limits in [
+            crate::limits::Limits {
+                max_faces_per_layer: Some(1),
+                ..Default::default()
+            },
+            crate::limits::Limits {
+                max_layer_blob_bytes: Some(0),
+                ..Default::default()
+            },
+        ] {
+            let fonts = FontCollection::new(&limits);
+            assert!(
+                fonts
+                    .best_match(
+                        vec![reloaded(SourceId::new())],
+                        &FontQuery::default(),
+                        "a",
+                        true
+                    )
+                    .is_none()
+            );
+            assert_eq!(fonts.state().faces.len(), 1);
+            assert_eq!(fonts.state().blob_bytes, 0);
+        }
     }
 }

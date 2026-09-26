@@ -71,7 +71,7 @@
 ### Task 6: documentation and final verification
 
 **Files:** README.md, public font API rustdoc, plan progress.
-- [ ] Add an executable doc example demonstrating document CSS registration and font-unit resolution.
-- [ ] Run fmt, clippy -D warnings, stable and 1.89 test suites, no-default-features tests, wasm build and rustdoc -D warnings.
-- [ ] Review complete diff against spec and issue; fix important defects with RED→GREEN regressions.
+- [x] Add an executable doc example demonstrating document CSS registration and font-unit resolution.
+- [x] Run fmt, clippy -D warnings, stable and 1.89 test suites, no-default-features tests, wasm build and rustdoc -D warnings.
+- [x] Review complete diff against spec and issue; fix important defects with RED→GREEN regressions.
 - [ ] Create PR against main, verify CI for exact head, merge only after success, close issue and remove worktree.

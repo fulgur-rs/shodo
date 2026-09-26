@@ -149,6 +149,7 @@ struct LayerState {
     descriptors: Vec<Option<FontFaceDescriptor>>,
     native: fontique::Collection,
     source_cache: fontique::SourceCache,
+    retained_sources: std::collections::HashMap<fontique::SourceId, Blob<u8>>,
     system_loaded: bool,
     options: FontOptions,
     generics: std::collections::HashMap<crate::style::GenericFamily, Vec<String>>,
@@ -222,6 +223,7 @@ impl FontCollection {
                     faces,
                     blob_bytes: 0,
                     source_cache: fontique::SourceCache::default(),
+                    retained_sources: Default::default(),
                     system_loaded: false,
                     options,
                     generics: Default::default(),
@@ -290,20 +292,33 @@ impl FontCollection {
         index: u32,
         descriptor: FontFaceDescriptor,
     ) -> Result<FontId, FontError> {
+        self.register_source_blob(blob, index, descriptor, None)
+    }
+
+    pub(super) fn register_source_blob(
+        &self,
+        blob: Blob<u8>,
+        index: u32,
+        descriptor: FontFaceDescriptor,
+        source: Option<fontique::SourceId>,
+    ) -> Result<FontId, FontError> {
         descriptor.validate()?;
+        let mut state = self.state();
+        let blob = source
+            .and_then(|id| state.retained_sources.get(&id).cloned())
+            .unwrap_or(blob);
         let limits = &self.layer.limits;
         let count = check::check_font(blob.as_ref(), limits)?;
         if index >= count {
             return Err(FontError::Malformed("face index out of bounds"));
         }
         // Unlike the S0 stub, a CSS face must have a usable cmap.
-        let source = fontique::SourceInfo::new(
+        let info_source = fontique::SourceInfo::new(
             fontique::SourceId::new(),
             fontique::SourceKind::Memory(blob.clone()),
         );
-        fontique::FontInfo::from_source(source, index)
+        fontique::FontInfo::from_source(info_source, index)
             .ok_or(FontError::Malformed("face has no usable character map"))?;
-        let mut state = self.state();
         Limits::check(
             limits.max_faces_per_layer,
             LimitKind::FacesPerLayer,
@@ -324,6 +339,9 @@ impl FontCollection {
             layer: self.layer.id,
             index: state.faces.len() as u32,
         };
+        if let Some(source) = source {
+            state.retained_sources.insert(source, blob.clone());
+        }
         state.faces.push(FontData::new(blob, index));
         state.descriptors.push(Some(descriptor));
         state.blob_bytes = bytes;
