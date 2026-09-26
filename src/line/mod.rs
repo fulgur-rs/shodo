@@ -56,7 +56,12 @@ impl Paragraph {
             cx,
             &mut sat,
         );
-        let offset = LayoutUnit::from_f32_round(constraint.inline_start_offset, &mut sat);
+        let offset = non_negative(
+            constraint.inline_start_offset,
+            "inline_start_offset",
+            cx,
+            &mut sat,
+        );
         let indent = text_indent(options, token.flags, &mut sat);
         let scan = scan(
             data, start, available, offset, indent, atomics, cx, &mut sat,

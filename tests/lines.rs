@@ -149,6 +149,31 @@ fn zero_and_negative_widths_still_progress() {
 }
 
 #[test]
+fn negative_inline_start_offset_is_normalized() {
+    let p = para("ab");
+    let mut cx = LayoutContext::new();
+    let constraint = LineConstraint {
+        inline_start_offset: -5.0,
+        ..LineConstraint::new(100.0)
+    };
+    let LineResult::Line(line) = p.next_line(
+        &mut cx,
+        p.start_token(),
+        &LineOptions::default(),
+        &constraint,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!()
+    };
+    assert_eq!(line.inline_size(), 20.0);
+    assert!(
+        cx.take_warnings()
+            .iter()
+            .any(|w| w.kind == WarningKind::NegativeInput)
+    );
+}
+
+#[test]
 fn empty_paragraph_is_done_immediately() {
     let p = para("   ");
     let r = p.next_line(
