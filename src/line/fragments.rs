@@ -2,6 +2,8 @@
 
 use std::ops::Range;
 
+use unicode_bidi::{BidiInfo, Level};
+
 use crate::analysis::units::UnitKind;
 use crate::geometry::LayoutUnit;
 use crate::node::{NodeId, OutOfFlowKind};
@@ -32,6 +34,9 @@ pub(crate) enum RecordKind {
         start_edge: bool,
         end_edge: bool,
         parent: Option<u32>,
+        /// Whether the box's level parity differs from the paragraph's base
+        /// level, so its start edge is on the inline-end side.
+        reversed: bool,
     },
     Anchor {
         node: NodeId,
@@ -40,7 +45,7 @@ pub(crate) enum RecordKind {
 }
 
 /// Builds the records of one line in logical order.
-pub(crate) fn build(
+fn build_logical(
     data: &ParagraphData,
     units: Range<usize>,
     widths: &[LayoutUnit],
@@ -77,6 +82,7 @@ pub(crate) fn build(
                 start_edge: false,
                 end_edge: false,
                 parent,
+                reversed: false,
             },
             inline_start: pos,
             inline_size: LayoutUnit::ZERO,
@@ -97,6 +103,7 @@ pub(crate) fn build(
                         start_edge: true,
                         end_edge: false,
                         parent,
+                        reversed: false,
                     },
                     inline_start: pos,
                     inline_size: LayoutUnit::ZERO,
@@ -177,4 +184,271 @@ pub(crate) fn build(
         out[r].inline_size = pos - out[r].inline_start;
     }
     out
+}
+
+/// Builds the records of one line in visual order (UAX #9 L2).
+pub(crate) fn build(
+    data: &ParagraphData,
+    units: Range<usize>,
+    widths: &[LayoutUnit],
+    origin: LayoutUnit,
+    atomics: &AtomicSizes,
+) -> Vec<FragmentRecord> {
+    let base = data.base_level;
+    if data.units[units.clone()].iter().all(|u| u.level == base) {
+        return build_logical(data, units, widths, origin, atomics);
+    }
+    build_bidi(data, units, widths, origin, atomics)
+}
+
+/// A reorderable piece of a line: a glyph run segment, an atomic, an
+/// anchor, a tab, or an inline box edge.
+struct Piece {
+    record: Option<FragmentRecord>,
+    width: LayoutUnit,
+    level: u8,
+    /// Innermost inline box the piece belongs to (the box itself for edges).
+    owner: Option<u32>,
+    /// `(box, is_start)` for inline box edges.
+    edge: Option<(u32, bool)>,
+}
+
+fn inside(data: &ParagraphData, mut b: Option<u32>, target: u32) -> bool {
+    while let Some(x) = b {
+        if x == target {
+            return true;
+        }
+        b = data.boxes[x as usize].parent;
+    }
+    false
+}
+
+fn build_bidi(
+    data: &ParagraphData,
+    units: Range<usize>,
+    widths: &[LayoutUnit],
+    origin: LayoutUnit,
+    atomics: &AtomicSizes,
+) -> Vec<FragmentRecord> {
+    let base = data.base_level;
+    let mut pieces: Vec<Piece> = Vec::new();
+    for (k, i) in units.clone().enumerate() {
+        let unit = &data.units[i];
+        let w = widths[k];
+        let record = |kind: RecordKind| FragmentRecord {
+            kind,
+            inline_start: LayoutUnit::ZERO,
+            inline_size: w,
+            level: unit.level,
+        };
+        let piece = match &unit.kind {
+            UnitKind::Open { box_index } => Piece {
+                record: None,
+                width: w,
+                level: unit.level,
+                owner: Some(*box_index),
+                edge: Some((*box_index, true)),
+            },
+            UnitKind::Close { box_index } => Piece {
+                record: None,
+                width: w,
+                level: unit.level,
+                owner: Some(*box_index),
+                edge: Some((*box_index, false)),
+            },
+            UnitKind::Cluster { run, glyphs, .. } => {
+                if let Some(last) = pieces.last_mut()
+                    && last.level == unit.level
+                    && last.owner == unit.parent_box
+                    && let Some(FragmentRecord {
+                        kind:
+                            RecordKind::Glyphs {
+                                run: r,
+                                glyphs: g,
+                                item,
+                                text,
+                            },
+                        inline_size,
+                        ..
+                    }) = &mut last.record
+                    && *r == *run
+                    && *item == unit.item
+                    && g.end == glyphs.start
+                {
+                    g.end = glyphs.end;
+                    text.end = unit.text.end;
+                    *inline_size = *inline_size + w;
+                    last.width = last.width + w;
+                    continue;
+                }
+                let kind = RecordKind::Glyphs {
+                    run: *run,
+                    glyphs: glyphs.clone(),
+                    item: unit.item,
+                    text: unit.text.clone(),
+                };
+                Piece {
+                    record: Some(record(kind)),
+                    width: w,
+                    level: unit.level,
+                    owner: unit.parent_box,
+                    edge: None,
+                }
+            }
+            UnitKind::Atomic { node } => {
+                let size = atomics.get(*node).copied().unwrap_or_default();
+                let kind = RecordKind::Atomic { node: *node, size };
+                Piece {
+                    record: Some(record(kind)),
+                    width: w,
+                    level: unit.level,
+                    owner: unit.parent_box,
+                    edge: None,
+                }
+            }
+            UnitKind::Float { node, .. } | UnitKind::Absolute { node } => {
+                let kind = if matches!(unit.kind, UnitKind::Float { .. }) {
+                    OutOfFlowKind::Float
+                } else {
+                    OutOfFlowKind::Absolute
+                };
+                let mut r = record(RecordKind::Anchor { node: *node, kind });
+                r.inline_size = LayoutUnit::ZERO;
+                Piece {
+                    record: Some(r),
+                    width: LayoutUnit::ZERO,
+                    level: unit.level,
+                    owner: unit.parent_box,
+                    edge: None,
+                }
+            }
+            UnitKind::Tab => Piece {
+                record: None,
+                width: w,
+                level: unit.level,
+                owner: unit.parent_box,
+                edge: None,
+            },
+            UnitKind::ForcedBreak | UnitKind::BidiControl | UnitKind::BlockInInline { .. } => {
+                continue;
+            }
+        };
+        pieces.push(piece);
+    }
+
+    // Visual order, left to right; from the inline-start edge that is the
+    // reverse order when the paragraph is right-to-left.
+    let levels: Vec<Level> = pieces
+        .iter()
+        .map(|p| Level::new(p.level).unwrap_or_else(|_| Level::ltr()))
+        .collect();
+    let mut order = BidiInfo::reorder_visual(&levels);
+    if base % 2 == 1 {
+        order.reverse();
+    }
+    let mut starts = vec![LayoutUnit::ZERO; pieces.len()];
+    let mut pos = origin;
+    for &p in &order {
+        starts[p] = pos;
+        pos = pos + pieces[p].width;
+    }
+
+    // Inline boxes: one fragment per visually contiguous group of members.
+    let mut box_ids: Vec<u32> = Vec::new();
+    for piece in &pieces {
+        let mut b = piece.owner;
+        while let Some(x) = b {
+            if !box_ids.contains(&x) {
+                box_ids.push(x);
+            }
+            b = data.boxes[x as usize].parent;
+        }
+    }
+    box_ids.sort_unstable();
+    let mut boxes: Vec<(FragmentRecord, u32)> = Vec::new();
+    for &b in &box_ids {
+        let open_level = pieces
+            .iter()
+            .find(|p| p.edge == Some((b, true)))
+            .map(|p| p.level);
+        let mut group: Option<(LayoutUnit, LayoutUnit, bool, bool, u8)> = None;
+        let flush = |group: &mut Option<(LayoutUnit, LayoutUnit, bool, bool, u8)>,
+                     boxes: &mut Vec<(FragmentRecord, u32)>| {
+            if let Some((start, size, start_edge, end_edge, level)) = group.take() {
+                let reversed = open_level.unwrap_or(level) % 2 != base % 2;
+                let kind = RecordKind::InlineBox {
+                    box_index: b,
+                    start_edge,
+                    end_edge,
+                    parent: None,
+                    reversed,
+                };
+                boxes.push((
+                    FragmentRecord {
+                        kind,
+                        inline_start: start,
+                        inline_size: size,
+                        level,
+                    },
+                    b,
+                ));
+            }
+        };
+        for &p in &order {
+            let piece = &pieces[p];
+            if inside(data, piece.owner, b) {
+                let g =
+                    group.get_or_insert((starts[p], LayoutUnit::ZERO, false, false, piece.level));
+                g.1 = g.1 + piece.width;
+                g.2 |= piece.edge == Some((b, true));
+                g.3 |= piece.edge == Some((b, false));
+            } else {
+                flush(&mut group, &mut boxes);
+            }
+        }
+        flush(&mut group, &mut boxes);
+    }
+
+    // Output: boxes and content sorted by position; a box precedes the
+    // content it starts with, and an outer box precedes an inner one.
+    let depth = |b: u32| {
+        let mut d = 0;
+        let mut x = data.boxes[b as usize].parent;
+        while let Some(p) = x {
+            d += 1;
+            x = data.boxes[p as usize].parent;
+        }
+        d
+    };
+    let mut out: Vec<(FragmentRecord, Option<u32>, u32)> = boxes
+        .into_iter()
+        .map(|(r, b)| (r, Some(b), depth(b)))
+        .collect();
+    for &p in &order {
+        if let Some(mut r) = pieces[p].record.clone() {
+            r.inline_start = starts[p];
+            out.push((r, None, u32::MAX));
+        }
+    }
+    out.sort_by_key(|(r, _, d)| (r.inline_start, *d));
+
+    // Parent links: the enclosing box fragment of the parent box.
+    let spans: Vec<(Option<u32>, LayoutUnit, LayoutUnit)> = out
+        .iter()
+        .map(|(r, b, _)| (*b, r.inline_start, r.inline_start + r.inline_size))
+        .collect();
+    for (r, b, _) in &mut out {
+        let Some(b) = *b else { continue };
+        let Some(parent_box) = data.boxes[b as usize].parent else {
+            continue;
+        };
+        let (start, end) = (r.inline_start, r.inline_start + r.inline_size);
+        let parent = spans
+            .iter()
+            .position(|(pb, ps, pe)| *pb == Some(parent_box) && *ps <= start && end <= *pe);
+        if let RecordKind::InlineBox { parent: slot, .. } = &mut r.kind {
+            *slot = parent.map(|p| p as u32);
+        }
+    }
+    out.into_iter().map(|(r, _, _)| r).collect()
 }

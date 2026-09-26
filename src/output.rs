@@ -291,8 +291,8 @@ impl<'a> GlyphRunView<'a> {
         let gi = g as usize;
         let rel = store.pen[gi] - store.pen[self.glyphs.0 as usize];
         let advance = store.advance[gi];
-        // Odd bidi levels run right to left within the run (UAX #9 L2).
-        let pen = if self.record.level % 2 == 1 {
+        let reversed = self.record.level % 2 != self.line.data.base_level % 2;
+        let pen = if reversed {
             self.record.inline_size - rel - advance
         } else {
             rel
@@ -427,6 +427,7 @@ impl Line {
                 start_edge,
                 end_edge,
                 parent,
+                reversed,
             } => {
                 let info = &self.data.boxes[*box_index as usize];
                 let style = &self.data.styles[info.style as usize];
@@ -438,8 +439,15 @@ impl Line {
                 let margin_end = pick(*end_edge, e.margin.inline_end);
                 let inner_start = pick(*start_edge, e.border.inline_start + e.padding.inline_start);
                 let inner_end = pick(*end_edge, e.border.inline_end + e.padding.inline_end);
-                let border_start = record.inline_start.to_f32() + margin_start;
-                let border_size = record.inline_size.to_f32() - margin_start - margin_end;
+                // A box whose direction opposes the paragraph's has its start
+                // edge on the inline-end side.
+                let (lead_margin, trail_margin, lead_inner, trail_inner) = if *reversed {
+                    (margin_end, margin_start, inner_end, inner_start)
+                } else {
+                    (margin_start, margin_end, inner_start, inner_end)
+                };
+                let border_start = record.inline_start.to_f32() + lead_margin;
+                let border_size = record.inline_size.to_f32() - lead_margin - trail_margin;
                 let content_top = self.baseline.to_f32() - m.ascent;
                 let content_height = m.ascent + m.descent;
                 let above = e.padding.block_start + e.border.block_start;
@@ -455,8 +463,8 @@ impl Line {
                     content_rect: rect(
                         content_top,
                         content_height,
-                        border_start + inner_start,
-                        border_size - inner_start - inner_end,
+                        border_start + lead_inner,
+                        border_size - lead_inner - trail_inner,
                     ),
                     has_start_edge: *start_edge,
                     has_end_edge: *end_edge,
