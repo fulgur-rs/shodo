@@ -2,10 +2,10 @@
 //! insertion (CSS Writing Modes 4 §2.4), producing the processed text,
 //! the item list and the offset mapping.
 //!
-//! Collapsing here covers spaces, tabs and segment breaks as plain spaces;
-//! the language-dependent segment break transformation (§4.1.3) is not
-//! applied yet.
+//! Segment breaks use whole-IFC neighbor context. The input is DOM text:
+//! LF is a segment break and CR is a CSS space, not an HTML source newline.
 
+use super::whitespace_context::{REMOVE, ignorable, whitespace_flags};
 use super::{Item, ItemKind};
 use crate::builder::RawItem;
 use crate::geometry::Direction;
@@ -30,6 +30,7 @@ pub(crate) fn process(
     with_mapping: bool,
     limits: &Limits,
 ) -> Result<Processed, LimitExceeded> {
+    let flags = whitespace_flags(raw_text, raw, styles);
     let mut p = Processor {
         out: String::with_capacity(raw_text.len()),
         items: Vec::with_capacity(raw.len()),
@@ -38,6 +39,7 @@ pub(crate) fn process(
         after_space: true,
         open: Vec::new(),
         limits,
+        styles,
     };
     for item in raw {
         match item {
@@ -47,7 +49,12 @@ pub(crate) fn process(
                 style,
             } => {
                 let text = &raw_text[range.start as usize..range.end as usize];
-                p.text(text, *source, *style, &styles[*style as usize])?;
+                p.text(
+                    text,
+                    *source,
+                    *style,
+                    &flags[range.start as usize..range.end as usize],
+                )?;
             }
             RawItem::Open { node, style, edges } => {
                 p.marker(ItemKind::OpenInline { edges: *edges }, *style, *node)?;
@@ -87,11 +94,15 @@ pub(crate) fn process(
                 )?;
             }
             RawItem::BlockInInline { node, style } => {
+                p.close_bidi_scopes()?;
                 p.generated(ItemKind::BlockInInline, PARAGRAPH_SEPARATOR, *style, *node)?;
+                p.open_bidi_scopes()?;
                 p.after_space = true;
             }
             RawItem::ForcedBreak { node, style } => {
+                p.close_bidi_scopes()?;
                 p.generated(ItemKind::ForcedBreak, '\n', *style, *node)?;
+                p.open_bidi_scopes()?;
                 p.after_space = true;
             }
         }
@@ -110,9 +121,30 @@ struct Processor<'a> {
     after_space: bool,
     open: Vec<(NodeId, u32)>,
     limits: &'a Limits,
+    styles: &'a [InlineStyle],
 }
 
 impl Processor<'_> {
+    fn close_bidi_scopes(&mut self) -> Result<(), LimitExceeded> {
+        for i in (0..self.open.len()).rev() {
+            let (node, style) = self.open[i];
+            for &c in bidi_close(&self.styles[style as usize]) {
+                self.generated(ItemKind::BidiControl, c, style, node)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn open_bidi_scopes(&mut self) -> Result<(), LimitExceeded> {
+        for i in 0..self.open.len() {
+            let (node, style) = self.open[i];
+            for &c in bidi_open(&self.styles[style as usize]) {
+                self.generated(ItemKind::BidiControl, c, style, node)?;
+            }
+        }
+        Ok(())
+    }
+
     fn check_item(&self) -> Result<(), LimitExceeded> {
         Limits::check(
             Some(u64::from(u32::MAX)),
@@ -200,9 +232,10 @@ impl Processor<'_> {
         s: &str,
         source: TextSource,
         style_index: u32,
-        style: &InlineStyle,
+        flags: &[u8],
     ) -> Result<(), LimitExceeded> {
         use WhiteSpaceCollapse::*;
+        let style = &self.styles[style_index as usize];
         let collapse_spaces = matches!(style.white_space_collapse, Collapse | PreserveBreaks);
         let preserve_breaks = !matches!(style.white_space_collapse, Collapse);
         // `preserve-spaces` keeps every space uncollapsed but, unlike
@@ -218,7 +251,12 @@ impl Processor<'_> {
         for (i, raw_c) in s.char_indices() {
             let dom = dom_base.map(|b| b.saturating_add(i as u32));
             let len = raw_c.len_utf8() as u32;
-            let c = if convert_to_space && matches!(raw_c, '\t' | '\n') {
+            if flags[i] & REMOVE != 0 {
+                let at = self.pos();
+                self.map(MappingKind::Collapsed, node, dom, len, at..at);
+                continue;
+            }
+            let c = if raw_c == '\r' || convert_to_space && matches!(raw_c, '\t' | '\n') {
                 ' '
             } else {
                 raw_c
@@ -230,6 +268,9 @@ impl Processor<'_> {
             };
             if let Some(kind) = control {
                 self.flush(&mut segment, style_index, node)?;
+                if matches!(kind, ItemKind::ForcedBreak) {
+                    self.close_bidi_scopes()?;
+                }
                 self.check_item()?;
                 let start = self.pos();
                 self.append(c)?;
@@ -241,6 +282,9 @@ impl Processor<'_> {
                     node: Some(node),
                 });
                 self.after_space = matches!(kind, ItemKind::ForcedBreak);
+                if matches!(kind, ItemKind::ForcedBreak) {
+                    self.open_bidi_scopes()?;
+                }
                 continue;
             }
             let collapsible = collapse_spaces && matches!(c, ' ' | '\t' | '\n');
@@ -257,7 +301,9 @@ impl Processor<'_> {
             // A collapsible tab or segment break is kept as one space (same length).
             self.append(if collapsible { ' ' } else { c })?;
             self.map(MappingKind::Identity, node, dom, len, start..self.pos());
-            self.after_space = collapsible;
+            if !ignorable(c) {
+                self.after_space = collapsible;
+            }
         }
         self.flush(&mut segment, style_index, node)
     }
@@ -526,5 +572,175 @@ mod tests {
                 .mapping
                 .is_none()
         );
+    }
+    #[test]
+    fn segment_break_neighbors_cross_nodes() {
+        let mut b = builder();
+        b.push_text(dom(1), "日 \t\n")
+            .open_inline(NodeId(2), &InlineStyle::default(), InlineEdges::default())
+            .push_out_of_flow(NodeId(9), crate::node::OutOfFlowKind::Absolute)
+            .push_text(dom(3), " \t本")
+            .close_inline();
+        assert_eq!(run(&b).text, "日\u{FFFC}本");
+        // An actual inline box is a context barrier, unlike an OOF marker.
+        let mut b = builder();
+        b.push_text(dom(1), "日\n")
+            .push_atomic(NodeId(2), &InlineStyle::default(), InlineEdges::default())
+            .push_text(dom(3), "本");
+        assert_eq!(run(&b).text, "日 \u{FFFC}本");
+    }
+
+    #[test]
+    fn hangul_keeps_segment_space() {
+        let mut b = builder();
+        b.push_text(dom(1), "한\n글 日\n本 a\n\nb");
+        assert_eq!(run(&b).text, "한 글 日本 a b");
+    }
+
+    #[test]
+    fn zero_width_space_removes_adjacent_break() {
+        for s in ["a\u{200B}\nb", "a\n\u{200B}b", "日\u{FE0F} \n \u{200E}本"] {
+            let mut b = builder();
+            b.push_text(dom(1), s);
+            let expected = s.replace(['\n', ' '], "");
+            assert_eq!(run(&b).text, expected);
+        }
+    }
+
+    #[test]
+    fn preserve_breaks_removes_surrounding_collapsible_spaces() {
+        let pre_line = InlineStyle {
+            white_space_collapse: WhiteSpaceCollapse::PreserveBreaks,
+            ..InlineStyle::default()
+        };
+        let mut b = builder();
+        b.open_inline(NodeId(1), &pre_line, InlineEdges::default())
+            .push_text(dom(2), "a \t\n \tb")
+            .close_inline();
+        assert_eq!(run(&b).text, "a\nb");
+    }
+
+    #[test]
+    fn dom_carriage_return_is_space() {
+        for (mode, expected) in [
+            (WhiteSpaceCollapse::Preserve, "a \nb"),
+            (WhiteSpaceCollapse::Collapse, "a b"),
+            (WhiteSpaceCollapse::PreserveSpaces, "a  b"),
+        ] {
+            let style = ParagraphStyle {
+                root: InlineStyle {
+                    white_space_collapse: mode,
+                    ..InlineStyle::default()
+                },
+                ..ParagraphStyle::default()
+            };
+            let mut b = ParagraphBuilder::new(&style, &Limits::default());
+            b.push_text(dom(1), "a\r\nb");
+            assert_eq!(run(&b).text, expected);
+        }
+    }
+
+    #[test]
+    fn bidi_scopes_restart_at_paragraph_boundaries() {
+        let outer = InlineStyle {
+            unicode_bidi: UnicodeBidi::Isolate,
+            ..InlineStyle::default()
+        };
+        let inner = InlineStyle {
+            unicode_bidi: UnicodeBidi::Embed,
+            white_space_collapse: WhiteSpaceCollapse::Preserve,
+            ..InlineStyle::default()
+        };
+        let mut b = builder();
+        b.open_inline(NodeId(1), &outer, InlineEdges::default())
+            .open_inline(NodeId(2), &inner, InlineEdges::default())
+            .push_text(dom(3), "a\nb")
+            .push_block_in_inline(NodeId(4))
+            .push_text(dom(5), "c")
+            .push_forced_break(NodeId(6))
+            .push_text(dom(7), "d")
+            .close_inline()
+            .close_inline();
+        let p = run(&b);
+        let start = "\u{2066}\u{202A}";
+        let end = "\u{202C}\u{2069}";
+        assert_eq!(
+            p.text,
+            format!("{start}a{end}\n{start}b{end}\u{2029}{start}c{end}\n{start}d{end}")
+        );
+        let m = p.mapping.unwrap();
+        let at = p.text.find('\n').unwrap() as u32;
+        assert_eq!(
+            m.text_to_dom(at, Affinity::Downstream),
+            Some(TextOrigin::Dom {
+                node: NodeId(3),
+                offset: 1
+            })
+        );
+        assert_eq!(
+            m.text_to_dom(at + 1, Affinity::Downstream),
+            Some(TextOrigin::Generated { node: NodeId(1) })
+        );
+    }
+
+    #[test]
+    fn segment_mapping_and_limits() {
+        let mut b = builder();
+        b.push_text(dom(1), "日 \n 本");
+        let p = run(&b);
+        assert_eq!(p.text, "日本");
+        let m = p.mapping.unwrap();
+        assert_eq!(m.dom_to_text(NodeId(1), 4), Some((3, Affinity::Downstream)));
+        assert_eq!(
+            m.text_to_dom(3, Affinity::Downstream),
+            Some(TextOrigin::Dom {
+                node: NodeId(1),
+                offset: 6
+            })
+        );
+        let style = ParagraphStyle {
+            root: InlineStyle {
+                white_space_collapse: WhiteSpaceCollapse::Preserve,
+                ..InlineStyle::default()
+            },
+            ..ParagraphStyle::default()
+        };
+        for limits in [
+            Limits {
+                max_text_bytes: Some(10),
+                ..Limits::default()
+            },
+            Limits {
+                max_items: Some(7),
+                ..Limits::default()
+            },
+        ] {
+            let iso = InlineStyle {
+                unicode_bidi: UnicodeBidi::Isolate,
+                white_space_collapse: WhiteSpaceCollapse::Preserve,
+                ..InlineStyle::default()
+            };
+            let mut b = ParagraphBuilder::new(&style, &limits);
+            b.open_inline(NodeId(1), &iso, InlineEdges::default())
+                .push_text(dom(2), "a\nb")
+                .close_inline();
+            assert!(process(&b.text, &b.items, &b.styles, true, &limits).is_err());
+        }
+    }
+
+    #[test]
+    fn transparent_boundaries_are_linear() {
+        let mut b = builder();
+        b.push_text(dom(0), "日");
+        for i in 1..=4096 {
+            b.open_inline(NodeId(i), &InlineStyle::default(), InlineEdges::default())
+                .push_text(dom(10000 + i), " \n ")
+                .push_out_of_flow(NodeId(20000 + i), crate::node::OutOfFlowKind::Absolute)
+                .close_inline();
+        }
+        b.push_text(dom(50000), "本");
+        let p = run(&b);
+        assert_eq!(p.text, format!("日{}本", "\u{FFFC}".repeat(4096)));
+        assert!(p.items.len() <= 3 * 4096 + 2);
     }
 }
