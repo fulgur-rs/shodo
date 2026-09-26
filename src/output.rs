@@ -48,6 +48,7 @@ pub struct Line {
     pub(crate) fragments: Vec<FragmentRecord>,
     pub(crate) block_shifts: Vec<LayoutUnit>,
     pub(crate) empty: bool,
+    pub(crate) positions: Option<(u32, Vec<LayoutUnit>)>,
 }
 
 impl fmt::Debug for Line {
@@ -118,6 +119,7 @@ impl Line {
             fragments: records,
             block_shifts: metrics.shifts,
             empty: metrics.empty,
+            positions: None,
         }
     }
 
@@ -250,6 +252,14 @@ pub struct Glyph {
     pub cluster: u32,
 }
 
+/// A shaping cluster with both its laid-out and original advance.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Cluster {
+    pub text_range: Range<usize>,
+    pub advance: f32,
+    pub shaping_advance: f32,
+}
+
 impl<'a> GlyphRunView<'a> {
     fn data(&self) -> &'a ParagraphData {
         &self.line.data
@@ -300,11 +310,47 @@ impl<'a> GlyphRunView<'a> {
         }
     }
 
+    pub fn clusters(&self) -> impl ExactSizeIterator<Item = Cluster> + '_ {
+        let units: Vec<_> = self.data().units
+            [self.line.units.start as usize..self.line.units.end as usize]
+            .iter()
+            .filter_map(|u| {
+                if let crate::analysis::units::UnitKind::Cluster { glyphs, .. } = &u.kind
+                    && glyphs.start >= self.glyphs.0
+                    && glyphs.end <= self.glyphs.1
+                {
+                    return Some((u.text.clone(), glyphs.clone()));
+                }
+                None
+            })
+            .collect();
+        units.into_iter().map(|(text, glyphs)| Cluster {
+            text_range: text.start as usize..text.end as usize,
+            advance: glyphs.clone().map(|g| self.glyph(g).advance).sum(),
+            shaping_advance: glyphs
+                .map(|g| self.data().glyphs.advance[g as usize].to_f32())
+                .sum(),
+        })
+    }
+
     fn glyph(&self, g: u32) -> Glyph {
         let store = &self.data().glyphs;
         let gi = g as usize;
-        let rel = store.pen[gi] - store.pen[self.glyphs.0 as usize];
-        let advance = store.advance[gi];
+        let (rel, advance) = if let Some((start, positions)) = &self.line.positions {
+            let pen = positions[(g - start) as usize];
+            let rel = pen - positions[(self.glyphs.0 - start) as usize];
+            let end = if g + 1 < self.glyphs.1 {
+                positions[(g + 1 - start) as usize] - positions[(self.glyphs.0 - start) as usize]
+            } else {
+                self.record.inline_size
+            };
+            (rel, end - rel)
+        } else {
+            (
+                store.pen[gi] - store.pen[self.glyphs.0 as usize],
+                store.advance[gi],
+            )
+        };
         // Runs are stored in logical order and reversed for display here; a
         // real shaper that emits right-to-left runs in visual order must not
         // be reversed twice.

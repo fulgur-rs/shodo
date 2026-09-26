@@ -1,5 +1,6 @@
 //! Line breaking.
 
+mod align;
 mod decoration;
 pub(crate) mod fragments;
 pub(crate) mod metrics;
@@ -83,11 +84,14 @@ impl Paragraph {
             &mut sat,
         );
         let indent = text_indent(&options, token.flags, &mut sat);
-        let scan = scan(
+        let mut scan = scan(
             data, start, available, offset, indent, atomics, cx, &mut sat,
         );
-        let origin = offset.add(indent, &mut sat);
-        let line = Line::new(
+        let alignment = align::apply(
+            data, start, &mut scan, &options, available, indent, &mut sat,
+        );
+        let origin = offset.add(indent, &mut sat).add(alignment.shift, &mut sat);
+        let mut line = Line::new(
             self,
             token,
             scan,
@@ -96,6 +100,7 @@ impl Paragraph {
             atomics,
             &mut sat,
         );
+        line.positions = alignment.positions;
         cx.warnings.record_saturation(&sat);
         if constraint
             .max_block_size
