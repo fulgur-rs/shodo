@@ -370,12 +370,16 @@ impl AtomicIntrinsics {
 }
 
 /// A precomputed set of break positions for `text-wrap: balance | pretty`.
-/// Produced by `Paragraph::plan_breaks` (not available yet).
+/// Produced by [`Paragraph::plan_breaks`]; mismatching inputs safely fall
+/// back to greedy layout.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BreakPlan {
     pub(crate) para: u64,
     pub(crate) width: f32,
     pub(crate) atomics_generation: u64,
+    pub(crate) atomics_revision: u64,
+    pub(crate) options: crate::style::LineOptions,
+    pub(crate) ends: Vec<u32>,
 }
 
 /// Space available to one line.

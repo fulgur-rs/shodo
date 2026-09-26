@@ -7,6 +7,7 @@ pub(crate) mod fragments;
 mod intrinsic;
 mod iter;
 pub(crate) mod metrics;
+mod plan;
 mod scan;
 use scan::scan;
 
@@ -88,27 +89,51 @@ impl Paragraph {
             &mut sat,
         );
         let indent = text_indent(&options, token.flags, &mut sat);
-        let mut scan = match cache::resolve(
-            self,
-            token,
-            &options,
-            &constraint,
-            available,
-            offset,
-            indent,
-            atomics,
-            cx,
-            &mut sat,
-        ) {
-            Ok(scan) => scan,
-            Err((node, ordinal, position)) => {
-                cx.warnings.record_saturation(&sat);
-                return LineResult::FloatEncountered {
-                    node,
-                    line_start: token,
-                    inline_position: position.to_f32(),
-                    float_cursor: FloatCursor(ordinal),
-                };
+        let planned_end = constraint.break_plan.and_then(|p| {
+            if plan::matches(p, self, &options, &constraint, atomics) {
+                let index = p.ends.partition_point(|end| *end <= token.unit);
+                let valid_start = token.unit == 0
+                    || index > 0 && p.ends[index - 1] == token.unit
+                    || start > 0
+                        && matches!(data.units[start - 1].kind, UnitKind::BlockInInline { .. })
+                        && p.ends.binary_search(&(token.unit - 1)).is_ok();
+                valid_start
+                    .then(|| p.ends.get(index).copied())
+                    .flatten()
+                    .map(|end| end as usize)
+            } else {
+                cx.warnings.push(
+                    WarningKind::Unsupported,
+                    "break plan inputs mismatch; using greedy layout",
+                );
+                None
+            }
+        });
+        let mut scan = if let Some(end) = planned_end {
+            plan::selected(data, start, end, offset, indent, atomics, cx, &mut sat)
+        } else {
+            match cache::resolve(
+                self,
+                token,
+                &options,
+                &constraint,
+                available,
+                offset,
+                indent,
+                atomics,
+                cx,
+                &mut sat,
+            ) {
+                Ok(scan) => scan,
+                Err((node, ordinal, position)) => {
+                    cx.warnings.record_saturation(&sat);
+                    return LineResult::FloatEncountered {
+                        node,
+                        line_start: token,
+                        inline_position: position.to_f32(),
+                        float_cursor: FloatCursor(ordinal),
+                    };
+                }
             }
         };
         // Select the break before reporting an anchor: floats do not create
