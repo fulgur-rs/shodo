@@ -3,8 +3,11 @@
 use std::collections::HashMap;
 use std::ops::Range;
 
+use crate::context::LayoutContext;
+use crate::font::FontCollection;
 use crate::limits::{LimitExceeded, LimitKind, Limits, WarningKind, WarningSink};
 use crate::node::{InlineEdges, NodeId, OutOfFlowKind, TextSource};
+use crate::paragraph::Paragraph;
 use crate::style::{InlineStyle, ParagraphStyle};
 
 /// Input as recorded, before white-space processing.
@@ -235,6 +238,73 @@ impl ParagraphBuilder {
         self.styles.push(style.clone());
         self.style_index.insert(key, index);
         Some(index)
+    }
+}
+
+impl ParagraphBuilder {
+    /// Analyzes and shapes the content. Fails only when a resource limit was
+    /// exceeded; inline boxes left open are closed with a warning.
+    pub fn build(
+        mut self,
+        _cx: &mut LayoutContext,
+        fonts: &FontCollection,
+    ) -> Result<Paragraph, LimitExceeded> {
+        while !self.stack.is_empty() && self.error.is_none() {
+            self.warnings.push(
+                WarningKind::UnbalancedInline,
+                "unclosed inline box closed at build",
+            );
+            self.close_inline();
+        }
+        if let Some(e) = self.error {
+            return Err(e);
+        }
+        if self.style.first_line.is_some() {
+            self.warnings.push(
+                WarningKind::Unsupported,
+                "::first-line style is not applied yet",
+            );
+        }
+        Paragraph::from_builder(self, fonts)
+    }
+}
+
+/// Convenience builder for plain rich text (no DOM). The n-th pushed span
+/// gets `NodeId(n)`, starting at 0, and offsets within the pushed string map
+/// through [`crate::mapping::OffsetMapping`].
+pub struct RichText {
+    builder: ParagraphBuilder,
+    next_node: u64,
+}
+
+impl RichText {
+    pub fn new(style: &ParagraphStyle) -> Self {
+        Self::with_limits(style, &Limits::default())
+    }
+
+    pub fn with_limits(style: &ParagraphStyle, limits: &Limits) -> Self {
+        Self {
+            builder: ParagraphBuilder::new(style, limits),
+            next_node: 0,
+        }
+    }
+
+    pub fn push(mut self, text: &str, style: &InlineStyle) -> Self {
+        let node = NodeId(self.next_node);
+        self.next_node += 1;
+        self.builder
+            .open_inline(node, style, InlineEdges::default())
+            .push_text(TextSource::Dom { node, offset: 0 }, text)
+            .close_inline();
+        self
+    }
+
+    pub fn build(
+        self,
+        cx: &mut LayoutContext,
+        fonts: &FontCollection,
+    ) -> Result<Paragraph, LimitExceeded> {
+        self.builder.build(cx, fonts)
     }
 }
 

@@ -17,6 +17,10 @@ pub mod style;
 
 mod analysis;
 mod builder;
+mod context;
+mod paragraph;
 mod shape;
 
-pub use builder::ParagraphBuilder;
+pub use builder::{ParagraphBuilder, RichText};
+pub use context::LayoutContext;
+pub use paragraph::{BreakToken, FloatCursor, Paragraph};

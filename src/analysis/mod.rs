@@ -1,5 +1,6 @@
 //! Text analysis: white-space processing and the data line breaking uses.
 
+pub(crate) mod units;
 mod whitespace;
 
 use std::ops::Range;
