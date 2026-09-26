@@ -319,7 +319,7 @@ pub struct Glyphs<'a> {
 impl Glyphs<'_> {
     /// The `index`-th glyph of the run, independent of iteration.
     pub fn get(&self, index: usize) -> Option<Glyph> {
-        let g = self.view.glyphs.0 as usize + index;
+        let g = (self.view.glyphs.0 as usize).checked_add(index)?;
         (g < self.view.glyphs.1 as usize).then(|| self.view.glyph(g as u32))
     }
 }

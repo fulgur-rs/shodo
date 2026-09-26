@@ -112,6 +112,21 @@ fn glyph_runs_split_at_item_boundaries() {
 }
 
 #[test]
+fn glyphs_get_returns_none_for_an_out_of_range_index() {
+    // Two separate text pushes shape into two runs, so the second run's
+    // glyph range starts at a non-zero offset, which is what exercises the
+    // overflow in a naive `start + index` bounds check.
+    let p = para(|b| {
+        b.push_text(dom(1), "ab").push_text(dom(2), "cd");
+    });
+    let line = &all_lines(&p, 100.0, &AtomicSizes::EMPTY, &mut LayoutContext::new())[0];
+    let Some(Fragment::GlyphRun(run)) = line.fragment(1) else {
+        panic!()
+    };
+    assert_eq!(run.glyphs().get(usize::MAX), None);
+}
+
+#[test]
 fn glyph_offsets_are_applied_on_top_of_pen_positions() {
     let p = para(|b| {
         b.push_text(dom(1), "e\u{301}");
@@ -198,6 +213,61 @@ fn nested_boxes_point_at_their_parent_fragment() {
         assert_eq!((outer.node, outer.parent), (NodeId(1), None));
         assert_eq!((inner.node, inner.parent), (NodeId(2), Some(0)));
     }
+}
+
+#[test]
+fn a_line_starting_on_a_close_keeps_the_boxs_end_edge() {
+    let padded = InlineEdges {
+        padding: Sides {
+            inline_start: 5.0,
+            inline_end: 5.0,
+            ..Sides::default()
+        },
+        ..InlineEdges::default()
+    };
+    let p = para(|b| {
+        b.open_inline(NodeId(1), &span(), padded)
+            .push_text(dom(2), "ab")
+            .push_forced_break(NodeId(3))
+            .close_inline()
+            .push_text(dom(4), "cd");
+    });
+    let lines = all_lines(&p, 100.0, &AtomicSizes::EMPTY, &mut LayoutContext::new());
+    assert_eq!(lines.len(), 2);
+    let second = boxes(&lines[1]);
+    assert_eq!(second.len(), 1);
+    assert_eq!(second[0].node, NodeId(1));
+    assert_eq!(
+        (second[0].has_start_edge, second[0].has_end_edge),
+        (false, true)
+    );
+}
+
+#[test]
+fn nested_boxes_closing_on_a_continuation_line_each_keep_their_end_edge() {
+    let p = para(|b| {
+        b.open_inline(NodeId(1), &span(), InlineEdges::default())
+            .open_inline(NodeId(2), &span(), InlineEdges::default())
+            .push_text(dom(3), "ab")
+            .push_forced_break(NodeId(4))
+            .close_inline()
+            .close_inline()
+            .push_text(dom(5), "cd");
+    });
+    let lines = all_lines(&p, 100.0, &AtomicSizes::EMPTY, &mut LayoutContext::new());
+    assert_eq!(lines.len(), 2);
+    let fragments: Vec<_> = lines[1].fragments().collect();
+    let Fragment::InlineBox(outer) = &fragments[0] else {
+        panic!()
+    };
+    let Fragment::InlineBox(inner) = &fragments[1] else {
+        panic!()
+    };
+    assert_eq!((outer.node, outer.has_end_edge), (NodeId(1), true));
+    assert_eq!(
+        (inner.node, inner.has_end_edge, inner.parent),
+        (NodeId(2), true, Some(0))
+    );
 }
 
 #[test]

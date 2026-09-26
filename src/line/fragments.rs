@@ -56,9 +56,15 @@ pub(crate) fn build(
         .map_or(data.base_level, |u| u.level);
 
     // Boxes that are still open from the previous line continue here,
-    // without their start edge.
+    // without their start edge. A line can start on the `Close` of a box
+    // that was still open at the previous line's end (for example after a
+    // forced break inside it); that box's own index, not its parent's, is
+    // where the continuation chain begins.
     let mut chain = Vec::new();
-    let mut parent = data.units.get(units.start).and_then(|u| u.parent_box);
+    let mut parent = data.units.get(units.start).and_then(|u| match &u.kind {
+        UnitKind::Close { box_index } => Some(*box_index),
+        _ => u.parent_box,
+    });
     while let Some(b) = parent {
         chain.push(b);
         parent = data.boxes[b as usize].parent;
