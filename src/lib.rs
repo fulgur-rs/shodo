@@ -17,5 +17,6 @@ pub mod style;
 
 mod analysis;
 mod builder;
+mod shape;
 
 pub use builder::ParagraphBuilder;
