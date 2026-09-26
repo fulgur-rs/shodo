@@ -88,8 +88,10 @@ impl OffsetMapping {
         let mut at_end = None;
         for u in self.units.iter().filter(|u| u.node == node) {
             if u.dom.start <= offset && offset < u.dom.end {
+                // Saturate: `dom` came from a caller-supplied offset and may
+                // already be clamped near `u32::MAX` (see `push_unit`).
                 let text = match u.kind {
-                    MappingKind::Identity => u.text.start + (offset - u.dom.start),
+                    MappingKind::Identity => u.text.start.saturating_add(offset - u.dom.start),
                     MappingKind::Collapsed => u.text.end,
                     MappingKind::Expanded => u.text.start,
                 };
@@ -119,8 +121,10 @@ impl OffsetMapping {
             .filter(|u| u.kind != MappingKind::Collapsed)
         {
             if downstream.is_none() && u.text.start <= offset && offset < u.text.end {
+                // Saturate for the same reason as in `dom_to_text`: `u.dom.start`
+                // may already be clamped near `u32::MAX`.
                 let dom = match u.kind {
-                    MappingKind::Identity => u.dom.start + (offset - u.text.start),
+                    MappingKind::Identity => u.dom.start.saturating_add(offset - u.text.start),
                     _ => u.dom.start,
                 };
                 downstream = Some(TextOrigin::Dom {

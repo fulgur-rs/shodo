@@ -148,10 +148,13 @@ impl Processor {
     ) {
         let Some(m) = &mut self.mapping else { return };
         match dom {
+            // `dom` is a caller-supplied offset, not covered by any
+            // resource limit; saturate instead of overflowing so no input
+            // can panic.
             Some(dom) => m.push_unit(MappingUnit {
                 kind,
                 node,
-                dom: dom..dom + len,
+                dom: dom..dom.saturating_add(len),
                 text,
             }),
             None if !text.is_empty() => m.push_generated(text, node),
@@ -163,15 +166,24 @@ impl Processor {
         use WhiteSpaceCollapse::*;
         let collapse_spaces = matches!(style.white_space_collapse, Collapse | PreserveBreaks);
         let preserve_breaks = !matches!(style.white_space_collapse, Collapse);
+        // `preserve-spaces` keeps every space uncollapsed but, unlike
+        // `preserve`, tabs and segment breaks lose their special meaning and
+        // become an ordinary space character (CSS Text 4, `white-space-collapse`).
+        let convert_to_space = matches!(style.white_space_collapse, PreserveSpaces);
         let node = source.node();
         let dom_base = match source {
             TextSource::Dom { offset, .. } => Some(offset),
             TextSource::Generated { .. } => None,
         };
         let mut segment: Option<u32> = None;
-        for (i, c) in s.char_indices() {
-            let dom = dom_base.map(|b| b + i as u32);
-            let len = c.len_utf8() as u32;
+        for (i, raw_c) in s.char_indices() {
+            let dom = dom_base.map(|b| b.saturating_add(i as u32));
+            let len = raw_c.len_utf8() as u32;
+            let c = if convert_to_space && matches!(raw_c, '\t' | '\n') {
+                ' '
+            } else {
+                raw_c
+            };
             let control = match c {
                 '\n' if preserve_breaks => Some(ItemKind::ForcedBreak),
                 '\t' if !collapse_spaces => Some(ItemKind::Tab),
@@ -337,6 +349,93 @@ mod tests {
         .map(std::mem::discriminant)
         .collect();
         assert_eq!(kinds, expected);
+    }
+
+    #[test]
+    fn preserve_spaces_converts_tabs_and_breaks_to_space_without_collapsing() {
+        let style = InlineStyle {
+            white_space_collapse: WhiteSpaceCollapse::PreserveSpaces,
+            ..InlineStyle::default()
+        };
+        let mut b = builder();
+        b.open_inline(NodeId(1), &style, InlineEdges::default())
+            .push_text(dom(2), "a \t\nb")
+            .close_inline();
+        let p = run(&b);
+        assert_eq!(p.text, "a   b");
+        let kinds: Vec<_> = p
+            .items
+            .iter()
+            .map(|i| std::mem::discriminant(&i.kind))
+            .collect();
+        use ItemKind::*;
+        let expected: Vec<_> = [
+            OpenInline {
+                edges: InlineEdges::default(),
+            },
+            Text,
+            CloseInline,
+        ]
+        .iter()
+        .map(std::mem::discriminant)
+        .collect();
+        assert_eq!(
+            kinds, expected,
+            "no Tab or ForcedBreak items under preserve-spaces"
+        );
+    }
+
+    #[test]
+    fn break_spaces_still_produces_tab_and_forced_break_items() {
+        let style = InlineStyle {
+            white_space_collapse: WhiteSpaceCollapse::BreakSpaces,
+            ..InlineStyle::default()
+        };
+        let mut b = builder();
+        b.open_inline(NodeId(1), &style, InlineEdges::default())
+            .push_text(dom(2), "a\tb\nc")
+            .close_inline();
+        let p = run(&b);
+        assert_eq!(p.text, "a\tb\nc");
+        let kinds: Vec<_> = p
+            .items
+            .iter()
+            .map(|i| std::mem::discriminant(&i.kind))
+            .collect();
+        use ItemKind::*;
+        let expected: Vec<_> = [
+            OpenInline {
+                edges: InlineEdges::default(),
+            },
+            Text,
+            Tab,
+            Text,
+            ForcedBreak,
+            Text,
+            CloseInline,
+        ]
+        .iter()
+        .map(std::mem::discriminant)
+        .collect();
+        assert_eq!(kinds, expected);
+    }
+
+    #[test]
+    fn dom_offsets_near_u32_max_do_not_panic() {
+        let mut b = builder();
+        b.push_text(
+            TextSource::Dom {
+                node: NodeId(1),
+                offset: u32::MAX - 1,
+            },
+            "abc",
+        );
+        let p = process(&b.text, &b.items, &b.styles, true);
+        assert_eq!(p.text, "abc");
+        // The mapping itself must not panic either, in both directions.
+        let m = p.mapping.unwrap();
+        assert!(m.text_to_dom(2, Affinity::Downstream).is_some());
+        assert!(m.dom_to_text(NodeId(1), u32::MAX - 1).is_some());
     }
 
     #[test]
