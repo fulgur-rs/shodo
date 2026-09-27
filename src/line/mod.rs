@@ -3,6 +3,7 @@
 mod align;
 pub(crate) mod cache;
 mod decoration;
+pub(crate) mod font_metrics;
 pub(crate) mod fragments;
 mod hyphen;
 mod intrinsic;
@@ -269,6 +270,7 @@ impl Paragraph {
         line.positions = alignment.positions;
         line.displaced = displaced;
         reshape::apply(&mut line, cx, &mut sat);
+        line.measure_metrics(&mut sat);
         cx.warnings.record_saturation(&sat);
         if constraint
             .max_block_size

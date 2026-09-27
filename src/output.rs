@@ -77,9 +77,7 @@ impl Line {
         sat: &mut Saturation,
     ) -> Line {
         let data = &para.data;
-        let root = &data.styles[0];
-        let size = root.font_size;
-        let m = data.fonts.metrics(data.fonts.primary_font(), size);
+        let m = data.style_metrics[0].metrics;
         let flags = match scan.reason {
             BreakReason::Forced => BreakToken::AFTER_FORCED,
             _ => 0,
@@ -98,8 +96,6 @@ impl Line {
             atomics,
             visible_hyphen,
         );
-        let metrics =
-            crate::line::metrics::measure(data, token.unit as usize..scan.end, &records, sat);
         // Resource-limited whole clusters can overlap following transparent
         // markers in source order. Their complete source extent still belongs
         // to this line. Cache it so public range queries remain constant-time.
@@ -123,21 +119,35 @@ impl Line {
             units: token.unit..scan.end as u32,
             text_range,
             inline_size: scan.content,
-            block_size: metrics.block_size,
-            baseline: metrics.baseline,
+            block_size: LayoutUnit::ZERO,
+            baseline: LayoutUnit::ZERO,
             ascent: LayoutUnit::from_f32_round(m.ascent, sat),
             descent: LayoutUnit::from_f32_round(m.descent, sat),
             block_offset,
             displaced: Vec::new(),
+            block_shifts: vec![LayoutUnit::ZERO; records.len()],
             fragments: records,
-            block_shifts: metrics.shifts,
-            empty: metrics.empty,
+            empty: false,
             positions: None,
             overlay: None,
             overlay_clusters: Box::default(),
             overlay_runs: Box::default(),
             pending_overlays: scan.overlays,
         }
+    }
+
+    pub(crate) fn measure_metrics(&mut self, sat: &mut Saturation) {
+        let metrics = crate::line::metrics::measure(
+            &self.data,
+            self.units.start as usize..self.units.end as usize,
+            &self.fragments,
+            &self.overlay_runs,
+            sat,
+        );
+        self.block_size = metrics.block_size;
+        self.baseline = metrics.baseline;
+        self.block_shifts = metrics.shifts;
+        self.empty = metrics.empty;
     }
 
     pub fn break_token(&self) -> BreakToken {
@@ -283,6 +293,8 @@ pub struct Cluster {
     pub text_range: Range<usize>,
     pub advance: f32,
     pub shaping_advance: f32,
+    /// First scalar in the processed source range (SHY retains U+00AD).
+    pub source_char: Option<char>,
 }
 
 #[derive(Clone, Debug)]
@@ -309,6 +321,14 @@ impl<'a> GlyphRunView<'a> {
 
     pub fn font(&self) -> FontId {
         self.run_data().font
+    }
+
+    /// Metrics at this run's actual size and normalized variation location.
+    pub fn metrics(&self) -> crate::font::FontMetrics {
+        self.run_data()
+            .instance
+            .metrics
+            .unwrap_or_else(|| self.data().fonts.metrics(self.font(), self.font_size()))
     }
 
     pub fn font_size(&self) -> f32 {
@@ -404,6 +424,10 @@ impl<'a> GlyphRunView<'a> {
                 }
             };
             Cluster {
+                source_char: data
+                    .text
+                    .get(text.start as usize..text.end as usize)
+                    .and_then(|s| s.chars().next()),
                 text_range: text.start as usize..text.end as usize,
                 advance: glyphs.clone().map(|g| self.glyph(g).advance).sum(),
                 shaping_advance: glyphs.map(|g| store.advance[g as usize].to_f32()).sum(),
@@ -589,9 +613,9 @@ impl Line {
                 reversed,
             } => {
                 let info = &self.data.boxes[*box_index as usize];
-                let style = &self.data.styles[info.style as usize];
-                let font = self.data.fonts.primary_font();
-                let m = self.data.fonts.metrics(font, style.font_size);
+                let resolved = self.data.style_metrics[info.style as usize];
+                let font = resolved.font;
+                let m = resolved.metrics;
                 let e = info.edges;
                 let pick = |on: bool, v: f32| if on { v } else { 0.0 };
                 let margin_start = pick(*start_edge, e.margin.inline_start);
@@ -629,7 +653,7 @@ impl Line {
                     has_end_edge: *end_edge,
                     parent: parent.map(|p| p as usize),
                     font,
-                    font_size: style.font_size,
+                    font_size: resolved.size,
                 })
             }
             RecordKind::Anchor { node, kind } => Fragment::OutOfFlowAnchor(AnchorFragment {

@@ -1,5 +1,7 @@
+use super::font_metrics::StyleMetrics;
 use super::fragments::{FragmentRecord, RecordKind};
 use crate::analysis::units::UnitKind;
+use crate::font::FontMetrics;
 use crate::geometry::{BaselineKind, LayoutUnit, Saturation};
 use crate::paragraph::ParagraphData;
 use crate::style::{InlineStyle, LineHeight, VerticalAlign};
@@ -13,11 +15,11 @@ pub(crate) struct LineMetrics {
     pub(crate) empty: bool,
 }
 
-fn extents(s: &InlineStyle) -> (f32, f32) {
-    let a = 0.8 * s.font_size;
-    let d = 0.2 * s.font_size;
+fn extents(s: &InlineStyle, m: FontMetrics) -> (f32, f32) {
+    let a = m.ascent;
+    let d = m.descent;
     let h = match s.line_height {
-        LineHeight::Normal => a + d,
+        LineHeight::Normal => a + d + m.line_gap,
         LineHeight::Px(v) => v,
         LineHeight::Number(n) => n * s.font_size,
     };
@@ -25,14 +27,14 @@ fn extents(s: &InlineStyle) -> (f32, f32) {
     (a + lead, d + lead)
 }
 
-fn shift(s: &InlineStyle, parent: &InlineStyle, a: f32, d: f32) -> f32 {
+fn shift(s: &InlineStyle, parent: StyleMetrics, a: f32, d: f32) -> f32 {
     match s.vertical_align {
         VerticalAlign::Length(v) => -v,
-        VerticalAlign::Sub => parent.font_size * 0.2,
-        VerticalAlign::Super => -parent.font_size * 0.3,
-        VerticalAlign::TextTop => a - parent.font_size * 0.8,
-        VerticalAlign::TextBottom => parent.font_size * 0.2 - d,
-        VerticalAlign::Middle => (a - d) / 2.0 - parent.font_size * 0.25,
+        VerticalAlign::Sub => parent.metrics.subscript_offset,
+        VerticalAlign::Super => -parent.metrics.superscript_offset,
+        VerticalAlign::TextTop => a - parent.metrics.ascent,
+        VerticalAlign::TextBottom => parent.metrics.descent - d,
+        VerticalAlign::Middle => (a - d) / 2.0 - parent.metrics.x_height / 2.0,
         _ => 0.0,
     }
 }
@@ -43,21 +45,31 @@ fn box_shift(
     box_: u32,
     cache: &mut HashMap<u32, (f32, Option<u32>)>,
 ) -> (f32, Option<u32>) {
-    if let Some(v) = cache.get(&box_) {
-        return *v;
+    let mut path = Vec::new();
+    let mut cursor = Some(box_);
+    let mut value = (0.0, None);
+    while let Some(index) = cursor {
+        if let Some(cached) = cache.get(&index) {
+            value = *cached;
+            break;
+        }
+        path.push(index);
+        cursor = data.boxes[index as usize].parent;
     }
-    let b = &data.boxes[box_ as usize];
-    let s = &data.styles[b.style as usize];
-    let (base, group) = b.parent.map_or((0.0, None), |p| box_shift(data, p, cache));
-    let parent = b.parent.map_or(&data.styles[0], |p| {
-        &data.styles[data.boxes[p as usize].style as usize]
-    });
-    let (a, d) = extents(s);
-    let group = group.or_else(|| {
-        matches!(s.vertical_align, VerticalAlign::Top | VerticalAlign::Bottom).then_some(box_)
-    });
-    let value = (base + shift(s, parent, a, d), group);
-    cache.insert(box_, value);
+    for index in path.into_iter().rev() {
+        let b = &data.boxes[index as usize];
+        let s = &data.styles[b.style as usize];
+        let parent_style = b.parent.map_or(0, |p| data.boxes[p as usize].style) as usize;
+        let (a, d) = extents(s, data.style_metrics[b.style as usize].metrics);
+        let group = value.1.or_else(|| {
+            matches!(s.vertical_align, VerticalAlign::Top | VerticalAlign::Bottom).then_some(index)
+        });
+        value = (
+            value.0 + shift(s, data.style_metrics[parent_style], a, d),
+            group,
+        );
+        cache.insert(index, value);
+    }
     value
 }
 
@@ -65,10 +77,11 @@ pub(crate) fn measure(
     data: &ParagraphData,
     units: Range<usize>,
     records: &[FragmentRecord],
+    overlay_runs: &[crate::shape::ShapedRun],
     sat: &mut Saturation,
 ) -> LineMetrics {
     let root = &data.styles[0];
-    let (mut above, mut below) = extents(root);
+    let (mut above, mut below) = extents(root, data.style_metrics[0].metrics);
     let mut cache = HashMap::new();
     let mut parents = HashMap::new();
     let mut atomic_styles = HashMap::new();
@@ -86,10 +99,22 @@ pub(crate) fn measure(
     let mut memberships = Vec::with_capacity(records.len());
     for (i, r) in records.iter().enumerate() {
         let (a, d, base, group, own_group) = match &r.kind {
-            RecordKind::Glyphs { item, .. } => {
+            RecordKind::Glyphs {
+                item, run, source, ..
+            } => {
                 empty = false;
                 let s = &data.styles[data.items[*item as usize].style as usize];
-                let (a, d) = extents(s);
+                let shaped = match source {
+                    super::fragments::GlyphSource::Overlay { run: Some(run), .. } => {
+                        &overlay_runs[*run as usize]
+                    }
+                    _ => &data.runs[*run as usize],
+                };
+                let metrics = shaped
+                    .instance
+                    .metrics
+                    .unwrap_or_else(|| data.fonts.metrics(shaped.font, shaped.font_size));
+                let (a, d) = extents(s, metrics);
                 let (base, group) = parents
                     .get(item)
                     .copied()
@@ -112,7 +137,7 @@ pub(crate) fn measure(
                     || e.border.block_end != 0.0
                     || e.padding.block_start != 0.0
                     || e.padding.block_end != 0.0);
-                let (a, d) = extents(s);
+                let (a, d) = extents(s, data.style_metrics[b.style as usize].metrics);
                 let (base, group) = box_shift(data, *box_index, &mut cache);
                 (a, d, base, group, None)
             }
@@ -120,9 +145,8 @@ pub(crate) fn measure(
                 empty = false;
                 let (item, parent_box) = atomic_styles[node];
                 let s = &data.styles[data.items[item as usize].style as usize];
-                let parent = parent_box.map_or(root, |p| {
-                    &data.styles[data.boxes[p as usize].style as usize]
-                });
+                let parent_style = parent_box.map_or(0, |p| data.boxes[p as usize].style) as usize;
+                let parent = data.style_metrics[parent_style];
                 let (base, group) =
                     parent_box.map_or((0.0, None), |b| box_shift(data, b, &mut cache));
                 let height = size.block_size + size.margins.block_start + size.margins.block_end;
@@ -131,7 +155,7 @@ pub(crate) fn measure(
                     .baseline
                     .unwrap_or(if central { height / 2.0 } else { height });
                 let dominant_shift = if central {
-                    -0.3 * parent.font_size
+                    -(parent.metrics.ascent - parent.metrics.descent) / 2.0
                 } else {
                     0.0
                 };

@@ -45,11 +45,11 @@
 
 **Interfaces:** produces resolved style/run metrics and public `GlyphRunView::metrics()`, `FontMetrics::{x_height,cap_height}`, `Cluster::source_char`; keeps next_line and glyph geometry signatures。
 
-- [ ] Add fixed-font `normal_line_height_uses_selected_font`, `mixed_face_and_adjusted_run_metrics_drive_line_box`, `parent_x_height_drives_middle_and_text_edges`; compare existing baseline/height to direct Skrifa before changes, run fixture test and confirm numeric RED。
-- [ ] Add primary-face query without depending on requested character coverage for strut; reuse the same normalized style/variation/size-adjust resolution as shaping. Cache resolved style/run metrics once at build, expose run metrics and processed source_char。
-- [ ] Replace fixed extents and parent shifts; support all VerticalAlign values, normal and explicit half-leading, actual fallback extents, inline content rect, empty box/tab/br, required atomic baseline and top/bottom subtree placement. Replace recursive ancestor aggregation with iterative cache。
-- [ ] Add `all_vertical_align_values_match_font_and_atomic_oracles`, `variation_and_decoration_metrics_match_run_instance`, `deep_inline_metrics_do_not_recurse`, empty/zero-height/negative-margin checks. Existing stub-font numeric tests must keep documented fallback results。
-- [ ] Run workspace, fixture metrics and root line-box tests; commit `feat: resolve horizontal line boxes from actual font metrics`。
+- [x] Add fixed-font `normal_line_height_uses_selected_font`, `mixed_face_and_adjusted_run_metrics_drive_line_box`, `parent_x_height_drives_middle_and_text_edges`; compare existing baseline/height to direct Skrifa before changes, run fixture test and confirm numeric RED。
+- [x] Add primary-face query without depending on requested character coverage for strut; reuse the same normalized style/variation/size-adjust resolution as shaping. Cache resolved style/run metrics once at build, expose run metrics and processed source_char。
+- [x] Replace fixed extents and parent shifts; support all VerticalAlign values, normal and explicit half-leading, actual fallback extents, inline content rect, empty box/tab/br, required atomic baseline and top/bottom subtree placement. Replace recursive ancestor aggregation with iterative cache。
+- [x] Add `all_vertical_align_values_match_font_and_atomic_oracles`, `variation_and_decoration_metrics_match_run_instance`, `deep_inline_metrics_do_not_recurse`, empty/zero-height/negative-margin checks. Existing stub-font numeric tests must keep documented fallback results。
+- [x] Run workspace, fixture metrics and root line-box tests; commit `feat: resolve horizontal line boxes from actual font metrics`。
 
 ### Task 2: Letter/word spacing and actual tab intervals
 

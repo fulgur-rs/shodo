@@ -109,6 +109,12 @@ pub struct FontMetrics {
     pub ascent: f32,
     pub descent: f32,
     pub line_gap: f32,
+    pub x_height: f32,
+    pub cap_height: f32,
+    /// Positive displacement below the alphabetic baseline.
+    pub subscript_offset: f32,
+    /// Positive displacement above the alphabetic baseline.
+    pub superscript_offset: f32,
     pub underline_offset: f32,
     pub underline_thickness: f32,
     pub strikeout_offset: f32,
