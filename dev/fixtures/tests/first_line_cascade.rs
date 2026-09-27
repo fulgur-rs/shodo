@@ -206,7 +206,9 @@ fn five_resolved_child_cases_reach_actual_font_metrics_mapping_and_glyph_paint()
     assert!(
         image
             .data()
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|p| p[0] > p[1] && p[0] > p[2])
             .count()
             > 30
@@ -214,7 +216,9 @@ fn five_resolved_child_cases_reach_actual_font_metrics_mapping_and_glyph_paint()
     assert!(
         image
             .data()
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|p| p[2] > p[0] && p[2] > p[1])
             .count()
             > 10
