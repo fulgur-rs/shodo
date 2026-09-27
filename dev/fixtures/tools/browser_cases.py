@@ -56,6 +56,13 @@ def generate():
     return dict(format_version=1, generator='xorshift32-v1; seeds 1..16; corpus words/30-scalar slices; named structural seeds1001..1007', cases=result)
 
 
+def check_materialized(path=None):
+    path = Path(path) if path is not None else ROOT / 'assets/browser-inputs.json'
+    output = json.dumps(generate(), ensure_ascii=False, indent=2)+'\n'
+    if path.read_text(encoding='utf-8') != output:
+        raise ValueError('browser-inputs.json is stale; run browser_cases.py to regenerate')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check', action='store_true')
@@ -63,7 +70,6 @@ if __name__ == '__main__':
     output = json.dumps(generate(), ensure_ascii=False, indent=2)+'\n'
     path = ROOT / 'assets/browser-inputs.json'
     if args.check:
-        if path.read_text(encoding='utf-8') != output:
-            raise SystemExit('browser-inputs.json is stale; run browser_cases.py to regenerate')
+        check_materialized(path)
     else:
         path.write_text(output, encoding='utf-8')

@@ -2,11 +2,13 @@
 import argparse
 import hashlib
 import json
+import math
 import platform
 import shutil
 import subprocess
 import tempfile
 import threading
+import browser_cases
 from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -65,10 +67,22 @@ def validate_capture(result, inputs, fonts):
         if widths != sorted(set(widths)) or widths[0] != 1:
             raise ValueError('invalid probe widths')
         for sample in samples:
-            if not isinstance(sample['end_utf16'], int) or sample['end_utf16'] < 0:
+            if type(sample['width_subpixels']) is not int or sample['width_subpixels'] <= 0:
+                raise ValueError('invalid probe width')
+            if type(sample['end_utf16']) is not int or sample['end_utf16'] < 0:
                 raise ValueError('invalid endpoint')
             if utf16_to_utf8(text, sample['end_utf16']) != sample['end_utf8']:
                 raise ValueError('UTF-16/UTF-8 endpoint mismatch')
+            atomic_part = next((p for p in case['parts'] if 'atomic_width' in p), None)
+            atomic = sample.get('atomic')
+            if (atomic_part is not None) != (atomic is not None):
+                raise ValueError('missing/unexpected atomic geometry')
+            if atomic is not None:
+                values = [atomic.get(k) for k in ['top', 'bottom', 'width', 'height']]
+                if not all(type(v) in (int, float) and math.isfinite(v) for v in values):
+                    raise ValueError('invalid atomic geometry')
+                if atomic['width'] != atomic_part['atomic_width'] or atomic['height'] != atomic_part['atomic_height'] or abs(atomic['bottom']-atomic['top']-atomic['height']) > 0.001:
+                    raise ValueError('atomic dimensions differ')
         boundary = record['boundary_subpixels']
         if boundary is not None:
             by_width = {s['width_subpixels']: s for s in samples}
@@ -82,15 +96,18 @@ def validate_capture(result, inputs, fonts):
 def save_capture(path, result, inputs, fonts):
     validate_capture(result, inputs, fonts)
     path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent, delete=False) as f:
-        tmp = Path(f.name); json.dump(result, f, ensure_ascii=False, indent=2); f.write('\n')
+    f = tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent, delete=False)
+    tmp = Path(f.name)
     try:
+        with f:
+            json.dump(result, f, ensure_ascii=False, indent=2, allow_nan=False); f.write('\n')
         tmp.replace(path)
     finally:
         tmp.unlink(missing_ok=True)
 
 
 def capture(browser, timeout):
+    browser_cases.check_materialized()
     inputs_path = ROOT / 'assets/browser-inputs.json'
     inputs = json.loads(inputs_path.read_text(encoding='utf-8'))
     manifest = json.loads((ROOT/'assets/manifest.json').read_text(encoding='utf-8'))

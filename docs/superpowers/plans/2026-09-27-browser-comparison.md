@@ -27,33 +27,33 @@
 
 **Files:** tools/browser_cases.py, tools/test_browser_cases.py, assets/browser-inputs.json, src/browser.rs, src/lib.rs, tests/browser_inputs.rs (all under dev/fixtures).
 **Interfaces:** BrowserCase materialized ID/seed/text/font/size/direction/whitespace/parts/initial width; build(case,cx,fonts)->paragraph+AtomicSizes; checked UTF-16/UTF-8 conversion.
-- [ ] Write generator determinism/corpus/font/priority coverage tests and UTF-16/nested/atomic builder tests; observe missing behavior RED.
-- [ ] Implement stable versioned seed generation and matching public builder, with strict validation.
-- [ ] Run Python tests and focused Rust tests GREEN; record the exact corpus/input hashes.
-- [ ] Commit task and ledger result.
+- [x] Write generator determinism/corpus/font/priority coverage tests and UTF-16/nested/atomic builder tests; observe missing behavior RED.
+- [x] Implement stable versioned seed generation and matching public builder, with strict validation.
+- [x] Run Python tests and focused Rust tests GREEN; record the exact corpus/input hashes.
+- [x] Commit task and ledger result.
 
 ### Task 2: Actual browser recorder
 
 **Files:** tools/collect_browser.py, tools/browser_recorder.js, tools/test_collect_browser.py, assets/browser/chromium.json.
 **Interfaces:** collector consumes inputs+manifest, output metadata and records with source UTF-16/UTF-8 endpoints, initial and adjacent boundary probes, no-transition status and atomic baseline geometry.
-- [ ] Add RED validation/result/Unicode/source-line tests before implementation; no mocked browser verdicts.
-- [ ] Implement loopback fixed-font headless collection, explicit errors/timeouts, disposable profile and atomic validated output.
-- [ ] Collect actual browser data; inspect priority cases and whitespace/RTL/atomic source endpoints, then recollect and compare measurements exactly.
-- [ ] Run Python test suite GREEN and commit task/evidence.
+- [x] Add RED validation/result/Unicode/source-line tests before implementation; no mocked browser verdicts.
+- [x] Implement loopback fixed-font headless collection, explicit errors/timeouts, disposable profile and atomic validated output.
+- [x] Collect actual browser data; inspect priority cases and whitespace/RTL/atomic source endpoints, then recollect and compare measurements exactly.
+- [x] Run Python test suite GREEN and commit task/evidence.
 
 ### Task 3: Offline numeric comparison and diagnostic report
 
 **Files:** src/browser.rs, tests/browser_comparison.rs, examples/browser_compare.rs, assets/browser/differences.json.
 **Interfaces:** compare saved browser record with next_line at raw width; strict differences keyed by case/probe and exact expected/actual, transition classification and reproducer report.
-- [ ] Add RED tests for exact break checks, malformed/stale exceptions, metadata mismatch and useful diagnostics.
-- [ ] Implement raw-width comparison and boundary analysis; inspect every mismatch with measured probes, classify numeric/CSS/collector errors and fix collector errors rather than blessing them.
-- [ ] Add only justified exact known differences with evidence and issue links; no automatic blessing or omission.
-- [ ] Run offline comparison GREEN, verify full diagnostic report and commit.
+- [x] Add RED tests for exact break checks, malformed/stale exceptions, metadata mismatch and useful diagnostics.
+- [x] Implement raw-width comparison and boundary analysis; inspect every mismatch with measured probes, classify numeric/CSS/collector errors and fix collector errors rather than blessing them.
+- [x] Add only justified exact known differences with evidence and issue links; no automatic blessing or omission.
+- [x] Run offline comparison GREEN, verify full diagnostic report and commit.
 
 ### Task 4: Documentation and integration gates
 
 **Files:** docs/browser-comparison.md, dev/fixtures/README.md, README.md, CI only if necessary for normal saved-data checks.
-- [ ] Document exact collection/update commands, browser/font/input metadata, source conversion, measured tolerance/difference rationale and supported scope.
-- [ ] Stable/MSRV workspace tests, Python fixture tests, Clippy/docs/fmt/diff; actual collection reproducibility complete.
+- [x] Document exact collection/update commands, browser/font/input metadata, source conversion, measured tolerance/difference rationale and supported scope.
+- [x] Stable/MSRV workspace tests, Python fixture tests, Clippy/docs/fmt/diff; actual collection reproducibility complete.
 - [ ] One fresh final whole-branch reviewer, meaningful RED/GREEN fixes for material findings.
 - [ ] Push/PR; exact HEAD full CI SUCCESS; merge/readback/ancestor verification, bd close and owned workspace cleanup; resume bd ready.

@@ -1,4 +1,6 @@
 import unittest
+import tempfile
+from pathlib import Path
 import browser_cases as cases
 
 class BrowserCasesTests(unittest.TestCase):
@@ -20,6 +22,15 @@ class BrowserCasesTests(unittest.TestCase):
             self.assertTrue(set(c['font_ids']) <= {'latin', 'cjk', 'arabic'})
             self.assertGreater(c['width_subpixels'], 0)
             self.assertTrue(''.join(p['text'] for p in c['parts']))
+
+    def test_stale_materialized_input_fails_without_overwriting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'inputs.json'
+            path.write_text('{}', encoding='utf-8')
+            with self.assertRaises(ValueError):
+                cases.check_materialized(path)
+            self.assertEqual(path.read_text(encoding='utf-8'), '{}')
+        cases.check_materialized()
 
 if __name__ == '__main__':
     unittest.main()

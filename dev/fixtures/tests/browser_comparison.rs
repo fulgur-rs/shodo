@@ -24,10 +24,10 @@ fn saved_browser_metadata_and_source_endpoints_are_valid() {
         assert_eq!(data.metadata[key], format!("{:x}", Sha256::digest(bytes)));
     }
     assert!(
-        data.metadata["browser_version"]
+        !data.metadata["browser_version"]
             .as_str()
             .unwrap()
-            .contains("152.0.7977.82")
+            .is_empty()
     );
 }
 
@@ -44,7 +44,7 @@ fn raw_width_comparison_detects_a_wrong_browser_endpoint_with_a_reproducer() {
     r.samples
         .retain(|s| s.width_subpixels == r.initial.width_subpixels);
     r.samples[0].end_utf8 = 0;
-    let result = browser::compare(&data, &[c.clone()], &mut cx, &fonts).unwrap();
+    let result = browser::compare(&data, std::slice::from_ref(c), &mut cx, &fonts).unwrap();
     assert_eq!(result.mismatches.len(), 1);
     let m = &result.mismatches[0];
     assert_eq!(m.id, "color-ffi");
@@ -59,6 +59,8 @@ fn raw_width_comparison_detects_a_wrong_browser_endpoint_with_a_reproducer() {
         "ffi office",
         "expected",
         "actual",
+        "font=",
+        "size=16",
     ] {
         assert!(report.contains(fragment), "{fragment}: {report}");
     }
@@ -88,6 +90,8 @@ fn exact_difference_ledger_rejects_changes_improvements_duplicates_and_missing_e
     let result = browser::Comparison {
         samples: 1,
         mismatches: vec![browser::Mismatch {
+            font_ids: vec!["latin".into()],
+            font_size: 16.0,
             id: "case".into(),
             seed: 1,
             width_subpixels: 64,

@@ -27,5 +27,20 @@ class CollectorValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             collector.parse_dom('<html><body>loading</body></html>')
 
+    def test_corrupt_atomic_geometry_is_rejected_before_replacing_data(self):
+        original = json.loads((collector.ROOT/'assets/browser/chromium.json').read_text(encoding='utf-8'))
+        inputs = json.loads((collector.ROOT/'assets/browser-inputs.json').read_text(encoding='utf-8'))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'capture.json'
+            path.write_text('previous', encoding='utf-8')
+            for bad in [None, {'top': 0, 'bottom': 18, 'width': 25, 'height': 18},
+                        {'top': 0, 'bottom': 18, 'width': 24, 'height': float('inf')}]:
+                data = json.loads(json.dumps(original))
+                record = next(r for r in data['records'] if r['id'] == 'atomic-baseline')
+                record['samples'][0]['atomic'] = bad
+                with self.assertRaises(ValueError):
+                    collector.save_capture(path, data, inputs, original['fonts'])
+                self.assertEqual(path.read_text(encoding='utf-8'), 'previous')
+
 if __name__ == '__main__':
     unittest.main()

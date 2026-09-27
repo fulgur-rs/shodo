@@ -289,3 +289,6 @@ selection and hit testing, with fixed-font Latin/Arabic connection tests.
 
 The [PNG sample](docs/png-render-sample.md) draws fixed-font public glyph output
 and an atomic rectangle: `cargo run -p shodo-fixtures --example render_png -- /tmp/shodo-sample.png`.
+
+The [Chrome numeric comparison](docs/browser-comparison.md) records fixed-font
+first-line breaks and boundary widths; ordinary tests use saved data offline.
