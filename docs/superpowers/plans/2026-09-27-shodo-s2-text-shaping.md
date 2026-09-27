@@ -104,8 +104,8 @@
 
 **Interfaces:** Consumes complete public behavior of Tasks1–6; produces reproducible validation and exact-HEAD integration evidence.
 
-- [ ] Update examples to remove S0 shaping caveat only once real corpus glyphs pass. Document locale/unknown font/AutoPhrase/automatic hyphenation degradation, complex-scripts mode, cache/budget policy, first-line and public coords/synthesis.
-- [ ] Record fixed-font cold/warm shaping measurements, retained plan reuse and working-set shrink; explain word-cache decision and upstream failure-status draft.
+- [x] Update examples to remove S0 shaping caveat only once real corpus glyphs pass. Document locale/unknown font/AutoPhrase/automatic hyphenation degradation, complex-scripts mode, cache/budget policy, first-line and public coords/synthesis.
+- [x] Record fixed-font cold/warm shaping measurements, retained plan reuse and working-set shrink; explain word-cache decision and upstream failure-status draft.
 - [ ] Verify `cargo fmt --all --check`, Clippy workspace all-targets warnings deny, stable/MSRV1.89 workspace, root no-default and explicit complex-scripts mode, wasm-p shodo, rustdoc workspace, Python5 and fixture asset check.
-- [ ] Package whole branch with skill review-package and dispatch one fresh most-capable reviewer. Regrade findings by user effect, ledger all rulings/deferred minors; fix Important/Critical once with reproduced RED→GREEN and full suite.
+- [x] Package whole branch with skill review-package and dispatch one fresh most-capable reviewer. Regrade findings by user effect, ledger all rulings/deferred minors; fix Important/Critical once with reproduced RED→GREEN and full suite.
 - [ ] Push feat/s2-text-shaping, create PR, verify exact current HEAD all CI success, merge matching HEAD, close shodo-p2m.3, preserve decision record, remove clean worktree/branch, proceed to bd ready next issue.

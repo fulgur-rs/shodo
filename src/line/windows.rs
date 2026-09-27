@@ -143,19 +143,48 @@ fn shape(
     result
 }
 
-fn expand_original(data: &ParagraphData, line: &Range<usize>, range: &mut Range<usize>) {
+fn within_window_budget(data: &ParagraphData, range: &Range<usize>) -> bool {
+    data.limits.max_reshape_window_bytes.is_none_or(|max| {
+        u64::from(data.units[range.end - 1].text.end - data.units[range.start].text.start) <= max
+    })
+}
+
+fn expand_original(data: &ParagraphData, line: &Range<usize>, range: &mut Range<usize>) -> bool {
+    if !within_window_budget(data, range) {
+        return false;
+    }
     while let Some(previous) = last(data, line.start, range.start)
         && compatible(data, previous, range.start)
         && unsafe_join(data, previous, range.start)
     {
+        #[cfg(test)]
+        data.window_queries
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         range.start = clipped_group(data, previous, line).start;
+        if !within_window_budget(data, range) {
+            return false;
+        }
     }
     while let Some(next) = first(data, range.end, line.end)
         && compatible(data, range.end - 1, next)
         && unsafe_join(data, range.end - 1, next)
     {
+        #[cfg(test)]
+        data.window_queries
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         range.end = clipped_group(data, next, line).end;
+        if !within_window_budget(data, range) {
+            return false;
+        }
     }
+    true
+}
+
+fn window_budget_warning(cx: &mut LayoutContext) {
+    cx.warnings.push(
+        crate::limits::WarningKind::Unsupported,
+        "unsafe edge exceeds reshape window budget; retaining shared glyphs",
+    );
 }
 
 /// Re-shape to original safe boundaries, then check new concatenation flags.
@@ -169,7 +198,10 @@ fn materialize(
     budget: Option<u64>,
     replacement: Option<&crate::shape::Replacement>,
 ) -> Option<Window> {
-    expand_original(data, line, &mut range);
+    if !expand_original(data, line, &mut range) {
+        window_budget_warning(cx);
+        return None;
+    }
     loop {
         if storage_split(data, range.start) || storage_split(data, range.end - 1) {
             cx.warnings.push(
@@ -184,7 +216,10 @@ fn materialize(
             && compatible(data, previous, range.start)
         {
             range.start = clipped_group(data, previous, line).start;
-            expand_original(data, line, &mut range);
+            if !expand_original(data, line, &mut range) {
+                window_budget_warning(cx);
+                return None;
+            }
             continue;
         }
         if let Some(next) = first(data, range.end, line.end)
@@ -204,7 +239,10 @@ fn materialize(
             drop(tested);
             if unsafe_probe {
                 range.end = probe.end;
-                expand_original(data, line, &mut range);
+                if !expand_original(data, line, &mut range) {
+                    window_budget_warning(cx);
+                    return None;
+                }
                 continue;
             }
             (store, runs) = shape(data, &range, cx, sat, budget, replacement)?;
@@ -319,9 +357,13 @@ fn measure_edit(
     if needs_last {
         ranges.push(last_range);
     }
-    for range in &mut ranges {
-        expand_original(data, &line, range);
-    }
+    ranges.retain_mut(|range| {
+        let fits = expand_original(data, &line, range);
+        if !fits {
+            window_budget_warning(cx);
+        }
+        fits
+    });
     if ranges.len() == 2 && ranges[0].end > ranges[1].start {
         ranges[0].end = ranges[0].end.max(ranges[1].end);
         ranges.pop();

@@ -48,10 +48,10 @@ pub(super) fn apply(
         TextAlign::Right => data.base_level.is_multiple_of(2),
         _ => reversed_start,
     };
-    let mut shift = if end {
-        spare
-    } else if align == TextAlign::Center {
+    let mut shift = if align == TextAlign::Center {
         spare.div_i32(2)
+    } else if end {
+        spare
     } else {
         LayoutUnit::ZERO
     };
@@ -183,6 +183,13 @@ pub(super) fn apply(
         }
     }
     scan.content = scan.content.add(spare, sat);
+    // Successful justification consumes the spare width in either direction;
+    // the start-alignment fallback shift is only appropriate without expansion.
+    result.shift = if reversed_start {
+        LayoutUnit::ZERO.sub(indent, sat)
+    } else {
+        LayoutUnit::ZERO
+    };
     let ranges: Vec<_> = data.units[start..scan.end]
         .iter()
         .filter_map(|u| match &u.kind {

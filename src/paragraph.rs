@@ -73,6 +73,10 @@ pub(crate) struct ParagraphData {
     pub(crate) baseline_queries: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
     pub(crate) cluster_queries: std::sync::atomic::AtomicUsize,
+    #[cfg(test)]
+    pub(crate) cursor_queries: std::sync::atomic::AtomicUsize,
+    #[cfg(test)]
+    pub(crate) window_queries: std::sync::atomic::AtomicUsize,
     pub(crate) first_line: Option<FirstLineData>,
     pub(crate) source_spans: Vec<crate::mapping::TransformSpan>,
     pub(crate) id: u64,
@@ -300,10 +304,19 @@ impl Paragraph {
             })?;
             finalize_data(&mut data, cx, &mut warnings, &mut sat);
             finalize_data(&mut alternate, cx, &mut warnings, &mut sat);
+            let mut normal_search = 0;
             let mut normal_cursors: Vec<_> = alternate
                 .units
                 .iter()
-                .map(|u| normal_cursor(&data, &alternate, u, source_cuts.as_ref().unwrap()))
+                .map(|u| {
+                    normal_cursor(
+                        &data,
+                        &alternate,
+                        u,
+                        source_cuts.as_ref().unwrap(),
+                        &mut normal_search,
+                    )
+                })
                 .collect();
             normal_cursors.push(Some(data.units.len() as u32));
             for i in 0..alternate.units.len() {
@@ -425,6 +438,10 @@ fn build_data(
         baseline_queries: Default::default(),
         #[cfg(test)]
         cluster_queries: Default::default(),
+        #[cfg(test)]
+        cursor_queries: Default::default(),
+        #[cfg(test)]
+        window_queries: Default::default(),
         first_line: None,
         source_spans: processed.source_spans,
         id,
@@ -504,6 +521,7 @@ fn normal_cursor(
     alternate: &ParagraphData,
     u: &Unit,
     source_cuts: &[std::ops::RangeInclusive<u32>],
+    search: &mut usize,
 ) -> Option<u32> {
     use crate::analysis::units::UnitKind;
     use crate::mapping::TransformSpan;
@@ -522,18 +540,28 @@ fn normal_cursor(
     if TransformSpan::source_position(&normal.source_spans, pos) != source {
         return None;
     }
-    let begin = normal.units.partition_point(|n| n.text.start < pos);
-    normal.units[begin..]
-        .iter()
-        .take_while(|n| n.text.start == pos)
-        .position(|n| match (&n.kind, &u.kind) {
-            (UnitKind::Cluster { .. }, UnitKind::Cluster { .. }) => true,
-            _ => {
-                n.item == u.item
-                    && std::mem::discriminant(&n.kind) == std::mem::discriminant(&u.kind)
+    // Both sets preserve source/item order. Exact mapped cuts are monotone,
+    // including empty markers sharing a source offset, so never restart a group.
+    while let Some(n) = normal.units.get(*search) {
+        #[cfg(test)]
+        normal.cursor_queries.fetch_add(1, Ordering::Relaxed);
+        if n.text.start > pos {
+            return None;
+        }
+        if n.text.start == pos
+            && match (&n.kind, &u.kind) {
+                (UnitKind::Cluster { .. }, UnitKind::Cluster { .. }) => true,
+                _ => {
+                    n.item == u.item
+                        && std::mem::discriminant(&n.kind) == std::mem::discriminant(&u.kind)
+                }
             }
-        })
-        .map(|i| (begin + i) as u32)
+        {
+            return Some(*search as u32);
+        }
+        *search += 1;
+    }
+    None
 }
 
 fn first_line_style(

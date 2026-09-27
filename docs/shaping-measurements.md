@@ -1,21 +1,21 @@
 # S2 fixed-font shaping measurements
 
-Measured on 2026-09-27 with rustc 1.96.0, default features, the checked-in
-12-case corpus, and the three pinned font subsets (404,464 bytes).
+Measured on 2026-09-27 with rustc 1.89.0 after the S2 final review fixes, default
+features, the checked-in 12-case corpus, and the three pinned font subsets (404,464 bytes).
 Font loading/registration happens before the clock starts. Each iteration builds
 all paragraphs through the public fixture API and drops those paragraphs.
 The reusable context retains only shaping plans/scratch, not the paragraphs.
 
 ```sh
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 RUSTFLAGS='-D warnings' \
-  cargo run --offline -p shodo-fixtures --example shape_timing
+  cargo +1.89.0 run --offline -p shodo-fixtures --example shape_timing
 ```
 
 | Context state | Time for all 12 paragraph builds |
 | --- | ---: |
-| First build with a new context | 45.753 ms |
-| Retained context, mean of 100 builds | 42.416 ms |
-| First build after `shrink_to(0)` | 43.406 ms |
+| First build with a new context | 52.241 ms |
+| Retained context, mean of 100 builds | 53.537 ms |
+| First build after `shrink_to(0)` | 54.555 ms |
 
 These are a single local debug-profile sample, not release throughput claims or
 a statistical comparison. Font-layer shaping data is already populated after the
@@ -41,8 +41,8 @@ first-line paragraph and float retry, verify the nonzero aggregate cap, and veri
 that dropping paragraph/collection then shrinking releases the document font layer.
 Shared paragraph/font allocations are not counted as context buffer bytes.
 
-S2 deliberately adds no word cache. This sample shows a modest context-reuse gain
-but does not establish a word-cache benefit. A word cache would need to qualify
+S2 deliberately adds no word cache. This sample does not show a consistent
+context-reuse gain and does not establish a word-cache benefit. A word cache would need to qualify
 text, script, language, features, normalized coordinates, font identity/generation,
 pre/post context, source clusters and discretionary line edges, while respecting
 retention budgets. A future proposal should measure representative application
