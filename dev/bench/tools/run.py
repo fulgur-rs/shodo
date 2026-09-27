@@ -12,12 +12,13 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from pathlib import Path
 
 OPS = ("build", "next_line", "all_lines", "intrinsic", "reuse_widths", "rebuild_widths", "page_retry")
 PHASES = ("context_init", "font_initialization_registration", "build", "all_lines")
 SCOPES = ("font_context_init", "build", "plain_lines", "release_plain_lines", "justify_lines", "release_justify_lines", "reuse_widths", "release_reuse", "rebuild_widths", "release_rebuild", "page_retry", "release_pages", "intrinsic", "release_intrinsic", "drop_paragraphs", "context_shrink_zero", "drop_context", "drop_fonts")
-CONDITIONS = ("rustc", "cargo", "cpu", "os", "features", "profile", "flags", "font_hashes", "input_hash", "harness_hash", "lock_hash", "measurement_config")
+CONDITIONS = ("rustc", "cargo", "cpu", "os", "features", "profile", "flags", "build_configuration", "font_hashes", "input_hash", "harness_hash", "lock_hash", "measurement_config")
 ROOT = Path(__file__).resolve().parents[3]
 VARIANTS = ("many-short-latin", "nested-atomic", "preserved-tabs", "float-retry", "justify", "fallback")
 
@@ -171,17 +172,38 @@ def ensure_lock(root,log,env=None):
     if not (Path(root)/"Cargo.lock").is_file():
         execute(["cargo","+stable","generate-lockfile"],log,cwd=root,env=env)
 
-def executable_from_cargo(output,name,kind):
+def executable_from_cargo(output,name,kind,*,profiles=None):
     found=[]
     for line in output.splitlines():
         row=json.loads(line)
         if row.get("reason")=="compiler-artifact" and row.get("target",{}).get("name")==name and kind in row["target"].get("kind",[]) and row.get("executable"):
-            found.append(Path(row["executable"]))
+            found.append(row)
     require(len(found)==1, "missing/ambiguous Cargo executable")
-    return found[0]
+    if profiles is not None:
+        require(isinstance(found[0].get("profile"),dict), "missing actual Cargo profile")
+        profiles[name]=found[0]["profile"]
+    return Path(found[0]["executable"])
 
 def file_hash(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+def build_configuration(root,env):
+    """Conservative compatibility fingerprint; config contents stay private."""
+    root=Path(root).resolve()
+    configs={}
+    locations=[(f"ancestor-{depth}",directory/".cargo") for depth,directory in enumerate([root,*root.parents])]
+    home=Path(env.get("CARGO_HOME",str(Path.home()/".cargo")))
+    if not home.is_absolute():home=root/home
+    locations.append(("cargo-home",home))
+    for label,directory in locations:
+        for name in ("config","config.toml"):
+            path=directory/name
+            if path.is_file():configs[f"{label}/{name}"]=file_hash(path)
+    variables={key:value for key,value in env.items() if
+        key.startswith(("CARGO_PROFILE_","CARGO_BUILD_","CARGO_TARGET_")) and key!="CARGO_TARGET_DIR" or
+        key in ("CARGO_ENCODED_RUSTFLAGS","CARGO_INCREMENTAL","RUSTFLAGS","RUSTDOCFLAGS","RUSTC","RUSTC_WRAPPER","RUSTC_WORKSPACE_WRAPPER")}
+    profiles=tomllib.loads((root/"Cargo.toml").read_text(encoding="utf-8")).get("profile",{})
+    return dict(workspace_profiles=profiles,cargo_configs=configs,environment=variables)
 
 def tree_hash(paths):
     sha=hashlib.sha256()
@@ -209,15 +231,23 @@ def collect(stage,args):
         common=execute(["git","rev-parse","--git-common-dir"],logs/"git-common.log").strip()
         env["CARGO_TARGET_DIR"]=str((ROOT/common).resolve().parent/"target/performance-harness")
     initial_hashes=source_hashes()
+    initial_build=build_configuration(ROOT,env)
+    actual_profiles={}
     def command(argv,name):return execute(argv,logs/(name+".log"),env=env)
     cargo=["cargo","+stable"]
     ensure_lock(ROOT,logs/"resolve-lock.log",env)
     default=command(cargo+["build","--locked","--release","-p","shodo-bench","--bin","shodo-probe","--message-format=json"],"build-cold")
-    shutil.copy2(executable_from_cargo(default,"shodo-probe","bin"),bins/"cold")
-    benchmark=command(cargo+["bench","--locked","--no-run","-p","shodo-bench","--bench","layout","--message-format=json"],"build-timing")
-    shutil.copy2(executable_from_cargo(benchmark,"layout","bench"),bins/"layout")
+    cold_profiles={}
+    shutil.copy2(executable_from_cargo(default,"shodo-probe","bin",profiles=cold_profiles),bins/"cold")
+    actual_profiles["cold"]=cold_profiles["shodo-probe"]
+    benchmark=command(cargo+["build","--locked","--profile","release","-p","shodo-bench","--bench","layout","--message-format=json"],"build-timing")
+    timing_profiles={}
+    shutil.copy2(executable_from_cargo(benchmark,"layout","bench",profiles=timing_profiles),bins/"layout")
+    actual_profiles["timing"]=timing_profiles["layout"]
     instrumented=command(cargo+["build","--locked","--release","-p","shodo-bench","--bin","shodo-probe","--features","allocation-counting","--message-format=json"],"build-memory")
-    shutil.copy2(executable_from_cargo(instrumented,"shodo-probe","bin"),bins/"memory")
+    memory_profiles={}
+    shutil.copy2(executable_from_cargo(instrumented,"shodo-probe","bin",profiles=memory_profiles),bins/"memory")
+    actual_profiles["memory"]=memory_profiles["shodo-probe"]
     shutil.copy2(ROOT/"Cargo.lock",stage/"Cargo.lock")
     settings=json.loads(command([bins/"cold","--describe"],"describe"))
     selected=[dict(key=f'{s["id"]}/{s["scale"]}',settings=s) for s in settings if args.case is None or s["id"]==args.case]
@@ -244,11 +274,12 @@ def collect(stage,args):
         (samples/f'memory-{settings["id"]}-{settings["scale"]}.json').write_text(output,encoding="utf-8")
         rows.append(dict(**item,timing=timings[key],cold=cold,process_wall_ns=walls,memory=memory))
     require(source_hashes()==initial_hashes, "source changed while measuring")
+    require(build_configuration(ROOT,env)==initial_build, "Cargo configuration changed while measuring")
     require(file_hash(ROOT/"Cargo.lock")==file_hash(stage/"Cargo.lock"), "lockfile changed while measuring")
     cpu=[]
     if Path("/proc/cpuinfo").is_file():
         cpu=sorted({line.split(":",1)[1].strip() for line in Path("/proc/cpuinfo").read_text().splitlines() if line.startswith("model name")})
-    conditions=dict(rustc=command(["rustc","+stable","-Vv"],"rustc").strip(),cargo=command(cargo+["-V"],"cargo").strip(),cpu=dict(models=cpu,machine=platform.machine(),logical_cpus=os.cpu_count(),affinity=sorted(os.sched_getaffinity(0)) if hasattr(os,"sched_getaffinity") else None),os=platform.platform(),features=["complex-scripts"],profile=dict(name="release",opt_level=3,debug=0,incremental=False),flags={k:env.get(k,"") for k in ("RUSTFLAGS","CARGO_ENCODED_RUSTFLAGS","RUSTDOCFLAGS","RUSTC","RUSTC_WRAPPER","RUSTC_WORKSPACE_WRAPPER","CARGO_PROFILE_RELEASE_LTO","CARGO_PROFILE_RELEASE_CODEGEN_UNITS","CARGO_PROFILE_RELEASE_PANIC","CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS","CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS")},font_hashes={p.name:file_hash(p) for p in sorted((ROOT/"dev/fixtures/assets/fonts").iterdir()) if p.is_file()},input_hash=hashlib.sha256(json.dumps(selected,sort_keys=True,separators=(",",":")).encode()).hexdigest(),harness_hash=initial_hashes["harness_hash"],lock_hash=file_hash(stage/"Cargo.lock"),measurement_config=dict(quick=args.quick,cold_samples=args.cold_samples))
+    conditions=dict(rustc=command(["rustc","+stable","-Vv"],"rustc").strip(),cargo=command(cargo+["-V"],"cargo").strip(),cpu=dict(models=cpu,machine=platform.machine(),logical_cpus=os.cpu_count(),affinity=sorted(os.sched_getaffinity(0)) if hasattr(os,"sched_getaffinity") else None),os=platform.platform(),features=["complex-scripts"],profile=dict(name="release",opt_level=3,debug=0,incremental=False,effective=actual_profiles),build_configuration=initial_build,flags={k:env.get(k,"") for k in ("RUSTFLAGS","CARGO_ENCODED_RUSTFLAGS","RUSTDOCFLAGS","RUSTC","RUSTC_WRAPPER","RUSTC_WORKSPACE_WRAPPER","CARGO_PROFILE_RELEASE_LTO","CARGO_PROFILE_RELEASE_CODEGEN_UNITS","CARGO_PROFILE_RELEASE_PANIC","CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS","CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS")},font_hashes={p.name:file_hash(p) for p in sorted((ROOT/"dev/fixtures/assets/fonts").iterdir()) if p.is_file()},input_hash=hashlib.sha256(json.dumps(selected,sort_keys=True,separators=(",",":")).encode()).hexdigest(),harness_hash=initial_hashes["harness_hash"],lock_hash=file_hash(stage/"Cargo.lock"),measurement_config=dict(quick=args.quick,cold_samples=args.cold_samples))
     metadata=dict(revision=command(["git","rev-parse","HEAD"],"revision").strip(),dirty_status=command(["git","status","--porcelain"],"status").splitlines(),source_hash=initial_hashes["source_hash"],conditions=conditions,process_wall_scope="Parent subprocess invocation, startup, probe work, JSON output and log write; inner cold phases reported separately.")
     report=dict(schema=1,metadata=metadata,selected=selected,rows=rows)
     validate_report(report)

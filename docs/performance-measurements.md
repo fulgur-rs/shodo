@@ -2,7 +2,7 @@
 
 `dev/bench` measures shodo with the checked-in fixture fonts and text. It is a
 development workspace package; the library's normal dependencies are unchanged.
-Run it from the repository with Rust stable (at least 1.89) and Python 3:
+Run it from the repository with Rust stable (at least 1.89) and Python 3.11 or newer:
 
 ```sh
 python3 dev/bench/tools/run.py --output /tmp/shodo-full --quick
@@ -79,6 +79,14 @@ revision/dirty state, source and harness hashes, fixed font/input/lock hashes,
 verbose compiler version, Cargo version, CPU/OS, build flags/features/profile and
 measurement settings. Builds select only this package, complex-scripts enabled,
 release optimization 3, debug information 0 and incremental compilation disabled.
+All three executables explicitly use the release profile, including the timing
+bench. Metadata also records each executable's actual Cargo artifact profile,
+workspace profile settings, relevant Cargo/compiler environment overrides and
+hashes of Cargo config files in the workspace, its ancestors and Cargo home.
+Different configuration fingerprints refuse comparison, even when a setting
+would be harmless. Config contents are not copied into the report. Older reports
+without this build fingerprint cannot serve as compatible baselines. Changes to
+these settings during collection also reject publication.
 
 Baseline comparison requires identical machine/toolchain/build conditions,
 configuration, selected inputs, harness/lock/font hashes and operation output.
@@ -101,7 +109,7 @@ coverage remain separate. Historical debug measurements in
 The initial full run is summarized in `dev/bench/results/initial.json`: 54
 workloads, 378 warm operation samples and 162 cold/memory process outputs.
 It used Rust 1.97.1, an AMD Ryzen 5 5600G, release optimization 3 and quick mode
-with two cold processes per workload. The engine revision was `beef4f8`; the
+with two cold processes per workload. The engine revision was `d5ecb16`; the
 runner was uncommitted, with its exact harness and source hashes recorded in the
 metadata. The summary records the SHA256 of the complete raw report and its
 local archive path, outside the disposable worktree. It is diagnostic evidence,
@@ -111,14 +119,14 @@ Selected warm medians in microseconds, with scales 1 / 8 / 64:
 
 | Case | Build | All lines |
 | --- | --- | --- |
-| latin-short | 82.4 / 592.0 / 4552.7 | 31.1 / 219.1 / 1729.2 |
-| japanese-short | 87.7 / 566.3 / 4308.9 | 42.5 / 269.1 / 2254.7 |
-| arabic-short | 133.0 / 781.0 / 6200.2 | 224.6 / 6019.3 / 52302.1 |
+| latin-short | 87.7 / 581.1 / 5148.6 | 30.6 / 308.1 / 2534.7 |
+| japanese-short | 86.8 / 565.5 / 4227.6 | 25.1 / 266.1 / 2322.7 |
+| arabic-short | 111.9 / 772.9 / 6115.5 | 220.4 / 5910.0 / 51480.8 |
 
 A separate repeated `latin-short` run at all three scales compared successfully
 with the first representative run using identical recorded conditions. Warm
-ratios ranged from approximately 0.96 to 1.88 and all scope net byte deltas were
+ratios ranged from approximately 0.96 to 1.09 and all scope net byte deltas were
 zero. Both runs use the same engine revision; this checks baseline comparison
 and illustrates measurement variation, without claiming a code improvement.
 Full raw outputs are retained under the root checkout's
-`target/performance-artifacts/{full-final,latin-final-before,latin-final-after}`.
+`target/performance-artifacts/{full-profile-fixed,latin-profile-before,latin-profile-after}`.

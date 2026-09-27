@@ -1,11 +1,14 @@
 import copy
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location("bench_runner", Path(__file__).with_name("run.py"))
 runner = importlib.util.module_from_spec(SPEC)
@@ -27,9 +30,71 @@ def valid_report():
     timing["page_retry"]["digest"]["height_retries"]=2
     timing["intrinsic"]["digest"].update(lines=0,glyphs=0,runs=0,intrinsic_measurements=1)
     timing["next_line"]["digest"].update(lines=1,glyphs=5)
-    return dict(schema=1, metadata=dict(revision="one",conditions=dict(rustc="rust",cargo="cargo",cpu="cpu",os="os",features=["complex-scripts"],profile="release",flags=[],font_hashes=["b"*64],input_hash="c"*64,harness_hash="d"*64,lock_hash="e"*64,measurement_config=dict(quick=True,cold_samples=2))), selected=[dict(key=key,settings=settings)], rows=[dict(key=key,settings=settings,timing=timing,cold=[cold,cold],process_wall_ns=[20,20],memory=memory)])
+    return dict(schema=1, metadata=dict(revision="one",conditions=dict(rustc="rust",cargo="cargo",cpu="cpu",os="os",features=["complex-scripts"],profile="release",flags=[],build_configuration=dict(workspace_profiles={},cargo_configs={},environment={}),font_hashes=["b"*64],input_hash="c"*64,harness_hash="d"*64,lock_hash="e"*64,measurement_config=dict(quick=True,cold_samples=2))), selected=[dict(key=key,settings=settings)], rows=[dict(key=key,settings=settings,timing=timing,cold=[cold,cold],process_wall_ns=[20,20],memory=memory)])
 
 class ReportTests(unittest.TestCase):
+    def test_reports_without_cargo_build_configuration_are_rejected(self):
+        report=valid_report();report["metadata"]["conditions"].pop("build_configuration",None)
+        with self.assertRaises(ValueError):runner.validate_report(report)
+
+    def test_workspace_profile_change_rejects_baseline_comparison(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);manifest=root/"Cargo.toml"
+            manifest.write_text('[workspace]\n[profile.release]\nlto=false\n')
+            before=valid_report()
+            before["metadata"]["conditions"]["build_configuration"]=runner.build_configuration(root,{"CARGO_HOME":str(root/"cargo-home")})
+            manifest.write_text('[workspace]\n[profile.release]\nlto=true\n')
+            after=copy.deepcopy(before)
+            after["metadata"]["conditions"]["build_configuration"]=runner.build_configuration(root,{"CARGO_HOME":str(root/"cargo-home")})
+            with self.assertRaises(ValueError):runner.compare(after,before)
+
+    def test_cargo_config_or_target_environment_change_rejects_comparison(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)/"workspace";root.mkdir();(root/"Cargo.toml").write_text('[workspace]\n')
+            home=Path(tmp)/"cargo-home";home.mkdir()
+            env={"CARGO_HOME":str(home)}
+            before=valid_report()
+            before["metadata"]["conditions"]["build_configuration"]=runner.build_configuration(root,env)
+            for config in [root/".cargo/config.toml",root.parent/".cargo/config",home/"config.toml"]:
+                with self.subTest(config=config):
+                    config.parent.mkdir(parents=True,exist_ok=True)
+                    config.write_text('[build]\nrustflags=["-C", "opt-level=0"]\n')
+                    after=copy.deepcopy(before)
+                    after["metadata"]["conditions"]["build_configuration"]=runner.build_configuration(root,env)
+                    with self.assertRaises(ValueError):runner.compare(after,before)
+                    config.unlink()
+            for key,value in [("CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS","-C opt-level=0"),("CARGO_PROFILE_RELEASE_STRIP","symbols"),("CARGO_BUILD_TARGET","aarch64-unknown-linux-gnu")]:
+                with self.subTest(key=key):
+                    after=copy.deepcopy(before)
+                    after["metadata"]["conditions"]["build_configuration"]=runner.build_configuration(root,dict(env,**{key:value}))
+                    with self.assertRaises(ValueError):runner.compare(after,before)
+
+    def test_collector_builds_timing_with_release_despite_bench_override(self):
+        # A bench-profile build would silently record release opt3 for opt0 code.
+        class BuildsComplete(Exception): pass
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            for directory in ["src", "dev/bench/src", "dev/bench/benches", "dev/bench/tools", "dev/fixtures/assets", "dev/fixtures/src"]:
+                (root/directory).mkdir(parents=True,exist_ok=True)
+            (root/"Cargo.toml").write_text('[package]\nname="shodo-bench"\nversion="0.0.0"\nedition="2024"\n[workspace]\n[features]\nallocation-counting=[]\n[[bin]]\nname="shodo-probe"\npath="src/main.rs"\n[[bench]]\nname="layout"\npath="dev/bench/benches/layout.rs"\nharness=false\n')
+            (root/"src/main.rs").write_text('fn main() {}')
+            (root/"dev/bench/benches/layout.rs").write_text('fn main() {}')
+            for name in ["dev/bench/Cargo.toml", "dev/fixtures/Cargo.toml", "dev/fixtures/assets/cases.json", "dev/bench/tools/run.py"]:
+                (root/name).write_text("")
+            stage=root/"output";stage.mkdir()
+            actual_execute=runner.execute;profiles=[]
+            def execute(argv,log,*,cwd=None,env=None):
+                if "--describe" in argv:raise BuildsComplete()
+                output=actual_execute(argv,log,cwd=root if cwd is None else cwd,env=env)
+                if "--message-format=json" in argv:
+                    artifacts=[json.loads(line) for line in output.splitlines()]
+                    name=argv[argv.index("--bench" if "--bench" in argv else "--bin")+1]
+                    profiles.extend(row["profile"] for row in artifacts if row.get("executable") and row["target"]["name"]==name)
+                return output
+            with patch.object(runner,"ROOT",root),patch.object(runner,"execute",execute),patch.dict(os.environ,{"CARGO_TARGET_DIR":str(root/"target"),"CARGO_PROFILE_BENCH_OPT_LEVEL":"0"}):
+                with self.assertRaises(BuildsComplete):runner.collect(stage,SimpleNamespace(case=None,quick=True,cold_samples=2,baseline=None))
+            self.assertEqual(len(profiles),3)
+            self.assertEqual([p["opt_level"] for p in profiles],["3","3","3"])
     def test_fresh_checkout_resolves_lock_and_existing_lock_is_preserved(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);(root/"src").mkdir();(root/"src/lib.rs").write_text("")
@@ -92,7 +157,7 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(result["rows"][0]["cold_median_ratios"]["build"],1)
         self.assertEqual(result["rows"][0]["process_wall_median_ratio"],1)
     def test_changed_conditions_are_rejected(self):
-        for field in ["rustc","cargo","cpu","os","features","profile","flags","font_hashes","input_hash","harness_hash","lock_hash","measurement_config"]:
+        for field in ["rustc","cargo","cpu","os","features","profile","flags","build_configuration","font_hashes","input_hash","harness_hash","lock_hash","measurement_config"]:
             after=valid_report();after["metadata"]["conditions"][field]="different"
             with self.subTest(field=field),self.assertRaises(ValueError):runner.compare(after,valid_report())
     def test_missing_duplicate_or_empty_measurements_are_rejected(self):
