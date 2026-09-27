@@ -1,0 +1,1072 @@
+{
+  "format_version": 1,
+  "inputs_sha256": "be582c013c19967078ea3ab35c6e398d6b303aeeaa02e1c93ef927c013349aad",
+  "capture_sha256": "9a51ece89fea3ae27882e0cfe4f2c8e6f799fc684f61a052e824070370dcf253",
+  "notes": [
+    "401/458 source endpoints match at raw widths; 44 boundary-drift observations, 8 CJK spacing observations and 5 hanging-tab observations are retained exactly, not suppressed by a tolerance.",
+    "Atomic bottom-baseline policy is shared. Raw font/line baseline differs by0.203125px. At3812 subpixels, the one-unit line transition also moves the atomic by40px; both geometry vectors are checked exactly. Numeric cause attribution is observational, not a full Chromium internal arithmetic audit."
+  ],
+  "transitions": [
+    {
+      "id": "latin-02",
+      "target": 13,
+      "browser_subpixels": 6507,
+      "shodo_subpixels": 6508,
+      "shodo_at": 13,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "latin-03",
+      "target": 18,
+      "browser_subpixels": 9527,
+      "shodo_subpixels": 9527,
+      "shodo_at": 18,
+      "delta_subpixels": 0
+    },
+    {
+      "id": "latin-04",
+      "target": 20,
+      "browser_subpixels": 9958,
+      "shodo_subpixels": 9960,
+      "shodo_at": 20,
+      "delta_subpixels": 2
+    },
+    {
+      "id": "latin-06",
+      "target": 9,
+      "browser_subpixels": 4271,
+      "shodo_subpixels": 4272,
+      "shodo_at": 9,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "latin-07",
+      "target": 12,
+      "browser_subpixels": 5580,
+      "shodo_subpixels": 5579,
+      "shodo_at": 12,
+      "delta_subpixels": -1
+    },
+    {
+      "id": "latin-08",
+      "target": 15,
+      "browser_subpixels": 6298,
+      "shodo_subpixels": 6297,
+      "shodo_at": 15,
+      "delta_subpixels": -1
+    },
+    {
+      "id": "latin-09",
+      "target": 23,
+      "browser_subpixels": 10182,
+      "shodo_subpixels": 10183,
+      "shodo_at": 23,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "latin-11",
+      "target": 14,
+      "browser_subpixels": 6113,
+      "shodo_subpixels": 6113,
+      "shodo_at": 14,
+      "delta_subpixels": 0
+    },
+    {
+      "id": "latin-12",
+      "target": 12,
+      "browser_subpixels": 5093,
+      "shodo_subpixels": 5093,
+      "shodo_at": 12,
+      "delta_subpixels": 0
+    },
+    {
+      "id": "latin-13",
+      "target": 20,
+      "browser_subpixels": 9590,
+      "shodo_subpixels": 9592,
+      "shodo_at": 20,
+      "delta_subpixels": 2
+    },
+    {
+      "id": "latin-14",
+      "target": 16,
+      "browser_subpixels": 9045,
+      "shodo_subpixels": 9045,
+      "shodo_at": 16,
+      "delta_subpixels": 0
+    },
+    {
+      "id": "latin-16",
+      "target": 10,
+      "browser_subpixels": 4885,
+      "shodo_subpixels": 4886,
+      "shodo_at": 10,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "japanese-01",
+      "target": 18,
+      "browser_subpixels": 6239,
+      "shodo_subpixels": 6240,
+      "shodo_at": 18,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "japanese-02",
+      "target": 21,
+      "browser_subpixels": 7391,
+      "shodo_subpixels": 7392,
+      "shodo_at": 21,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "japanese-03",
+      "target": 27,
+      "browser_subpixels": 9540,
+      "shodo_subpixels": 9541,
+      "shodo_at": 27,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "japanese-04",
+      "target": 30,
+      "browser_subpixels": 10240,
+      "shodo_subpixels": 10240,
+      "shodo_at": 30,
+      "delta_subpixels": 0
+    },
+    {
+      "id": "japanese-05",
+      "target": 15,
+      "browser_subpixels": 5199,
+      "shodo_subpixels": 5200,
+      "shodo_at": 15,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "japanese-06",
+      "target": 18,
+      "browser_subpixels": 6230,
+      "shodo_subpixels": 6230,
+      "shodo_at": 18,
+      "delta_subpixels": 0
+    },
+    {
+      "id": "japanese-07",
+      "target": 21,
+      "browser_subpixels": 6969,
+      "shodo_subpixels": 7504,
+      "shodo_at": 21,
+      "delta_subpixels": 535
+    },
+    {
+      "id": "japanese-08",
+      "target": 27,
+      "browser_subpixels": 9216,
+      "shodo_subpixels": 9216,
+      "shodo_at": 27,
+      "delta_subpixels": 0
+    },
+    {
+      "id": "japanese-09",
+      "target": 30,
+      "browser_subpixels": 10295,
+      "shodo_subpixels": 10296,
+      "shodo_at": 30,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "japanese-10",
+      "target": 15,
+      "browser_subpixels": 5279,
+      "shodo_subpixels": 5280,
+      "shodo_at": 15,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "japanese-11",
+      "target": 18,
+      "browser_subpixels": 6432,
+      "shodo_subpixels": 6432,
+      "shodo_at": 18,
+      "delta_subpixels": 0
+    },
+    {
+      "id": "japanese-12",
+      "target": 24,
+      "browser_subpixels": 8089,
+      "shodo_subpixels": 8090,
+      "shodo_at": 24,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "japanese-13",
+      "target": 27,
+      "browser_subpixels": 8735,
+      "shodo_subpixels": 9256,
+      "shodo_at": 27,
+      "delta_subpixels": 521
+    },
+    {
+      "id": "japanese-14",
+      "target": 30,
+      "browser_subpixels": 10559,
+      "shodo_subpixels": 10560,
+      "shodo_at": 30,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "japanese-15",
+      "target": 15,
+      "browser_subpixels": 5360,
+      "shodo_subpixels": 5360,
+      "shodo_at": 15,
+      "delta_subpixels": 0
+    },
+    {
+      "id": "japanese-16",
+      "target": 18,
+      "browser_subpixels": 6144,
+      "shodo_subpixels": 6144,
+      "shodo_at": 18,
+      "delta_subpixels": 0
+    },
+    {
+      "id": "arabic-01",
+      "target": 24,
+      "browser_subpixels": 5218,
+      "shodo_subpixels": 5219,
+      "shodo_at": 24,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "arabic-02",
+      "target": 41,
+      "browser_subpixels": 8017,
+      "shodo_subpixels": 8016,
+      "shodo_at": 41,
+      "delta_subpixels": -1
+    },
+    {
+      "id": "arabic-03",
+      "target": 37,
+      "browser_subpixels": 7668,
+      "shodo_subpixels": 7672,
+      "shodo_at": 37,
+      "delta_subpixels": 4
+    },
+    {
+      "id": "arabic-04",
+      "target": 37,
+      "browser_subpixels": 8436,
+      "shodo_subpixels": 8438,
+      "shodo_at": 37,
+      "delta_subpixels": 2
+    },
+    {
+      "id": "arabic-05",
+      "target": 27,
+      "browser_subpixels": 5289,
+      "shodo_subpixels": 5290,
+      "shodo_at": 27,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "arabic-06",
+      "target": 27,
+      "browser_subpixels": 6124,
+      "shodo_subpixels": 6124,
+      "shodo_at": 27,
+      "delta_subpixels": 0
+    },
+    {
+      "id": "arabic-07",
+      "target": 29,
+      "browser_subpixels": 6926,
+      "shodo_subpixels": 6929,
+      "shodo_at": 29,
+      "delta_subpixels": 3
+    },
+    {
+      "id": "arabic-08",
+      "target": 37,
+      "browser_subpixels": 8156,
+      "shodo_subpixels": 8158,
+      "shodo_at": 37,
+      "delta_subpixels": 2
+    },
+    {
+      "id": "arabic-09",
+      "target": 45,
+      "browser_subpixels": 10139,
+      "shodo_subpixels": 10139,
+      "shodo_at": 45,
+      "delta_subpixels": 0
+    },
+    {
+      "id": "arabic-10",
+      "target": 24,
+      "browser_subpixels": 5623,
+      "shodo_subpixels": 5623,
+      "shodo_at": 24,
+      "delta_subpixels": 0
+    },
+    {
+      "id": "arabic-11",
+      "target": 22,
+      "browser_subpixels": 5533,
+      "shodo_subpixels": 5536,
+      "shodo_at": 22,
+      "delta_subpixels": 3
+    },
+    {
+      "id": "arabic-12",
+      "target": 34,
+      "browser_subpixels": 8093,
+      "shodo_subpixels": 8095,
+      "shodo_at": 34,
+      "delta_subpixels": 2
+    },
+    {
+      "id": "arabic-13",
+      "target": 42,
+      "browser_subpixels": 8824,
+      "shodo_subpixels": 8825,
+      "shodo_at": 42,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "arabic-14",
+      "target": 38,
+      "browser_subpixels": 8621,
+      "shodo_subpixels": 8620,
+      "shodo_at": 38,
+      "delta_subpixels": -1
+    },
+    {
+      "id": "arabic-16",
+      "target": 28,
+      "browser_subpixels": 5781,
+      "shodo_subpixels": 5782,
+      "shodo_at": 28,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "nested-inline",
+      "target": 16,
+      "browser_subpixels": 8428,
+      "shodo_subpixels": 8429,
+      "shodo_at": 16,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "color-ffi",
+      "target": 19,
+      "browser_subpixels": 7833,
+      "shodo_subpixels": 7835,
+      "shodo_at": 19,
+      "delta_subpixels": 2
+    },
+    {
+      "id": "arabic-wrap",
+      "target": 42,
+      "browser_subpixels": 7957,
+      "shodo_subpixels": 7956,
+      "shodo_at": 42,
+      "delta_subpixels": -1
+    },
+    {
+      "id": "pre-wrap-tab",
+      "target": 9,
+      "browser_subpixels": 4336,
+      "shodo_subpixels": 6390,
+      "shodo_at": 9,
+      "delta_subpixels": 2054
+    },
+    {
+      "id": "japanese-punctuation",
+      "target": 21,
+      "browser_subpixels": 7168,
+      "shodo_subpixels": 7168,
+      "shodo_at": 21,
+      "delta_subpixels": 0
+    },
+    {
+      "id": "atomic-baseline",
+      "target": 8,
+      "browser_subpixels": 3812,
+      "shodo_subpixels": 3813,
+      "shodo_at": 8,
+      "delta_subpixels": 1
+    },
+    {
+      "id": "supplementary",
+      "target": 16,
+      "browser_subpixels": 5120,
+      "shodo_subpixels": 5120,
+      "shodo_at": 16,
+      "delta_subpixels": 0
+    }
+  ],
+  "atomic_geometry": [
+    {
+      "id": "atomic-baseline",
+      "width_subpixels": 1,
+      "browser": {
+        "top": 48.0,
+        "bottom": 66.0,
+        "width": 24.0,
+        "height": 18.0
+      },
+      "shodo": {
+        "top": 48.203125,
+        "bottom": 66.203125,
+        "width": 24.0,
+        "height": 18.0
+      }
+    },
+    {
+      "id": "atomic-baseline",
+      "width_subpixels": 3748,
+      "browser": {
+        "top": 48.0,
+        "bottom": 66.0,
+        "width": 24.0,
+        "height": 18.0
+      },
+      "shodo": {
+        "top": 48.203125,
+        "bottom": 66.203125,
+        "width": 24.0,
+        "height": 18.0
+      }
+    },
+    {
+      "id": "atomic-baseline",
+      "width_subpixels": 3810,
+      "browser": {
+        "top": 48.0,
+        "bottom": 66.0,
+        "width": 24.0,
+        "height": 18.0
+      },
+      "shodo": {
+        "top": 48.203125,
+        "bottom": 66.203125,
+        "width": 24.0,
+        "height": 18.0
+      }
+    },
+    {
+      "id": "atomic-baseline",
+      "width_subpixels": 3811,
+      "browser": {
+        "top": 48.0,
+        "bottom": 66.0,
+        "width": 24.0,
+        "height": 18.0
+      },
+      "shodo": {
+        "top": 48.203125,
+        "bottom": 66.203125,
+        "width": 24.0,
+        "height": 18.0
+      }
+    },
+    {
+      "id": "atomic-baseline",
+      "width_subpixels": 3812,
+      "browser": {
+        "top": 8.0,
+        "bottom": 26.0,
+        "width": 24.0,
+        "height": 18.0
+      },
+      "shodo": {
+        "top": 48.203125,
+        "bottom": 66.203125,
+        "width": 24.0,
+        "height": 18.0
+      }
+    },
+    {
+      "id": "atomic-baseline",
+      "width_subpixels": 3813,
+      "browser": {
+        "top": 8.0,
+        "bottom": 26.0,
+        "width": 24.0,
+        "height": 18.0
+      },
+      "shodo": {
+        "top": 8.203125,
+        "bottom": 26.203125,
+        "width": 24.0,
+        "height": 18.0
+      }
+    },
+    {
+      "id": "atomic-baseline",
+      "width_subpixels": 3814,
+      "browser": {
+        "top": 8.0,
+        "bottom": 26.0,
+        "width": 24.0,
+        "height": 18.0
+      },
+      "shodo": {
+        "top": 8.203125,
+        "bottom": 26.203125,
+        "width": 24.0,
+        "height": 18.0
+      }
+    },
+    {
+      "id": "atomic-baseline",
+      "width_subpixels": 3876,
+      "browser": {
+        "top": 8.0,
+        "bottom": 26.0,
+        "width": 24.0,
+        "height": 18.0
+      },
+      "shodo": {
+        "top": 8.203125,
+        "bottom": 26.203125,
+        "width": 24.0,
+        "height": 18.0
+      }
+    },
+    {
+      "id": "atomic-baseline",
+      "width_subpixels": 5760,
+      "browser": {
+        "top": 8.0,
+        "bottom": 26.0,
+        "width": 24.0,
+        "height": 18.0
+      },
+      "shodo": {
+        "top": 8.203125,
+        "bottom": 26.203125,
+        "width": 24.0,
+        "height": 18.0
+      }
+    }
+  ],
+  "entries": [
+    {
+      "id": "latin-02",
+      "width_subpixels": 6507,
+      "expected": 13,
+      "actual": 6,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend13, measured Chrome threshold6507, shodo threshold6508 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "latin-04",
+      "width_subpixels": 9958,
+      "expected": 20,
+      "actual": 12,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend20, measured Chrome threshold9958, shodo threshold9960 (delta2 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "latin-04",
+      "width_subpixels": 9959,
+      "expected": 20,
+      "actual": 12,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend20, measured Chrome threshold9958, shodo threshold9960 (delta2 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "latin-06",
+      "width_subpixels": 4271,
+      "expected": 9,
+      "actual": 7,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend9, measured Chrome threshold4271, shodo threshold4272 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "latin-07",
+      "width_subpixels": 5579,
+      "expected": 8,
+      "actual": 12,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend12, measured Chrome threshold5580, shodo threshold5579 (delta-1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "latin-08",
+      "width_subpixels": 6297,
+      "expected": 7,
+      "actual": 15,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend15, measured Chrome threshold6298, shodo threshold6297 (delta-1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "latin-09",
+      "width_subpixels": 10182,
+      "expected": 23,
+      "actual": 16,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend23, measured Chrome threshold10182, shodo threshold10183 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "latin-13",
+      "width_subpixels": 9590,
+      "expected": 20,
+      "actual": 14,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend20, measured Chrome threshold9590, shodo threshold9592 (delta2 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "latin-13",
+      "width_subpixels": 9591,
+      "expected": 20,
+      "actual": 14,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend20, measured Chrome threshold9590, shodo threshold9592 (delta2 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "latin-16",
+      "width_subpixels": 4885,
+      "expected": 10,
+      "actual": 6,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend10, measured Chrome threshold4885, shodo threshold4886 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "japanese-01",
+      "width_subpixels": 6239,
+      "expected": 18,
+      "actual": 15,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend18, measured Chrome threshold6239, shodo threshold6240 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "japanese-02",
+      "width_subpixels": 7391,
+      "expected": 21,
+      "actual": 18,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend21, measured Chrome threshold7391, shodo threshold7392 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "japanese-03",
+      "width_subpixels": 9540,
+      "expected": 27,
+      "actual": 24,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend27, measured Chrome threshold9540, shodo threshold9541 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "japanese-05",
+      "width_subpixels": 5199,
+      "expected": 15,
+      "actual": 12,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend15, measured Chrome threshold5199, shodo threshold5200 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "japanese-07",
+      "width_subpixels": 6969,
+      "expected": 21,
+      "actual": 15,
+      "category": "css-text-spacing-trim",
+      "evidence": "Measured threshold Chrome 6969/64px, shodo 7504/64px. Real CSS space-all probe removes half-em punctuation compression: Japanese07=7504, Japanese13=9255 (shodo9256). Original normal CSS retained.",
+      "issue": "shodo-unc.1"
+    },
+    {
+      "id": "japanese-07",
+      "width_subpixels": 6970,
+      "expected": 21,
+      "actual": 15,
+      "category": "css-text-spacing-trim",
+      "evidence": "Measured threshold Chrome 6969/64px, shodo 7504/64px. Real CSS space-all probe removes half-em punctuation compression: Japanese07=7504, Japanese13=9255 (shodo9256). Original normal CSS retained.",
+      "issue": "shodo-unc.1"
+    },
+    {
+      "id": "japanese-07",
+      "width_subpixels": 6971,
+      "expected": 21,
+      "actual": 15,
+      "category": "css-text-spacing-trim",
+      "evidence": "Measured threshold Chrome 6969/64px, shodo 7504/64px. Real CSS space-all probe removes half-em punctuation compression: Japanese07=7504, Japanese13=9255 (shodo9256). Original normal CSS retained.",
+      "issue": "shodo-unc.1"
+    },
+    {
+      "id": "japanese-07",
+      "width_subpixels": 7033,
+      "expected": 21,
+      "actual": 15,
+      "category": "css-text-spacing-trim",
+      "evidence": "Measured threshold Chrome 6969/64px, shodo 7504/64px. Real CSS space-all probe removes half-em punctuation compression: Japanese07=7504, Japanese13=9255 (shodo9256). Original normal CSS retained.",
+      "issue": "shodo-unc.1"
+    },
+    {
+      "id": "japanese-09",
+      "width_subpixels": 10295,
+      "expected": 30,
+      "actual": 27,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend30, measured Chrome threshold10295, shodo threshold10296 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "japanese-10",
+      "width_subpixels": 5279,
+      "expected": 15,
+      "actual": 12,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend15, measured Chrome threshold5279, shodo threshold5280 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "japanese-12",
+      "width_subpixels": 8089,
+      "expected": 24,
+      "actual": 18,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend24, measured Chrome threshold8089, shodo threshold8090 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "japanese-13",
+      "width_subpixels": 8735,
+      "expected": 27,
+      "actual": 24,
+      "category": "css-text-spacing-trim",
+      "evidence": "Measured threshold Chrome 8735/64px, shodo 9256/64px. Real CSS space-all probe removes half-em punctuation compression: Japanese07=7504, Japanese13=9255 (shodo9256). Original normal CSS retained.",
+      "issue": "shodo-unc.1"
+    },
+    {
+      "id": "japanese-13",
+      "width_subpixels": 8736,
+      "expected": 27,
+      "actual": 24,
+      "category": "css-text-spacing-trim",
+      "evidence": "Measured threshold Chrome 8735/64px, shodo 9256/64px. Real CSS space-all probe removes half-em punctuation compression: Japanese07=7504, Japanese13=9255 (shodo9256). Original normal CSS retained.",
+      "issue": "shodo-unc.1"
+    },
+    {
+      "id": "japanese-13",
+      "width_subpixels": 8737,
+      "expected": 27,
+      "actual": 24,
+      "category": "css-text-spacing-trim",
+      "evidence": "Measured threshold Chrome 8735/64px, shodo 9256/64px. Real CSS space-all probe removes half-em punctuation compression: Japanese07=7504, Japanese13=9255 (shodo9256). Original normal CSS retained.",
+      "issue": "shodo-unc.1"
+    },
+    {
+      "id": "japanese-13",
+      "width_subpixels": 8799,
+      "expected": 27,
+      "actual": 24,
+      "category": "css-text-spacing-trim",
+      "evidence": "Measured threshold Chrome 8735/64px, shodo 9256/64px. Real CSS space-all probe removes half-em punctuation compression: Japanese07=7504, Japanese13=9255 (shodo9256). Original normal CSS retained.",
+      "issue": "shodo-unc.1"
+    },
+    {
+      "id": "japanese-14",
+      "width_subpixels": 10559,
+      "expected": 30,
+      "actual": 27,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend30, measured Chrome threshold10559, shodo threshold10560 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-01",
+      "width_subpixels": 5218,
+      "expected": 24,
+      "actual": 11,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend24, measured Chrome threshold5218, shodo threshold5219 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-02",
+      "width_subpixels": 8016,
+      "expected": 26,
+      "actual": 41,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend41, measured Chrome threshold8017, shodo threshold8016 (delta-1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-03",
+      "width_subpixels": 7668,
+      "expected": 37,
+      "actual": 26,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend37, measured Chrome threshold7668, shodo threshold7672 (delta4 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-03",
+      "width_subpixels": 7669,
+      "expected": 37,
+      "actual": 26,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend37, measured Chrome threshold7668, shodo threshold7672 (delta4 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-03",
+      "width_subpixels": 7670,
+      "expected": 37,
+      "actual": 26,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend37, measured Chrome threshold7668, shodo threshold7672 (delta4 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-04",
+      "width_subpixels": 8436,
+      "expected": 37,
+      "actual": 24,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend37, measured Chrome threshold8436, shodo threshold8438 (delta2 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-04",
+      "width_subpixels": 8437,
+      "expected": 37,
+      "actual": 24,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend37, measured Chrome threshold8436, shodo threshold8438 (delta2 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-05",
+      "width_subpixels": 5289,
+      "expected": 27,
+      "actual": 11,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend27, measured Chrome threshold5289, shodo threshold5290 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-07",
+      "width_subpixels": 6926,
+      "expected": 29,
+      "actual": 16,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend29, measured Chrome threshold6926, shodo threshold6929 (delta3 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-07",
+      "width_subpixels": 6927,
+      "expected": 29,
+      "actual": 16,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend29, measured Chrome threshold6926, shodo threshold6929 (delta3 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-07",
+      "width_subpixels": 6928,
+      "expected": 29,
+      "actual": 16,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend29, measured Chrome threshold6926, shodo threshold6929 (delta3 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-08",
+      "width_subpixels": 8156,
+      "expected": 37,
+      "actual": 26,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend37, measured Chrome threshold8156, shodo threshold8158 (delta2 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-08",
+      "width_subpixels": 8157,
+      "expected": 37,
+      "actual": 26,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend37, measured Chrome threshold8156, shodo threshold8158 (delta2 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-11",
+      "width_subpixels": 5533,
+      "expected": 22,
+      "actual": 11,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend22, measured Chrome threshold5533, shodo threshold5536 (delta3 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-11",
+      "width_subpixels": 5534,
+      "expected": 22,
+      "actual": 11,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend22, measured Chrome threshold5533, shodo threshold5536 (delta3 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-11",
+      "width_subpixels": 5535,
+      "expected": 22,
+      "actual": 11,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend22, measured Chrome threshold5533, shodo threshold5536 (delta3 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-12",
+      "width_subpixels": 8093,
+      "expected": 34,
+      "actual": 21,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend34, measured Chrome threshold8093, shodo threshold8095 (delta2 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-12",
+      "width_subpixels": 8094,
+      "expected": 34,
+      "actual": 21,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend34, measured Chrome threshold8093, shodo threshold8095 (delta2 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-13",
+      "width_subpixels": 8824,
+      "expected": 42,
+      "actual": 26,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend42, measured Chrome threshold8824, shodo threshold8825 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-14",
+      "width_subpixels": 8620,
+      "expected": 22,
+      "actual": 38,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend38, measured Chrome threshold8621, shodo threshold8620 (delta-1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-16",
+      "width_subpixels": 5781,
+      "expected": 28,
+      "actual": 13,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend28, measured Chrome threshold5781, shodo threshold5782 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "nested-inline",
+      "width_subpixels": 8428,
+      "expected": 16,
+      "actual": 8,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend16, measured Chrome threshold8428, shodo threshold8429 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "color-ffi",
+      "width_subpixels": 7833,
+      "expected": 19,
+      "actual": 11,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend19, measured Chrome threshold7833, shodo threshold7835 (delta2 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "color-ffi",
+      "width_subpixels": 7834,
+      "expected": 19,
+      "actual": 11,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend19, measured Chrome threshold7833, shodo threshold7835 (delta2 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "arabic-wrap",
+      "width_subpixels": 7956,
+      "expected": 27,
+      "actual": 42,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend42, measured Chrome threshold7957, shodo threshold7956 (delta-1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    },
+    {
+      "id": "pre-wrap-tab",
+      "width_subpixels": 4336,
+      "expected": 9,
+      "actual": 5,
+      "category": "css-tab-hanging",
+      "evidence": "Target sourceend9 threshold Chrome4336 vs shodo6390 subpixels. Real break-spaces probe at120px gives target9 threshold6389; original pre-wrap at90px ends9, shodo5. Trailing preserved tab hanging requires separate core fix.",
+      "issue": "shodo-p2m.15"
+    },
+    {
+      "id": "pre-wrap-tab",
+      "width_subpixels": 4337,
+      "expected": 9,
+      "actual": 5,
+      "category": "css-tab-hanging",
+      "evidence": "Target sourceend9 threshold Chrome4336 vs shodo6390 subpixels. Real break-spaces probe at120px gives target9 threshold6389; original pre-wrap at90px ends9, shodo5. Trailing preserved tab hanging requires separate core fix.",
+      "issue": "shodo-p2m.15"
+    },
+    {
+      "id": "pre-wrap-tab",
+      "width_subpixels": 4338,
+      "expected": 9,
+      "actual": 5,
+      "category": "css-tab-hanging",
+      "evidence": "Target sourceend9 threshold Chrome4336 vs shodo6390 subpixels. Real break-spaces probe at120px gives target9 threshold6389; original pre-wrap at90px ends9, shodo5. Trailing preserved tab hanging requires separate core fix.",
+      "issue": "shodo-p2m.15"
+    },
+    {
+      "id": "pre-wrap-tab",
+      "width_subpixels": 4400,
+      "expected": 9,
+      "actual": 5,
+      "category": "css-tab-hanging",
+      "evidence": "Target sourceend9 threshold Chrome4336 vs shodo6390 subpixels. Real break-spaces probe at120px gives target9 threshold6389; original pre-wrap at90px ends9, shodo5. Trailing preserved tab hanging requires separate core fix.",
+      "issue": "shodo-p2m.15"
+    },
+    {
+      "id": "pre-wrap-tab",
+      "width_subpixels": 5760,
+      "expected": 9,
+      "actual": 5,
+      "category": "css-tab-hanging",
+      "evidence": "Target sourceend9 threshold Chrome4336 vs shodo6390 subpixels. Real break-spaces probe at120px gives target9 threshold6389; original pre-wrap at90px ends9, shodo5. Trailing preserved tab hanging requires separate core fix.",
+      "issue": "shodo-p2m.15"
+    },
+    {
+      "id": "atomic-baseline",
+      "width_subpixels": 3812,
+      "expected": 8,
+      "actual": 4,
+      "category": "boundary-drift",
+      "evidence": "Same target sourceend8, measured Chrome threshold3812, shodo threshold3813 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
+      "issue": null
+    }
+  ]
+}
