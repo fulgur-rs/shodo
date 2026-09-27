@@ -34,8 +34,10 @@ fn fixed_matrix_paints_real_glyphs_on_the_declared_canvas() {
             rendered
                 .image
                 .data()
-                .chunks_exact(4)
-                .any(|p| p != [255, 255, 255, 255])
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|p| *p != [255, 255, 255, 255])
         );
         if let Some(directory) = std::env::var_os("SHODO_SNAPSHOT_REVIEW_DIR") {
             let directory = std::path::PathBuf::from(directory);
@@ -77,7 +79,7 @@ fn shared_ffi_is_one_red_owner_glyph_with_a_separate_blue_source_annotation() {
     let annotations = array(&r.geometry, "annotations");
     assert_eq!(annotations.len(), 1);
     assert!(annotations[0]["width"].as_f64().unwrap() > 0.0);
-    let pixels = r.image.data().chunks_exact(4).collect::<Vec<_>>();
+    let pixels = r.image.data().as_chunks::<4>().0.iter().collect::<Vec<_>>();
     assert!(pixels.iter().filter(|p| p[0] > p[2]).count() > 20);
     assert!(pixels.iter().filter(|p| p[2] > p[0]).count() > 2);
 }
@@ -241,8 +243,10 @@ fn real_ink_inside_fixed_canvas_is_not_lost_to_a_short_line_box() {
     // one-pixel line box ends near101px. Its lower ink must survive below143px.
     assert!(
         image.data()[143 * 512 * 4..]
-            .chunks_exact(4)
-            .any(|pixel| pixel != [255, 255, 255, 255])
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| *pixel != [255, 255, 255, 255])
     );
 }
 

@@ -519,8 +519,10 @@ pub fn render(id: &str) -> Result<Rendered, String> {
         || glyph_count != glyphs_json.len()
         || !image
             .data()
-            .chunks_exact(4)
-            .any(|p| p != [255, 255, 255, 255])
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|p| *p != [255, 255, 255, 255])
     {
         return Err("snapshot has no valid glyph ink".into());
     }
