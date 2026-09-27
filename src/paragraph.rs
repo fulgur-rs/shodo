@@ -87,6 +87,8 @@ pub(crate) struct ParagraphData {
     pub(crate) text: String,
     pub(crate) items: Vec<Item>,
     pub(crate) styles: Vec<InlineStyle>,
+    pub(crate) combine_spans: Vec<crate::analysis::combine::CombineSpan>,
+    pub(crate) combine_geometry: crate::analysis::combine::Geometry,
     pub(crate) style_metrics: Vec<crate::line::font_metrics::StyleMetrics>,
     pub(crate) unit_spacing: Vec<crate::line::spacing::UnitSpacing>,
     pub(crate) punctuation: Vec<crate::line::punctuation::Punctuation>,
@@ -119,6 +121,18 @@ pub(crate) struct ParagraphData {
 }
 
 impl ParagraphData {
+    pub(crate) fn combine_at_text(
+        &self,
+        offset: u32,
+    ) -> Option<&crate::analysis::combine::CombineSpan> {
+        let index = self
+            .combine_spans
+            .partition_point(|span| span.text.end <= offset);
+        self.combine_spans
+            .get(index)
+            .filter(|span| span.text.start <= offset)
+    }
+
     pub(crate) fn bidi_paragraph_at_unit(&self, unit: usize) -> Option<&BidiParagraph> {
         let pos = self.units.get(unit)?.text.start;
         self.bidi_paragraph_at_text(pos)
@@ -414,10 +428,29 @@ fn build_data(
 ) -> Result<ParagraphData, LimitExceeded> {
     let mut shape_limits = limits.clone();
     shape_limits.max_shaped_glyphs = glyph_budget;
-    let breaks = crate::analysis::breaks::analyze_breaks(&processed, &styles, warnings);
+    let combine_spans = crate::analysis::combine::prepare(
+        &processed.text,
+        &processed.items,
+        &styles,
+        style.writing_mode,
+    );
+    let mut breaks = crate::analysis::breaks::analyze_breaks(&processed, &styles, warnings);
+    for opportunity in &mut breaks.opportunities {
+        let index = combine_spans.partition_point(|span| span.text.end <= opportunity.offset);
+        if let Some(span) = combine_spans.get(index)
+            && span.text.start < opportunity.offset
+        {
+            opportunity.class = crate::analysis::units::BreakClass::Prohibited;
+            opportunity.min_content = false;
+        }
+    }
     let used_direction = crate::analysis::bidi::used_root_direction(&style, &styles[0]);
-    let bidi_text =
-        crate::analysis::bidi::upright_analysis_text(&processed, &styles, style.writing_mode);
+    let bidi_text = crate::analysis::bidi::upright_analysis_text(
+        &processed,
+        &styles,
+        style.writing_mode,
+        &combine_spans,
+    );
     let bidi = analyze_bidi(
         bidi_text.as_deref().unwrap_or(&processed.text),
         &style,
@@ -431,6 +464,7 @@ fn build_data(
         &breaks,
         fonts,
         style.writing_mode,
+        &combine_spans,
     );
     let (glyphs, runs) = shape_items(
         cx,
@@ -443,8 +477,17 @@ fn build_data(
         sat,
     )?;
     let base_level = u8::from(used_direction == Direction::Rtl);
+    let combine_geometry = crate::analysis::combine::geometry(
+        &processed.text,
+        &processed.items,
+        &styles,
+        &combine_spans,
+        &glyphs,
+        &runs,
+        fonts,
+    );
     let UnitList {
-        units,
+        mut units,
         boxes,
         float_count,
     } = build_units(
@@ -456,6 +499,16 @@ fn build_data(
         base_level,
         &breaks,
     );
+    for unit in &mut units {
+        let index = combine_spans.partition_point(|span| span.text.end <= unit.text.start);
+        if let Some(span) = combine_spans.get(index)
+            && span.text.start <= unit.text.start
+            && unit.text.end < span.text.end
+        {
+            unit.break_after = crate::analysis::units::BreakClass::Prohibited;
+            unit.emergency_min_content = false;
+        }
+    }
     let mut baselines = HashMap::new();
     for item in &processed.items {
         if let ItemKind::Atomic { parent_style, .. } = item.kind
@@ -489,6 +542,8 @@ fn build_data(
         text: processed.text,
         items: processed.items,
         styles,
+        combine_spans,
+        combine_geometry,
         style_metrics,
         unit_spacing: Vec::new(),
         punctuation: Vec::new(),

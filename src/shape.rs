@@ -199,6 +199,7 @@ pub(crate) fn shape_items(
                 script: original.script,
                 font: original.font.clone(),
                 orientation: original.orientation,
+                combine: original.combine,
                 before: original.before.clone(),
                 after: original.after.clone(),
             };
@@ -724,6 +725,7 @@ pub(crate) fn shape_window_edit(
                 script: original.script,
                 font,
                 orientation: original.orientation,
+                combine: original.combine,
                 before: before.into_iter().collect(),
                 after: original.scalars[finish..]
                     .iter()
@@ -739,6 +741,7 @@ pub(crate) fn shape_window_edit(
                 && previous.script == part.script
                 && previous.font == part.font
                 && previous.orientation == part.orientation
+                && previous.combine == part.combine
             {
                 previous.scalars.extend(part.scalars);
                 previous.end = part.end;

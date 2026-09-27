@@ -298,6 +298,15 @@ pub(super) fn unit_width(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> LayoutUnit {
+    if matches!(unit.kind, UnitKind::Cluster { .. })
+        && let Some(span) = data.combine_at_text(unit.text.start)
+    {
+        return if unit.text.end == span.text.end {
+            LayoutUnit::from_f32_round(span.em, sat)
+        } else {
+            LayoutUnit::ZERO
+        };
+    }
     match &unit.kind {
         UnitKind::Cluster { .. } if unit.shared_cluster.is_some() => unit.slice_advance,
         UnitKind::Cluster { glyphs, .. } => glyphs.clone().fold(LayoutUnit::ZERO, |acc, g| {

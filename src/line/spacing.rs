@@ -40,6 +40,21 @@ pub(crate) fn build(
             };
             match unit.kind {
                 UnitKind::Cluster { .. } => {
+                    if let Some(span) = data.combine_at_text(unit.text.start) {
+                        if unit.text.start == span.text.start
+                            && previous_text.as_ref() != Some(&unit.text)
+                        {
+                            value.summary = Summary::leaf(Edge {
+                                tracking,
+                                kind: Kind::Atomic,
+                                unit: index as u32,
+                                box_node: data.spacing_tree.item_nodes[unit.item as usize],
+                                ..Default::default()
+                            });
+                        }
+                        previous_text = Some(unit.text.clone());
+                        return value;
+                    }
                     if previous_text.as_ref() == Some(&unit.text) {
                         return value;
                     }

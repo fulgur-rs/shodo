@@ -36,16 +36,15 @@ impl LineLayout<'_> {
                     .position
             }),
             NavigationOrder::Visual => {
-                let x = current.rect.inline_start;
+                let key = super::index::visual_key;
+                let x = key(&current);
                 let next = match direction {
-                    CaretDirection::Forward => index.visual.get(
-                        index
-                            .visual
-                            .partition_point(|i| index.stops[*i].rect.inline_start <= x),
-                    ),
+                    CaretDirection::Forward => index
+                        .visual
+                        .get(index.visual.partition_point(|i| key(&index.stops[*i]) <= x)),
                     CaretDirection::Backward => index
                         .visual
-                        .partition_point(|i| index.stops[*i].rect.inline_start < x)
+                        .partition_point(|i| key(&index.stops[*i]) < x)
                         .checked_sub(1)
                         .and_then(|i| index.visual.get(i)),
                 };

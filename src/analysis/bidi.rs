@@ -38,12 +38,14 @@ pub(crate) fn upright_analysis_text(
     input: &Processed,
     styles: &[InlineStyle],
     mode: WritingMode,
+    combined: &[super::combine::CombineSpan],
 ) -> Option<String> {
     if !matches!(mode, WritingMode::VerticalRl | WritingMode::VerticalLr)
-        || !input.items.iter().any(|item| {
-            matches!(item.kind, ItemKind::Text)
-                && styles[item.style as usize].text_orientation == TextOrientation::Upright
-        })
+        || (combined.is_empty()
+            && !input.items.iter().any(|item| {
+                matches!(item.kind, ItemKind::Text)
+                    && styles[item.style as usize].text_orientation == TextOrientation::Upright
+            }))
     {
         return None;
     }
@@ -65,6 +67,22 @@ pub(crate) fn upright_analysis_text(
                 _ => unreachable!("UTF-8 scalar length"),
             };
             bytes[start + offset..start + offset + ltr.len()].copy_from_slice(ltr);
+        }
+    }
+    // Internal direction belongs to the horizontal isolate. Neutral scalars
+    // of the same UTF-8 width keep external byte levels/source offsets stable.
+    for span in combined {
+        let start = span.text.start as usize;
+        let end = span.text.end as usize;
+        for (offset, c) in input.text[start..end].char_indices() {
+            let neutral: &[u8] = match c.len_utf8() {
+                1 => b"!",
+                2 => "¡".as_bytes(),
+                3 => "☃".as_bytes(),
+                4 => "😃".as_bytes(),
+                _ => unreachable!("UTF-8 scalar length"),
+            };
+            bytes[start + offset..start + offset + neutral.len()].copy_from_slice(neutral);
         }
     }
     Some(String::from_utf8(bytes).expect("same-width Unicode scalar replacement"))

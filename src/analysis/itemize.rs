@@ -29,6 +29,7 @@ pub(crate) struct ShapeItem {
     pub(crate) script: [u8; 4],
     pub(crate) font: Option<FontMatch>,
     pub(crate) orientation: crate::shape::orientation::RunOrientation,
+    pub(crate) combine: Option<u32>,
     pub(crate) before: String,
     pub(crate) after: String,
 }
@@ -123,7 +124,23 @@ pub(crate) fn itemize(
     breaks: &super::breaks::BreakAnalysis,
     fonts: &FontCollection,
     mode: crate::geometry::WritingMode,
+    combined: &[super::combine::CombineSpan],
 ) -> Vec<ShapeItem> {
+    let combined_levels: Vec<_> = combined
+        .iter()
+        .map(|span| {
+            let style = &styles[input.items[span.item as usize].style as usize];
+            let level = unicode_bidi::Level::new(u8::from(
+                style.direction == crate::geometry::Direction::Rtl,
+            ))
+            .unwrap();
+            unicode_bidi::BidiInfo::new(
+                &input.text[span.text.start as usize..span.text.end as usize],
+                Some(level),
+            )
+            .levels
+        })
+        .collect();
     // Canonical query identities are built once per style, without searching a
     // growing list of styles or cloning family/language strings per scalar.
     let mut query_ids = HashMap::new();
@@ -180,10 +197,20 @@ pub(crate) fn itemize(
                     part_end += 1;
                 }
                 let source = &scalars[part_start];
-                let orientation = crate::shape::orientation::resolve(
-                    mode,
-                    styles[style as usize].text_orientation,
-                    scalars[scalar_start].c,
+                let combine_index = combined.partition_point(|span| span.text.end <= source.offset);
+                let combine = combined.get(combine_index).and_then(|span| {
+                    (span.text.start <= source.offset && source.offset < span.text.end)
+                        .then_some(combine_index as u32)
+                });
+                let orientation = combine.map_or_else(
+                    || {
+                        crate::shape::orientation::resolve(
+                            mode,
+                            styles[style as usize].text_orientation,
+                            scalars[scalar_start].c,
+                        )
+                    },
+                    |_| crate::shape::orientation::RunOrientation::Combined,
                 );
                 let locale_script: icu_locale_core::subtags::Script =
                     scalar_scripts[part_start].into();
@@ -192,7 +219,14 @@ pub(crate) fn itemize(
                     .as_bytes()
                     .try_into()
                     .expect("script tag");
-                let level = bidi.levels[source.offset as usize];
+                let level = combine.map_or_else(
+                    || bidi.levels[source.offset as usize],
+                    |index| {
+                        combined_levels[index as usize]
+                            [(source.offset - combined[index as usize].text.start) as usize]
+                            .number()
+                    },
+                );
                 let query_id = style_queries[style as usize];
                 let select = || {
                     let mut query = queries[query_id].clone();
@@ -226,6 +260,7 @@ pub(crate) fn itemize(
                     && previous.script == script
                     && previous.font == font
                     && previous.orientation == orientation
+                    && previous.combine == combine
                 {
                     previous
                         .scalars
@@ -245,6 +280,7 @@ pub(crate) fn itemize(
                         script,
                         font,
                         orientation,
+                        combine,
                         before: scalars[part_start.saturating_sub(5)..part_start]
                             .iter()
                             .map(|s| s.c)

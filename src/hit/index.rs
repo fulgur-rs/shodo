@@ -18,6 +18,11 @@ struct RawCluster {
     rect: LogicalRect,
     natural: f32,
     carets: Option<Vec<f32>>,
+    block_axis: bool,
+}
+struct CombineHit {
+    rect: LogicalRect,
+    stops: Vec<usize>,
 }
 pub(super) struct LineIndex {
     pub(super) stops: Vec<Caret>,
@@ -25,6 +30,19 @@ pub(super) struct LineIndex {
     pub(super) segments: Vec<Segment>,
     range: Range<u32>,
     spatial: super::spatial::Tree,
+    combined: Vec<CombineHit>,
+    combined_spatial: super::spatial::Tree,
+}
+
+pub(super) fn visual_key(caret: &Caret) -> (f32, f32) {
+    (
+        caret.rect.inline_start,
+        if caret.rect.block_size == 0.0 && caret.rect.inline_size > 0.0 {
+            caret.rect.block_start
+        } else {
+            0.0
+        },
+    )
 }
 impl LineIndex {
     pub(super) fn new(number: usize, line: &Line) -> Self {
@@ -35,11 +53,53 @@ impl LineIndex {
             segments: Vec::new(),
             range: range.start as u32..range.end as u32,
             spatial: super::spatial::Tree::new(std::iter::empty(), false),
+            combined: Vec::new(),
+            combined_spatial: super::spatial::Tree::new(std::iter::empty(), false),
         };
         let mut raw = Vec::<RawCluster>::new();
         for (record_index, fragment) in line.fragments().enumerate() {
             match fragment {
                 Fragment::GlyphRun(run) => {
+                    if run.orientation() == crate::GlyphOrientation::Combined {
+                        for cluster in run.clusters() {
+                            let g = line
+                                .data
+                                .glyphs
+                                .cluster
+                                .partition_point(|c| *c < cluster.text_range.start as u32);
+                            let Some(paint) =
+                                line.data.combine_geometry.glyphs.get(g).copied().flatten()
+                            else {
+                                continue;
+                            };
+                            let em = line.data.combine_spans[paint.span].em;
+                            let sign = if line.data.style.writing_mode
+                                == crate::geometry::WritingMode::VerticalRl
+                            {
+                                -1.0
+                            } else {
+                                1.0
+                            };
+                            let origin = line.block_offset() + run.baseline() - sign * em / 2.0;
+                            raw.push(RawCluster {
+                                text: cluster.text_range.start as u32
+                                    ..cluster.text_range.end as u32,
+                                from: origin + sign * paint.from,
+                                to: origin + sign * paint.to,
+                                rect: LogicalRect {
+                                    inline_start: run.inline_start(),
+                                    inline_size: em,
+                                    block_start: 0.0,
+                                    block_size: 0.0,
+                                },
+                                natural: cluster.shaping_advance
+                                    * line.data.combine_geometry.scales[paint.span],
+                                carets: None,
+                                block_axis: true,
+                            });
+                        }
+                        continue;
+                    }
                     let reversed = run.bidi_level() % 2 != line.data.base_level % 2;
                     let metrics = run.metrics();
                     let vertical = matches!(
@@ -97,6 +157,7 @@ impl LineIndex {
                             rect,
                             carets,
                             natural: cluster.shaping_advance,
+                            block_axis: false,
                         });
                     }
                 }
@@ -122,6 +183,7 @@ impl LineIndex {
                             rect,
                             None,
                             rect.inline_size,
+                            false,
                         );
                     }
                 }
@@ -145,6 +207,7 @@ impl LineIndex {
                 rect,
                 None,
                 rect.inline_size,
+                false,
             );
         }
         raw.sort_by_key(|r| r.text.start);
@@ -152,6 +215,7 @@ impl LineIndex {
         for cluster in raw {
             if let Some(previous) = combined.last_mut()
                 && previous.text.end == cluster.text.start
+                && previous.block_axis == cluster.block_axis
                 && line
                     .data
                     .breaks
@@ -182,6 +246,7 @@ impl LineIndex {
                 cluster.rect,
                 cluster.carets.as_deref(),
                 cluster.natural,
+                cluster.block_axis,
             );
         }
         // Empty lines and nonpainting source at their ends still have stops.
@@ -228,10 +293,12 @@ impl LineIndex {
             .dedup_by(|a, b| a.position == b.position && a.rect == b.rect);
         result.visual = (0..result.stops.len()).collect();
         result.visual.sort_by(|a, b| {
-            result.stops[*a]
-                .rect
-                .inline_start
-                .total_cmp(&result.stops[*b].rect.inline_start)
+            let a_key = visual_key(&result.stops[*a]);
+            let b_key = visual_key(&result.stops[*b]);
+            a_key
+                .0
+                .total_cmp(&b_key.0)
+                .then(a_key.1.total_cmp(&b_key.1))
                 .then(
                     affinity_key(result.stops[*a].position.affinity)
                         .cmp(&affinity_key(result.stops[*b].position.affinity)),
@@ -243,9 +310,49 @@ impl LineIndex {
                         .cmp(&result.stops[*b].position.offset),
                 )
         });
-        result.visual.dedup_by(|a, b| {
-            result.stops[*a].rect.inline_start == result.stops[*b].rect.inline_start
-        });
+        result
+            .visual
+            .dedup_by(|a, b| visual_key(&result.stops[*a]) == visual_key(&result.stops[*b]));
+        for span in &line.data.combine_spans {
+            let begin = result
+                .stops
+                .partition_point(|stop| stop.position.offset < span.text.start);
+            let end = result
+                .stops
+                .partition_point(|stop| stop.position.offset <= span.text.end);
+            let mut stops: Vec<_> = result.stops[begin..end]
+                .iter()
+                .enumerate()
+                .filter_map(|(index, stop)| {
+                    (stop.rect.block_size == 0.0 && stop.rect.inline_size > 0.0)
+                        .then_some(begin + index)
+                })
+                .collect();
+            stops.sort_by(|a, b| {
+                result.stops[*a]
+                    .rect
+                    .block_start
+                    .total_cmp(&result.stops[*b].rect.block_start)
+            });
+            stops.dedup_by(|a, b| {
+                result.stops[*a].rect.block_start == result.stops[*b].rect.block_start
+            });
+            if let (Some(&first), Some(&last)) = (stops.first(), stops.last()) {
+                let mut rect = result.stops[first].rect;
+                let width = result.stops[last].rect.block_start - rect.block_start;
+                rect.block_start -= (span.em - width) / 2.0;
+                rect.block_size = span.em;
+                result.combined.push(CombineHit { rect, stops });
+            }
+        }
+        result.combined_spatial = super::spatial::Tree::new(
+            result
+                .combined
+                .iter()
+                .enumerate()
+                .map(|(i, group)| (i, group.rect)),
+            false,
+        );
         result.spatial = super::spatial::Tree::new(
             result
                 .segments
@@ -274,6 +381,7 @@ impl LineIndex {
         rect: LogicalRect,
         gdef: Option<&[f32]>,
         natural: f32,
+        block_axis: bool,
     ) {
         if cuts.len() < 2 {
             return;
@@ -302,10 +410,18 @@ impl LineIndex {
                 (to - from) * ratio
             };
             let x = from + distance;
-            let caret_rect = LogicalRect {
-                inline_start: x,
-                inline_size: 0.0,
-                ..rect
+            let caret_rect = if block_axis {
+                LogicalRect {
+                    block_start: x,
+                    block_size: 0.0,
+                    ..rect
+                }
+            } else {
+                LogicalRect {
+                    inline_start: x,
+                    inline_size: 0.0,
+                    ..rect
+                }
             };
             if i < n {
                 self.stops.push(Caret {
@@ -332,10 +448,18 @@ impl LineIndex {
                     text: before..offset,
                     from: bx,
                     to: x,
-                    rect: LogicalRect {
-                        inline_start: bx.min(x),
-                        inline_size: (x - bx).abs(),
-                        ..rect
+                    rect: if block_axis {
+                        LogicalRect {
+                            block_start: bx.min(x),
+                            block_size: (x - bx).abs(),
+                            ..rect
+                        }
+                    } else {
+                        LogicalRect {
+                            inline_start: bx.min(x),
+                            inline_size: (x - bx).abs(),
+                            ..rect
+                        }
                     },
                 });
             }
@@ -366,7 +490,31 @@ impl LineIndex {
         };
         Some(*stop)
     }
-    pub(super) fn hit(&self, inline: f32) -> Option<&Caret> {
+    pub(super) fn hit(&self, inline: f32, block: f32) -> Option<&Caret> {
+        if let Some(group) = self
+            .combined_spatial
+            .containing(inline, block)
+            .map(|i| &self.combined[i])
+        {
+            let at = group
+                .stops
+                .partition_point(|i| self.stops[*i].rect.block_start < block);
+            let a = at
+                .checked_sub(1)
+                .and_then(|i| group.stops.get(i))
+                .map(|i| &self.stops[*i]);
+            let b = group.stops.get(at).map(|i| &self.stops[*i]);
+            return match (a, b) {
+                (Some(a), Some(b)) => Some(
+                    if block - a.rect.block_start <= b.rect.block_start - block {
+                        a
+                    } else {
+                        b
+                    },
+                ),
+                (a, b) => a.or(b),
+            };
+        }
         let at = self
             .visual
             .partition_point(|i| self.stops[*i].rect.inline_start < inline);

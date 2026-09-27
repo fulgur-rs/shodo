@@ -7,6 +7,8 @@ use icu_properties::{CodePointMapData, props::VerticalOrientation};
 pub enum GlyphOrientation {
     Horizontal,
     Upright,
+    /// Horizontal glyphs composed inside one vertical 1em square.
+    Combined,
     SidewaysClockwise,
     SidewaysCounterClockwise,
 }

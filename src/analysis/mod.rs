@@ -2,6 +2,7 @@
 
 pub(crate) mod bidi;
 pub(crate) mod breaks;
+pub(crate) mod combine;
 pub(crate) mod itemize;
 mod transform;
 mod transform_context;

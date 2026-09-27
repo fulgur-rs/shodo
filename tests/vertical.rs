@@ -9,7 +9,7 @@ use shodo::mapping::Affinity;
 use shodo::node::{InlineEdges, NodeId, OutOfFlowKind, TextSource};
 use shodo::style::{
     FontFamily, FontFeature, FontKerning, InlineStyle, LineOptions, ParagraphStyle,
-    TextOrientation, TextSpacingTrim, VerticalAlign,
+    TextCombineUpright, TextOrientation, TextSpacingTrim, VerticalAlign,
 };
 use shodo::{
     AtomicSize, AtomicSizes, Fragment, LayoutContext, LineConstraint, LineResult, Paragraph,
@@ -33,8 +33,24 @@ fn style(mode: WritingMode, orientation: TextOrientation) -> ParagraphStyle {
 
 fn paragraph(style: &ParagraphStyle, text: &str) -> Paragraph {
     let limits = Limits::default();
+    build_paragraph(style, &limits, |builder| {
+        builder.push_text(
+            TextSource::Dom {
+                node: NodeId(1),
+                offset: 0,
+            },
+            text,
+        );
+    })
+}
+
+fn build_paragraph(
+    style: &ParagraphStyle,
+    limits: &Limits,
+    add: impl FnOnce(&mut ParagraphBuilder),
+) -> Paragraph {
     let fonts = FontCollection::with_options(
-        &limits,
+        limits,
         FontOptions {
             system_fonts: false,
             ..Default::default()
@@ -50,14 +66,8 @@ fn paragraph(style: &ParagraphStyle, text: &str) -> Paragraph {
             },
         )
         .unwrap();
-    let mut builder = ParagraphBuilder::new(style, &limits);
-    builder.push_text(
-        TextSource::Dom {
-            node: NodeId(1),
-            offset: 0,
-        },
-        text,
-    );
+    let mut builder = ParagraphBuilder::new(style, limits);
+    add(&mut builder);
     builder.build(&mut LayoutContext::new(), &fonts).unwrap()
 }
 
@@ -334,9 +344,9 @@ fn public_glyph_transform_has_literal_physical_axes_in_every_writing_mode() {
                     },
                 );
                 let axes = match expected {
-                    shodo::GlyphOrientation::Horizontal | shodo::GlyphOrientation::Upright => {
-                        ((1.0, 0.0), (0.0, 1.0))
-                    }
+                    shodo::GlyphOrientation::Horizontal
+                    | shodo::GlyphOrientation::Upright
+                    | shodo::GlyphOrientation::Combined => ((1.0, 0.0), (0.0, 1.0)),
                     shodo::GlyphOrientation::SidewaysClockwise => ((0.0, 1.0), (-1.0, 0.0)),
                     shodo::GlyphOrientation::SidewaysCounterClockwise => ((0.0, -1.0), (1.0, 0.0)),
                 };
@@ -1181,6 +1191,219 @@ fn vertical_grapheme_shared_across_nodes_keeps_one_orientation_and_owner() {
         divided.1,
         vec![(Some(NodeId(1)), shodo::GlyphOrientation::SidewaysClockwise)]
     );
+}
+
+#[test]
+fn combine_all_digit_sequences_take_one_em_in_vertical_modes() {
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        for text in ["1", "12", "123", "1234", "12345"] {
+            let mut style = style(mode, TextOrientation::Mixed);
+            style.root.text_combine_upright = TextCombineUpright::All;
+            style.root.text_autospace = shodo::style::TextAutospace::NoAutospace;
+            let paragraph = paragraph(&style, text);
+            let line = first_line(
+                &paragraph,
+                100.0,
+                &LineOptions::default(),
+                &AtomicSizes::EMPTY,
+            );
+            assert_eq!(line.inline_size(), 16.0, "{mode:?}/{text}");
+            assert_eq!(glyphs(&line).len(), text.len(), "{mode:?}/{text}");
+            assert_eq!(line.baseline(BaselineKind::Central), 8.0, "{mode:?}/{text}");
+        }
+    }
+}
+
+#[test]
+fn combine_all_does_not_change_horizontal_or_sideways_modes() {
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::SidewaysRl,
+        WritingMode::SidewaysLr,
+    ] {
+        let normal = paragraph(&style(mode, TextOrientation::Mixed), "1234");
+        let mut combined = style(mode, TextOrientation::Mixed);
+        combined.root.text_combine_upright = TextCombineUpright::All;
+        let combined = paragraph(&combined, "1234");
+        let ordinary = first_line(&normal, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        let unchanged = first_line(
+            &combined,
+            100.0,
+            &LineOptions::default(),
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(glyphs(&ordinary), glyphs(&unchanged), "{mode:?}");
+        assert_eq!(ordinary.inline_size(), unchanged.inline_size(), "{mode:?}");
+    }
+}
+
+#[test]
+fn combine_all_keeps_horizontal_glyphs_and_centers_their_paint_axes() {
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        for text in ["1", "12", "1234", "12345"] {
+            let mut combined = style(mode, TextOrientation::Mixed);
+            combined.root.text_combine_upright = TextCombineUpright::All;
+            combined.root.text_autospace = shodo::style::TextAutospace::NoAutospace;
+            let line = first_line(
+                &paragraph(&combined, text),
+                100.0,
+                &LineOptions::default(),
+                &AtomicSizes::EMPTY,
+            );
+            let run = match line.fragment(0).unwrap() {
+                Fragment::GlyphRun(run) => run,
+                _ => panic!("combined glyph run"),
+            };
+            let natural: f32 = run.clusters().map(|cluster| cluster.shaping_advance).sum();
+            let scale = (16.0 / natural).min(1.0);
+            assert_eq!(run.orientation(), shodo::GlyphOrientation::Combined);
+            let converter = PhysicalConverter::new(
+                mode,
+                line.used_direction(),
+                PhysicalSize {
+                    width: 100.0,
+                    height: 100.0,
+                },
+            );
+            let transform = run.glyph_transform();
+            let x = converter.vector(transform.inline_x, transform.block_x);
+            assert!(
+                (x.0 - scale).abs() < 0.001,
+                "{mode:?}/{text}: {x:?}/{scale}"
+            );
+            assert_eq!(x.1, 0.0);
+            assert_eq!(
+                converter.vector(transform.inline_y, transform.block_y),
+                (0.0, 1.0)
+            );
+            let origins: Vec<_> = (0..run.glyphs().len())
+                .map(|i| run.glyph_origin(i).unwrap())
+                .collect();
+            assert!(
+                origins
+                    .iter()
+                    .all(|origin| (origin.0 - origins[0].0).abs() < 0.001),
+                "horizontal baseline {origins:?}"
+            );
+            let sign = if mode == WritingMode::VerticalRl {
+                -1.0
+            } else {
+                1.0
+            };
+            let expected =
+                line.metrics().baseline + sign * (((16.0 - natural * scale) / 2.0) - 8.0);
+            assert!(
+                (origins[0].1 - expected).abs() < 0.001,
+                "center {mode:?}/{text}: {origins:?}/{expected}"
+            );
+        }
+    }
+}
+
+#[test]
+fn combine_all_ignores_internal_letter_spacing() {
+    let mut combined = style(WritingMode::VerticalRl, TextOrientation::Mixed);
+    combined.root.text_combine_upright = TextCombineUpright::All;
+    combined.root.text_autospace = shodo::style::TextAutospace::NoAutospace;
+    let normal = first_line(
+        &paragraph(&combined, "1234"),
+        100.0,
+        &LineOptions::default(),
+        &AtomicSizes::EMPTY,
+    );
+    combined.root.letter_spacing = 10.0;
+    let tracked = first_line(
+        &paragraph(&combined, "1234"),
+        100.0,
+        &LineOptions::default(),
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(tracked.inline_size(), 16.0);
+    assert_eq!(glyphs(&tracked), glyphs(&normal));
+}
+
+#[test]
+fn combine_all_preserves_source_ownership_and_internal_caret_selection() {
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let mut combined = style(mode, TextOrientation::Mixed);
+        combined.root.text_combine_upright = TextCombineUpright::All;
+        combined.root.text_autospace = shodo::style::TextAutospace::NoAutospace;
+        let p = build_paragraph(&combined, &Limits::default(), |builder| {
+            builder.push_text(
+                TextSource::Dom {
+                    node: NodeId(1),
+                    offset: 0,
+                },
+                "12",
+            );
+            builder.push_text(
+                TextSource::Dom {
+                    node: NodeId(2),
+                    offset: 0,
+                },
+                "34",
+            );
+        });
+        let lines = vec![first_line(
+            &p,
+            100.0,
+            &LineOptions::default(),
+            &AtomicSizes::EMPTY,
+        )];
+        let owners: Vec<_> = lines[0]
+            .fragments()
+            .filter_map(|fragment| match fragment {
+                Fragment::GlyphRun(run) => Some(run.node()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(owners, vec![Some(NodeId(1)), Some(NodeId(2))]);
+        let layout = LineLayout::new(&lines);
+        let position = |offset, affinity| TextPosition {
+            line: 0,
+            offset,
+            affinity,
+        };
+        let carets: Vec<_> = (0..=4)
+            .map(|offset| {
+                layout
+                    .caret(position(offset, Affinity::Downstream))
+                    .unwrap()
+            })
+            .collect();
+        for caret in &carets {
+            assert_eq!(caret.rect.inline_start, 0.0);
+            assert_eq!(caret.rect.inline_size, 16.0);
+            assert_eq!(caret.rect.block_size, 0.0);
+        }
+        let sign = if mode == WritingMode::VerticalRl {
+            -1.0
+        } else {
+            1.0
+        };
+        for pair in carets.windows(2) {
+            assert!(
+                (pair[1].rect.block_start - pair[0].rect.block_start - sign * 4.0).abs() < 0.01
+            );
+        }
+        let hit = layout.hit_test(8.0, carets[2].rect.block_start).unwrap();
+        assert_eq!(hit.position.offset, 2);
+        let selection = layout.selection_rects(
+            position(1, Affinity::Downstream),
+            position(3, Affinity::Upstream),
+        );
+        assert_eq!(selection.len(), 1);
+        assert_eq!(selection[0].inline_size, 16.0);
+        assert!((selection[0].block_size - 8.0).abs() < 0.01);
+        let mapping = lines[0].offset_mapping().unwrap();
+        assert_eq!(
+            mapping.text_to_dom(2, Affinity::Downstream),
+            Some(shodo::mapping::TextOrigin::Dom {
+                node: NodeId(2),
+                offset: 0
+            })
+        );
+    }
 }
 
 #[test]

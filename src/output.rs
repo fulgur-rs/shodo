@@ -666,6 +666,18 @@ impl<'a> GlyphRunView<'a> {
                 block_x: block_sign,
                 block_y: 0.0,
             },
+            O::Combined => {
+                let index = self
+                    .data()
+                    .combine_spans
+                    .partition_point(|span| span.text.end <= self.text.0);
+                GlyphTransform {
+                    inline_x: 0.0,
+                    inline_y: inline_sign,
+                    block_x: block_sign * self.data().combine_geometry.scales[index],
+                    block_y: 0.0,
+                }
+            }
             O::SidewaysClockwise => GlyphTransform {
                 inline_x: inline_sign,
                 inline_y: 0.0,
@@ -696,7 +708,9 @@ impl<'a> GlyphRunView<'a> {
         };
         let mode = self.data().style.writing_mode;
         let ltr = self.line.used_direction() == crate::geometry::Direction::Ltr;
-        let negative_inline = if mode == crate::geometry::WritingMode::SidewaysLr {
+        let negative_inline = if self.orientation() == crate::GlyphOrientation::Combined {
+            false
+        } else if mode == crate::geometry::WritingMode::SidewaysLr {
             ltr
         } else {
             !ltr
@@ -842,6 +856,37 @@ impl<'a> GlyphRunView<'a> {
             GlyphSource::Overlay { .. } => self.line.overlay.as_deref().expect("overlay store"),
         };
         let gi = g as usize;
+        if matches!(self.source, GlyphSource::Shared)
+            && let Some(paint) = self
+                .data()
+                .combine_geometry
+                .glyphs
+                .get(gi)
+                .copied()
+                .flatten()
+        {
+            let span = &self.data().combine_spans[paint.span];
+            let sign = if self.data().style.writing_mode == crate::geometry::WritingMode::VerticalRl
+            {
+                -1.0
+            } else {
+                1.0
+            };
+            let baseline = self.data().combine_geometry.baselines[paint.span]
+                + store.offset_block[gi].to_f32();
+            return Glyph {
+                id: store.id[gi],
+                inline_position: self.record.inline_start.to_f32()
+                    + if self.line.used_direction() == crate::geometry::Direction::Ltr {
+                        baseline
+                    } else {
+                        span.em - baseline
+                    },
+                block_offset: sign * (paint.x - span.em / 2.0),
+                advance: store.advance[gi].to_f32(),
+                cluster: store.cluster[gi],
+            };
+        }
         let first = self.glyphs.0 as usize;
         let (rel, advance) = if matches!(self.source, GlyphSource::Shared)
             && let Some((start, positions)) = &self.line.positions

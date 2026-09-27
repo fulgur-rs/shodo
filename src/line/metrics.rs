@@ -161,8 +161,16 @@ pub(crate) fn measure(
                 let (a, d) = extents(
                     s,
                     metrics,
-                    shaped.instance.vertical_metrics,
-                    shaped.orientation == crate::shape::orientation::RunOrientation::Upright,
+                    if shaped.orientation == crate::shape::orientation::RunOrientation::Combined {
+                        None
+                    } else {
+                        shaped.instance.vertical_metrics
+                    },
+                    matches!(
+                        shaped.orientation,
+                        crate::shape::orientation::RunOrientation::Upright
+                            | crate::shape::orientation::RunOrientation::Combined
+                    ),
                 );
                 let (base, group) = parents
                     .get(item)
