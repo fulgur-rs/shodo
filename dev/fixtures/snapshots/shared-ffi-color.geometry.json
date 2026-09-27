@@ -1,0 +1,84 @@
+{
+  "annotations": [
+    {
+      "block_start": -9.786125183105469,
+      "height": 43.58399963378906,
+      "inline_start": 10.080000877380371,
+      "width": 10.112000465393066
+    }
+  ],
+  "atomics": [],
+  "glyphs": [
+    {
+      "advance": 30.265625,
+      "baseline": 24.421875,
+      "block_offset": 0.0,
+      "cluster": 0,
+      "coords": [],
+      "embolden": false,
+      "font": "latin",
+      "id": 367,
+      "inline_position": 0.0,
+      "line": 0,
+      "owner": 1,
+      "size": 32.0,
+      "skew": null
+    }
+  ],
+  "height_rejections": 0,
+  "inline_boxes": [
+    {
+      "block_start": -9.786125183105469,
+      "end_edge": true,
+      "height": 43.58399963378906,
+      "inline_start": 0.0,
+      "line": 0,
+      "node": 11,
+      "parent": null,
+      "start_edge": true,
+      "width": 11.015625
+    },
+    {
+      "block_start": -9.786125183105469,
+      "end_edge": true,
+      "height": 43.58399963378906,
+      "inline_start": 11.015625,
+      "line": 0,
+      "node": 12,
+      "parent": null,
+      "start_edge": true,
+      "width": 11.0
+    },
+    {
+      "block_start": -9.786125183105469,
+      "end_edge": true,
+      "height": 43.58399963378906,
+      "inline_start": 22.015625,
+      "line": 0,
+      "node": 13,
+      "parent": null,
+      "start_edge": true,
+      "width": 8.25
+    }
+  ],
+  "lines": [
+    {
+      "baseline": 24.421875,
+      "block_offset": 0.0,
+      "block_size": 24.0,
+      "end": 3,
+      "inline_size": 30.265625,
+      "page": 0,
+      "start": 0
+    }
+  ],
+  "pages": [
+    {
+      "floats": [],
+      "fragment": 0,
+      "panel_offset": 0.0
+    }
+  ],
+  "rejected_token_preserved": false,
+  "schema": 1
+}

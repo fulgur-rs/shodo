@@ -27,18 +27,57 @@ impl OutlinePen for Pen {
         self.0.close();
     }
 }
+#[allow(dead_code)] // Standalone samples use the dynamic canvas wrapper.
 pub fn try_paint(
+    lines: &[Line],
+    color: impl FnMut(NodeId) -> [u8; 4],
+    annotations: &[LogicalRect],
+) -> Result<(tiny_skia::Pixmap, usize), PaintError> {
+    paint(lines, color, annotations, None)
+}
+
+/// Draw directly onto a declared canvas, rejecting any clipped outline or rect.
+#[allow(dead_code)] // The fixed snapshot caller uses this wrapper.
+pub fn try_paint_on_canvas(
+    lines: &[Line],
+    color: impl FnMut(NodeId) -> [u8; 4],
+    annotations: &[LogicalRect],
+    width: u32,
+    height: u32,
+) -> Result<(tiny_skia::Pixmap, usize), PaintError> {
+    paint(lines, color, annotations, Some((width, height)))
+}
+
+fn check_bounds(rect: tiny_skia::Rect, image: &tiny_skia::Pixmap) -> Result<(), PaintError> {
+    if rect.left() < 0.0
+        || rect.top() < 0.0
+        || rect.right() > image.width() as f32
+        || rect.bottom() > image.height() as f32
+    {
+        Err(PaintError::ClippedOutput)
+    } else {
+        Ok(())
+    }
+}
+
+fn paint(
     lines: &[Line],
     mut color: impl FnMut(NodeId) -> [u8; 4],
     annotations: &[LogicalRect],
+    canvas: Option<(u32, u32)>,
 ) -> Result<(tiny_skia::Pixmap, usize), PaintError> {
-    let height = lines
-        .iter()
-        .map(|l| l.block_offset() + l.block_size())
-        .fold(0.0, f32::max)
-        .ceil() as u32
-        + 40;
-    let mut image = tiny_skia::Pixmap::new(512, height).ok_or(PaintError::InvalidCanvas)?;
+    let (width, height) = canvas.unwrap_or_else(|| {
+        (
+            512,
+            lines
+                .iter()
+                .map(|l| l.block_offset() + l.block_size())
+                .fold(0.0, f32::max)
+                .ceil() as u32
+                + 40,
+        )
+    });
+    let mut image = tiny_skia::Pixmap::new(width, height).ok_or(PaintError::InvalidCanvas)?;
     image.fill(tiny_skia::Color::WHITE);
     let mut count = 0;
     for line in lines {
@@ -51,6 +90,9 @@ pub fn try_paint(
                     rect.inline_size,
                     rect.block_size,
                 ) {
+                    if canvas.is_some() {
+                        check_bounds(rect, &image)?;
+                    }
                     let [r, g, b, a] = color(atomic.node);
                     let mut paint = tiny_skia::Paint::default();
                     paint.set_color_rgba8(r, g, b, a);
@@ -86,20 +128,23 @@ pub fn try_paint(
                     )
                     .map_err(|_| PaintError::MissingOutline)?;
                 if let Some(path) = pen.0.finish() {
-                    image.fill_path(
-                        &path,
-                        &paint,
-                        tiny_skia::FillRule::Winding,
-                        tiny_skia::Transform::from_row(
-                            1.0,
-                            0.0,
-                            0.0,
-                            -1.0,
-                            10.0 + glyph.inline_position,
-                            10.0 + line.block_offset() + run.baseline() + glyph.block_offset,
-                        ),
-                        None,
+                    let transform = tiny_skia::Transform::from_row(
+                        1.0,
+                        0.0,
+                        0.0,
+                        -1.0,
+                        10.0 + glyph.inline_position,
+                        10.0 + line.block_offset() + run.baseline() + glyph.block_offset,
                     );
+                    if canvas.is_some() {
+                        let bounds = path
+                            .clone()
+                            .transform(transform)
+                            .and_then(|path| path.compute_tight_bounds())
+                            .ok_or(PaintError::InvalidCanvas)?;
+                        check_bounds(bounds, &image)?;
+                    }
+                    image.fill_path(&path, &paint, tiny_skia::FillRule::Winding, transform, None);
                 }
                 count += 1;
             }
@@ -115,6 +160,9 @@ pub fn try_paint(
             2.0,
         )
         .ok_or(PaintError::InvalidAnnotation)?;
+        if canvas.is_some() {
+            check_bounds(rect, &image)?;
+        }
         image.fill_rect(rect, &paint, tiny_skia::Transform::identity(), None);
     }
     Ok((image, count))
@@ -122,6 +170,7 @@ pub fn try_paint(
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PaintError {
+    ClippedOutput,
     InvalidCanvas,
     InvalidAnnotation,
     MissingOwner,
@@ -133,6 +182,7 @@ pub enum PaintError {
 impl std::fmt::Display for PaintError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
+            Self::ClippedOutput => "accepted outline or rectangle exceeds the drawing canvas",
             Self::InvalidCanvas => "cannot allocate PNG canvas",
             Self::InvalidAnnotation => "source annotation has no positive rectangle",
             Self::MissingOwner => "paint style needs a source owner",

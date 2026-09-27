@@ -1,0 +1,176 @@
+{
+  "annotations": [],
+  "atomics": [],
+  "glyphs": [
+    {
+      "advance": 25.09375,
+      "baseline": 34.171875,
+      "block_offset": 0.0,
+      "cluster": 0,
+      "coords": [],
+      "embolden": false,
+      "font": "arabic",
+      "id": 470,
+      "inline_position": 0.0,
+      "line": 0,
+      "owner": 1,
+      "size": 32.0,
+      "skew": null
+    },
+    {
+      "advance": 19.171875,
+      "baseline": 34.171875,
+      "block_offset": 0.0,
+      "cluster": 2,
+      "coords": [],
+      "embolden": false,
+      "font": "arabic",
+      "id": 325,
+      "inline_position": 25.09375,
+      "line": 0,
+      "owner": 1,
+      "size": 32.0,
+      "skew": null
+    },
+    {
+      "advance": 15.484375,
+      "baseline": 34.171875,
+      "block_offset": 0.0,
+      "cluster": 6,
+      "coords": [],
+      "embolden": false,
+      "font": "arabic",
+      "id": 343,
+      "inline_position": 44.265625,
+      "line": 0,
+      "owner": 2,
+      "size": 32.0,
+      "skew": null
+    },
+    {
+      "advance": 8.3125,
+      "baseline": 34.171875,
+      "block_offset": 0.0,
+      "cluster": 8,
+      "coords": [],
+      "embolden": false,
+      "font": "arabic",
+      "id": 3,
+      "inline_position": 59.75,
+      "line": 0,
+      "owner": 2,
+      "size": 32.0,
+      "skew": null
+    },
+    {
+      "advance": 25.09375,
+      "baseline": 34.171875,
+      "block_offset": 0.0,
+      "cluster": 9,
+      "coords": [],
+      "embolden": false,
+      "font": "arabic",
+      "id": 470,
+      "inline_position": 0.0,
+      "line": 1,
+      "owner": 3,
+      "size": 32.0,
+      "skew": null
+    },
+    {
+      "advance": 19.171875,
+      "baseline": 34.171875,
+      "block_offset": 0.0,
+      "cluster": 11,
+      "coords": [],
+      "embolden": false,
+      "font": "arabic",
+      "id": 325,
+      "inline_position": 25.09375,
+      "line": 1,
+      "owner": 3,
+      "size": 32.0,
+      "skew": null
+    },
+    {
+      "advance": 15.484375,
+      "baseline": 34.171875,
+      "block_offset": 0.0,
+      "cluster": 15,
+      "coords": [],
+      "embolden": false,
+      "font": "arabic",
+      "id": 343,
+      "inline_position": 44.265625,
+      "line": 1,
+      "owner": 3,
+      "size": 32.0,
+      "skew": null
+    }
+  ],
+  "height_rejections": 0,
+  "inline_boxes": [
+    {
+      "block_start": -9.796127319335938,
+      "end_edge": true,
+      "height": 67.58399963378906,
+      "inline_start": 0.0,
+      "line": 0,
+      "node": 11,
+      "parent": null,
+      "start_edge": true,
+      "width": 34.6875
+    },
+    {
+      "block_start": -9.796127319335938,
+      "end_edge": true,
+      "height": 67.58399963378906,
+      "inline_start": 34.6875,
+      "line": 0,
+      "node": 12,
+      "parent": null,
+      "start_edge": true,
+      "width": 33.375
+    },
+    {
+      "block_start": -9.796127319335938,
+      "end_edge": true,
+      "height": 67.58399963378906,
+      "inline_start": 0.0,
+      "line": 1,
+      "node": 13,
+      "parent": null,
+      "start_edge": true,
+      "width": 59.75
+    }
+  ],
+  "lines": [
+    {
+      "baseline": 34.171875,
+      "block_offset": 0.0,
+      "block_size": 48.0,
+      "end": 9,
+      "inline_size": 59.75,
+      "page": 0,
+      "start": 0
+    },
+    {
+      "baseline": 34.171875,
+      "block_offset": 48.0,
+      "block_size": 48.0,
+      "end": 17,
+      "inline_size": 59.75,
+      "page": 0,
+      "start": 9
+    }
+  ],
+  "pages": [
+    {
+      "floats": [],
+      "fragment": 0,
+      "panel_offset": 0.0
+    }
+  ],
+  "rejected_token_preserved": false,
+  "schema": 1
+}
