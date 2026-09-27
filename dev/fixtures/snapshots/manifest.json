@@ -1,0 +1,302 @@
+{
+  "cases": {
+    "arabic-long": {
+      "direction": "Rtl",
+      "font_size": 16.0,
+      "fonts": [
+        "arabic"
+      ],
+      "id": "arabic-long",
+      "lang": "ar",
+      "text": "مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات. مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات.",
+      "width": 420.0
+    },
+    "arabic-short": {
+      "direction": "Rtl",
+      "font_size": 16.0,
+      "fonts": [
+        "arabic"
+      ],
+      "id": "arabic-short",
+      "lang": "ar",
+      "text": "مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات.",
+      "width": 320.0
+    },
+    "arabic-wrap": {
+      "direction": "Rtl",
+      "families": [
+        "Named(\"Shodo Fixture Arabic\")"
+      ],
+      "font_size": 32.0,
+      "id": "arabic-wrap",
+      "indent": 0.0,
+      "line_height": "Px(48.0)",
+      "tab_px": null,
+      "text": "سلام سلام",
+      "white_space": "Collapse",
+      "width": 65.0
+    },
+    "combining-arabic": {
+      "direction": "Rtl",
+      "font_size": 16.0,
+      "fonts": [
+        "arabic"
+      ],
+      "id": "combining-arabic",
+      "lang": "ar",
+      "text": "السَّلَامُ عَلَيْكُمْ",
+      "width": 220.0
+    },
+    "combining-latin": {
+      "direction": "Ltr",
+      "font_size": 16.0,
+      "fonts": [
+        "latin"
+      ],
+      "id": "combining-latin",
+      "lang": "en",
+      "text": "Café, ä, ñ, Å, ọ́.",
+      "width": 220.0
+    },
+    "float-pages": {
+      "direction": "Ltr",
+      "families": [
+        "Named(\"Shodo Fixture Latin\")"
+      ],
+      "font_size": 16.0,
+      "id": "float-pages",
+      "indent": 0.0,
+      "line_height": "Px(20.0)",
+      "tab_px": null,
+      "text": "aa bb cc dd ee ff gg hh ii jj",
+      "white_space": "Collapse",
+      "width": 80.0
+    },
+    "hanging-white-space": {
+      "direction": "Ltr",
+      "families": [
+        "Named(\"Shodo Fixture Latin\")"
+      ],
+      "font_size": 20.0,
+      "id": "hanging-white-space",
+      "indent": 0.0,
+      "line_height": "Px(24.0)",
+      "tab_px": null,
+      "text": "One two   three   ",
+      "white_space": "Preserve",
+      "width": 90.0
+    },
+    "indent-baseline": {
+      "direction": "Ltr",
+      "families": [
+        "Named(\"Shodo Fixture Latin\")"
+      ],
+      "font_size": 20.0,
+      "id": "indent-baseline",
+      "indent": 10.0,
+      "line_height": "Px(24.0)",
+      "tab_px": null,
+      "text": "Alpha beta gamma delta.",
+      "white_space": "Collapse",
+      "width": 180.0
+    },
+    "japanese-kinsoku": {
+      "direction": "Ltr",
+      "families": [
+        "Named(\"Shodo Fixture CJK\")"
+      ],
+      "font_size": 16.0,
+      "id": "japanese-kinsoku",
+      "indent": 0.0,
+      "line_height": "Px(24.0)",
+      "tab_px": null,
+      "text": "「日本語」、句読点。読みやすい文章。",
+      "white_space": "Collapse",
+      "width": 90.0
+    },
+    "japanese-long": {
+      "direction": "Ltr",
+      "font_size": 16.0,
+      "fonts": [
+        "cjk"
+      ],
+      "id": "japanese-long",
+      "lang": "ja",
+      "text": "日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。",
+      "width": 420.0
+    },
+    "japanese-short": {
+      "direction": "Ltr",
+      "font_size": 16.0,
+      "fonts": [
+        "cjk"
+      ],
+      "id": "japanese-short",
+      "lang": "ja",
+      "text": "日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。",
+      "width": 320.0
+    },
+    "japanese-supplementary": {
+      "direction": "Ltr",
+      "font_size": 16.0,
+      "fonts": [
+        "cjk",
+        "latin"
+      ],
+      "id": "japanese-supplementary",
+      "lang": "ja",
+      "text": "𠮷と吉、ひらがな、カタカナ、ＡＢＣ。",
+      "width": 200.0
+    },
+    "latin-case-mapping": {
+      "direction": "Ltr",
+      "font_size": 16.0,
+      "fonts": [
+        "latin"
+      ],
+      "id": "latin-case-mapping",
+      "lang": "de",
+      "text": "Straße, café, istanbul, IĞDIR, iıİI, ΟΣ ΣΟΣ.",
+      "width": 320.0
+    },
+    "latin-long": {
+      "direction": "Ltr",
+      "font_size": 16.0,
+      "fonts": [
+        "latin"
+      ],
+      "id": "latin-long",
+      "lang": "en",
+      "text": "A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines. A quiet library keeps its doors open. Readers compare words, spaces, and lines.",
+      "width": 420.0
+    },
+    "latin-short": {
+      "direction": "Ltr",
+      "font_size": 16.0,
+      "fonts": [
+        "latin"
+      ],
+      "id": "latin-short",
+      "lang": "en",
+      "text": "A quiet library keeps its doors open. Readers compare words, spaces, and lines.",
+      "width": 320.0
+    },
+    "latin-spacing": {
+      "direction": "Ltr",
+      "font_size": 16.0,
+      "fonts": [
+        "latin"
+      ],
+      "id": "latin-spacing",
+      "lang": "en",
+      "text": "One  two\tthree\nFour five soft­hyphen.",
+      "width": 160.0
+    },
+    "mixed-scripts": {
+      "direction": "Ltr",
+      "font_size": 16.0,
+      "fonts": [
+        "latin",
+        "cjk",
+        "arabic"
+      ],
+      "id": "mixed-scripts",
+      "lang": "ja",
+      "text": "Library 図書館 مكتبة: Café / 日本語 / العربية.",
+      "width": 280.0
+    },
+    "nested-atomic-baseline": {
+      "direction": "Ltr",
+      "families": [
+        "Named(\"Shodo Fixture Latin\")"
+      ],
+      "font_size": 20.0,
+      "id": "nested-atomic-baseline",
+      "indent": 0.0,
+      "line_height": "Px(24.0)",
+      "tab_px": null,
+      "text": "A\n[atomic]B",
+      "white_space": "Collapse",
+      "width": 180.0
+    },
+    "normal-white-space": {
+      "direction": "Ltr",
+      "families": [
+        "Named(\"Shodo Fixture Latin\")"
+      ],
+      "font_size": 20.0,
+      "id": "normal-white-space",
+      "indent": 0.0,
+      "line_height": "Px(24.0)",
+      "tab_px": null,
+      "text": "One   two\n  three   four.",
+      "white_space": "Collapse",
+      "width": 90.0
+    },
+    "preserved-tabs": {
+      "direction": "Ltr",
+      "families": [
+        "Named(\"Shodo Fixture Latin\")"
+      ],
+      "font_size": 16.0,
+      "id": "preserved-tabs",
+      "indent": 0.0,
+      "line_height": "Px(24.0)",
+      "tab_px": 16.0,
+      "text": "One  two\tthree\nFour five.",
+      "white_space": "Preserve",
+      "width": 90.0
+    },
+    "shared-ffi-color": {
+      "direction": "Ltr",
+      "families": [
+        "Named(\"Shodo Fixture Latin\")"
+      ],
+      "font_size": 32.0,
+      "id": "shared-ffi-color",
+      "indent": 0.0,
+      "line_height": "Px(24.0)",
+      "tab_px": null,
+      "text": "ffi",
+      "white_space": "Collapse",
+      "width": 200.0
+    }
+  },
+  "conditions": {
+    "background": [
+      255,
+      255,
+      255,
+      255
+    ],
+    "canvas": [
+      512,
+      1024
+    ],
+    "fonts": [
+      {
+        "face": 0,
+        "id": "latin",
+        "sha256": "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25"
+      },
+      {
+        "face": 0,
+        "id": "cjk",
+        "sha256": "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b"
+      },
+      {
+        "face": 0,
+        "id": "arabic",
+        "sha256": "e9885fbcf3bdbddea94d1679d636a80f7421c6b63632a35c6f884a9ee74067d9"
+      }
+    ],
+    "origin": [
+      10,
+      10
+    ],
+    "renderer": "skrifa-0.44.0/tiny-skia-0.12.0/unhinted",
+    "scale": 1
+  },
+  "provenance": "Explicit agent-generated fixed-output expectations; review/commit through PR, no claim of separate human approval or browser conformance.",
+  "schema": 1
+}

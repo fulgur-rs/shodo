@@ -1,0 +1,123 @@
+{
+  "annotations": [],
+  "atomics": [
+    {
+      "baseline": 19.765625,
+      "block_start": 27.765625,
+      "block_start_in_line": 3.765625,
+      "height": 20.0,
+      "inline_start": 0.0,
+      "line": 1,
+      "node": 9,
+      "width": 20.0
+    }
+  ],
+  "glyphs": [
+    {
+      "advance": 12.78125,
+      "baseline": 19.765625,
+      "block_offset": 0.0,
+      "cluster": 0,
+      "coords": [],
+      "embolden": false,
+      "font": "latin",
+      "id": 36,
+      "inline_position": 0.0,
+      "line": 0,
+      "owner": 1,
+      "size": 20.0,
+      "skew": null
+    },
+    {
+      "advance": 13.0,
+      "baseline": 19.765625,
+      "block_offset": 0.0,
+      "cluster": 5,
+      "coords": [],
+      "embolden": false,
+      "font": "latin",
+      "id": 37,
+      "inline_position": 20.0,
+      "line": 1,
+      "owner": 2,
+      "size": 20.0,
+      "skew": null
+    }
+  ],
+  "height_rejections": 0,
+  "inline_boxes": [
+    {
+      "block_start": -1.6143741607666016,
+      "end_edge": true,
+      "height": 27.23999786376953,
+      "inline_start": 0.0,
+      "line": 1,
+      "node": 11,
+      "parent": null,
+      "start_edge": true,
+      "width": 41.0
+    },
+    {
+      "block_start": -1.6143741607666016,
+      "end_edge": true,
+      "height": 27.23999786376953,
+      "inline_start": 0.0,
+      "line": 1,
+      "node": 12,
+      "parent": 0,
+      "start_edge": true,
+      "width": 39.0
+    },
+    {
+      "block_start": -1.6143741607666016,
+      "end_edge": true,
+      "height": 27.23999786376953,
+      "inline_start": 0.0,
+      "line": 1,
+      "node": 13,
+      "parent": 1,
+      "start_edge": true,
+      "width": 37.0
+    },
+    {
+      "block_start": -1.6143741607666016,
+      "end_edge": true,
+      "height": 27.23999786376953,
+      "inline_start": 0.0,
+      "line": 1,
+      "node": 14,
+      "parent": 2,
+      "start_edge": true,
+      "width": 35.0
+    }
+  ],
+  "lines": [
+    {
+      "baseline": 19.765625,
+      "block_offset": 0.0,
+      "block_size": 24.0,
+      "end": 2,
+      "inline_size": 12.78125,
+      "page": 0,
+      "start": 0
+    },
+    {
+      "baseline": 19.765625,
+      "block_offset": 24.0,
+      "block_size": 24.0,
+      "end": 6,
+      "inline_size": 41.0,
+      "page": 0,
+      "start": 2
+    }
+  ],
+  "pages": [
+    {
+      "floats": [],
+      "fragment": 0,
+      "panel_offset": 0.0
+    }
+  ],
+  "rejected_token_preserved": false,
+  "schema": 1
+}

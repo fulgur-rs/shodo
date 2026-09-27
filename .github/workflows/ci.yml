@@ -22,6 +22,18 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets
       - run: cargo test --workspace
+      - name: Check fixed glyph snapshots
+        if: always()
+        run: cargo run -p shodo-fixtures --example snapshots -- --output target/snapshot-report
+      - name: Upload snapshot report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots-${{ github.job }}
+          path: |
+            target/snapshot-report
+            target/snapshot-checks
+          if-no-files-found: warn
       - run: cargo test -p shodo-bench --features allocation-counting --test allocator --test probe
       - run: cargo test -p shodo-bench --bench layout
         env:
@@ -47,6 +59,18 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig1-dev
       - uses: dtolnay/rust-toolchain@1.89.0
       - run: cargo test --workspace
+      - name: Check fixed glyph snapshots
+        if: always()
+        run: cargo run -p shodo-fixtures --example snapshots -- --output target/snapshot-report
+      - name: Upload snapshot report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots-${{ github.job }}
+          path: |
+            target/snapshot-report
+            target/snapshot-checks
+          if-no-files-found: warn
 
   wasm:
     runs-on: ubuntu-latest
