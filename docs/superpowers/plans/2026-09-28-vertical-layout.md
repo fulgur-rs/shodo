@@ -46,16 +46,16 @@
   `itemize(input, styles, bidi, breaks, fonts, mode: WritingMode) -> Vec<ShapeItem>`。
   shaping budget/reshape時に同属性を引き継ぐ。
 
-- [ ] **Step 1: Write failing itemization regression** real ParagraphBuilderで `a§b` をprepareし、HorizontalTbは1 item、VerticalRl/Mixedは3 itemとassertする。
+- [x] **Step 1: Write failing itemization regression** real ParagraphBuilderで `a§b` をprepareし、HorizontalTbは1 item、VerticalRl/Mixedは3 itemとassertする。
   `§` はU、Latin a/bはR。同じscript/fontのorientation差がrun結合を止めることを検証する。
-- [ ] **Step 2: Run RED** `cargo +stable test --lib mixed_vertical_orientation_cuts_shaping_items --offline -- --nocapture`。
+- [x] **Step 2: Run RED** `cargo +stable test --lib mixed_vertical_orientation_cuts_shaping_items --offline -- --nocapture`。
   Expected: assertionで実際のitem数1と期待3が異なる。
-- [ ] **Step 3: Implement classifier and item metadata** modeをitemizeに渡す。
+- [x] **Step 3: Implement classifier and item metadata** modeをitemizeに渡す。
   ICU分類はgrapheme先頭で一度決定し、style分割したmarkにも引き継ぐ。
   orientationをshape.rs内の二つのShapeItem clone/mergeに渡す。
-- [ ] **Step 4: Add orientation matrix and boundary regressions** 全5mode/3orientation、U/Tu/Tr/R、base+mark/VS16、透明nodeを検証する。
+- [x] **Step 4: Add orientation matrix and boundary regressions** 全5mode/3orientation、U/Tu/Tr/R、base+mark/VS16、透明nodeを検証する。
   Expected: literal orientation/rangeが一致し、horizontal compatibility/Arabic既存testが維持される。
-- [ ] **Step 5: Verify and commit** `cargo +stable test --workspace --offline`。
+- [x] **Step 5: Verify and commit** `cargo +stable test --workspace --offline`。
   Expected: 全workspace成功。`feat: classify vertical grapheme orientation` をcommitする。
   `task-done`も同じworkspace commandを使う。
 
@@ -70,6 +70,7 @@ Create `tests/vertical.rs`;必要な固定font table fixtureを既存fixture生�
 - Produces: ShapedRunのorientation/scale metadata、公開 `GlyphOrientation`、
   `GlyphTransform { inline_x, inline_y, block_x, block_y: f32 }`。
   `GlyphRunView::orientation() -> GlyphOrientation`, `glyph_transform() -> GlyphTransform`。
+  `GlyphRunView::glyph_origin(index: usize) -> Option<(f32, f32)>` はspacingを除いたshaping advanceで負の物理inline軸を補償する。
   `PhysicalConverter::point(inline: f32, block: f32) -> (f32, f32)`、
   `vector(inline: f32, block: f32) -> (f32, f32)` と逆point変換。
   glyph originにmatrixを加えphysical point/vectorを合成する。

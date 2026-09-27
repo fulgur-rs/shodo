@@ -429,6 +429,7 @@ fn build_data(
         &shape_items_input,
         &styles,
         fonts,
+        style.writing_mode,
         &shape_limits,
         warnings,
         sat,

@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::ops::Range;
 
 use crate::font::FontId;
-use crate::geometry::{LayoutUnit, Saturation};
+use crate::geometry::{LayoutUnit, Saturation, WritingMode};
 use crate::limits::{LimitExceeded, LimitKind, Limits};
 
 /// A run is closed before its pen position would exceed this value, so
@@ -52,6 +52,7 @@ pub(crate) struct ShapedRun {
     pub(crate) glyphs: Range<u32>,
     pub(crate) text: Range<u32>,
     pub(crate) item: u32,
+    pub(crate) orientation: orientation::RunOrientation,
     pub(crate) font: FontId,
     pub(crate) font_size: f32,
     pub(crate) instance: Arc<RunInstance>,
@@ -65,6 +66,7 @@ pub(crate) fn shape_items(
     items: &[crate::analysis::itemize::ShapeItem],
     styles: &[crate::style::InlineStyle],
     fonts: &crate::font::FontCollection,
+    mode: WritingMode,
     limits: &Limits,
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
@@ -93,14 +95,20 @@ pub(crate) fn shape_items(
                     warnings,
                 );
                 let metrics = fonts.metrics_with_coords(found.id, size, &instance.coords);
+                let vertical_metrics = fonts.vertical_metrics(found.id, size, &instance.coords);
                 Arc::get_mut(&mut instance).expect("new instance").metrics = metrics;
+                Arc::get_mut(&mut instance)
+                    .expect("new instance")
+                    .vertical_metrics = vertical_metrics;
+                Arc::get_mut(&mut instance).expect("new instance").features =
+                    features::for_orientation(style, original.orientation);
                 (shaper, instance, size)
             });
         let missing_instance = if resolved.is_none() {
             Some(Arc::new(RunInstance {
                 script: original.script,
                 language: style.lang.clone(),
-                features: features::features(style),
+                features: features::for_orientation(style, original.orientation),
                 metrics: Some(fonts.metrics(fonts.primary_font(), style.font_size)),
                 ..Default::default()
             }))
@@ -171,6 +179,7 @@ pub(crate) fn shape_items(
                     *store.id.last_mut().unwrap() = 0;
                     let mut current = runs.pop().unwrap();
                     current.instance = Arc::clone(run_instance);
+                    current.orientation = item.orientation;
                     if runs.len() > window_run_start
                         && let Some(previous) = runs.last_mut()
                         && previous.item == current.item
@@ -222,7 +231,10 @@ pub(crate) fn shape_items(
             } else {
                 &post
             });
-            buffer.set_direction(if item.level % 2 == 1 {
+            let upright = item.orientation == orientation::RunOrientation::Upright;
+            buffer.set_direction(if upright {
+                harfrust::Direction::TopToBottom
+            } else if item.level % 2 == 1 {
                 harfrust::Direction::RightToLeft
             } else {
                 harfrust::Direction::LeftToRight
@@ -286,8 +298,14 @@ pub(crate) fn shape_items(
                 let mut part_start = begin;
                 let mut part_advance = 0i64;
                 for (at, index) in order.iter().enumerate().take(end).skip(begin) {
+                    let position = &shaped.glyph_positions()[*index];
                     let advance = LayoutUnit::from_f32_round(
-                        shaped.glyph_positions()[*index].x_advance as f32 * scale,
+                        if upright {
+                            -position.y_advance
+                        } else {
+                            position.x_advance
+                        } as f32
+                            * scale,
                         sat,
                     )
                     .raw() as i64;
@@ -316,7 +334,15 @@ pub(crate) fn shape_items(
                     for index in &order[part.clone()] {
                         let info = &shaped.glyph_infos()[*index];
                         let pos = &shaped.glyph_positions()[*index];
-                        let advance = LayoutUnit::from_f32_round(pos.x_advance as f32 * scale, sat);
+                        let advance = LayoutUnit::from_f32_round(
+                            if upright {
+                                -pos.y_advance
+                            } else {
+                                pos.x_advance
+                            } as f32
+                                * scale,
+                            sat,
+                        );
                         store.flags.push(
                             u8::from(info.unsafe_to_break())
                                 | (u8::from(info.unsafe_to_concat()) << 1),
@@ -325,7 +351,10 @@ pub(crate) fn shape_items(
                         store.cluster.push(cluster);
                         store.advance.push(advance);
                         store.pen.push(pen);
-                        let offset = LayoutUnit::from_f32_round(pos.x_offset as f32 * scale, sat);
+                        let offset = LayoutUnit::from_f32_round(
+                            if upright { -pos.y_offset } else { pos.x_offset } as f32 * scale,
+                            sat,
+                        );
                         let offset = if item.level % 2 == 1 {
                             LayoutUnit::from_raw(
                                 part_advance.clamp(i32::MIN as i64, i32::MAX as i64) as i32,
@@ -339,7 +368,15 @@ pub(crate) fn shape_items(
                         };
                         store.offset_inline.push(offset);
                         store.offset_block.push(LayoutUnit::from_f32_round(
-                            -pos.y_offset as f32 * scale,
+                            if upright {
+                                match mode {
+                                    WritingMode::VerticalLr => pos.x_offset,
+                                    _ => -pos.x_offset,
+                                }
+                            } else {
+                                -pos.y_offset
+                            } as f32
+                                * scale,
                             sat,
                         ));
                         pen = pen.add(advance, sat);
@@ -372,6 +409,7 @@ pub(crate) fn shape_items(
                             glyphs: run_start..store.len() as u32,
                             text: cluster..cluster_end,
                             item: owner,
+                            orientation: item.orientation,
                             font: found.id,
                             font_size,
                             instance: Arc::clone(run_instance),
@@ -446,6 +484,7 @@ pub(crate) fn shape_item(
                 glyphs: run_glyphs..store.len() as u32,
                 text: run_text..cluster,
                 item,
+                orientation: orientation::RunOrientation::Horizontal,
                 font,
                 font_size,
                 instance: Arc::new(RunInstance::default()),
@@ -473,6 +512,7 @@ pub(crate) fn shape_item(
             glyphs: run_glyphs..store.len() as u32,
             text: run_text..end,
             item,
+            orientation: orientation::RunOrientation::Horizontal,
             font,
             font_size,
             instance: Arc::new(RunInstance::default()),
@@ -640,6 +680,7 @@ pub(crate) fn shape_window_edit(
         &items,
         &data.styles,
         &data.fonts,
+        data.style.writing_mode,
         &limits,
         warnings,
         sat,

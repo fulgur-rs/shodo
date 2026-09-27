@@ -4,12 +4,14 @@ use crate::style::TextOrientation;
 use icu_properties::{CodePointMapData, props::VerticalOrientation};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum RunOrientation {
+pub enum GlyphOrientation {
     Horizontal,
     Upright,
     SidewaysClockwise,
     SidewaysCounterClockwise,
 }
+
+pub(crate) use GlyphOrientation as RunOrientation;
 
 /// `base` is the first scalar of the complete grapheme, including when its
 /// marks cross transparent source or shaping-style boundaries.

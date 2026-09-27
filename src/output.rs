@@ -85,13 +85,26 @@ pub struct LineMetrics {
 impl Line {
     pub fn metrics(&self) -> LineMetrics {
         let baseline = self.baseline.to_f32();
-        let root = self.data.style_metrics[0].metrics;
+        let root_style = &self.data.styles[0];
+        let root = self.data.style_metrics[0];
+        let upright = matches!(
+            self.data.style.writing_mode,
+            crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
+        ) && root_style.text_orientation != crate::style::TextOrientation::Sideways;
+        let (a, d) = if upright {
+            root.vertical_metrics
+                .map_or((root.size / 2.0, root.size / 2.0), |v| {
+                    (v.ascent, v.descent)
+                })
+        } else {
+            (root.metrics.ascent, root.metrics.descent)
+        };
         LineMetrics {
             ascent: baseline,
             descent: self.block_size.to_f32() - baseline,
             baseline,
-            text_over: baseline - root.ascent,
-            text_under: baseline + root.descent,
+            text_over: baseline - a,
+            text_under: baseline + d,
         }
     }
     /// Leading hanging amount; punctuation hanging is reserved for Japanese
@@ -261,8 +274,36 @@ impl Line {
             visible_hyphen,
             block_size: LayoutUnit::ZERO,
             baseline: LayoutUnit::ZERO,
-            ascent: LayoutUnit::from_f32_round(m.ascent, sat),
-            descent: LayoutUnit::from_f32_round(m.descent, sat),
+            ascent: LayoutUnit::from_f32_round(
+                if matches!(
+                    data.style.writing_mode,
+                    crate::geometry::WritingMode::VerticalRl
+                        | crate::geometry::WritingMode::VerticalLr
+                ) && data.styles[0].text_orientation != crate::style::TextOrientation::Sideways
+                {
+                    data.style_metrics[0]
+                        .vertical_metrics
+                        .map_or(data.style_metrics[0].size / 2.0, |v| v.ascent)
+                } else {
+                    m.ascent
+                },
+                sat,
+            ),
+            descent: LayoutUnit::from_f32_round(
+                if matches!(
+                    data.style.writing_mode,
+                    crate::geometry::WritingMode::VerticalRl
+                        | crate::geometry::WritingMode::VerticalLr
+                ) && data.styles[0].text_orientation != crate::style::TextOrientation::Sideways
+                {
+                    data.style_metrics[0]
+                        .vertical_metrics
+                        .map_or(data.style_metrics[0].size / 2.0, |v| v.descent)
+                } else {
+                    m.descent
+                },
+                sat,
+            ),
             block_offset,
             displaced: Vec::new(),
             block_shifts: vec![LayoutUnit::ZERO; records.len()],
@@ -418,6 +459,16 @@ pub struct GlyphRunView<'a> {
     text: (u32, u32),
 }
 
+/// Local outline coordinates (x right, y down) to logical inline/block
+/// displacement. The outline has already been scaled to the run's font size.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GlyphTransform {
+    pub inline_x: f32,
+    pub inline_y: f32,
+    pub block_x: f32,
+    pub block_y: f32,
+}
+
 /// One positioned glyph. `inline_position` is the glyph origin from the
 /// container's content edge; `block_offset` is relative to the baseline.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -555,12 +606,99 @@ impl<'a> GlyphRunView<'a> {
         self.run_data().font
     }
 
+    pub fn orientation(&self) -> crate::GlyphOrientation {
+        self.run_data().orientation
+    }
+
+    /// Maps an outline's local x/y axes into logical axes. Apply the
+    /// [`crate::geometry::PhysicalConverter`] to this displacement after
+    /// positioning the glyph origin, so RTL never mirrors the outline.
+    pub fn glyph_transform(&self) -> GlyphTransform {
+        use crate::GlyphOrientation as O;
+        use crate::geometry::{Direction, WritingMode};
+        let mode = self.data().style.writing_mode;
+        let ltr = self.data().style.direction == Direction::Ltr;
+        let inline_sign = if mode == WritingMode::SidewaysLr {
+            if ltr { -1.0 } else { 1.0 }
+        } else if ltr {
+            1.0
+        } else {
+            -1.0
+        };
+        let block_sign = if matches!(mode, WritingMode::VerticalRl | WritingMode::SidewaysRl) {
+            -1.0
+        } else {
+            1.0
+        };
+        match self.orientation() {
+            O::Horizontal => GlyphTransform {
+                inline_x: inline_sign,
+                inline_y: 0.0,
+                block_x: 0.0,
+                block_y: 1.0,
+            },
+            O::Upright => GlyphTransform {
+                inline_x: 0.0,
+                inline_y: inline_sign,
+                block_x: block_sign,
+                block_y: 0.0,
+            },
+            O::SidewaysClockwise => GlyphTransform {
+                inline_x: inline_sign,
+                inline_y: 0.0,
+                block_x: 0.0,
+                block_y: -block_sign,
+            },
+            O::SidewaysCounterClockwise => GlyphTransform {
+                inline_x: -inline_sign,
+                inline_y: 0.0,
+                block_x: 0.0,
+                block_y: block_sign,
+            },
+        }
+    }
+
+    /// Font outline origin in line-local logical coordinates. On a negative
+    /// physical inline axis, the stored position names the advance cell's
+    /// start, so use the original shaping advance, excluding layout spacing.
+    pub fn glyph_origin(&self, index: usize) -> Option<(f32, f32)> {
+        let gi = (self.glyphs.0 as usize).checked_add(index)?;
+        if gi >= self.glyphs.1 as usize {
+            return None;
+        }
+        let glyph = self.glyphs().get(index)?;
+        let store = match self.source {
+            GlyphSource::Shared => &self.data().glyphs,
+            GlyphSource::Overlay { .. } => self.line.overlay.as_deref()?,
+        };
+        let mode = self.data().style.writing_mode;
+        let ltr = self.data().style.direction == crate::geometry::Direction::Ltr;
+        let negative_inline = if mode == crate::geometry::WritingMode::SidewaysLr {
+            ltr
+        } else {
+            !ltr
+        };
+        let inline = glyph.inline_position
+            + if negative_inline {
+                store.advance[gi].to_f32()
+            } else {
+                0.0
+            };
+        Some((inline, self.baseline() + glyph.block_offset))
+    }
+
     /// Metrics at this run's actual size and normalized variation location.
     pub fn metrics(&self) -> crate::font::FontMetrics {
         self.run_data()
             .instance
             .metrics
             .unwrap_or_else(|| self.data().fonts.metrics(self.font(), self.font_size()))
+    }
+
+    /// Resolved vhea/MVAR metrics for this run's font instance, when present.
+    /// Glyph-specific vertical advances and origins are reflected in `glyphs`.
+    pub fn vertical_metrics(&self) -> Option<crate::font::VerticalFontMetrics> {
+        self.run_data().instance.vertical_metrics
     }
 
     pub fn font_size(&self) -> f32 {

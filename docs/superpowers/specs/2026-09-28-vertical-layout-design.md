@@ -90,7 +90,11 @@ spacing/emphasisは一つのcompositionとして扱う。
 
 ## 公開出力の契約
 
-既存Glyphのinline_positionとblock_offsetは論理glyph originを表す。
+既存Glyphのinline_positionとblock_offsetの結果は横書き互換を維持する。
+`GlyphRunView::glyph_origin(index: usize) -> Option<(f32, f32)>` は、
+font outline用の論理inline/block originを返す。block座標にはrunのbaselineを含める。
+物理inline軸が負の場合は既存glyph positionに元のshaping advanceを加えたoriginを使う。
+layout spacing込みのGlyph.advanceを加算してはいけない。
 `GlyphRunView::orientation()` は公開GlyphOrientationを返す。
 `GlyphRunView::glyph_transform()` はGlyphTransformを返す。
 GlyphTransformはfont-size適用済みのoutline（x右、y下）の局所座標を、
@@ -98,7 +102,8 @@ glyph originに加算する論理inline/block displacementへ写す2×2行列で
 font variationとsynthetic skew/emboldenは現在の公開instance情報を利用する。
 TCY scaleも行列に含めるため、描画側がcompositionを再計算しない。
 PhysicalConverterにpoint/vector変換を追加し、directionによるorigin移動とoutlineの回転を混同しない。
-変換は `physical point(logical origin) + physical vector(glyph_transform(local outline))` の順序。
+変換は `physical point(glyph_origin(index)) + physical vector(glyph_transform(local outline))` の順序。
+matrixはconverterのdirectionを補償するため、glyphの回転を保ちながら鏡像化を防ぐ。
 矩形のRTL反転で文字自体を鏡像化しない。横書きLTR/RTLの既存出力は変えない。
 
 Line::baseline/GlyphRunView::baselineのdocはalphabetic限定をやめ、支配baselineからの論理block位置を説明する。

@@ -80,6 +80,72 @@ impl PhysicalConverter {
         }
     }
 
+    /// Map a logical point; unlike `rect`, no glyph or box extent is known.
+    pub fn point(&self, inline: f32, block: f32) -> (f32, f32) {
+        let ltr = self.direction == Direction::Ltr;
+        match self.writing_mode {
+            WritingMode::HorizontalTb => (
+                if ltr {
+                    inline
+                } else {
+                    self.container.width - inline
+                },
+                block,
+            ),
+            WritingMode::VerticalRl | WritingMode::SidewaysRl => (
+                self.container.width - block,
+                if ltr {
+                    inline
+                } else {
+                    self.container.height - inline
+                },
+            ),
+            WritingMode::VerticalLr => (
+                block,
+                if ltr {
+                    inline
+                } else {
+                    self.container.height - inline
+                },
+            ),
+            WritingMode::SidewaysLr => (
+                block,
+                if ltr {
+                    self.container.height - inline
+                } else {
+                    inline
+                },
+            ),
+        }
+    }
+
+    /// Map a displacement, without applying the container's translated origin.
+    pub fn vector(&self, inline: f32, block: f32) -> (f32, f32) {
+        let ltr = self.direction == Direction::Ltr;
+        match self.writing_mode {
+            WritingMode::HorizontalTb => (if ltr { inline } else { -inline }, block),
+            WritingMode::VerticalRl | WritingMode::SidewaysRl => {
+                (-block, if ltr { inline } else { -inline })
+            }
+            WritingMode::VerticalLr => (block, if ltr { inline } else { -inline }),
+            WritingMode::SidewaysLr => (block, if ltr { -inline } else { inline }),
+        }
+    }
+
+    /// Inverse of `point`, used for caret/hit coordinates from a painter.
+    pub fn logical_point(&self, x: f32, y: f32) -> (f32, f32) {
+        let origin = self.point(0.0, 0.0);
+        let dx = x - origin.0;
+        let dy = y - origin.1;
+        let ltr = self.direction == Direction::Ltr;
+        match self.writing_mode {
+            WritingMode::HorizontalTb => (if ltr { dx } else { -dx }, dy),
+            WritingMode::VerticalRl | WritingMode::SidewaysRl => (if ltr { dy } else { -dy }, -dx),
+            WritingMode::VerticalLr => (if ltr { dy } else { -dy }, dx),
+            WritingMode::SidewaysLr => (if ltr { -dy } else { dy }, dx),
+        }
+    }
+
     pub fn rect(&self, r: LogicalRect) -> PhysicalRect {
         let PhysicalSize {
             width: w,

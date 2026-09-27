@@ -12,6 +12,7 @@ use std::sync::Arc;
 #[derive(Clone, Debug, Default)]
 pub(crate) struct RunInstance {
     pub(crate) metrics: Option<crate::font::FontMetrics>,
+    pub(crate) vertical_metrics: Option<crate::font::VerticalFontMetrics>,
     pub(crate) coords: Vec<NormalizedCoord>,
     pub(crate) variations: Vec<FontVariation>,
     pub(crate) embolden: bool,
@@ -133,6 +134,7 @@ pub(crate) fn resolve(
     }
     let result = Arc::new(RunInstance {
         metrics: None,
+        vertical_metrics: None,
         coords: instance.coords().to_vec(),
         variations,
         embolden: found.embolden,

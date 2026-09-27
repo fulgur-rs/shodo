@@ -15,11 +15,21 @@ pub(crate) struct LineMetrics {
     pub(crate) empty: bool,
 }
 
-fn extents(s: &InlineStyle, m: FontMetrics) -> (f32, f32) {
-    let a = m.ascent;
-    let d = m.descent;
+fn extents(
+    s: &InlineStyle,
+    m: FontMetrics,
+    vertical: Option<crate::font::VerticalFontMetrics>,
+    upright: bool,
+) -> (f32, f32) {
+    let (a, d, gap) = if upright {
+        vertical.map_or((s.font_size / 2.0, s.font_size / 2.0, 0.0), |v| {
+            (v.ascent, v.descent, v.line_gap)
+        })
+    } else {
+        (m.ascent, m.descent, m.line_gap)
+    };
     let h = match s.line_height {
-        LineHeight::Normal => a + d + m.line_gap,
+        LineHeight::Normal => a + d + gap,
         LineHeight::Px(v) => v,
         LineHeight::Number(n) => n * s.font_size,
     };
@@ -60,7 +70,17 @@ fn box_shift(
         let b = &data.boxes[index as usize];
         let s = &data.styles[b.style as usize];
         let parent_style = b.parent.map_or(0, |p| data.boxes[p as usize].style) as usize;
-        let (a, d) = extents(s, data.style_metrics[b.style as usize].metrics);
+        let style_metrics = data.style_metrics[b.style as usize];
+        let upright = matches!(
+            data.style.writing_mode,
+            crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
+        ) && s.text_orientation != crate::style::TextOrientation::Sideways;
+        let (a, d) = extents(
+            s,
+            style_metrics.metrics,
+            style_metrics.vertical_metrics,
+            upright,
+        );
         let group = value.1.or_else(|| {
             matches!(s.vertical_align, VerticalAlign::Top | VerticalAlign::Bottom).then_some(index)
         });
@@ -81,7 +101,17 @@ pub(crate) fn measure(
     sat: &mut Saturation,
 ) -> LineMetrics {
     let root = &data.styles[0];
-    let (mut above, mut below) = extents(root, data.style_metrics[0].metrics);
+    let root_metrics = data.style_metrics[0];
+    let root_upright = matches!(
+        data.style.writing_mode,
+        crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
+    ) && root.text_orientation != crate::style::TextOrientation::Sideways;
+    let (mut above, mut below) = extents(
+        root,
+        root_metrics.metrics,
+        root_metrics.vertical_metrics,
+        root_upright,
+    );
     let mut cache = HashMap::new();
     let mut parents = HashMap::new();
     let mut atomic_styles = HashMap::new();
@@ -114,7 +144,12 @@ pub(crate) fn measure(
                     .instance
                     .metrics
                     .unwrap_or_else(|| data.fonts.metrics(shaped.font, shaped.font_size));
-                let (a, d) = extents(s, metrics);
+                let (a, d) = extents(
+                    s,
+                    metrics,
+                    shaped.instance.vertical_metrics,
+                    shaped.orientation == crate::shape::orientation::RunOrientation::Upright,
+                );
                 let (base, group) = parents
                     .get(item)
                     .copied()
@@ -137,7 +172,18 @@ pub(crate) fn measure(
                     || e.border.block_end != 0.0
                     || e.padding.block_start != 0.0
                     || e.padding.block_end != 0.0);
-                let (a, d) = extents(s, data.style_metrics[b.style as usize].metrics);
+                let style_metrics = data.style_metrics[b.style as usize];
+                let upright = matches!(
+                    data.style.writing_mode,
+                    crate::geometry::WritingMode::VerticalRl
+                        | crate::geometry::WritingMode::VerticalLr
+                ) && s.text_orientation != crate::style::TextOrientation::Sideways;
+                let (a, d) = extents(
+                    s,
+                    style_metrics.metrics,
+                    style_metrics.vertical_metrics,
+                    upright,
+                );
                 let (base, group) = box_shift(data, *box_index, &mut cache);
                 (a, d, base, group, None)
             }
@@ -155,7 +201,12 @@ pub(crate) fn measure(
                     .baseline
                     .unwrap_or(if central { height / 2.0 } else { height });
                 let dominant_shift = if central {
-                    -(parent.metrics.ascent - parent.metrics.descent) / 2.0
+                    let (over, under) = parent
+                        .vertical_metrics
+                        .map_or((parent.size / 2.0, parent.size / 2.0), |v| {
+                            (v.ascent, v.descent)
+                        });
+                    -(over - under) / 2.0
                 } else {
                     0.0
                 };

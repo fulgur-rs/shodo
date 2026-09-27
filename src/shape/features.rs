@@ -1,6 +1,41 @@
 //! CSS feature components followed by explicit author settings (last wins).
 use crate::style::*;
 
+pub(super) fn for_orientation(
+    style: &InlineStyle,
+    orientation: super::orientation::RunOrientation,
+) -> Vec<harfrust::Feature> {
+    if orientation != super::orientation::RunOrientation::Upright {
+        return features(style);
+    }
+    let explicit_vert = style.font_features.iter().any(|f| f.tag == *b"vert");
+    let explicit_vrt2 = style
+        .font_features
+        .iter()
+        .rfind(|f| f.tag == *b"vrt2")
+        .is_some_and(|f| f.value != 0);
+    let mut result = vec![
+        harfrust::Feature::new(
+            harfrust::Tag::new(b"vert"),
+            u32::from(explicit_vert || !explicit_vrt2),
+            ..,
+        ),
+        harfrust::Feature::new(harfrust::Tag::new(b"vrt2"), 0, ..),
+    ];
+    match style.font_kerning {
+        FontKerning::Auto => {}
+        FontKerning::Normal => {
+            result.push(harfrust::Feature::new(harfrust::Tag::new(b"vkrn"), 1, ..));
+        }
+        FontKerning::None => {
+            result.push(harfrust::Feature::new(harfrust::Tag::new(b"vkrn"), 0, ..));
+        }
+    }
+    // Explicit settings come last, including an explicit vert/vrt2 choice.
+    result.extend(features(style));
+    result
+}
+
 pub(super) fn features(s: &InlineStyle) -> Vec<harfrust::Feature> {
     let mut result = Vec::new();
     let mut push = |tag: &[u8; 4], value| {
