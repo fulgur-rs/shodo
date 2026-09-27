@@ -251,6 +251,7 @@ pub(crate) fn analyze_breaks(
         }
     }
     let ja: LanguageIdentifier = "ja".parse().expect("constant language");
+    let lb = CodePointMapData::<props::LineBreak>::new();
     for profile in active {
         let mut options = LineBreakOptions::default();
         options.strictness = Some(match profile.strict {
@@ -270,6 +271,18 @@ pub(crate) fn analyze_breaks(
         #[cfg(not(feature = "complex-scripts"))]
         let line = LineSegmenter::new_for_non_complex_scripts(options);
         for at in line.segment_str(&projection.text) {
+            // ICU's Normal mode relaxes CJ as well as CJK hyphen-like
+            // characters. CSS Text §6.2 only permits CJ (small kana and
+            // prolonged sound marks) in Loose mode. Tailor the projected
+            // boundary so transparent source items cannot hide the CJ.
+            if profile.strict == 0
+                && projection.text[at..]
+                    .chars()
+                    .next()
+                    .is_some_and(|c| lb.get(c) == props::LineBreak::ConditionalJapaneseStarter)
+            {
+                continue;
+            }
             let offset = projection.upstream(at);
             if let Some(item) = item_before(&input.items, offset)
                 && profiles[item.style as usize] == profile
@@ -280,7 +293,6 @@ pub(crate) fn analyze_breaks(
             }
         }
     }
-    let lb = CodePointMapData::<props::LineBreak>::new();
     let logical_end = projection.upstream(projection.text.len());
     let mut indivisible_index = 0;
     let mut following_span = 0;
@@ -449,6 +461,176 @@ mod tests {
         let mut warnings = WarningSink::default();
         let processed = transform(processed, &b.styles, &limits, &mut warnings).unwrap();
         analyze_breaks(&processed, &b.styles, &mut warnings)
+    }
+
+    #[test]
+    fn css_japanese_strictness_matrix() {
+        // CSS Text 4 §6.2: these are literal wrapping expectations, not
+        // expectations computed using ICU's strictness options.
+        let rows = [
+            ("日〜本", [true, true, false]),
+            ("日゠本", [true, true, false]),
+            ("日ぁ本", [true, false, false]),
+            ("日ー本", [true, false, false]),
+            ("日々本", [true, false, false]),
+            ("……日", [true, false, false]),
+            ("日・本", [true, false, false]),
+            ("日：本", [true, false, false]),
+            ("日；本", [true, false, false]),
+            ("日！本", [true, false, false]),
+            ("日？本", [true, false, false]),
+            ("日％本", [true, false, false]),
+            ("＄日本", [true, false, false]),
+            ("日‐本", [true, false, false]),
+            ("日–本", [true, false, false]),
+        ];
+        let mut failures = Vec::new();
+        for lang in ["ja", "zh"] {
+            for (text, expected) in rows {
+                for (mode, allowed) in [LineBreak::Loose, LineBreak::Normal, LineBreak::Strict]
+                    .into_iter()
+                    .zip(expected)
+                {
+                    let result = analyze(
+                        text,
+                        InlineStyle {
+                            lang: Some(lang.into()),
+                            line_break: mode,
+                            ..InlineStyle::default()
+                        },
+                        true,
+                    );
+                    let opportunity = result.at(3);
+                    let expected = if allowed {
+                        BreakClass::Allowed
+                    } else {
+                        BreakClass::Prohibited
+                    };
+                    if opportunity.class != expected || opportunity.min_content != allowed {
+                        failures.push(format!(
+                            "{lang} {mode:?} {text:?}: {:?}/min={} expected {expected:?}/min={allowed}",
+                            opportunity.class, opportunity.min_content
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    #[test]
+    fn css_strictness_preserves_other_break_contracts() {
+        for lang in [None, Some("en"), Some("ja-JP"), Some("zh-Hant")] {
+            for mode in [LineBreak::Loose, LineBreak::Normal, LineBreak::Strict] {
+                let style = InlineStyle {
+                    lang: lang.map(str::to_owned),
+                    line_break: mode,
+                    ..InlineStyle::default()
+                };
+                assert_eq!(
+                    analyze("日ぁ本", style.clone(), true).at(3).class,
+                    if mode == LineBreak::Loose {
+                        BreakClass::Allowed
+                    } else {
+                        BreakClass::Prohibited
+                    },
+                    "CJ {lang:?} {mode:?}"
+                );
+                assert_eq!(
+                    analyze("日〜本", style.clone(), true).at(3).class,
+                    if matches!(lang, Some("ja-JP" | "zh-Hant")) && mode != LineBreak::Strict {
+                        BreakClass::Allowed
+                    } else {
+                        BreakClass::Prohibited
+                    },
+                    "hyphen-like {lang:?} {mode:?}"
+                );
+                assert_eq!(
+                    analyze("a‐b", style.clone(), true).at(1).class,
+                    BreakClass::Prohibited
+                );
+                assert_eq!(
+                    analyze(
+                        "日ぁ本",
+                        InlineStyle {
+                            text_wrap_mode: TextWrapMode::NoWrap,
+                            ..style.clone()
+                        },
+                        true,
+                    )
+                    .at(3)
+                    .class,
+                    BreakClass::Prohibited
+                );
+                assert_eq!(
+                    analyze(
+                        "日ぁ本",
+                        InlineStyle {
+                            line_break: LineBreak::Anywhere,
+                            ..style.clone()
+                        },
+                        true,
+                    )
+                    .at(3)
+                    .class,
+                    BreakClass::Allowed
+                );
+                assert_eq!(
+                    analyze(
+                        "日本",
+                        InlineStyle {
+                            word_break: WordBreak::KeepAll,
+                            ..style
+                        },
+                        true,
+                    )
+                    .at(3)
+                    .class,
+                    BreakClass::Prohibited
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn normal_cj_tailoring_looks_through_inline_bidi_controls() {
+        for mode in [LineBreak::Normal, LineBreak::Loose, LineBreak::Anywhere] {
+            let limits = Limits::default();
+            let style = InlineStyle {
+                lang: Some("ja".into()),
+                line_break: mode,
+                ..InlineStyle::default()
+            };
+            let mut b = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    root: style.clone(),
+                    ..ParagraphStyle::default()
+                },
+                &limits,
+            );
+            b.push_text(TextSource::Generated { node: NodeId(1) }, "日")
+                .open_inline(NodeId(2), &style, InlineEdges::default())
+                .push_text(
+                    TextSource::Generated { node: NodeId(3) },
+                    "\u{2066}ぁ\u{3099}\u{2069}",
+                )
+                .close_inline();
+            let processed = process(&b.text, &b.items, &b.styles, true, &limits).unwrap();
+            let mut warnings = WarningSink::default();
+            let processed = transform(processed, &b.styles, &limits, &mut warnings).unwrap();
+            let breaks = analyze_breaks(&processed, &b.styles, &mut warnings);
+            assert_eq!(
+                breaks.at(3).class,
+                if mode == LineBreak::Normal {
+                    BreakClass::Prohibited
+                } else {
+                    BreakClass::Allowed
+                }
+            );
+            // The combining mark remains in its base character even with
+            // anywhere; source byte positions are not new character cuts.
+            assert!(breaks.opportunities.iter().all(|o| o.offset != 9));
+        }
     }
 
     #[test]

@@ -52,21 +52,21 @@ scan/cache/planned/intrinsicと採用行のglyph配置に同じ判断を適用�
 - Consumes: `analyze_breaks(...) -> BreakAnalysis`、既存testsの `analyze(text, style, dom)`。
 - Produces: 同じ `BreakAnalysis` とAPI。新しい公開APIは不要。
 
-- [ ] **Step 1: Write matrix tests** `css_japanese_strictness_matrix`。
+- [x] **Step 1: Write matrix tests** `css_japanese_strictness_matrix`。
   `ja/zh` の `日〜本`、`日゠本` はNormal/Looseでbyte3にAllowed、StrictでProhibited。
   `日ぁ本`、`日ー本`、`日々本`、`日…本` はNormal/StrictでProhibited、LooseでAllowed。
   Looseの `日・本`、`日：本`、`日％本`、`＄日本` と他言語での差を検証する。
   `日‐本`/`日–本` のID先行と `a‐b` の非ID先行を分ける。
   各rowは `class` と `min_content` を検証する。
-- [ ] **Step 2: Run RED** `cargo +stable test --lib css_japanese_strictness_matrix -- --nocapture`。
+- [x] **Step 2: Run RED** `cargo +stable test --lib css_japanese_strictness_matrix -- --nocapture`。
   未対応rowがassertion failureになることを記録する。既に通るrowは変更しない。
-- [ ] **Step 3: Implement missing CSS tailoring** ICU結果を既存のtypographic boundaryで補正する。
+- [x] **Step 3: Implement missing CSS tailoring** ICU結果を既存のtypographic boundaryで補正する。
   strictness/lang/ICU LineBreak/EastAsianWidthの判定を使う。
   nowrap、anywhere、keep-all、mandatory、transform indivisibleの優先順位を維持する。
-- [ ] **Step 4: Add and pass contract regressions** inline境界にまたがる本文、ja-JP/zh-Hant、
+- [x] **Step 4: Add and pass contract regressions** inline境界にまたがる本文、ja-JP/zh-Hant、
   langなし、combining mark、nowrap/anywhere/keep-allをmatrixへ追加する。
   `cargo +stable test --lib analysis::breaks::tests` と既存workspaceが通る。
-- [ ] **Step 5: Commit** `feat: enforce CSS Japanese line-break strictness`。
+- [x] **Step 5: Commit** `feat: enforce CSS Japanese line-break strictness`。
 
 ### Task 2: 約物詰めとぶら下がりを共通コスト・配置に実装する
 
