@@ -147,15 +147,27 @@ fn final_review_first_line_empty_siblings_use_bounded_cursor_comparisons() {
 #[test]
 fn final_review_giant_grapheme_reuses_identical_font_queries_across_styles() {
     use crate::analysis::itemize::MATCH_CALLS;
-    for different_queries in [false, true] {
+    for query_mode in [0, 1, 2, 3, 4] {
         let mut style = ParagraphStyle::default();
-        if different_queries {
+        if query_mode == 1 {
             style.root.font_weight = 300.0;
+        } else if query_mode == 2 {
+            style.root.font_weight = 2000.0;
+        } else if query_mode == 3 {
+            style.root.font_style = crate::style::FontStyle::Oblique(120.0);
+        } else if query_mode == 4 {
+            style.root.font_width = -10.0;
         }
         let mut tracked = style.root.clone();
         tracked.letter_spacing = 1.0;
-        if different_queries {
+        if query_mode == 1 {
             tracked.font_weight = 700.0;
+        } else if query_mode == 2 {
+            tracked.font_weight = 3000.0;
+        } else if query_mode == 3 {
+            tracked.font_style = crate::style::FontStyle::Oblique(170.0);
+        } else if query_mode == 4 {
+            tracked.font_width = -20.0;
         }
         let mut b = ParagraphBuilder::new(&style, &Limits::default());
         b.push_text(TextSource::Generated { node: NodeId(0) }, "a");
@@ -175,7 +187,7 @@ fn final_review_giant_grapheme_reuses_identical_font_queries_across_styles() {
         let calls = MATCH_CALLS.with(|calls| calls.get());
         assert_eq!(
             calls,
-            if different_queries { 2 } else { 1 },
+            if query_mode == 1 { 2 } else { 1 },
             "queries matched once per grapheme"
         );
         assert_eq!(p.text().len(), 8193);

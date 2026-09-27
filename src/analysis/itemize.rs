@@ -40,27 +40,27 @@ struct QueryKey {
     synthesis: u8,
 }
 impl QueryKey {
-    fn new(s: &InlineStyle) -> Self {
+    fn new(s: &FontQuery) -> Self {
         Self {
             families: s
-                .font_families
+                .families
                 .iter()
                 .map(|f| match f {
                     FontFamily::Named(name) => (0, name.clone()),
                     FontFamily::Generic(generic) => (*generic as u8 + 1, String::new()),
                 })
                 .collect(),
-            weight: s.font_weight.to_bits(),
-            width: s.font_width.to_bits(),
-            style: match s.font_style {
+            weight: s.weight.to_bits(),
+            width: s.width.to_bits(),
+            style: match s.style {
                 FontStyle::Normal => (0, 0),
                 FontStyle::Italic => (1, 0),
-                FontStyle::Oblique(angle) => (2, angle.to_bits()),
+                FontStyle::Oblique(angle) => (2, if angle == 0.0 { 0 } else { angle.to_bits() }),
             },
-            language: s.lang.as_ref().map(|l| l.to_ascii_lowercase()),
-            synthesis: u8::from(s.font_synthesis.weight)
-                | u8::from(s.font_synthesis.style) << 1
-                | u8::from(s.font_synthesis.small_caps) << 2,
+            language: s.language.clone(),
+            synthesis: u8::from(s.synthesis.weight)
+                | u8::from(s.synthesis.style) << 1
+                | u8::from(s.synthesis.small_caps) << 2,
         }
     }
 }
@@ -105,17 +105,19 @@ pub(crate) fn itemize(
     let style_queries: Vec<_> = styles
         .iter()
         .map(|s| {
+            let query = FontQuery {
+                families: s.font_families.clone(),
+                weight: s.font_weight,
+                width: s.font_width,
+                style: s.font_style,
+                language: s.lang.clone(),
+                synthesis: s.font_synthesis,
+                ..Default::default()
+            }
+            .normalized();
             let next = queries.len();
-            *query_ids.entry(QueryKey::new(s)).or_insert_with(|| {
-                queries.push(FontQuery {
-                    families: s.font_families.clone(),
-                    weight: s.font_weight,
-                    width: s.font_width,
-                    style: s.font_style,
-                    language: s.lang.clone(),
-                    synthesis: s.font_synthesis,
-                    ..Default::default()
-                });
+            *query_ids.entry(QueryKey::new(&query)).or_insert_with(|| {
+                queries.push(query);
                 next
             })
         })

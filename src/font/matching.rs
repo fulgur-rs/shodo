@@ -43,6 +43,18 @@ impl Default for FontQuery {
     }
 }
 
+impl FontQuery {
+    pub(crate) fn normalized(mut self) -> Self {
+        self.weight = finite(self.weight, 400.).clamp(1., 1000.);
+        self.width = finite(self.width, 100.).max(0.01);
+        if let FontStyle::Oblique(angle) = &mut self.style {
+            *angle = finite(*angle, 14.).clamp(-90., 90.);
+        }
+        self.language = self.language.map(|s| s.to_ascii_lowercase());
+        self
+    }
+}
+
 /// The selected stable face and the adjustments needed by a shaper/renderer.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FontMatch {
@@ -116,13 +128,7 @@ impl FontCollection {
         if cluster.is_empty() {
             return None;
         }
-        let mut query = query.clone();
-        query.weight = finite(query.weight, 400.).clamp(1., 1000.);
-        query.width = finite(query.width, 100.).max(0.01);
-        if let FontStyle::Oblique(angle) = &mut query.style {
-            *angle = finite(*angle, 14.).clamp(-90., 90.);
-        }
-        query.language = query.language.map(|s| s.to_ascii_lowercase());
+        let query = query.clone().normalized();
         let generations = self.generations();
         {
             let mut state = self.state();
