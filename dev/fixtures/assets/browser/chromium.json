@@ -1,0 +1,3108 @@
+{
+  "format_version": 1,
+  "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+  "fonts": [
+    {
+      "id": "latin",
+      "sha256": "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25",
+      "face_index": 0
+    },
+    {
+      "id": "cjk",
+      "sha256": "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b",
+      "face_index": 0
+    },
+    {
+      "id": "arabic",
+      "sha256": "e9885fbcf3bdbddea94d1679d636a80f7421c6b63632a35c6f884a9ee74067d9",
+      "face_index": 0
+    }
+  ],
+  "records": [
+    {
+      "id": "latin-01",
+      "seed": 1,
+      "text": "compare doors compare A doors A keeps open. doors open.",
+      "initial": {
+        "width_subpixels": 7040,
+        "end_utf16": 8,
+        "end_utf8": 8
+      },
+      "boundary_subpixels": null,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 7040,
+          "end_utf16": 8,
+          "end_utf8": 8
+        }
+      ]
+    },
+    {
+      "id": "latin-02",
+      "seed": 2,
+      "text": "keeps words, spaces, keeps spaces, A compare Readers A spaces,",
+      "initial": {
+        "width_subpixels": 8320,
+        "end_utf16": 13,
+        "end_utf8": 13
+      },
+      "boundary_subpixels": 6507,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 6
+        },
+        {
+          "width_subpixels": 6443,
+          "end_utf16": 6,
+          "end_utf8": 6
+        },
+        {
+          "width_subpixels": 6505,
+          "end_utf16": 6,
+          "end_utf8": 6
+        },
+        {
+          "width_subpixels": 6506,
+          "end_utf16": 6,
+          "end_utf8": 6
+        },
+        {
+          "width_subpixels": 6507,
+          "end_utf16": 13,
+          "end_utf8": 13
+        },
+        {
+          "width_subpixels": 6508,
+          "end_utf16": 13,
+          "end_utf8": 13
+        },
+        {
+          "width_subpixels": 6509,
+          "end_utf16": 13,
+          "end_utf8": 13
+        },
+        {
+          "width_subpixels": 6571,
+          "end_utf16": 13,
+          "end_utf8": 13
+        },
+        {
+          "width_subpixels": 8320,
+          "end_utf16": 13,
+          "end_utf8": 13
+        }
+      ]
+    },
+    {
+      "id": "latin-03",
+      "seed": 3,
+      "text": "and Readers keeps spaces, open. compare lines. spaces, lines. its",
+      "initial": {
+        "width_subpixels": 9600,
+        "end_utf16": 18,
+        "end_utf8": 18
+      },
+      "boundary_subpixels": 9527,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 4,
+          "end_utf8": 4
+        },
+        {
+          "width_subpixels": 9463,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 9525,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 9526,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 9527,
+          "end_utf16": 18,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 9528,
+          "end_utf16": 18,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 9529,
+          "end_utf16": 18,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 9591,
+          "end_utf16": 18,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 9600,
+          "end_utf16": 18,
+          "end_utf8": 18
+        }
+      ]
+    },
+    {
+      "id": "latin-04",
+      "seed": 4,
+      "text": "open. doors Readers open. and compare open. compare A Readers",
+      "initial": {
+        "width_subpixels": 10880,
+        "end_utf16": 20,
+        "end_utf8": 20
+      },
+      "boundary_subpixels": 9958,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 6
+        },
+        {
+          "width_subpixels": 9894,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 9956,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 9957,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 9958,
+          "end_utf16": 20,
+          "end_utf8": 20
+        },
+        {
+          "width_subpixels": 9959,
+          "end_utf16": 20,
+          "end_utf8": 20
+        },
+        {
+          "width_subpixels": 9960,
+          "end_utf16": 20,
+          "end_utf8": 20
+        },
+        {
+          "width_subpixels": 10022,
+          "end_utf16": 20,
+          "end_utf8": 20
+        },
+        {
+          "width_subpixels": 10880,
+          "end_utf16": 20,
+          "end_utf8": 20
+        }
+      ]
+    },
+    {
+      "id": "latin-05",
+      "seed": 5,
+      "text": "quiet spaces, doors its words, words, spaces, words, A and",
+      "initial": {
+        "width_subpixels": 5760,
+        "end_utf16": 6,
+        "end_utf8": 6
+      },
+      "boundary_subpixels": null,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 6
+        },
+        {
+          "width_subpixels": 5760,
+          "end_utf16": 6,
+          "end_utf8": 6
+        }
+      ]
+    },
+    {
+      "id": "latin-06",
+      "seed": 6,
+      "text": "words, A doors lines. doors library words, spaces, its keeps",
+      "initial": {
+        "width_subpixels": 7040,
+        "end_utf16": 9,
+        "end_utf8": 9
+      },
+      "boundary_subpixels": 4271,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 7,
+          "end_utf8": 7
+        },
+        {
+          "width_subpixels": 4207,
+          "end_utf16": 7,
+          "end_utf8": 7
+        },
+        {
+          "width_subpixels": 4269,
+          "end_utf16": 7,
+          "end_utf8": 7
+        },
+        {
+          "width_subpixels": 4270,
+          "end_utf16": 7,
+          "end_utf8": 7
+        },
+        {
+          "width_subpixels": 4271,
+          "end_utf16": 9,
+          "end_utf8": 9
+        },
+        {
+          "width_subpixels": 4272,
+          "end_utf16": 9,
+          "end_utf8": 9
+        },
+        {
+          "width_subpixels": 4273,
+          "end_utf16": 9,
+          "end_utf8": 9
+        },
+        {
+          "width_subpixels": 4335,
+          "end_utf16": 9,
+          "end_utf8": 9
+        },
+        {
+          "width_subpixels": 7040,
+          "end_utf16": 9,
+          "end_utf8": 9
+        }
+      ]
+    },
+    {
+      "id": "latin-07",
+      "seed": 7,
+      "text": "its and and keeps A open. its spaces, keeps library",
+      "initial": {
+        "width_subpixels": 8320,
+        "end_utf16": 12,
+        "end_utf8": 12
+      },
+      "boundary_subpixels": 5580,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 4,
+          "end_utf8": 4
+        },
+        {
+          "width_subpixels": 5516,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 5578,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 5579,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 5580,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 5581,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 5582,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 5644,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 8320,
+          "end_utf16": 12,
+          "end_utf8": 12
+        }
+      ]
+    },
+    {
+      "id": "latin-08",
+      "seed": 8,
+      "text": "lines. spaces, compare doors compare spaces, Readers A compare keeps",
+      "initial": {
+        "width_subpixels": 9600,
+        "end_utf16": 15,
+        "end_utf8": 15
+      },
+      "boundary_subpixels": 6298,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 7,
+          "end_utf8": 7
+        },
+        {
+          "width_subpixels": 6234,
+          "end_utf16": 7,
+          "end_utf8": 7
+        },
+        {
+          "width_subpixels": 6296,
+          "end_utf16": 7,
+          "end_utf8": 7
+        },
+        {
+          "width_subpixels": 6297,
+          "end_utf16": 7,
+          "end_utf8": 7
+        },
+        {
+          "width_subpixels": 6298,
+          "end_utf16": 15,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6299,
+          "end_utf16": 15,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6300,
+          "end_utf16": 15,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6362,
+          "end_utf16": 15,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 9600,
+          "end_utf16": 15,
+          "end_utf8": 15
+        }
+      ]
+    },
+    {
+      "id": "latin-09",
+      "seed": 9,
+      "text": "Readers library lines. lines. quiet spaces, library lines. words, keeps",
+      "initial": {
+        "width_subpixels": 10880,
+        "end_utf16": 23,
+        "end_utf8": 23
+      },
+      "boundary_subpixels": 10182,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 10118,
+          "end_utf16": 16,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 10180,
+          "end_utf16": 16,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 10181,
+          "end_utf16": 16,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 10182,
+          "end_utf16": 23,
+          "end_utf8": 23
+        },
+        {
+          "width_subpixels": 10183,
+          "end_utf16": 23,
+          "end_utf8": 23
+        },
+        {
+          "width_subpixels": 10184,
+          "end_utf16": 23,
+          "end_utf8": 23
+        },
+        {
+          "width_subpixels": 10246,
+          "end_utf16": 23,
+          "end_utf8": 23
+        },
+        {
+          "width_subpixels": 10880,
+          "end_utf16": 23,
+          "end_utf8": 23
+        }
+      ]
+    },
+    {
+      "id": "latin-10",
+      "seed": 10,
+      "text": "library open. and words, keeps open. spaces, words, A its",
+      "initial": {
+        "width_subpixels": 5760,
+        "end_utf16": 8,
+        "end_utf8": 8
+      },
+      "boundary_subpixels": null,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 5760,
+          "end_utf16": 8,
+          "end_utf8": 8
+        }
+      ]
+    },
+    {
+      "id": "latin-11",
+      "seed": 11,
+      "text": "spaces, its A open. doors library Readers Readers words, spaces,",
+      "initial": {
+        "width_subpixels": 7040,
+        "end_utf16": 14,
+        "end_utf8": 14
+      },
+      "boundary_subpixels": 6113,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 6049,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 6111,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 6112,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 6113,
+          "end_utf16": 14,
+          "end_utf8": 14
+        },
+        {
+          "width_subpixels": 6114,
+          "end_utf16": 14,
+          "end_utf8": 14
+        },
+        {
+          "width_subpixels": 6115,
+          "end_utf16": 14,
+          "end_utf8": 14
+        },
+        {
+          "width_subpixels": 6177,
+          "end_utf16": 14,
+          "end_utf8": 14
+        },
+        {
+          "width_subpixels": 7040,
+          "end_utf16": 14,
+          "end_utf8": 14
+        }
+      ]
+    },
+    {
+      "id": "latin-12",
+      "seed": 12,
+      "text": "doors A its compare and lines. spaces, lines. keeps quiet",
+      "initial": {
+        "width_subpixels": 8320,
+        "end_utf16": 12,
+        "end_utf8": 12
+      },
+      "boundary_subpixels": 5093,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 6
+        },
+        {
+          "width_subpixels": 5029,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 5091,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 5092,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 5093,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 5094,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 5095,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 5157,
+          "end_utf16": 12,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 8320,
+          "end_utf16": 12,
+          "end_utf8": 12
+        }
+      ]
+    },
+    {
+      "id": "latin-13",
+      "seed": 13,
+      "text": "A doors open. quiet open. its and lines. A A",
+      "initial": {
+        "width_subpixels": 9600,
+        "end_utf16": 20,
+        "end_utf8": 20
+      },
+      "boundary_subpixels": 9590,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 2,
+          "end_utf8": 2
+        },
+        {
+          "width_subpixels": 9526,
+          "end_utf16": 14,
+          "end_utf8": 14
+        },
+        {
+          "width_subpixels": 9588,
+          "end_utf16": 14,
+          "end_utf8": 14
+        },
+        {
+          "width_subpixels": 9589,
+          "end_utf16": 14,
+          "end_utf8": 14
+        },
+        {
+          "width_subpixels": 9590,
+          "end_utf16": 20,
+          "end_utf8": 20
+        },
+        {
+          "width_subpixels": 9591,
+          "end_utf16": 20,
+          "end_utf8": 20
+        },
+        {
+          "width_subpixels": 9592,
+          "end_utf16": 20,
+          "end_utf8": 20
+        },
+        {
+          "width_subpixels": 9600,
+          "end_utf16": 20,
+          "end_utf8": 20
+        },
+        {
+          "width_subpixels": 9654,
+          "end_utf16": 20,
+          "end_utf8": 20
+        }
+      ]
+    },
+    {
+      "id": "latin-14",
+      "seed": 14,
+      "text": "compare compare compare spaces, library Readers quiet A open. quiet",
+      "initial": {
+        "width_subpixels": 10880,
+        "end_utf16": 16,
+        "end_utf8": 16
+      },
+      "boundary_subpixels": 9045,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 8981,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 9043,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 9044,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 9045,
+          "end_utf16": 16,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 9046,
+          "end_utf16": 16,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 9047,
+          "end_utf16": 16,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 9109,
+          "end_utf16": 16,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 10880,
+          "end_utf16": 16,
+          "end_utf8": 16
+        }
+      ]
+    },
+    {
+      "id": "latin-15",
+      "seed": 15,
+      "text": "keeps open. doors library words, words, quiet doors library lines.",
+      "initial": {
+        "width_subpixels": 5760,
+        "end_utf16": 6,
+        "end_utf8": 6
+      },
+      "boundary_subpixels": null,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 6
+        },
+        {
+          "width_subpixels": 5760,
+          "end_utf16": 6,
+          "end_utf8": 6
+        }
+      ]
+    },
+    {
+      "id": "latin-16",
+      "seed": 16,
+      "text": "doors and words, its its open. open. Readers library quiet",
+      "initial": {
+        "width_subpixels": 7040,
+        "end_utf16": 10,
+        "end_utf8": 10
+      },
+      "boundary_subpixels": 4885,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 6
+        },
+        {
+          "width_subpixels": 4821,
+          "end_utf16": 6,
+          "end_utf8": 6
+        },
+        {
+          "width_subpixels": 4883,
+          "end_utf16": 6,
+          "end_utf8": 6
+        },
+        {
+          "width_subpixels": 4884,
+          "end_utf16": 6,
+          "end_utf8": 6
+        },
+        {
+          "width_subpixels": 4885,
+          "end_utf16": 10,
+          "end_utf8": 10
+        },
+        {
+          "width_subpixels": 4886,
+          "end_utf16": 10,
+          "end_utf8": 10
+        },
+        {
+          "width_subpixels": 4887,
+          "end_utf16": 10,
+          "end_utf8": 10
+        },
+        {
+          "width_subpixels": 4949,
+          "end_utf16": 10,
+          "end_utf8": 10
+        },
+        {
+          "width_subpixels": 7040,
+          "end_utf16": 10,
+          "end_utf8": 10
+        }
+      ]
+    },
+    {
+      "id": "japanese-01",
+      "seed": 1,
+      "text": "文章」を、同じ条件で比べます。日本語の組版では、句読点や空白",
+      "initial": {
+        "width_subpixels": 7040,
+        "end_utf16": 6,
+        "end_utf8": 18
+      },
+      "boundary_subpixels": 6239,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 1,
+          "end_utf8": 3
+        },
+        {
+          "width_subpixels": 6175,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6237,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6238,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6239,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 6240,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 6241,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 6303,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 7040,
+          "end_utf16": 6,
+          "end_utf8": 18
+        }
+      ]
+    },
+    {
+      "id": "japanese-02",
+      "seed": 2,
+      "text": "空白を調整します。「読みやすい文章」を、同じ条件で比べます。",
+      "initial": {
+        "width_subpixels": 8320,
+        "end_utf16": 7,
+        "end_utf8": 21
+      },
+      "boundary_subpixels": 7391,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 1,
+          "end_utf8": 3
+        },
+        {
+          "width_subpixels": 7327,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 7389,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 7390,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 7391,
+          "end_utf16": 7,
+          "end_utf8": 21
+        },
+        {
+          "width_subpixels": 7392,
+          "end_utf16": 7,
+          "end_utf8": 21
+        },
+        {
+          "width_subpixels": 7393,
+          "end_utf16": 7,
+          "end_utf8": 21
+        },
+        {
+          "width_subpixels": 7455,
+          "end_utf16": 7,
+          "end_utf8": 21
+        },
+        {
+          "width_subpixels": 8320,
+          "end_utf16": 7,
+          "end_utf8": 21
+        }
+      ]
+    },
+    {
+      "id": "japanese-03",
+      "seed": 3,
+      "text": "す。日本語の組版では、句読点や空白を調整します。「読みやすい",
+      "initial": {
+        "width_subpixels": 9600,
+        "end_utf16": 9,
+        "end_utf8": 27
+      },
+      "boundary_subpixels": 9540,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 2,
+          "end_utf8": 6
+        },
+        {
+          "width_subpixels": 9476,
+          "end_utf16": 8,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 9538,
+          "end_utf16": 8,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 9539,
+          "end_utf16": 8,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 9540,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 9541,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 9542,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 9600,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 9604,
+          "end_utf16": 9,
+          "end_utf8": 27
+        }
+      ]
+    },
+    {
+      "id": "japanese-04",
+      "seed": 4,
+      "text": "すい文章」を、同じ条件で比べます。日本語の組版では、句読点や",
+      "initial": {
+        "width_subpixels": 10880,
+        "end_utf16": 10,
+        "end_utf8": 30
+      },
+      "boundary_subpixels": 10240,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 1,
+          "end_utf8": 3
+        },
+        {
+          "width_subpixels": 10176,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 10238,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 10239,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 10240,
+          "end_utf16": 10,
+          "end_utf8": 30
+        },
+        {
+          "width_subpixels": 10241,
+          "end_utf16": 10,
+          "end_utf8": 30
+        },
+        {
+          "width_subpixels": 10242,
+          "end_utf16": 10,
+          "end_utf8": 30
+        },
+        {
+          "width_subpixels": 10304,
+          "end_utf16": 10,
+          "end_utf8": 30
+        },
+        {
+          "width_subpixels": 10880,
+          "end_utf16": 10,
+          "end_utf8": 30
+        }
+      ]
+    },
+    {
+      "id": "japanese-05",
+      "seed": 5,
+      "text": "点や空白を調整します。「読みやすい文章」を、同じ条件で比べま",
+      "initial": {
+        "width_subpixels": 5760,
+        "end_utf16": 5,
+        "end_utf8": 15
+      },
+      "boundary_subpixels": 5199,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 1,
+          "end_utf8": 3
+        },
+        {
+          "width_subpixels": 5135,
+          "end_utf16": 4,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 5197,
+          "end_utf16": 4,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 5198,
+          "end_utf16": 4,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 5199,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 5200,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 5201,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 5263,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 5760,
+          "end_utf16": 5,
+          "end_utf8": 15
+        }
+      ]
+    },
+    {
+      "id": "japanese-06",
+      "seed": 6,
+      "text": "べます。日本語の組版では、句読点や空白を調整します。「読みや",
+      "initial": {
+        "width_subpixels": 7040,
+        "end_utf16": 6,
+        "end_utf8": 18
+      },
+      "boundary_subpixels": 6230,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 1,
+          "end_utf8": 3
+        },
+        {
+          "width_subpixels": 6166,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6228,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6229,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6230,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 6231,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 6232,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 6294,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 7040,
+          "end_utf16": 6,
+          "end_utf8": 18
+        }
+      ]
+    },
+    {
+      "id": "japanese-07",
+      "seed": 7,
+      "text": "みやすい文章」を、同じ条件で比べます。日本語の組版では、句読",
+      "initial": {
+        "width_subpixels": 8320,
+        "end_utf16": 7,
+        "end_utf8": 21
+      },
+      "boundary_subpixels": 6969,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 1,
+          "end_utf8": 3
+        },
+        {
+          "width_subpixels": 6905,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6967,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6968,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6969,
+          "end_utf16": 7,
+          "end_utf8": 21
+        },
+        {
+          "width_subpixels": 6970,
+          "end_utf16": 7,
+          "end_utf8": 21
+        },
+        {
+          "width_subpixels": 6971,
+          "end_utf16": 7,
+          "end_utf8": 21
+        },
+        {
+          "width_subpixels": 7033,
+          "end_utf16": 7,
+          "end_utf8": 21
+        },
+        {
+          "width_subpixels": 8320,
+          "end_utf16": 7,
+          "end_utf8": 21
+        }
+      ]
+    },
+    {
+      "id": "japanese-08",
+      "seed": 8,
+      "text": "句読点や空白を調整します。「読みやすい文章」を、同じ条件で比",
+      "initial": {
+        "width_subpixels": 9600,
+        "end_utf16": 9,
+        "end_utf8": 27
+      },
+      "boundary_subpixels": 9216,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 1,
+          "end_utf8": 3
+        },
+        {
+          "width_subpixels": 9152,
+          "end_utf16": 8,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 9214,
+          "end_utf16": 8,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 9215,
+          "end_utf16": 8,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 9216,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 9217,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 9218,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 9280,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 9600,
+          "end_utf16": 9,
+          "end_utf8": 27
+        }
+      ]
+    },
+    {
+      "id": "japanese-09",
+      "seed": 9,
+      "text": "で比べます。日本語の組版では、句読点や空白を調整します。「読",
+      "initial": {
+        "width_subpixels": 10880,
+        "end_utf16": 10,
+        "end_utf8": 30
+      },
+      "boundary_subpixels": 10295,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 1,
+          "end_utf8": 3
+        },
+        {
+          "width_subpixels": 10231,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 10293,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 10294,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 10295,
+          "end_utf16": 10,
+          "end_utf8": 30
+        },
+        {
+          "width_subpixels": 10296,
+          "end_utf16": 10,
+          "end_utf8": 30
+        },
+        {
+          "width_subpixels": 10297,
+          "end_utf16": 10,
+          "end_utf8": 30
+        },
+        {
+          "width_subpixels": 10359,
+          "end_utf16": 10,
+          "end_utf8": 30
+        },
+        {
+          "width_subpixels": 10880,
+          "end_utf16": 10,
+          "end_utf8": 30
+        }
+      ]
+    },
+    {
+      "id": "japanese-10",
+      "seed": 10,
+      "text": "「読みやすい文章」を、同じ条件で比べます。日本語の組版では、",
+      "initial": {
+        "width_subpixels": 5760,
+        "end_utf16": 5,
+        "end_utf8": 15
+      },
+      "boundary_subpixels": 5279,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 2,
+          "end_utf8": 6
+        },
+        {
+          "width_subpixels": 5215,
+          "end_utf16": 4,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 5277,
+          "end_utf16": 4,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 5278,
+          "end_utf16": 4,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 5279,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 5280,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 5281,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 5343,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 5760,
+          "end_utf16": 5,
+          "end_utf8": 15
+        }
+      ]
+    },
+    {
+      "id": "japanese-11",
+      "seed": 11,
+      "text": "は、句読点や空白を調整します。「読みやすい文章」を、同じ条件",
+      "initial": {
+        "width_subpixels": 7040,
+        "end_utf16": 6,
+        "end_utf8": 18
+      },
+      "boundary_subpixels": 6432,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 2,
+          "end_utf8": 6
+        },
+        {
+          "width_subpixels": 6368,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6430,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6431,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6432,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 6433,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 6434,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 6496,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 7040,
+          "end_utf16": 6,
+          "end_utf8": 18
+        }
+      ]
+    },
+    {
+      "id": "japanese-12",
+      "seed": 12,
+      "text": "条件で比べます。日本語の組版では、句読点や空白を調整します。",
+      "initial": {
+        "width_subpixels": 8320,
+        "end_utf16": 8,
+        "end_utf8": 24
+      },
+      "boundary_subpixels": 8089,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 1,
+          "end_utf8": 3
+        },
+        {
+          "width_subpixels": 8025,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 8087,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 8088,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 8089,
+          "end_utf16": 8,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 8090,
+          "end_utf16": 8,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 8091,
+          "end_utf16": 8,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 8153,
+          "end_utf16": 8,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 8320,
+          "end_utf16": 8,
+          "end_utf8": 24
+        }
+      ]
+    },
+    {
+      "id": "japanese-13",
+      "seed": 13,
+      "text": "す。「読みやすい文章」を、同じ条件で比べます。日本語の組版で",
+      "initial": {
+        "width_subpixels": 9600,
+        "end_utf16": 9,
+        "end_utf8": 27
+      },
+      "boundary_subpixels": 8735,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 2,
+          "end_utf8": 6
+        },
+        {
+          "width_subpixels": 8671,
+          "end_utf16": 8,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 8733,
+          "end_utf16": 8,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 8734,
+          "end_utf16": 8,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 8735,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 8736,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 8737,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 8799,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 9600,
+          "end_utf16": 9,
+          "end_utf8": 27
+        }
+      ]
+    },
+    {
+      "id": "japanese-14",
+      "seed": 14,
+      "text": "版では、句読点や空白を調整します。「読みやすい文章」を、同じ",
+      "initial": {
+        "width_subpixels": 10880,
+        "end_utf16": 10,
+        "end_utf8": 30
+      },
+      "boundary_subpixels": 10559,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 1,
+          "end_utf8": 3
+        },
+        {
+          "width_subpixels": 10495,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 10557,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 10558,
+          "end_utf16": 9,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 10559,
+          "end_utf16": 10,
+          "end_utf8": 30
+        },
+        {
+          "width_subpixels": 10560,
+          "end_utf16": 10,
+          "end_utf8": 30
+        },
+        {
+          "width_subpixels": 10561,
+          "end_utf16": 10,
+          "end_utf8": 30
+        },
+        {
+          "width_subpixels": 10623,
+          "end_utf16": 10,
+          "end_utf8": 30
+        },
+        {
+          "width_subpixels": 10880,
+          "end_utf16": 10,
+          "end_utf8": 30
+        }
+      ]
+    },
+    {
+      "id": "japanese-15",
+      "seed": 15,
+      "text": "同じ条件で比べます。日本語の組版では、句読点や空白を調整しま",
+      "initial": {
+        "width_subpixels": 5760,
+        "end_utf16": 5,
+        "end_utf8": 15
+      },
+      "boundary_subpixels": 5360,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 1,
+          "end_utf8": 3
+        },
+        {
+          "width_subpixels": 5296,
+          "end_utf16": 4,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 5358,
+          "end_utf16": 4,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 5359,
+          "end_utf16": 4,
+          "end_utf8": 12
+        },
+        {
+          "width_subpixels": 5360,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 5361,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 5362,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 5424,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 5760,
+          "end_utf16": 5,
+          "end_utf8": 15
+        }
+      ]
+    },
+    {
+      "id": "japanese-16",
+      "seed": 16,
+      "text": "、句読点や空白を調整します。「読みやすい文章」を、同じ条件で",
+      "initial": {
+        "width_subpixels": 7040,
+        "end_utf16": 6,
+        "end_utf8": 18
+      },
+      "boundary_subpixels": 6144,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 1,
+          "end_utf8": 3
+        },
+        {
+          "width_subpixels": 6080,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6142,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6143,
+          "end_utf16": 5,
+          "end_utf8": 15
+        },
+        {
+          "width_subpixels": 6144,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 6145,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 6146,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 6208,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 7040,
+          "end_utf16": 6,
+          "end_utf8": 18
+        }
+      ]
+    },
+    {
+      "id": "arabic-01",
+      "seed": 1,
+      "text": "مرحبا جميلة، الحروف الكلمات. الكلمات. في بالعالم. الحروف وتتصل جميلة،",
+      "initial": {
+        "width_subpixels": 7040,
+        "end_utf16": 13,
+        "end_utf8": 24
+      },
+      "boundary_subpixels": 5218,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5154,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5216,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5217,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5218,
+          "end_utf16": 13,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 5219,
+          "end_utf16": 13,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 5220,
+          "end_utf16": 13,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 5282,
+          "end_utf16": 13,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 7040,
+          "end_utf16": 13,
+          "end_utf8": 24
+        }
+      ]
+    },
+    {
+      "id": "arabic-02",
+      "seed": 2,
+      "text": "مرحبا العربية الكتابة بالعالم. في بالعالم. بالعالم. في وتتصل مرحبا",
+      "initial": {
+        "width_subpixels": 8320,
+        "end_utf16": 22,
+        "end_utf8": 41
+      },
+      "boundary_subpixels": 8017,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 7953,
+          "end_utf16": 14,
+          "end_utf8": 26
+        },
+        {
+          "width_subpixels": 8015,
+          "end_utf16": 14,
+          "end_utf8": 26
+        },
+        {
+          "width_subpixels": 8016,
+          "end_utf16": 14,
+          "end_utf8": 26
+        },
+        {
+          "width_subpixels": 8017,
+          "end_utf16": 22,
+          "end_utf8": 41
+        },
+        {
+          "width_subpixels": 8018,
+          "end_utf16": 22,
+          "end_utf8": 41
+        },
+        {
+          "width_subpixels": 8019,
+          "end_utf16": 22,
+          "end_utf8": 41
+        },
+        {
+          "width_subpixels": 8081,
+          "end_utf16": 22,
+          "end_utf8": 41
+        },
+        {
+          "width_subpixels": 8320,
+          "end_utf16": 22,
+          "end_utf8": 41
+        }
+      ]
+    },
+    {
+      "id": "arabic-03",
+      "seed": 3,
+      "text": "مرحبا الكتابة مرحبا العربية جميلة، جميلة، جميلة، مرحبا في وتتصل",
+      "initial": {
+        "width_subpixels": 9600,
+        "end_utf16": 20,
+        "end_utf8": 37
+      },
+      "boundary_subpixels": 7668,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 7604,
+          "end_utf16": 14,
+          "end_utf8": 26
+        },
+        {
+          "width_subpixels": 7666,
+          "end_utf16": 14,
+          "end_utf8": 26
+        },
+        {
+          "width_subpixels": 7667,
+          "end_utf16": 14,
+          "end_utf8": 26
+        },
+        {
+          "width_subpixels": 7668,
+          "end_utf16": 20,
+          "end_utf8": 37
+        },
+        {
+          "width_subpixels": 7669,
+          "end_utf16": 20,
+          "end_utf8": 37
+        },
+        {
+          "width_subpixels": 7670,
+          "end_utf16": 20,
+          "end_utf8": 37
+        },
+        {
+          "width_subpixels": 7732,
+          "end_utf16": 20,
+          "end_utf8": 37
+        },
+        {
+          "width_subpixels": 9600,
+          "end_utf16": 20,
+          "end_utf8": 37
+        }
+      ]
+    },
+    {
+      "id": "arabic-04",
+      "seed": 4,
+      "text": "مرحبا الحروف جميلة، الكتابة بالعالم. جميلة، الكتابة جميلة، الحروف العربية",
+      "initial": {
+        "width_subpixels": 10880,
+        "end_utf16": 20,
+        "end_utf8": 37
+      },
+      "boundary_subpixels": 8436,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 8372,
+          "end_utf16": 13,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 8434,
+          "end_utf16": 13,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 8435,
+          "end_utf16": 13,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 8436,
+          "end_utf16": 20,
+          "end_utf8": 37
+        },
+        {
+          "width_subpixels": 8437,
+          "end_utf16": 20,
+          "end_utf8": 37
+        },
+        {
+          "width_subpixels": 8438,
+          "end_utf16": 20,
+          "end_utf8": 37
+        },
+        {
+          "width_subpixels": 8500,
+          "end_utf16": 20,
+          "end_utf8": 37
+        },
+        {
+          "width_subpixels": 10880,
+          "end_utf16": 20,
+          "end_utf8": 37
+        }
+      ]
+    },
+    {
+      "id": "arabic-05",
+      "seed": 5,
+      "text": "مرحبا بالعالم. الكتابة العربية بالعالم. جميلة، الكلمات. وتتصل بالعالم. الكتابة",
+      "initial": {
+        "width_subpixels": 5760,
+        "end_utf16": 15,
+        "end_utf8": 27
+      },
+      "boundary_subpixels": 5289,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5225,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5287,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5288,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5289,
+          "end_utf16": 15,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 5290,
+          "end_utf16": 15,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 5291,
+          "end_utf16": 15,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 5353,
+          "end_utf16": 15,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 5760,
+          "end_utf16": 15,
+          "end_utf8": 27
+        }
+      ]
+    },
+    {
+      "id": "arabic-06",
+      "seed": 6,
+      "text": "مرحبا الكلمات. وتتصل مرحبا الكتابة وتتصل الحروف الحروف العربية العربية",
+      "initial": {
+        "width_subpixels": 7040,
+        "end_utf16": 15,
+        "end_utf8": 27
+      },
+      "boundary_subpixels": 6124,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 6060,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 6122,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 6123,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 6124,
+          "end_utf16": 15,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 6125,
+          "end_utf16": 15,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 6126,
+          "end_utf16": 15,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 6188,
+          "end_utf16": 15,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 7040,
+          "end_utf16": 15,
+          "end_utf8": 27
+        }
+      ]
+    },
+    {
+      "id": "arabic-07",
+      "seed": 7,
+      "text": "مرحبا في جميلة، العربية جميلة، الحروف بالعالم. في الكتابة الكتابة",
+      "initial": {
+        "width_subpixels": 8320,
+        "end_utf16": 16,
+        "end_utf8": 29
+      },
+      "boundary_subpixels": 6926,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 6862,
+          "end_utf16": 9,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 6924,
+          "end_utf16": 9,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 6925,
+          "end_utf16": 9,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 6926,
+          "end_utf16": 16,
+          "end_utf8": 29
+        },
+        {
+          "width_subpixels": 6927,
+          "end_utf16": 16,
+          "end_utf8": 29
+        },
+        {
+          "width_subpixels": 6928,
+          "end_utf16": 16,
+          "end_utf8": 29
+        },
+        {
+          "width_subpixels": 6990,
+          "end_utf16": 16,
+          "end_utf8": 29
+        },
+        {
+          "width_subpixels": 8320,
+          "end_utf16": 16,
+          "end_utf8": 29
+        }
+      ]
+    },
+    {
+      "id": "arabic-08",
+      "seed": 8,
+      "text": "مرحبا العربية وتتصل جميلة، العربية العربية الكتابة في مرحبا الكتابة",
+      "initial": {
+        "width_subpixels": 9600,
+        "end_utf16": 20,
+        "end_utf8": 37
+      },
+      "boundary_subpixels": 8156,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 8092,
+          "end_utf16": 14,
+          "end_utf8": 26
+        },
+        {
+          "width_subpixels": 8154,
+          "end_utf16": 14,
+          "end_utf8": 26
+        },
+        {
+          "width_subpixels": 8155,
+          "end_utf16": 14,
+          "end_utf8": 26
+        },
+        {
+          "width_subpixels": 8156,
+          "end_utf16": 20,
+          "end_utf8": 37
+        },
+        {
+          "width_subpixels": 8157,
+          "end_utf16": 20,
+          "end_utf8": 37
+        },
+        {
+          "width_subpixels": 8158,
+          "end_utf16": 20,
+          "end_utf8": 37
+        },
+        {
+          "width_subpixels": 8220,
+          "end_utf16": 20,
+          "end_utf8": 37
+        },
+        {
+          "width_subpixels": 9600,
+          "end_utf16": 20,
+          "end_utf8": 37
+        }
+      ]
+    },
+    {
+      "id": "arabic-09",
+      "seed": 9,
+      "text": "مرحبا في الحروف بالعالم. العربية بالعالم. العربية بالعالم. الحروف مرحبا",
+      "initial": {
+        "width_subpixels": 10880,
+        "end_utf16": 25,
+        "end_utf8": 45
+      },
+      "boundary_subpixels": 10139,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 10075,
+          "end_utf16": 16,
+          "end_utf8": 29
+        },
+        {
+          "width_subpixels": 10137,
+          "end_utf16": 16,
+          "end_utf8": 29
+        },
+        {
+          "width_subpixels": 10138,
+          "end_utf16": 16,
+          "end_utf8": 29
+        },
+        {
+          "width_subpixels": 10139,
+          "end_utf16": 25,
+          "end_utf8": 45
+        },
+        {
+          "width_subpixels": 10140,
+          "end_utf16": 25,
+          "end_utf8": 45
+        },
+        {
+          "width_subpixels": 10141,
+          "end_utf16": 25,
+          "end_utf8": 45
+        },
+        {
+          "width_subpixels": 10203,
+          "end_utf16": 25,
+          "end_utf8": 45
+        },
+        {
+          "width_subpixels": 10880,
+          "end_utf16": 25,
+          "end_utf8": 45
+        }
+      ]
+    },
+    {
+      "id": "arabic-10",
+      "seed": 10,
+      "text": "مرحبا الحروف في في الحروف وتتصل مرحبا مرحبا وتتصل بالعالم.",
+      "initial": {
+        "width_subpixels": 5760,
+        "end_utf16": 13,
+        "end_utf8": 24
+      },
+      "boundary_subpixels": 5623,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5559,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5621,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5622,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5623,
+          "end_utf16": 13,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 5624,
+          "end_utf16": 13,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 5625,
+          "end_utf16": 13,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 5687,
+          "end_utf16": 13,
+          "end_utf8": 24
+        },
+        {
+          "width_subpixels": 5760,
+          "end_utf16": 13,
+          "end_utf8": 24
+        }
+      ]
+    },
+    {
+      "id": "arabic-11",
+      "seed": 11,
+      "text": "مرحبا وتتصل مرحبا بالعالم. بالعالم. الحروف بالعالم. العربية جميلة، بالعالم.",
+      "initial": {
+        "width_subpixels": 7040,
+        "end_utf16": 12,
+        "end_utf8": 22
+      },
+      "boundary_subpixels": 5533,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5469,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5531,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5532,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5533,
+          "end_utf16": 12,
+          "end_utf8": 22
+        },
+        {
+          "width_subpixels": 5534,
+          "end_utf16": 12,
+          "end_utf8": 22
+        },
+        {
+          "width_subpixels": 5535,
+          "end_utf16": 12,
+          "end_utf8": 22
+        },
+        {
+          "width_subpixels": 5597,
+          "end_utf16": 12,
+          "end_utf8": 22
+        },
+        {
+          "width_subpixels": 7040,
+          "end_utf16": 12,
+          "end_utf8": 22
+        }
+      ]
+    },
+    {
+      "id": "arabic-12",
+      "seed": 12,
+      "text": "مرحبا في في جميلة، العربية الكتابة الكتابة بالعالم. وتتصل الحروف",
+      "initial": {
+        "width_subpixels": 8320,
+        "end_utf16": 19,
+        "end_utf8": 34
+      },
+      "boundary_subpixels": 8093,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 8029,
+          "end_utf16": 12,
+          "end_utf8": 21
+        },
+        {
+          "width_subpixels": 8091,
+          "end_utf16": 12,
+          "end_utf8": 21
+        },
+        {
+          "width_subpixels": 8092,
+          "end_utf16": 12,
+          "end_utf8": 21
+        },
+        {
+          "width_subpixels": 8093,
+          "end_utf16": 19,
+          "end_utf8": 34
+        },
+        {
+          "width_subpixels": 8094,
+          "end_utf16": 19,
+          "end_utf8": 34
+        },
+        {
+          "width_subpixels": 8095,
+          "end_utf16": 19,
+          "end_utf8": 34
+        },
+        {
+          "width_subpixels": 8157,
+          "end_utf16": 19,
+          "end_utf8": 34
+        },
+        {
+          "width_subpixels": 8320,
+          "end_utf16": 19,
+          "end_utf8": 34
+        }
+      ]
+    },
+    {
+      "id": "arabic-13",
+      "seed": 13,
+      "text": "مرحبا الكتابة الكلمات. في جميلة، بالعالم. الحروف مرحبا مرحبا مرحبا",
+      "initial": {
+        "width_subpixels": 9600,
+        "end_utf16": 23,
+        "end_utf8": 42
+      },
+      "boundary_subpixels": 8824,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 8760,
+          "end_utf16": 14,
+          "end_utf8": 26
+        },
+        {
+          "width_subpixels": 8822,
+          "end_utf16": 14,
+          "end_utf8": 26
+        },
+        {
+          "width_subpixels": 8823,
+          "end_utf16": 14,
+          "end_utf8": 26
+        },
+        {
+          "width_subpixels": 8824,
+          "end_utf16": 23,
+          "end_utf8": 42
+        },
+        {
+          "width_subpixels": 8825,
+          "end_utf16": 23,
+          "end_utf8": 42
+        },
+        {
+          "width_subpixels": 8826,
+          "end_utf16": 23,
+          "end_utf8": 42
+        },
+        {
+          "width_subpixels": 8888,
+          "end_utf16": 23,
+          "end_utf8": 42
+        },
+        {
+          "width_subpixels": 9600,
+          "end_utf16": 23,
+          "end_utf8": 42
+        }
+      ]
+    },
+    {
+      "id": "arabic-14",
+      "seed": 14,
+      "text": "مرحبا مرحبا الكلمات. العربية العربية الحروف الكتابة جميلة، الكلمات. الكلمات.",
+      "initial": {
+        "width_subpixels": 10880,
+        "end_utf16": 21,
+        "end_utf8": 38
+      },
+      "boundary_subpixels": 8621,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 8557,
+          "end_utf16": 12,
+          "end_utf8": 22
+        },
+        {
+          "width_subpixels": 8619,
+          "end_utf16": 12,
+          "end_utf8": 22
+        },
+        {
+          "width_subpixels": 8620,
+          "end_utf16": 12,
+          "end_utf8": 22
+        },
+        {
+          "width_subpixels": 8621,
+          "end_utf16": 21,
+          "end_utf8": 38
+        },
+        {
+          "width_subpixels": 8622,
+          "end_utf16": 21,
+          "end_utf8": 38
+        },
+        {
+          "width_subpixels": 8623,
+          "end_utf16": 21,
+          "end_utf8": 38
+        },
+        {
+          "width_subpixels": 8685,
+          "end_utf16": 21,
+          "end_utf8": 38
+        },
+        {
+          "width_subpixels": 10880,
+          "end_utf16": 21,
+          "end_utf8": 38
+        }
+      ]
+    },
+    {
+      "id": "arabic-15",
+      "seed": 15,
+      "text": "مرحبا الكلمات. بالعالم. جميلة، وتتصل في بالعالم. الكلمات. مرحبا وتتصل",
+      "initial": {
+        "width_subpixels": 5760,
+        "end_utf16": 6,
+        "end_utf8": 11
+      },
+      "boundary_subpixels": null,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 5760,
+          "end_utf16": 6,
+          "end_utf8": 11
+        }
+      ]
+    },
+    {
+      "id": "arabic-16",
+      "seed": 16,
+      "text": "الحروف الكتابة في الكتابة العربية الحروف الكتابة الكلمات. وتتصل في",
+      "initial": {
+        "width_subpixels": 7040,
+        "end_utf16": 15,
+        "end_utf8": 28
+      },
+      "boundary_subpixels": 5781,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 7,
+          "end_utf8": 13
+        },
+        {
+          "width_subpixels": 5717,
+          "end_utf16": 7,
+          "end_utf8": 13
+        },
+        {
+          "width_subpixels": 5779,
+          "end_utf16": 7,
+          "end_utf8": 13
+        },
+        {
+          "width_subpixels": 5780,
+          "end_utf16": 7,
+          "end_utf8": 13
+        },
+        {
+          "width_subpixels": 5781,
+          "end_utf16": 15,
+          "end_utf8": 28
+        },
+        {
+          "width_subpixels": 5782,
+          "end_utf16": 15,
+          "end_utf8": 28
+        },
+        {
+          "width_subpixels": 5783,
+          "end_utf16": 15,
+          "end_utf8": 28
+        },
+        {
+          "width_subpixels": 5845,
+          "end_utf16": 15,
+          "end_utf8": 28
+        },
+        {
+          "width_subpixels": 7040,
+          "end_utf16": 15,
+          "end_utf8": 28
+        }
+      ]
+    },
+    {
+      "id": "nested-inline",
+      "seed": 1001,
+      "text": "Readers compare office words and lines.",
+      "initial": {
+        "width_subpixels": 8960,
+        "end_utf16": 16,
+        "end_utf8": 16
+      },
+      "boundary_subpixels": 8428,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 8364,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 8426,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 8427,
+          "end_utf16": 8,
+          "end_utf8": 8
+        },
+        {
+          "width_subpixels": 8428,
+          "end_utf16": 16,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 8429,
+          "end_utf16": 16,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 8430,
+          "end_utf16": 16,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 8492,
+          "end_utf16": 16,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 8960,
+          "end_utf16": 16,
+          "end_utf8": 16
+        }
+      ]
+    },
+    {
+      "id": "color-ffi",
+      "seed": 1002,
+      "text": "ffi office readers compare words.",
+      "initial": {
+        "width_subpixels": 8960,
+        "end_utf16": 19,
+        "end_utf8": 19
+      },
+      "boundary_subpixels": 7833,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 4,
+          "end_utf8": 4
+        },
+        {
+          "width_subpixels": 7769,
+          "end_utf16": 11,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 7831,
+          "end_utf16": 11,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 7832,
+          "end_utf16": 11,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 7833,
+          "end_utf16": 19,
+          "end_utf8": 19
+        },
+        {
+          "width_subpixels": 7834,
+          "end_utf16": 19,
+          "end_utf8": 19
+        },
+        {
+          "width_subpixels": 7835,
+          "end_utf16": 19,
+          "end_utf8": 19
+        },
+        {
+          "width_subpixels": 7897,
+          "end_utf16": 19,
+          "end_utf8": 19
+        },
+        {
+          "width_subpixels": 8960,
+          "end_utf16": 19,
+          "end_utf8": 19
+        }
+      ]
+    },
+    {
+      "id": "arabic-wrap",
+      "seed": 1003,
+      "text": "مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات.",
+      "initial": {
+        "width_subpixels": 8320,
+        "end_utf16": 23,
+        "end_utf8": 42
+      },
+      "boundary_subpixels": 7957,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 6,
+          "end_utf8": 11
+        },
+        {
+          "width_subpixels": 7893,
+          "end_utf16": 15,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 7955,
+          "end_utf16": 15,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 7956,
+          "end_utf16": 15,
+          "end_utf8": 27
+        },
+        {
+          "width_subpixels": 7957,
+          "end_utf16": 23,
+          "end_utf8": 42
+        },
+        {
+          "width_subpixels": 7958,
+          "end_utf16": 23,
+          "end_utf8": 42
+        },
+        {
+          "width_subpixels": 7959,
+          "end_utf16": 23,
+          "end_utf8": 42
+        },
+        {
+          "width_subpixels": 8021,
+          "end_utf16": 23,
+          "end_utf8": 42
+        },
+        {
+          "width_subpixels": 8320,
+          "end_utf16": 23,
+          "end_utf8": 42
+        }
+      ]
+    },
+    {
+      "id": "pre-wrap-tab",
+      "seed": 1004,
+      "text": "One  two\tthree\nFour five.",
+      "initial": {
+        "width_subpixels": 5760,
+        "end_utf16": 9,
+        "end_utf8": 9
+      },
+      "boundary_subpixels": 4336,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 5,
+          "end_utf8": 5
+        },
+        {
+          "width_subpixels": 4272,
+          "end_utf16": 5,
+          "end_utf8": 5
+        },
+        {
+          "width_subpixels": 4334,
+          "end_utf16": 5,
+          "end_utf8": 5
+        },
+        {
+          "width_subpixels": 4335,
+          "end_utf16": 5,
+          "end_utf8": 5
+        },
+        {
+          "width_subpixels": 4336,
+          "end_utf16": 9,
+          "end_utf8": 9
+        },
+        {
+          "width_subpixels": 4337,
+          "end_utf16": 9,
+          "end_utf8": 9
+        },
+        {
+          "width_subpixels": 4338,
+          "end_utf16": 9,
+          "end_utf8": 9
+        },
+        {
+          "width_subpixels": 4400,
+          "end_utf16": 9,
+          "end_utf8": 9
+        },
+        {
+          "width_subpixels": 5760,
+          "end_utf16": 9,
+          "end_utf8": 9
+        }
+      ]
+    },
+    {
+      "id": "japanese-punctuation",
+      "seed": 1005,
+      "text": "日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。",
+      "initial": {
+        "width_subpixels": 7168,
+        "end_utf16": 7,
+        "end_utf8": 21
+      },
+      "boundary_subpixels": 7168,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 1,
+          "end_utf8": 3
+        },
+        {
+          "width_subpixels": 7104,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 7166,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 7167,
+          "end_utf16": 6,
+          "end_utf8": 18
+        },
+        {
+          "width_subpixels": 7168,
+          "end_utf16": 7,
+          "end_utf8": 21
+        },
+        {
+          "width_subpixels": 7169,
+          "end_utf16": 7,
+          "end_utf8": 21
+        },
+        {
+          "width_subpixels": 7170,
+          "end_utf16": 7,
+          "end_utf8": 21
+        },
+        {
+          "width_subpixels": 7232,
+          "end_utf16": 7,
+          "end_utf8": 21
+        }
+      ]
+    },
+    {
+      "id": "atomic-baseline",
+      "seed": 1006,
+      "text": "One ￼ two three.",
+      "initial": {
+        "width_subpixels": 5760,
+        "end_utf16": 6,
+        "end_utf8": 8,
+        "atomic": {
+          "top": 8,
+          "bottom": 26,
+          "width": 24,
+          "height": 18
+        }
+      },
+      "boundary_subpixels": 3812,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 4,
+          "end_utf8": 4,
+          "atomic": {
+            "top": 48,
+            "bottom": 66,
+            "width": 24,
+            "height": 18
+          }
+        },
+        {
+          "width_subpixels": 3748,
+          "end_utf16": 4,
+          "end_utf8": 4,
+          "atomic": {
+            "top": 48,
+            "bottom": 66,
+            "width": 24,
+            "height": 18
+          }
+        },
+        {
+          "width_subpixels": 3810,
+          "end_utf16": 4,
+          "end_utf8": 4,
+          "atomic": {
+            "top": 48,
+            "bottom": 66,
+            "width": 24,
+            "height": 18
+          }
+        },
+        {
+          "width_subpixels": 3811,
+          "end_utf16": 4,
+          "end_utf8": 4,
+          "atomic": {
+            "top": 48,
+            "bottom": 66,
+            "width": 24,
+            "height": 18
+          }
+        },
+        {
+          "width_subpixels": 3812,
+          "end_utf16": 6,
+          "end_utf8": 8,
+          "atomic": {
+            "top": 8,
+            "bottom": 26,
+            "width": 24,
+            "height": 18
+          }
+        },
+        {
+          "width_subpixels": 3813,
+          "end_utf16": 6,
+          "end_utf8": 8,
+          "atomic": {
+            "top": 8,
+            "bottom": 26,
+            "width": 24,
+            "height": 18
+          }
+        },
+        {
+          "width_subpixels": 3814,
+          "end_utf16": 6,
+          "end_utf8": 8,
+          "atomic": {
+            "top": 8,
+            "bottom": 26,
+            "width": 24,
+            "height": 18
+          }
+        },
+        {
+          "width_subpixels": 3876,
+          "end_utf16": 6,
+          "end_utf8": 8,
+          "atomic": {
+            "top": 8,
+            "bottom": 26,
+            "width": 24,
+            "height": 18
+          }
+        },
+        {
+          "width_subpixels": 5760,
+          "end_utf16": 6,
+          "end_utf8": 8,
+          "atomic": {
+            "top": 8,
+            "bottom": 26,
+            "width": 24,
+            "height": 18
+          }
+        }
+      ]
+    },
+    {
+      "id": "supplementary",
+      "seed": 1007,
+      "text": "𠮷と吉、ひらがな、カタカナ、ＡＢＣ。",
+      "initial": {
+        "width_subpixels": 5120,
+        "end_utf16": 6,
+        "end_utf8": 16
+      },
+      "boundary_subpixels": 5120,
+      "samples": [
+        {
+          "width_subpixels": 1,
+          "end_utf16": 2,
+          "end_utf8": 4
+        },
+        {
+          "width_subpixels": 5056,
+          "end_utf16": 5,
+          "end_utf8": 13
+        },
+        {
+          "width_subpixels": 5118,
+          "end_utf16": 5,
+          "end_utf8": 13
+        },
+        {
+          "width_subpixels": 5119,
+          "end_utf16": 5,
+          "end_utf8": 13
+        },
+        {
+          "width_subpixels": 5120,
+          "end_utf16": 6,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 5121,
+          "end_utf16": 6,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 5122,
+          "end_utf16": 6,
+          "end_utf8": 16
+        },
+        {
+          "width_subpixels": 5184,
+          "end_utf16": 6,
+          "end_utf8": 16
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "browser_version": "Chromium 152.0.7977.82 Arch Linux",
+    "platform": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+    "inputs_sha256": "be582c013c19967078ea3ab35c6e398d6b303aeeaa02e1c93ef927c013349aad",
+    "corpus_sha256": "8c641d37deb7328e603f604dc220295b3784f483de6d65f8ffabada57978f384",
+    "recorder_sha256": "65b62cb83d127bd4344da0978aae7a841ec8906a768a804691782334dd60ed25",
+    "generator": "xorshift32-v1; seeds 1..16; corpus words/30-scalar slices; named structural seeds1001..1007",
+    "subpixels_per_px": 64,
+    "line_height": 40,
+    "flags": [
+      "--headless",
+      "--disable-gpu",
+      "--disable-background-networking",
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--dump-dom",
+      "--virtual-time-budget=30000"
+    ],
+    "source_endpoint": "first later-line scalar; normal collapsible whitespace assigned to preceding line; UTF-16 and UTF-8 original source"
+  }
+}
