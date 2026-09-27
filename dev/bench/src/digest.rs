@@ -13,6 +13,7 @@ pub struct Digest {
     pub synthetic_glyphs: usize,
     pub float_reports: usize,
     pub height_retries: usize,
+    pub intrinsic_measurements: usize,
 }
 pub fn digest(run: &Run, fonts: &FixtureFonts) -> Result<Digest, BenchError> {
     let mut hash = Sha256::new();
@@ -87,5 +88,6 @@ pub fn digest(run: &Run, fonts: &FixtureFonts) -> Result<Digest, BenchError> {
         synthetic_glyphs: 0,
         float_reports: run.float_reports,
         height_retries: run.height_retries,
+        intrinsic_measurements: run.intrinsics.len(),
     })
 }

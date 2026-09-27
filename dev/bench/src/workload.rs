@@ -41,6 +41,8 @@ pub struct Workload {
     pub text: String,
     kind: Kind,
     style: ParagraphStyle,
+    atomic_sizes: AtomicSizes,
+    intrinsic_inputs: AtomicIntrinsics,
 }
 impl Workload {
     pub fn named(id: &str, scale: usize) -> Result<Self, BenchError> {
@@ -85,6 +87,38 @@ impl Workload {
         } else {
             source.repeat(scale)
         };
+        let mut atomic_sizes = AtomicSizes::new();
+        let mut intrinsic_inputs = AtomicIntrinsics::new();
+        if kind == Kind::Nested {
+            atomic_sizes.insert(
+                NodeId(1000),
+                AtomicSize {
+                    inline_size: 20.0,
+                    block_size: 20.0,
+                    baseline: Some(16.0),
+                    ..Default::default()
+                },
+            );
+            intrinsic_inputs.insert_atomic(
+                NodeId(1000),
+                shodo::AtomicIntrinsic {
+                    min_content: 20.0,
+                    max_content: 20.0,
+                },
+            );
+        }
+        if kind == Kind::Float {
+            for (node, width) in [(1001, 40.0), (1002, 75.0)] {
+                intrinsic_inputs.insert_float(
+                    NodeId(node),
+                    shodo::FloatIntrinsic {
+                        min_content: width,
+                        max_content: width,
+                        ..Default::default()
+                    },
+                );
+            }
+        }
         Ok(Self {
             id: id.into(),
             scale,
@@ -92,6 +126,8 @@ impl Workload {
             text,
             kind,
             style,
+            atomic_sizes,
+            intrinsic_inputs,
         })
     }
     pub fn settings(&self) -> serde_json::Value {
@@ -107,45 +143,11 @@ impl Workload {
     pub fn widths(&self) -> [f32; 3] {
         [self.width, self.width / 2.0, self.width * 1.5]
     }
-    pub fn atomics(&self) -> AtomicSizes {
-        let mut sizes = AtomicSizes::new();
-        if self.kind == Kind::Nested {
-            sizes.insert(
-                NodeId(1000),
-                AtomicSize {
-                    inline_size: 20.0,
-                    block_size: 20.0,
-                    baseline: Some(16.0),
-                    ..Default::default()
-                },
-            );
-        }
-        sizes
+    pub fn atomics(&self) -> &AtomicSizes {
+        &self.atomic_sizes
     }
-    pub fn intrinsics(&self) -> AtomicIntrinsics {
-        let mut inputs = AtomicIntrinsics::new();
-        if self.kind == Kind::Nested {
-            inputs.insert_atomic(
-                NodeId(1000),
-                shodo::AtomicIntrinsic {
-                    min_content: 20.0,
-                    max_content: 20.0,
-                },
-            );
-        }
-        if self.kind == Kind::Float {
-            for (node, width) in [(1001, 40.0), (1002, 75.0)] {
-                inputs.insert_float(
-                    NodeId(node),
-                    shodo::FloatIntrinsic {
-                        min_content: width,
-                        max_content: width,
-                        ..Default::default()
-                    },
-                );
-            }
-        }
-        inputs
+    pub fn intrinsics(&self) -> &AtomicIntrinsics {
+        &self.intrinsic_inputs
     }
     fn options(&self) -> LineOptions {
         LineOptions {
@@ -242,22 +244,33 @@ pub fn layout(
     if paragraphs.len() != w.paragraph_count() {
         return Err(BenchError("wrong paragraph count".into()));
     }
-    let options = w.options();
+    layout_with_options(w, paragraphs, cx, fonts, limits, operation, &w.options())
+}
+pub fn layout_with_options(
+    w: &Workload,
+    paragraphs: &[Paragraph],
+    cx: &mut LayoutContext,
+    fonts: &FixtureFonts,
+    limits: &Limits,
+    operation: Operation,
+    options: &LineOptions,
+) -> Result<Run, BenchError> {
     let atomics = w.atomics();
     let mut run = Run::default();
     if operation == Operation::Intrinsic {
         for p in paragraphs {
             run.intrinsics
-                .push(p.intrinsic_sizes(cx, &options, &w.intrinsics()));
+                .push(p.intrinsic_sizes(cx, options, w.intrinsics()));
         }
         return Ok(run);
     }
-    let widths: Vec<_> = if matches!(operation, Operation::ReuseWidths | Operation::RebuildWidths) {
-        w.widths().to_vec()
+    let widths = w.widths();
+    let widths = if matches!(operation, Operation::ReuseWidths | Operation::RebuildWidths) {
+        &widths[..]
     } else {
-        vec![w.width]
+        &widths[..1]
     };
-    for width in widths {
+    for &width in widths {
         let rebuilt;
         let paragraphs = if operation == Operation::RebuildWidths {
             rebuilt = w.build(cx, fonts, limits)?;
@@ -284,15 +297,15 @@ pub fn layout(
                         max_block_size: Some(0.0),
                         ..constraint
                     };
-                    match p.next_line(cx, token, &options, &rejected, &atomics) {
+                    match p.next_line(cx, token, options, &rejected, atomics) {
                         LineResult::BlockSizeExceeded { .. } => {
                             run.height_retries += 1;
-                            p.next_line(cx, token, &options, &constraint, &atomics)
+                            p.next_line(cx, token, options, &constraint, atomics)
                         }
                         other => other,
                     }
                 } else {
-                    p.next_line(cx, token, &options, &constraint, &atomics)
+                    p.next_line(cx, token, options, &constraint, atomics)
                 };
                 match result {
                     LineResult::Line(line) => {

@@ -2,7 +2,7 @@
 mod digest;
 mod workload;
 pub use digest::{Digest, digest};
-pub use workload::{Operation, Run, Workload, layout, workloads};
+pub use workload::{Operation, Run, Workload, layout, layout_with_options, workloads};
 
 #[derive(Debug)]
 pub struct BenchError(pub String);
@@ -12,3 +12,8 @@ impl std::fmt::Display for BenchError {
     }
 }
 impl std::error::Error for BenchError {}
+
+#[cfg(feature = "allocation-counting")]
+pub mod allocator;
+
+pub mod checked;
