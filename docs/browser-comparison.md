@@ -26,7 +26,7 @@ box, no margins, and baseline at the bottom edge.
 The checked-in browser is **Chromium 152.0.7977.82 Arch Linux**, collected on Linux
 x86_64. Two independent disposable-profile runs reproduced the whole data JSON,
 including metadata and geometry. There are 458 measured width probes. At the
-original widths, 401 source endpoints match; 57 differences remain. There are 50
+original widths, 404 source endpoints match; 54 differences remain. There are 50
 measurable target transitions: five initial targets are already present at the
 1/64px minimum probe, and explicitly have `boundary_subpixels: null` (overflow/
 first unbreakable segment), rather than an invented zero-width transition.
@@ -135,9 +135,9 @@ separate source nodes even when glyphs are shared.
 
 | Category | Observations | Evidence and follow-up |
 | --- | ---: | --- |
-| Boundary drift | 44 | Same target endpoints; shodo transition minus Chrome is -1 to +4 integer subpixels. Every difference lies strictly between the two measured transitions; probes a pixel away agree. Exact observations are retained, with no global slack. |
+| Boundary drift | 46 | Same target endpoints; shodo transition minus Chrome is -1 to +4 integer subpixels. Every difference lies strictly between the two measured transitions; probes a pixel away agree. Exact observations are retained, with no global slack. |
 | Japanese spacing | 8 | Cases japanese-07/13: Chrome normal thresholds 6969/8735, shodo 7504/9256 subpixels. A real Chrome `text-spacing-trim: space-all` diagnostic yields 7504/9255, isolating roughly half-em contextual punctuation compression. Tracked by `shodo-unc.1`. |
-| Hanging trailing tab | 5 | pre-wrap-tab: Chrome target end9 threshold4336, shodo6390. At90px Chrome end9 vs shodo5. Real `white-space: break-spaces` gives end5 at90px and target end9 threshold6389 with initial120px. Tracked by `shodo-p2m.15`. |
+| Resolved hanging trailing tab | 0 semantic / 2 numeric | `shodo-p2m.15` fixes pre-wrap-tab: both consume source end9 at90px. The shodo threshold improves6390→4338 versus Chrome4336, so only the two adjacent probes remain as exact boundary drift. The original diagnostic `white-space: break-spaces` gives end5 at90px and target end9 threshold6389 with initial120px. |
 
 The normal-CSS capture is preserved; diagnostic CSS probes did not replace it.
 To reproduce those diagnostics, make a temporary copy of the collector and
@@ -174,3 +174,11 @@ The raikiri integration spike remains unmerged.
 - [Official Chrome Headless documentation](https://developer.chrome.com/docs/automation-and-testing/headless): dump-dom and virtual-time budget.
 - [CSS Text 3 whitespace positioning](https://www.w3.org/TR/css-text-3/#white-space-phase-2), [tab sizing](https://www.w3.org/TR/css-text-3/#tab-size-property) and [boundary shaping](https://www.w3.org/TR/css-text-3/#boundary-shaping).
 - [CSS Text 4 punctuation spacing](https://www.w3.org/TR/css-text-4/#text-spacing-trim-property) and [CSS Inline 3](https://www.w3.org/TR/css-inline-3/): reference contracts for the documented semantic/metric investigations.
+
+## Preserved whitespace policy
+
+The hanging-tab fix uses each whitespace unit's existing style. `Preserve` with wrapping excludes trailing spaces/tabs at soft breaks; forced/end lines retain the part that fits before alignment. `Preserve` with nowrap keeps preserved advances. `BreakSpaces` keeps trailing advances and allows breaks after each preserved space/tab, subject to nowrap and mandatory-break precedence. Selection retains the full tab-stop advance even when line fitting excludes it. Nonzero end padding/borders obstruct preserved whitespace hanging; collapsible trailing spaces retain removal/reordering behavior.
+
+Scanning, float retry caches, prescribed plans and intrinsic measurement use the shared policy. Min-content excludes eligible hanging whitespace; max-content includes conditional trailing whitespace and its tracking. The synthetic regressions use10px glyphs/40px tab stops, and the real Latin case pins source end5 at4337 and end9 at4338 subpixels without modifying browser data. Supported first-line font changes preserve the underlying whitespace policy.
+
+CSS Text4 explicitly leaves the hanging behavior of `preserve-spaces` open. Its existing trailing behavior is retained as a compatibility decision, with no new conformance claim. The original Chromium observations, inputs, fonts and recorder are unchanged by this core correction.

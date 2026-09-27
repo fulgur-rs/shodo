@@ -249,3 +249,17 @@ fn capture_validation_rejects_inconsistent_transitions_and_missing_probes() {
         );
     }
 }
+
+#[test]
+fn real_pre_wrap_tab_consumes_browser_source_endpoint_at_ninety_pixels() {
+    let case = browser::cases()
+        .iter()
+        .find(|c| c.id == "pre-wrap-tab")
+        .unwrap();
+    let fonts = load_fonts(&Default::default()).unwrap();
+    let mut cx = LayoutContext::new();
+    let built = browser::build(case, &mut cx, &fonts).unwrap();
+    assert_eq!(browser::first_end(case, &built, &mut cx, 5760).unwrap(), 9);
+    assert_eq!(browser::first_end(case, &built, &mut cx, 4337).unwrap(), 5);
+    assert_eq!(browser::first_end(case, &built, &mut cx, 4338).unwrap(), 9);
+}
