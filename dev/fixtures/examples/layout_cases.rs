@@ -13,9 +13,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let limits = Limits::default();
     let fonts = load_fonts(&limits)?;
     let mut cx = LayoutContext::new();
-    eprintln!(
-        "Paragraph shaping is the S0 stub until S2; these line counts are not real-font browser comparisons."
-    );
     for case in selected_cases {
         let paragraph = case.build(&mut cx, &fonts, &limits)?;
         let lines = paragraph.break_all(
@@ -30,7 +27,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "id": case.id, "font_ids": case.font_ids, "lang": case.lang,
                 "direction": format!("{:?}", case.direction), "font_size": case.font_size,
                 "width": case.width, "processed_bytes": paragraph.text().len(),
-                "lines": lines.len(), "paragraph_shaping": "S0 stub",
+                "lines": lines.len(), "paragraph_shaping": "harfrust",
+                "glyphs": lines.iter().flat_map(|line| line.fragments()).filter_map(|f| match f {
+                    shodo::Fragment::GlyphRun(run) => Some(run.glyphs().len()),
+                    _ => None,
+                }).sum::<usize>(),
             })
         );
     }

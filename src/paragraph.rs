@@ -5,17 +5,18 @@ use std::fmt;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::analysis::units::{InlineBoxInfo, Unit, UnitList, bidi_levels, build_units};
-use crate::analysis::{Item, ItemKind, process};
+use crate::analysis::bidi::{BidiParagraph, analyze_bidi};
+use crate::analysis::units::{InlineBoxInfo, Unit, UnitList, build_units};
+use crate::analysis::{Item, ItemKind, process, transform};
 use crate::builder::ParagraphBuilder;
 use crate::font::FontCollection;
 use crate::geometry::{BaselineKind, Direction, Saturation, WritingMode};
-use crate::limits::{LimitExceeded, Limits, Warning, WarningKind};
+use crate::limits::{LimitExceeded, LimitKind, Limits, Warning, WarningKind, WarningSink};
 use crate::mapping::OffsetMapping;
 use crate::node::{NodeId, Sides};
 use crate::output::Line;
 use crate::sanitize;
-use crate::shape::{GlyphStore, ShapedRun, shape_item};
+use crate::shape::{GlyphStore, ShapedRun, shape_items};
 use crate::style::{InlineStyle, ParagraphStyle, TextOrientation};
 
 static NEXT_PARAGRAPH_ID: AtomicU64 = AtomicU64::new(1);
@@ -50,11 +51,34 @@ impl FloatCursor {
     }
 }
 
+pub(crate) struct FirstLineData {
+    pub(crate) data: Arc<ParagraphData>,
+    /// Exact alternate-unit cursors in the normal set; absent cuts are prohibited.
+    pub(crate) normal_cursors: Vec<Option<u32>>,
+    pub(crate) alternate_cursors: Vec<(u32, u32)>,
+}
+
+impl FirstLineData {
+    pub(crate) fn alternate_cursor(&self, normal: u32) -> Option<usize> {
+        let index = self.alternate_cursors.partition_point(|(u, _)| *u < normal);
+        self.alternate_cursors
+            .get(index)
+            .filter(|(u, _)| *u == normal)
+            .map(|(_, u)| *u as usize)
+    }
+}
+
 pub(crate) struct ParagraphData {
     #[cfg(test)]
     pub(crate) baseline_queries: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
     pub(crate) cluster_queries: std::sync::atomic::AtomicUsize,
+    #[cfg(test)]
+    pub(crate) cursor_queries: std::sync::atomic::AtomicUsize,
+    #[cfg(test)]
+    pub(crate) window_queries: std::sync::atomic::AtomicUsize,
+    pub(crate) first_line: Option<FirstLineData>,
+    pub(crate) source_spans: Vec<crate::mapping::TransformSpan>,
     pub(crate) id: u64,
     pub(crate) style: ParagraphStyle,
     pub(crate) limits: Limits,
@@ -64,14 +88,20 @@ pub(crate) struct ParagraphData {
     pub(crate) glyphs: GlyphStore,
     /// Unit index for each shaping cluster and cluster index for each glyph.
     pub(crate) clusters: Vec<u32>,
+    pub(crate) selectable_clusters: Vec<u32>,
+    pub(crate) shaping_barriers: Vec<u32>,
     pub(crate) glyph_clusters: Vec<u32>,
     /// Unit index and node, in float ordinal order.
     pub(crate) floats: Vec<(u32, NodeId)>,
     pub(crate) runs: Vec<ShapedRun>,
+    pub(crate) shape_items: Vec<crate::analysis::itemize::ShapeItem>,
+    pub(crate) breaks: crate::analysis::breaks::BreakAnalysis,
     pub(crate) units: Vec<Unit>,
     pub(crate) boxes: Vec<InlineBoxInfo>,
     pub(crate) float_count: u32,
+    /// Coordinate direction of the block; independent of plaintext paragraphs.
     pub(crate) base_level: u8,
+    pub(crate) bidi_paragraphs: Vec<BidiParagraph>,
     pub(crate) mapping: Option<OffsetMapping>,
     pub(crate) fonts: FontCollection,
     pub(crate) generations: (u64, Option<u64>),
@@ -80,6 +110,16 @@ pub(crate) struct ParagraphData {
 }
 
 impl ParagraphData {
+    pub(crate) fn bidi_paragraph_at_unit(&self, unit: usize) -> Option<&BidiParagraph> {
+        let pos = self.units.get(unit)?.text.start;
+        self.bidi_paragraph_at_text(pos)
+    }
+
+    pub(crate) fn bidi_paragraph_at_text(&self, pos: u32) -> Option<&BidiParagraph> {
+        let index = self.bidi_paragraphs.partition_point(|p| p.text.end <= pos);
+        self.bidi_paragraphs.get(index)
+    }
+
     pub(crate) fn baseline_kind(&self, node: NodeId) -> Option<BaselineKind> {
         #[cfg(test)]
         self.baseline_queries.fetch_add(1, Ordering::Relaxed);
@@ -143,6 +183,7 @@ impl Paragraph {
 
     pub(crate) fn from_builder(
         b: ParagraphBuilder,
+        cx: &mut crate::LayoutContext,
         fonts: &FontCollection,
     ) -> Result<Paragraph, LimitExceeded> {
         let ParagraphBuilder {
@@ -165,102 +206,399 @@ impl Paragraph {
             style.root = root.clone();
         }
         sanitize::items(&mut items, &mut warnings);
+        let id = NEXT_PARAGRAPH_ID.fetch_add(1, Ordering::Relaxed);
+        if style.first_line.is_some() {
+            Limits::check(
+                limits.max_styles,
+                LimitKind::Styles,
+                styles.len() as u64 * 2,
+            )?;
+        }
+        let alternate_styles = style.first_line.as_ref().map(|first| {
+            styles
+                .iter()
+                .map(|original| first_line_style(original, &style.root, first))
+                .collect::<Vec<_>>()
+        });
         let processed = process(&text, &items, &styles, offset_mapping, &limits)?;
+        let source_cuts = alternate_styles
+            .as_ref()
+            .map(|_| crate::analysis::breaks::source_cursor_ranges(&processed));
+        let mut processed = transform(processed, &styles, &limits, &mut warnings)?;
+        if alternate_styles.is_none() {
+            processed.source_spans = Vec::new();
+        }
         let mut sat = Saturation::default();
-        let font = fonts.primary_font();
-        let mut glyphs = GlyphStore::default();
-        let mut runs = Vec::new();
-        for (index, item) in processed.items.iter().enumerate() {
-            if matches!(item.kind, ItemKind::Text) {
-                let s = &processed.text[item.text.start as usize..item.text.end as usize];
-                let size = styles[item.style as usize].font_size;
-                shape_item(
-                    &mut glyphs,
-                    &mut runs,
-                    s,
-                    item.text.start,
-                    index as u32,
-                    font,
-                    size,
-                    &limits,
-                    &mut sat,
-                )?;
+        let mut data = build_data(
+            style.clone(),
+            &limits,
+            limits.max_shaped_glyphs,
+            processed,
+            styles,
+            id,
+            cx,
+            fonts,
+            &mut warnings,
+            &mut sat,
+        )?;
+        if let Some(mut alternate_styles) = alternate_styles {
+            for s in &mut alternate_styles {
+                s.font_size = sanitize_font_size(s.font_size, &mut warnings);
+                sanitize::style(s, &mut warnings);
             }
-        }
-        let levels = bidi_levels(
-            &processed.text,
-            style.direction,
-            style.unicode_bidi_plaintext,
-        );
-        let base_level = u8::from(style.direction == Direction::Rtl);
-        let UnitList {
-            units,
-            boxes,
-            float_count,
-        } = build_units(
-            &processed.text,
-            &processed.items,
-            &runs,
-            &glyphs,
-            &levels,
-            base_level,
-        );
-        let mut baselines = HashMap::new();
-        for item in &processed.items {
-            if let ItemKind::Atomic { parent_style, .. } = item.kind
-                && let Some(node) = item.node
-            {
-                baselines.entry(node).or_insert_with(|| {
-                    baseline_kind(style.writing_mode, &styles[parent_style as usize])
-                });
-            }
-        }
-        let mut clusters = Vec::new();
-        let mut glyph_clusters = vec![0; glyphs.len()];
-        let mut floats = Vec::new();
-        for (i, u) in units.iter().enumerate() {
-            match &u.kind {
-                crate::analysis::units::UnitKind::Cluster { glyphs, .. } => {
-                    let cluster = clusters.len() as u32;
-                    clusters.push(i as u32);
-                    glyph_clusters[glyphs.start as usize..glyphs.end as usize].fill(cluster);
+            let mut remaining = limits.clone();
+            remaining.max_text_bytes = limits
+                .max_text_bytes
+                .map(|max| max.saturating_sub(data.text.len() as u64));
+            remaining.max_items = limits
+                .max_items
+                .map(|max| max.saturating_sub(data.items.len() as u64));
+            // The transient common input is bounded independently; a shrinking
+            // transform may fit the remaining retained-text budget even when
+            // its input is larger. Every output append uses the remaining cap.
+            let mut input_limits = remaining.clone();
+            input_limits.max_text_bytes = limits.max_text_bytes;
+            let alternate = process(&text, &items, &data.styles, offset_mapping, &input_limits)
+                .and_then(|p| transform(p, &alternate_styles, &remaining, &mut warnings))
+                .map_err(|mut e| {
+                    if e.kind == LimitKind::TextBytes
+                        && let Some(limit) = limits.max_text_bytes
+                    {
+                        e.actual += data.text.len() as u64;
+                        e.limit = limit;
+                    }
+                    if e.kind == LimitKind::Items
+                        && let Some(limit) = limits.max_items
+                    {
+                        e.actual += data.items.len() as u64;
+                        e.limit = limit;
+                    }
+                    e
+                })?;
+            let mut alternate_style = style;
+            alternate_style.root = alternate_styles[0].clone();
+            alternate_style.first_line = None;
+            let remaining_glyphs = limits
+                .max_shaped_glyphs
+                .map(|max| max.saturating_sub(data.glyphs.len() as u64));
+            let mut alternate = build_data(
+                alternate_style,
+                &limits,
+                remaining_glyphs,
+                alternate,
+                alternate_styles,
+                id,
+                cx,
+                fonts,
+                &mut warnings,
+                &mut sat,
+            )
+            .map_err(|mut e| {
+                if e.kind == LimitKind::ShapedGlyphs
+                    && let Some(limit) = limits.max_shaped_glyphs
+                {
+                    e.actual += data.glyphs.len() as u64;
+                    e.limit = limit;
                 }
-                crate::analysis::units::UnitKind::Float { node, .. } => {
-                    floats.push((i as u32, *node))
+                e
+            })?;
+            finalize_data(&mut data, cx, &mut warnings, &mut sat);
+            finalize_data(&mut alternate, cx, &mut warnings, &mut sat);
+            let mut normal_search = 0;
+            let mut normal_cursors: Vec<_> = alternate
+                .units
+                .iter()
+                .map(|u| {
+                    normal_cursor(
+                        &data,
+                        &alternate,
+                        u,
+                        source_cuts.as_ref().unwrap(),
+                        &mut normal_search,
+                    )
+                })
+                .collect();
+            normal_cursors.push(Some(data.units.len() as u32));
+            for i in 0..alternate.units.len() {
+                if normal_cursors[i + 1].is_some() {
+                    continue;
                 }
-                _ => {}
+                let class = alternate.units[i].break_after;
+                let min_content = alternate.units[i].emergency_min_content;
+                alternate.units[i].break_after = crate::analysis::units::BreakClass::Prohibited;
+                alternate.units[i].emergency_min_content = false;
+                if matches!(
+                    class,
+                    crate::analysis::units::BreakClass::Allowed
+                        | crate::analysis::units::BreakClass::Emergency
+                ) {
+                    // Preserve the transformed opportunity beyond markers
+                    // inside a source grapheme whose trailing scalar was consumed.
+                    for j in i + 1..alternate.units.len() {
+                        use crate::analysis::units::UnitKind;
+                        if !matches!(
+                            alternate.units[j].kind,
+                            UnitKind::Float { .. }
+                                | UnitKind::Absolute { .. }
+                                | UnitKind::Open { .. }
+                                | UnitKind::Close { .. }
+                                | UnitKind::BidiControl
+                        ) {
+                            break;
+                        }
+                        if normal_cursors[j + 1].is_some() {
+                            if alternate.units[j].break_after
+                                == crate::analysis::units::BreakClass::Prohibited
+                            {
+                                alternate.units[j].break_after = class;
+                                alternate.units[j].emergency_min_content = min_content;
+                            }
+                            break;
+                        }
+                    }
+                }
             }
+            data.source_spans = Vec::new();
+            alternate.source_spans = Vec::new();
+            data.first_line = Some(FirstLineData {
+                data: Arc::new(alternate),
+                alternate_cursors: normal_cursors
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, u)| u.map(|u| (u, i as u32)))
+                    .collect(),
+                normal_cursors,
+            });
+        } else {
+            data.source_spans = Vec::new();
+            finalize_data(&mut data, cx, &mut warnings, &mut sat);
         }
         warnings.record_saturation(&sat);
+        data.warnings = warnings.take();
         Ok(Paragraph {
-            data: Arc::new(ParagraphData {
-                #[cfg(test)]
-                baseline_queries: Default::default(),
-                #[cfg(test)]
-                cluster_queries: Default::default(),
-                id: NEXT_PARAGRAPH_ID.fetch_add(1, Ordering::Relaxed),
-                style,
-                limits,
-                text: processed.text,
-                items: processed.items,
-                styles,
-                glyphs,
-                clusters,
-                glyph_clusters,
-                floats,
-                runs,
-                units,
-                boxes,
-                float_count,
-                base_level,
-                mapping: processed.mapping,
-                fonts: fonts.clone(),
-                generations: fonts.generations(),
-                warnings: warnings.take(),
-                baselines,
-            }),
+            data: Arc::new(data),
         })
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_data(
+    style: ParagraphStyle,
+    limits: &Limits,
+    glyph_budget: Option<u64>,
+    processed: crate::analysis::whitespace::Processed,
+    styles: Vec<InlineStyle>,
+    id: u64,
+    cx: &mut crate::LayoutContext,
+    fonts: &FontCollection,
+    warnings: &mut WarningSink,
+    sat: &mut Saturation,
+) -> Result<ParagraphData, LimitExceeded> {
+    let mut shape_limits = limits.clone();
+    shape_limits.max_shaped_glyphs = glyph_budget;
+    let breaks = crate::analysis::breaks::analyze_breaks(&processed, &styles, warnings);
+    let bidi = analyze_bidi(&processed.text, &style, &styles);
+    let shape_items_input =
+        crate::analysis::itemize::itemize(&processed, &styles, &bidi, &breaks, fonts);
+    let (glyphs, runs) = shape_items(
+        cx,
+        &shape_items_input,
+        &styles,
+        fonts,
+        &shape_limits,
+        warnings,
+        sat,
+    )?;
+    let base_level = u8::from(style.direction == Direction::Rtl);
+    let UnitList {
+        units,
+        boxes,
+        float_count,
+    } = build_units(
+        &processed.text,
+        &processed.items,
+        &runs,
+        &glyphs,
+        &bidi.levels,
+        base_level,
+        &breaks,
+    );
+    let mut baselines = HashMap::new();
+    for item in &processed.items {
+        if let ItemKind::Atomic { parent_style, .. } = item.kind
+            && let Some(node) = item.node
+        {
+            baselines.entry(node).or_insert_with(|| {
+                baseline_kind(style.writing_mode, &styles[parent_style as usize])
+            });
+        }
+    }
+    let data = ParagraphData {
+        #[cfg(test)]
+        baseline_queries: Default::default(),
+        #[cfg(test)]
+        cluster_queries: Default::default(),
+        #[cfg(test)]
+        cursor_queries: Default::default(),
+        #[cfg(test)]
+        window_queries: Default::default(),
+        first_line: None,
+        source_spans: processed.source_spans,
+        id,
+        style,
+        limits: limits.clone(),
+        text: processed.text,
+        items: processed.items,
+        styles,
+        glyphs,
+        clusters: Vec::new(),
+        glyph_clusters: Vec::new(),
+        selectable_clusters: Vec::new(),
+        shaping_barriers: Vec::new(),
+        floats: Vec::new(),
+        runs,
+        shape_items: shape_items_input,
+        breaks,
+        units,
+        boxes,
+        float_count,
+        base_level,
+        bidi_paragraphs: bidi.paragraphs,
+        mapping: processed.mapping,
+        fonts: fonts.clone(),
+        generations: fonts.generations(),
+        warnings: Vec::new(),
+        baselines,
+    };
+    Ok(data)
+}
+
+fn finalize_data(
+    data: &mut ParagraphData,
+    cx: &mut crate::LayoutContext,
+    warnings: &mut WarningSink,
+    sat: &mut Saturation,
+) {
+    crate::line::reshape::initialize_slices(data, cx, warnings, sat);
+    let mut clusters = Vec::new();
+    let mut glyph_clusters = vec![0; data.glyphs.len()];
+    let mut floats = Vec::new();
+    let mut selectable_clusters = Vec::new();
+    let mut shaping_barriers = Vec::new();
+    let mut previous_cluster = None;
+    for (i, u) in data.units.iter().enumerate() {
+        match &u.kind {
+            crate::analysis::units::UnitKind::Cluster { glyphs, .. } => {
+                selectable_clusters.push(i as u32);
+                let same = previous_cluster
+                    .is_some_and(|previous: usize| u.shares_cluster(&data.units[previous]));
+                previous_cluster = Some(i);
+                if same {
+                    continue;
+                }
+                let cluster = clusters.len() as u32;
+                clusters.push(i as u32);
+                glyph_clusters[glyphs.start as usize..glyphs.end as usize].fill(cluster);
+            }
+            crate::analysis::units::UnitKind::Float { node, .. } => floats.push((i as u32, *node)),
+            crate::analysis::units::UnitKind::Atomic { .. }
+            | crate::analysis::units::UnitKind::ForcedBreak
+            | crate::analysis::units::UnitKind::BlockInInline { .. }
+            | crate::analysis::units::UnitKind::Tab
+            | crate::analysis::units::UnitKind::BidiControl => shaping_barriers.push(i as u32),
+            _ => {}
+        }
+    }
+    data.shaping_barriers = shaping_barriers;
+    data.clusters = clusters;
+    data.selectable_clusters = selectable_clusters;
+    data.glyph_clusters = glyph_clusters;
+    data.floats = floats;
+}
+
+fn normal_cursor(
+    normal: &ParagraphData,
+    alternate: &ParagraphData,
+    u: &Unit,
+    source_cuts: &[std::ops::RangeInclusive<u32>],
+    search: &mut usize,
+) -> Option<u32> {
+    use crate::analysis::units::UnitKind;
+    use crate::mapping::TransformSpan;
+    let source = TransformSpan::source_position(&alternate.source_spans, u.text.start);
+    let cut = source_cuts.partition_point(|cut| *cut.end() < source);
+    if !source_cuts
+        .get(cut)
+        .is_some_and(|cut| cut.contains(&source))
+    {
+        return None;
+    }
+    if TransformSpan::map_position(&alternate.source_spans, source) != u.text.start {
+        return None;
+    }
+    let pos = TransformSpan::map_position(&normal.source_spans, source);
+    if TransformSpan::source_position(&normal.source_spans, pos) != source {
+        return None;
+    }
+    // Both sets preserve source/item order. Exact mapped cuts are monotone,
+    // including empty markers sharing a source offset, so never restart a group.
+    while let Some(n) = normal.units.get(*search) {
+        #[cfg(test)]
+        normal.cursor_queries.fetch_add(1, Ordering::Relaxed);
+        if n.text.start > pos {
+            return None;
+        }
+        if n.text.start == pos
+            && match (&n.kind, &u.kind) {
+                (UnitKind::Cluster { .. }, UnitKind::Cluster { .. }) => true,
+                _ => {
+                    n.item == u.item
+                        && std::mem::discriminant(&n.kind) == std::mem::discriminant(&u.kind)
+                }
+            }
+        {
+            return Some(*search as u32);
+        }
+        *search += 1;
+    }
+    None
+}
+
+fn first_line_style(
+    original: &InlineStyle,
+    root: &InlineStyle,
+    first: &InlineStyle,
+) -> InlineStyle {
+    let mut result = original.clone();
+    macro_rules! inherit {
+        ($($field:ident),* $(,)?) => { $(if original.$field == root.$field { result.$field = first.$field.clone(); })* };
+    }
+    inherit!(
+        font_families,
+        font_size,
+        font_weight,
+        font_width,
+        font_style,
+        font_variations,
+        font_features,
+        font_kerning,
+        font_variant_ligatures,
+        font_variant_caps,
+        font_variant_numeric,
+        font_variant_east_asian,
+        font_variant_position,
+        font_variant_alternates,
+        font_optical_sizing,
+        font_synthesis,
+        font_size_adjust,
+        lang,
+        line_height,
+        letter_spacing,
+        word_spacing,
+        text_transform,
+        text_emphasis
+    );
+    result
 }
 
 /// The dominant baseline of a parent inline box (CSS Writing Modes 4 §4.2):
@@ -444,6 +782,8 @@ impl LineConstraint<'_> {
 }
 
 /// Outcome of [`Paragraph::next_line`].
+// Keep the public by-value line result without a heap allocation on every line.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum LineResult {

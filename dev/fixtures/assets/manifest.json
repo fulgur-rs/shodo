@@ -39,8 +39,8 @@
       "source_commit": "f8d157532fbfaeda587e826d4cd5b21a49186f7c",
       "source_file": "cjk.otf",
       "source_sha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
-      "sha256": "29878953ae982e3091aba0102ab5d774094ceb1092f2e3d181a6632bfdd962c3",
-      "size": 209988,
+      "sha256": "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b",
+      "size": 210332,
       "license": "assets/licenses/noto-cjk-OFL.txt",
       "license_url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/LICENSE",
       "extra_unicode_ranges": [
@@ -55,6 +55,10 @@
         [
           65281,
           65374
+        ],
+        [
+          27700,
+          27700
         ]
       ]
     },

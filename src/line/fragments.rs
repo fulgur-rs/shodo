@@ -56,7 +56,11 @@ pub(crate) enum RecordKind {
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum GlyphSource {
     Shared,
-    Overlay { start: u32 },
+    Overlay {
+        glyphs: (u32, u32),
+        clusters: (u32, u32),
+        run: Option<u32>,
+    },
 }
 
 /// Whether a box's own `direction` opposes the paragraph's, so its start
@@ -76,9 +80,17 @@ fn build_logical(
     widths: &[LayoutUnit],
     origin: LayoutUnit,
     atomics: &AtomicSizes,
+    visible_hyphen: Option<u32>,
 ) -> Vec<FragmentRecord> {
+    let hidden_hyphen = |unit: &Unit| {
+        data.text
+            .get(unit.text.start as usize..unit.text.end as usize)
+            == Some("\u{ad}")
+            && visible_hyphen != Some(unit.text.start)
+    };
     let mut out: Vec<FragmentRecord> = Vec::new();
     let mut open: Vec<usize> = Vec::new();
+    let mut shared_record: Option<(usize, usize)> = None;
     let mut pos = origin;
     let level_at_start = data
         .units
@@ -155,6 +167,19 @@ fn build_logical(
                 }
             }
             UnitKind::Cluster { run, glyphs, .. } => {
+                if let Some((previous, record)) = shared_record
+                    && unit.shares_cluster(&data.units[previous])
+                {
+                    out[record].inline_size = out[record].inline_size + w;
+                    if let RecordKind::Glyphs { text, .. } = &mut out[record].kind {
+                        text.end = unit.text.end;
+                    }
+                    pos = pos + w;
+                    continue;
+                }
+                if hidden_hyphen(unit) {
+                    continue;
+                }
                 if let Some(last) = out.last_mut()
                     && last.level == unit.level
                     && let RecordKind::Glyphs {
@@ -166,7 +191,10 @@ fn build_logical(
                     } = &mut last.kind
                     && *r == *run
                     && *item == unit.item
-                    && g.end == glyphs.start
+                    && (g.end == glyphs.start
+                        || unit.shared_cluster.as_ref().is_some_and(|shared| {
+                            g.end == shared.glyphs.end && g.start <= shared.glyphs.start
+                        }))
                 {
                     g.end = glyphs.end;
                     text.end = unit.text.end;
@@ -185,6 +213,7 @@ fn build_logical(
                         level: unit.level,
                     });
                 }
+                shared_record = unit.shared_cluster.as_ref().map(|_| (i, out.len() - 1));
                 pos = pos + w;
             }
             UnitKind::Atomic { node } => {
@@ -245,12 +274,21 @@ pub(crate) fn build(
     widths: &[LayoutUnit],
     origin: LayoutUnit,
     atomics: &AtomicSizes,
+    visible_hyphen: Option<u32>,
 ) -> Vec<FragmentRecord> {
     let base = data.base_level;
     if data.units[units.clone()].iter().all(|u| u.level == base) {
-        return build_logical(data, units, widths, origin, atomics);
+        return build_logical(data, units, widths, origin, atomics, visible_hyphen);
     }
-    build_bidi(data, units, hang_start, widths, origin, atomics)
+    build_bidi(
+        data,
+        units,
+        hang_start,
+        widths,
+        origin,
+        atomics,
+        visible_hyphen,
+    )
 }
 
 /// A reorderable piece of a line: a glyph run segment, an atomic, an
@@ -283,11 +321,34 @@ fn push_cluster(
     width: LayoutUnit,
     level: u8,
     owner: Option<u32>,
+    shared_record: &mut Option<(std::sync::Arc<crate::analysis::units::SharedCluster>, usize)>,
+    continuations: &mut Vec<(usize, usize)>,
 ) {
     let UnitKind::Cluster { run, glyphs, .. } = &unit.kind else {
         return;
     };
     let (run, item, text) = (*run, unit.item, &unit.text);
+    if let Some(shared) = &unit.shared_cluster
+        && let Some((previous, record)) = shared_record.as_ref()
+        && std::sync::Arc::ptr_eq(shared, previous)
+    {
+        let record = *record;
+        if let Some(glyph) = &mut list[record].record {
+            glyph.inline_size = glyph.inline_size + width;
+            if let RecordKind::Glyphs { text, .. } = &mut glyph.kind {
+                text.end = unit.text.end;
+            }
+        }
+        continuations.push((record, list.len()));
+        list.push(Piece {
+            record: None,
+            width,
+            level,
+            owner,
+            edge: None,
+        });
+        return;
+    }
     if let Some(last) = list.last_mut()
         && last.level == level
         && last.owner == owner
@@ -305,12 +366,20 @@ fn push_cluster(
         }) = &mut last.record
         && *r == run
         && *it == item
-        && g.end == glyphs.start
+        && (g.end == glyphs.start
+            || unit
+                .shared_cluster
+                .as_ref()
+                .is_some_and(|shared| g.end == shared.glyphs.end && g.start <= shared.glyphs.start))
     {
         g.end = glyphs.end;
         t.end = text.end;
         *inline_size = *inline_size + width;
         last.width = last.width + width;
+        *shared_record = unit
+            .shared_cluster
+            .as_ref()
+            .map(|c| (std::sync::Arc::clone(c), list.len() - 1));
         return;
     }
     list.push(Piece {
@@ -331,6 +400,10 @@ fn push_cluster(
         owner,
         edge: None,
     });
+    *shared_record = unit
+        .shared_cluster
+        .as_ref()
+        .map(|c| (std::sync::Arc::clone(c), list.len() - 1));
 }
 
 fn build_bidi(
@@ -340,8 +413,11 @@ fn build_bidi(
     widths: &[LayoutUnit],
     origin: LayoutUnit,
     atomics: &AtomicSizes,
+    visible_hyphen: Option<u32>,
 ) -> Vec<FragmentRecord> {
-    let base = data.base_level;
+    let base = data
+        .bidi_paragraph_at_unit(units.start)
+        .map_or(data.base_level, |p| p.base_level);
     let mut pieces: Vec<Piece> = Vec::new();
     // Hanging trailing spaces, placed after everything else on the line.
     let mut hanging: Vec<Piece> = Vec::new();
@@ -364,6 +440,10 @@ fn build_bidi(
             edge: Some((b, true)),
         });
     }
+    let mut shared_record = None;
+    let mut hanging_shared = None;
+    let mut continuations = Vec::new();
+    let mut hanging_continuations = Vec::new();
     for (k, i) in units.clone().enumerate() {
         let unit = &data.units[i];
         let w = widths[k];
@@ -405,6 +485,14 @@ fn build_bidi(
                 edge: Some((*box_index, false)),
             },
             UnitKind::Cluster { space, .. } => {
+                if data
+                    .text
+                    .get(unit.text.start as usize..unit.text.end as usize)
+                    == Some("\u{ad}")
+                    && visible_hyphen != Some(unit.text.start)
+                {
+                    continue;
+                }
                 if trailing && *space && unit.level != base {
                     // L1 moves a hanging space out of an embedding to the
                     // paragraph level. Kept inside its box, it would split
@@ -412,9 +500,25 @@ fn build_bidi(
                     // else instead. A space already at the paragraph level
                     // is unaffected by L1 and stays in its box, exactly as
                     // on lines without reordering.
-                    push_cluster(&mut hanging, unit, w, level, None);
+                    push_cluster(
+                        &mut hanging,
+                        unit,
+                        w,
+                        level,
+                        None,
+                        &mut hanging_shared,
+                        &mut hanging_continuations,
+                    );
                 } else {
-                    push_cluster(&mut pieces, unit, w, level, unit.parent_box);
+                    push_cluster(
+                        &mut pieces,
+                        unit,
+                        w,
+                        level,
+                        unit.parent_box,
+                        &mut shared_record,
+                        &mut continuations,
+                    );
                     last_kept = Some((level, unit.parent_box));
                 }
                 continue;
@@ -476,6 +580,11 @@ fn build_bidi(
             edge: Some((b, false)),
         });
     }
+    continuations.extend(
+        hanging_continuations
+            .into_iter()
+            .map(|(a, b)| (a + pieces.len(), b + pieces.len())),
+    );
     pieces.append(&mut hanging);
 
     // Visual order, left to right; from the inline-start edge that is the
@@ -485,7 +594,7 @@ fn build_bidi(
         .map(|p| Level::new(p.level).unwrap_or_else(|_| Level::ltr()))
         .collect();
     let mut order = BidiInfo::reorder_visual(&levels);
-    if base % 2 == 1 {
+    if data.base_level % 2 == 1 {
         order.reverse();
     }
     let mut starts = vec![LayoutUnit::ZERO; pieces.len()];
@@ -493,6 +602,11 @@ fn build_bidi(
     for &p in &order {
         starts[p] = pos;
         pos = pos + pieces[p].width;
+    }
+
+    let mut glyph_starts = starts.clone();
+    for (owner, continuation) in continuations {
+        glyph_starts[owner] = glyph_starts[owner].min(starts[continuation]);
     }
 
     // Inline boxes: one fragment per visually contiguous group of members,
@@ -579,7 +693,7 @@ fn build_bidi(
     }
     for &p in &order {
         if let Some(mut r) = pieces[p].record.clone() {
-            r.inline_start = starts[p];
+            r.inline_start = glyph_starts[p];
             out.push((r, None, u32::MAX));
         }
     }

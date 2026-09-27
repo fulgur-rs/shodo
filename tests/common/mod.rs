@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use shodo::font::FontCollection;
+use shodo::font::{FontCollection, FontOptions};
 use shodo::limits::Limits;
 use shodo::node::{NodeId, TextSource};
 use shodo::style::{LineOptions, ParagraphStyle};
@@ -18,7 +18,13 @@ pub fn build(style: &ParagraphStyle, input: impl FnOnce(&mut ParagraphBuilder)) 
     input(&mut b);
     b.build(
         &mut LayoutContext::new(),
-        &FontCollection::new(&Limits::default()),
+        &FontCollection::with_options(
+            &Limits::default(),
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        ),
     )
     .unwrap()
 }

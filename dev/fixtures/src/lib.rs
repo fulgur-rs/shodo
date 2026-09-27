@@ -36,7 +36,7 @@ pub const FONTS: &[FontFixture] = &[
         family: "Shodo Fixture CJK",
         bytes: include_bytes!("../assets/fonts/cjk.otf"),
         face_index: 0,
-        sha256: "29878953ae982e3091aba0102ab5d774094ceb1092f2e3d181a6632bfdd962c3",
+        sha256: "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b",
     },
     FontFixture {
         id: "arabic",
@@ -136,8 +136,7 @@ pub fn load_fonts(limits: &Limits) -> Result<FixtureFonts, FontError> {
 
 impl FixtureCase {
     /// Build through the public paragraph API with the fixed case settings.
-    /// Paragraph shaping is the S0 stub until S2; do not render its codepoints
-    /// as glyph IDs from these real fonts.
+    /// Paragraph glyph IDs belong to the actual fixed fonts retained by each run.
     pub fn build(
         &self,
         cx: &mut LayoutContext,

@@ -26,22 +26,25 @@ bytes/face index/identity for renderers or browser font embedding. `FixtureFonts
 are runtime FontIds for that collection, ordered like `FONTS`; use stable string
 IDs in snapshots/recorded data, not those runtime IDs.
 
-The font-information example reads real S1 metrics and shaping data. The paragraph
-layout example still uses the S0 stub until S2 integrates real shaping: its output
-labels this limitation. These line counts are not real-font Chrome baselines, and
-stub codepoints must not be interpreted as these fonts' glyph IDs. The acceptance
-test directly shapes Arabic with harfrust to check retained GSUB/GPOS without
-pretending that the paragraph pipeline already does so.
+The font-information example reads real metrics and shaping data. The paragraph
+layout example shapes with the fixed fonts through shodo and reports real glyph
+counts. Corpus tests check actual face IDs, contextual Arabic shaping, Latin
+ligatures/kerning, source ranges and finite positions. These results are not
+Chrome reference baselines; a browser comparison needs its own recorder.
+
+`cargo run -p shodo-fixtures --example shape_timing` measures paragraph builds for
+all 12 cases before and after context reuse and `shrink_to(0)`, excluding font
+registration. See [the measurement record](../../docs/shaping-measurements.md).
 
 ## Data and provenance
 
 | ID | Derived family | Format / index | Bytes | Upstream source |
 | --- | --- | --- | ---: | --- |
 | latin | Shodo Fixture Latin | TrueType / 0 | 97,232 | Noto Sans Regular |
-| cjk | Shodo Fixture CJK | CFF OpenType / 0 | 209,988 | Noto Sans CJK JP Regular |
+| cjk | Shodo Fixture CJK | CFF OpenType / 0 | 210,332 | Noto Sans CJK JP Regular |
 | arabic | Shodo Fixture Arabic | TrueType / 0 | 96,900 | Noto Sans Arabic Regular |
 
-Total font data: 404,120 bytes (about 395 KiB). The originals total 17,277,400 bytes;
+Total font data: 404,464 bytes (about 395 KiB). The originals total 17,277,400 bytes;
 subsets retain the corpus, useful ASCII/Latin/combining, kana/CJK punctuation/full-width,
 and Arabic ranges rather than shipping that entire set. Other characters are not
 promised. Every visible corpus character is tested against its ordered font chain.
@@ -107,3 +110,5 @@ CI checks the workspace and offline asset integrity/names, and tests Rust 1.89. 
 never downloads font sources, regenerates fonts or updates expected outputs. FontTools
 is development-only; ordinary cargo users do not need Python. The separate
 `--rebuild` maintainer check verifies reproducibility against the original sources.
+
+The CJK subset also retains 水 (U+6C34) for size-adjust metric verification.

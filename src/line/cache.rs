@@ -1,14 +1,94 @@
-use super::{Scan, decoration, scan::scan};
+use super::{Scan, decoration, hyphen, scan::scan};
 use crate::analysis::units::{BreakClass, UnitKind};
 use crate::context::LayoutContext;
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::node::NodeId;
-use crate::output::BreakReason;
 use crate::paragraph::{
     AtomicSizes, BreakToken, FloatCursor, LineConstraint, Paragraph, ParagraphData,
 };
 use crate::style::LineOptions;
 use std::sync::Arc;
+
+/// Candidate costs need not increase with text position (fonts can change).
+/// The frontier retains the latest candidate for each increasing cost. Undo
+/// records restore dominated candidates when a shrinking scan drops its tail.
+#[derive(Default)]
+struct Candidates {
+    candidates: Vec<(usize, LayoutUnit)>,
+    frontier: Vec<usize>,
+    undo: Vec<std::ops::Range<usize>>,
+    popped: Vec<usize>,
+    active: usize,
+    fitting: usize,
+    #[cfg(test)]
+    visits: usize,
+}
+
+impl Candidates {
+    fn push(&mut self, end: usize, required: LayoutUnit) {
+        let begin = self.popped.len();
+        while self
+            .frontier
+            .last()
+            .is_some_and(|i| self.candidates[*i].1 >= required)
+        {
+            self.popped.push(self.frontier.pop().unwrap());
+            #[cfg(test)]
+            {
+                self.visits += 1;
+            }
+        }
+        self.undo.push(begin..self.popped.len());
+        self.frontier.push(self.candidates.len());
+        self.candidates.push((end, required));
+        self.active = self.candidates.len();
+        self.fitting = self.frontier.len();
+    }
+
+    fn select(&mut self, through: usize, limit: LayoutUnit) -> Option<usize> {
+        while self.active > 0 && self.candidates[self.active - 1].0 > through {
+            self.active -= 1;
+            #[cfg(test)]
+            {
+                self.visits += 1;
+            }
+            debug_assert_eq!(self.frontier.pop(), Some(self.active));
+            for i in self.popped[self.undo[self.active].clone()].iter().rev() {
+                self.frontier.push(*i);
+                #[cfg(test)]
+                {
+                    self.visits += 1;
+                }
+            }
+        }
+        self.fitting = self.fitting.min(self.frontier.len());
+        while self.fitting > 0 && self.candidates[self.frontier[self.fitting - 1]].1 > limit {
+            self.fitting -= 1;
+            #[cfg(test)]
+            {
+                self.visits += 1;
+            }
+        }
+        while self.fitting < self.frontier.len()
+            && self.candidates[self.frontier[self.fitting]].1 <= limit
+        {
+            self.fitting += 1;
+            #[cfg(test)]
+            {
+                self.visits += 1;
+            }
+        }
+        self.fitting
+            .checked_sub(1)
+            .map(|i| self.candidates[self.frontier[i]].0)
+    }
+
+    fn bytes(&self) -> usize {
+        self.candidates.capacity() * std::mem::size_of::<(usize, LayoutUnit)>()
+            + (self.frontier.capacity() + self.popped.capacity()) * std::mem::size_of::<usize>()
+            + self.undo.capacity() * std::mem::size_of::<std::ops::Range<usize>>()
+    }
+}
 
 pub(crate) struct PartialLine {
     data: Arc<ParagraphData>,
@@ -20,10 +100,11 @@ pub(crate) struct PartialLine {
     scan: Scan,
     prefix: Vec<LayoutUnit>,
     thresholds: Vec<(usize, LayoutUnit)>,
-    breaks: Vec<usize>,
+    breaks: Candidates,
+    emergencies: Candidates,
+    hyphens: Candidates,
     floats: Vec<(usize, NodeId, u32)>,
     threshold_cursor: usize,
-    break_cursor: usize,
     float_index: usize,
 }
 
@@ -39,13 +120,21 @@ impl std::fmt::Debug for PartialLine {
 impl PartialLine {
     pub(crate) fn bytes(&self) -> usize {
         std::mem::size_of::<Self>()
-            + self.scan.widths.capacity() * 4
+            + self.scan.widths.capacity() * std::mem::size_of::<LayoutUnit>()
+            + self.scan.overlays.capacity() * std::mem::size_of::<super::reshape::EdgeOverlay>()
             + self.prefix.capacity() * 4
             + self.thresholds.capacity() * std::mem::size_of::<(usize, LayoutUnit)>()
-            + self.breaks.capacity() * std::mem::size_of::<usize>()
+            + self.breaks.bytes()
+            + self.emergencies.bytes()
+            + self.hyphens.bytes()
             + self.floats.capacity() * std::mem::size_of::<(usize, NodeId, u32)>()
     }
-    fn end(&mut self, available: LayoutUnit, indent: LayoutUnit, sat: &mut Saturation) -> usize {
+    fn end(
+        &mut self,
+        available: LayoutUnit,
+        indent: LayoutUnit,
+        sat: &mut Saturation,
+    ) -> (usize, Option<usize>) {
         let limit = available.sub(indent, sat);
         while self.threshold_cursor > 0 && self.thresholds[self.threshold_cursor - 1].1 > limit {
             self.threshold_cursor -= 1;
@@ -57,20 +146,40 @@ impl PartialLine {
         }
         let bad = self.threshold_cursor;
         let Some(&(i, _)) = self.thresholds.get(bad) else {
-            return self.scan.end;
+            let hyphen = (self.scan.reason == crate::output::BreakReason::Regular)
+                .then(|| self.hyphens.candidates.last().map(|c| c.0))
+                .flatten()
+                .filter(|end| {
+                    (*end..self.scan.end).all(|at| {
+                        matches!(
+                            self.data.units[at].kind,
+                            UnitKind::Close { .. } | UnitKind::BidiControl
+                        )
+                    })
+                });
+            return (self.scan.end, hyphen);
         };
-        while self.break_cursor > 0 && self.breaks[self.break_cursor - 1] > i {
-            self.break_cursor -= 1;
-        }
-        while self.break_cursor < self.breaks.len() && self.breaks[self.break_cursor] <= i {
-            self.break_cursor += 1;
-        }
-        let before = self.break_cursor;
-        let mut end = if before > 0 {
-            self.breaks[before - 1]
-        } else {
-            self.breaks.first().copied().unwrap_or(self.scan.end)
-        };
+        let normal = self.breaks.select(i, limit);
+        let emergency = self.emergencies.select(i, limit);
+        let fitting_hyphen = self.hyphens.select(i, limit);
+        let preferred = normal.into_iter().chain(fitting_hyphen).max();
+        let mut end = preferred.or(emergency).unwrap_or_else(|| {
+            self.breaks
+                .candidates
+                .first()
+                .map(|c| c.0)
+                .into_iter()
+                .chain(self.emergencies.candidates.first().map(|c| c.0))
+                .chain(self.hyphens.candidates.first().map(|c| c.0))
+                .min()
+                .unwrap_or(self.scan.end)
+        });
+        let hyphen = self
+            .hyphens
+            .candidates
+            .binary_search_by_key(&end, |c| c.0)
+            .ok()
+            .map(|_| end);
         while end < self.scan.end
             && matches!(
                 self.data.units[end].kind,
@@ -79,7 +188,7 @@ impl PartialLine {
         {
             end += 1;
         }
-        end
+        (end, hyphen)
     }
 }
 
@@ -107,7 +216,7 @@ pub(super) fn resolve(
     });
     if !valid {
         cx.partial = None;
-        let scanned = scan(
+        let mut scanned = scan(
             &para.data, start, available, offset, indent, atomics, cx, sat,
         );
         #[cfg(test)]
@@ -125,28 +234,83 @@ pub(super) fn resolve(
         if !safe {
             return Ok(scanned);
         }
+        // A cached prefix always describes the unbroken text. The selected
+        // discretionary glyph is materialized afresh after choosing an end.
+        let natural_widths: Vec<_> = units
+            .iter()
+            .map(|u| {
+                super::scan::unit_width_from(
+                    data,
+                    u,
+                    data.units[start].text.start,
+                    LayoutUnit::ZERO,
+                    atomics,
+                    cx,
+                    sat,
+                )
+            })
+            .collect();
+        if natural_widths.iter().any(|w| *w < LayoutUnit::ZERO) {
+            return Ok(scanned);
+        }
+        let mut hyphens = Candidates::default();
         let mut prefix = vec![decoration::width(data, start, true, sat)];
         let mut thresholds = Vec::new();
-        let mut breaks = Vec::new();
+        let mut breaks = Candidates::default();
+        let mut emergencies = Candidates::default();
         let mut floats = Vec::new();
         let mut max = LayoutUnit::ZERO;
-        for (k, (u, w)) in units.iter().zip(&scanned.widths).enumerate() {
+        let mut hanging = LayoutUnit::ZERO;
+        for (k, (u, w)) in units.iter().zip(&natural_widths).enumerate() {
             if let UnitKind::Float { node, ordinal } = u.kind {
                 floats.push((start + k, node, ordinal));
             }
             let next = prefix[k].add(*w, sat);
             prefix.push(next);
+            let (delta, viable) = super::windows::candidate(data, start, start + k + 1, cx, sat);
+            let suffix = decoration::width(data, start + k + 1, false, sat);
+            let transparent = matches!(
+                u.kind,
+                UnitKind::Close { .. }
+                    | UnitKind::BidiControl
+                    | UnitKind::Float { .. }
+                    | UnitKind::Absolute { .. }
+            );
             if k > 0
                 && !matches!(
                     u.kind,
                     UnitKind::Cluster { space: true, .. } | UnitKind::ForcedBreak
                 )
             {
-                max = max.max(next.add(decoration::width(data, start + k + 1, false, sat), sat));
+                let extent = next.add(delta, sat).add(suffix, sat).sub(
+                    if transparent {
+                        hanging
+                    } else {
+                        LayoutUnit::ZERO
+                    },
+                    sat,
+                );
+                max = max.max(extent);
                 thresholds.push((start + k, max));
             }
-            if u.break_after == BreakClass::Allowed {
-                breaks.push(start + k + 1);
+            match u.kind {
+                UnitKind::Cluster { space: true, .. } => hanging = hanging.add(*w, sat),
+                _ if transparent => {}
+                _ => hanging = LayoutUnit::ZERO,
+            }
+            let required = next.add(delta, sat).sub(hanging, sat).add(suffix, sat);
+            if u.break_after == BreakClass::Hyphen {
+                if let Some(windows) = hyphen::line(data, start, start + k + 1, cx, sat) {
+                    let required = next
+                        .sub(hanging, sat)
+                        .add(suffix, sat)
+                        .add(super::windows::cost(&windows, start + k + 1, sat), sat);
+                    hyphens.push(start + k + 1, required);
+                }
+            } else if viable && u.break_after == BreakClass::Allowed {
+                breaks.push(start + k + 1, required);
+            } else if viable && u.break_after == BreakClass::Emergency {
+                emergencies.push(start + k + 1, required);
             }
         }
         if !sat.is_clean()
@@ -154,9 +318,12 @@ pub(super) fn resolve(
         {
             return Ok(scanned);
         }
+        // Keep the cold result intact until all cache safety checks pass.
+        scanned.widths = natural_widths;
+        scanned.overlays.clear();
+        scanned.prepared = false;
         cx.partial = Some(PartialLine {
             threshold_cursor: thresholds.len(),
-            break_cursor: breaks.len(),
             float_index: 0,
             data: Arc::clone(data),
             token,
@@ -168,12 +335,15 @@ pub(super) fn resolve(
             prefix,
             thresholds,
             breaks,
+            emergencies,
+            hyphens,
             floats,
         });
     }
     let p = cx.partial.as_mut().unwrap();
     p.cursor = constraint.floats_placed_through;
-    let end = p.end(available, indent, sat);
+    p.width = available;
+    let (end, selected_hyphen) = p.end(available, indent, sat);
     while p.floats.get(p.float_index).is_some_and(|(_, _, ordinal)| {
         constraint
             .floats_placed_through
@@ -184,7 +354,15 @@ pub(super) fn resolve(
     if let Some(&(i, node, ordinal)) = p.floats.get(p.float_index)
         && i < end
     {
-        return Err((node, ordinal, indent.add(p.prefix[i - start], sat)));
+        let position = indent.add(p.prefix[i - start], sat);
+        let data = Arc::clone(&p.data);
+        let windows = selected_hyphen
+            .and_then(|h| hyphen::line(&data, start, h, cx, sat))
+            .unwrap_or_else(|| super::windows::measure(&data, start, end, cx, sat));
+        let delta = windows.iter().fold(LayoutUnit::ZERO, |sum, window| {
+            sum.add(window.delta(i, sat), sat)
+        });
+        return Err((node, ordinal, position.add(delta, sat)));
     }
     let mut hang_start = end;
     let mut trailing = LayoutUnit::ZERO;
@@ -202,23 +380,62 @@ pub(super) fn resolve(
             _ => break,
         }
     }
-    Ok(Scan {
+    // Release the mutable cache borrow before accessing the context shaper.
+    let data = Arc::clone(&p.data);
+    let mut result = Scan {
+        prepared: false,
+        overlays: Vec::new(),
         end,
         reason: if end == p.scan.end {
             p.scan.reason
         } else {
-            BreakReason::Regular
+            super::soft_break_reason(&p.data, start, end)
         },
         widths: p.scan.widths[..end - start].to_vec(),
         content: p.prefix[end - start]
             .sub(trailing, sat)
             .add(decoration::width(&p.data, end, false, sat), sat),
         hang_start,
-    })
+    };
+    if let Some(end) = selected_hyphen
+        && let Some(windows) = hyphen::line(&data, start, end, cx, sat)
+    {
+        super::reshape::apply_windows(&data, start, &mut result, windows, cx, sat);
+    }
+    Ok(result)
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn varying_hyphen_costs_choose_latest_fitting_break_with_linear_shrink_work() {
+        use super::Candidates;
+        use crate::geometry::LayoutUnit;
+        for count in [128, 1024, 4096] {
+            let mut hyphens = Candidates::default();
+            for end in 1..=count {
+                // A varying font/size can make a later hyphen cheaper.
+                let cost = (end * 37 % 101 + end / 4) as i32;
+                hyphens.push(end, LayoutUnit::from_raw(cost));
+            }
+            for through in (0..=count).rev() {
+                let limit = LayoutUnit::from_raw((through / 3) as i32);
+                let expected = hyphens
+                    .candidates
+                    .iter()
+                    .filter(|(end, cost)| *end <= through && *cost <= limit)
+                    .map(|(end, _)| *end)
+                    .max();
+                assert_eq!(hyphens.select(through, limit), expected);
+            }
+            assert!(
+                hyphens.visits <= count * 6,
+                "{} for {count}",
+                hyphens.visits
+            );
+        }
+    }
+
     #[test]
     fn cache_matches_cold_layout_across_widths_options_atomics_and_rewinds() {
         use crate::limits::Limits;

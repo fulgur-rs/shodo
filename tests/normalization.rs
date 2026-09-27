@@ -12,7 +12,16 @@ fn constraint_block_offset_is_normalized() {
     builder.push_text(TextSource::Generated { node: NodeId(1) }, "a");
     let mut cx = LayoutContext::new();
     let p = builder
-        .build(&mut cx, &FontCollection::new(&Limits::default()))
+        .build(
+            &mut cx,
+            &FontCollection::with_options(
+                &Limits::default(),
+                shodo::font::FontOptions {
+                    system_fonts: false,
+                    ..Default::default()
+                },
+            ),
+        )
         .unwrap();
     for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
         let c = LineConstraint {
@@ -47,7 +56,16 @@ fn atomic_geometry_never_exposes_nonfinite_input() {
     );
     let mut cx = LayoutContext::new();
     let p = b
-        .build(&mut cx, &FontCollection::new(&Limits::default()))
+        .build(
+            &mut cx,
+            &FontCollection::with_options(
+                &Limits::default(),
+                shodo::font::FontOptions {
+                    system_fonts: false,
+                    ..Default::default()
+                },
+            ),
+        )
         .unwrap();
     for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
         let mut atomics = AtomicSizes::new();
@@ -110,7 +128,16 @@ fn negative_atomic_dimensions_preserve_signed_margins_and_baseline() {
     );
     let mut cx = LayoutContext::new();
     let p = b
-        .build(&mut cx, &FontCollection::new(&Limits::default()))
+        .build(
+            &mut cx,
+            &FontCollection::with_options(
+                &Limits::default(),
+                shodo::font::FontOptions {
+                    system_fonts: false,
+                    ..Default::default()
+                },
+            ),
+        )
         .unwrap();
     let mut atomics = AtomicSizes::new();
     atomics.insert(
@@ -160,7 +187,16 @@ fn caller_dimensions_round_to_nearest_unit() {
     );
     let mut cx = LayoutContext::new();
     let p = b
-        .build(&mut cx, &FontCollection::new(&Limits::default()))
+        .build(
+            &mut cx,
+            &FontCollection::with_options(
+                &Limits::default(),
+                shodo::font::FontOptions {
+                    system_fonts: false,
+                    ..Default::default()
+                },
+            ),
+        )
         .unwrap();
     let mut atomics = AtomicSizes::new();
     atomics.insert(

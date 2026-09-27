@@ -1,12 +1,19 @@
 //! Text analysis: white-space processing and the data line breaking uses.
 
+pub(crate) mod bidi;
+pub(crate) mod breaks;
+pub(crate) mod itemize;
+mod transform;
+mod transform_context;
 pub(crate) mod units;
-mod whitespace;
+pub(crate) mod whitespace;
+mod whitespace_context;
 
 use std::ops::Range;
 
 use crate::node::{InlineEdges, NodeId, OutOfFlowKind};
 
+pub(crate) use transform::transform;
 pub(crate) use whitespace::process;
 
 /// An item of the processed paragraph. `text` indexes the processed text.
@@ -39,3 +46,7 @@ pub(crate) enum ItemKind {
     Tab,
     BidiControl,
 }
+
+mod scripts;
+
+pub(crate) mod language;

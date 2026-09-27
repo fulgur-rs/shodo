@@ -1,0 +1,668 @@
+//! Whole-IFC segmentation with CSS tailoring and explicit emergency breaks.
+use crate::analysis::units::BreakClass;
+use crate::analysis::whitespace::Processed;
+use crate::analysis::{Item, ItemKind};
+use crate::limits::{WarningKind, WarningSink};
+use crate::style::{Hyphens, InlineStyle, LineBreak, OverflowWrap, TextWrapMode, WordBreak};
+use icu_locale_core::LanguageIdentifier;
+use icu_properties::{CodePointMapData, CodePointSetData, props};
+use icu_segmenter::options::{LineBreakOptions, LineBreakStrictness, LineBreakWordOption};
+use icu_segmenter::{GraphemeClusterSegmenter, LineSegmenter};
+use std::collections::BTreeSet;
+use std::ops::Range;
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BreakOpportunity {
+    pub(crate) offset: u32,
+    pub(crate) class: BreakClass,
+    pub(crate) min_content: bool,
+}
+
+pub(crate) struct BreakAnalysis {
+    pub(crate) graphemes: Vec<u32>,
+    pub(crate) opportunities: Vec<BreakOpportunity>,
+}
+
+impl BreakAnalysis {
+    pub(crate) fn at(&self, offset: u32) -> BreakOpportunity {
+        self.opportunities
+            .binary_search_by_key(&offset, |o| o.offset)
+            .ok()
+            .map_or(
+                BreakOpportunity {
+                    offset,
+                    class: BreakClass::Prohibited,
+                    min_content: false,
+                },
+                |i| self.opportunities[i],
+            )
+    }
+}
+
+struct ProjectionSpan {
+    original: Range<u32>,
+    projected: Range<u32>,
+}
+struct Projection {
+    text: String,
+    spans: Vec<ProjectionSpan>,
+}
+impl Projection {
+    fn new(input: &Processed) -> Self {
+        let mut p = Self {
+            text: String::new(),
+            spans: Vec::new(),
+        };
+        let bidi_control = CodePointSetData::new::<props::BidiControl>();
+        for item in &input.items {
+            if matches!(
+                item.kind,
+                ItemKind::OutOfFlow { .. } | ItemKind::BidiControl
+            ) {
+                continue;
+            }
+            for (i, c) in
+                input.text[item.text.start as usize..item.text.end as usize].char_indices()
+            {
+                if bidi_control.contains(c) {
+                    continue;
+                }
+                let original = item.text.start + i as u32;
+                let begin = p.text.len() as u32;
+                p.text.push(c);
+                let next = ProjectionSpan {
+                    original: original..original + c.len_utf8() as u32,
+                    projected: begin..p.text.len() as u32,
+                };
+                if let Some(last) = p.spans.last_mut()
+                    && last.original.end == next.original.start
+                    && last.projected.end == next.projected.start
+                {
+                    last.original.end = next.original.end;
+                    last.projected.end = next.projected.end;
+                } else {
+                    p.spans.push(next);
+                }
+            }
+        }
+        p
+    }
+    // A break before a transparent marker belongs to the preceding content.
+    fn upstream(&self, offset: usize) -> u32 {
+        let index = self
+            .spans
+            .partition_point(|s| s.projected.end < offset as u32);
+        self.spans
+            .get(index)
+            .map_or(0, |s| s.original.start + offset as u32 - s.projected.start)
+    }
+}
+
+/// Common input grapheme cuts include the transparent-marker gap at a cut.
+/// A transform can consume a combining scalar beyond such a marker; only
+/// these source cuts may switch from the alternate to the normal text set.
+pub(crate) fn source_cursor_ranges(input: &Processed) -> Vec<std::ops::RangeInclusive<u32>> {
+    let projection = Projection::new(input);
+    GraphemeClusterSegmenter::new()
+        .segment_str(&projection.text)
+        .map(|offset| {
+            let before = if offset == 0 {
+                0
+            } else {
+                projection.upstream(offset)
+            };
+            let index = projection
+                .spans
+                .partition_point(|s| s.projected.end <= offset as u32);
+            let after = projection
+                .spans
+                .get(index)
+                .map_or(input.text.len() as u32, |s| {
+                    s.original.start + offset as u32 - s.projected.start
+                });
+            before..=after
+        })
+        .collect()
+}
+
+// Only these options affect ICU's rule selection: at most4*3*2=24 full
+// segmenter passes, independently of the number of distinct inline styles.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct Profile {
+    strict: u8,
+    word: u8,
+    ja_zh: bool,
+}
+impl Profile {
+    fn new(s: &InlineStyle) -> Self {
+        let lang = s
+            .lang
+            .as_deref()
+            .unwrap_or("")
+            .split('-')
+            .next()
+            .unwrap_or("");
+        Self {
+            strict: match s.line_break {
+                LineBreak::Auto | LineBreak::Normal => 0,
+                LineBreak::Loose => 1,
+                LineBreak::Strict => 2,
+                LineBreak::Anywhere => 3,
+            },
+            word: match s.word_break {
+                WordBreak::Normal | WordBreak::AutoPhrase => 0,
+                WordBreak::BreakAll => 1,
+                WordBreak::KeepAll => 2,
+            },
+            ja_zh: lang.eq_ignore_ascii_case("ja") || lang.eq_ignore_ascii_case("zh"),
+        }
+    }
+}
+
+fn item_before(items: &[Item], offset: u32) -> Option<&Item> {
+    let first = items.partition_point(|item| item.text.end < offset);
+    items[first..]
+        .iter()
+        .take_while(|item| item.text.start < offset)
+        .find(|item| {
+            !item.text.is_empty()
+                && !matches!(
+                    item.kind,
+                    ItemKind::OutOfFlow { .. } | ItemKind::BidiControl
+                )
+        })
+}
+
+pub(crate) fn analyze_breaks(
+    input: &Processed,
+    styles: &[InlineStyle],
+    warnings: &mut WarningSink,
+) -> BreakAnalysis {
+    let projection = Projection::new(input);
+    let segmenter = GraphemeClusterSegmenter::new();
+    let graphemes: Vec<u32> = segmenter
+        .segment_str(&projection.text)
+        .map(|at| projection.upstream(at))
+        .collect();
+    let mut opportunities: Vec<_> = graphemes
+        .iter()
+        .map(|offset| BreakOpportunity {
+            offset: *offset,
+            class: BreakClass::Prohibited,
+            min_content: false,
+        })
+        .collect();
+    let profiles: Vec<_> = styles.iter().map(Profile::new).collect();
+    let active: BTreeSet<_> = input
+        .items
+        .iter()
+        .filter(|i| {
+            !i.text.is_empty()
+                && !matches!(i.kind, ItemKind::OutOfFlow { .. } | ItemKind::BidiControl)
+        })
+        .map(|i| profiles[i.style as usize])
+        .collect();
+    for s in styles {
+        if s.word_break == WordBreak::AutoPhrase {
+            warnings.push(
+                WarningKind::Unsupported,
+                "phrase segmentation unavailable; using normal word breaks",
+            );
+        }
+        if s.hyphens == Hyphens::Auto {
+            warnings.push(
+                WarningKind::Unsupported,
+                "automatic hyphenation unavailable; using manual soft hyphens",
+            );
+        }
+    }
+    let ja: LanguageIdentifier = "ja".parse().expect("constant language");
+    for profile in active {
+        let mut options = LineBreakOptions::default();
+        options.strictness = Some(match profile.strict {
+            0 => LineBreakStrictness::Normal,
+            1 => LineBreakStrictness::Loose,
+            2 => LineBreakStrictness::Strict,
+            _ => LineBreakStrictness::Anywhere,
+        });
+        options.word_option = Some(match profile.word {
+            1 => LineBreakWordOption::BreakAll,
+            2 => LineBreakWordOption::KeepAll,
+            _ => LineBreakWordOption::Normal,
+        });
+        options.content_locale = profile.ja_zh.then_some(&ja);
+        #[cfg(feature = "complex-scripts")]
+        let line = LineSegmenter::new_auto(options);
+        #[cfg(not(feature = "complex-scripts"))]
+        let line = LineSegmenter::new_for_non_complex_scripts(options);
+        for at in line.segment_str(&projection.text) {
+            let offset = projection.upstream(at);
+            if let Some(item) = item_before(&input.items, offset)
+                && profiles[item.style as usize] == profile
+                && let Ok(index) = graphemes.binary_search(&offset)
+            {
+                opportunities[index].class = BreakClass::Allowed;
+                opportunities[index].min_content = true;
+            }
+        }
+    }
+    let lb = CodePointMapData::<props::LineBreak>::new();
+    let logical_end = projection.upstream(projection.text.len());
+    let mut indivisible_index = 0;
+    let mut following_span = 0;
+    let mut following_item = 0;
+    for o in &mut opportunities {
+        if o.offset == 0 {
+            o.class = BreakClass::Prohibited;
+            o.min_content = false;
+            continue;
+        }
+        let Some(item) = item_before(&input.items, o.offset) else {
+            continue;
+        };
+        let s = &styles[item.style as usize];
+        let last = input.text[item.text.start as usize..o.offset as usize]
+            .chars()
+            .next_back();
+        if matches!(item.kind, ItemKind::ForcedBreak)
+            || last.is_some_and(|c| {
+                matches!(
+                    lb.get(c),
+                    props::LineBreak::MandatoryBreak | props::LineBreak::NextLine
+                )
+            })
+        {
+            o.class = BreakClass::Mandatory;
+            o.min_content = true;
+        } else if o.offset == logical_end || s.text_wrap_mode == TextWrapMode::NoWrap {
+            o.class = BreakClass::Prohibited;
+            o.min_content = false;
+        } else if last == Some('\u{AD}') && s.line_break != LineBreak::Anywhere {
+            while projection
+                .spans
+                .get(following_span)
+                .is_some_and(|span| span.original.end <= o.offset)
+            {
+                following_span += 1;
+            }
+            let mandatory_follows = projection.spans.get(following_span).is_some_and(|span| {
+                let pos = span.original.start.max(o.offset);
+                while input
+                    .items
+                    .get(following_item)
+                    .is_some_and(|item| item.text.end <= pos)
+                {
+                    following_item += 1;
+                }
+                input.items.get(following_item).is_some_and(|item| {
+                    matches!(item.kind, ItemKind::ForcedBreak | ItemKind::BlockInInline)
+                }) || input.text[pos as usize..].chars().next().is_some_and(|c| {
+                    matches!(
+                        lb.get(c),
+                        props::LineBreak::MandatoryBreak | props::LineBreak::NextLine
+                    )
+                })
+            });
+            o.class = if s.hyphens == Hyphens::None || mandatory_follows {
+                BreakClass::Prohibited
+            } else {
+                BreakClass::Hyphen
+            };
+            o.min_content = o.class == BreakClass::Hyphen;
+        } else if o.class == BreakClass::Prohibited {
+            #[cfg(not(feature = "complex-scripts"))]
+            if last.is_some_and(|c| lb.get(c) == props::LineBreak::ComplexContext) {
+                o.class = BreakClass::Allowed;
+                o.min_content = true;
+            }
+            if o.class == BreakClass::Prohibited && s.overflow_wrap != OverflowWrap::Normal {
+                o.class = BreakClass::Emergency;
+                o.min_content = s.overflow_wrap == OverflowWrap::Anywhere;
+            }
+        }
+        // Expanded transform scalars remain a single typographic unit even
+        // with optional DOM mapping turned off.
+        while input
+            .indivisible
+            .get(indivisible_index)
+            .is_some_and(|r| r.end <= o.offset)
+        {
+            indivisible_index += 1;
+        }
+        if input
+            .indivisible
+            .get(indivisible_index)
+            .is_some_and(|r| r.start < o.offset && o.offset < r.end)
+        {
+            o.class = BreakClass::Prohibited;
+            o.min_content = false;
+        }
+    }
+    BreakAnalysis {
+        graphemes,
+        opportunities,
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::{BreakAnalysis, analyze_breaks};
+    use crate::analysis::units::BreakClass;
+    use crate::analysis::{process, transform};
+    use crate::builder::ParagraphBuilder;
+    use crate::limits::{Limits, WarningSink};
+    use crate::node::{InlineEdges, NodeId, TextSource};
+    use crate::style::{
+        Hyphens, InlineStyle, LineBreak, OverflowWrap, ParagraphStyle, TextTransform, TextWrapMode,
+        WhiteSpaceCollapse, WordBreak,
+    };
+
+    fn analyze(text: &str, style: InlineStyle, mapping: bool) -> BreakAnalysis {
+        let limits = Limits::default();
+        let mut b = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: style,
+                ..ParagraphStyle::default()
+            },
+            &limits,
+        );
+        b.with_offset_mapping(mapping).push_text(
+            TextSource::Dom {
+                node: NodeId(1),
+                offset: 0,
+            },
+            text,
+        );
+        let processed = process(&b.text, &b.items, &b.styles, mapping, &limits).unwrap();
+        let mut warnings = WarningSink::default();
+        let processed = transform(processed, &b.styles, &limits, &mut warnings).unwrap();
+        analyze_breaks(&processed, &b.styles, &mut warnings)
+    }
+
+    #[test]
+    fn strictness_and_locale() {
+        let ja = InlineStyle {
+            lang: Some("ja".to_owned()),
+            ..InlineStyle::default()
+        };
+        assert_eq!(
+            analyze(
+                "あぁい",
+                InlineStyle {
+                    line_break: LineBreak::Strict,
+                    ..ja.clone()
+                },
+                true
+            )
+            .at(3)
+            .class,
+            BreakClass::Prohibited
+        );
+        assert_eq!(
+            analyze(
+                "あぁい",
+                InlineStyle {
+                    line_break: LineBreak::Loose,
+                    ..ja
+                },
+                true
+            )
+            .at(3)
+            .class,
+            BreakClass::Allowed
+        );
+    }
+
+    #[test]
+    fn break_all_keep_all_anywhere() {
+        assert_eq!(
+            analyze("abc", InlineStyle::default(), true).at(1).class,
+            BreakClass::Prohibited
+        );
+        assert_eq!(
+            analyze(
+                "abc",
+                InlineStyle {
+                    word_break: WordBreak::BreakAll,
+                    ..InlineStyle::default()
+                },
+                true
+            )
+            .at(1)
+            .class,
+            BreakClass::Allowed
+        );
+        assert_eq!(
+            analyze("日本語", InlineStyle::default(), true).at(3).class,
+            BreakClass::Allowed
+        );
+        assert_eq!(
+            analyze(
+                "日本語",
+                InlineStyle {
+                    word_break: WordBreak::KeepAll,
+                    ..InlineStyle::default()
+                },
+                true
+            )
+            .at(3)
+            .class,
+            BreakClass::Prohibited
+        );
+        assert_eq!(
+            analyze(
+                "a\u{A0}b",
+                InlineStyle {
+                    line_break: LineBreak::Anywhere,
+                    word_break: WordBreak::KeepAll,
+                    ..InlineStyle::default()
+                },
+                true
+            )
+            .at(1)
+            .class,
+            BreakClass::Allowed
+        );
+    }
+
+    #[test]
+    fn nowrap_no_soft_breaks() {
+        let p = analyze(
+            "ab\ncd",
+            InlineStyle {
+                word_break: WordBreak::BreakAll,
+                overflow_wrap: OverflowWrap::Anywhere,
+                text_wrap_mode: TextWrapMode::NoWrap,
+                white_space_collapse: WhiteSpaceCollapse::Preserve,
+                ..InlineStyle::default()
+            },
+            true,
+        );
+        assert_eq!(p.at(1).class, BreakClass::Prohibited);
+        assert_eq!(p.at(3).class, BreakClass::Mandatory);
+        let p = analyze("a\u{2028}b", InlineStyle::default(), true);
+        assert_eq!(p.at(4).class, BreakClass::Mandatory);
+    }
+
+    #[test]
+    fn overflow_wrap_intrinsic_distinction() {
+        let p = analyze(
+            "abc",
+            InlineStyle {
+                overflow_wrap: OverflowWrap::BreakWord,
+                ..InlineStyle::default()
+            },
+            true,
+        );
+        assert_eq!(p.at(1).class, BreakClass::Emergency);
+        assert!(!p.at(1).min_content);
+        let p = analyze(
+            "abc",
+            InlineStyle {
+                overflow_wrap: OverflowWrap::Anywhere,
+                ..InlineStyle::default()
+            },
+            true,
+        );
+        assert_eq!(p.at(1).class, BreakClass::Emergency);
+        assert!(p.at(1).min_content);
+    }
+
+    #[test]
+    fn manual_soft_hyphen() {
+        assert_eq!(
+            analyze("ab\u{AD}cd", InlineStyle::default(), true)
+                .at(4)
+                .class,
+            BreakClass::Hyphen
+        );
+        assert_eq!(
+            analyze(
+                "ab\u{AD}cd",
+                InlineStyle {
+                    hyphens: Hyphens::None,
+                    ..InlineStyle::default()
+                },
+                true
+            )
+            .at(4)
+            .class,
+            BreakClass::Prohibited
+        );
+        assert_eq!(
+            analyze(
+                "ab\u{AD}cd",
+                InlineStyle {
+                    line_break: LineBreak::Anywhere,
+                    ..InlineStyle::default()
+                },
+                true
+            )
+            .at(4)
+            .class,
+            BreakClass::Allowed
+        );
+    }
+
+    #[test]
+    fn nbsp_word_joiner_zwj_graphemes() {
+        let p = analyze(
+            "e\u{301}👩\u{200D}💻 x",
+            InlineStyle {
+                line_break: LineBreak::Anywhere,
+                ..InlineStyle::default()
+            },
+            true,
+        );
+        assert_eq!(p.graphemes, vec![0, 3, 14, 15, 16]);
+        assert_eq!(p.at(3).class, BreakClass::Allowed);
+        assert_eq!(p.at(7).class, BreakClass::Prohibited);
+        for (text, at) in [("ab\u{A0}cd", 2), ("ab\u{A0}cd", 4), ("ab\u{2060}cd", 2)] {
+            assert_eq!(
+                analyze(text, InlineStyle::default(), true).at(at).class,
+                BreakClass::Prohibited
+            );
+        }
+    }
+
+    #[test]
+    fn complex_scripts_feature_modes() {
+        let p = analyze("ภาษาไทย", InlineStyle::default(), true);
+        #[cfg(feature = "complex-scripts")]
+        {
+            assert_eq!(p.at(3).class, BreakClass::Prohibited);
+            assert_eq!(p.at(12).class, BreakClass::Allowed);
+        }
+        #[cfg(not(feature = "complex-scripts"))]
+        {
+            for at in &p.graphemes[1..p.graphemes.len() - 1] {
+                assert_eq!(p.at(*at).class, BreakClass::Allowed);
+            }
+        }
+    }
+
+    #[test]
+    fn expanded_transform_is_indivisible_without_dom_mapping() {
+        for mapping in [true, false] {
+            let p = analyze(
+                "ßx",
+                InlineStyle {
+                    text_transform: TextTransform::Uppercase,
+                    line_break: LineBreak::Anywhere,
+                    ..InlineStyle::default()
+                },
+                mapping,
+            );
+            assert_eq!(p.at(1).class, BreakClass::Prohibited);
+            assert_eq!(p.at(2).class, BreakClass::Allowed);
+        }
+    }
+
+    #[test]
+    fn many_styles_shared_segmenter_passes() {
+        let limits = Limits::default();
+        let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+        for i in 0..4096 {
+            let s = InlineStyle {
+                font_size: 16.0 + i as f32,
+                ..InlineStyle::default()
+            };
+            b.open_inline(NodeId(i + 1), &s, InlineEdges::default())
+                .push_text(
+                    TextSource::Generated {
+                        node: NodeId(i + 10000),
+                    },
+                    "a",
+                )
+                .close_inline();
+        }
+        let p = process(&b.text, &b.items, &b.styles, false, &limits).unwrap();
+        let p = analyze_breaks(&p, &b.styles, &mut WarningSink::default());
+        assert_eq!(p.graphemes.len(), 4097);
+        assert!(
+            p.opportunities
+                .iter()
+                .all(|o| o.class == BreakClass::Prohibited)
+        );
+    }
+    #[test]
+    fn final_forced_separator_stays_mandatory() {
+        let s = InlineStyle {
+            white_space_collapse: WhiteSpaceCollapse::Preserve,
+            ..Default::default()
+        };
+        assert_eq!(analyze("a\n", s, true).at(2).class, BreakClass::Mandatory);
+    }
+
+    #[test]
+    fn nowrap_atomic_and_tab_units_do_not_introduce_soft_breaks() {
+        let limits = Limits::default();
+        let root = InlineStyle {
+            text_wrap_mode: TextWrapMode::NoWrap,
+            white_space_collapse: WhiteSpaceCollapse::Preserve,
+            ..Default::default()
+        };
+        let style = ParagraphStyle {
+            root: root.clone(),
+            ..Default::default()
+        };
+        let mut b = ParagraphBuilder::new(&style, &limits);
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "a\t")
+            .push_atomic(NodeId(2), &root, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(3) }, "b");
+        let fonts = crate::font::FontCollection::with_options(
+            &limits,
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        let mut cx = crate::LayoutContext::new();
+        let p = b.build(&mut cx, &fonts).unwrap();
+        assert!(
+            p.data
+                .units
+                .iter()
+                .all(|u| u.break_after == BreakClass::Prohibited)
+        );
+    }
+}

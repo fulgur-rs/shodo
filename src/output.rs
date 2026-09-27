@@ -22,7 +22,7 @@ pub enum BreakReason {
     Regular,
     /// At a forced break (`<br>`, preserved newline).
     Forced,
-    /// Inside a word because of `overflow-wrap` (not produced yet).
+    /// Inside a word because of `overflow-wrap`.
     Emergency,
     /// Before a block-level box inside inline content.
     BlockInInline,
@@ -38,6 +38,7 @@ pub struct Line {
     pub(crate) break_token: BreakToken,
     pub(crate) reason: BreakReason,
     pub(crate) units: Range<u32>,
+    text_range: Range<u32>,
     pub(crate) inline_size: LayoutUnit,
     pub(crate) block_size: LayoutUnit,
     pub(crate) baseline: LayoutUnit,
@@ -50,6 +51,9 @@ pub struct Line {
     pub(crate) empty: bool,
     pub(crate) positions: Option<(u32, Vec<LayoutUnit>)>,
     pub(crate) overlay: Option<Box<GlyphStore>>,
+    pub(crate) overlay_clusters: Box<[OverlayCluster]>,
+    pub(crate) overlay_runs: Box<[crate::shape::ShapedRun]>,
+    pub(crate) pending_overlays: Vec<crate::line::reshape::EdgeOverlay>,
 }
 
 impl fmt::Debug for Line {
@@ -81,6 +85,10 @@ impl Line {
             _ => 0,
         };
         let origin_units = token.unit as usize..scan.end;
+        let visible_hyphen = scan
+            .overlays
+            .iter()
+            .find_map(|w| w.hyphen.as_ref().map(|text| text.start));
         let records = fragments::build(
             data,
             origin_units,
@@ -88,9 +96,22 @@ impl Line {
             &scan.widths,
             origin,
             atomics,
+            visible_hyphen,
         );
         let metrics =
             crate::line::metrics::measure(data, token.unit as usize..scan.end, &records, sat);
+        // Resource-limited whole clusters can overlap following transparent
+        // markers in source order. Their complete source extent still belongs
+        // to this line. Cache it so public range queries remain constant-time.
+        let text_range = data.units[token.unit as usize..scan.end]
+            .iter()
+            .fold(None, |range, u| {
+                Some(range.map_or_else(
+                    || u.text.clone(),
+                    |range: Range<u32>| range.start.min(u.text.start)..range.end.max(u.text.end),
+                ))
+            })
+            .unwrap_or(0..0);
         Line {
             data: Arc::clone(&para.data),
             break_token: BreakToken {
@@ -100,6 +121,7 @@ impl Line {
             },
             reason: scan.reason,
             units: token.unit..scan.end as u32,
+            text_range,
             inline_size: scan.content,
             block_size: metrics.block_size,
             baseline: metrics.baseline,
@@ -112,6 +134,9 @@ impl Line {
             empty: metrics.empty,
             positions: None,
             overlay: None,
+            overlay_clusters: Box::default(),
+            overlay_runs: Box::default(),
+            pending_overlays: scan.overlays,
         }
     }
 
@@ -161,13 +186,20 @@ impl Line {
         }
     }
 
-    /// Range of the paragraph's processed text covered by this line.
+    /// The complete processed text set used by this line. `::first-line`
+    /// transforms can make this differ from [`Paragraph::text`].
+    pub fn text(&self) -> &str {
+        &self.data.text
+    }
+
+    /// Mapping for this line's processed text set, when enabled at build.
+    pub fn offset_mapping(&self) -> Option<&crate::mapping::OffsetMapping> {
+        self.data.mapping.as_ref()
+    }
+
+    /// Range of [`Self::text`] covered by this line.
     pub fn text_range(&self) -> Range<usize> {
-        let units = &self.data.units[self.units.start as usize..self.units.end as usize];
-        match (units.first(), units.last()) {
-            (Some(first), Some(last)) => first.text.start as usize..last.text.end as usize,
-            _ => 0..0,
-        }
+        self.text_range.start as usize..self.text_range.end as usize
     }
 
     /// Floats reported for this line whose anchors ended up after its end.
@@ -253,6 +285,12 @@ pub struct Cluster {
     pub shaping_advance: f32,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct OverlayCluster {
+    pub(crate) glyphs: Range<u32>,
+    pub(crate) text: Range<u32>,
+}
+
 impl<'a> GlyphRunView<'a> {
     fn data(&self) -> &'a ParagraphData {
         &self.line.data
@@ -262,12 +300,40 @@ impl<'a> GlyphRunView<'a> {
         self.data().items[self.item as usize].node
     }
 
+    fn run_data(&self) -> &'a crate::shape::ShapedRun {
+        match self.source {
+            GlyphSource::Overlay { run: Some(run), .. } => &self.line.overlay_runs[run as usize],
+            _ => &self.data().runs[self.run as usize],
+        }
+    }
+
     pub fn font(&self) -> FontId {
-        self.data().runs[self.run as usize].font
+        self.run_data().font
     }
 
     pub fn font_size(&self) -> f32 {
-        self.data().runs[self.run as usize].font_size
+        self.run_data().font_size
+    }
+
+    /// Normalized variation coordinates in the face's axis order.
+    pub fn normalized_coords(&self) -> &'a [crate::font::NormalizedCoord] {
+        &self.run_data().instance.coords
+    }
+    pub fn variations(&self) -> &'a [crate::style::FontVariation] {
+        &self.run_data().instance.variations
+    }
+    pub fn embolden(&self) -> bool {
+        self.run_data().instance.embolden
+    }
+    /// Synthetic slant supplied by font matching, in degrees.
+    pub fn skew(&self) -> Option<f32> {
+        self.run_data().instance.skew
+    }
+    pub fn script(&self) -> [u8; 4] {
+        self.run_data().instance.script
+    }
+    pub fn language(&self) -> Option<&'a str> {
+        self.run_data().instance.language.as_deref()
     }
 
     pub fn font_data(&self) -> Option<FontData> {
@@ -305,37 +371,56 @@ impl<'a> GlyphRunView<'a> {
 
     pub fn clusters(&self) -> impl ExactSizeIterator<Item = Cluster> + '_ {
         let data = self.data();
-        let begin = data.glyph_clusters[self.glyphs.0 as usize] as usize;
-        let end = data.glyph_clusters[(self.glyphs.1 - 1) as usize] as usize;
-        data.clusters[begin..=end].iter().map(|unit| {
+        let (begin, count) = match self.source {
+            GlyphSource::Shared if self.glyphs.0 < self.glyphs.1 => {
+                let begin = data.glyph_clusters[self.glyphs.0 as usize] as usize;
+                let end = data.glyph_clusters[(self.glyphs.1 - 1) as usize] as usize;
+                (begin, end + 1 - begin)
+            }
+            GlyphSource::Shared => (0, 0),
+            GlyphSource::Overlay { clusters, .. } => {
+                (clusters.0 as usize, (clusters.1 - clusters.0) as usize)
+            }
+        };
+        (0..count).map(move |i| {
             #[cfg(test)]
             data.cluster_queries
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let u = &data.units[*unit as usize];
-            let crate::analysis::units::UnitKind::Cluster { glyphs, .. } = &u.kind else {
-                unreachable!()
+            let (glyphs, text, store) = match self.source {
+                GlyphSource::Shared => {
+                    let u = &data.units[data.clusters[begin + i] as usize];
+                    let crate::analysis::units::UnitKind::Cluster { glyphs, .. } = &u.kind else {
+                        unreachable!()
+                    };
+                    (glyphs.clone(), u.shaping_text().clone(), &data.glyphs)
+                }
+                GlyphSource::Overlay { .. } => {
+                    let c = &self.line.overlay_clusters[begin + i];
+                    (
+                        c.glyphs.clone(),
+                        c.text.clone(),
+                        self.line.overlay.as_deref().expect("overlay store"),
+                    )
+                }
             };
             Cluster {
-                text_range: u.text.start as usize..u.text.end as usize,
+                text_range: text.start as usize..text.end as usize,
                 advance: glyphs.clone().map(|g| self.glyph(g).advance).sum(),
-                shaping_advance: glyphs
-                    .clone()
-                    .map(|g| data.glyphs.advance[g as usize].to_f32())
-                    .sum(),
+                shaping_advance: glyphs.map(|g| store.advance[g as usize].to_f32()).sum(),
             }
         })
     }
 
     fn glyph(&self, g: u32) -> Glyph {
-        let (store, gi, first) = match self.source {
-            GlyphSource::Shared => (&self.data().glyphs, g as usize, self.glyphs.0 as usize),
-            GlyphSource::Overlay { start } => (
-                self.line.overlay.as_deref().unwrap(),
-                (start + g - self.glyphs.0) as usize,
-                start as usize,
-            ),
+        let store = match self.source {
+            GlyphSource::Shared => &self.data().glyphs,
+            GlyphSource::Overlay { .. } => self.line.overlay.as_deref().expect("overlay store"),
         };
-        let (rel, advance) = if let Some((start, positions)) = &self.line.positions {
+        let gi = g as usize;
+        let first = self.glyphs.0 as usize;
+        let (rel, advance) = if matches!(self.source, GlyphSource::Shared)
+            && let Some((start, positions)) = &self.line.positions
+        {
             let pen = positions[(g - start) as usize];
             let rel = pen - positions[(self.glyphs.0 - start) as usize];
             let end = if g + 1 < self.glyphs.1 {
@@ -345,57 +430,36 @@ impl<'a> GlyphRunView<'a> {
             };
             (rel, end - rel)
         } else {
-            (store.pen[gi] - store.pen[first], store.advance[gi])
+            let rel = store.pen[gi] - store.pen[first];
+            let advance = if let Some(spacing) = &store.spacing {
+                store.advance[gi] + spacing[gi]
+            } else if matches!(self.source, GlyphSource::Overlay { .. })
+                && self.line.positions.is_some()
+                && g + 1 == self.glyphs.1
+            {
+                self.record.inline_size - rel
+            } else {
+                store.advance[gi]
+            };
+            (rel, advance)
         };
         // Runs are stored in logical order and reversed for display here; a
         // real shaper that emits right-to-left runs in visual order must not
         // be reversed twice.
         let reversed = self.record.level % 2 != self.line.data.base_level % 2;
-        let mut pen = if reversed {
-            self.record.inline_size - rel - advance
+        let pen = if reversed {
+            // Layout spacing belongs between clusters; subtracting it from
+            // a glyph's ink origin would detach a mark from its base.
+            self.record.inline_size - rel - store.advance[gi]
         } else {
             rel
         };
-        // Justification stretches between clusters, never the attachment
-        // positions within a cluster. Locate its base in constant time.
-        let unit = self.data().clusters[self.data().glyph_clusters[g as usize] as usize];
-        let crate::analysis::units::UnitKind::Cluster { glyphs, .. } =
-            &self.data().units[unit as usize].kind
-        else {
-            unreachable!()
+        let offset = if reversed {
+            LayoutUnit::ZERO - store.offset_inline[gi]
+        } else {
+            store.offset_inline[gi]
         };
-        let base = glyphs.start;
-        if g != base {
-            let base_gi = match self.source {
-                GlyphSource::Shared => base as usize,
-                GlyphSource::Overlay { start } => (start + base - self.glyphs.0) as usize,
-            };
-            let (base_rel, base_advance) = if let Some((start, positions)) = &self.line.positions {
-                let base_rel = positions[(base - start) as usize]
-                    - positions[(self.glyphs.0 - start) as usize];
-                let end = if base + 1 < self.glyphs.1 {
-                    positions[(base + 1 - start) as usize]
-                        - positions[(self.glyphs.0 - start) as usize]
-                } else {
-                    self.record.inline_size
-                };
-                (base_rel, end - base_rel)
-            } else {
-                (
-                    store.pen[base_gi] - store.pen[first],
-                    store.advance[base_gi],
-                )
-            };
-            let cluster_rel = store.pen[gi] - store.pen[base_gi];
-            pen = if reversed {
-                self.record.inline_size - base_rel - base_advance + store.advance[base_gi]
-                    - cluster_rel
-                    - store.advance[gi]
-            } else {
-                base_rel + cluster_rel
-            };
-        }
-        let position = self.record.inline_start + pen + store.offset_inline[gi];
+        let position = self.record.inline_start + pen + offset;
         Glyph {
             id: store.id[gi],
             inline_position: position.to_f32(),
@@ -483,7 +547,10 @@ impl Line {
                 line: self,
                 record,
                 run: *run,
-                glyphs: (glyphs.start, glyphs.end),
+                glyphs: match source {
+                    GlyphSource::Shared => (glyphs.start, glyphs.end),
+                    GlyphSource::Overlay { glyphs, .. } => *glyphs,
+                },
                 item: *item,
                 text: (text.start, text.end),
             }),

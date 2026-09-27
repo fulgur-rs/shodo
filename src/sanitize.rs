@@ -122,6 +122,16 @@ fn non_negative(v: f32, what: &str, warnings: &mut WarningSink) -> f32 {
 /// Sanitizes every float of an interned style except `font_size`, which the
 /// paragraph clamps separately.
 pub(crate) fn style(s: &mut InlineStyle, warnings: &mut WarningSink) {
+    if s.lang
+        .as_deref()
+        .is_some_and(|language| !crate::analysis::language::recognized(language))
+    {
+        warnings.push(
+            WarningKind::Unsupported,
+            "unknown or invalid lang; using root language",
+        );
+        s.lang = None;
+    }
     s.line_height = match s.line_height {
         LineHeight::Normal => LineHeight::Normal,
         LineHeight::Px(v) => LineHeight::Px(non_negative(v, "line-height", warnings)),
@@ -138,6 +148,12 @@ pub(crate) fn style(s: &mut InlineStyle, warnings: &mut WarningSink) {
     }
     s.font_weight = finite_or(s.font_weight, INITIAL_FONT_WEIGHT, "font-weight", warnings);
     s.font_width = finite_or(s.font_width, INITIAL_FONT_WIDTH, "font-width", warnings);
+    for variation in &mut s.font_variations {
+        variation.value = finite_or(variation.value, 0.0, "font variation", warnings);
+    }
+    if let Some(adjust) = &mut s.font_size_adjust {
+        adjust.value = non_negative(adjust.value, "font-size-adjust", warnings);
+    }
 }
 
 fn sides(s: &mut Sides, what: &str, allow_negative: bool, warnings: &mut WarningSink) {

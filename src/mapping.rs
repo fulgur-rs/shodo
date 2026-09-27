@@ -50,7 +50,81 @@ pub struct OffsetMapping {
     generated: Vec<(Range<u32>, NodeId)>,
 }
 
+/// A scalar transform, or a coalesced byte-preserving sequence. Expanded
+/// spans also cover one-to-many scalar changes with equal UTF-8 byte lengths.
+pub(crate) struct TransformSpan {
+    pub(crate) old: Range<u32>,
+    pub(crate) new: Range<u32>,
+    pub(crate) kind: MappingKind,
+}
+
+impl TransformSpan {
+    pub(crate) fn source_position(spans: &[Self], pos: u32) -> u32 {
+        let index = spans.partition_point(|s| s.new.end <= pos);
+        let Some(span) = spans.get(index) else {
+            return spans.last().map_or(0, |s| s.old.end);
+        };
+        match span.kind {
+            MappingKind::Identity => span.old.start + pos.saturating_sub(span.new.start),
+            _ => span.old.start,
+        }
+    }
+
+    pub(crate) fn map_position(spans: &[Self], pos: u32) -> u32 {
+        let index = spans.partition_point(|s| s.old.end <= pos);
+        let Some(span) = spans.get(index) else {
+            return spans.last().map_or(0, |s| s.new.end);
+        };
+        match span.kind {
+            MappingKind::Identity => span.new.start + pos.saturating_sub(span.old.start),
+            _ => span.new.start,
+        }
+    }
+}
+
 impl OffsetMapping {
+    pub(crate) fn remap_text(&mut self, spans: &[TransformSpan]) {
+        let units = std::mem::take(&mut self.units);
+        let generated = std::mem::take(&mut self.generated);
+        for unit in units {
+            if unit.kind != MappingKind::Identity {
+                self.push_unit(MappingUnit {
+                    text: TransformSpan::map_position(spans, unit.text.start)
+                        ..TransformSpan::map_position(spans, unit.text.end),
+                    ..unit
+                });
+                continue;
+            }
+            let first = spans.partition_point(|s| s.old.end <= unit.text.start);
+            for span in &spans[first..] {
+                if span.old.start >= unit.text.end {
+                    break;
+                }
+                let begin = span.old.start.max(unit.text.start);
+                let end = span.old.end.min(unit.text.end);
+                let new_text = if span.kind == MappingKind::Identity {
+                    span.new.start + begin - span.old.start..span.new.start + end - span.old.start
+                } else {
+                    span.new.clone()
+                };
+                self.push_unit(MappingUnit {
+                    kind: span.kind,
+                    node: unit.node,
+                    dom: unit.dom.start.saturating_add(begin - unit.text.start)
+                        ..unit.dom.start.saturating_add(end - unit.text.start),
+                    text: new_text,
+                });
+            }
+        }
+        for (range, node) in generated {
+            self.push_generated(
+                TransformSpan::map_position(spans, range.start)
+                    ..TransformSpan::map_position(spans, range.end),
+                node,
+            );
+        }
+    }
+
     pub(crate) fn push_unit(&mut self, unit: MappingUnit) {
         if let Some(last) = self.units.last_mut()
             && last.kind == unit.kind
