@@ -493,7 +493,12 @@ pub struct ParagraphStyle {
     pub unicode_bidi_plaintext: bool,
     /// Style of the root inline box; also the source of the strut.
     pub root: InlineStyle,
-    /// Style applied by `::first-line`, if any.
+    /// Resolved root style for `::first-line`, if any. Clone `root` and
+    /// change its first-line properties to express a partial override.
+    /// Font, language, line height, spacing, transform and emphasis values
+    /// inherit into descendants whose normal value equals the root value;
+    /// differing descendant values are preserved. Other properties retain
+    /// their normal values.
     pub first_line: Option<InlineStyle>,
 }
 

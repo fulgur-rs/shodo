@@ -11,7 +11,7 @@ use crate::analysis::{Item, ItemKind, process, transform};
 use crate::builder::ParagraphBuilder;
 use crate::font::FontCollection;
 use crate::geometry::{BaselineKind, Direction, Saturation, WritingMode};
-use crate::limits::{LimitExceeded, Limits, Warning, WarningKind};
+use crate::limits::{LimitExceeded, LimitKind, Limits, Warning, WarningKind, WarningSink};
 use crate::mapping::OffsetMapping;
 use crate::node::{NodeId, Sides};
 use crate::output::Line;
@@ -51,11 +51,30 @@ impl FloatCursor {
     }
 }
 
+pub(crate) struct FirstLineData {
+    pub(crate) data: Arc<ParagraphData>,
+    /// Exact alternate-unit cursors in the normal set; absent cuts are prohibited.
+    pub(crate) normal_cursors: Vec<Option<u32>>,
+    pub(crate) alternate_cursors: Vec<(u32, u32)>,
+}
+
+impl FirstLineData {
+    pub(crate) fn alternate_cursor(&self, normal: u32) -> Option<usize> {
+        let index = self.alternate_cursors.partition_point(|(u, _)| *u < normal);
+        self.alternate_cursors
+            .get(index)
+            .filter(|(u, _)| *u == normal)
+            .map(|(_, u)| *u as usize)
+    }
+}
+
 pub(crate) struct ParagraphData {
     #[cfg(test)]
     pub(crate) baseline_queries: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
     pub(crate) cluster_queries: std::sync::atomic::AtomicUsize,
+    pub(crate) first_line: Option<FirstLineData>,
+    pub(crate) source_spans: Vec<crate::mapping::TransformSpan>,
     pub(crate) id: u64,
     pub(crate) style: ParagraphStyle,
     pub(crate) limits: Limits,
@@ -183,120 +202,322 @@ impl Paragraph {
             style.root = root.clone();
         }
         sanitize::items(&mut items, &mut warnings);
+        let id = NEXT_PARAGRAPH_ID.fetch_add(1, Ordering::Relaxed);
+        if style.first_line.is_some() {
+            Limits::check(
+                limits.max_styles,
+                LimitKind::Styles,
+                styles.len() as u64 * 2,
+            )?;
+        }
+        let alternate_styles = style.first_line.as_ref().map(|first| {
+            styles
+                .iter()
+                .map(|original| first_line_style(original, &style.root, first))
+                .collect::<Vec<_>>()
+        });
         let processed = process(&text, &items, &styles, offset_mapping, &limits)?;
-        let processed = transform(processed, &styles, &limits, &mut warnings)?;
-        let breaks = crate::analysis::breaks::analyze_breaks(&processed, &styles, &mut warnings);
+        let mut processed = transform(processed, &styles, &limits, &mut warnings)?;
+        if alternate_styles.is_none() {
+            processed.source_spans = Vec::new();
+        }
         let mut sat = Saturation::default();
-        let bidi = analyze_bidi(&processed.text, &style, &styles);
-        let shape_items_input =
-            crate::analysis::itemize::itemize(&processed, &styles, &bidi, &breaks, fonts);
-        let (glyphs, runs) = shape_items(
-            cx,
-            &shape_items_input,
-            &styles,
-            fonts,
+        let mut data = build_data(
+            style.clone(),
             &limits,
+            limits.max_shaped_glyphs,
+            processed,
+            styles,
+            id,
+            cx,
+            fonts,
             &mut warnings,
             &mut sat,
         )?;
-        let base_level = u8::from(style.direction == Direction::Rtl);
-        let UnitList {
-            units,
-            boxes,
-            float_count,
-        } = build_units(
-            &processed.text,
-            &processed.items,
-            &runs,
-            &glyphs,
-            &bidi.levels,
-            base_level,
-            &breaks,
-        );
-        let mut baselines = HashMap::new();
-        for item in &processed.items {
-            if let ItemKind::Atomic { parent_style, .. } = item.kind
-                && let Some(node) = item.node
-            {
-                baselines.entry(node).or_insert_with(|| {
-                    baseline_kind(style.writing_mode, &styles[parent_style as usize])
-                });
+        if let Some(mut alternate_styles) = alternate_styles {
+            for s in &mut alternate_styles {
+                s.font_size = sanitize_font_size(s.font_size, &mut warnings);
+                sanitize::style(s, &mut warnings);
             }
-        }
-        let mut data = ParagraphData {
-            #[cfg(test)]
-            baseline_queries: Default::default(),
-            #[cfg(test)]
-            cluster_queries: Default::default(),
-            id: NEXT_PARAGRAPH_ID.fetch_add(1, Ordering::Relaxed),
-            style,
-            limits,
-            text: processed.text,
-            items: processed.items,
-            styles,
-            glyphs,
-            clusters: Vec::new(),
-            glyph_clusters: Vec::new(),
-            selectable_clusters: Vec::new(),
-            shaping_barriers: Vec::new(),
-            floats: Vec::new(),
-            runs,
-            shape_items: shape_items_input,
-            breaks,
-            units,
-            boxes,
-            float_count,
-            base_level,
-            bidi_paragraphs: bidi.paragraphs,
-            mapping: processed.mapping,
-            fonts: fonts.clone(),
-            generations: fonts.generations(),
-            warnings: Vec::new(),
-            baselines,
-        };
-        crate::line::reshape::initialize_slices(&mut data, cx, &mut warnings, &mut sat);
-        let mut clusters = Vec::new();
-        let mut glyph_clusters = vec![0; data.glyphs.len()];
-        let mut floats = Vec::new();
-        let mut selectable_clusters = Vec::new();
-        let mut shaping_barriers = Vec::new();
-        let mut previous_cluster = None;
-        for (i, u) in data.units.iter().enumerate() {
-            match &u.kind {
-                crate::analysis::units::UnitKind::Cluster { glyphs, .. } => {
-                    selectable_clusters.push(i as u32);
-                    let same = previous_cluster
-                        .is_some_and(|previous: usize| u.shares_cluster(&data.units[previous]));
-                    previous_cluster = Some(i);
-                    if same {
-                        continue;
+            let mut remaining = limits.clone();
+            remaining.max_text_bytes = limits
+                .max_text_bytes
+                .map(|max| max.saturating_sub(data.text.len() as u64));
+            remaining.max_items = limits
+                .max_items
+                .map(|max| max.saturating_sub(data.items.len() as u64));
+            let alternate = process(&text, &items, &data.styles, offset_mapping, &remaining)
+                .and_then(|p| transform(p, &alternate_styles, &remaining, &mut warnings))
+                .map_err(|mut e| {
+                    if e.kind == LimitKind::TextBytes
+                        && let Some(limit) = limits.max_text_bytes
+                    {
+                        e.actual += data.text.len() as u64;
+                        e.limit = limit;
                     }
-                    let cluster = clusters.len() as u32;
-                    clusters.push(i as u32);
-                    glyph_clusters[glyphs.start as usize..glyphs.end as usize].fill(cluster);
+                    if e.kind == LimitKind::Items
+                        && let Some(limit) = limits.max_items
+                    {
+                        e.actual += data.items.len() as u64;
+                        e.limit = limit;
+                    }
+                    e
+                })?;
+            let mut alternate_style = style;
+            alternate_style.root = alternate_styles[0].clone();
+            alternate_style.first_line = None;
+            let remaining_glyphs = limits
+                .max_shaped_glyphs
+                .map(|max| max.saturating_sub(data.glyphs.len() as u64));
+            let mut alternate = build_data(
+                alternate_style,
+                &limits,
+                remaining_glyphs,
+                alternate,
+                alternate_styles,
+                id,
+                cx,
+                fonts,
+                &mut warnings,
+                &mut sat,
+            )
+            .map_err(|mut e| {
+                if e.kind == LimitKind::ShapedGlyphs
+                    && let Some(limit) = limits.max_shaped_glyphs
+                {
+                    e.actual += data.glyphs.len() as u64;
+                    e.limit = limit;
                 }
-                crate::analysis::units::UnitKind::Float { node, .. } => {
-                    floats.push((i as u32, *node))
+                e
+            })?;
+            finalize_data(&mut data, cx, &mut warnings, &mut sat);
+            finalize_data(&mut alternate, cx, &mut warnings, &mut sat);
+            let mut normal_cursors: Vec<_> = alternate
+                .units
+                .iter()
+                .map(|u| normal_cursor(&data, &alternate, u))
+                .collect();
+            normal_cursors.push(Some(data.units.len() as u32));
+            for (i, unit) in alternate.units.iter_mut().enumerate() {
+                if normal_cursors[i + 1].is_none() {
+                    unit.break_after = crate::analysis::units::BreakClass::Prohibited;
+                    unit.emergency_min_content = false;
                 }
-                crate::analysis::units::UnitKind::Atomic { .. }
-                | crate::analysis::units::UnitKind::ForcedBreak
-                | crate::analysis::units::UnitKind::BlockInInline { .. }
-                | crate::analysis::units::UnitKind::Tab
-                | crate::analysis::units::UnitKind::BidiControl => shaping_barriers.push(i as u32),
-                _ => {}
             }
+            data.source_spans = Vec::new();
+            alternate.source_spans = Vec::new();
+            data.first_line = Some(FirstLineData {
+                data: Arc::new(alternate),
+                alternate_cursors: normal_cursors
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, u)| u.map(|u| (u, i as u32)))
+                    .collect(),
+                normal_cursors,
+            });
+        } else {
+            data.source_spans = Vec::new();
+            finalize_data(&mut data, cx, &mut warnings, &mut sat);
         }
-        data.shaping_barriers = shaping_barriers;
-        data.clusters = clusters;
-        data.selectable_clusters = selectable_clusters;
-        data.glyph_clusters = glyph_clusters;
-        data.floats = floats;
         warnings.record_saturation(&sat);
         data.warnings = warnings.take();
         Ok(Paragraph {
             data: Arc::new(data),
         })
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_data(
+    style: ParagraphStyle,
+    limits: &Limits,
+    glyph_budget: Option<u64>,
+    processed: crate::analysis::whitespace::Processed,
+    styles: Vec<InlineStyle>,
+    id: u64,
+    cx: &mut crate::LayoutContext,
+    fonts: &FontCollection,
+    warnings: &mut WarningSink,
+    sat: &mut Saturation,
+) -> Result<ParagraphData, LimitExceeded> {
+    let mut shape_limits = limits.clone();
+    shape_limits.max_shaped_glyphs = glyph_budget;
+    let breaks = crate::analysis::breaks::analyze_breaks(&processed, &styles, warnings);
+    let bidi = analyze_bidi(&processed.text, &style, &styles);
+    let shape_items_input =
+        crate::analysis::itemize::itemize(&processed, &styles, &bidi, &breaks, fonts);
+    let (glyphs, runs) = shape_items(
+        cx,
+        &shape_items_input,
+        &styles,
+        fonts,
+        &shape_limits,
+        warnings,
+        sat,
+    )?;
+    let base_level = u8::from(style.direction == Direction::Rtl);
+    let UnitList {
+        units,
+        boxes,
+        float_count,
+    } = build_units(
+        &processed.text,
+        &processed.items,
+        &runs,
+        &glyphs,
+        &bidi.levels,
+        base_level,
+        &breaks,
+    );
+    let mut baselines = HashMap::new();
+    for item in &processed.items {
+        if let ItemKind::Atomic { parent_style, .. } = item.kind
+            && let Some(node) = item.node
+        {
+            baselines.entry(node).or_insert_with(|| {
+                baseline_kind(style.writing_mode, &styles[parent_style as usize])
+            });
+        }
+    }
+    let data = ParagraphData {
+        #[cfg(test)]
+        baseline_queries: Default::default(),
+        #[cfg(test)]
+        cluster_queries: Default::default(),
+        first_line: None,
+        source_spans: processed.source_spans,
+        id,
+        style,
+        limits: limits.clone(),
+        text: processed.text,
+        items: processed.items,
+        styles,
+        glyphs,
+        clusters: Vec::new(),
+        glyph_clusters: Vec::new(),
+        selectable_clusters: Vec::new(),
+        shaping_barriers: Vec::new(),
+        floats: Vec::new(),
+        runs,
+        shape_items: shape_items_input,
+        breaks,
+        units,
+        boxes,
+        float_count,
+        base_level,
+        bidi_paragraphs: bidi.paragraphs,
+        mapping: processed.mapping,
+        fonts: fonts.clone(),
+        generations: fonts.generations(),
+        warnings: Vec::new(),
+        baselines,
+    };
+    Ok(data)
+}
+
+fn finalize_data(
+    data: &mut ParagraphData,
+    cx: &mut crate::LayoutContext,
+    warnings: &mut WarningSink,
+    sat: &mut Saturation,
+) {
+    crate::line::reshape::initialize_slices(data, cx, warnings, sat);
+    let mut clusters = Vec::new();
+    let mut glyph_clusters = vec![0; data.glyphs.len()];
+    let mut floats = Vec::new();
+    let mut selectable_clusters = Vec::new();
+    let mut shaping_barriers = Vec::new();
+    let mut previous_cluster = None;
+    for (i, u) in data.units.iter().enumerate() {
+        match &u.kind {
+            crate::analysis::units::UnitKind::Cluster { glyphs, .. } => {
+                selectable_clusters.push(i as u32);
+                let same = previous_cluster
+                    .is_some_and(|previous: usize| u.shares_cluster(&data.units[previous]));
+                previous_cluster = Some(i);
+                if same {
+                    continue;
+                }
+                let cluster = clusters.len() as u32;
+                clusters.push(i as u32);
+                glyph_clusters[glyphs.start as usize..glyphs.end as usize].fill(cluster);
+            }
+            crate::analysis::units::UnitKind::Float { node, .. } => floats.push((i as u32, *node)),
+            crate::analysis::units::UnitKind::Atomic { .. }
+            | crate::analysis::units::UnitKind::ForcedBreak
+            | crate::analysis::units::UnitKind::BlockInInline { .. }
+            | crate::analysis::units::UnitKind::Tab
+            | crate::analysis::units::UnitKind::BidiControl => shaping_barriers.push(i as u32),
+            _ => {}
+        }
+    }
+    data.shaping_barriers = shaping_barriers;
+    data.clusters = clusters;
+    data.selectable_clusters = selectable_clusters;
+    data.glyph_clusters = glyph_clusters;
+    data.floats = floats;
+}
+
+fn normal_cursor(normal: &ParagraphData, alternate: &ParagraphData, u: &Unit) -> Option<u32> {
+    use crate::analysis::units::UnitKind;
+    use crate::mapping::TransformSpan;
+    let source = TransformSpan::source_position(&alternate.source_spans, u.text.start);
+    if TransformSpan::map_position(&alternate.source_spans, source) != u.text.start {
+        return None;
+    }
+    let pos = TransformSpan::map_position(&normal.source_spans, source);
+    if TransformSpan::source_position(&normal.source_spans, pos) != source {
+        return None;
+    }
+    let begin = normal.units.partition_point(|n| n.text.start < pos);
+    normal.units[begin..]
+        .iter()
+        .take_while(|n| n.text.start == pos)
+        .position(|n| match (&n.kind, &u.kind) {
+            (UnitKind::Cluster { .. }, UnitKind::Cluster { .. }) => true,
+            _ => {
+                n.item == u.item
+                    && std::mem::discriminant(&n.kind) == std::mem::discriminant(&u.kind)
+            }
+        })
+        .map(|i| (begin + i) as u32)
+}
+
+fn first_line_style(
+    original: &InlineStyle,
+    root: &InlineStyle,
+    first: &InlineStyle,
+) -> InlineStyle {
+    let mut result = original.clone();
+    macro_rules! inherit {
+        ($($field:ident),* $(,)?) => { $(if original.$field == root.$field { result.$field = first.$field.clone(); })* };
+    }
+    inherit!(
+        font_families,
+        font_size,
+        font_weight,
+        font_width,
+        font_style,
+        font_variations,
+        font_features,
+        font_kerning,
+        font_variant_ligatures,
+        font_variant_caps,
+        font_variant_numeric,
+        font_variant_east_asian,
+        font_variant_position,
+        font_variant_alternates,
+        font_optical_sizing,
+        font_synthesis,
+        font_size_adjust,
+        lang,
+        line_height,
+        letter_spacing,
+        word_spacing,
+        text_transform,
+        text_emphasis
+    );
+    result
 }
 
 /// The dominant baseline of a parent inline box (CSS Writing Modes 4 §4.2):

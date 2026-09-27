@@ -22,6 +22,8 @@ pub(crate) struct Processed {
     pub(crate) items: Vec<Item>,
     pub(crate) mapping: Option<OffsetMapping>,
     pub(crate) indivisible: Vec<std::ops::Range<u32>>,
+    /// Correspondence with the common pre-transform text, independent of DOM mapping.
+    pub(crate) source_spans: Vec<crate::mapping::TransformSpan>,
 }
 
 pub(crate) fn process(
@@ -33,8 +35,22 @@ pub(crate) fn process(
 ) -> Result<Processed, LimitExceeded> {
     let flags = whitespace_flags(raw_text, raw, styles);
     let mut p = Processor {
-        out: String::with_capacity(raw_text.len()),
-        items: Vec::with_capacity(raw.len()),
+        out: String::with_capacity(
+            raw_text.len().min(
+                limits
+                    .max_text_bytes
+                    .and_then(|n| usize::try_from(n).ok())
+                    .unwrap_or(usize::MAX),
+            ),
+        ),
+        items: Vec::with_capacity(
+            raw.len().min(
+                limits
+                    .max_items
+                    .and_then(|n| usize::try_from(n).ok())
+                    .unwrap_or(usize::MAX),
+            ),
+        ),
         mapping: with_mapping.then(OffsetMapping::default),
         // Collapsible spaces at the start of the paragraph are removed.
         after_space: true,
@@ -109,6 +125,11 @@ pub(crate) fn process(
         }
     }
     Ok(Processed {
+        source_spans: vec![crate::mapping::TransformSpan {
+            old: 0..p.out.len() as u32,
+            new: 0..p.out.len() as u32,
+            kind: MappingKind::Identity,
+        }],
         text: p.out,
         items: p.items,
         mapping: p.mapping,

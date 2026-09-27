@@ -273,12 +273,6 @@ impl ParagraphBuilder {
         if let Some(e) = self.error {
             return Err(e);
         }
-        if self.style.first_line.is_some() {
-            self.warnings.push(
-                WarningKind::Unsupported,
-                "::first-line style is not applied yet",
-            );
-        }
         Paragraph::from_builder(self, cx, fonts)
     }
 }

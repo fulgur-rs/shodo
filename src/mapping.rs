@@ -59,6 +59,17 @@ pub(crate) struct TransformSpan {
 }
 
 impl TransformSpan {
+    pub(crate) fn source_position(spans: &[Self], pos: u32) -> u32 {
+        let index = spans.partition_point(|s| s.new.end <= pos);
+        let Some(span) = spans.get(index) else {
+            return spans.last().map_or(0, |s| s.old.end);
+        };
+        match span.kind {
+            MappingKind::Identity => span.old.start + pos.saturating_sub(span.new.start),
+            _ => span.old.start,
+        }
+    }
+
     pub(crate) fn map_position(spans: &[Self], pos: u32) -> u32 {
         let index = spans.partition_point(|s| s.old.end <= pos);
         let Some(span) = spans.get(index) else {

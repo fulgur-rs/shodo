@@ -31,6 +31,13 @@ pub(crate) fn initialize_slices(
         }
     }
     let mut offsets: Vec<_> = markers.iter().map(|(_, u)| u.text.start).collect();
+    if data.style.first_line.is_some() {
+        // The alternate line may end within a normal-set ligature even if
+        // normal CSS forbids a soft break there. These are cursor slices,
+        // and retain the normal set's original break class.
+        offsets.extend(data.breaks.graphemes.iter().copied());
+        offsets.sort_unstable();
+    }
     offsets.dedup();
     for (i, unit) in original.iter().enumerate() {
         let UnitKind::Cluster { glyphs, .. } = &unit.kind else {

@@ -92,19 +92,45 @@ fn unclosed_inline_boxes_are_closed_with_a_warning() {
 }
 
 #[test]
-fn first_line_style_is_reported_as_unsupported() {
+fn first_line_style_applies_without_a_font() {
     let style = ParagraphStyle {
-        first_line: Some(InlineStyle::default()),
-        ..ParagraphStyle::default()
+        first_line: Some(InlineStyle {
+            font_size: 32.0,
+            ..Default::default()
+        }),
+        ..Default::default()
     };
-    let para = ParagraphBuilder::new(&style, &Limits::default())
-        .build(&mut LayoutContext::new(), &fonts())
-        .unwrap();
+    let mut b = ParagraphBuilder::new(&style, &Limits::default());
+    b.push_text(dom(1), "x")
+        .push_forced_break(NodeId(2))
+        .push_text(dom(3), "y");
+    let para = b.build(&mut LayoutContext::new(), &fonts()).unwrap();
     assert!(
-        para.warnings()
+        !para
+            .warnings()
             .iter()
-            .any(|w| w.kind == WarningKind::Unsupported)
+            .any(|w| w.message.contains("::first-line"))
     );
+    let lines = para.break_all(
+        &mut LayoutContext::new(),
+        &Default::default(),
+        100.0,
+        &shodo::AtomicSizes::EMPTY,
+    );
+    assert_eq!(lines.len(), 2);
+    assert_eq!(lines[0].inline_size(), 32.0);
+    assert_eq!(lines[1].inline_size(), 16.0);
+    for line in &lines {
+        let glyphs: Vec<_> = line
+            .fragments()
+            .filter_map(|f| match f {
+                shodo::Fragment::GlyphRun(r) => Some(r),
+                _ => None,
+            })
+            .flat_map(|r| r.glyphs().map(|g| g.id))
+            .collect();
+        assert_eq!(glyphs, vec![0], "explicit missing-font output");
+    }
 }
 
 #[test]

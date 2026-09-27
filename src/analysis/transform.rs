@@ -229,6 +229,7 @@ pub(crate) fn transform(
         .map(|span| span.new.clone())
         .collect();
     input.text = output;
+    input.source_spans = spans;
     Ok(input)
 }
 

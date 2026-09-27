@@ -172,7 +172,18 @@ impl Line {
         }
     }
 
-    /// Range of the paragraph's processed text covered by this line.
+    /// The complete processed text set used by this line. `::first-line`
+    /// transforms can make this differ from [`Paragraph::text`].
+    pub fn text(&self) -> &str {
+        &self.data.text
+    }
+
+    /// Mapping for this line's processed text set, when enabled at build.
+    pub fn offset_mapping(&self) -> Option<&crate::mapping::OffsetMapping> {
+        self.data.mapping.as_ref()
+    }
+
+    /// Range of [`Self::text`] covered by this line.
     pub fn text_range(&self) -> Range<usize> {
         let units = &self.data.units[self.units.start as usize..self.units.end as usize];
         match (units.first(), units.last()) {

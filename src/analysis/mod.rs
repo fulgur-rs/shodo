@@ -6,7 +6,7 @@ pub(crate) mod itemize;
 mod transform;
 mod transform_context;
 pub(crate) mod units;
-mod whitespace;
+pub(crate) mod whitespace;
 mod whitespace_context;
 
 use std::ops::Range;

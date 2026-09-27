@@ -118,6 +118,24 @@ pub(super) fn selected(
     scan
 }
 
+fn line_start(para: &Paragraph, line: &crate::Line) -> usize {
+    if std::sync::Arc::ptr_eq(&para.data, &line.data) {
+        line.units.start as usize
+    } else {
+        0
+    }
+}
+
+fn span_data(para: &Paragraph, begin: usize, end: usize) -> Option<(&ParagraphData, usize, usize)> {
+    if begin == 0
+        && let Some(first) = &para.data.first_line
+    {
+        Some((&first.data, 0, first.alternate_cursor(end as u32)?))
+    } else {
+        Some((&para.data, begin, end))
+    }
+}
+
 impl Paragraph {
     /// Computes fixed-width breaks. Floats are treated as zero-width anchors;
     /// float insets and unhandled floats make a plan inapplicable at layout.
@@ -195,23 +213,25 @@ impl Paragraph {
                         if let Some(k) = (chunk..stop).find(|i| greedy[*i].is_last()) {
                             stop = k + 1;
                         }
-                        let start = greedy[chunk].units.start as usize;
+                        let start = line_start(self, &greedy[chunk]);
                         let mut previous = vec![(start, 0.0_f64)];
                         let mut layers: Vec<Vec<(usize, f64, usize)>> = Vec::new();
                         for (i, line) in greedy.iter().enumerate().take(stop).skip(chunk) {
-                            let end = line.units.end as usize;
+                            let end = line.break_token().unit as usize;
+                            let actual_end = line.units.end as usize;
+                            let candidate_data = &line.data;
+                            let candidate_start = line.units.start as usize;
                             let mut candidates = vec![end];
                             if i + 1 < stop
-                                && let Some(j) = (greedy[i].units.start as usize
-                                    ..end.saturating_sub(1))
+                                && let Some(j) = (candidate_start..actual_end.saturating_sub(1))
                                     .rev()
                                     .find(|j| {
-                                        let unit = &self.data.units[*j];
+                                        let unit = &candidate_data.units[*j];
                                         unit.break_after == BreakClass::Allowed
                                             || unit.break_after == BreakClass::Hyphen
                                                 && super::hyphen::line(
-                                                    &self.data,
-                                                    greedy[i].units.start as usize,
+                                                    candidate_data,
+                                                    candidate_start,
                                                     *j + 1,
                                                     cx,
                                                     &mut sat,
@@ -220,16 +240,25 @@ impl Paragraph {
                                     })
                             {
                                 let mut alt = j + 1;
-                                while alt < end
+                                while alt < actual_end
                                     && matches!(
-                                        self.data.units[alt].kind,
+                                        candidate_data.units[alt].kind,
                                         UnitKind::Close { .. } | UnitKind::BidiControl
                                     )
                                 {
                                     alt += 1;
                                 }
-                                if alt < end {
-                                    candidates.push(alt);
+                                if alt < actual_end {
+                                    let normal =
+                                        if std::sync::Arc::ptr_eq(candidate_data, &self.data) {
+                                            Some(alt as u32)
+                                        } else {
+                                            self.data.first_line.as_ref().unwrap().normal_cursors
+                                                [alt]
+                                        };
+                                    if let Some(normal) = normal {
+                                        candidates.push(normal as usize);
+                                    }
                                 }
                             }
                             candidates.sort_unstable();
@@ -238,20 +267,35 @@ impl Paragraph {
                             for end in candidates {
                                 let mut best = (f64::INFINITY, 0);
                                 for (k, &(begin, cost)) in previous.iter().enumerate() {
-                                    if begin >= end
-                                        || !cost.is_finite()
-                                        || !if let Some(hyphen) = hyphen_end(&self.data, end) {
-                                            super::hyphen::line(
-                                                &self.data, begin, hyphen, cx, &mut sat,
-                                            )
-                                            .is_some()
-                                        } else {
-                                            super::windows::candidate(
-                                                &self.data, begin, end, cx, &mut sat,
-                                            )
-                                            .1
-                                        }
+                                    if begin >= end || !cost.is_finite() {
+                                        continue;
+                                    }
+                                    let Some((data, actual_begin, actual_end)) =
+                                        span_data(self, begin, end)
+                                    else {
+                                        continue;
+                                    };
+                                    let viable = if let Some(hyphen) = hyphen_end(data, actual_end)
                                     {
+                                        super::hyphen::line(
+                                            data,
+                                            actual_begin,
+                                            hyphen,
+                                            cx,
+                                            &mut sat,
+                                        )
+                                        .is_some()
+                                    } else {
+                                        super::windows::candidate(
+                                            data,
+                                            actual_begin,
+                                            actual_end,
+                                            cx,
+                                            &mut sat,
+                                        )
+                                        .1
+                                    };
+                                    if !viable {
                                         continue;
                                     }
                                     let flags = if begin == 0 {
@@ -261,9 +305,9 @@ impl Paragraph {
                                     };
                                     let indent = super::text_indent(&options, flags, &mut sat);
                                     let scan = selected(
-                                        &self.data,
-                                        begin,
-                                        end,
+                                        data,
+                                        actual_begin,
+                                        actual_end,
                                         LayoutUnit::ZERO,
                                         indent,
                                         atomics,
@@ -272,8 +316,8 @@ impl Paragraph {
                                     );
                                     let used = scan.content.add(indent, &mut sat).to_f32();
                                     if used > width
-                                        && (begin != greedy[i].units.start as usize
-                                            || end != greedy[i].units.end as usize)
+                                        && (begin != line_start(self, &greedy[i])
+                                            || end != greedy[i].break_token().unit as usize)
                                     {
                                         continue;
                                     }
