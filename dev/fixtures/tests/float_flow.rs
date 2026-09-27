@@ -262,8 +262,8 @@ fn indivisible_word_reports_float_on_its_anchor_line() {
     assert!(!events.iter().any(|e| matches!(e, Event::Reported { .. })));
     let (second, s, events, calls) = line(trial(&d, &p, &s));
     assert_eq!(second.text_range(), 3..11);
-    assert_eq!(second.block_offset(), 40.0);
-    assert_eq!(s.placed()[0].rect.block_start, 10.0);
+    assert_eq!(second.block_offset(), 10.0);
+    assert_eq!(s.placed()[0].rect.block_start, 20.0);
     assert_eq!(
         events
             .iter()
@@ -271,7 +271,7 @@ fn indivisible_word_reports_float_on_its_anchor_line() {
             .count(),
         1
     );
-    assert!(calls <= 4);
+    assert_eq!(calls, 3);
 }
 fn same(a: &Checkpoint, b: &Checkpoint) {
     assert_eq!(a.token(), b.token());
@@ -1028,4 +1028,348 @@ fn widow_selected_page_checkpoint_and_height_limited_preview_replay_actual_conte
         )
         .is_err()
     );
+}
+#[test]
+fn head_float_can_stay_high_when_unbreakable_text_moves_below_it() {
+    let p = paragraph(&[Part::Float(2), Part::Text("aaaaa")], false);
+    let d = Driver::new(vec![spec(2, Side::Left, Clear::None, 30.0, 30.0)]).unwrap();
+    let (l, s, _, calls) = line(trial(&d, &p, &Checkpoint::new(&p, 60.0).unwrap()));
+    assert_eq!(l.block_offset(), 30.0);
+    assert_eq!(s.placed()[0].rect.block_start, 0.0);
+    assert_eq!(calls, 3);
+    let mut options = LineOptions::default();
+    options.text_indent.length = 5.0;
+    let (l, s, _, _) = line(
+        d.trial(
+            &p,
+            &mut LayoutContext::new(),
+            &Checkpoint::new(&p, 60.0).unwrap(),
+            &options,
+            &AtomicSizes::EMPTY,
+            None,
+        )
+        .unwrap(),
+    );
+    assert_eq!(l.block_offset(), 30.0);
+    assert_eq!(s.placed()[0].rect.block_start, 0.0);
+}
+#[test]
+fn atomic_prefix_prevents_trial_float_from_remaining_above_its_line() {
+    let p = paragraph(
+        &[Part::Atomic(9), Part::Float(2), Part::Text("aaaaa")],
+        false,
+    );
+    let d = Driver::new(vec![spec(2, Side::Left, Clear::None, 30.0, 30.0)]).unwrap();
+    let mut a = AtomicSizes::new();
+    a.insert(
+        NodeId(9),
+        shodo::AtomicSize {
+            inline_size: 0.0,
+            block_size: 10.0,
+            baseline: Some(8.0),
+            ..Default::default()
+        },
+    );
+    let (l, s, _, _) = line(
+        d.trial(
+            &p,
+            &mut LayoutContext::new(),
+            &Checkpoint::new(&p, 60.0).unwrap(),
+            &LineOptions::default(),
+            &a,
+            None,
+        )
+        .unwrap(),
+    );
+    assert_eq!(l.block_offset(), 0.0);
+    assert_eq!(s.placed()[0].rect.block_start, 10.0);
+}
+#[test]
+fn source_order_handles_zero_advance_prefix_and_float_only_prefix() {
+    let p = paragraph(
+        &[Part::Text("\u{0301}"), Part::Float(2), Part::Text("aaaaa")],
+        false,
+    );
+    let d = Driver::new(vec![spec(2, Side::Left, Clear::None, 30.0, 30.0)]).unwrap();
+    let (l, s, events, _) = line(trial(&d, &p, &Checkpoint::new(&p, 60.0).unwrap()));
+    assert_eq!(l.block_offset(), 0.0);
+    assert_eq!(s.placed()[0].rect.block_start, 10.0);
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, Event::Reported { position: 0.0, .. }))
+    );
+    let p = paragraph(
+        &[Part::Float(2), Part::Float(3), Part::Text("aaaaa")],
+        false,
+    );
+    let d = Driver::new(vec![
+        spec(2, Side::Left, Clear::None, 10.0, 30.0),
+        spec(3, Side::Right, Clear::None, 20.0, 30.0),
+    ])
+    .unwrap();
+    let (l, s, _, _) = line(trial(&d, &p, &Checkpoint::new(&p, 60.0).unwrap()));
+    assert_eq!(l.block_offset(), 30.0);
+    assert!(s.placed().iter().all(|p| p.rect.block_start == 0.0));
+}
+fn transform_paragraph(mapping: bool, first_line: bool) -> shodo::Paragraph {
+    let mut style = ParagraphStyle::default();
+    style.root.font_size = 10.0;
+    if first_line {
+        let mut first = style.root.clone();
+        first.text_transform = shodo::style::TextTransform::Uppercase;
+        style.first_line = Some(first);
+    }
+    let mut b = shodo::ParagraphBuilder::new(&style, &Limits::default());
+    b.with_offset_mapping(mapping)
+        .push_text(TextSource::Generated { node: NodeId(1) }, "\u{fb00}")
+        .push_out_of_flow(NodeId(2), OutOfFlowKind::Float)
+        .push_text(TextSource::Generated { node: NodeId(1) }, "aaaaa");
+    b.build(
+        &mut LayoutContext::new(),
+        &FontCollection::with_options(
+            &Limits::default(),
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        ),
+    )
+    .unwrap()
+}
+#[test]
+fn first_line_uses_its_actual_processed_source_set_and_mapping_off_metadata() {
+    for mapping in [true, false] {
+        let p = transform_paragraph(mapping, true);
+        let mut d = Driver::new(vec![spec(2, Side::Left, Clear::None, 30.0, 30.0)]).unwrap();
+        if !mapping {
+            // Register the first-line set, whose marker starts at byte2,
+            // rather than the normal Paragraph set's marker at byte3.
+            d.register_source_order(
+                p.id(),
+                "FF\u{fffc}AAAAA",
+                SourceOrder {
+                    floats: vec![(NodeId(2), 2)],
+                    atomics: vec![],
+                    edges: Some(vec![]),
+                },
+            )
+            .unwrap();
+        }
+        let (l, s, _, _) = line(trial(&d, &p, &Checkpoint::new(&p, 80.0).unwrap()));
+        assert_eq!(p.text(), "\u{fb00}\u{fffc}aaaaa");
+        assert_eq!(l.text(), "FF\u{fffc}AAAAA");
+        assert_eq!(l.block_offset(), 0.0);
+        assert_eq!(s.placed()[0].rect.block_start, 10.0);
+    }
+    let p = transform_paragraph(false, false);
+    let mut d = Driver::new(vec![spec(2, Side::Left, Clear::None, 30.0, 30.0)]).unwrap();
+    let start = Checkpoint::new(&p, 70.0).unwrap();
+    // No source metadata means a clear error, not a position-based guess.
+    assert!(matches!(
+        d.trial(
+            &p,
+            &mut LayoutContext::new(),
+            &start,
+            &LineOptions::default(),
+            &AtomicSizes::EMPTY,
+            None
+        ),
+        Err(FlowError::MissingSourceOrder)
+    ));
+    assert!(
+        d.register_source_order(
+            p.id(),
+            p.text(),
+            SourceOrder {
+                floats: vec![(NodeId(2), 0)],
+                atomics: vec![],
+                edges: Some(vec![])
+            }
+        )
+        .is_err()
+    );
+    d.register_source_order(
+        p.id(),
+        p.text(),
+        SourceOrder {
+            floats: vec![(NodeId(2), 3)],
+            atomics: vec![],
+            edges: Some(vec![]),
+        },
+    )
+    .unwrap();
+    let (l, s, _, _) = line(trial(&d, &p, &start));
+    assert_eq!(l.block_offset(), 0.0);
+    assert_eq!(s.placed()[0].rect.block_start, 10.0);
+}
+#[test]
+fn geometry_defers_latest_placements_one_at_a_time_then_flushes_source_order() {
+    let p = paragraph(
+        &[
+            Part::Text("b"),
+            Part::Float(2),
+            Part::Float(3),
+            Part::Text("aaaaa"),
+        ],
+        false,
+    );
+    let d = Driver::new(vec![
+        spec(2, Side::Left, Clear::None, 30.0, 30.0),
+        spec(3, Side::Right, Clear::None, 10.0, 30.0),
+    ])
+    .unwrap();
+    let (l, s, events, calls) = line(trial(&d, &p, &Checkpoint::new(&p, 80.0).unwrap()));
+    assert_eq!(l.block_offset(), 0.0);
+    assert_eq!(
+        s.placed()
+            .iter()
+            .map(|p| (p.node, p.rect.block_start))
+            .collect::<Vec<_>>(),
+        [(NodeId(2), 10.0), (NodeId(3), 10.0)]
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter_map(|e| if let Event::Deferred { node } = e {
+                Some(*node)
+            } else {
+                None
+            })
+            .collect::<Vec<_>>(),
+        [NodeId(3), NodeId(2)]
+    );
+    assert_eq!(calls, 5);
+}
+#[test]
+fn source_order_remains_active_after_first_geometry_position_retry() {
+    let mut style = ParagraphStyle::default();
+    style.root.font_size = 10.0;
+    style.root.line_height = shodo::style::LineHeight::Px(40.0);
+    let mut b = shodo::ParagraphBuilder::new(&style, &Limits::default());
+    b.push_out_of_flow(NodeId(2), OutOfFlowKind::Float)
+        .push_text(TextSource::Generated { node: NodeId(1) }, "a")
+        .push_out_of_flow(NodeId(3), OutOfFlowKind::Float)
+        .push_text(TextSource::Generated { node: NodeId(1) }, "aaaaaaaa");
+    let p = b
+        .build(
+            &mut LayoutContext::new(),
+            &FontCollection::with_options(
+                &Limits::default(),
+                FontOptions {
+                    system_fonts: false,
+                    ..Default::default()
+                },
+            ),
+        )
+        .unwrap();
+    let d = Driver::new(vec![
+        spec(2, Side::Left, Clear::None, 20.0, 30.0),
+        spec(3, Side::Right, Clear::Left, 20.0, 30.0),
+    ])
+    .unwrap();
+    let (l, s, events, _) = line(trial(&d, &p, &Checkpoint::new(&p, 100.0).unwrap()));
+    assert_eq!(l.block_offset(), 30.0);
+    assert_eq!(s.placed()[0].rect.block_start, 0.0);
+    assert_eq!(s.placed()[1].rect.block_start, 70.0);
+    assert!(events.contains(&Event::PositionRetry { block: 30.0 }));
+    assert!(events.contains(&Event::Deferred { node: NodeId(3) }));
+}
+fn empty_inline_paragraph(float_first: bool) -> shodo::Paragraph {
+    let mut style = ParagraphStyle::default();
+    style.root.font_size = 10.0;
+    let mut b = shodo::ParagraphBuilder::new(&style, &Limits::default());
+    if float_first {
+        b.push_out_of_flow(NodeId(2), OutOfFlowKind::Float);
+    }
+    let mut edges = shodo::node::InlineEdges::default();
+    edges.padding.inline_start = 5.0;
+    edges.border.inline_end = 5.0;
+    b.open_inline(NodeId(8), &style.root, edges).close_inline();
+    if !float_first {
+        b.push_out_of_flow(NodeId(2), OutOfFlowKind::Float);
+    }
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "aaaaa");
+    b.build(
+        &mut LayoutContext::new(),
+        &FontCollection::with_options(
+            &Limits::default(),
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        ),
+    )
+    .unwrap()
+}
+#[test]
+fn empty_inline_edges_before_float_remain_on_the_same_or_higher_line() {
+    let p = empty_inline_paragraph(false);
+    let mut d = Driver::new(vec![spec(2, Side::Left, Clear::None, 30.0, 30.0)]).unwrap();
+    let start = Checkpoint::new(&p, 60.0).unwrap();
+    assert!(matches!(
+        d.trial(
+            &p,
+            &mut LayoutContext::new(),
+            &start,
+            &LineOptions::default(),
+            &AtomicSizes::EMPTY,
+            None
+        ),
+        Err(FlowError::MissingSourceOrder)
+    ));
+    d.register_source_order(
+        p.id(),
+        p.text(),
+        SourceOrder {
+            floats: vec![(NodeId(2), 0)],
+            atomics: vec![],
+            edges: Some(vec![
+                SourceEdge {
+                    node: NodeId(8),
+                    offset: 0,
+                    start: true,
+                },
+                SourceEdge {
+                    node: NodeId(8),
+                    offset: 0,
+                    start: false,
+                },
+            ]),
+        },
+    )
+    .unwrap();
+    let (l, s, _, _) = line(trial(&d, &p, &Checkpoint::new(&p, 60.0).unwrap()));
+    assert_eq!(l.block_offset(), 0.0);
+    assert_eq!(s.placed()[0].rect.block_start, 10.0);
+}
+
+#[test]
+fn inline_edges_after_head_float_do_not_force_it_below_later_content() {
+    let p = empty_inline_paragraph(true);
+    let mut d = Driver::new(vec![spec(2, Side::Left, Clear::None, 30.0, 30.0)]).unwrap();
+    d.register_source_order(
+        p.id(),
+        p.text(),
+        SourceOrder {
+            floats: vec![(NodeId(2), 0)],
+            atomics: vec![],
+            edges: Some(vec![
+                SourceEdge {
+                    node: NodeId(8),
+                    offset: 3,
+                    start: true,
+                },
+                SourceEdge {
+                    node: NodeId(8),
+                    offset: 3,
+                    start: false,
+                },
+            ]),
+        },
+    )
+    .unwrap();
+    let (l, s, _, _) = line(trial(&d, &p, &Checkpoint::new(&p, 60.0).unwrap()));
+    assert_eq!(l.block_offset(), 30.0);
+    assert_eq!(s.placed()[0].rect.block_start, 0.0);
 }

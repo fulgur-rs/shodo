@@ -29,3 +29,9 @@ Parley upstream `parley_tests/tests/floats.rs` was read through GitHub contents 
 ## Implementation evidence amendment
 
 A direct Taffy 0.14 reproducer loses an opposite-side inset for left20×30/right20×50 followed by right10×10 clear:left: returns(90,30) overlapping right. Preserve rectangle-band insets when calling real Taffy at its public cleared threshold. Numeric matrix asserts nonoverlap, source order and clear independently; documentation retains the upstream discrepancy rather than calling it an upstream fix. A placement epoch separates reused Paragraph cursor namespaces.
+
+## Review correction: source order on geometry retry
+
+Do not move a trial line below a middle float while leaving that float above its preceding inline content. Before position retry, use actual Line processed glyph source ranges and atomic marker offsets. If unsafe, defer the latest current placement and replay one at a time; keep these anchors acknowledged as pending (distinct from displaced-anchor cursor rewind). Preserve lawful head-float placement. Use Line offset mapping by default; mapping-off callers register ordered floats/atomics for each exact processed text set, including alternate first-line transforms. Missing metadata is an explicit error. Regressions cover midword y10/Fy20, head y30/Fy0, zero advances, atomic prefix and alternate first-line UTF-8 offsets.
+
+Empty inline padding/border/margin edges are caller-owned SourceEdge metadata at processed boundaries, matched to actual box-fragment start/end flags. Absent metadata for an ambiguous edge-only prefix is an explicit MissingSourceOrder error. Regressions verify both empty inline beforefloat (liney0/Fy10) and edges afterheadfloat (liney30/Fy0).

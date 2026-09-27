@@ -33,4 +33,10 @@ Use `cargo +stable test --offline -p shodo-fixtures --test float_flow` for focus
 
 ## Local execution record
 
-2026-09-27: 21 focused tests, including the144-case float matrix; stable/MSRV1.89 workspace469 each; Clippy/docs/fmt/diff pass. Fixed-font PNG generated and viewed, SHA256 e8aa5e77eb198f55a8c3b3b4b117d0bed81b24e5bd88ed0ff3655f87f2b9a9dc. Final review/PR/exact-HEAD CI/merge/cleanup remain the integration gate. External command and execution logs: /tmp/shodo-float-harness-*.
+2026-09-27: 29 focused tests, including the144-case float matrix; stable/MSRV1.89 workspace477 each; Clippy/docs/fmt/diff pass. Fixed-font PNG generated and viewed, SHA256 e8aa5e77eb198f55a8c3b3b4b117d0bed81b24e5bd88ed0ff3655f87f2b9a9dc. Final review/PR/exact-HEAD CI/merge/cleanup remain the integration gate. External command and execution logs: /tmp/shodo-float-harness-*.
+
+Review correction: source-aware geometry deferral prevents a middle float from staying above earlier inline when moving the same line. The corrected midword oracle, legitimate head/indent placement, zero-width/atomic prefixes, alternate first-line offsets, mapping-off explicit metadata, reverse geometry deferral/source flush order and repeated candidate movement are covered. Focused27 tests pass; final full gates are rerun after the correction.
+
+Empty painted inline edges are also covered through explicit SourceEdge metadata and an error boundary when unavailable; focused29 pass before the final complete verification.
+
+Final corrected verification: stable/MSRV workspace477 each, all-target Clippy/docs with warnings denied/fmt/diff/PNG all exit0; unchanged PNG SHA e8aa5e77eb198f55a8c3b3b4b117d0bed81b24e5bd88ed0ff3655f87f2b9a9dc. Same final reviewer rechecks the fix commit before integration.

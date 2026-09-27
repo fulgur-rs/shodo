@@ -71,7 +71,16 @@ including the caller's inset, as required by the core contract.
 The initial slot is a point query; subsequent trials include every rectangle
 intersecting the actual line-height band. Height growth that changes exclusions
 causes a band retry. An indivisible line that cannot fit beside a float retries
-at successive float bottoms. These geometry retries are distinct from the
+at successive float bottoms. Before moving a line down, a current-line float must not remain above earlier
+inline content belonging to that same line. The driver checks logical glyph
+source ranges and atomic source offsets, independently of visual fragment order
+or advance. If a middle float would violate that rule, defer the latest current
+placement and replay the retained BFC before retrying; repeat one placement at a
+time to preserve source order. This geometry deferral keeps the anchor
+acknowledged as pending. It is separate from a displaced-anchor source rewind.
+A head float with only later inline content can remain high while that content
+moves below it. Text-indent and zero-width content do not substitute for source
+order. These geometry retries are distinct from the
 foundation's `3F+1` report/withdraw/rereport bound at a fixed position/band.
 The trial also has a finite defensive call limit derived from source length and
 float specs. Candidate y positions strictly increase; no candidate is repeatedly
@@ -120,6 +129,23 @@ Before page movement, restore the chosen prefix checkpoint, then call
 accepted content. Only unconsumed float rectangles carry into the new fragment;
 resolved old clearance is not reapplied. Right-side placement is rebuilt for the
 new width. Token, cursor, pending reports and withdrawn records remain together.
+For source ordering, use the actual `Line::text`/`Line::offset_mapping` text set,
+which can differ from `Paragraph::text` for first-line transforms. Default
+OffsetMapping identifies float markers and accepted atomic markers. With mapping
+turned off, register caller-owned `SourceOrder` with
+`Driver::register_source_order(paragraph_id, exact_processed_text, order)`.
+Its ordered float `(NodeId, byte_offset)` entries cover all float anchors in that
+text set; atomic byte offsets identify the in-flow markers. Inline padding/border
+or margin edges have no generated text marker: supply `SourceEdge` node, processed
+boundary offset and start/end flag in `SourceOrder::edges` when their prefix order
+is needed. The driver matches actual accepted box-fragment edge flags. `None`
+means unknown and returns `MissingSourceOrder` for an ambiguous edge-only prefix;
+`Some(empty)` explicitly asserts no in-flow edges. Zero-length empty inline boxes
+before a float use the marker's start boundary; edges after it use the marker's
+end boundary. Both directions are regression-tested. Register separate
+text sets if first-line transforms alter processed offsets. A missing entry on a
+geometry retry returns `MissingSourceOrder`, rather than guessing from an inline
+position. Preserve these inputs along with float sizes when replaying checkpoints.
 These are provisional float-slicing rules for this harness, not a general CSS
 fragmentation implementation with margins, nested BFCs or float painting across
 arbitrary pages.
@@ -135,7 +161,7 @@ they have no inline advance. Numeric source ranges therefore include markers.
 | Opposing head floats, content width100 | left x0/right x70; slot start20/width50; 3 calls |
 | Midline `aa ` followed by widths80/10 | both deferred in order to y10; 3 calls |
 | Width160, F1=20, `a a TAB a `, F2=50 | withdraw only F2; F1 y0/F2 y10; 5 calls |
-| Width60, `aa b[F]bbbb`, F=30 | first line0..3 with no report; anchor line3..11 moves to y40 beside/after float at y10 |
+| Width60, `aa b[F]bbbb`, F=30 | first line0..3 with no report; anchor line3..11 stays y10; F deferred below it to y20; 3 calls |
 | Width120, TAB then long span and F=90 | ranges0..5,5..17,17..29,29..33; float first appears at anchor line y30 |
 | Tall40px atomic with future right float | band retry then line y30; 5 calls |
 | Height5 for a 10px line | placement trial rejected; original checkpoint and float report replayed |
@@ -144,7 +170,8 @@ they have no inline advance. Numeric source ranges therefore include markers.
 
 The suite additionally exercises nonempty pending/withdrawn checkpoint rollback,
 accepted/rejected lookahead, source epochs, block handoff, oversized and zero-width
-floats and real-font deterministic RGBA paint.
+floats, head/middle source-order safety, mapping-off and transformed first-line
+sets, and real-font deterministic RGBA paint.
 
 Reference: [Parley float test](https://github.com/linebender/parley/blob/main/parley_tests/tests/floats.rs),
 read via the GitHub contents API on 2026-09-27; downloaded source SHA256

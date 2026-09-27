@@ -61,6 +61,7 @@ pub enum FlowError {
     RetryLimit,
     InvalidToken,
     UnknownResult,
+    MissingSourceOrder,
 }
 impl std::fmt::Display for FlowError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -388,6 +389,22 @@ pub struct Trial {
 }
 pub struct Driver {
     specs: Vec<FloatSpec>,
+    source_orders: Vec<(u64, String, SourceOrder)>,
+}
+/// Caller metadata for processed text sets built without OffsetMapping.
+#[derive(Clone, Debug)]
+pub struct SourceOrder {
+    pub floats: Vec<(NodeId, usize)>,
+    pub atomics: Vec<usize>,
+    /// In-flow inline edges are not represented in OffsetMapping. None means
+    /// unknown; Some(empty) explicitly says all box edges have no in-flow effect.
+    pub edges: Option<Vec<SourceEdge>>,
+}
+#[derive(Clone, Copy, Debug)]
+pub struct SourceEdge {
+    pub node: NodeId,
+    pub offset: usize,
+    pub start: bool,
 }
 impl Driver {
     pub fn new(specs: Vec<FloatSpec>) -> Result<Self, FlowError> {
@@ -399,7 +416,182 @@ impl Driver {
                 return Err(FlowError::DuplicateFloat);
             }
         }
-        Ok(Self { specs })
+        Ok(Self {
+            specs,
+            source_orders: Vec::new(),
+        })
+    }
+    /// Register positions in the exact processed text set used by a Line.
+    /// First-line transforms may require a separate entry from Paragraph::text.
+    pub fn register_source_order(
+        &mut self,
+        paragraph: u64,
+        text: &str,
+        order: SourceOrder,
+    ) -> Result<(), FlowError> {
+        let marker = |offset: usize| {
+            text.get(offset..)
+                .is_some_and(|s| s.starts_with('\u{fffc}'))
+        };
+        if order
+            .floats
+            .iter()
+            .any(|(node, offset)| !marker(*offset) || self.spec(*node).is_err())
+            || order.floats.windows(2).any(|w| w[0].1 >= w[1].1)
+            || order
+                .atomics
+                .iter()
+                .any(|o| !marker(*o) || order.floats.iter().any(|(_, f)| f == o))
+            || order.atomics.windows(2).any(|w| w[0] >= w[1])
+            || order.edges.as_ref().is_some_and(|edges| {
+                edges
+                    .iter()
+                    .any(|e| e.offset > text.len() || !text.is_char_boundary(e.offset))
+            })
+        {
+            return Err(FlowError::InvalidCheckpoint);
+        }
+        self.source_orders
+            .retain(|(id, set, _)| *id != paragraph || set != text);
+        self.source_orders.push((paragraph, text.to_owned(), order));
+        Ok(())
+    }
+    fn source_order(&self, paragraph: u64, line: &Line) -> Result<SourceOrder, FlowError> {
+        if let Some((_, _, order)) = self
+            .source_orders
+            .iter()
+            .find(|(id, text, _)| *id == paragraph && text == line.text())
+        {
+            return Ok(order.clone());
+        }
+        let mapping = line.offset_mapping().ok_or(FlowError::MissingSourceOrder)?;
+        let atomic_nodes: Vec<_> = line
+            .fragments()
+            .filter_map(|f| {
+                if let shodo::Fragment::Atomic(a) = f {
+                    Some(a.node)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let mut order = SourceOrder {
+            floats: Vec::new(),
+            atomics: Vec::new(),
+            edges: None,
+        };
+        for (offset, c) in line.text().char_indices() {
+            if c != '\u{fffc}' {
+                continue;
+            }
+            // Inside the marker avoids boundary affinity ambiguity.
+            if let Some(shodo::mapping::TextOrigin::Generated { node }) =
+                mapping.text_to_dom((offset + 1) as u32, shodo::mapping::Affinity::Downstream)
+            {
+                if self.specs.iter().any(|s| s.node == node) {
+                    order.floats.push((node, offset));
+                } else if atomic_nodes.contains(&node) {
+                    order.atomics.push(offset);
+                }
+            }
+        }
+        Ok(order)
+    }
+    fn source_index(cursor: FloatCursor) -> usize {
+        let mut n = 0;
+        let mut previous = cursor.before();
+        while let Some(c) = previous {
+            n += 1;
+            previous = c.before();
+        }
+        n
+    }
+    fn defer_before_position_retry(
+        &self,
+        p: &Paragraph,
+        line: &Line,
+        state: &mut Checkpoint,
+        next_y: f32,
+    ) -> Result<Option<NodeId>, FlowError> {
+        // Do not let a trial's middle float stay above earlier inline content
+        // when moving this same line below the float. Glyph source ranges (not
+        // visual fragment order or advance) also handle RTL and zero-width text.
+        if !state.placed.iter().any(|v| v.epoch == state.epoch) {
+            return Ok(None);
+        }
+        let order = self.source_order(p.id(), line)?;
+        let range = line.text_range();
+        let mut latest = None;
+        let mut unsafe_prefix = false;
+        for (i, placed) in state.placed.iter().enumerate() {
+            if placed.epoch != state.epoch {
+                continue;
+            }
+            let &(node, offset) = order
+                .floats
+                .get(Self::source_index(placed.cursor))
+                .ok_or(FlowError::MissingSourceOrder)?;
+            if node != placed.node {
+                return Err(FlowError::MissingSourceOrder);
+            }
+            if offset < range.start || offset >= range.end {
+                continue;
+            }
+            latest = Some(i);
+            if placed.rect.block_start < next_y {
+                let text_before = line.fragments().any(|f| matches!(f, shodo::Fragment::GlyphRun(r) if r.text_range().start < offset && r.text_range().end > range.start));
+                let atomic_before = order
+                    .atomics
+                    .iter()
+                    .any(|o| range.start <= *o && *o < offset);
+                let mut edge_before = false;
+                if !text_before && !atomic_before {
+                    let boxes: Vec<_> = line
+                        .fragments()
+                        .filter_map(|f| {
+                            if let shodo::Fragment::InlineBox(b) = f {
+                                Some(b)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    if !boxes.is_empty() {
+                        let edges = order.edges.as_ref().ok_or(FlowError::MissingSourceOrder)?;
+                        edge_before = edges.iter().any(|e| {
+                            range.start <= e.offset
+                                && e.offset <= offset
+                                && boxes.iter().any(|b| {
+                                    b.node == e.node
+                                        && if e.start {
+                                            b.has_start_edge
+                                        } else {
+                                            b.has_end_edge
+                                        }
+                                })
+                        });
+                    }
+                }
+                unsafe_prefix |= text_before || atomic_before || edge_before;
+            }
+        }
+        if !unsafe_prefix {
+            return Ok(None);
+        }
+        let placed = state
+            .placed
+            .remove(latest.ok_or(FlowError::InvalidCheckpoint)?);
+        let report = Report {
+            node: placed.node,
+            cursor: placed.cursor,
+        };
+        let index = state.pending.partition_point(|r| r.cursor < report.cursor);
+        state.pending.insert(index, report);
+        // This is geometry deferral, not a source rewind: the anchor remains
+        // acknowledged and is pending. Core displaced withdrawal still rewinds
+        // one cursor at a time and rereports the removed anchor as before.
+        state.replay()?;
+        Ok(Some(report.node))
     }
     fn spec(&self, node: NodeId) -> Result<FloatSpec, FlowError> {
         self.specs
@@ -496,6 +688,12 @@ impl Driver {
                     if line.inline_size() > width
                         && let Some(y) = state.next_bottom(band)
                     {
+                        if let Some(node) =
+                            self.defer_before_position_retry(p, &line, &mut state, y)?
+                        {
+                            events.push(Event::Deferred { node });
+                            continue;
+                        }
                         state.block = y;
                         events.push(Event::PositionRetry { block: y });
                         continue;
