@@ -66,7 +66,9 @@ pub(super) fn selected(
             data,
             u,
             data.units[start].text.start,
-            offset.add(pos, sat).add(spacing.summary().width(sat), sat),
+            offset
+                .add(pos, sat)
+                .add(spacing.summary(Some(data)).width(sat), sat),
             atomics,
             cx,
             sat,
@@ -108,6 +110,7 @@ pub(super) fn selected(
         reason,
         widths,
         leading: None,
+        autospace_gaps: Vec::new(),
         content: pos
             .sub(indent, sat)
             .sub(trailing, sat)

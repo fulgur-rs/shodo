@@ -796,3 +796,395 @@ fn visible_soft_hyphen_tracking_reaches_intrinsics_and_plans() {
         close(last.inline_size(), suffix);
     }
 }
+
+fn ic(size: f32) -> f32 {
+    let font = FontRef::from_index(FONTS[1].bytes, 0).unwrap();
+    font.glyph_metrics(Size::new(size), LocationRef::default())
+        .advance_width(font.charmap().map('水').unwrap())
+        .unwrap()
+}
+
+#[test]
+fn autospace_uses_visual_classes_and_real_ic() {
+    for text in ["水a", "a水", "水1", "1水"] {
+        let mut no = root();
+        no.text_autospace = shodo::style::TextAutospace::NoAutospace;
+        let natural = lines(&paragraph(no, text), 1000.0).remove(0);
+        let actual = lines(&paragraph(root(), text), 1000.0).remove(0);
+        close(actual.inline_size(), natural.inline_size() + ic(20.0) / 8.0);
+    }
+    for tail in ["אב", "אב♥"] {
+        let layout = |autospace| {
+            let mut style = root();
+            style.text_autospace = autospace;
+            let mut rtl = style.clone();
+            rtl.direction = shodo::geometry::Direction::Rtl;
+            rtl.unicode_bidi = shodo::style::UnicodeBidi::Isolate;
+            let p = build(style, |b| {
+                b.push_text(TextSource::Generated { node: NodeId(1) }, "水")
+                    .open_inline(NodeId(2), &rtl, InlineEdges::default())
+                    .push_text(TextSource::Generated { node: NodeId(3) }, tail)
+                    .close_inline();
+            });
+            lines(&p, 1000.0).remove(0)
+        };
+        let natural = layout(shodo::style::TextAutospace::NoAutospace);
+        let actual = layout(shodo::style::TextAutospace::Normal);
+        // The isolate's visual first character is bet or the heart.
+        close(
+            actual.inline_size(),
+            natural.inline_size() + if tail == "אב" { ic(20.0) / 8.0 } else { 0.0 },
+        );
+    }
+}
+
+#[test]
+fn autospace_cross_node_boundary_uses_containing_style() {
+    let mut style = root();
+    style.font_size = 32.0;
+    let mut child = root();
+    child.text_autospace = shodo::style::TextAutospace::NoAutospace;
+    child.font_size = 12.0;
+    let p = build(style, |b| {
+        b.open_inline(NodeId(1), &child, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(2) }, "水")
+            .close_inline()
+            .open_inline(NodeId(3), &child, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(4) }, "a")
+            .close_inline();
+    });
+    let natural = lines(&paragraph(child, "水a"), 1000.0).remove(0);
+    let line = lines(&p, 1000.0).remove(0);
+    close(line.inline_size(), natural.inline_size() + ic(32.0) / 8.0);
+    for f in line.fragments() {
+        if let Fragment::InlineBox(b) = f
+            && b.node == NodeId(1)
+        {
+            close(b.rect.inline_size, ic(12.0));
+        }
+    }
+}
+
+#[test]
+fn autospace_removed_at_soft_wrap_and_intrinsics() {
+    for mode in [
+        shodo::style::TextWrapStyle::Auto,
+        shodo::style::TextWrapStyle::Balance,
+        shodo::style::TextWrapStyle::Pretty,
+    ] {
+        let mut style = root();
+        style.overflow_wrap = shodo::style::OverflowWrap::Anywhere;
+        let p = paragraph(style, "水a");
+        let mut no = root();
+        no.text_autospace = shodo::style::TextAutospace::NoAutospace;
+        let natural = lines(&paragraph(no, "水a"), 1000.0).remove(0).inline_size();
+        let options = shodo::style::LineOptions {
+            text_wrap_style: mode,
+            ..Default::default()
+        };
+        let wrapped = p.break_all(
+            &mut LayoutContext::new(),
+            &options,
+            natural + ic(20.0) / 16.0,
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(wrapped.len(), 2);
+        close(wrapped[0].inline_size(), ic(20.0));
+        close(wrapped[1].inline_size(), advance('a'));
+        assert_eq!(wrapped[0].text_range(), 0..3);
+        assert_eq!(wrapped[1].text_range(), 3..4);
+        let intrinsic = p.intrinsic_sizes(
+            &mut LayoutContext::new(),
+            &options,
+            &AtomicIntrinsics::EMPTY,
+        );
+        close(intrinsic.max_content, natural + ic(20.0) / 8.0);
+        close(intrinsic.min_content, ic(20.0).max(advance('a')));
+    }
+}
+
+#[test]
+fn autospace_classification_and_grapheme_marks() {
+    for (text, gaps) in [
+        ("水e\u{301}", 1),
+        ("e\u{301}水", 1),
+        ("水ｶ", 1),
+        ("水1", 1),
+        ("水Ａ", 0),
+        ("水１", 0),
+        ("水가", 0),
+        ("水。a", 0),
+        ("水 a", 0),
+        ("水♥a", 0),
+        ("水\u{200d}a", 1),
+        ("々a", 1),
+        ("㇀a", 1),
+    ] {
+        let mut no = root();
+        no.text_autospace = shodo::style::TextAutospace::NoAutospace;
+        let natural = lines(&paragraph(no, text), 1000.0).remove(0);
+        let actual = lines(&paragraph(root(), text), 1000.0).remove(0);
+        close(
+            actual.inline_size(),
+            natural.inline_size() + gaps as f32 * ic(20.0) / 8.0,
+        );
+    }
+}
+
+#[test]
+fn autospace_and_tracking_compose_with_justification() {
+    let mut style = root();
+    style.letter_spacing = 2.0;
+    style.word_spacing = 3.0;
+    let p = paragraph(style, "水a b");
+    let mut no = root();
+    no.text_autospace = shodo::style::TextAutospace::NoAutospace;
+    let natural = lines(&paragraph(no, "水a b"), 1000.0).remove(0);
+    let plain = lines(&p, 1000.0).remove(0);
+    close(
+        plain.inline_size(),
+        natural.inline_size() + 6.0 + 3.0 + ic(20.0) / 8.0,
+    );
+    let options = shodo::style::LineOptions {
+        text_align: shodo::style::TextAlign::JustifyAll,
+        text_justify: shodo::style::TextJustify::InterWord,
+        ..Default::default()
+    };
+    let justified = p
+        .break_all(
+            &mut LayoutContext::new(),
+            &options,
+            plain.inline_size() + 30.0,
+            &AtomicSizes::EMPTY,
+        )
+        .remove(0);
+    close(justified.inline_size(), plain.inline_size() + 30.0);
+    let glyphs = |line: &Line| {
+        line.fragments()
+            .filter_map(|f| {
+                if let Fragment::GlyphRun(r) = f {
+                    Some(r)
+                } else {
+                    None
+                }
+            })
+            .flat_map(|r| r.glyphs())
+            .collect::<Vec<_>>()
+    };
+    let before = glyphs(&plain);
+    let after = glyphs(&justified);
+    assert_eq!(
+        before.iter().map(|g| g.id).collect::<Vec<_>>(),
+        after.iter().map(|g| g.id).collect::<Vec<_>>()
+    );
+    close(after[1].inline_position, before[1].inline_position);
+    close(
+        after.last().unwrap().inline_position,
+        before.last().unwrap().inline_position + 30.0,
+    );
+    close(
+        lines(&p, 1000.0).remove(0).inline_size(),
+        plain.inline_size(),
+    );
+}
+
+#[test]
+fn autospace_checks_the_intervening_physical_inline_edge() {
+    for direction in [
+        shodo::geometry::Direction::Ltr,
+        shodo::geometry::Direction::Rtl,
+    ] {
+        for left_edge in [true, false] {
+            let layout = |auto| {
+                let mut style = root();
+                style.text_autospace = auto;
+                let mut child = style.clone();
+                child.direction = direction;
+                child.unicode_bidi = shodo::style::UnicodeBidi::Isolate;
+                let mut edges = InlineEdges::default();
+                if left_edge == (direction == shodo::geometry::Direction::Ltr) {
+                    edges.padding.inline_start = 2.0;
+                } else {
+                    edges.padding.inline_end = 2.0;
+                }
+                let p = build(style, |b| {
+                    b.push_text(TextSource::Generated { node: NodeId(1) }, "水")
+                        .open_inline(NodeId(2), &child, edges)
+                        .push_text(TextSource::Generated { node: NodeId(3) }, "אב")
+                        .close_inline();
+                });
+                lines(&p, 1000.0).remove(0)
+            };
+            let no = layout(shodo::style::TextAutospace::NoAutospace);
+            let yes = layout(shodo::style::TextAutospace::Normal);
+            close(
+                yes.inline_size(),
+                no.inline_size() + if left_edge { 0.0 } else { ic(20.0) / 8.0 },
+            );
+        }
+    }
+}
+
+#[test]
+fn autospace_empty_edges_block_but_transparent_markers_do_not() {
+    for content in ["", "\u{ad}", "\u{200e}"] {
+        for edge in [0.0, 2.0] {
+            let layout = |auto| {
+                let mut style = root();
+                style.text_autospace = auto;
+                let p = build(style.clone(), |b| {
+                    b.push_text(TextSource::Generated { node: NodeId(1) }, "水")
+                        .open_inline(
+                            NodeId(2),
+                            &style,
+                            InlineEdges {
+                                padding: shodo::node::Sides {
+                                    inline_start: edge,
+                                    ..Default::default()
+                                },
+                                ..Default::default()
+                            },
+                        )
+                        .push_text(TextSource::Generated { node: NodeId(3) }, content)
+                        .close_inline()
+                        .push_text(TextSource::Generated { node: NodeId(4) }, "a");
+                });
+                lines(&p, 1000.0).remove(0)
+            };
+            let no = layout(shodo::style::TextAutospace::NoAutospace);
+            let yes = layout(shodo::style::TextAutospace::Normal);
+            assert!(
+                (yes.inline_size()
+                    - no.inline_size()
+                    - if edge == 0.0 { ic(20.0) / 8.0 } else { 0.0 })
+                .abs()
+                    < 1.0 / 32.0,
+                "content {content:?}, edge {edge}: {} vs {}",
+                yes.inline_size(),
+                no.inline_size()
+            );
+        }
+    }
+}
+
+#[test]
+fn autospace_first_line_uses_its_transformed_text_and_ic() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let mut first = root();
+    first.font_size = 32.0;
+    first.text_transform = shodo::style::TextTransform::FullWidth;
+    let mut b = ParagraphBuilder::new(
+        &ParagraphStyle {
+            root: root(),
+            first_line: Some(first.clone()),
+            ..Default::default()
+        },
+        &Limits::default(),
+    );
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "水a")
+        .push_forced_break(NodeId(2))
+        .push_text(TextSource::Generated { node: NodeId(3) }, "水a");
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let actual = lines(&p, 1000.0);
+    assert_eq!(actual.len(), 2);
+    first.text_autospace = shodo::style::TextAutospace::NoAutospace;
+    close(
+        actual[0].inline_size(),
+        lines(&paragraph(first, "水a"), 1000.0)
+            .remove(0)
+            .inline_size(),
+    );
+    close(
+        actual[1].inline_size(),
+        ic(20.0) + advance('a') + ic(20.0) / 8.0,
+    );
+}
+
+#[test]
+fn autospace_float_retries_and_tiny_windows_keep_final_geometry() {
+    for budget in [None, Some(0), Some(2)] {
+        let limits = Limits {
+            max_shaping_run_bytes: budget,
+            max_reshape_window_bytes: budget,
+            ..Default::default()
+        };
+        let fonts = load_fonts(&limits).unwrap();
+        let mut style = root();
+        style.letter_spacing = 2.0;
+        style.overflow_wrap = shodo::style::OverflowWrap::Anywhere;
+        let mut b = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: style,
+                ..Default::default()
+            },
+            &limits,
+        );
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "水a")
+            .push_out_of_flow(NodeId(2), shodo::node::OutOfFlowKind::Float)
+            .push_text(TextSource::Generated { node: NodeId(3) }, "水e\u{301} 水a");
+        let p = b
+            .build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap();
+        let mut warm = LayoutContext::new();
+        let shodo::LineResult::FloatEncountered {
+            float_cursor,
+            inline_position,
+            ..
+        } = p.next_line(
+            &mut warm,
+            p.start_token(),
+            &Default::default(),
+            &shodo::LineConstraint::new(1000.0),
+            &AtomicSizes::EMPTY,
+        )
+        else {
+            panic!()
+        };
+        close(
+            inline_position,
+            ic(20.0) + advance('a') + 2.0 + ic(20.0) / 8.0,
+        );
+        for width in [100.0, 60.0, 35.0, 20.0] {
+            let constraint = shodo::LineConstraint {
+                floats_placed_through: Some(float_cursor),
+                ..shodo::LineConstraint::new(width)
+            };
+            let shodo::LineResult::Line(a) = p.next_line(
+                &mut warm,
+                p.start_token(),
+                &Default::default(),
+                &constraint,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!()
+            };
+            let shodo::LineResult::Line(b) = p.next_line(
+                &mut LayoutContext::new(),
+                p.start_token(),
+                &Default::default(),
+                &constraint,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!()
+            };
+            assert_eq!(a.text_range(), b.text_range());
+            close(a.inline_size(), b.inline_size());
+            let glyphs = |l: &Line| {
+                l.fragments()
+                    .filter_map(|f| {
+                        if let Fragment::GlyphRun(r) = f {
+                            Some(r)
+                        } else {
+                            None
+                        }
+                    })
+                    .flat_map(|r| r.glyphs())
+                    .map(|g| (g.id, g.cluster, g.inline_position, g.advance))
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(glyphs(&a), glyphs(&b));
+        }
+    }
+}

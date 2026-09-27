@@ -15,12 +15,17 @@ pub(crate) struct UnitSpacing {
     /// Last storage piece of the same source grapheme. Mark-only pieces may
     /// be split into another run when a shaping resource budget is small.
     pub(crate) tail: usize,
+    pub(crate) gaps: (usize, usize),
 }
 
-pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<UnitSpacing> {
+pub(crate) fn build(
+    data: &ParagraphData,
+    sat: &mut Saturation,
+) -> (Vec<UnitSpacing>, Vec<super::autospace::Gap>) {
     let category = CodePointMapData::<GeneralCategory>::new();
     let script = CodePointMapData::<Script>::new();
     let mut previous_text = None;
+    let mut gaps = Vec::new();
     let mut result: Vec<_> = data
         .units
         .iter()
@@ -30,6 +35,7 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<UnitSpaci
             let tracking = LayoutUnit::from_f32_round(style.letter_spacing, sat).raw();
             let mut value = UnitSpacing {
                 tail: index,
+                gaps: (gaps.len(), gaps.len()),
                 ..Default::default()
             };
             match unit.kind {
@@ -40,13 +46,13 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<UnitSpaci
                     previous_text = Some(unit.text.clone());
                     let start = data
                         .breaks
-                        .graphemes
+                        .typographic_starts
                         .partition_point(|g| *g < unit.text.start);
                     let end = data
                         .breaks
-                        .graphemes
+                        .typographic_starts
                         .partition_point(|g| *g < unit.text.end);
-                    for &offset in &data.breaks.graphemes[start..end] {
+                    for &offset in &data.breaks.typographic_starts[start..end] {
                         let Some(ch) = data.text[offset as usize..].chars().next() else {
                             continue;
                         };
@@ -73,10 +79,29 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<UnitSpaci
                                 | GeneralCategory::ModifierLetter
                                 | GeneralCategory::OtherLetter
                         );
-                        value.summary = value.summary.join(Summary::leaf(Edge {
-                            tracking,
+                        // A resource-limited cluster can span source items and
+                        // inline markers; ownership comes from the character,
+                        // not the cluster's first shaping slice.
+                        let source = data.items.partition_point(|item| item.text.end <= offset);
+                        let style = &data.styles[data.items[source].style as usize];
+                        let edge = Edge {
+                            tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
                             kind: if cursive { Kind::Cursive } else { Kind::Text },
-                        }));
+                            unit: index as u32,
+                            box_node: data.spacing_tree.item_nodes[source],
+                            class: super::autospace::classify(ch),
+                        };
+                        if let Some(previous) = value.summary.last {
+                            let amount = super::autospace::gap(data, previous, edge, false);
+                            if amount != 0 {
+                                gaps.push(super::autospace::Gap {
+                                    assigned: index as u32,
+                                    owner: super::autospace::owner(data, previous, edge),
+                                    amount: super::spacing_summary::raw(amount, sat),
+                                });
+                            }
+                        }
+                        value.summary = value.summary.join(Summary::leaf(edge), Some(data));
                         if matches!(
                             ch,
                             ' ' | '\u{a0}'
@@ -96,16 +121,42 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<UnitSpaci
                     value.summary = Summary::leaf(Edge {
                         tracking,
                         kind: Kind::Atomic,
+                        unit: index as u32,
+                        ..Default::default()
                     })
                 }
                 UnitKind::Tab | UnitKind::ForcedBreak | UnitKind::BlockInInline { .. } => {
                     value.summary = Summary::leaf(Edge {
                         tracking: 0,
                         kind: Kind::Barrier,
+                        unit: index as u32,
+                        ..Default::default()
                     })
+                }
+                UnitKind::Open { box_index } | UnitKind::Close { box_index }
+                    if !data.spacing_tree.has_content[box_index as usize + 1] =>
+                {
+                    let edges = data.boxes[box_index as usize].edges;
+                    let parts = if matches!(unit.kind, UnitKind::Open { .. }) {
+                        [
+                            edges.margin.inline_start,
+                            edges.border.inline_start,
+                            edges.padding.inline_start,
+                        ]
+                    } else {
+                        [
+                            edges.margin.inline_end,
+                            edges.border.inline_end,
+                            edges.padding.inline_end,
+                        ]
+                    };
+                    if parts.iter().any(|v| *v != 0.0) {
+                        value.summary = Summary::barrier();
+                    }
                 }
                 _ => {}
             }
+            value.gaps.1 = gaps.len();
             value
         })
         .collect();
@@ -117,11 +168,11 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<UnitSpaci
         if let Some(first) = owner
             && data
                 .breaks
-                .graphemes
+                .typographic_starts
                 .partition_point(|g| *g < data.units[first].text.end)
                 == data
                     .breaks
-                    .graphemes
+                    .typographic_starts
                     .partition_point(|g| *g <= unit.text.start)
         {
             result[first].tail = i;
@@ -129,7 +180,25 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<UnitSpaci
             owner = Some(i);
         }
     }
-    result
+    (result, gaps)
+}
+
+pub(crate) fn needed(data: &ParagraphData) -> bool {
+    !(data.styles.iter().all(|s| {
+        #[cfg(test)]
+        data.spacing_setup_visits
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        s.letter_spacing == 0.0 && s.word_spacing == 0.0
+    }) && !data.unit_spacing.iter().any(|s| {
+        #[cfg(test)]
+        data.spacing_setup_visits
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        s.summary.cost != 0
+            || [s.summary.first, s.summary.last]
+                .into_iter()
+                .flatten()
+                .any(|e| e.class == super::autospace::Class::Ideograph)
+    }))
 }
 
 pub(super) fn push(data: &ParagraphData, cursor: &mut Cursor, index: usize) {
@@ -139,7 +208,7 @@ pub(super) fn push(data: &ParagraphData, cursor: &mut Cursor, index: usize) {
     } else {
         unit.level
     };
-    cursor.push(level, data.unit_spacing[index].summary);
+    cursor.push(level, data.unit_spacing[index].summary, Some(data));
 }
 
 pub(super) fn intercharacter_allowed(data: &ParagraphData, left: usize, right: usize) -> bool {
@@ -164,9 +233,12 @@ pub(super) fn hyphen(
         Summary::leaf(Edge {
             tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
             kind: Kind::Text,
+            unit: index as u32,
+            ..Default::default()
         }),
+        Some(data),
     );
-    cursor.summary().width(sat)
+    cursor.summary(Some(data)).width(sat)
 }
 
 pub(super) fn width(
@@ -188,13 +260,16 @@ pub(super) fn width(
                 Summary::leaf(Edge {
                     tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
                     kind: Kind::Text,
+                    unit: i as u32,
+                    ..Default::default()
                 }),
+                Some(data),
             );
         } else {
             push(data, &mut cursor, i);
         }
     }
-    cursor.summary().width(sat)
+    cursor.summary(Some(data)).width(sat)
 }
 
 /// Allocate gaps only after one visual reorder of the selected line.
@@ -206,11 +281,7 @@ pub(super) fn apply(
     scan: &mut super::Scan,
     sat: &mut Saturation,
 ) {
-    if data
-        .styles
-        .iter()
-        .all(|s| s.letter_spacing == 0.0 && s.word_spacing == 0.0)
-    {
+    if !data.needs_spacing {
         return;
     }
     let mut leading: Vec<_> = data.unit_spacing[start..scan.end]
@@ -226,6 +297,10 @@ pub(super) fn apply(
         .map(|u| u.summary)
         .collect();
     for (k, unit) in data.units[start..scan.end].iter().enumerate() {
+        let unit_spacing = &data.unit_spacing[start + k];
+        scan.autospace_gaps.extend_from_slice(
+            &data.internal_autospace_gaps[unit_spacing.gaps.0..unit_spacing.gaps.1],
+        );
         let tail = data.unit_spacing[start + k].tail.min(scan.end - 1);
         if tail > start + k {
             let after = data.unit_spacing[start + k].word.sub(leading[k], sat);
@@ -239,12 +314,15 @@ pub(super) fn apply(
             metadata[k] = Summary::leaf(Edge {
                 tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
                 kind: Kind::Text,
+                unit: (start + k) as u32,
+                ..Default::default()
             });
         }
         scan.widths[k] =
             scan.widths[k].add(super::spacing_summary::raw(metadata[k].cost, sat), sat);
     }
     let mut previous: Option<(usize, Edge)> = None;
+    let mut barrier = false;
     for range in [start..scan.hang_start, scan.hang_start..scan.end] {
         let levels: Vec<_> = range
             .clone()
@@ -273,11 +351,17 @@ pub(super) fn apply(
                 (summary.first, summary.last)
             };
             let Some(first) = first else {
+                barrier |= summary.before || summary.after;
                 continue;
             };
             if let Some((j, edge)) = previous {
                 let cost = super::spacing_summary::gap(edge, first);
                 let gap = super::spacing_summary::raw(cost, sat);
+                let auto = if data.base_level.is_multiple_of(2) {
+                    super::autospace::gap(data, edge, first, barrier || summary.before)
+                } else {
+                    super::autospace::gap(data, first, edge, barrier || summary.after)
+                };
                 // Hanging whitespace takes the content→space gap itself;
                 // the content width remains the trimmed candidate width.
                 if i >= scan.hang_start && j < scan.hang_start {
@@ -302,7 +386,26 @@ pub(super) fn apply(
                         }
                     }
                 }
+                if auto != 0 {
+                    scan.autospace_gaps.push(super::autospace::Gap {
+                        assigned: edge.unit,
+                        owner: super::autospace::owner(data, edge, first),
+                        amount: super::spacing_summary::raw(auto, sat),
+                    });
+                    let before = data.units[j].level % 2 != data.base_level % 2;
+                    let target = if before {
+                        j
+                    } else {
+                        data.unit_spacing[j].tail.min(scan.end - 1)
+                    };
+                    let extra = super::spacing_summary::raw(auto, sat);
+                    scan.widths[target - start] = scan.widths[target - start].add(extra, sat);
+                    if before {
+                        leading[target - start] = leading[target - start].add(extra, sat);
+                    }
+                }
             }
+            barrier = summary.after;
             previous = Some((i, last.unwrap()));
         }
     }
@@ -451,4 +554,53 @@ pub(super) fn positions(
         Some((range.start, points)),
         Some((range.start, adjustments)),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn many_styles_are_not_rescanned_for_every_line() {
+        use crate::node::{InlineEdges, NodeId, TextSource};
+        use crate::style::{InlineStyle, ParagraphStyle, TextAutospace, WordBreak};
+        let limits = crate::limits::Limits::default();
+        let mut root = ParagraphStyle::default();
+        root.root.text_autospace = TextAutospace::NoAutospace;
+        root.root.word_break = WordBreak::BreakAll;
+        let mut b = crate::ParagraphBuilder::new(&root, &limits);
+        for i in 0..1000 {
+            let style = InlineStyle {
+                font_size: 10.0 + i as f32,
+                ..root.root.clone()
+            };
+            b.open_inline(NodeId(i * 2 + 1), &style, InlineEdges::default())
+                .push_text(
+                    TextSource::Generated {
+                        node: NodeId(i * 2 + 2),
+                    },
+                    "a",
+                )
+                .close_inline();
+        }
+        let p = b
+            .build(
+                &mut crate::LayoutContext::new(),
+                &crate::font::FontCollection::new(&limits),
+            )
+            .unwrap();
+        let lines = p.break_all(
+            &mut crate::LayoutContext::new(),
+            &Default::default(),
+            1.0,
+            &crate::AtomicSizes::EMPTY,
+        );
+        assert_eq!(lines.len(), 1000);
+        let visits = p
+            .data
+            .spacing_setup_visits
+            .load(std::sync::atomic::Ordering::Relaxed);
+        assert!(
+            visits <= 10_000,
+            "{visits} whole-paragraph spacing setup visits"
+        );
+    }
 }

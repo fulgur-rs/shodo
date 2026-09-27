@@ -2,19 +2,24 @@
 //! A candidate folds at most 127 frames (implicit levels 0–126); it never
 //! reorders its whole prefix.
 use crate::geometry::{LayoutUnit, Saturation};
+use crate::paragraph::ParagraphData;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum Kind {
+    #[default]
     Text,
     Cursive,
     Atomic,
     Barrier,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub(super) struct Edge {
     pub(super) tracking: i32,
     pub(super) kind: Kind,
+    pub(super) unit: u32,
+    pub(super) box_node: u32,
+    pub(super) class: super::autospace::Class,
 }
 
 pub(super) fn allowed(a: Edge, b: Edge) -> bool {
@@ -36,6 +41,8 @@ pub(crate) struct Summary {
     pub(super) first: Option<Edge>,
     pub(super) last: Option<Edge>,
     pub(super) cost: i64,
+    pub(super) before: bool,
+    pub(super) after: bool,
 }
 
 impl Summary {
@@ -44,14 +51,41 @@ impl Summary {
             first: Some(edge),
             last: Some(edge),
             cost: 0,
+            before: false,
+            after: false,
         }
     }
 
-    pub(super) fn join(self, other: Self) -> Self {
+    pub(super) fn barrier() -> Self {
+        Self {
+            before: true,
+            after: true,
+            ..Default::default()
+        }
+    }
+
+    pub(super) fn join(self, other: Self, data: Option<&ParagraphData>) -> Self {
         Self {
             first: self.first.or(other.first),
             last: other.last.or(self.last),
-            cost: self.cost + other.cost + self.last.zip(other.first).map_or(0, |(a, b)| gap(a, b)),
+            cost: self.cost
+                + other.cost
+                + self.last.zip(other.first).map_or(0, |(a, b)| {
+                    gap(a, b)
+                        + data.map_or(0, |d| {
+                            super::autospace::gap(d, a, b, self.after || other.before)
+                        })
+                }),
+            before: if self.first.is_some() {
+                self.before
+            } else {
+                self.before || other.before
+            },
+            after: if other.last.is_some() {
+                other.after
+            } else {
+                self.after || other.after
+            },
         }
     }
 
@@ -59,6 +93,8 @@ impl Summary {
         Self {
             first: self.last,
             last: self.first,
+            before: self.after,
+            after: self.before,
             ..self
         }
     }
@@ -103,15 +139,15 @@ impl Default for Cursor {
 }
 
 impl Cursor {
-    fn append(frame: &mut Frame, summary: Summary) {
+    fn append(frame: &mut Frame, summary: Summary, data: Option<&ParagraphData>) {
         frame.summary = if frame.level.is_multiple_of(2) {
-            frame.summary.join(summary)
+            frame.summary.join(summary, data)
         } else {
-            summary.join(frame.summary)
+            summary.join(frame.summary, data)
         };
     }
 
-    pub(super) fn push(&mut self, level: u8, summary: Summary) {
+    pub(super) fn push(&mut self, level: u8, summary: Summary, data: Option<&ParagraphData>) {
         #[cfg(test)]
         self.visits.set(self.visits.get() + 1);
         let mut carry = None;
@@ -120,7 +156,7 @@ impl Cursor {
             self.visits.set(self.visits.get() + 1);
             let mut popped = self.frames.pop().unwrap();
             if let Some(summary) = carry {
-                Self::append(&mut popped, summary);
+                Self::append(&mut popped, summary, data);
             }
             carry = Some(popped.summary);
         }
@@ -132,7 +168,7 @@ impl Cursor {
         }
         let frame = self.frames.last_mut().unwrap();
         if let Some(summary) = carry {
-            Self::append(frame, summary);
+            Self::append(frame, summary, data);
         }
         Self::append(
             frame,
@@ -141,16 +177,17 @@ impl Cursor {
             } else {
                 summary.reverse()
             },
+            data,
         );
     }
 
-    pub(super) fn summary(&self) -> Summary {
+    pub(super) fn summary(&self, data: Option<&ParagraphData>) -> Summary {
         let mut carry = Summary::default();
         for frame in self.frames.iter().rev() {
             #[cfg(test)]
             self.visits.set(self.visits.get() + 1);
             let mut frame = *frame;
-            Self::append(&mut frame, carry);
+            Self::append(&mut frame, carry, data);
             carry = frame.summary;
         }
         carry
@@ -182,11 +219,16 @@ mod tests {
                 .map(|i| Edge {
                     tracking: ((i as i32) - 2) * 64,
                     kind: kinds[(i + profile) % 6],
+                    ..Default::default()
                 })
                 .collect();
             let mut cursor = Cursor::default();
             for end in 1..=6 {
-                cursor.push(levels[end - 1].number(), Summary::leaf(edges[end - 1]));
+                cursor.push(
+                    levels[end - 1].number(),
+                    Summary::leaf(edges[end - 1]),
+                    None,
+                );
                 let order = BidiInfo::reorder_visual(&levels[..end]);
                 let expected: i64 = order
                     .windows(2)
@@ -204,7 +246,7 @@ mod tests {
                     })
                     .sum();
                 assert_eq!(
-                    cursor.summary().cost,
+                    cursor.summary(None).cost,
                     expected,
                     "profile {profile}, prefix {end}"
                 );
@@ -221,11 +263,13 @@ mod tests {
                 Summary::leaf(Edge {
                     tracking: 64,
                     kind: Kind::Text,
+                    ..Default::default()
                 }),
+                None,
             );
         }
         assert_eq!(cursor.frames.len(), 127);
-        assert_eq!(cursor.summary().cost, 126 * 64);
+        assert_eq!(cursor.summary(None).cost, 126 * 64);
         let mut cursor = Cursor::default();
         for i in 0..100_000 {
             let level = ((i * 37) % 127) as u8;
@@ -234,9 +278,11 @@ mod tests {
                 Summary::leaf(Edge {
                     tracking: 64,
                     kind: Kind::Text,
+                    ..Default::default()
                 }),
+                None,
             );
-            assert_eq!(cursor.summary().cost, i * 64);
+            assert_eq!(cursor.summary(None).cost, i * 64);
             assert!(cursor.frames.len() <= 127);
         }
         assert!(cursor.visits.get() < 100_000 * 130);

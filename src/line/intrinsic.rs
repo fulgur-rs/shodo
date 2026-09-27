@@ -197,7 +197,7 @@ impl Paragraph {
                 let width = super::scan::unit_width(
                     data,
                     u,
-                    total.add(total_spacing.summary().width(&mut sat), &mut sat),
+                    total.add(total_spacing.summary(Some(data)).width(&mut sat), &mut sat),
                     &AtomicSizes::EMPTY,
                     cx,
                     &mut sat,
@@ -208,7 +208,7 @@ impl Paragraph {
                         data,
                         u,
                         word_start,
-                        word.add(word_spacing.summary().width(&mut sat), &mut sat),
+                        word.add(word_spacing.summary(Some(data)).width(&mut sat), &mut sat),
                         &AtomicSizes::EMPTY,
                         cx,
                         &mut sat,
@@ -231,8 +231,8 @@ impl Paragraph {
                 | UnitKind::Float { .. } => {}
                 _ => {
                     trailing = LayoutUnit::ZERO;
-                    kept_word_spacing = word_spacing.summary().width(&mut sat);
-                    kept_total_spacing = total_spacing.summary().width(&mut sat);
+                    kept_word_spacing = word_spacing.summary(Some(data)).width(&mut sat);
+                    kept_total_spacing = total_spacing.summary(Some(data)).width(&mut sat);
                 }
             }
             let hyphen = if u.break_after == BreakClass::Hyphen {

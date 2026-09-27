@@ -69,10 +69,10 @@
 
 **Interfaces:** consumes Task2 visual boundary summary and Task1 ic metrics; extends the same spacing contract, no text insertion or separate glyph shaping。
 
-- [ ] Write/run numeric RED `autospace_uses_visual_classes_and_real_ic` for CJK/Latin and CJK/decimal boundaries, no-autospace comparison, direct 0.125ic expectation; include mixed bidi whose visual neighbor differs from logical neighbor。
-- [ ] Implement current CSS ideograph/script-extension/EAW/category classification and boundary-owning innermost inline style. Cache ic measure by resolved style; ignore transparent OOF/empty boundaries, stop across nonzero edges, whitespace, punctuation, atomic/tab/forced/block。
-- [ ] Add `autospace_cross_node_boundary_uses_containing_style`, `autospace_removed_at_soft_wrap`, `autospace_and_tracking_compose_with_justification`, first-line/transformed text, marks/fullwidth/halfwidth classification and float callback tests。
-- [ ] Verify all width consumers and selected glyph output agree with actual autospace, warm/cold cache and tiny windows preserve source. Run workspace/spacing; commit `feat: add bidi-aware inter-script text autospace`。
+- [x] Write/run numeric RED `autospace_uses_visual_classes_and_real_ic` for CJK/Latin and CJK/decimal boundaries, no-autospace comparison, direct 0.125ic expectation; include mixed bidi whose visual neighbor differs from logical neighbor。
+- [x] Implement current CSS ideograph/script-extension/EAW/category classification and boundary-owning innermost inline style. Cache ic measure by resolved style; ignore transparent OOF/empty boundaries, stop across nonzero edges, whitespace, punctuation, atomic/tab/forced/block。
+- [x] Add `autospace_cross_node_boundary_uses_containing_style`, `autospace_removed_at_soft_wrap`, `autospace_and_tracking_compose_with_justification`, first-line/transformed text, marks/fullwidth/halfwidth classification and float callback tests。
+- [x] Verify all width consumers and selected glyph output agree with actual autospace, warm/cold cache and tiny windows preserve source. Run workspace/spacing; commit `feat: add bidi-aware inter-script text autospace`。
 
 ### Task 4: Caret index and coordinate hit testing
 

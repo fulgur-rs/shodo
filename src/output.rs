@@ -97,6 +97,7 @@ impl Line {
             atomics,
             visible_hyphen,
         );
+        crate::line::autospace::exclude_from_boxes(data, &mut records, &scan.autospace_gaps, sat);
         if let Some(leading) = &scan.leading {
             for record in &mut records {
                 let RecordKind::Atomic { size, unit, .. } = &record.kind else {

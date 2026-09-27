@@ -270,7 +270,7 @@ pub(super) fn resolve(
         let mut kept_spacing = LayoutUnit::ZERO;
         for (k, (u, w)) in units.iter().zip(&natural_widths).enumerate() {
             super::spacing::push(data, &mut spacing, start + k);
-            let spacing_width = spacing.summary().width(sat);
+            let spacing_width = spacing.summary(Some(data)).width(sat);
             tracking.push(spacing_width);
             if let UnitKind::Float { node, ordinal } = u.kind {
                 floats.push((start + k, node, ordinal));
@@ -421,6 +421,7 @@ pub(super) fn resolve(
         },
         widths: p.scan.widths[..end - start].to_vec(),
         leading: None,
+        autospace_gaps: Vec::new(),
         content: p.prefix[end - start]
             .sub(trailing, sat)
             .add(p.tracking[hang_start - start], sat)

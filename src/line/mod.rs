@@ -1,6 +1,7 @@
 //! Line breaking.
 
 mod align;
+pub(crate) mod autospace;
 pub(crate) mod cache;
 mod decoration;
 pub(crate) mod font_metrics;
@@ -35,6 +36,7 @@ pub(crate) struct Scan {
     /// Width of every unit in the line, in order.
     pub(crate) widths: Vec<LayoutUnit>,
     pub(crate) leading: Option<Vec<LayoutUnit>>,
+    pub(crate) autospace_gaps: Vec<autospace::Gap>,
     pub(crate) overlays: Vec<reshape::EdgeOverlay>,
     /// Content width, excluding text-indent and hanging trailing spaces.
     pub(crate) content: LayoutUnit,

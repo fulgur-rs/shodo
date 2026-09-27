@@ -14,6 +14,7 @@ pub(crate) struct StyleMetrics {
     pub(crate) metrics: FontMetrics,
     pub(crate) space: f32,
     pub(crate) ch: f32,
+    pub(crate) ic: f32,
 }
 
 pub(crate) fn resolve(
@@ -32,6 +33,7 @@ pub(crate) fn resolve(
     };
     let space = character_advance(fonts, style, &query, ' ', 1.0, warnings);
     let ch = character_advance(fonts, style, &query, '0', 0.5, warnings);
+    let ic = character_advance(fonts, style, &query, '水', 1.0, warnings);
     if let Some(found) = fonts.match_primary(&query)
         && let Some(data) = fonts.font_data(found.id)
     {
@@ -48,6 +50,7 @@ pub(crate) fn resolve(
             size,
             space,
             ch,
+            ic,
             metrics: fonts
                 .metrics_with_coords(found.id, size, &instance.coords)
                 .expect("retained primary face"),
@@ -59,6 +62,7 @@ pub(crate) fn resolve(
         size: style.font_size,
         space,
         ch,
+        ic,
         metrics: fonts.metrics(font, style.font_size),
     }
 }

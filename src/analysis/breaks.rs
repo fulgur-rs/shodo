@@ -20,6 +20,9 @@ pub(crate) struct BreakOpportunity {
 
 pub(crate) struct BreakAnalysis {
     pub(crate) graphemes: Vec<u32>,
+    /// Actual character starts after transparent bidi controls. Break cuts
+    /// intentionally stay before those controls for source consumption.
+    pub(crate) typographic_starts: Vec<u32>,
     pub(crate) opportunities: Vec<BreakOpportunity>,
 }
 
@@ -184,6 +187,20 @@ pub(crate) fn analyze_breaks(
         .segment_str(&projection.text)
         .map(|at| projection.upstream(at))
         .collect();
+    let typographic_starts = segmenter
+        .segment_str(&projection.text)
+        .map(|at| {
+            let index = projection
+                .spans
+                .partition_point(|s| s.projected.end <= at as u32);
+            projection
+                .spans
+                .get(index)
+                .map_or(input.text.len() as u32, |s| {
+                    s.original.start + at as u32 - s.projected.start
+                })
+        })
+        .collect();
     let mut opportunities: Vec<_> = graphemes
         .iter()
         .map(|offset| BreakOpportunity {
@@ -340,6 +357,7 @@ pub(crate) fn analyze_breaks(
     }
     BreakAnalysis {
         graphemes,
+        typographic_starts,
         opportunities,
     }
 }

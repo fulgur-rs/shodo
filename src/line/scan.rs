@@ -48,14 +48,16 @@ pub(super) fn scan(
             data,
             unit,
             units[start].text.start,
-            offset.add(pos, sat).add(spacing.summary().width(sat), sat),
+            offset
+                .add(pos, sat)
+                .add(spacing.summary(Some(data)).width(sat), sat),
             atomics,
             cx,
             sat,
         )
         .add(data.unit_spacing[i].word, sat);
         super::spacing::push(data, &mut spacing, i);
-        let tracking = spacing.summary().width(sat);
+        let tracking = spacing.summary(Some(data)).width(sat);
         // Trailing spaces hang and never cause a break (CSS Text 3 §4.1.3).
         let hangs = matches!(unit.kind, UnitKind::Cluster { space: true, .. });
         let suffix = super::decoration::width(data, i + 1, false, sat);
@@ -200,6 +202,7 @@ pub(super) fn scan(
         reason,
         widths,
         leading: None,
+        autospace_gaps: Vec::new(),
         content: total
             .sub(trailing, sat)
             .add(prefix, sat)
