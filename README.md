@@ -286,3 +286,6 @@ include these assets or tooling dependencies.
 The [shared glyph contract](docs/shared-glyph-contract.md) describes one-time
 paint ownership and separate source-node regions for links, decorations,
 selection and hit testing, with fixed-font Latin/Arabic connection tests.
+
+The [PNG sample](docs/png-render-sample.md) draws fixed-font public glyph output
+and an atomic rectangle: `cargo run -p shodo-fixtures --example render_png -- /tmp/shodo-sample.png`.

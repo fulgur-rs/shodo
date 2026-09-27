@@ -1,5 +1,5 @@
 //! Paint ownership and source interaction are deliberately separate contracts.
-#[path = "support/glyph_paint.rs"]
+#[path = "../examples/support/glyph_paint.rs"]
 mod glyph_paint;
 use shodo::geometry::Direction;
 use shodo::hit::{LineLayout, TextPosition};
@@ -86,7 +86,7 @@ fn ffi_is_painted_once_using_its_owner_even_across_color_boundaries() {
     assert_eq!(runs[0].glyphs().len(), 1);
     for differing in [false, true] {
         let mut requested = Vec::new();
-        let (image, count) = glyph_paint::paint(
+        let (image, count) = glyph_paint::try_paint(
             &lines,
             |owner| {
                 requested.push(owner);
@@ -97,7 +97,8 @@ fn ffi_is_painted_once_using_its_owner_even_across_color_boundaries() {
                 }
             },
             &[],
-        );
+        )
+        .unwrap();
         assert_eq!(count, 1);
         assert_eq!(requested, vec![NodeId(100)]);
         let pixels = image.data().as_chunks::<4>().0;
@@ -156,7 +157,8 @@ fn ffi_source_regions_partition_the_advance_and_drive_links_and_underline() {
     );
     // Only the middle source is linked/underlined, despite the first glyph
     // owner. Annotation geometry must never duplicate the whole glyph.
-    let (image, count) = glyph_paint::paint(&lines, |_| [255, 0, 0, 255], &[regions[1]]);
+    let (image, count) =
+        glyph_paint::try_paint(&lines, |_| [255, 0, 0, 255], &[regions[1]]).unwrap();
     assert_eq!(count, 1);
     assert!(image.data().as_chunks::<4>().0.iter().any(|p| p[2] > p[0]));
     assert_blue_bounds(&image, regions[1]);
@@ -190,8 +192,8 @@ fn arabic_joining_survives_node_boundaries_and_rtl_source_regions() {
             );
         }
         close(widths, split[0].inline_size());
-        let (image, count) = glyph_paint::paint(&split, |_| [0, 0, 0, 255], &[]);
-        let (reference, _) = glyph_paint::paint(&joined, |_| [0, 0, 0, 255], &[]);
+        let (image, count) = glyph_paint::try_paint(&split, |_| [0, 0, 0, 255], &[]).unwrap();
+        let (reference, _) = glyph_paint::try_paint(&joined, |_| [0, 0, 0, 255], &[]).unwrap();
         assert_eq!(image.data(), reference.data());
         assert_eq!(count, glyphs(&split).len());
     }
@@ -209,8 +211,8 @@ fn narrow_arabic_lines_match_unsplit_source_without_lost_or_duplicated_glyphs() 
                 joined.iter().map(Line::text_range).collect::<Vec<_>>()
             );
             assert_eq!(logical_glyphs(&split), logical_glyphs(&joined));
-            let (image, count) = glyph_paint::paint(&split, |_| [0, 0, 0, 255], &[]);
-            let (reference, _) = glyph_paint::paint(&joined, |_| [0, 0, 0, 255], &[]);
+            let (image, count) = glyph_paint::try_paint(&split, |_| [0, 0, 0, 255], &[]).unwrap();
+            let (reference, _) = glyph_paint::try_paint(&joined, |_| [0, 0, 0, 255], &[]).unwrap();
             assert_eq!(image.data(), reference.data());
             assert_eq!(count, glyphs(&split).len());
             let layout = LineLayout::new(&split);
@@ -346,7 +348,7 @@ fn raikiri_cascade_to_shared_glyph_paint_keeps_link_and_decoration_source_identi
         })
     );
     let mut owners = Vec::new();
-    let (image, count) = glyph_paint::paint(
+    let (image, count) = glyph_paint::try_paint(
         &lines,
         |owner| {
             owners.push(owner);
@@ -359,7 +361,8 @@ fn raikiri_cascade_to_shared_glyph_paint_keeps_link_and_decoration_source_identi
             [c.r, c.g, c.b, c.a]
         },
         &rects,
-    );
+    )
+    .unwrap();
     assert_eq!(count, 1);
     assert_eq!(owners, vec![sources[0].0]);
     let pixels = image.data().as_chunks::<4>().0;

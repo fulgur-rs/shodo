@@ -27,36 +27,54 @@ impl OutlinePen for Pen {
         self.0.close();
     }
 }
-pub fn paint(
+pub fn try_paint(
     lines: &[Line],
     mut color: impl FnMut(NodeId) -> [u8; 4],
     annotations: &[LogicalRect],
-) -> (tiny_skia::Pixmap, usize) {
+) -> Result<(tiny_skia::Pixmap, usize), PaintError> {
     let height = lines
         .iter()
         .map(|l| l.block_offset() + l.block_size())
         .fold(0.0, f32::max)
         .ceil() as u32
         + 40;
-    let mut image = tiny_skia::Pixmap::new(512, height).unwrap();
+    let mut image = tiny_skia::Pixmap::new(512, height).ok_or(PaintError::InvalidCanvas)?;
     image.fill(tiny_skia::Color::WHITE);
     let mut count = 0;
     for line in lines {
         for fragment in line.fragments() {
+            if let Fragment::Atomic(atomic) = fragment {
+                let rect = atomic.border_rect;
+                if let Some(rect) = tiny_skia::Rect::from_xywh(
+                    10.0 + rect.inline_start,
+                    10.0 + line.block_offset() + rect.block_start,
+                    rect.inline_size,
+                    rect.block_size,
+                ) {
+                    let [r, g, b, a] = color(atomic.node);
+                    let mut paint = tiny_skia::Paint::default();
+                    paint.set_color_rgba8(r, g, b, a);
+                    image.fill_rect(rect, &paint, tiny_skia::Transform::identity(), None);
+                }
+                continue;
+            }
             let Fragment::GlyphRun(run) = fragment else {
                 continue;
             };
-            assert!(
-                !run.embolden() && run.skew().is_none(),
-                "example supports unsynthesized outline fixtures"
-            );
-            let data = run.font_data().unwrap();
-            let font = FontRef::from_index(data.data.as_ref(), data.index).unwrap();
-            let [r, g, b, a] = color(run.node().expect("fixture must supply paint owners"));
+            if run.embolden() || run.skew().is_some() {
+                return Err(PaintError::UnsupportedSynthesis);
+            }
+            let data = run.font_data().ok_or(PaintError::MissingFont)?;
+            let font = FontRef::from_index(data.data.as_ref(), data.index)
+                .map_err(|_| PaintError::InvalidFont)?;
+            let [r, g, b, a] = color(run.node().ok_or(PaintError::MissingOwner)?);
             let mut paint = tiny_skia::Paint::default();
             paint.set_color_rgba8(r, g, b, a);
             for glyph in run.glyphs() {
-                let outline = font.outline_glyphs().get(GlyphId::new(glyph.id)).unwrap();
+                let outline = font
+                    .outline_glyphs()
+                    .get(GlyphId::new(glyph.id))
+                    .ok_or(PaintError::MissingOutline)?;
                 let mut pen = Pen(tiny_skia::PathBuilder::new());
                 outline
                     .draw(
@@ -66,7 +84,7 @@ pub fn paint(
                         ),
                         &mut pen,
                     )
-                    .unwrap();
+                    .map_err(|_| PaintError::MissingOutline)?;
                 if let Some(path) = pen.0.finish() {
                     image.fill_path(
                         &path,
@@ -96,8 +114,33 @@ pub fn paint(
             rect.inline_size,
             2.0,
         )
-        .unwrap();
+        .ok_or(PaintError::InvalidAnnotation)?;
         image.fill_rect(rect, &paint, tiny_skia::Transform::identity(), None);
     }
-    (image, count)
+    Ok((image, count))
 }
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum PaintError {
+    InvalidCanvas,
+    InvalidAnnotation,
+    MissingOwner,
+    MissingFont,
+    InvalidFont,
+    MissingOutline,
+    UnsupportedSynthesis,
+}
+impl std::fmt::Display for PaintError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::InvalidCanvas => "cannot allocate PNG canvas",
+            Self::InvalidAnnotation => "source annotation has no positive rectangle",
+            Self::MissingOwner => "paint style needs a source owner",
+            Self::MissingFont => "accepted glyph font bytes are unavailable",
+            Self::InvalidFont => "accepted font data cannot be read",
+            Self::MissingOutline => "glyph has no supported outline",
+            Self::UnsupportedSynthesis => "example does not support synthetic weight or skew",
+        })
+    }
+}
+impl std::error::Error for PaintError {}
