@@ -89,6 +89,8 @@ pub(crate) struct ParagraphData {
     pub(crate) styles: Vec<InlineStyle>,
     pub(crate) style_metrics: Vec<crate::line::font_metrics::StyleMetrics>,
     pub(crate) unit_spacing: Vec<crate::line::spacing::UnitSpacing>,
+    pub(crate) punctuation: Vec<crate::line::punctuation::Punctuation>,
+    pub(crate) last_content_unit: Option<usize>,
     pub(crate) internal_autospace_gaps: Vec<crate::line::autospace::Gap>,
     pub(crate) needs_spacing: bool,
     pub(crate) spacing_tree: crate::line::autospace::Tree,
@@ -474,6 +476,8 @@ fn build_data(
         styles,
         style_metrics,
         unit_spacing: Vec::new(),
+        punctuation: Vec::new(),
+        last_content_unit: None,
         internal_autospace_gaps: Vec::new(),
         needs_spacing: false,
         spacing_tree: Default::default(),
@@ -508,7 +512,9 @@ fn finalize_data(
 ) {
     crate::line::reshape::initialize_slices(data, cx, warnings, sat);
     data.spacing_tree = crate::line::autospace::Tree::build(data);
+    data.punctuation = crate::line::punctuation::build(data, sat);
     (data.unit_spacing, data.internal_autospace_gaps) = crate::line::spacing::build(data, sat);
+    data.last_content_unit = crate::line::spacing::last_content(data);
     data.needs_spacing = crate::line::spacing::needed(data);
     let mut clusters = Vec::new();
     let mut glyph_clusters = vec![0; data.glyphs.len()];

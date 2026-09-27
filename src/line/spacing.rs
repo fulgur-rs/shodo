@@ -52,7 +52,10 @@ pub(crate) fn build(
                         .breaks
                         .typographic_starts
                         .partition_point(|g| *g < unit.text.end);
-                    for &offset in &data.breaks.typographic_starts[start..end] {
+                    for (character, &offset) in data.breaks.typographic_starts[start..end]
+                        .iter()
+                        .enumerate()
+                    {
                         let Some(ch) = data.text[offset as usize..].chars().next() else {
                             continue;
                         };
@@ -90,6 +93,7 @@ pub(crate) fn build(
                             unit: index as u32,
                             box_node: data.spacing_tree.item_nodes[source],
                             class: super::autospace::classify(ch),
+                            punctuation: data.punctuation[start + character],
                         };
                         if let Some(previous) = value.summary.last {
                             let amount = super::autospace::gap(data, previous, edge, false);
@@ -197,8 +201,19 @@ pub(crate) fn needed(data: &ParagraphData) -> bool {
             || [s.summary.first, s.summary.last]
                 .into_iter()
                 .flatten()
-                .any(|e| e.class == super::autospace::Class::Ideograph)
+                .any(|e| {
+                    e.class == super::autospace::Class::Ideograph
+                        || e.punctuation.trim != crate::style::TextSpacingTrim::SpaceAll
+                            && (e.punctuation.left != LayoutUnit::ZERO
+                                || e.punctuation.right != LayoutUnit::ZERO)
+                })
     }))
+}
+
+pub(crate) fn last_content(data: &ParagraphData) -> Option<usize> {
+    data.unit_spacing
+        .iter()
+        .rposition(|s| s.summary.last.is_some_and(|e| e.kind != Kind::Barrier))
 }
 
 pub(super) fn push(data: &ParagraphData, cursor: &mut Cursor, index: usize) {
@@ -259,12 +274,12 @@ pub(super) fn justification_metadata(
     (count, first, last)
 }
 
-pub(super) fn hyphen(
+pub(super) fn hyphen_summary(
     data: &ParagraphData,
     cursor: &Cursor,
     index: usize,
     sat: &mut Saturation,
-) -> LayoutUnit {
+) -> Summary {
     let mut cursor = cursor.clone();
     let unit = &data.units[index];
     let style = &data.styles[data.items[unit.item as usize].style as usize];
@@ -278,7 +293,7 @@ pub(super) fn hyphen(
         }),
         Some(data),
     );
-    cursor.summary(Some(data)).width(sat)
+    cursor.summary(Some(data))
 }
 
 pub(super) fn width(
@@ -360,6 +375,10 @@ pub(super) fn apply(
         }
         scan.widths[k] =
             scan.widths[k].add(super::spacing_summary::raw(metadata[k].cost, sat), sat);
+        if let Some(first) = metadata[k].first {
+            let (left, right) = first.punctuation.own_blanks();
+            leading[k] = leading[k].sub(if unit.level % 2 == 1 { right } else { left }, sat);
+        }
     }
     let mut previous: Option<(usize, Edge)> = None;
     let mut barrier = false;
@@ -394,6 +413,27 @@ pub(super) fn apply(
                 continue;
             };
             if let Some((j, edge)) = previous {
+                let (right, left) = if data.base_level.is_multiple_of(2) {
+                    super::punctuation::boundary(data, edge, first, barrier || summary.before)
+                } else {
+                    let (right, left) =
+                        super::punctuation::boundary(data, first, edge, barrier || summary.after);
+                    (left, right)
+                };
+                for (unit, amount, before) in [
+                    (j, right, level(j) % 2 != data.base_level % 2),
+                    (i, left, !reversed),
+                ] {
+                    let target = if before {
+                        unit
+                    } else {
+                        data.unit_spacing[unit].tail.min(scan.end - 1)
+                    };
+                    scan.widths[target - start] = scan.widths[target - start].sub(amount, sat);
+                    if before {
+                        leading[target - start] = leading[target - start].sub(amount, sat);
+                    }
+                }
                 let cost = super::spacing_summary::gap(edge, first);
                 let gap = super::spacing_summary::raw(cost, sat);
                 let auto = if data.base_level.is_multiple_of(2) {

@@ -87,32 +87,32 @@ Modify `src/style.rs`, `src/paragraph.rs`, `src/output.rs`,
   準備metadataが境界のfirst/last unitを持つため、edgesはrange再走査しない。
   `Line::hang_start()/hang_end()` は既存signatureで実量を返す。
 
-- [ ] **Step 1: Write failing public layout tests** Normal/SpaceAll/TrimStart/SpaceFirst/
+- [x] **Step 1: Write failing public layout tests** Normal/SpaceAll/TrimStart/SpaceFirst/
   TrimBoth/TrimAll/Autoのopening、closing、middle、adjacent pairs。
   全角advance16でtrim可能なblank8の場合、`「「日` のNormalは40、SpaceAllは48、
   TrimAllは32。行頭trimはglyph inkも8だけ移動する。font-sizeの等号と大小を別々に検証する。
   実font testsでは固定fontの観測値から期待advance/inkを導き、font_sizeを期待値の代用にしない。
-- [ ] **Step 2: Run RED** `cargo +stable test --test japanese -- --nocapture`。
+- [x] **Step 2: Run RED** `cargo +stable test --test japanese -- --nocapture`。
   未実装behaviorで失敗することを記録する。
-- [ ] **Step 3: Implement prepared metadata and interior costs** specの分類・隣接表を実装し、
+- [x] **Step 3: Implement prepared metadata and interior costs** specの分類・隣接表を実装し、
   実run/instanceでfullwidth/blankを判定する。proportional faceはno-trim。
   summaryとselected spacingの両方にsigned costを接続し、glyph leadingとadvanceを分ける。
-- [ ] **Step 4: Write failing edge/hanging tests** first16の対象はhang_start16、
+- [x] **Step 4: Write failing edge/hanging tests** first16の対象はhang_start16、
   force-end16はhang_end16、allow-endはnatural40/available36ならhang_end4、
   available40なら0。trim後の対象8はforce-end8であり16ではない。
   first/last、first U+3000、ASCII quotes、CSS stop list、padding blocker、
   強制/soft改行、min/maxのconditional hang差を検証する。
-- [ ] **Step 5: Implement common edges** scan/cache/selected/intrinsicに同じルールを接続する。
+- [x] **Step 5: Implement common edges** scan/cache/selected/intrinsicに同じルールを接続する。
   cacheのfrontierコストにも反映し、first/after-forcedを渡す。
   accepted lineにstart/end hangを保持し、alignment前にcontentを減じてinkを移動する。
   trailing whitespaceとの合成とhit/source ownershipを保持する。
-- [ ] **Step 6: Add and pass interaction regressions** mixed style、fallback、variation、
+- [x] **Step 6: Add and pass interaction regressions** mixed style、fallback、variation、
   proportional、mark/shared cluster、RTL visual edges、inline border/padding、
   floatで幅変更、height rejection/retry、first-line、planned/greedy一致。
   long punctuation paragraphのcandidate visitsが線形の既存上限内であることを検証する。
   `cargo +stable test --test japanese --test break_plan --test intrinsic --test fragments --test floats`
   とworkspaceを通す。
-- [ ] **Step 7: Commit** `feat: integrate punctuation trimming and hanging into line layout`。
+- [x] **Step 7: Commit** `feat: integrate punctuation trimming and hanging into line layout`。
 
 ### Task 3: 日本語両端揃えと画像による統合検証
 

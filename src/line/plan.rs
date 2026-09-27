@@ -51,6 +51,9 @@ pub(super) fn selected(
     end: usize,
     offset: LayoutUnit,
     indent: LayoutUnit,
+    flags: u8,
+    options: &LineOptions,
+    available: LayoutUnit,
     atomics: &AtomicSizes,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
@@ -102,6 +105,7 @@ pub(super) fn selected(
             .add(decoration::width(data, end, false, sat), sat),
         hang_start,
         hanging_end: LayoutUnit::ZERO,
+        punctuation_edges: Default::default(),
     };
     if let Some(windows) = hyphen {
         super::reshape::apply_windows(data, start, &mut scan, windows, cx, sat);
@@ -115,6 +119,9 @@ pub(super) fn selected(
     scan.content = scan.content.add(
         super::spacing::width(data, start, hang_start, visible_hyphen, sat),
         sat,
+    );
+    super::punctuation::prepare(
+        data, start, &mut scan, flags, options, available, indent, sat,
     );
     scan
 }
@@ -311,6 +318,9 @@ impl Paragraph {
                                         actual_end,
                                         LayoutUnit::ZERO,
                                         indent,
+                                        flags,
+                                        &options,
+                                        LayoutUnit::from_f32_round(width, &mut sat),
                                         atomics,
                                         cx,
                                         &mut sat,

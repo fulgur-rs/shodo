@@ -72,11 +72,24 @@ pub(crate) struct Tree {
     jumps: Vec<Vec<usize>>,
     left: Vec<u32>,
     right: Vec<u32>,
+    hang_left: Vec<u32>,
+    hang_right: Vec<u32>,
     pub(super) item_nodes: Vec<u32>,
     pub(super) has_content: Vec<bool>,
 }
 
 impl Tree {
+    pub(super) fn outer_clear(&self, node: usize, left: bool) -> bool {
+        if left {
+            self.hang_left[node] == 0
+        } else {
+            self.hang_right[node] == 0
+        }
+    }
+    pub(super) fn unobstructed(&self, left: usize, right: usize) -> bool {
+        let common = self.common(left, right);
+        self.right[left] == self.right[common] && self.left[right] == self.left[common]
+    }
     pub(crate) fn build(data: &ParagraphData) -> Self {
         let n = data.boxes.len() + 1;
         let mut tree = Self {
@@ -84,6 +97,8 @@ impl Tree {
             jumps: vec![vec![0; n]],
             left: vec![0; n],
             right: vec![0; n],
+            hang_left: vec![0; n],
+            hang_right: vec![0; n],
             item_nodes: vec![0; data.items.len()],
             has_content: vec![false; n],
         };
@@ -110,6 +125,12 @@ impl Tree {
             let rtl = data.styles[b.style as usize].direction == Direction::Rtl;
             tree.left[node] = tree.left[parent] + u32::from(if rtl { end } else { start });
             tree.right[node] = tree.right[parent] + u32::from(if rtl { start } else { end });
+            let hang_start = e.border.inline_start != 0.0 || e.padding.inline_start != 0.0;
+            let hang_end = e.border.inline_end != 0.0 || e.padding.inline_end != 0.0;
+            tree.hang_left[node] =
+                tree.hang_left[parent] + u32::from(if rtl { hang_end } else { hang_start });
+            tree.hang_right[node] =
+                tree.hang_right[parent] + u32::from(if rtl { hang_start } else { hang_end });
         }
         let mut current = 0u32;
         let mut next_box = 1u32;

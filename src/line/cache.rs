@@ -219,7 +219,16 @@ pub(super) fn resolve(
     if !valid {
         cx.partial = None;
         let mut scanned = scan(
-            &para.data, start, available, offset, indent, atomics, cx, sat,
+            &para.data,
+            start,
+            available,
+            offset,
+            indent,
+            token.flags,
+            options,
+            atomics,
+            cx,
+            sat,
         );
         #[cfg(test)]
         {
@@ -297,7 +306,17 @@ pub(super) fn resolve(
                         },
                         sat,
                     );
-                max = max.max(extent);
+                let adjustment = super::punctuation::edges(
+                    data,
+                    spacing.summary(Some(data)),
+                    token.flags,
+                    super::punctuation::last_edge(data, start + k + 1),
+                    options,
+                    LayoutUnit::ZERO,
+                    extent,
+                    sat,
+                );
+                max = max.max(extent.sub(adjustment.removed(sat), sat));
                 thresholds.push((start + k, max));
             }
             match u.kind {
@@ -318,13 +337,36 @@ pub(super) fn resolve(
                 .add(delta, sat)
                 .sub(hanging, sat)
                 .add(suffix, sat);
+            let adjustment = super::punctuation::edges(
+                data,
+                spacing.summary(Some(data)),
+                token.flags,
+                super::punctuation::last_edge(data, start + k + 1),
+                options,
+                LayoutUnit::ZERO,
+                required.add(indent, sat),
+                sat,
+            );
+            let required = required.sub(adjustment.removed(sat), sat);
             if u.break_after == BreakClass::Hyphen {
                 if let Some(windows) = hyphen::line(data, start, start + k + 1, cx, sat) {
+                    let summary = super::spacing::hyphen_summary(data, &spacing, start + k, sat);
                     let required = next
-                        .add(super::spacing::hyphen(data, &spacing, start + k, sat), sat)
+                        .add(summary.width(sat), sat)
                         .sub(hanging, sat)
                         .add(suffix, sat)
                         .add(super::windows::cost(&windows, start + k + 1, sat), sat);
+                    let adjustment = super::punctuation::edges(
+                        data,
+                        summary,
+                        token.flags,
+                        false,
+                        options,
+                        LayoutUnit::ZERO,
+                        required.add(indent, sat),
+                        sat,
+                    );
+                    let required = required.sub(adjustment.removed(sat), sat);
                     hyphens.push(start + k + 1, required);
                 }
             } else if viable && u.break_after == BreakClass::Allowed {
@@ -409,6 +451,7 @@ pub(super) fn resolve(
             .add(decoration::width(&p.data, end, false, sat), sat),
         hang_start,
         hanging_end: LayoutUnit::ZERO,
+        punctuation_edges: Default::default(),
     };
     if let Some(end) = selected_hyphen
         && let Some(windows) = hyphen::line(&data, start, end, cx, sat)
@@ -429,6 +472,16 @@ pub(super) fn resolve(
                 sat,
             );
     }
+    super::punctuation::prepare(
+        &data,
+        start,
+        &mut result,
+        token.flags,
+        options,
+        available,
+        indent,
+        sat,
+    );
     Ok(result)
 }
 
@@ -602,6 +655,115 @@ mod tests {
             assert!(weak.upgrade().is_some());
             cx.shrink_to(0);
             assert!(weak.upgrade().is_none());
+        }
+    }
+
+    #[test]
+    fn punctuation_float_retries_keep_candidate_work_linear() {
+        use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+        use crate::limits::Limits;
+        use crate::node::{NodeId, OutOfFlowKind, TextSource};
+        use crate::style::{
+            FontFamily, HangingPunctuation, LineOptions, ParagraphStyle, TextSpacingTrim,
+        };
+        use crate::{
+            AtomicSizes, Fragment, LayoutContext, LineConstraint, LineResult, ParagraphBuilder,
+        };
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register_face(
+                include_bytes!("../../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: "CJK".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let mut style = ParagraphStyle::default();
+        style.root.font_families = vec![FontFamily::Named("CJK".into())];
+        style.root.font_size = 16.;
+        style.root.lang = Some("ja".into());
+        style.root.text_spacing_trim = TextSpacingTrim::TrimAll;
+        let options = LineOptions {
+            hanging_punctuation: HangingPunctuation {
+                first: true,
+                allow_end: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        for count in [32u64, 128, 512] {
+            let mut builder = ParagraphBuilder::new(&style, &limits);
+            for i in 0..count {
+                builder
+                    .push_text(
+                        TextSource::Generated {
+                            node: NodeId(i * 2 + 1),
+                        },
+                        "「日」、",
+                    )
+                    .push_out_of_flow(NodeId(i * 2 + 2), OutOfFlowKind::Float);
+            }
+            let p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+            let mut cx = LayoutContext::new();
+            let mut constraint = LineConstraint::new(count as f32 * 40.);
+            let line = loop {
+                match p.next_line(
+                    &mut cx,
+                    p.start_token(),
+                    &options,
+                    &constraint,
+                    &AtomicSizes::EMPTY,
+                ) {
+                    LineResult::FloatEncountered { float_cursor, .. } => {
+                        constraint.floats_placed_through = Some(float_cursor);
+                        constraint.available_inline_size -= 4.;
+                    }
+                    LineResult::Line(line) => break line,
+                    other => panic!("{other:?}"),
+                }
+            };
+            assert!(cx.cache_visits <= p.data.units.len() * 2);
+            let partial = cx.partial.as_ref().expect("retained float cache");
+            let visits =
+                partial.breaks.visits + partial.emergencies.visits + partial.hyphens.visits;
+            assert!(visits <= p.data.units.len() * 8, "{count}: {visits}");
+            let LineResult::Line(fresh) = p.next_line(
+                &mut LayoutContext::new(),
+                p.start_token(),
+                &options,
+                &constraint,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!("fresh")
+            };
+            assert_eq!(line.text_range(), fresh.text_range());
+            assert_eq!(
+                (line.inline_size(), line.hang_start(), line.hang_end()),
+                (fresh.inline_size(), fresh.hang_start(), fresh.hang_end())
+            );
+            let glyphs = |line: &crate::Line| {
+                line.fragments()
+                    .filter_map(|f| {
+                        if let Fragment::GlyphRun(r) = f {
+                            Some(r.glyphs())
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten()
+                    .map(|g| (g.id, g.inline_position))
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(glyphs(&line), glyphs(&fresh));
         }
     }
 }

@@ -54,6 +54,8 @@ impl Paragraph {
         );
         let rtl = data.base_level % 2 == 1;
         let mut indent = super::text_indent(&options, BreakToken::FIRST_LINE, &mut sat);
+        let mut word_flags = BreakToken::FIRST_LINE;
+        let mut total_flags = BreakToken::FIRST_LINE;
         let mut min = LayoutUnit::ZERO;
         let mut max = LayoutUnit::ZERO;
         let mut word = indent;
@@ -75,19 +77,42 @@ impl Paragraph {
                 UnitKind::ForcedBreak | UnitKind::BlockInInline { .. }
             ) {
                 let suffix = super::decoration::width(data, i, false, &mut sat);
-                min = min.max(
-                    word.add(kept_word_spacing, &mut sat)
-                        .sub(word_trailing, &mut sat)
-                        .add(suffix, &mut sat),
-                );
-                max = max.max(
-                    total
-                        .add(kept_total_spacing, &mut sat)
-                        .sub(trailing, &mut sat)
-                        .add(left, &mut sat)
-                        .add(right, &mut sat)
-                        .add(suffix, &mut sat),
-                );
+                let natural_min = word
+                    .add(kept_word_spacing, &mut sat)
+                    .sub(word_trailing, &mut sat)
+                    .add(suffix, &mut sat);
+                min = min.max(super::punctuation::intrinsic(
+                    data,
+                    word_spacing.summary(Some(data)),
+                    word_flags,
+                    false,
+                    &options,
+                    natural_min,
+                    true,
+                    &mut sat,
+                ));
+                let natural_max = total
+                    .add(kept_total_spacing, &mut sat)
+                    .sub(trailing, &mut sat)
+                    .add(left, &mut sat)
+                    .add(right, &mut sat)
+                    .add(suffix, &mut sat);
+                max = max.max(super::punctuation::intrinsic(
+                    data,
+                    total_spacing.summary(Some(data)),
+                    total_flags,
+                    false,
+                    &options,
+                    natural_max,
+                    false,
+                    &mut sat,
+                ));
+                word_flags = if matches!(u.kind, UnitKind::ForcedBreak) {
+                    BreakToken::AFTER_FORCED
+                } else {
+                    0
+                };
+                total_flags = word_flags;
                 indent = super::text_indent(
                     &options,
                     if matches!(u.kind, UnitKind::ForcedBreak) {
@@ -264,15 +289,26 @@ impl Paragraph {
                     continue;
                 }
                 let tracking = if hyphen.is_some() {
-                    super::spacing::hyphen(data, &word_spacing, i, &mut sat)
+                    super::spacing::hyphen_summary(data, &word_spacing, i, &mut sat).width(&mut sat)
                 } else {
                     kept_word_spacing
                 };
                 let measured_word = word.add(tracking, &mut sat).add(delta, &mut sat);
-                min = min.max(measured_word.sub(word_trailing, &mut sat).add(
+                let natural_min = measured_word.sub(word_trailing, &mut sat).add(
                     super::decoration::width(data, i + 1, false, &mut sat),
                     &mut sat,
+                );
+                min = min.max(super::punctuation::intrinsic(
+                    data,
+                    word_spacing.summary(Some(data)),
+                    word_flags,
+                    super::punctuation::last_edge(data, i + 1),
+                    &options,
+                    natural_min,
+                    true,
+                    &mut sat,
                 ));
+                word_flags = 0;
                 let next = i + 1;
                 let next_text = u.text.end;
                 if alternate
@@ -308,21 +344,38 @@ impl Paragraph {
             i += 1;
         }
         let final_delta = super::windows::delta(data, word_unit, data.units.len(), cx, &mut sat);
+        let natural_min = word
+            .add(kept_word_spacing, &mut sat)
+            .add(final_delta, &mut sat)
+            .sub(word_trailing, &mut sat);
         min = min
-            .max(
-                word.add(kept_word_spacing, &mut sat)
-                    .add(final_delta, &mut sat)
-                    .sub(word_trailing, &mut sat),
-            )
+            .max(super::punctuation::intrinsic(
+                data,
+                word_spacing.summary(Some(data)),
+                word_flags,
+                true,
+                &options,
+                natural_min,
+                true,
+                &mut sat,
+            ))
             .max(LayoutUnit::ZERO);
+        let natural_max = total
+            .add(kept_total_spacing, &mut sat)
+            .sub(trailing, &mut sat)
+            .add(left, &mut sat)
+            .add(right, &mut sat);
         max = max
-            .max(
-                total
-                    .add(kept_total_spacing, &mut sat)
-                    .sub(trailing, &mut sat)
-                    .add(left, &mut sat)
-                    .add(right, &mut sat),
-            )
+            .max(super::punctuation::intrinsic(
+                data,
+                total_spacing.summary(Some(data)),
+                total_flags,
+                true,
+                &options,
+                natural_max,
+                false,
+                &mut sat,
+            ))
             .max(min);
         cx.warnings.record_saturation(&sat);
         IntrinsicSizes {

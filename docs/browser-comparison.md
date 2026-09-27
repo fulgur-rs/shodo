@@ -26,7 +26,7 @@ box, no margins, and baseline at the bottom edge.
 The checked-in browser is **Chromium 152.0.7977.82 Arch Linux**, collected on Linux
 x86_64. Two independent disposable-profile runs reproduced the whole data JSON,
 including metadata and geometry. There are 458 measured width probes. At the
-original widths, 404 source endpoints match; 54 differences remain. There are 50
+original widths, 408 source endpoints match; 50 differences remain. There are 50
 measurable target transitions: five initial targets are already present at the
 1/64px minimum probe, and explicitly have `boundary_subpixels: null` (overflow/
 first unbreakable segment), rather than an invented zero-width transition.
@@ -135,11 +135,26 @@ separate source nodes even when glyphs are shared.
 
 | Category | Observations | Evidence and follow-up |
 | --- | ---: | --- |
-| Boundary drift | 46 | Same target endpoints; shodo transition minus Chrome is -1 to +4 integer subpixels. Every difference lies strictly between the two measured transitions; probes a pixel away agree. Exact observations are retained, with no global slack. |
-| Japanese spacing | 8 | Cases japanese-07/13: Chrome normal thresholds 6969/8735, shodo 7504/9256 subpixels. A real Chrome `text-spacing-trim: space-all` diagnostic yields 7504/9255, isolating roughly half-em contextual punctuation compression. Tracked by `shodo-unc.1`. |
+| Boundary drift | 47 | Same target endpoints; shodo transition minus Chrome is -1 to +4 integer subpixels. Every difference lies strictly between the two measured transitions; probes a pixel away agree. Exact observations are retained, with no global slack. Japanese07/13 now differ by only -1/+1 subpixel. |
+| Conditional line-end trim policy | 3 | Japanese12: captured Chrome target24 threshold8089, shodo7578 subpixels. Shodo follows CSS Text4 normal end trim for Japanese fullwidth stops; the prior shodo8090 threshold decreases by512 subpixels (8px). Independent Chromium152 fixed-font `日本。` at40px gives end3 with both normal and space-all; shodo normal fits all9 UTF-8 bytes. Tracked by `shodo-unc.1`. |
 | Resolved hanging trailing tab | 0 semantic / 2 numeric | `shodo-p2m.15` fixes pre-wrap-tab: both consume source end9 at90px. The shodo threshold improves6390→4338 versus Chrome4336, so only the two adjacent probes remain as exact boundary drift. The original diagnostic `white-space: break-spaces` gives end5 at90px and target end9 threshold6389 with initial120px. |
 
 The normal-CSS capture is preserved; diagnostic CSS probes did not replace it.
+Punctuation implementation changes matches404→408 and mismatches54→50: eight
+old differences disappear and four appear. Japanese07/13 thresholds improve
+7504→6968 and9256→8736. Seven former half-em spacing differences resolve;
+Japanese13's remaining one-subpixel observation is now classified as boundary
+drift. Japanese12's former boundary probe at8089 resolves, while three lower
+widths now expose the conditional end trim policy difference. This ledger
+records exact browser endpoint observations, not WPT PASS counts.
+
+Conditional end trim follows
+[CSS Text4 WD2026-08-14 §8.5](https://www.w3.org/TR/2026/WD-css-text-4-20260814/#text-spacing-trim-property).
+Independent Chromium152 controls with `日本」`, `日本、`, and `日本。` at16px
+and40px all return end3 for normal and space-all; at48px all return end9.
+These controls do not explain every contextual spacing choice inside Chromium.
+The saved corpus and all raw transition values remain the comparison evidence.
+
 To reproduce those diagnostics, make a temporary copy of the collector and
 recorder, point its ROOT at these fixtures, make the fixture tools importable with
 `PYTHONPATH="$PWD/dev/fixtures/tools"`, and set `textSpacingTrim:'space-all'` in
