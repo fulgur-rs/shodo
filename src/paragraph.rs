@@ -199,6 +199,7 @@ impl Paragraph {
             text,
             mut items,
             mut styles,
+            mut first_line_styles,
             mut warnings,
             offset_mapping,
             ..
@@ -214,17 +215,25 @@ impl Paragraph {
         }
         sanitize::items(&mut items, &mut warnings);
         let id = NEXT_PARAGRAPH_ID.fetch_add(1, Ordering::Relaxed);
-        if style.first_line.is_some() {
+        let has_first_line = style.first_line.is_some() || !first_line_styles.is_empty();
+        if has_first_line {
             Limits::check(
                 limits.max_styles,
                 LimitKind::Styles,
                 styles.len() as u64 * 2,
             )?;
         }
-        let alternate_styles = style.first_line.as_ref().map(|first| {
+        let alternate_styles = has_first_line.then(|| {
+            let first = style.first_line.as_ref().unwrap_or(&style.root);
             styles
                 .iter()
-                .map(|original| first_line_style(original, &style.root, first))
+                .enumerate()
+                .map(
+                    |(index, original)| match first_line_styles.remove(&(index as u32)) {
+                        Some(resolved) => resolved_first_line_style(original, &resolved),
+                        None => first_line_style(original, &style.root, first),
+                    },
+                )
                 .collect::<Vec<_>>()
         });
         let processed = process(&text, &items, &styles, offset_mapping, &limits)?;
@@ -597,6 +606,36 @@ fn normal_cursor(
     None
 }
 
+macro_rules! first_line_properties {
+    ($copy:ident) => {
+        $copy!(
+            font_families,
+            font_size,
+            font_weight,
+            font_width,
+            font_style,
+            font_variations,
+            font_features,
+            font_kerning,
+            font_variant_ligatures,
+            font_variant_caps,
+            font_variant_numeric,
+            font_variant_east_asian,
+            font_variant_position,
+            font_variant_alternates,
+            font_optical_sizing,
+            font_synthesis,
+            font_size_adjust,
+            lang,
+            line_height,
+            letter_spacing,
+            word_spacing,
+            text_transform,
+            text_emphasis
+        );
+    };
+}
+
 fn first_line_style(
     original: &InlineStyle,
     root: &InlineStyle,
@@ -606,31 +645,16 @@ fn first_line_style(
     macro_rules! inherit {
         ($($field:ident),* $(,)?) => { $(if original.$field == root.$field { result.$field = first.$field.clone(); })* };
     }
-    inherit!(
-        font_families,
-        font_size,
-        font_weight,
-        font_width,
-        font_style,
-        font_variations,
-        font_features,
-        font_kerning,
-        font_variant_ligatures,
-        font_variant_caps,
-        font_variant_numeric,
-        font_variant_east_asian,
-        font_variant_position,
-        font_variant_alternates,
-        font_optical_sizing,
-        font_synthesis,
-        font_size_adjust,
-        lang,
-        line_height,
-        letter_spacing,
-        word_spacing,
-        text_transform,
-        text_emphasis
-    );
+    first_line_properties!(inherit);
+    result
+}
+
+fn resolved_first_line_style(original: &InlineStyle, resolved: &InlineStyle) -> InlineStyle {
+    let mut result = original.clone();
+    macro_rules! copy {
+        ($($field:ident),* $(,)?) => { $(result.$field = resolved.$field.clone();)* };
+    }
+    first_line_properties!(copy);
     result
 }
 

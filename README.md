@@ -161,8 +161,14 @@ performed by shodo. Runs retain their font layer after the collection is dropped
 
 Set `ParagraphStyle::first_line` by cloning the normal root and changing the
 applicable properties. A descendant value equal to the normal root inherits the
-first-line value; a differing descendant value is preserved. Resolved styles do
-not encode whether an equal child value was explicitly declared. Only the first
+first-line value; a differing descendant value is preserved. This legacy fallback cannot distinguish an equal explicitly declared child
+value from an inherited value. Use `ParagraphBuilder::open_inline_with_first_line`
+or `RichText::push_with_first_line` to supply the caller-resolved normal and
+first-line styles of every inline; explicit alternatives use the supported
+first-line properties exactly, without this inference. An explicit alternative
+also activates first-line layout when the root override is absent. See the
+[resolved input contract](docs/first-line-style-contract.md) for examples,
+property scope, migration and the pinned raikiri producer limitation. Only the first
 formatted line uses the alternate set, including after a float retry; forced or
 block boundaries discontinue it. `Line::text()` and `Line::offset_mapping()` expose
 the chosen set, so slice that text with `Line::text_range()` rather than slicing
