@@ -91,7 +91,10 @@ impl LineIndex {
                         let unit = &line.data.units[unit as usize];
                         let reversed = unit.level % 2 != line.data.base_level % 2;
                         let mut rect = atomic.margin_rect;
-                        rect.block_start += line.block_offset();
+                        // Signed margins reserve inline space, but the painted
+                        // border box supplies the caret's vertical extent.
+                        rect.block_start = atomic.border_rect.block_start + line.block_offset();
+                        rect.block_size = atomic.border_rect.block_size.max(0.0);
                         let (from, to) = (rect.inline_start, rect.inline_start + rect.inline_size);
                         result.add(
                             number,

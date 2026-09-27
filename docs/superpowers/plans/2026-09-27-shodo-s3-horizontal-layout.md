@@ -104,10 +104,10 @@
 
 **Interfaces:** consumes Tasks1–5 and existing S0/S2 contracts; adds no alternate layout implementation or renderer dependency。
 
-- [ ] Map every issue/foundation S3 requirement to current public tests. Add missing fixed-font coverage for pure repeated next_line, token ownership, unbreakable float lookahead, displaced cursor restoration, page-height rollback, missing atomic sizes and BlockInInline empty/first-line boundaries。
-- [ ] Verify indent hanging/each-line, tab offsets, all align/text-align-last/justify-all values, hanging preserved spaces, actual min/max (float/first-line), Balance/Pretty actual spacing, glyph data/font/coords/synthesis/metrics/source and no mutation of prior Lines。
-- [ ] Exercise all adverse numeric inputs through style/constraints/atomic/hit; tiny/max-zero reshape budgets and aggregate glyph budgets; deeply nested inline; long controls/styles/bidi with operation-count assertions; every accepted result progresses through source exactly once。
-- [ ] Run stable workspace, root no-default and explicit complex-scripts; fix only actual contract regressions with RED/GREEN and full suite. Commit `test: verify horizontal layout and hit resource contracts`。
+- [x] Map every issue/foundation S3 requirement to current public tests. Add missing fixed-font coverage for pure repeated next_line, token ownership, unbreakable float lookahead, displaced cursor restoration, page-height rollback, missing atomic sizes and BlockInInline empty/first-line boundaries。
+- [x] Verify indent hanging/each-line, tab offsets, all align/text-align-last/justify-all values, hanging preserved spaces, actual min/max (float/first-line), Balance/Pretty actual spacing, glyph data/font/coords/synthesis/metrics/source and no mutation of prior Lines。
+- [x] Exercise all adverse numeric inputs through style/constraints/atomic/hit; tiny/max-zero reshape budgets and aggregate glyph budgets; deeply nested inline; long controls/styles/bidi with operation-count assertions; every accepted result progresses through source exactly once。
+- [x] Run stable workspace, root no-default and explicit complex-scripts; fix only actual contract regressions with RED/GREEN and full suite. Commit `test: verify horizontal layout and hit resource contracts`。
 
 ### Task 7: Documentation, final review and exact-HEAD integration
 

@@ -26,8 +26,8 @@ mod shape;
 pub use builder::{ParagraphBuilder, RichText};
 pub use context::LayoutContext;
 pub use output::{
-    AnchorFragment, AtomicFragment, BreakReason, Cluster, Fragment, Glyph, GlyphRunView, Glyphs,
-    InlineBoxFragment, Line,
+    AnchorFragment, AtomicFragment, BreakReason, Cluster, ClusterFlags, Fragment, Glyph,
+    GlyphRunView, Glyphs, InlineBoxFragment, Line, LineMetrics,
 };
 pub use paragraph::{
     AtomicIntrinsic, AtomicIntrinsics, AtomicSize, AtomicSizes, BreakPlan, BreakToken, FloatClear,

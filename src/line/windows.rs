@@ -470,10 +470,27 @@ fn remaining_valid(
 #[cfg(test)]
 mod tests {
     fn ligature_font(substitutions: &[(&str, char)]) -> Vec<u8> {
+        ligature_font_for(
+            include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf"),
+            *b"latn",
+            substitutions,
+        )
+    }
+
+    fn ligature_font_for(bytes: &[u8], script: [u8; 4], substitutions: &[(&str, char)]) -> Vec<u8> {
         use skrifa::MetadataProvider;
-        let bytes = include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf");
         let font = skrifa::FontRef::from_index(bytes, 0).unwrap();
-        let glyph = |c| font.charmap().map(c).unwrap().to_u32() as u16;
+        let glyph = |c| {
+            font.charmap()
+                .map(c)
+                .or_else(|| {
+                    (script == *b"kana" && c == 'ｶ')
+                        .then(|| font.charmap().map('カ'))
+                        .flatten()
+                })
+                .unwrap()
+                .to_u32() as u16
+        };
         let mut sets = std::collections::BTreeMap::<u16, Vec<Vec<u16>>>::new();
         for (text, target) in substitutions {
             let mut components = text.chars().map(glyph);
@@ -507,7 +524,7 @@ mod tests {
         for word in [1u16, 0, 10, 30, 44, 1] {
             gsub.extend(word.to_be_bytes());
         }
-        gsub.extend(b"latn");
+        gsub.extend(script);
         for word in [8u16, 4, 0, 0, 0xffff, 1, 0, 1] {
             gsub.extend(word.to_be_bytes());
         }
@@ -524,13 +541,141 @@ mod tests {
             let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
             let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
             let tag: [u8; 4] = bytes[at..at + 4].try_into().unwrap();
-            if tag != *b"GSUB" {
+            if tag == *b"cmap" && script == *b"kana" {
+                // The subset has no halfwidth kana; give that source scalar
+                // the existing fullwidth glyph before forcing their ligature.
+                let mut chars: Vec<_> = substitutions
+                    .iter()
+                    .flat_map(|(s, c)| s.chars().chain(std::iter::once(*c)))
+                    .collect();
+                chars.sort_unstable();
+                chars.dedup();
+                let mut cmap = Vec::new();
+                for word in [0u16, 1, 3, 10] {
+                    cmap.extend(word.to_be_bytes());
+                }
+                cmap.extend(12u32.to_be_bytes());
+                cmap.extend(12u16.to_be_bytes());
+                cmap.extend(0u16.to_be_bytes());
+                for word in [16 + 12 * chars.len() as u32, 0, chars.len() as u32] {
+                    cmap.extend(word.to_be_bytes());
+                }
+                for ch in chars {
+                    for word in [ch as u32, ch as u32, glyph(ch) as u32] {
+                        cmap.extend(word.to_be_bytes());
+                    }
+                }
+                tables.push((tag, cmap));
+            } else if tag != *b"GSUB" {
                 tables.push((tag, bytes[offset..offset + len].to_vec()));
             }
         }
         tables.push((*b"GSUB", gsub));
         tables.sort_by_key(|(tag, _)| *tag);
-        crate::font::sfnt::build_sfnt(&tables)
+        let mut result = crate::font::sfnt::build_sfnt(&tables);
+        result[..4].copy_from_slice(&bytes[..4]);
+        result
+    }
+
+    #[test]
+    fn mixed_width_kana_whole_cluster_uses_each_source_box_for_autospace() {
+        use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+        use crate::limits::Limits;
+        use crate::node::{InlineEdges, NodeId, TextSource};
+        use crate::style::{FontFamily, OverflowWrap, ParagraphStyle, TextAutospace};
+        use crate::{AtomicSizes, Fragment, LayoutContext, ParagraphBuilder};
+        use skrifa::{
+            MetadataProvider,
+            instance::{LocationRef, Size},
+        };
+        let bytes = ligature_font_for(
+            include_bytes!("../../dev/fixtures/assets/fonts/cjk.otf"),
+            *b"kana",
+            &[("カｶ", '水')],
+        );
+        let font = skrifa::FontRef::from_index(&bytes, 0).unwrap();
+        let metrics = font.glyph_metrics(Size::new(20.0), LocationRef::default());
+        let water = font.charmap().map('水').unwrap();
+        let natural = metrics.advance_width(water).unwrap();
+        let hf = harfrust::FontRef::from_index(&bytes, 0).unwrap();
+        let hd = harfrust::ShaperData::new(&hf);
+        let mut buffer = harfrust::UnicodeBuffer::new();
+        buffer.push_str("カｶ");
+        buffer.guess_segment_properties();
+        let direct = hd.shaper(&hf).build().shape(buffer, Default::default());
+        assert_eq!(
+            direct.len(),
+            1,
+            "the oracle must force a shared GSUB cluster"
+        );
+        assert_eq!(direct.glyph_infos()[0].glyph_id, water.to_u32());
+        let limits = Limits {
+            max_reshape_window_bytes: Some(0),
+            ..Default::default()
+        };
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register_face(
+                bytes,
+                0,
+                FontFaceDescriptor {
+                    family: "Kana provenance".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let mut style = ParagraphStyle::default();
+        style.root.font_families = vec![FontFamily::Named("Kana provenance".into())];
+        style.root.font_size = 20.0;
+        style.root.overflow_wrap = OverflowWrap::Anywhere;
+        let mut child = style.root.clone();
+        child.text_autospace = TextAutospace::NoAutospace;
+        let mut builder = ParagraphBuilder::new(&style, &limits);
+        for (node, text) in [(1, "カ"), (2, "ｶ")] {
+            builder
+                .open_inline(NodeId(node), &child, InlineEdges::default())
+                .push_text(TextSource::Generated { node: NodeId(node) }, text)
+                .close_inline();
+        }
+        let p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        for width in [0.0, 100.0] {
+            let lines = p.break_all(
+                &mut LayoutContext::new(),
+                &Default::default(),
+                width,
+                &AtomicSizes::EMPTY,
+            );
+            assert_eq!(lines.len(), 1);
+            assert_eq!(lines[0].text_range(), 0..6);
+            assert!((lines[0].inline_size() - (natural + natural / 8.0)).abs() < 0.04);
+            assert_eq!(
+                lines[0]
+                    .fragments()
+                    .filter_map(|f| match f {
+                        Fragment::GlyphRun(r) => Some(r.glyphs().len()),
+                        _ => None,
+                    })
+                    .sum::<usize>(),
+                1
+            );
+            let child_width: f32 = lines[0]
+                .fragments()
+                .filter_map(|f| match f {
+                    Fragment::InlineBox(b) => Some(b.rect.inline_size),
+                    _ => None,
+                })
+                .sum();
+            assert!(
+                (child_width - natural).abs() < 0.04,
+                "parent-owned spacing leaked into descendants: {child_width}"
+            );
+        }
     }
 
     fn expanded_hyphen_font(count: u16) -> Vec<u8> {
