@@ -15,6 +15,7 @@ std::thread_local! {
 pub(crate) struct Scalar {
     pub(crate) c: char,
     pub(crate) offset: u32,
+    pub(crate) end: u32,
     pub(crate) item: u32,
     pub(crate) grapheme_start: bool,
 }
@@ -30,6 +31,7 @@ pub(crate) struct ShapeItem {
     pub(crate) font: Option<FontMatch>,
     pub(crate) orientation: crate::shape::orientation::RunOrientation,
     pub(crate) combine: Option<u32>,
+    pub(crate) width_feature: Option<[u8; 4]>,
     pub(crate) before: String,
     pub(crate) after: String,
 }
@@ -126,6 +128,18 @@ pub(crate) fn itemize(
     mode: crate::geometry::WritingMode,
     combined: &[super::combine::CombineSpan],
 ) -> Vec<ShapeItem> {
+    let revert_width: Vec<_> = combined
+        .iter()
+        .map(|span| {
+            let start = breaks
+                .typographic_starts
+                .partition_point(|offset| *offset < span.text.start);
+            let end = breaks
+                .typographic_starts
+                .partition_point(|offset| *offset < span.text.end);
+            end - start > 1
+        })
+        .collect();
     let combined_levels: Vec<_> = combined
         .iter()
         .map(|span| {
@@ -244,7 +258,7 @@ pub(crate) fn itemize(
                         .or_insert_with(select)
                         .clone()
                 };
-                let end = scalars[part_end - 1].offset + scalars[part_end - 1].c.len_utf8() as u32;
+                let end = scalars[part_end - 1].end;
                 if result.len() > segment_start
                     && let Some(previous) = result.last_mut()
                     && (previous.style == style
@@ -281,6 +295,7 @@ pub(crate) fn itemize(
                         font,
                         orientation,
                         combine,
+                        width_feature: None,
                         before: scalars[part_start.saturating_sub(5)..part_start]
                             .iter()
                             .map(|s| s.c)
@@ -300,20 +315,75 @@ pub(crate) fn itemize(
         style_indices.clear();
     };
     let mut close_boundaries = Vec::new();
+    let mut active_combine = None;
     for (index, item) in input.items.iter().enumerate() {
         match item.kind {
             ItemKind::Text => {
-                for (at, c) in
-                    input.text[item.text.start as usize..item.text.end as usize].char_indices()
-                {
-                    text.push(c);
-                    scalars.push(Scalar {
-                        c,
-                        offset: item.text.start + at as u32,
-                        item: index as u32,
-                        grapheme_start: false,
+                let mut chars = input.text[item.text.start as usize..item.text.end as usize]
+                    .char_indices()
+                    .peekable();
+                while let Some((at, c)) = chars.next() {
+                    let offset = item.text.start + at as u32;
+                    let ci = combined.partition_point(|span| span.text.end <= offset);
+                    let combine = combined
+                        .get(ci)
+                        .and_then(|span| (span.text.start <= offset).then_some(ci));
+                    if combine != active_combine {
+                        // The horizontal composition is a shaping isolate on
+                        // both edges. Context must not join neighboring Arabic.
+                        flush(&mut text, &mut scalars, &mut style_indices, &mut result);
+                        active_combine = combine;
+                    }
+                    let origin_index = input
+                        .width_origins
+                        .partition_point(|origin| origin.text.end <= offset);
+                    let origin = input.width_origins.get(origin_index).filter(|origin| {
+                        origin.text.start == offset
+                            && combined
+                                .get(ci)
+                                .is_some_and(|span| span.text.start <= offset && revert_width[ci])
                     });
-                    style_indices.push(item.style);
+                    if let Some(origin) = origin {
+                        let mapped: Vec<_> = input.text
+                            [origin.text.start as usize..origin.text.end as usize]
+                            .char_indices()
+                            .collect();
+                        let source: Vec<_> = origin.before_width.chars().collect();
+                        for (part, c) in source.iter().copied().enumerate() {
+                            let (offset, end) = if mapped.len() == source.len() {
+                                let (at, mapped_c) = mapped[part];
+                                let offset = origin.text.start + at as u32;
+                                (offset, offset + mapped_c.len_utf8() as u32)
+                            } else {
+                                (origin.text.start, origin.text.end)
+                            };
+                            text.push(c);
+                            scalars.push(Scalar {
+                                c,
+                                offset,
+                                end,
+                                item: index as u32,
+                                grapheme_start: false,
+                            });
+                            style_indices.push(item.style);
+                        }
+                        while chars
+                            .peek()
+                            .is_some_and(|(at, _)| item.text.start + (*at as u32) < origin.text.end)
+                        {
+                            chars.next();
+                        }
+                    } else {
+                        text.push(c);
+                        scalars.push(Scalar {
+                            c,
+                            offset,
+                            end: offset + c.len_utf8() as u32,
+                            item: index as u32,
+                            grapheme_start: false,
+                        });
+                        style_indices.push(item.style);
+                    }
                 }
             }
             ItemKind::OpenInline { edges } => {

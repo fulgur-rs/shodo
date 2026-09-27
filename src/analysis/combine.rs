@@ -139,6 +139,7 @@ struct Candidate {
     style: u32,
     all: bool,
     before: Separation,
+    scope: Option<u32>,
 }
 
 /// Locate whole-box text that may be composed. `TextSource` boundaries are
@@ -154,9 +155,19 @@ pub(crate) fn prepare(
     }
     let mut candidates: Vec<Candidate> = Vec::new();
     let mut before = Separation::None;
+    let mut scope = styles
+        .first()
+        .and_then(|style| (style.text_combine_upright == TextCombineUpright::All).then_some(0));
+    let mut scopes = Vec::new();
+    let mut next_scope = 1u32;
     for (index, item) in items.iter().enumerate() {
         match item.kind {
-            ItemKind::Text if !item.text.is_empty() => {
+            ItemKind::Text | ItemKind::ForcedBreak
+                if !item.text.is_empty()
+                    && (matches!(item.kind, ItemKind::Text)
+                        || styles[item.style as usize].text_combine_upright
+                            == TextCombineUpright::All) =>
+            {
                 debug_assert!(item.text.end as usize <= text.len());
                 if before == Separation::None
                     && let Some(last) = candidates.last_mut()
@@ -176,19 +187,42 @@ pub(crate) fn prepare(
                     style: item.style,
                     all: style.text_combine_upright == TextCombineUpright::All,
                     before,
+                    scope,
                 });
                 before = Separation::None;
             }
-            ItemKind::OpenInline { .. } | ItemKind::CloseInline => {
+            ItemKind::OpenInline { .. } => {
                 before = before.max(Separation::Box);
+                scopes.push(scope);
+                scope = if styles[item.style as usize].text_combine_upright
+                    == TextCombineUpright::All
+                {
+                    scope.or_else(|| {
+                        let id = next_scope;
+                        next_scope += 1;
+                        Some(id)
+                    })
+                } else {
+                    None
+                };
+            }
+            ItemKind::CloseInline => {
+                before = before.max(Separation::Box);
+                scope = scopes.pop().flatten();
             }
             ItemKind::OutOfFlow { .. } | ItemKind::BidiControl => {}
+            ItemKind::Text => {}
             _ => before = Separation::Barrier,
         }
     }
     let mut rejected = vec![false; candidates.len()];
     for i in 1..candidates.len() {
-        if candidates[i].before == Separation::Box && candidates[i - 1].all && candidates[i].all {
+        if candidates[i].before == Separation::Box
+            && candidates[i - 1].all
+            && candidates[i].all
+            && candidates[i].scope.is_some()
+            && candidates[i - 1].scope == candidates[i].scope
+        {
             rejected[i - 1] = true;
             rejected[i] = true;
         }
@@ -198,6 +232,62 @@ pub(crate) fn prepare(
         .zip(rejected)
         .filter_map(|(candidate, rejected)| (candidate.all && !rejected).then_some(candidate.span))
         .collect()
+}
+
+/// Independent horizontal inline-block whitespace processing for each
+/// candidate. The transform pass applies these omissions to the source map.
+pub(crate) fn omissions(
+    input: &super::whitespace::Processed,
+    styles: &[InlineStyle],
+    mode: WritingMode,
+) -> Vec<Range<u32>> {
+    let spans = prepare(&input.text, &input.items, styles, mode);
+    let mut result: Vec<Range<u32>> = Vec::new();
+    for span in spans {
+        let start = input
+            .items
+            .partition_point(|item| item.text.end <= span.text.start);
+        let mut chars = Vec::new();
+        for item in input.items[start..]
+            .iter()
+            .take_while(|item| item.text.start < span.text.end)
+        {
+            let collapse = matches!(
+                styles[item.style as usize].white_space_collapse,
+                crate::style::WhiteSpaceCollapse::Collapse
+                    | crate::style::WhiteSpaceCollapse::PreserveBreaks
+            );
+            let ignored = matches!(item.kind, ItemKind::ForcedBreak | ItemKind::BidiControl);
+            for (at, c) in
+                input.text[item.text.start as usize..item.text.end as usize].char_indices()
+            {
+                let at = item.text.start + at as u32;
+                chars.push((at..at + c.len_utf8() as u32, ignored, collapse && c == ' '));
+            }
+        }
+        let first = chars
+            .iter()
+            .position(|(_, ignored, space)| !ignored && !space);
+        let last = chars
+            .iter()
+            .rposition(|(_, ignored, space)| !ignored && !space);
+        for (index, (range, ignored, space)) in chars.into_iter().enumerate() {
+            if ignored
+                || space
+                    && (first.is_none_or(|first| index < first)
+                        || last.is_none_or(|last| last < index))
+            {
+                if let Some(previous) = result.last_mut()
+                    && previous.end == range.start
+                {
+                    previous.end = range.end;
+                } else {
+                    result.push(range);
+                }
+            }
+        }
+    }
+    result
 }
 
 #[cfg(test)]

@@ -256,7 +256,13 @@ impl Paragraph {
         let source_cuts = alternate_styles
             .as_ref()
             .map(|_| crate::analysis::breaks::source_cursor_ranges(&processed));
-        let mut processed = transform(processed, &styles, &limits, &mut warnings)?;
+        let mut processed = transform(
+            processed,
+            &styles,
+            &limits,
+            &mut warnings,
+            style.writing_mode,
+        )?;
         if alternate_styles.is_none() {
             processed.source_spans = Vec::new();
         }
@@ -291,7 +297,15 @@ impl Paragraph {
             let mut input_limits = remaining.clone();
             input_limits.max_text_bytes = limits.max_text_bytes;
             let alternate = process(&text, &items, &data.styles, offset_mapping, &input_limits)
-                .and_then(|p| transform(p, &alternate_styles, &remaining, &mut warnings))
+                .and_then(|p| {
+                    transform(
+                        p,
+                        &alternate_styles,
+                        &remaining,
+                        &mut warnings,
+                        style.writing_mode,
+                    )
+                })
                 .map_err(|mut e| {
                     if e.kind == LimitKind::TextBytes
                         && let Some(limit) = limits.max_text_bytes
@@ -457,7 +471,7 @@ fn build_data(
         &styles,
         used_direction,
     );
-    let shape_items_input = crate::analysis::itemize::itemize(
+    let mut shape_items_input = crate::analysis::itemize::itemize(
         &processed,
         &styles,
         &bidi,
@@ -465,6 +479,14 @@ fn build_data(
         fonts,
         style.writing_mode,
         &combine_spans,
+    );
+    crate::shape::select_combined_widths(
+        cx,
+        &mut shape_items_input,
+        &styles,
+        fonts,
+        style.writing_mode,
+        &shape_limits,
     );
     let (glyphs, runs) = shape_items(
         cx,

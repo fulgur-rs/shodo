@@ -1,6 +1,18 @@
 //! CSS feature components followed by explicit author settings (last wins).
 use crate::style::*;
 
+pub(super) fn for_item(
+    style: &InlineStyle,
+    item: &crate::analysis::itemize::ShapeItem,
+) -> Vec<harfrust::Feature> {
+    let mut result = for_orientation(style, item.orientation);
+    if let Some(tag) = item.width_feature {
+        // Automatic composition features precede explicit author settings.
+        result.insert(0, harfrust::Feature::new(harfrust::Tag::new(&tag), 1, ..));
+    }
+    result
+}
+
 pub(super) fn for_orientation(
     style: &InlineStyle,
     orientation: super::orientation::RunOrientation,

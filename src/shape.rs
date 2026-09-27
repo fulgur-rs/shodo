@@ -103,6 +103,104 @@ pub(crate) struct ShapedRun {
     pub(crate) instance: Arc<RunInstance>,
 }
 
+/// Prove applicable width-feature coverage through the selected font/script/
+/// language/variation instance. A feature must change every visible source
+/// character; otherwise keep the complete composition on its ordinary glyphs.
+pub(crate) fn select_combined_widths(
+    cx: &mut crate::LayoutContext,
+    items: &mut [crate::analysis::itemize::ShapeItem],
+    styles: &[crate::style::InlineStyle],
+    fonts: &crate::font::FontCollection,
+    mode: WritingMode,
+    limits: &Limits,
+) {
+    let mut begin = 0;
+    while begin < items.len() {
+        let Some(combine) = items[begin].combine else {
+            begin += 1;
+            continue;
+        };
+        let mut end = begin + 1;
+        while end < items.len() && items[end].combine == Some(combine) {
+            end += 1;
+        }
+        let group = &items[begin..end];
+        let mut starts: Vec<_> = group
+            .iter()
+            .flat_map(|item| item.scalars.iter())
+            .filter(|scalar| scalar.grapheme_start)
+            .map(|scalar| scalar.offset)
+            .collect();
+        starts.sort_unstable();
+        starts.dedup();
+        let tag = match starts.len() {
+            2 => *b"hwid",
+            3 => *b"twid",
+            4 => *b"qwid",
+            _ => {
+                begin = end;
+                continue;
+            }
+        };
+        if group.iter().any(|item| item.font.is_none()) {
+            begin = end;
+            continue;
+        }
+        let mut warnings = crate::limits::WarningSink::new(limits.max_warnings);
+        let mut sat = Saturation::default();
+        let Ok((plain, _)) = shape_items(
+            cx,
+            group,
+            styles,
+            fonts,
+            mode,
+            limits,
+            &mut warnings,
+            &mut sat,
+        ) else {
+            begin = end;
+            continue;
+        };
+        let mut candidate = group.to_vec();
+        for item in &mut candidate {
+            item.width_feature = Some(tag);
+        }
+        let Ok((narrow, _)) = shape_items(
+            cx,
+            &candidate,
+            styles,
+            fonts,
+            mode,
+            limits,
+            &mut warnings,
+            &mut sat,
+        ) else {
+            begin = end;
+            continue;
+        };
+        starts.push(group.last().unwrap().end);
+        let covered = starts.windows(2).all(|range| {
+            let a = plain.cluster.partition_point(|offset| *offset < range[0])
+                ..plain.cluster.partition_point(|offset| *offset < range[1]);
+            let b = narrow.cluster.partition_point(|offset| *offset < range[0])
+                ..narrow.cluster.partition_point(|offset| *offset < range[1]);
+            if a.is_empty() || b.is_empty() {
+                return false;
+            }
+            let visible = plain.advance[a.clone()]
+                .iter()
+                .any(|advance| advance.raw() != 0);
+            !visible || plain.id[a] != narrow.id[b]
+        });
+        if covered {
+            for item in &mut items[begin..end] {
+                item.width_feature = Some(tag);
+            }
+        }
+        begin = end;
+    }
+}
+
 /// Shapes one compatible style/font/script segment, then assigns each cluster
 /// to the item supplying its first scalar. Node boundaries do not lose GSUB.
 #[allow(clippy::too_many_arguments)]
@@ -146,14 +244,14 @@ pub(crate) fn shape_items(
                     .expect("new instance")
                     .vertical_metrics = vertical_metrics;
                 Arc::get_mut(&mut instance).expect("new instance").features =
-                    features::for_orientation(style, original.orientation);
+                    features::for_item(style, original);
                 (shaper, instance, size)
             });
         let missing_instance = if resolved.is_none() {
             Some(Arc::new(RunInstance {
                 script: original.script,
                 language: style.lang.clone(),
-                features: features::for_orientation(style, original.orientation),
+                features: features::for_item(style, original),
                 metrics: Some(fonts.metrics(fonts.primary_font(), style.font_size)),
                 ..Default::default()
             }))
@@ -193,13 +291,14 @@ pub(crate) fn shape_items(
             let item = crate::analysis::itemize::ShapeItem {
                 segment: original.segment,
                 scalars: original.scalars[start..cursor].to_vec(),
-                end: last.offset + last.c.len_utf8() as u32,
+                end: last.end,
                 style: original.style,
                 level: original.level,
                 script: original.script,
                 font: original.font.clone(),
                 orientation: original.orientation,
                 combine: original.combine,
+                width_feature: original.width_feature,
                 before: original.before.clone(),
                 after: original.after.clone(),
             };
@@ -224,6 +323,7 @@ pub(crate) fn shape_items(
                     )?;
                     *store.id.last_mut().unwrap() = 0;
                     let mut current = runs.pop().unwrap();
+                    current.text.end = scalar.end;
                     current.instance = Arc::clone(run_instance);
                     current.orientation = item.orientation;
                     if runs.len() > window_run_start
@@ -351,7 +451,7 @@ pub(crate) fn shape_items(
                 // while a gap between clusters ends at the last actual scalar.
                 let scalar_end = item.scalars.partition_point(|s| s.offset < next_cluster);
                 let last_scalar = &item.scalars[scalar_end.saturating_sub(1)];
-                let cluster_end = last_scalar.offset + last_scalar.c.len_utf8() as u32;
+                let cluster_end = last_scalar.end;
                 let mut parts = Vec::new();
                 let mut part_start = begin;
                 let mut part_advance = 0i64;
@@ -712,13 +812,11 @@ pub(crate) fn shape_window_edit(
             let mut scalars = original.scalars[at..finish].to_vec();
             if let Some(r) = edited {
                 scalars[0].c = r.c;
+                scalars[0].end = r.text.end;
             }
             let part = crate::analysis::itemize::ShapeItem {
                 segment: original.segment,
-                end: edited.map_or_else(
-                    || scalars.last().unwrap().offset + scalars.last().unwrap().c.len_utf8() as u32,
-                    |r| r.text.end,
-                ),
+                end: edited.map_or_else(|| scalars.last().unwrap().end, |r| r.text.end),
                 scalars,
                 style: original.style,
                 level: original.level,
@@ -726,6 +824,7 @@ pub(crate) fn shape_window_edit(
                 font,
                 orientation: original.orientation,
                 combine: original.combine,
+                width_feature: original.width_feature,
                 before: before.into_iter().collect(),
                 after: original.scalars[finish..]
                     .iter()
@@ -742,6 +841,7 @@ pub(crate) fn shape_window_edit(
                 && previous.font == part.font
                 && previous.orientation == part.orientation
                 && previous.combine == part.combine
+                && previous.width_feature == part.width_feature
             {
                 previous.scalars.extend(part.scalars);
                 previous.end = part.end;
