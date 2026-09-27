@@ -1082,3 +1082,393 @@ fn first_line_intrinsic_break_after_consumed_mark_and_float_uses_normal_tail() {
         "unbroken first line remains full-width"
     );
 }
+
+#[test]
+fn resolved_first_line_keeps_explicit_equal_child_distinct_from_inherited_child() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let root = InlineStyle {
+        font_families: vec![FontFamily::Named(FONTS[0].family.into())],
+        ..Default::default()
+    };
+    let first = InlineStyle {
+        font_size: 32.0,
+        ..root.clone()
+    };
+    let style = ParagraphStyle {
+        root: root.clone(),
+        first_line: Some(first.clone()),
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&style, &Limits::default());
+    b.open_inline_with_first_line(NodeId(10), &root, &first, Default::default())
+        .push_text(
+            TextSource::Dom {
+                node: NodeId(11),
+                offset: 0,
+            },
+            "a",
+        )
+        .close_inline()
+        .open_inline_with_first_line(NodeId(20), &root, &root, Default::default())
+        .push_text(
+            TextSource::Dom {
+                node: NodeId(21),
+                offset: 0,
+            },
+            "b",
+        )
+        .close_inline();
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &Default::default(),
+        1000.0,
+        &AtomicSizes::EMPTY,
+    );
+    let runs: Vec<_> = lines[0]
+        .fragments()
+        .filter_map(|f| match f {
+            Fragment::GlyphRun(r) => Some((r.node(), r.font_size())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        runs,
+        vec![(Some(NodeId(11)), 32.0), (Some(NodeId(21)), 16.0)]
+    );
+    assert_eq!(lines[0].text(), "ab");
+    let mapping = lines[0].offset_mapping().unwrap();
+    assert_eq!(
+        mapping.text_to_dom(1, shodo::mapping::Affinity::Downstream),
+        Some(shodo::mapping::TextOrigin::Dom {
+            node: NodeId(21),
+            offset: 0
+        })
+    );
+}
+
+#[test]
+fn resolved_rich_text_can_activate_first_line_without_a_root_override() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let normal = InlineStyle {
+        font_families: vec![FontFamily::Named(FONTS[0].family.into())],
+        ..Default::default()
+    };
+    let first = InlineStyle {
+        font_size: 24.0,
+        text_transform: TextTransform::Uppercase,
+        ..normal.clone()
+    };
+    let p = shodo::RichText::new(&ParagraphStyle {
+        root: normal.clone(),
+        ..Default::default()
+    })
+    .push_with_first_line("ab\ncd", &normal, &first)
+    .build(&mut LayoutContext::new(), &fonts.collection)
+    .unwrap();
+    let options = shodo::style::LineOptions::default();
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &options,
+        1000.0,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0].text(), "AB CD");
+    assert!(glyphs(&lines[0]).iter().all(|(_, size)| *size == 24.0));
+}
+
+#[test]
+fn resolved_first_line_nested_child_is_not_reinherited_and_forced_break_continues_normally() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let normal = InlineStyle {
+        font_families: vec![FontFamily::Named(FONTS[0].family.into())],
+        ..Default::default()
+    };
+    let first = InlineStyle {
+        font_size: 32.0,
+        text_transform: TextTransform::Uppercase,
+        ..normal.clone()
+    };
+    let nested_first = InlineStyle {
+        font_size: 24.0,
+        text_transform: TextTransform::None,
+        ..normal.clone()
+    };
+    let mut b = ParagraphBuilder::new(
+        &ParagraphStyle {
+            root: normal.clone(),
+            first_line: Some(first.clone()),
+            ..Default::default()
+        },
+        &Limits::default(),
+    );
+    b.open_inline_with_first_line(NodeId(1), &normal, &first, Default::default())
+        .open_inline_with_first_line(NodeId(2), &normal, &nested_first, Default::default())
+        .push_text(
+            TextSource::Dom {
+                node: NodeId(3),
+                offset: 0,
+            },
+            "abc",
+        )
+        .push_forced_break(NodeId(4))
+        .push_text(
+            TextSource::Dom {
+                node: NodeId(3),
+                offset: 3,
+            },
+            "def",
+        )
+        .close_inline()
+        .close_inline();
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &Default::default(),
+        1000.0,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(lines.len(), 2);
+    assert!(glyphs(&lines[0]).iter().all(|(_, size)| *size == 24.0));
+    assert!(glyphs(&lines[1]).iter().all(|(_, size)| *size == 16.0));
+    assert_eq!(&lines[0].text()[lines[0].text_range()], "abc\n");
+    assert_eq!(&lines[1].text()[lines[1].text_range()], "def");
+    assert_eq!(
+        lines[1].offset_mapping().unwrap().text_to_dom(
+            lines[1].text_range().start as u32,
+            shodo::mapping::Affinity::Downstream
+        ),
+        Some(shodo::mapping::TextOrigin::Dom {
+            node: NodeId(3),
+            offset: 3
+        })
+    );
+}
+
+#[test]
+fn resolved_first_line_pairs_count_both_styles_before_copying_and_share_equal_pairs() {
+    let normal = InlineStyle::default();
+    let first = InlineStyle {
+        font_size: 32.0,
+        ..normal.clone()
+    };
+    let limits = Limits {
+        max_styles: Some(2),
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+    b.open_inline_with_first_line(NodeId(1), &normal, &first, Default::default());
+    let error = b
+        .error()
+        .expect("root+normal+explicit alternative exceed two stored styles");
+    assert_eq!(
+        (error.kind, error.limit, error.actual),
+        (LimitKind::Styles, 2, 3)
+    );
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let limits = Limits {
+        max_styles: Some(4),
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+    for n in 0..20 {
+        b.open_inline_with_first_line(NodeId(n), &normal, &first, Default::default())
+            .push_text(TextSource::Generated { node: NodeId(n) }, "a")
+            .close_inline();
+    }
+    assert!(
+        b.build(&mut LayoutContext::new(), &fonts.collection)
+            .is_ok(),
+        "equal pairs must share normal/alternate indices and fit four retained styles"
+    );
+}
+
+#[test]
+fn resolved_first_line_float_retry_preserves_alternate_style_and_normal_continuation() {
+    use shodo::node::OutOfFlowKind;
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let normal = InlineStyle {
+        font_families: vec![FontFamily::Named(FONTS[0].family.into())],
+        overflow_wrap: OverflowWrap::Anywhere,
+        ..Default::default()
+    };
+    let first = InlineStyle {
+        font_size: 24.0,
+        text_transform: TextTransform::Uppercase,
+        ..normal.clone()
+    };
+    let mut b = ParagraphBuilder::new(
+        &ParagraphStyle {
+            root: normal.clone(),
+            ..Default::default()
+        },
+        &Limits::default(),
+    );
+    b.open_inline_with_first_line(NodeId(1), &normal, &first, Default::default())
+        .push_text(
+            TextSource::Dom {
+                node: NodeId(2),
+                offset: 0,
+            },
+            "ß",
+        )
+        .push_out_of_flow(NodeId(3), OutOfFlowKind::Float)
+        .push_text(
+            TextSource::Dom {
+                node: NodeId(4),
+                offset: 0,
+            },
+            "ffi tail",
+        )
+        .close_inline();
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let mut cx = LayoutContext::new();
+    let LineResult::FloatEncountered {
+        line_start,
+        float_cursor,
+        ..
+    } = p.next_line(
+        &mut cx,
+        p.start_token(),
+        &Default::default(),
+        &LineConstraint::new(1000.0),
+        &AtomicSizes::EMPTY,
+    )
+    else {
+        panic!("float requires retry")
+    };
+    assert_eq!(line_start, p.start_token());
+    let mut constraint = LineConstraint::new(30.0);
+    constraint.floats_placed_through = Some(float_cursor);
+    let LineResult::Line(warm) = p.next_line(
+        &mut cx,
+        line_start,
+        &Default::default(),
+        &constraint,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!("warm first line")
+    };
+    let LineResult::Line(cold) = p.next_line(
+        &mut LayoutContext::new(),
+        line_start,
+        &Default::default(),
+        &constraint,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!("cold first line")
+    };
+    assert_eq!(warm.break_token(), cold.break_token());
+    assert_eq!(glyphs(&warm), glyphs(&cold));
+    assert!(glyphs(&warm).iter().all(|(_, size)| *size == 24.0));
+    assert_eq!(&warm.text()[warm.text_range()], "SS");
+    let LineResult::Line(next) = p.next_line(
+        &mut cx,
+        warm.break_token(),
+        &Default::default(),
+        &constraint,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!("normal continuation")
+    };
+    assert!(glyphs(&next).iter().all(|(_, size)| *size == 16.0));
+    let first_text_range = next
+        .fragments()
+        .find_map(|fragment| match fragment {
+            Fragment::GlyphRun(run) => Some(run.text_range()),
+            _ => None,
+        })
+        .expect("normal continuation contains glyphs after its float anchor");
+    assert_eq!(
+        next.offset_mapping().unwrap().text_to_dom(
+            first_text_range.start as u32,
+            shodo::mapping::Affinity::Downstream
+        ),
+        Some(shodo::mapping::TextOrigin::Dom {
+            node: NodeId(4),
+            offset: 0
+        })
+    );
+}
+
+#[test]
+fn resolved_alternatives_do_not_split_normal_cross_node_ligatures() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let normal = InlineStyle {
+        font_families: vec![FontFamily::Named(FONTS[0].family.into())],
+        ..Default::default()
+    };
+    let a = InlineStyle {
+        font_size: 24.0,
+        ..normal.clone()
+    };
+    let z = InlineStyle {
+        font_size: 32.0,
+        ..normal.clone()
+    };
+    let mut b = ParagraphBuilder::new(
+        &ParagraphStyle {
+            root: normal.clone(),
+            ..Default::default()
+        },
+        &Limits::default(),
+    );
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "a")
+        .push_forced_break(NodeId(2))
+        .open_inline_with_first_line(NodeId(3), &normal, &a, Default::default())
+        .push_text(
+            TextSource::Dom {
+                node: NodeId(4),
+                offset: 0,
+            },
+            "f",
+        )
+        .close_inline()
+        .open_inline_with_first_line(NodeId(5), &normal, &z, Default::default())
+        .push_text(
+            TextSource::Dom {
+                node: NodeId(6),
+                offset: 0,
+            },
+            "fi",
+        )
+        .close_inline();
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &Default::default(),
+        1000.0,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(lines.len(), 2);
+    assert_eq!(
+        glyphs(&lines[1]).len(),
+        1,
+        "unused alternative styles must not add normal shaping barriers"
+    );
+    let start = lines[1].text_range().start as u32;
+    let m = lines[1].offset_mapping().unwrap();
+    assert_eq!(
+        m.text_to_dom(start, shodo::mapping::Affinity::Downstream),
+        Some(shodo::mapping::TextOrigin::Dom {
+            node: NodeId(4),
+            offset: 0
+        })
+    );
+    assert_eq!(
+        m.text_to_dom(start + 1, shodo::mapping::Affinity::Downstream),
+        Some(shodo::mapping::TextOrigin::Dom {
+            node: NodeId(6),
+            offset: 0
+        })
+    );
+}

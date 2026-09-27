@@ -499,6 +499,9 @@ pub struct ParagraphStyle {
     /// inherit into descendants whose normal value equals the root value;
     /// differing descendant values are preserved. Other properties retain
     /// their normal values.
+    /// Use `ParagraphBuilder::open_inline_with_first_line` or
+    /// `RichText::push_with_first_line` for caller-resolved descendant styles;
+    /// those explicit inputs override the value-based fallback.
     pub first_line: Option<InlineStyle>,
 }
 

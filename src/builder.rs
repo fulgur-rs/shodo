@@ -57,6 +57,9 @@ pub struct ParagraphBuilder {
     pub(crate) items: Vec<RawItem>,
     /// Interned styles; index 0 is the paragraph's root style.
     pub(crate) styles: Vec<InlineStyle>,
+    /// Explicit alternatives, keyed by the normal/alternate pair's index.
+    /// Sparse storage adds no alternate style allocations to legacy inputs.
+    pub(crate) first_line_styles: HashMap<u32, InlineStyle>,
     style_index: HashMap<String, u32>,
     /// Index of the most recently interned or reused style.
     last_interned: u32,
@@ -75,6 +78,7 @@ impl ParagraphBuilder {
             text: String::new(),
             items: Vec::new(),
             styles: Vec::new(),
+            first_line_styles: HashMap::new(),
             style_index: HashMap::new(),
             last_interned: 0,
             stack: Vec::new(),
@@ -83,7 +87,9 @@ impl ParagraphBuilder {
             offset_mapping: true,
         };
         builder.styles.push(style.root.clone());
-        builder.style_index.insert(format!("{:?}", style.root), 0);
+        builder
+            .style_index
+            .insert(format!("{:?}", (&style.root, None::<&InlineStyle>)), 0);
         builder
     }
 
@@ -105,13 +111,41 @@ impl ParagraphBuilder {
         style: &InlineStyle,
         edges: InlineEdges,
     ) -> &mut Self {
+        self.open_inline_styles(node, style, None, edges)
+    }
+
+    /// Open an inline with caller-resolved normal and first-line styles.
+    /// The supported first-line font/language/line-height/spacing/transform/
+    /// emphasis properties use the supplied values exactly, including values
+    /// equal to the normal root. Other formatting stays in `normal`.
+    /// Resolve inheritance and relative values in the caller's cascade.
+    /// An explicit alternative activates first-line layout even without a
+    /// `ParagraphStyle::first_line` root override. Legacy `open_inline` keeps
+    /// its documented value-based fallback; resolve every inline to avoid it.
+    pub fn open_inline_with_first_line(
+        &mut self,
+        node: NodeId,
+        normal: &InlineStyle,
+        first_line: &InlineStyle,
+        edges: InlineEdges,
+    ) -> &mut Self {
+        self.open_inline_styles(node, normal, Some(first_line), edges)
+    }
+
+    fn open_inline_styles(
+        &mut self,
+        node: NodeId,
+        style: &InlineStyle,
+        first_line: Option<&InlineStyle>,
+        edges: InlineEdges,
+    ) -> &mut Self {
         let depth = self.stack.len() as u64 + 1;
         if self.check(
             self.limits.max_nesting_depth,
             LimitKind::NestingDepth,
             depth,
         ) && self.reserve_item()
-            && let Some(style) = self.intern(style)
+            && let Some(style) = self.intern_styles(style, first_line)
         {
             self.items.push(RawItem::Open { node, style, edges });
             self.stack.push(style);
@@ -229,26 +263,42 @@ impl ParagraphBuilder {
     }
 
     fn intern(&mut self, style: &InlineStyle) -> Option<u32> {
+        self.intern_styles(style, None)
+    }
+
+    fn intern_styles(
+        &mut self,
+        style: &InlineStyle,
+        first_line: Option<&InlineStyle>,
+    ) -> Option<u32> {
         // Consecutive and nested elements usually share a style; compare
         // with the enclosing box's style and the last interned one before
         // building the map key, whose cost grows with the style's size.
         for index in [self.current_style(), self.last_interned] {
-            if self.styles.get(index as usize) == Some(style) {
+            if self.styles.get(index as usize) == Some(style)
+                && self.first_line_styles.get(&index) == first_line
+            {
                 self.last_interned = index;
                 return Some(index);
             }
         }
-        let key = format!("{style:?}");
+        let key = format!("{:?}", (style, first_line));
         if let Some(&index) = self.style_index.get(&key) {
             self.last_interned = index;
             return Some(index);
         }
-        let count = self.styles.len() as u64 + 1;
+        let count = self.styles.len() as u64
+            + self.first_line_styles.len() as u64
+            + 1
+            + u64::from(first_line.is_some());
         if !self.check(self.limits.max_styles, LimitKind::Styles, count) {
             return None;
         }
         let index = self.styles.len() as u32;
         self.styles.push(style.clone());
+        if let Some(first_line) = first_line {
+            self.first_line_styles.insert(index, first_line.clone());
+        }
         self.style_index.insert(key, index);
         self.last_interned = index;
         Some(index)
@@ -302,6 +352,24 @@ impl RichText {
         self.next_node += 1;
         self.builder
             .open_inline(node, style, InlineEdges::default())
+            .push_text(TextSource::Dom { node, offset: 0 }, text)
+            .close_inline();
+        self
+    }
+
+    /// Append one span with caller-resolved normal and first-line styles.
+    /// Uses the same property subset and fallback contract as
+    /// [`ParagraphBuilder::open_inline_with_first_line`].
+    pub fn push_with_first_line(
+        mut self,
+        text: &str,
+        normal: &InlineStyle,
+        first_line: &InlineStyle,
+    ) -> Self {
+        let node = NodeId(self.next_node);
+        self.next_node += 1;
+        self.builder
+            .open_inline_with_first_line(node, normal, first_line, InlineEdges::default())
             .push_text(TextSource::Dom { node, offset: 0 }, text)
             .close_inline();
         self

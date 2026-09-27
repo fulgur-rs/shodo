@@ -16,3 +16,7 @@ serde_json = "1"
 sha2 = "0.10"
 skrifa = "0.44"
 harfrust = "0.12"
+raikiri-html = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
+raikiri-style = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
+raikiri-traits = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
+tiny-skia = "0.12"
