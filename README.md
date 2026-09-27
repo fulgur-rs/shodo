@@ -16,6 +16,8 @@ shodo is in early development. Paragraph construction, CSS text analysis, real-f
 - Alternate `::first-line` fonts, transforms, features, and metrics with exact source continuation.
 - Greedy line breaking, tabs, indentation, participating inline/atomic line boxes, vertical alignment, and height-limit retries through `Paragraph::next_line`.
 - Alignment and justification without copying shared glyphs, plus cluster views with adjusted advances.
+- Actual-font struts and run metrics, signed letter/word spacing, root-font tab stops, and visual CJK autospace with inline ownership.
+- Carets, coordinate hit testing, discontiguous selections, and logical/visual navigation over the accepted lines.
 - Incremental float reporting and withdrawal, with a single bounded partial-line cache.
 - Fixed-width `break_all`, callback-driven `lines`, intrinsic widths with atomic/float inputs, and `balance` / `pretty` break plans.
 - Read access to glyph runs, inline boxes, atomic inlines, and anchors for out-of-flow elements.
@@ -183,6 +185,59 @@ not measure separately shared paragraph/font allocations. Shaping also releases
 scratch exceeding the current run budget's conservative storage bound. See the
 [measurement record](docs/shaping-measurements.md) and
 [unsent harfrust status proposal](docs/harfrust-shaping-status-proposal.md).
+
+## Horizontal output and hit testing
+
+`GlyphRunView::metrics()` uses the same face, effective size and variation
+coordinates as shaping. `Line::metrics()` separates the final line-box extents
+from the root font's text-over/text-under edges. Every participating run can
+contribute to line height; block padding/borders remain paint geometry.
+`Line::overflow_rect()` returns nominal glyph ink and painted box bounds in
+line-local coordinates. Add `block_offset` before physical conversion. Renderer
+strokes, antialiasing and decoration effects can extend those nominal bounds.
+`hang_end()` reports preserved trailing whitespace; Japanese punctuation hanging
+is a later milestone.
+
+Tracking uses the visual neighbors' half spacing, with no outer half at either
+line edge. Word spacing and justification affect layout advances while keeping
+natural `Cluster::shaping_advance` available. Cursive runs use word-level tracking
+fallback without elongation or arbitrary inter-letter gaps. Tabs measure the root
+font's space/ch with root spacing, even inside differently sized text.
+`TextAutospace::Normal` adds one eighth of the containing inline's actual ic
+between eligible visual CJK/letter/digit neighbors. Intervening box edges block
+it, and a soft wrap removes the boundary gap. `Cluster::source_char` and `flags`
+describe processed source; a displayed synthetic hyphen retains U+00AD. Emphasis
+is placed per typographic character by a renderer, not once per shaping cluster.
+
+`hit::LineLayout::new(&lines)` indexes the finalized, accepted lines once and
+borrows them. Each `TextPosition` identifies a line, a UTF-8 offset in that
+line's `text()`, and an `Affinity`. First-line transforms can make datasets
+differ; translate through that line's optional `offset_mapping()` when DOM
+positions are needed. Mapping is not required for geometric queries. At a bidi
+boundary, upstream/downstream positions can have different visual locations.
+Interior bytes, graphemes and indivisible transforms snap to legal boundaries.
+GDEF ligature carets use actual size/variation; absent, invalid or unsupported
+contour-point data falls back to proportional grapheme positions.
+
+`caret`, `hit_test` and `selection_rects` return logical geometry with line block
+offsets already applied. Convert through `PhysicalConverter` for painting; glyph
+fragments themselves still have line-local block positions. Outside hits clamp
+with `inside=false`; NaN and empty layouts return `None`. Logical movement skips
+duplicate affinities at one source offset; visual movement retains distinct
+locations and skips coincident stops. Selection preserves bidi gaps and merges
+only touching equal-height regions on the same line. These APIs do not perform
+editing or IME operations.
+
+Accepted `Line`s own their paragraph/font data, so they can outlive the original
+handles. Relayout and justification never mutate previously accepted lines.
+See the executable [horizontal hit example](examples/horizontal_hit.rs) and the
+[contract coverage](docs/horizontal-layout-contracts.md):
+
+```sh
+cargo run --example horizontal_hit -- path/to/a-font.ttf
+# Without a font path, the example uses deterministic missing-font fallback.
+cargo run --example horizontal_hit --no-default-features
+```
 
 ## Development
 
