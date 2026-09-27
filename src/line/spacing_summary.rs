@@ -20,6 +20,7 @@ pub(super) struct Edge {
     pub(super) unit: u32,
     pub(super) box_node: u32,
     pub(super) class: super::autospace::Class,
+    pub(super) punctuation: super::punctuation::Punctuation,
 }
 
 pub(super) fn allowed(a: Edge, b: Edge) -> bool {
@@ -43,16 +44,21 @@ pub(crate) struct Summary {
     pub(super) cost: i64,
     pub(super) before: bool,
     pub(super) after: bool,
+    pub(super) hang_before: bool,
+    pub(super) hang_after: bool,
 }
 
 impl Summary {
     pub(super) fn leaf(edge: Edge) -> Self {
+        let (left, right) = edge.punctuation.own_blanks();
         Self {
             first: Some(edge),
             last: Some(edge),
-            cost: 0,
+            cost: -i64::from(left.raw()) - i64::from(right.raw()),
             before: false,
             after: false,
+            hang_before: false,
+            hang_after: false,
         }
     }
 
@@ -60,6 +66,8 @@ impl Summary {
         Self {
             before: true,
             after: true,
+            hang_before: true,
+            hang_after: true,
             ..Default::default()
         }
     }
@@ -73,7 +81,11 @@ impl Summary {
                 + self.last.zip(other.first).map_or(0, |(a, b)| {
                     gap(a, b)
                         + data.map_or(0, |d| {
-                            super::autospace::gap(d, a, b, self.after || other.before)
+                            let blocked = self.after || other.before;
+                            let (right, left) = super::punctuation::boundary(d, a, b, blocked);
+                            super::autospace::gap(d, a, b, blocked)
+                                - i64::from(right.raw())
+                                - i64::from(left.raw())
                         })
                 }),
             before: if self.first.is_some() {
@@ -86,6 +98,16 @@ impl Summary {
             } else {
                 self.after || other.after
             },
+            hang_before: if self.first.is_some() {
+                self.hang_before
+            } else {
+                self.hang_before || other.hang_before
+            },
+            hang_after: if other.last.is_some() {
+                other.hang_after
+            } else {
+                self.hang_after || other.hang_after
+            },
         }
     }
 
@@ -95,6 +117,8 @@ impl Summary {
             last: self.first,
             before: self.after,
             after: self.before,
+            hang_before: self.hang_after,
+            hang_after: self.hang_before,
             ..self
         }
     }

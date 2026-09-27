@@ -14,6 +14,8 @@ pub(super) fn scan(
     available: LayoutUnit,
     offset: LayoutUnit,
     indent: LayoutUnit,
+    flags: u8,
+    options: &crate::style::LineOptions,
     atomics: &AtomicSizes,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
@@ -77,6 +79,17 @@ pub(super) fn scan(
                 },
                 sat,
             );
+        let adjustment = super::punctuation::edges(
+            data,
+            spacing.summary(Some(data)),
+            flags,
+            super::punctuation::last_edge(data, i + 1),
+            options,
+            LayoutUnit::ZERO,
+            extent,
+            sat,
+        );
+        let extent = extent.sub(adjustment.removed(sat), sat);
         if !hangs && !overflowing && extent > available {
             if let Some((b, edge)) = last_break.take() {
                 taken_hyphen = edge.then_some(b);
@@ -117,6 +130,17 @@ pub(super) fn scan(
             .add(edge_delta, sat)
             .sub(hanging, sat)
             .add(suffix, sat);
+        let adjustment = super::punctuation::edges(
+            data,
+            spacing.summary(Some(data)),
+            flags,
+            super::punctuation::last_edge(data, i + 1),
+            options,
+            LayoutUnit::ZERO,
+            required,
+            sat,
+        );
+        let required = required.sub(adjustment.removed(sat), sat);
         i += 1;
         match unit.break_after {
             BreakClass::Mandatory => break BreakReason::Forced,
@@ -130,11 +154,23 @@ pub(super) fn scan(
             }
             BreakClass::Hyphen => {
                 if let Some(windows) = super::hyphen::line(data, start, i, cx, sat) {
+                    let summary = super::spacing::hyphen_summary(data, &spacing, i - 1, sat);
                     let required = pos
-                        .add(super::spacing::hyphen(data, &spacing, i - 1, sat), sat)
+                        .add(summary.width(sat), sat)
                         .sub(hanging, sat)
                         .add(suffix, sat)
                         .add(super::windows::cost(&windows, i, sat), sat);
+                    let adjustment = super::punctuation::edges(
+                        data,
+                        summary,
+                        flags,
+                        false,
+                        options,
+                        LayoutUnit::ZERO,
+                        required,
+                        sat,
+                    );
+                    let required = required.sub(adjustment.removed(sat), sat);
                     if overflowing {
                         taken_hyphen = Some(i);
                         break BreakReason::Regular;
@@ -186,6 +222,7 @@ pub(super) fn scan(
             .add(super::decoration::width(data, i, false, sat), sat),
         hang_start,
         hanging_end: LayoutUnit::ZERO,
+        punctuation_edges: Default::default(),
     };
     if let Some(end) = taken_hyphen
         && let Some(windows) = super::hyphen::line(data, start, end, cx, sat)
@@ -198,6 +235,16 @@ pub(super) fn scan(
         .find_map(|w| w.hyphen.as_ref().map(|t| t.start));
     result.content = result.content.add(
         super::spacing::width(data, start, result.hang_start, visible_hyphen, sat),
+        sat,
+    );
+    super::punctuation::prepare(
+        data,
+        start,
+        &mut result,
+        flags,
+        options,
+        available,
+        indent,
         sat,
     );
     result

@@ -13,10 +13,10 @@ fn array<'a>(value: &'a Value, key: &str) -> &'a [Value] {
 #[test]
 fn fixed_matrix_paints_real_glyphs_on_the_declared_canvas() {
     let ids = snapshot_cases::case_ids();
-    assert_eq!(ids.len(), 21);
+    assert_eq!(ids.len(), 26);
     assert_eq!(
         ids.iter().collect::<std::collections::BTreeSet<_>>().len(),
-        21
+        26
     );
     for id in &ids {
         let rendered = snapshot_cases::render(id).unwrap_or_else(|e| panic!("{id}: {e}"));

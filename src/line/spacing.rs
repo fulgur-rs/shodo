@@ -52,7 +52,10 @@ pub(crate) fn build(
                         .breaks
                         .typographic_starts
                         .partition_point(|g| *g < unit.text.end);
-                    for &offset in &data.breaks.typographic_starts[start..end] {
+                    for (character, &offset) in data.breaks.typographic_starts[start..end]
+                        .iter()
+                        .enumerate()
+                    {
                         let Some(ch) = data.text[offset as usize..].chars().next() else {
                             continue;
                         };
@@ -90,6 +93,7 @@ pub(crate) fn build(
                             unit: index as u32,
                             box_node: data.spacing_tree.item_nodes[source],
                             class: super::autospace::classify(ch),
+                            punctuation: data.punctuation[start + character],
                         };
                         if let Some(previous) = value.summary.last {
                             let amount = super::autospace::gap(data, previous, edge, false);
@@ -154,6 +158,21 @@ pub(crate) fn build(
                         value.summary = Summary::barrier();
                     }
                 }
+                UnitKind::Open { box_index } | UnitKind::Close { box_index } => {
+                    let edges = data.boxes[box_index as usize].edges;
+                    let (border, padding) = if matches!(unit.kind, UnitKind::Open { .. }) {
+                        (edges.border.inline_start, edges.padding.inline_start)
+                    } else {
+                        (edges.border.inline_end, edges.padding.inline_end)
+                    };
+                    if border != 0.0 || padding != 0.0 {
+                        // Nonempty inline boundaries are checked physically
+                        // by the indexed tree for inter-character spacing.
+                        // Record their presence separately for line edges.
+                        value.summary.hang_before = true;
+                        value.summary.hang_after = true;
+                    }
+                }
                 _ => {}
             }
             value.gaps.1 = gaps.len();
@@ -197,8 +216,19 @@ pub(crate) fn needed(data: &ParagraphData) -> bool {
             || [s.summary.first, s.summary.last]
                 .into_iter()
                 .flatten()
-                .any(|e| e.class == super::autospace::Class::Ideograph)
+                .any(|e| {
+                    e.class == super::autospace::Class::Ideograph
+                        || e.punctuation.trim != crate::style::TextSpacingTrim::SpaceAll
+                            && (e.punctuation.left != LayoutUnit::ZERO
+                                || e.punctuation.right != LayoutUnit::ZERO)
+                })
     }))
+}
+
+pub(crate) fn last_content(data: &ParagraphData) -> Option<usize> {
+    data.unit_spacing
+        .iter()
+        .rposition(|s| s.summary.last.is_some_and(|e| e.kind != Kind::Barrier))
 }
 
 pub(super) fn push(data: &ParagraphData, cursor: &mut Cursor, index: usize) {
@@ -211,13 +241,16 @@ pub(super) fn push(data: &ParagraphData, cursor: &mut Cursor, index: usize) {
     cursor.push(level, data.unit_spacing[index].summary, Some(data));
 }
 
+/// A typographic edge's kind and source offset.
+type JustificationEdge = (Kind, u32);
+
 /// Legal typographic starts in a final shaping cluster. Keeping source cuts
 /// excludes combining continuations and indivisible transform expansions.
 pub(super) fn justification_metadata(
     data: &ParagraphData,
     text: std::ops::Range<u32>,
     visible_hyphen: Option<u32>,
-) -> (usize, Option<Kind>, Option<Kind>) {
+) -> (usize, Option<JustificationEdge>, Option<JustificationEdge>) {
     if text.start >= text.end {
         return (0, None, None);
     }
@@ -248,23 +281,24 @@ pub(super) fn justification_metadata(
                 | Script::Syriac
         ) && icu_properties::props::GeneralCategoryGroup::Letter.contains(gc);
         let kind = if cursive { Kind::Cursive } else { Kind::Text };
-        if let Some(previous) = last
+        if let Some((previous, previous_offset)) = last
             && !(previous == Kind::Cursive && kind == Kind::Cursive)
+            && super::punctuation::justify_boundary(data, previous_offset, offset)
         {
             count += 1;
         }
-        first.get_or_insert(kind);
-        last = Some(kind);
+        first.get_or_insert((kind, offset));
+        last = Some((kind, offset));
     }
     (count, first, last)
 }
 
-pub(super) fn hyphen(
+pub(super) fn hyphen_summary(
     data: &ParagraphData,
     cursor: &Cursor,
     index: usize,
     sat: &mut Saturation,
-) -> LayoutUnit {
+) -> Summary {
     let mut cursor = cursor.clone();
     let unit = &data.units[index];
     let style = &data.styles[data.items[unit.item as usize].style as usize];
@@ -278,7 +312,7 @@ pub(super) fn hyphen(
         }),
         Some(data),
     );
-    cursor.summary(Some(data)).width(sat)
+    cursor.summary(Some(data))
 }
 
 pub(super) fn width(
@@ -360,6 +394,10 @@ pub(super) fn apply(
         }
         scan.widths[k] =
             scan.widths[k].add(super::spacing_summary::raw(metadata[k].cost, sat), sat);
+        if let Some(first) = metadata[k].first {
+            let (left, right) = first.punctuation.own_blanks();
+            leading[k] = leading[k].sub(if unit.level % 2 == 1 { right } else { left }, sat);
+        }
     }
     let mut previous: Option<(usize, Edge)> = None;
     let mut barrier = false;
@@ -394,6 +432,27 @@ pub(super) fn apply(
                 continue;
             };
             if let Some((j, edge)) = previous {
+                let (right, left) = if data.base_level.is_multiple_of(2) {
+                    super::punctuation::boundary(data, edge, first, barrier || summary.before)
+                } else {
+                    let (right, left) =
+                        super::punctuation::boundary(data, first, edge, barrier || summary.after);
+                    (left, right)
+                };
+                for (unit, amount, before) in [
+                    (j, right, level(j) % 2 != data.base_level % 2),
+                    (i, left, !reversed),
+                ] {
+                    let target = if before {
+                        unit
+                    } else {
+                        data.unit_spacing[unit].tail.min(scan.end - 1)
+                    };
+                    scan.widths[target - start] = scan.widths[target - start].sub(amount, sat);
+                    if before {
+                        leading[target - start] = leading[target - start].sub(amount, sat);
+                    }
+                }
                 let cost = super::spacing_summary::gap(edge, first);
                 let gap = super::spacing_summary::raw(cost, sat);
                 let auto = if data.base_level.is_multiple_of(2) {

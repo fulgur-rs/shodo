@@ -113,7 +113,7 @@ fn explicit_update_creates_the_full_matrix_and_check_preserves_all_bytes() {
     update(&temp);
     let expected = temp.0.join("expected");
     let before = contents(&expected);
-    assert_eq!(before.len(), 43);
+    assert_eq!(before.len(), 53);
     assert!(before.contains_key(Path::new("manifest.json")));
     let report = run(&temp.options("check", false)).unwrap();
     assert!(

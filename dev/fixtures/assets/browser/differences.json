@@ -3,8 +3,9 @@
   "inputs_sha256": "be582c013c19967078ea3ab35c6e398d6b303aeeaa02e1c93ef927c013349aad",
   "capture_sha256": "9a51ece89fea3ae27882e0cfe4f2c8e6f799fc684f61a052e824070370dcf253",
   "notes": [
-    "404/458 source endpoints match at raw widths; 46 boundary-drift observations and 8 CJK spacing observations are retained exactly, not suppressed by a tolerance. The hanging-tab fix removes three mismatches and reduces its target threshold delta2054 to2 subpixels; the remaining two tab probes are numerical drift.",
-    "Atomic bottom-baseline policy is shared. Raw font/line baseline differs by0.203125px. At3812 subpixels, the one-unit line transition also moves the atomic by40px; both geometry vectors are checked exactly. Numeric cause attribution is observational, not a full Chromium internal arithmetic audit."
+    "408/458 source endpoints match at raw widths;47 exact boundary-drift observations and3 CSS Text4 conditional line-end trim policy differences remain. Japanese punctuation implementation resolves8 prior differences and adds4: japanese07 is one-subpixel drift; japanese12 contributes3 draft-policy observations. Input, captured normal CSS, raw probes and atomic geometry are unchanged.",
+    "Atomic bottom-baseline policy is shared. Raw font/line baseline differs by0.203125px. At3812 subpixels, the one-unit line transition also moves the atomic by40px; both geometry vectors are checked exactly. Numeric cause attribution is observational, not a full Chromium internal arithmetic audit.",
+    "Conditional end trim follows https://www.w3.org/TR/2026/WD-css-text-4-20260814/#text-spacing-trim-property . Isolated Chromium152 controls 日本」/日本、/日本。 at16px and40px return first end3 for normal and space-all, while48px returns9. Contextual browser spacing can still differ; the boundary-drift labels are measured observations, not a Chromium internals audit."
   ],
   "transitions": [
     {
@@ -155,9 +156,9 @@
       "id": "japanese-07",
       "target": 21,
       "browser_subpixels": 6969,
-      "shodo_subpixels": 7504,
+      "shodo_subpixels": 6968,
       "shodo_at": 21,
-      "delta_subpixels": 535
+      "delta_subpixels": -1
     },
     {
       "id": "japanese-08",
@@ -195,17 +196,17 @@
       "id": "japanese-12",
       "target": 24,
       "browser_subpixels": 8089,
-      "shodo_subpixels": 8090,
+      "shodo_subpixels": 7578,
       "shodo_at": 24,
-      "delta_subpixels": 1
+      "delta_subpixels": -511
     },
     {
       "id": "japanese-13",
       "target": 27,
       "browser_subpixels": 8735,
-      "shodo_subpixels": 9256,
+      "shodo_subpixels": 8736,
       "shodo_at": 27,
-      "delta_subpixels": 521
+      "delta_subpixels": 1
     },
     {
       "id": "japanese-14",
@@ -683,39 +684,12 @@
     },
     {
       "id": "japanese-07",
-      "width_subpixels": 6969,
-      "expected": 21,
-      "actual": 15,
-      "category": "css-text-spacing-trim",
-      "evidence": "Measured threshold Chrome 6969/64px, shodo 7504/64px. Real CSS space-all probe removes half-em punctuation compression: Japanese07=7504, Japanese13=9255 (shodo9256). Original normal CSS retained.",
-      "issue": "shodo-unc.1"
-    },
-    {
-      "id": "japanese-07",
-      "width_subpixels": 6970,
-      "expected": 21,
-      "actual": 15,
-      "category": "css-text-spacing-trim",
-      "evidence": "Measured threshold Chrome 6969/64px, shodo 7504/64px. Real CSS space-all probe removes half-em punctuation compression: Japanese07=7504, Japanese13=9255 (shodo9256). Original normal CSS retained.",
-      "issue": "shodo-unc.1"
-    },
-    {
-      "id": "japanese-07",
-      "width_subpixels": 6971,
-      "expected": 21,
-      "actual": 15,
-      "category": "css-text-spacing-trim",
-      "evidence": "Measured threshold Chrome 6969/64px, shodo 7504/64px. Real CSS space-all probe removes half-em punctuation compression: Japanese07=7504, Japanese13=9255 (shodo9256). Original normal CSS retained.",
-      "issue": "shodo-unc.1"
-    },
-    {
-      "id": "japanese-07",
-      "width_subpixels": 7033,
-      "expected": 21,
-      "actual": 15,
-      "category": "css-text-spacing-trim",
-      "evidence": "Measured threshold Chrome 6969/64px, shodo 7504/64px. Real CSS space-all probe removes half-em punctuation compression: Japanese07=7504, Japanese13=9255 (shodo9256). Original normal CSS retained.",
-      "issue": "shodo-unc.1"
+      "width_subpixels": 6968,
+      "expected": 15,
+      "actual": 21,
+      "category": "boundary-drift",
+      "evidence": "Normal closing trim resolves the prior half-em discrepancy. Target21 now transitions at shodo6968 versus captured Chromium6969; this exact one-subpixel probe reports21 versus15. Captured normal CSS and raw widths are unchanged.",
+      "issue": null
     },
     {
       "id": "japanese-09",
@@ -737,48 +711,39 @@
     },
     {
       "id": "japanese-12",
-      "width_subpixels": 8089,
-      "expected": 24,
-      "actual": 18,
-      "category": "boundary-drift",
-      "evidence": "Same target sourceend24, measured Chrome threshold8089, shodo threshold8090 (delta1 integer subpixels). This exact probe lies between those transitions; +/-1px probes agree. No added width slack.",
-      "issue": null
+      "width_subpixels": 8025,
+      "expected": 18,
+      "actual": 24,
+      "category": "css-text-4-end-trim",
+      "evidence": "CSS Text4 WD2026-08-14 §8.5 normal trims fullwidth closing punctuation at line end only when needed to fit. In ja, U+3002 is closing. Target24 now transitions at7578 versus prior shodo8090 (512 subpixels = half of16px), captured Chromium8089. Independent Chromium152 fixed-font 日本。 probe at40px returns end3 with both normal and space-all, whereas shodo normal fits end9 at40px. Capture retained; this is a policy difference, not numerical slack.",
+      "issue": "shodo-unc.1"
+    },
+    {
+      "id": "japanese-12",
+      "width_subpixels": 8087,
+      "expected": 18,
+      "actual": 24,
+      "category": "css-text-4-end-trim",
+      "evidence": "CSS Text4 WD2026-08-14 §8.5 normal trims fullwidth closing punctuation at line end only when needed to fit. In ja, U+3002 is closing. Target24 now transitions at7578 versus prior shodo8090 (512 subpixels = half of16px), captured Chromium8089. Independent Chromium152 fixed-font 日本。 probe at40px returns end3 with both normal and space-all, whereas shodo normal fits end9 at40px. Capture retained; this is a policy difference, not numerical slack.",
+      "issue": "shodo-unc.1"
+    },
+    {
+      "id": "japanese-12",
+      "width_subpixels": 8088,
+      "expected": 18,
+      "actual": 24,
+      "category": "css-text-4-end-trim",
+      "evidence": "CSS Text4 WD2026-08-14 §8.5 normal trims fullwidth closing punctuation at line end only when needed to fit. In ja, U+3002 is closing. Target24 now transitions at7578 versus prior shodo8090 (512 subpixels = half of16px), captured Chromium8089. Independent Chromium152 fixed-font 日本。 probe at40px returns end3 with both normal and space-all, whereas shodo normal fits end9 at40px. Capture retained; this is a policy difference, not numerical slack.",
+      "issue": "shodo-unc.1"
     },
     {
       "id": "japanese-13",
       "width_subpixels": 8735,
       "expected": 27,
       "actual": 24,
-      "category": "css-text-spacing-trim",
-      "evidence": "Measured threshold Chrome 8735/64px, shodo 9256/64px. Real CSS space-all probe removes half-em punctuation compression: Japanese07=7504, Japanese13=9255 (shodo9256). Original normal CSS retained.",
-      "issue": "shodo-unc.1"
-    },
-    {
-      "id": "japanese-13",
-      "width_subpixels": 8736,
-      "expected": 27,
-      "actual": 24,
-      "category": "css-text-spacing-trim",
-      "evidence": "Measured threshold Chrome 8735/64px, shodo 9256/64px. Real CSS space-all probe removes half-em punctuation compression: Japanese07=7504, Japanese13=9255 (shodo9256). Original normal CSS retained.",
-      "issue": "shodo-unc.1"
-    },
-    {
-      "id": "japanese-13",
-      "width_subpixels": 8737,
-      "expected": 27,
-      "actual": 24,
-      "category": "css-text-spacing-trim",
-      "evidence": "Measured threshold Chrome 8735/64px, shodo 9256/64px. Real CSS space-all probe removes half-em punctuation compression: Japanese07=7504, Japanese13=9255 (shodo9256). Original normal CSS retained.",
-      "issue": "shodo-unc.1"
-    },
-    {
-      "id": "japanese-13",
-      "width_subpixels": 8799,
-      "expected": 27,
-      "actual": 24,
-      "category": "css-text-spacing-trim",
-      "evidence": "Measured threshold Chrome 8735/64px, shodo 9256/64px. Real CSS space-all probe removes half-em punctuation compression: Japanese07=7504, Japanese13=9255 (shodo9256). Original normal CSS retained.",
-      "issue": "shodo-unc.1"
+      "category": "boundary-drift",
+      "evidence": "Adjacent closing/opening trim resolves the prior half-em discrepancy. Target27 transitions at shodo8736 versus captured Chromium8735; only this exact one-subpixel probe still reports24 versus27. Original normal CSS capture retained.",
+      "issue": null
     },
     {
       "id": "japanese-14",

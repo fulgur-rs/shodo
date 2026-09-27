@@ -40,7 +40,7 @@ cargo run -p shodo-fixtures --example snapshots -- --output target/snapshot-upda
 Inspect the HTML, PNGs, manifest and geometry changes in
 `dev/fixtures/snapshots`, run an ordinary check with a new output directory,
 and include the expectations in the same reviewed PR as the change.
-`--update` cannot be combined with `--case`. All 21 cases must render before
+`--update` cannot be combined with `--case`. All 26 cases must render before
 replacement. The command stages new files, backs up old expectations and
 restores them on publication failure; a recovery failure names the backup.
 Unknown files in an expectation directory cause update refusal, preserving
@@ -50,11 +50,11 @@ contract.
 
 ## Fixed coverage and provenance
 
-The matrix contains the shared 12 corpus cases and nine structural cases:
+The matrix contains the shared 12 corpus cases and 14 structural cases:
 shared ffi ownership/color/source underline, connected Arabic across wrapped
 lines, four nested inline boxes and a second-line atomic baseline, preserved
 tabs, normal and hanging whitespace, first-line indent/baseline, Japanese
-punctuation and a float continued into a new page fragment. Each image uses a
+punctuation, five Japanese trim/hanging/justification cases, and a float continued into a new page fragment. Each image uses a
 512 by 1024 opaque white canvas, scale 1 and a 10px origin margin. The manifest
 records renderer versions, font SHA256/face index and case settings; geometry
 records the accepted output. Three OFL fixture fonts are loaded with system

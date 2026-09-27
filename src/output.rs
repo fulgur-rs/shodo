@@ -41,6 +41,7 @@ pub struct Line {
     text_range: Range<u32>,
     pub(crate) inline_size: LayoutUnit,
     pub(crate) hanging_end: LayoutUnit,
+    pub(crate) hanging_start: LayoutUnit,
     visible_hyphen: Option<u32>,
     pub(crate) block_size: LayoutUnit,
     pub(crate) baseline: LayoutUnit,
@@ -96,7 +97,7 @@ impl Line {
     /// Leading hanging amount; punctuation hanging is reserved for Japanese
     /// typography. Preserved trailing whitespace is exposed by `hang_end`.
     pub fn hang_start(&self) -> f32 {
-        0.0
+        self.hanging_start.to_f32()
     }
     pub fn hang_end(&self) -> f32 {
         self.hanging_end.to_f32()
@@ -243,6 +244,7 @@ impl Line {
             })
             .unwrap_or(0..0);
         let hanging_end = scan.hanging_end;
+        let hanging_start = scan.punctuation_edges.hang_start;
         Line {
             data: Arc::clone(&para.data),
             break_token: BreakToken {
@@ -255,6 +257,7 @@ impl Line {
             text_range,
             inline_size: scan.content,
             hanging_end,
+            hanging_start,
             visible_hyphen,
             block_size: LayoutUnit::ZERO,
             baseline: LayoutUnit::ZERO,

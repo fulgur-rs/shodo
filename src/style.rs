@@ -298,11 +298,22 @@ pub enum TextAutospace {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TextSpacingTrim {
+    /// Collapse adjacent punctuation blanks; trim a closing line end only
+    /// when it would not otherwise fit before justification.
     #[default]
     Normal,
+    /// Preserve the font's fullwidth punctuation spacing everywhere.
     SpaceAll,
+    /// Trim opening punctuation at every line start; otherwise use Normal.
     TrimStart,
+    /// Preserve opening spacing on first/forced heads, trim soft heads.
     SpaceFirst,
+    /// Always trim opening line starts and closing line ends.
+    TrimBoth,
+    /// Trim punctuation blanks at every position, including middle dots.
+    TrimAll,
+    /// Deterministic high-quality policy: the same behavior as TrimBoth.
+    Auto,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

@@ -11,6 +11,7 @@ mod intrinsic;
 mod iter;
 pub(crate) mod metrics;
 mod plan;
+pub(crate) mod punctuation;
 pub(crate) mod reshape;
 mod scan;
 pub(crate) mod spacing;
@@ -46,6 +47,7 @@ pub(crate) struct Scan {
     /// ends, bidi controls, out-of-flow anchors or a forced break.
     pub(crate) hang_start: usize,
     pub(crate) hanging_end: LayoutUnit,
+    pub(super) punctuation_edges: punctuation::EdgeAdjustment,
 }
 
 impl Paragraph {
@@ -197,7 +199,19 @@ impl Paragraph {
             })
         });
         let mut scan = if let Some(end) = planned_end {
-            plan::selected(data, start, end, offset, indent, atomics, cx, &mut sat)
+            plan::selected(
+                data,
+                start,
+                end,
+                offset,
+                indent,
+                token.flags,
+                &options,
+                available,
+                atomics,
+                cx,
+                &mut sat,
+            )
         } else {
             match cache::resolve(
                 self,
@@ -225,6 +239,7 @@ impl Paragraph {
         };
         reshape::prepare(data, start, &mut scan, cx, &mut sat);
         spacing::apply(data, start, &mut scan, &mut sat);
+        punctuation::apply(data, start, &mut scan, &mut sat);
         // Select the break before reporting an anchor: floats do not create
         // opportunities, and a word containing one may belong to the next line.
         let mut float_pos = indent.add(decoration::width(data, start, true, &mut sat), &mut sat);
@@ -263,12 +278,18 @@ impl Paragraph {
             }
         }
         whitespace::finalize(data, start, &mut scan, available, indent, &mut sat);
+        scan.hanging_end = scan
+            .hanging_end
+            .add(scan.punctuation_edges.hang_end, &mut sat);
         let alignment = align::apply(
             data, start, &mut scan, &options, available, indent, &mut sat,
         );
         let (positions, glyph_spacing) =
             spacing::positions(data, start, &mut scan, alignment.justified, &mut sat);
-        let origin = offset.add(indent, &mut sat).add(alignment.shift, &mut sat);
+        let origin = offset
+            .add(indent, &mut sat)
+            .add(alignment.shift, &mut sat)
+            .sub(scan.punctuation_edges.hang_start, &mut sat);
         let mut line = Line::new(
             self,
             token,

@@ -1,0 +1,75 @@
+{
+  "annotations": [],
+  "atomics": [],
+  "glyphs": [
+    {
+      "advance": 16.0,
+      "baseline": 18.96875,
+      "block_offset": 0.0,
+      "cluster": 0,
+      "coords": [],
+      "embolden": false,
+      "font": "cjk",
+      "id": 608,
+      "inline_position": 0.0,
+      "line": 0,
+      "owner": 1,
+      "size": 16.0,
+      "skew": null
+    },
+    {
+      "advance": 16.0,
+      "baseline": 18.96875,
+      "block_offset": 0.0,
+      "cluster": 3,
+      "coords": [],
+      "embolden": false,
+      "font": "cjk",
+      "id": 611,
+      "inline_position": 16.0,
+      "line": 0,
+      "owner": 1,
+      "size": 16.0,
+      "skew": null
+    },
+    {
+      "advance": 16.0,
+      "baseline": 18.96875,
+      "block_offset": 0.0,
+      "cluster": 6,
+      "coords": [],
+      "embolden": false,
+      "font": "cjk",
+      "id": 103,
+      "inline_position": 32.0,
+      "line": 0,
+      "owner": 1,
+      "size": 16.0,
+      "skew": null
+    }
+  ],
+  "height_rejections": 0,
+  "inline_boxes": [],
+  "lines": [
+    {
+      "baseline": 18.96875,
+      "block_offset": 0.0,
+      "block_size": 24.0,
+      "end": 9,
+      "hang_end": 16.0,
+      "hang_start": 0.0,
+      "inline_size": 32.0,
+      "page": 0,
+      "start": 0
+    }
+  ],
+  "pages": [
+    {
+      "floats": [],
+      "fragment": 0,
+      "panel_offset": 0.0
+    }
+  ],
+  "rejected_token_preserved": false,
+  "schema": 1
+}
