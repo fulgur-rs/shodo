@@ -117,3 +117,8 @@ The CJK subset also retains 水 (U+6C34) for size-adjust metric verification.
 The [float caller harness](../../docs/float-integration-harness.md) shares an owned
 Taffy checkpoint driver between numeric regressions and the fixed-font PNG example.
 It remains dev-only; root shodo consumers acquire no Taffy dependency.
+
+The [Chrome comparison](../../docs/browser-comparison.md) shares seeded fixed inputs
+through `shodo_fixtures::browser`, checks saved source positions/boundary widths
+offline, and reports every raw difference. Recollection is an explicit Python
+standard-library/headless Chromium command using a disposable profile.
