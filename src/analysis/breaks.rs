@@ -3,7 +3,9 @@ use crate::analysis::units::BreakClass;
 use crate::analysis::whitespace::Processed;
 use crate::analysis::{Item, ItemKind};
 use crate::limits::{WarningKind, WarningSink};
-use crate::style::{Hyphens, InlineStyle, LineBreak, OverflowWrap, TextWrapMode, WordBreak};
+use crate::style::{
+    Hyphens, InlineStyle, LineBreak, OverflowWrap, TextWrapMode, WhiteSpaceCollapse, WordBreak,
+};
 use icu_locale_core::LanguageIdentifier;
 use icu_properties::{CodePointMapData, CodePointSetData, props};
 use icu_segmenter::options::{LineBreakOptions, LineBreakStrictness, LineBreakWordOption};
@@ -309,6 +311,30 @@ pub(crate) fn analyze_breaks(
         } else if o.offset == logical_end || s.text_wrap_mode == TextWrapMode::NoWrap {
             o.class = BreakClass::Prohibited;
             o.min_content = false;
+        } else if matches!(last, Some(' ' | '\t'))
+            && matches!(
+                s.white_space_collapse,
+                WhiteSpaceCollapse::Preserve
+                    | WhiteSpaceCollapse::PreserveSpaces
+                    | WhiteSpaceCollapse::BreakSpaces
+            )
+        {
+            let index = projection
+                .spans
+                .partition_point(|span| span.original.end <= o.offset);
+            let next = projection.spans.get(index).and_then(|span| {
+                input.text[span.original.start.max(o.offset) as usize..]
+                    .chars()
+                    .next()
+            });
+            let allowed = s.white_space_collapse == WhiteSpaceCollapse::BreakSpaces
+                || !matches!(next, Some(' ' | '\t'));
+            o.class = if allowed {
+                BreakClass::Allowed
+            } else {
+                BreakClass::Prohibited
+            };
+            o.min_content = allowed;
         } else if last == Some('\u{AD}') && s.line_break != LineBreak::Anywhere {
             while projection
                 .spans

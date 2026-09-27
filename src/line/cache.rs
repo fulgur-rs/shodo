@@ -287,10 +287,8 @@ pub(super) fn resolve(
                     | UnitKind::Absolute { .. }
             );
             if k > 0
-                && !matches!(
-                    u.kind,
-                    UnitKind::Cluster { space: true, .. } | UnitKind::ForcedBreak
-                )
+                && !super::whitespace::fits_hanging(data, start + k)
+                && !matches!(u.kind, UnitKind::ForcedBreak)
             {
                 let extent = next
                     .add(spacing_width, sat)
@@ -308,8 +306,10 @@ pub(super) fn resolve(
                 thresholds.push((start + k, max));
             }
             match u.kind {
-                UnitKind::Cluster { space: true, .. } => hanging = hanging.add(*w, sat),
-                _ if transparent => {}
+                _ if super::whitespace::fits_hanging(data, start + k) => {
+                    hanging = hanging.add(*w, sat)
+                }
+                _ if super::whitespace::transparent(data, start + k) => {}
                 _ => {
                     hanging = LayoutUnit::ZERO;
                     kept_spacing = spacing_width;
@@ -392,22 +392,8 @@ pub(super) fn resolve(
         });
         return Err((node, ordinal, position.add(delta, sat)));
     }
-    let mut hang_start = end;
-    let mut trailing = LayoutUnit::ZERO;
-    for i in (start..end).rev() {
-        match p.data.units[i].kind {
-            UnitKind::Cluster { space: true, .. } => {
-                trailing = trailing.add(p.scan.widths[i - start], sat);
-                hang_start = i;
-            }
-            UnitKind::Close { .. }
-            | UnitKind::BidiControl
-            | UnitKind::Float { .. }
-            | UnitKind::Absolute { .. }
-            | UnitKind::ForcedBreak => {}
-            _ => break,
-        }
-    }
+    let (hang_start, trailing) =
+        super::whitespace::trailing(&p.data, start, end, &p.scan.widths, sat);
     // Release the mutable cache borrow before accessing the context shaper.
     let data = Arc::clone(&p.data);
     let mut result = Scan {
@@ -427,6 +413,7 @@ pub(super) fn resolve(
             .add(p.tracking[hang_start - start], sat)
             .add(decoration::width(&p.data, end, false, sat), sat),
         hang_start,
+        hanging_end: LayoutUnit::ZERO,
     };
     if let Some(end) = selected_hyphen
         && let Some(windows) = hyphen::line(&data, start, end, cx, sat)
