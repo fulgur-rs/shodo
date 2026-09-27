@@ -15,13 +15,13 @@ The exact initial matrix is 21 cases: the existing 12 corpus IDs unchanged, plus
 Corpus cases use their existing width/font-size/language/direction. Structural cases use Latin 20px, line-height 24px, width 180px unless their settings below override it. Every effective setting and font SHA256 belongs to the expected manifest.
 
 - Shared ffi: three source nodes containing `f`, `f`, `i`, font size 32, width 200. Paint the single accepted glyph once, using its first source owner's red color; show the middle source node's link/underline rectangle separately in blue using offset mapping and selection geometry.
-- Arabic wrap: three inline nodes `سل`, `ام `, `سلام`, Arabic font 32px, RTL, width 65px. Capture actual connected glyphs and accepted line boundaries.
+- Arabic wrap: three inline nodes `سل`, `ام `, `سلام`, Arabic font 32px, line-height 48px, RTL, width 65px. Capture actual connected glyphs and accepted line boundaries.
 - Nested atomic: four nested inline boxes with end padding 2px, a forced first-line break, a 20 by 20 atomic with baseline 16px and zero margins; green caller-painted atomic and real surrounding glyphs.
 - Preserved tabs: `One  two\tthree\nFour five.`, pre-wrap, Latin16px, width90px, tab stop16px.
 - Normal whitespace: `One   two\n  three   four.`, collapse/wrap, width90px.
 - Hanging whitespace: `One two   three   `, pre-wrap, width90px; retain trailing source/geometry even when trailing whitespace paints no ink.
 - Indent/baseline: `Alpha beta gamma delta.`, first-line indent10px, line-height24px; show baseline guides as a separate overlay, never as a substitute for glyph painting.
-- Japanese kinsoku: `「日本語」、句読点。次の行です。`, fixed CJK16px, language ja, width90px; record actual line boundaries without claiming unsupported typography is complete.
+- Japanese kinsoku: `「日本語」、句読点。読みやすい文章。`, fixed CJK16px, language ja, width90px; record actual line boundaries without claiming unsupported typography is complete. This uses only characters present in the pinned CJK subset.
 - Float pages: fixed Latin16px/line-height20px, right float20 by50px, width80px then100px after the first accepted line and a fragment move consuming20px. Text `aa bb cc dd ee ff gg hh ii jj`. Use the shared caller float driver and unchanged source/token protocol; show each page in its own panel, retaining the remaining float height and right-edge placement. Also exercise one height rejection and unchanged-token retry. Never concatenate pages at overlapping origins.
 
 Geometry records accepted line source ranges, block/inline sizes, baselines, glyph IDs/clusters/positions/font fixture identity/variation/synthesis, atomic rectangles, source annotations and page/float placements. Process-local ParagraphId/FontId values are excluded. Painter glyph count must equal accepted glyph count and each render must contain actual glyph ink. Bound line/float retries and fail on nonprogress or unsupported output.
