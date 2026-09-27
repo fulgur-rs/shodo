@@ -40,6 +40,8 @@ pub struct Line {
     pub(crate) units: Range<u32>,
     text_range: Range<u32>,
     pub(crate) inline_size: LayoutUnit,
+    pub(crate) hanging_end: LayoutUnit,
+    visible_hyphen: Option<u32>,
     pub(crate) block_size: LayoutUnit,
     pub(crate) baseline: LayoutUnit,
     pub(crate) ascent: LayoutUnit,
@@ -49,7 +51,9 @@ pub struct Line {
     pub(crate) fragments: Vec<FragmentRecord>,
     pub(crate) block_shifts: Vec<LayoutUnit>,
     pub(crate) empty: bool,
+    pub(crate) tabs: Vec<fragments::TabSlot>,
     pub(crate) positions: Option<(u32, Vec<LayoutUnit>)>,
+    pub(crate) glyph_spacing: Option<(u32, Vec<crate::line::spacing::GlyphSpacing>)>,
     pub(crate) overlay: Option<Box<GlyphStore>>,
     pub(crate) overlay_clusters: Box<[OverlayCluster]>,
     pub(crate) overlay_runs: Box<[crate::shape::ShapedRun]>,
@@ -66,7 +70,117 @@ impl fmt::Debug for Line {
     }
 }
 
+/// Final line-box extents and root font edges, in line-local block coordinates.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LineMetrics {
+    /// Distances from the alphabetic baseline to the line-box top/bottom.
+    pub ascent: f32,
+    pub descent: f32,
+    pub baseline: f32,
+    pub text_over: f32,
+    pub text_under: f32,
+}
+
 impl Line {
+    pub fn metrics(&self) -> LineMetrics {
+        let baseline = self.baseline.to_f32();
+        let root = self.data.style_metrics[0].metrics;
+        LineMetrics {
+            ascent: baseline,
+            descent: self.block_size.to_f32() - baseline,
+            baseline,
+            text_over: baseline - root.ascent,
+            text_under: baseline + root.descent,
+        }
+    }
+    /// Leading hanging amount; punctuation hanging is reserved for Japanese
+    /// typography. Preserved trailing whitespace is exposed by `hang_end`.
+    pub fn hang_start(&self) -> f32 {
+        0.0
+    }
+    pub fn hang_end(&self) -> f32 {
+        self.hanging_end.to_f32()
+    }
+    /// Bounds of nominal glyph ink and painted box geometry, relative to this
+    /// line's top. Renderer-added stroke, antialiasing and decorations can
+    /// extend these bounds; block_offset is applied by the caller.
+    pub fn overflow_rect(&self) -> LogicalRect {
+        use skrifa::{
+            MetadataProvider,
+            instance::{LocationRef, Size},
+            raw::types::GlyphId,
+        };
+        let mut bounds: Option<LogicalRect> = None;
+        let mut include = |rect: LogicalRect| {
+            if rect.inline_size <= 0.0 || rect.block_size <= 0.0 {
+                return;
+            }
+            bounds = Some(bounds.map_or(rect, |previous| {
+                let left = previous.inline_start.min(rect.inline_start);
+                let top = previous.block_start.min(rect.block_start);
+                LogicalRect {
+                    inline_start: left,
+                    block_start: top,
+                    inline_size: (previous.inline_start + previous.inline_size)
+                        .max(rect.inline_start + rect.inline_size)
+                        - left,
+                    block_size: (previous.block_start + previous.block_size)
+                        .max(rect.block_start + rect.block_size)
+                        - top,
+                }
+            }));
+        };
+        for fragment in self.fragments() {
+            match fragment {
+                Fragment::GlyphRun(run) => {
+                    let data = run.font_data();
+                    let font = data
+                        .as_ref()
+                        .and_then(|d| skrifa::FontRef::from_index(d.data.as_ref(), d.index).ok());
+                    let metrics = font.as_ref().map(|f| {
+                        f.glyph_metrics(
+                            Size::new(run.font_size()),
+                            LocationRef::new(run.normalized_coords()),
+                        )
+                    });
+                    for (index, glyph) in run.glyphs().enumerate() {
+                        if let Some(b) = metrics
+                            .as_ref()
+                            .and_then(|m| m.bounds(GlyphId::new(glyph.id)))
+                        {
+                            let skew = run.skew().unwrap_or(0.0).to_radians().tan();
+                            let (mut left, mut right) = (
+                                b.x_min + (skew * b.y_min).min(skew * b.y_max),
+                                b.x_max + (skew * b.y_min).max(skew * b.y_max),
+                            );
+                            if self.data.base_level % 2 == 1 {
+                                let natural = run.natural_advance(index);
+                                (left, right) = (natural - right, natural - left);
+                            }
+                            include(LogicalRect {
+                                inline_start: glyph.inline_position + left,
+                                inline_size: right - left,
+                                block_start: run.baseline() + glyph.block_offset - b.y_max,
+                                block_size: b.y_max - b.y_min,
+                            });
+                        } else if metrics.is_none() {
+                            let m = run.metrics();
+                            include(LogicalRect {
+                                inline_start: glyph.inline_position,
+                                inline_size: run.natural_advance(index),
+                                block_start: run.baseline() + glyph.block_offset - m.ascent,
+                                block_size: m.ascent + m.descent,
+                            });
+                        }
+                    }
+                }
+                Fragment::Atomic(a) => include(a.border_rect),
+                Fragment::InlineBox(b) => include(b.rect),
+                Fragment::OutOfFlowAnchor(_) => {}
+            }
+        }
+        bounds.unwrap_or_default()
+    }
     pub(crate) fn new(
         para: &Paragraph,
         token: BreakToken,
@@ -77,9 +191,7 @@ impl Line {
         sat: &mut Saturation,
     ) -> Line {
         let data = &para.data;
-        let root = &data.styles[0];
-        let size = root.font_size;
-        let m = data.fonts.metrics(data.fonts.primary_font(), size);
+        let m = data.style_metrics[0].metrics;
         let flags = match scan.reason {
             BreakReason::Forced => BreakToken::AFTER_FORCED,
             _ => 0,
@@ -89,7 +201,7 @@ impl Line {
             .overlays
             .iter()
             .find_map(|w| w.hyphen.as_ref().map(|text| text.start));
-        let records = fragments::build(
+        let (mut records, tabs) = fragments::build(
             data,
             origin_units,
             scan.hang_start,
@@ -98,8 +210,26 @@ impl Line {
             atomics,
             visible_hyphen,
         );
-        let metrics =
-            crate::line::metrics::measure(data, token.unit as usize..scan.end, &records, sat);
+        crate::line::autospace::exclude_from_boxes(data, &mut records, &scan.autospace_gaps, sat);
+        if let Some(leading) = &scan.leading {
+            for record in &mut records {
+                let RecordKind::Atomic { size, unit, .. } = &record.kind else {
+                    continue;
+                };
+                let natural = LayoutUnit::from_f32_round(
+                    size.inline_size.max(0.0) + size.margins.inline_sum(),
+                    sat,
+                );
+                let before = leading[*unit as usize - token.unit as usize];
+                let before = if record.level % 2 != data.base_level % 2 {
+                    record.inline_size.sub(natural, sat).sub(before, sat)
+                } else {
+                    before
+                };
+                record.inline_start = record.inline_start.add(before, sat);
+                record.inline_size = natural;
+            }
+        }
         // Resource-limited whole clusters can overlap following transparent
         // markers in source order. Their complete source extent still belongs
         // to this line. Cache it so public range queries remain constant-time.
@@ -112,6 +242,16 @@ impl Line {
                 ))
             })
             .unwrap_or(0..0);
+        let hanging_end = data.units[scan.hang_start..scan.end]
+            .iter()
+            .zip(&scan.widths[scan.hang_start - token.unit as usize..])
+            .filter(|(unit, _)| {
+                matches!(
+                    unit.kind,
+                    crate::analysis::units::UnitKind::Cluster { space: true, .. }
+                )
+            })
+            .fold(LayoutUnit::ZERO, |sum, (_, w)| sum.add(*w, sat));
         Line {
             data: Arc::clone(&para.data),
             break_token: BreakToken {
@@ -123,21 +263,39 @@ impl Line {
             units: token.unit..scan.end as u32,
             text_range,
             inline_size: scan.content,
-            block_size: metrics.block_size,
-            baseline: metrics.baseline,
+            hanging_end,
+            visible_hyphen,
+            block_size: LayoutUnit::ZERO,
+            baseline: LayoutUnit::ZERO,
             ascent: LayoutUnit::from_f32_round(m.ascent, sat),
             descent: LayoutUnit::from_f32_round(m.descent, sat),
             block_offset,
             displaced: Vec::new(),
+            block_shifts: vec![LayoutUnit::ZERO; records.len()],
             fragments: records,
-            block_shifts: metrics.shifts,
-            empty: metrics.empty,
+            empty: false,
             positions: None,
+            glyph_spacing: None,
             overlay: None,
             overlay_clusters: Box::default(),
             overlay_runs: Box::default(),
             pending_overlays: scan.overlays,
+            tabs,
         }
+    }
+
+    pub(crate) fn measure_metrics(&mut self, sat: &mut Saturation) {
+        let metrics = crate::line::metrics::measure(
+            &self.data,
+            self.units.start as usize..self.units.end as usize,
+            &self.fragments,
+            &self.overlay_runs,
+            sat,
+        );
+        self.block_size = metrics.block_size;
+        self.baseline = metrics.baseline;
+        self.block_shifts = metrics.shifts;
+        self.empty = metrics.empty;
     }
 
     pub fn break_token(&self) -> BreakToken {
@@ -273,6 +431,8 @@ pub struct Glyph {
     pub id: u32,
     pub inline_position: f32,
     pub block_offset: f32,
+    /// Layout advance, including the cluster's assigned spacing. Half spacing
+    /// can precede its ink; `inline_position` remains the actual glyph origin.
     pub advance: f32,
     pub cluster: u32,
 }
@@ -283,6 +443,78 @@ pub struct Cluster {
     pub text_range: Range<usize>,
     pub advance: f32,
     pub shaping_advance: f32,
+    /// First scalar in the processed source range (SHY retains U+00AD).
+    pub source_char: Option<char>,
+    pub flags: ClusterFlags,
+}
+
+/// Source classification; whitespace and punctuation describe the first
+/// scalar. A multi-character shaping cluster is emphasis-excluded only when
+/// every constituent character is excluded. Renderers still place emphasis
+/// once per typographic character, rather than once per shaping cluster.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ClusterFlags {
+    pub whitespace: bool,
+    pub punctuation: bool,
+    pub synthetic_hyphen: bool,
+    pub emphasis_excluded: bool,
+}
+
+impl ClusterFlags {
+    fn from_source(source: &str, synthetic_hyphen: bool) -> Self {
+        use icu_properties::{
+            CodePointMapData,
+            props::{GeneralCategory, GeneralCategoryGroup},
+        };
+        let categories = CodePointMapData::<GeneralCategory>::new();
+        let punctuation = |ch| GeneralCategoryGroup::Punctuation.contains(categories.get(ch));
+        let excluded = |ch| {
+            let category = categories.get(ch);
+            if GeneralCategoryGroup::Separator.contains(category)
+                || matches!(
+                    category,
+                    GeneralCategory::Control
+                        | GeneralCategory::Format
+                        | GeneralCategory::Unassigned
+                )
+            {
+                return true;
+            }
+            if !punctuation(ch) {
+                return false;
+            }
+            // CSS Text Decoration 3 keeps emphasis on punctuation whose
+            // compatibility decomposition contains one of these symbols.
+            !icu_normalizer::DecomposingNormalizer::new_nfkd()
+                .normalize_iter(std::iter::once(ch))
+                .any(|c| {
+                    matches!(
+                        c,
+                        '#' | '%'
+                            | '\u{2030}'
+                            | '\u{2031}'
+                            | '\u{066a}'
+                            | '\u{0609}'
+                            | '\u{060a}'
+                            | '&'
+                            | '\u{204a}'
+                            | '@'
+                            | '\u{00a7}'
+                            | '\u{00b6}'
+                            | '\u{204b}'
+                            | '\u{2053}'
+                            | '\u{303d}'
+                    )
+                })
+        };
+        let first = source.chars().next();
+        Self {
+            whitespace: first.is_some_and(char::is_whitespace),
+            punctuation: first.is_some_and(punctuation),
+            synthetic_hyphen,
+            emphasis_excluded: synthetic_hyphen || source.chars().all(excluded),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -292,6 +524,17 @@ pub(crate) struct OverlayCluster {
 }
 
 impl<'a> GlyphRunView<'a> {
+    pub fn style_index(&self) -> u32 {
+        self.data().items[self.item as usize].style
+    }
+    fn natural_advance(&self, index: usize) -> f32 {
+        let store = match self.source {
+            GlyphSource::Shared => &self.data().glyphs,
+            _ => self.line.overlay.as_deref().expect("overlay store"),
+        };
+        store.advance[self.glyphs.0 as usize + index].to_f32()
+    }
+
     fn data(&self) -> &'a ParagraphData {
         &self.line.data
     }
@@ -309,6 +552,14 @@ impl<'a> GlyphRunView<'a> {
 
     pub fn font(&self) -> FontId {
         self.run_data().font
+    }
+
+    /// Metrics at this run's actual size and normalized variation location.
+    pub fn metrics(&self) -> crate::font::FontMetrics {
+        self.run_data()
+            .instance
+            .metrics
+            .unwrap_or_else(|| self.data().fonts.metrics(self.font(), self.font_size()))
     }
 
     pub fn font_size(&self) -> f32 {
@@ -403,7 +654,16 @@ impl<'a> GlyphRunView<'a> {
                     )
                 }
             };
+            let source = data
+                .text
+                .get(text.start as usize..text.end as usize)
+                .unwrap_or_default();
             Cluster {
+                source_char: source.chars().next(),
+                flags: ClusterFlags::from_source(
+                    source,
+                    self.line.visible_hyphen == Some(text.start),
+                ),
                 text_range: text.start as usize..text.end as usize,
                 advance: glyphs.clone().map(|g| self.glyph(g).advance).sum(),
                 shaping_advance: glyphs.map(|g| store.advance[g as usize].to_f32()).sum(),
@@ -422,15 +682,25 @@ impl<'a> GlyphRunView<'a> {
             && let Some((start, positions)) = &self.line.positions
         {
             let pen = positions[(g - start) as usize];
-            let rel = pen - positions[(self.glyphs.0 - start) as usize];
+            let spacing = self
+                .line
+                .glyph_spacing
+                .as_ref()
+                .map(|(start, v)| v[(g - start) as usize]);
+            let rel = pen - positions[(self.glyphs.0 - start) as usize]
+                + spacing.map_or(LayoutUnit::ZERO, |s| s.leading);
             let end = if g + 1 < self.glyphs.1 {
                 positions[(g + 1 - start) as usize] - positions[(self.glyphs.0 - start) as usize]
             } else {
                 self.record.inline_size
             };
-            (rel, end - rel)
+            (
+                rel,
+                spacing.map_or(end - rel, |s| store.advance[gi] + s.extra),
+            )
         } else {
-            let rel = store.pen[gi] - store.pen[first];
+            let rel = store.pen[gi] - store.pen[first]
+                + store.leading.as_ref().map_or(LayoutUnit::ZERO, |v| v[gi]);
             let advance = if let Some(spacing) = &store.spacing {
                 store.advance[gi] + spacing[gi]
             } else if matches!(self.source, GlyphSource::Overlay { .. })
@@ -554,7 +824,7 @@ impl Line {
                 item: *item,
                 text: (text.start, text.end),
             }),
-            RecordKind::Atomic { node, size } => {
+            RecordKind::Atomic { node, size, .. } => {
                 let margin_block = size.margins.block_start + size.margins.block_end;
                 let height = size.block_size + margin_block;
                 let kind = self.data.baseline_kind(*node);
@@ -589,9 +859,9 @@ impl Line {
                 reversed,
             } => {
                 let info = &self.data.boxes[*box_index as usize];
-                let style = &self.data.styles[info.style as usize];
-                let font = self.data.fonts.primary_font();
-                let m = self.data.fonts.metrics(font, style.font_size);
+                let resolved = self.data.style_metrics[info.style as usize];
+                let font = resolved.font;
+                let m = resolved.metrics;
                 let e = info.edges;
                 let pick = |on: bool, v: f32| if on { v } else { 0.0 };
                 let margin_start = pick(*start_edge, e.margin.inline_start);
@@ -629,7 +899,7 @@ impl Line {
                     has_end_edge: *end_edge,
                     parent: parent.map(|p| p as usize),
                     font,
-                    font_size: style.font_size,
+                    font_size: resolved.size,
                 })
             }
             RecordKind::Anchor { node, kind } => Fragment::OutOfFlowAnchor(AnchorFragment {

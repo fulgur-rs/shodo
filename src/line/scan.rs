@@ -28,6 +28,8 @@ pub(super) fn scan(
     let mut last_emergency: Option<usize> = None;
     let mut overflowing = false;
     let mut hanging = LayoutUnit::ZERO;
+    let mut spacing = super::spacing_summary::Cursor::default();
+    let mut kept_spacing = LayoutUnit::ZERO;
     let mut i = start;
     let reason = loop {
         let Some(unit) = units.get(i) else {
@@ -46,11 +48,16 @@ pub(super) fn scan(
             data,
             unit,
             units[start].text.start,
-            offset.add(pos, sat),
+            offset
+                .add(pos, sat)
+                .add(spacing.summary(Some(data)).width(sat), sat),
             atomics,
             cx,
             sat,
-        );
+        )
+        .add(data.unit_spacing[i].word, sat);
+        super::spacing::push(data, &mut spacing, i);
+        let tracking = spacing.summary(Some(data)).width(sat);
         // Trailing spaces hang and never cause a break (CSS Text 3 §4.1.3).
         let hangs = matches!(unit.kind, UnitKind::Cluster { space: true, .. });
         let suffix = super::decoration::width(data, i + 1, false, sat);
@@ -62,14 +69,19 @@ pub(super) fn scan(
                 | UnitKind::Float { .. }
                 | UnitKind::Absolute { .. }
         );
-        let extent = pos.add(w, sat).add(edge_delta, sat).add(suffix, sat).sub(
-            if transparent {
-                hanging
-            } else {
-                LayoutUnit::ZERO
-            },
-            sat,
-        );
+        let extent = pos
+            .add(w, sat)
+            .add(tracking, sat)
+            .add(edge_delta, sat)
+            .add(suffix, sat)
+            .sub(
+                if transparent {
+                    hanging.add(tracking.sub(kept_spacing, sat), sat)
+                } else {
+                    LayoutUnit::ZERO
+                },
+                sat,
+            );
         if !hangs && !overflowing && extent > available {
             if let Some((b, edge)) = last_break.take() {
                 taken_hyphen = edge.then_some(b);
@@ -100,9 +112,19 @@ pub(super) fn scan(
             | UnitKind::BidiControl
             | UnitKind::Float { .. }
             | UnitKind::Absolute { .. } => {}
-            _ => hanging = LayoutUnit::ZERO,
+            _ => {
+                hanging = LayoutUnit::ZERO;
+                kept_spacing = tracking;
+            }
         }
-        let required = pos.add(edge_delta, sat).sub(hanging, sat).add(suffix, sat);
+        if hanging == LayoutUnit::ZERO {
+            kept_spacing = tracking;
+        }
+        let required = pos
+            .add(kept_spacing, sat)
+            .add(edge_delta, sat)
+            .sub(hanging, sat)
+            .add(suffix, sat);
         i += 1;
         match unit.break_after {
             BreakClass::Mandatory => break BreakReason::Forced,
@@ -117,6 +139,7 @@ pub(super) fn scan(
             BreakClass::Hyphen => {
                 if let Some(windows) = super::hyphen::line(data, start, i, cx, sat) {
                     let required = pos
+                        .add(super::spacing::hyphen(data, &spacing, i - 1, sat), sat)
                         .sub(hanging, sat)
                         .add(suffix, sat)
                         .add(super::windows::cost(&windows, i, sat), sat);
@@ -178,6 +201,8 @@ pub(super) fn scan(
         end: i,
         reason,
         widths,
+        leading: None,
+        autospace_gaps: Vec::new(),
         content: total
             .sub(trailing, sat)
             .add(prefix, sat)
@@ -189,6 +214,14 @@ pub(super) fn scan(
     {
         super::reshape::apply_windows(data, start, &mut result, windows, cx, sat);
     }
+    let visible_hyphen = result
+        .overlays
+        .iter()
+        .find_map(|w| w.hyphen.as_ref().map(|t| t.start));
+    result.content = result.content.add(
+        super::spacing::width(data, start, result.hang_start, visible_hyphen, sat),
+        sat,
+    );
     result
 }
 
@@ -280,8 +313,8 @@ pub(super) fn unit_width(
     }
 }
 
-/// Distance to the next tab stop (CSS Text 3 §4.2). The placeholder shaper
-/// gives the space character a 1em advance.
+/// Tab-size numbers use the nearest block's actual space and spacing.
+/// A stop closer than half a ch is skipped (CSS Text 3 §4.1.2/4.2).
 fn tab_width(
     data: &ParagraphData,
     unit: &Unit,
@@ -289,8 +322,10 @@ fn tab_width(
     sat: &mut Saturation,
 ) -> LayoutUnit {
     let style = &data.styles[data.items[unit.item as usize].style as usize];
+    let block = &data.styles[0];
+    let metrics = data.style_metrics[0];
     let interval = match style.tab_size {
-        TabSize::Spaces(n) => n * style.font_size,
+        TabSize::Spaces(n) => n * (metrics.space + block.letter_spacing + block.word_spacing),
         TabSize::Px(v) => v,
     };
     let interval = i64::from(LayoutUnit::from_f32_round(interval, sat).raw());
@@ -298,6 +333,10 @@ fn tab_width(
         return LayoutUnit::ZERO;
     }
     let x = i64::from(content_pos.raw());
-    let next = (x.div_euclid(interval) + 1) * interval;
+    let mut next = (x.div_euclid(interval) + 1) * interval;
+    let min_gap = i64::from(LayoutUnit::from_f32_round(metrics.ch * 0.5, sat).raw());
+    if next - x < min_gap {
+        next += interval;
+    }
     LayoutUnit::from_raw((next - x).clamp(0, i64::from(i32::MAX)) as i32)
 }

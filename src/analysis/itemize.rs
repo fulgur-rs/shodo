@@ -20,6 +20,8 @@ pub(crate) struct Scalar {
 }
 #[derive(Clone, Debug)]
 pub(crate) struct ShapeItem {
+    /// Hard-boundary context; substitutions may join only within this segment.
+    pub(crate) segment: u32,
     pub(crate) scalars: Vec<Scalar>,
     pub(crate) end: u32,
     pub(crate) style: u32,
@@ -28,6 +30,28 @@ pub(crate) struct ShapeItem {
     pub(crate) font: Option<FontMatch>,
     pub(crate) before: String,
     pub(crate) after: String,
+}
+
+pub(crate) fn inline_boundary_breaks_shaping(
+    style: &InlineStyle,
+    edges: &crate::node::InlineEdges,
+    start: bool,
+) -> bool {
+    let values = if start {
+        [
+            edges.margin.inline_start,
+            edges.border.inline_start,
+            edges.padding.inline_start,
+        ]
+    } else {
+        [
+            edges.margin.inline_end,
+            edges.border.inline_end,
+            edges.padding.inline_end,
+        ]
+    };
+    style.vertical_align != crate::style::VerticalAlign::Baseline
+        || values.into_iter().any(|v| v != 0.0)
 }
 
 #[derive(Hash, PartialEq, Eq)]
@@ -205,6 +229,7 @@ pub(crate) fn itemize(
                         .collect();
                 } else {
                     result.push(ShapeItem {
+                        segment: segment_start as u32,
                         scalars: scalars[part_start..part_end].to_vec(),
                         end,
                         style,
@@ -229,6 +254,7 @@ pub(crate) fn itemize(
         scalars.clear();
         style_indices.clear();
     };
+    let mut close_boundaries = Vec::new();
     for (index, item) in input.items.iter().enumerate() {
         match item.kind {
             ItemKind::Text => {
@@ -245,7 +271,22 @@ pub(crate) fn itemize(
                     style_indices.push(item.style);
                 }
             }
-            ItemKind::OpenInline { .. } | ItemKind::CloseInline | ItemKind::OutOfFlow { .. } => {}
+            ItemKind::OpenInline { edges } => {
+                close_boundaries.push(inline_boundary_breaks_shaping(
+                    &styles[item.style as usize],
+                    &edges,
+                    false,
+                ));
+                if inline_boundary_breaks_shaping(&styles[item.style as usize], &edges, true) {
+                    flush(&mut text, &mut scalars, &mut style_indices, &mut result);
+                }
+            }
+            ItemKind::CloseInline => {
+                if close_boundaries.pop().unwrap_or(false) {
+                    flush(&mut text, &mut scalars, &mut style_indices, &mut result);
+                }
+            }
+            ItemKind::OutOfFlow { .. } => {}
             _ => flush(&mut text, &mut scalars, &mut style_indices, &mut result),
         }
     }

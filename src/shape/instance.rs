@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct RunInstance {
+    pub(crate) metrics: Option<crate::font::FontMetrics>,
     pub(crate) coords: Vec<NormalizedCoord>,
     pub(crate) variations: Vec<FontVariation>,
     pub(crate) embolden: bool,
@@ -20,7 +21,7 @@ pub(crate) struct RunInstance {
     pub(crate) features: Vec<harfrust::Feature>,
 }
 
-pub(super) fn resolve(
+pub(crate) fn resolve(
     bytes: &[u8],
     index: u32,
     found: &FontMatch,
@@ -131,6 +132,7 @@ pub(super) fn resolve(
         }
     }
     let result = Arc::new(RunInstance {
+        metrics: None,
         coords: instance.coords().to_vec(),
         variations,
         embolden: found.embolden,

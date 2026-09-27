@@ -70,6 +70,8 @@ impl FirstLineData {
 
 pub(crate) struct ParagraphData {
     #[cfg(test)]
+    pub(crate) spacing_setup_visits: std::sync::atomic::AtomicUsize,
+    #[cfg(test)]
     pub(crate) baseline_queries: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
     pub(crate) cluster_queries: std::sync::atomic::AtomicUsize,
@@ -85,6 +87,11 @@ pub(crate) struct ParagraphData {
     pub(crate) text: String,
     pub(crate) items: Vec<Item>,
     pub(crate) styles: Vec<InlineStyle>,
+    pub(crate) style_metrics: Vec<crate::line::font_metrics::StyleMetrics>,
+    pub(crate) unit_spacing: Vec<crate::line::spacing::UnitSpacing>,
+    pub(crate) internal_autospace_gaps: Vec<crate::line::autospace::Gap>,
+    pub(crate) needs_spacing: bool,
+    pub(crate) spacing_tree: crate::line::autospace::Tree,
     pub(crate) glyphs: GlyphStore,
     /// Unit index for each shaping cluster and cluster index for each glyph.
     pub(crate) clusters: Vec<u32>,
@@ -433,7 +440,13 @@ fn build_data(
             });
         }
     }
+    let style_metrics = styles
+        .iter()
+        .map(|s| crate::line::font_metrics::resolve(fonts, s, warnings))
+        .collect();
     let data = ParagraphData {
+        #[cfg(test)]
+        spacing_setup_visits: Default::default(),
         #[cfg(test)]
         baseline_queries: Default::default(),
         #[cfg(test)]
@@ -450,6 +463,11 @@ fn build_data(
         text: processed.text,
         items: processed.items,
         styles,
+        style_metrics,
+        unit_spacing: Vec::new(),
+        internal_autospace_gaps: Vec::new(),
+        needs_spacing: false,
+        spacing_tree: Default::default(),
         glyphs,
         clusters: Vec::new(),
         glyph_clusters: Vec::new(),
@@ -480,6 +498,9 @@ fn finalize_data(
     sat: &mut Saturation,
 ) {
     crate::line::reshape::initialize_slices(data, cx, warnings, sat);
+    data.spacing_tree = crate::line::autospace::Tree::build(data);
+    (data.unit_spacing, data.internal_autospace_gaps) = crate::line::spacing::build(data, sat);
+    data.needs_spacing = crate::line::spacing::needed(data);
     let mut clusters = Vec::new();
     let mut glyph_clusters = vec![0; data.glyphs.len()];
     let mut floats = Vec::new();
@@ -506,6 +527,18 @@ fn finalize_data(
             | crate::analysis::units::UnitKind::BlockInInline { .. }
             | crate::analysis::units::UnitKind::Tab
             | crate::analysis::units::UnitKind::BidiControl => shaping_barriers.push(i as u32),
+            crate::analysis::units::UnitKind::Open { box_index }
+            | crate::analysis::units::UnitKind::Close { box_index } => {
+                let b = &data.boxes[*box_index as usize];
+                let start = matches!(u.kind, crate::analysis::units::UnitKind::Open { .. });
+                if crate::analysis::itemize::inline_boundary_breaks_shaping(
+                    &data.styles[b.style as usize],
+                    &b.edges,
+                    start,
+                ) {
+                    shaping_barriers.push(i as u32);
+                }
+            }
             _ => {}
         }
     }

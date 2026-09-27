@@ -128,6 +128,16 @@ fn rtl_physical_alignment_and_no_justification() {
     };
     assert_eq!(
         glyphs(&first_line(&p, 100.0, &o, &AtomicSizes::EMPTY))[2].inline_position,
+        // justify-all implies last-line justification; with expansion
+        // disabled, CSS Text3's unexpandable-text fallback centers the line.
+        55.0
+    );
+    let o = LineOptions {
+        text_align_last: TextAlignLast::Start,
+        ..o
+    };
+    assert_eq!(
+        glyphs(&first_line(&p, 100.0, &o, &AtomicSizes::EMPTY))[2].inline_position,
         20.0
     );
 }

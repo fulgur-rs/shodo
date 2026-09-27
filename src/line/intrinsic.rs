@@ -64,15 +64,24 @@ impl Paragraph {
         let mut left = LayoutUnit::ZERO;
         let mut right = LayoutUnit::ZERO;
         let mut i = 0;
+        let mut word_spacing = super::spacing_summary::Cursor::default();
+        let mut total_spacing = super::spacing_summary::Cursor::default();
+        let mut kept_word_spacing = LayoutUnit::ZERO;
+        let mut kept_total_spacing = LayoutUnit::ZERO;
         while let Some(u) = data.units.get(i) {
             if matches!(
                 u.kind,
                 UnitKind::ForcedBreak | UnitKind::BlockInInline { .. }
             ) {
                 let suffix = super::decoration::width(data, i, false, &mut sat);
-                min = min.max(word.sub(trailing, &mut sat).add(suffix, &mut sat));
+                min = min.max(
+                    word.add(kept_word_spacing, &mut sat)
+                        .sub(trailing, &mut sat)
+                        .add(suffix, &mut sat),
+                );
                 max = max.max(
                     total
+                        .add(kept_total_spacing, &mut sat)
                         .sub(trailing, &mut sat)
                         .add(left, &mut sat)
                         .add(right, &mut sat)
@@ -110,6 +119,10 @@ impl Paragraph {
                 trailing = LayoutUnit::ZERO;
                 left = LayoutUnit::ZERO;
                 right = LayoutUnit::ZERO;
+                word_spacing = Default::default();
+                total_spacing = Default::default();
+                kept_word_spacing = LayoutUnit::ZERO;
+                kept_total_spacing = LayoutUnit::ZERO;
                 continue;
             }
             if let UnitKind::Float { node, .. } = u.kind {
@@ -142,6 +155,7 @@ impl Paragraph {
                 if clear_left || clear_right {
                     max = max.max(
                         total
+                            .add(kept_total_spacing, &mut sat)
                             .sub(trailing, &mut sat)
                             .add(left, &mut sat)
                             .add(right, &mut sat),
@@ -180,18 +194,26 @@ impl Paragraph {
                     LayoutUnit::from_f32_round(hi, &mut sat),
                 )
             } else {
-                let width =
-                    super::scan::unit_width(data, u, total, &AtomicSizes::EMPTY, cx, &mut sat);
-                let min_width = if u.shared_cluster.is_some() {
+                let width = super::scan::unit_width(
+                    data,
+                    u,
+                    total.add(total_spacing.summary(Some(data)).width(&mut sat), &mut sat),
+                    &AtomicSizes::EMPTY,
+                    cx,
+                    &mut sat,
+                )
+                .add(data.unit_spacing[i].word, &mut sat);
+                let min_width = if u.shared_cluster.is_some() || matches!(u.kind, UnitKind::Tab) {
                     super::scan::unit_width_from(
                         data,
                         u,
                         word_start,
-                        word,
+                        word.add(word_spacing.summary(Some(data)).width(&mut sat), &mut sat),
                         &AtomicSizes::EMPTY,
                         cx,
                         &mut sat,
                     )
+                    .add(data.unit_spacing[i].word, &mut sat)
                 } else {
                     width
                 };
@@ -199,13 +221,19 @@ impl Paragraph {
             };
             word = word.add(lo, &mut sat);
             total = total.add(hi, &mut sat);
+            super::spacing::push(data, &mut word_spacing, i);
+            super::spacing::push(data, &mut total_spacing, i);
             match u.kind {
                 UnitKind::Cluster { space: true, .. } => trailing = trailing.add(hi, &mut sat),
                 UnitKind::Close { .. }
                 | UnitKind::BidiControl
                 | UnitKind::Absolute { .. }
                 | UnitKind::Float { .. } => {}
-                _ => trailing = LayoutUnit::ZERO,
+                _ => {
+                    trailing = LayoutUnit::ZERO;
+                    kept_word_spacing = word_spacing.summary(Some(data)).width(&mut sat);
+                    kept_total_spacing = total_spacing.summary(Some(data)).width(&mut sat);
+                }
             }
             let hyphen = if u.break_after == BreakClass::Hyphen {
                 super::hyphen::line(data, word_unit, i + 1, cx, &mut sat)
@@ -226,7 +254,12 @@ impl Paragraph {
                     i += 1;
                     continue;
                 }
-                let measured_word = word.add(delta, &mut sat);
+                let tracking = if hyphen.is_some() {
+                    super::spacing::hyphen(data, &word_spacing, i, &mut sat)
+                } else {
+                    kept_word_spacing
+                };
+                let measured_word = word.add(tracking, &mut sat).add(delta, &mut sat);
                 min = min.max(
                     measured_word
                         .sub(
@@ -259,10 +292,14 @@ impl Paragraph {
                     word = super::text_indent(&options, 0, &mut sat)
                         .add(super::decoration::width(data, i, true, &mut sat), &mut sat);
                     trailing = LayoutUnit::ZERO;
+                    word_spacing = Default::default();
+                    kept_word_spacing = LayoutUnit::ZERO;
                     continue;
                 }
                 word_unit = next;
                 word_start = next_text;
+                word_spacing = Default::default();
+                kept_word_spacing = LayoutUnit::ZERO;
                 word = super::text_indent(&options, 0, &mut sat).add(
                     super::decoration::width(data, next, true, &mut sat),
                     &mut sat,
@@ -272,11 +309,16 @@ impl Paragraph {
         }
         let final_delta = super::windows::delta(data, word_unit, data.units.len(), cx, &mut sat);
         min = min
-            .max(word.add(final_delta, &mut sat).sub(trailing, &mut sat))
+            .max(
+                word.add(kept_word_spacing, &mut sat)
+                    .add(final_delta, &mut sat)
+                    .sub(trailing, &mut sat),
+            )
             .max(LayoutUnit::ZERO);
         max = max
             .max(
                 total
+                    .add(kept_total_spacing, &mut sat)
                     .sub(trailing, &mut sat)
                     .add(left, &mut sat)
                     .add(right, &mut sat),

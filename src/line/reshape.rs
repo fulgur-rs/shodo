@@ -251,6 +251,7 @@ pub(super) fn apply_windows(
             continue;
         }
         for (index, _, new) in window.changes {
+            let new = new.add(data.unit_spacing[index].word, sat);
             let old = scan.widths[index - start];
             scan.widths[index - start] = new;
             if index < scan.hang_start {
@@ -367,6 +368,17 @@ pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturati
                 window
                     .store
                     .spacing
+                    .unwrap_or_else(|| vec![LayoutUnit::ZERO; window.store.id.len()]),
+            );
+        }
+        if window.store.leading.is_some() || overlay.leading.is_some() {
+            let leading = overlay
+                .leading
+                .get_or_insert_with(|| vec![LayoutUnit::ZERO; start as usize]);
+            leading.extend(
+                window
+                    .store
+                    .leading
                     .unwrap_or_else(|| vec![LayoutUnit::ZERO; window.store.id.len()]),
             );
         }

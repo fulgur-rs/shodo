@@ -128,6 +128,15 @@ impl FontCollection {
         if cluster.is_empty() {
             return None;
         }
+        self.cached_match(query, cluster)
+    }
+
+    /// Select the first available CSS face without a cmap coverage condition.
+    pub(crate) fn match_primary(&self, query: &FontQuery) -> Option<FontMatch> {
+        self.cached_match(query, "")
+    }
+
+    fn cached_match(&self, query: &FontQuery, cluster: &str) -> Option<FontMatch> {
         let query = query.clone().normalized();
         let generations = self.generations();
         {

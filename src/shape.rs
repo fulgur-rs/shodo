@@ -8,6 +8,7 @@ pub(crate) mod cache;
 mod features;
 mod instance;
 use instance::RunInstance;
+pub(crate) use instance::resolve as resolve_instance;
 use std::sync::Arc;
 
 use std::ops::Range;
@@ -32,9 +33,11 @@ pub(crate) struct GlyphStore {
     pub(crate) cluster: Vec<u32>,
     /// Bits0/1: unsafe to break/concat before this shaping cluster.
     pub(crate) flags: Vec<u8>,
-    /// Per-glyph layout spacing, allocated only for justified owned windows.
+    /// Per-glyph layout spacing for tracked/word-spaced/justified owned windows.
     /// Shaping advances remain unchanged for public cluster measurements.
     pub(crate) spacing: Option<Vec<LayoutUnit>>,
+    /// Logical leading space, kept separate from the pen shared by marks.
+    pub(crate) leading: Option<Vec<LayoutUnit>>,
 }
 
 impl GlyphStore {
@@ -80,20 +83,24 @@ pub(crate) fn shape_items(
             .as_ref()
             .zip(font_data.as_ref())
             .map(|(found, data)| {
-                instance::resolve(
+                let (shaper, mut instance, size) = instance::resolve(
                     data.data.as_ref(),
                     data.index,
                     found,
                     style,
                     original.script,
                     warnings,
-                )
+                );
+                let metrics = fonts.metrics_with_coords(found.id, size, &instance.coords);
+                Arc::get_mut(&mut instance).expect("new instance").metrics = metrics;
+                (shaper, instance, size)
             });
         let missing_instance = if resolved.is_none() {
             Some(Arc::new(RunInstance {
                 script: original.script,
                 language: style.lang.clone(),
                 features: features::features(style),
+                metrics: Some(fonts.metrics(fonts.primary_font(), style.font_size)),
                 ..Default::default()
             }))
         } else {
@@ -130,6 +137,7 @@ pub(crate) fn shape_items(
             }
             let last = &original.scalars[cursor - 1];
             let item = crate::analysis::itemize::ShapeItem {
+                segment: original.segment,
                 scalars: original.scalars[start..cursor].to_vec(),
                 end: last.offset + last.c.len_utf8() as u32,
                 style: original.style,
@@ -587,6 +595,7 @@ pub(crate) fn shape_window_edit(
                 scalars[0].c = r.c;
             }
             let part = crate::analysis::itemize::ShapeItem {
+                segment: original.segment,
                 end: edited.map_or_else(
                     || scalars.last().unwrap().offset + scalars.last().unwrap().c.len_utf8() as u32,
                     |r| r.text.end,
@@ -605,6 +614,7 @@ pub(crate) fn shape_window_edit(
                     .collect(),
             };
             if let Some(previous) = items.last_mut()
+                && previous.segment == part.segment
                 && previous.style == part.style
                 && previous.level == part.level
                 && previous.script == part.script

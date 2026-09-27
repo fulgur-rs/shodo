@@ -970,7 +970,9 @@ fn unbroken_ligature_slices_do_not_overwrite_justified_glyph_positions() {
     assert!((glyphs[0].inline_position).abs() < 0.02);
     assert!((glyphs[2].inline_position - (100.0 - direct_width("x"))).abs() < 0.04);
     let spare = 100.0 - direct_width("ffi x");
-    assert!((glyphs[1].inline_position - (direct_width("ffi") + spare / 2.0)).abs() < 0.05);
+    // Four typographic boundaries: f|f, f|i, i|space, space|x. The
+    // retained ffi owns three of them; shaping-cluster count is irrelevant.
+    assert!((glyphs[1].inline_position - (direct_width("ffi") + 3.0 * spare / 4.0)).abs() < 0.05);
     assert!((glyphs.iter().map(|g| g.advance).sum::<f32>() - 100.0).abs() < 0.02);
 }
 
@@ -1814,7 +1816,7 @@ fn generated_hyphen_does_not_join_across_an_atomic_boundary() {
 }
 
 #[test]
-fn rtl_owned_justification_keeps_marks_attached_to_their_clusters() {
+fn cursive_owned_lines_keep_marks_without_forbidden_gaps() {
     use shodo::style::{TextAlign, TextJustify};
     let limits = Limits::default();
     let fonts = load_fonts(&limits).unwrap();
@@ -1852,7 +1854,9 @@ fn rtl_owned_justification_keeps_marks_attached_to_their_clusters() {
             &AtomicSizes::EMPTY,
         );
         assert_eq!(actual[0].text_range(), 0..8);
-        assert!((actual[0].inline_size() - width).abs() < 0.03);
+        // CSS Text3 §6.4.4 forbids inserting inter-character gaps inside a
+        // cursive word. Without elongation, this line keeps its natural width.
+        assert!((actual[0].inline_size() - plain[0].inline_size()).abs() < 0.03);
         let glyphs = |line: &Line| {
             line.fragments()
                 .filter_map(|f| match f {
