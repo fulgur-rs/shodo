@@ -311,6 +311,9 @@ pub(crate) fn analyze_breaks(
         } else if o.offset == logical_end || s.text_wrap_mode == TextWrapMode::NoWrap {
             o.class = BreakClass::Prohibited;
             o.min_content = false;
+        } else if s.line_break == LineBreak::Anywhere {
+            // ICU's opportunities include preserved whitespace; do not
+            // replace them with the normal nonbreaking-space sequence rule.
         } else if matches!(last, Some(' ' | '\t'))
             && matches!(
                 s.white_space_collapse,
@@ -327,8 +330,18 @@ pub(crate) fn analyze_breaks(
                     .chars()
                     .next()
             });
-            let allowed = s.white_space_collapse == WhiteSpaceCollapse::BreakSpaces
-                || !matches!(next, Some(' ' | '\t'));
+            let unicode_prohibited = o.class == BreakClass::Prohibited
+                && next.is_some_and(|c| {
+                    matches!(
+                        lb.get(c),
+                        props::LineBreak::WordJoiner
+                            | props::LineBreak::Glue
+                            | props::LineBreak::ZWJ
+                    )
+                });
+            let allowed = !unicode_prohibited
+                && (s.white_space_collapse == WhiteSpaceCollapse::BreakSpaces
+                    || !matches!(next, Some(' ' | '\t')));
             o.class = if allowed {
                 BreakClass::Allowed
             } else {

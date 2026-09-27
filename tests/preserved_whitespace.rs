@@ -421,3 +421,240 @@ fn hanging_tab_does_not_pull_the_next_float_back_across_a_soft_break() {
     };
     assert_eq!(inline_position, 0.0);
 }
+
+#[test]
+fn retained_bidi_trailing_space_stays_at_the_paragraph_end() {
+    for (mode, wrap, text, width, range, positions) in [
+        (
+            WhiteSpaceCollapse::BreakSpaces,
+            TextWrapMode::Wrap,
+            "אבג דהו",
+            45.0,
+            0..7,
+            vec![(0, 20.0), (2, 10.0), (4, 0.0), (6, 30.0)],
+        ),
+        (
+            WhiteSpaceCollapse::Preserve,
+            TextWrapMode::Wrap,
+            "\u{202e}abc \u{202c}",
+            100.0,
+            0..10,
+            vec![(3, 20.0), (4, 10.0), (5, 0.0), (6, 30.0)],
+        ),
+        (
+            WhiteSpaceCollapse::Preserve,
+            TextWrapMode::NoWrap,
+            "\u{202e}abc \u{202c}",
+            100.0,
+            0..10,
+            vec![(3, 20.0), (4, 10.0), (5, 0.0), (6, 30.0)],
+        ),
+        (
+            WhiteSpaceCollapse::Preserve,
+            TextWrapMode::Wrap,
+            "\u{202e}abc \u{202c}",
+            35.0,
+            0..10,
+            vec![(3, 20.0), (4, 10.0), (5, 0.0), (6, 30.0)],
+        ),
+    ] {
+        let p = preserved(text, mode, wrap);
+        let line = first_line(&p, width, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(line.text_range(), range, "{mode:?} {wrap:?} {width}");
+        let mut actual: Vec<_> = glyphs(&line)
+            .iter()
+            .filter(|g| g.advance > 0.0)
+            .map(|g| (g.cluster, g.inline_position))
+            .collect();
+        actual.sort_by_key(|g| g.0);
+        assert_eq!(actual, positions, "{mode:?} {wrap:?} {width}");
+        let space = line
+            .fragments()
+            .find_map(|f| match f {
+                Fragment::GlyphRun(r) if r.text_range().contains(&6) => Some(r.bidi_level()),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(space, 0);
+    }
+}
+
+#[test]
+fn anywhere_keeps_breaks_between_preserved_spaces_with_cloned_padding() {
+    let mut s = style();
+    s.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
+    s.root.line_break = shodo::style::LineBreak::Anywhere;
+    s.root.box_decoration_break = shodo::style::BoxDecorationBreak::Clone;
+    let p = build(&s, |b| {
+        b.open_inline(
+            NodeId(1),
+            &s.root,
+            InlineEdges {
+                padding: Sides {
+                    inline_end: 5.0,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .push_text(TextSource::Generated { node: NodeId(2) }, "a  b")
+        .close_inline();
+    });
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        25.0,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(
+        lines
+            .iter()
+            .map(|l| (l.text_range(), l.inline_size()))
+            .collect::<Vec<_>>(),
+        vec![(0..2, 25.0), (2..4, 25.0)]
+    );
+}
+
+#[test]
+fn preserved_space_does_not_override_a_word_joiner_prohibition() {
+    let p = preserved(
+        "a \u{2060}b",
+        WhiteSpaceCollapse::Preserve,
+        TextWrapMode::Wrap,
+    );
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        15.0,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(
+        lines
+            .iter()
+            .map(|l| (l.text_range(), l.inline_size()))
+            .collect::<Vec<_>>(),
+        vec![(0..6, 30.0)]
+    );
+    assert_eq!(
+        p.intrinsic_sizes(
+            &mut LayoutContext::new(),
+            &LineOptions::default(),
+            &AtomicIntrinsics::EMPTY
+        )
+        .min_content,
+        30.0
+    );
+}
+
+#[test]
+fn out_of_flow_anchors_do_not_hide_nonzero_end_padding() {
+    for kind in [
+        shodo::node::OutOfFlowKind::Float,
+        shodo::node::OutOfFlowKind::Absolute,
+    ] {
+        let mut s = style();
+        s.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
+        let p = build(&s, |b| {
+            b.open_inline(
+                NodeId(1),
+                &s.root,
+                InlineEdges {
+                    padding: Sides {
+                        inline_end: 5.0,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .push_text(TextSource::Generated { node: NodeId(2) }, "a b ")
+            .push_out_of_flow(NodeId(3), kind)
+            .close_inline();
+        });
+        let mut cx = LayoutContext::new();
+        let mut constraint = LineConstraint::new(35.0);
+        let mut token = p.start_token();
+        let mut actual = Vec::new();
+        loop {
+            match p.next_line(
+                &mut cx,
+                token,
+                &LineOptions::default(),
+                &constraint,
+                &AtomicSizes::EMPTY,
+            ) {
+                LineResult::FloatEncountered { float_cursor, .. } => {
+                    constraint.floats_placed_through = Some(float_cursor)
+                }
+                LineResult::Line(l) => {
+                    actual.push((l.text_range(), l.inline_size()));
+                    token = l.break_token();
+                }
+                _ => break,
+            }
+        }
+        assert_eq!(actual, vec![(0..2, 10.0), (2..7, 25.0)], "{kind:?}");
+        let sizes = p.intrinsic_sizes(
+            &mut LayoutContext::new(),
+            &LineOptions::default(),
+            &AtomicIntrinsics::EMPTY,
+        );
+        assert_eq!(
+            (sizes.min_content, sizes.max_content),
+            (25.0, 45.0),
+            "{kind:?}"
+        );
+        // Prime a whole-line float cache, then shrink to the literal split.
+        let mut cached = LayoutContext::new();
+        let mut wide = LineConstraint::new(100.0);
+        loop {
+            match p.next_line(
+                &mut cached,
+                p.start_token(),
+                &LineOptions::default(),
+                &wide,
+                &AtomicSizes::EMPTY,
+            ) {
+                LineResult::FloatEncountered { float_cursor, .. } => {
+                    wide.floats_placed_through = Some(float_cursor)
+                }
+                LineResult::Line(l) => {
+                    assert_eq!((l.text_range(), l.inline_size()), (0..7, 45.0));
+                    break;
+                }
+                _ => panic!("wide line"),
+            }
+        }
+        wide.available_inline_size = 35.0;
+        let LineResult::Line(line) = p.next_line(
+            &mut cached,
+            p.start_token(),
+            &LineOptions::default(),
+            &wide,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("cached line")
+        };
+        assert_eq!((line.text_range(), line.inline_size()), (0..2, 10.0));
+    }
+}
+
+#[test]
+fn retained_bidi_space_tracking_follows_visual_order() {
+    let mut s = style();
+    s.root.white_space_collapse = WhiteSpaceCollapse::BreakSpaces;
+    s.root.letter_spacing = 2.0;
+    let p = build(&s, |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "אבג דהו");
+    });
+    let line = first_line(&p, 47.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(
+        (line.text_range(), line.inline_size(), line.hang_end()),
+        (0..7, 46.0, 0.0)
+    );
+    let mut positions: Vec<_> = glyphs(&line)
+        .iter()
+        .map(|g| (g.cluster, g.inline_position))
+        .collect();
+    positions.sort_by_key(|g| g.0);
+    assert_eq!(positions, vec![(0, 24.0), (2, 12.0), (4, 0.0), (6, 36.0)]);
+}

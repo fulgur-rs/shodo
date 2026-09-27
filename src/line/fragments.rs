@@ -442,6 +442,7 @@ fn build_bidi(
     let base = data
         .bidi_paragraph_at_unit(units.start)
         .map_or(data.base_level, |p| p.base_level);
+    let bidi_start = super::whitespace::bidi_trailing(data, units.start, units.end);
     let mut pieces: Vec<Piece> = Vec::new();
     // Hanging trailing spaces, placed after everything else on the line.
     let mut hanging: Vec<Piece> = Vec::new();
@@ -477,7 +478,7 @@ fn build_bidi(
         // the paragraph embedding level. `BidiInfo` levels are resolved
         // before L1, so it is applied here, per line and per unit.
         let level = match &unit.kind {
-            UnitKind::Cluster { space: true, .. } if trailing => base,
+            UnitKind::Cluster { .. } if i >= bidi_start => base,
             UnitKind::Tab => base,
             // A box end after the hanging spaces stays with the box's
             // content: it takes the level of the box's last piece before

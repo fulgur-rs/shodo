@@ -279,13 +279,8 @@ pub(super) fn resolve(
             prefix.push(next);
             let (delta, viable) = super::windows::candidate(data, start, start + k + 1, cx, sat);
             let suffix = decoration::width(data, start + k + 1, false, sat);
-            let transparent = matches!(
-                u.kind,
-                UnitKind::Close { .. }
-                    | UnitKind::BidiControl
-                    | UnitKind::Float { .. }
-                    | UnitKind::Absolute { .. }
-            );
+            let transparent = super::whitespace::transparent(data, start + k)
+                && !matches!(u.kind, UnitKind::ForcedBreak);
             if k > 0
                 && !super::whitespace::fits_hanging(data, start + k)
                 && !matches!(u.kind, UnitKind::ForcedBreak)

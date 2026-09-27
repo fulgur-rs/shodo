@@ -29,19 +29,30 @@ pub(super) fn preserved(data: &ParagraphData, i: usize) -> bool {
 }
 
 pub(super) fn transparent(data: &ParagraphData, i: usize) -> bool {
-    matches!(
-        data.units[i].kind,
+    match data.units[i].kind {
         UnitKind::Close { .. }
-            | UnitKind::BidiControl
-            | UnitKind::Float { .. }
-            | UnitKind::Absolute { .. }
-            | UnitKind::ForcedBreak
-    )
+        | UnitKind::BidiControl
+        | UnitKind::Float { .. }
+        | UnitKind::Absolute { .. }
+        | UnitKind::ForcedBreak => true,
+        UnitKind::Cluster { .. } => {
+            use unicode_bidi::BidiClass::*;
+            data.text[data.units[i].text.start as usize..data.units[i].text.end as usize]
+                .chars()
+                .all(|c| {
+                    matches!(
+                        unicode_bidi::bidi_class(c),
+                        LRI | RLI | FSI | PDI | LRE | RLE | LRO | RLO | PDF | BN
+                    )
+                })
+        }
+        _ => false,
+    }
 }
 
 /// End edges that occur between a preserved glyph and the line edge.
 pub(super) fn obstructed(data: &ParagraphData, end: usize) -> bool {
-    for u in &data.units[end..] {
+    for (offset, u) in data.units[end..].iter().enumerate() {
         match u.kind {
             UnitKind::Close { box_index } => {
                 let e = data.boxes[box_index as usize].edges;
@@ -49,7 +60,8 @@ pub(super) fn obstructed(data: &ParagraphData, end: usize) -> bool {
                     return true;
                 }
             }
-            UnitKind::BidiControl => {}
+            UnitKind::BidiControl | UnitKind::Float { .. } | UnitKind::Absolute { .. } => {}
+            UnitKind::Cluster { .. } if transparent(data, end + offset) => {}
             _ => break,
         }
     }
@@ -86,6 +98,39 @@ pub(super) fn trailing(
         }
     }
     (begin, sum)
+}
+
+/// UAX #9 L1 resets logical trailing whitespace regardless of CSS hanging.
+/// Inline edges and zero-width anchors do not end that whitespace sequence.
+pub(super) fn bidi_trailing(data: &ParagraphData, start: usize, end: usize) -> usize {
+    let mut begin = end;
+    for i in (start..end).rev() {
+        match data.units[i].kind {
+            UnitKind::Cluster { .. } => {
+                use unicode_bidi::BidiClass::*;
+                let text =
+                    &data.text[data.units[i].text.start as usize..data.units[i].text.end as usize];
+                if text.chars().all(|c| {
+                    matches!(
+                        unicode_bidi::bidi_class(c),
+                        WS | S | B | LRI | RLI | FSI | PDI | LRE | RLE | LRO | RLO | PDF | BN
+                    )
+                }) {
+                    begin = i;
+                } else {
+                    break;
+                }
+            }
+            UnitKind::Tab => begin = i,
+            UnitKind::Close { .. }
+            | UnitKind::BidiControl
+            | UnitKind::Float { .. }
+            | UnitKind::Absolute { .. }
+            | UnitKind::ForcedBreak => {}
+            _ => break,
+        }
+    }
+    begin
 }
 
 /// Fit has already excluded eligible whitespace. Forced/end lines keep the

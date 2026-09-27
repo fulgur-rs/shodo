@@ -363,19 +363,18 @@ pub(super) fn apply(
     }
     let mut previous: Option<(usize, Edge)> = None;
     let mut barrier = false;
-    for range in [start..scan.hang_start, scan.hang_start..scan.end] {
+    let bidi_start = super::whitespace::bidi_trailing(data, start, scan.end);
+    let level = |i: usize| {
+        if i >= bidi_start || matches!(data.units[i].kind, UnitKind::Tab) {
+            data.base_level
+        } else {
+            data.units[i].level
+        }
+    };
+    for range in [start..bidi_start, bidi_start..scan.end] {
         let levels: Vec<_> = range
             .clone()
-            .map(|i| {
-                unicode_bidi::Level::new(
-                    if i >= scan.hang_start || matches!(data.units[i].kind, UnitKind::Tab) {
-                        data.base_level
-                    } else {
-                        data.units[i].level
-                    },
-                )
-                .unwrap()
-            })
+            .map(|i| unicode_bidi::Level::new(level(i)).unwrap())
             .collect();
         let mut order = unicode_bidi::BidiInfo::reorder_visual(&levels);
         if data.base_level % 2 == 1 {
@@ -384,7 +383,7 @@ pub(super) fn apply(
         for offset in order {
             let i = range.start + offset;
             let summary = metadata[i - start];
-            let reversed = data.units[i].level % 2 != data.base_level % 2;
+            let reversed = level(i) % 2 != data.base_level % 2;
             let (first, last) = if reversed {
                 (summary.last, summary.first)
             } else {
@@ -411,7 +410,7 @@ pub(super) fn apply(
                     let left = i64::from(edge.tracking) / 2;
                     let right = cost - left;
                     for (unit, extra, before) in [
-                        (j, left, data.units[j].level % 2 != data.base_level % 2),
+                        (j, left, level(j) % 2 != data.base_level % 2),
                         (i, right, !reversed),
                     ] {
                         let target = if before {
@@ -432,7 +431,7 @@ pub(super) fn apply(
                         owner: super::autospace::owner(data, edge, first),
                         amount: super::spacing_summary::raw(auto, sat),
                     });
-                    let before = data.units[j].level % 2 != data.base_level % 2;
+                    let before = level(j) % 2 != data.base_level % 2;
                     let target = if before {
                         j
                     } else {

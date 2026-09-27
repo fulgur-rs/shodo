@@ -62,13 +62,8 @@ pub(super) fn scan(
         let hangs = super::whitespace::fits_hanging(data, i);
         let suffix = super::decoration::width(data, i + 1, false, sat);
         let (edge_delta, viable) = super::windows::candidate(data, start, i + 1, cx, sat);
-        let transparent = matches!(
-            unit.kind,
-            UnitKind::Close { .. }
-                | UnitKind::BidiControl
-                | UnitKind::Float { .. }
-                | UnitKind::Absolute { .. }
-        );
+        let transparent =
+            super::whitespace::transparent(data, i) && !matches!(unit.kind, UnitKind::ForcedBreak);
         let extent = pos
             .add(w, sat)
             .add(tracking, sat)
