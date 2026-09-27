@@ -15,6 +15,7 @@ pub(crate) mod reshape;
 mod scan;
 pub(crate) mod spacing;
 mod spacing_summary;
+mod whitespace;
 mod windows;
 
 use crate::analysis::units::UnitKind;
@@ -38,12 +39,13 @@ pub(crate) struct Scan {
     pub(crate) leading: Option<Vec<LayoutUnit>>,
     pub(crate) autospace_gaps: Vec<autospace::Gap>,
     pub(crate) overlays: Vec<reshape::EdgeOverlay>,
-    /// Content width, excluding text-indent and hanging trailing spaces.
+    /// Content width, excluding text-indent and hanging trailing whitespace.
     pub(crate) content: LayoutUnit,
-    /// Index of the first hanging trailing space of the line (`end` when
-    /// there is none). Units from here on are hanging spaces, inline box
+    /// Index of the first eligible trailing whitespace of the line (`end` when
+    /// there is none). Units from here on are trailing spaces/tabs, inline box
     /// ends, bidi controls, out-of-flow anchors or a forced break.
     pub(crate) hang_start: usize,
+    pub(crate) hanging_end: LayoutUnit,
 }
 
 impl Paragraph {
@@ -260,6 +262,7 @@ impl Paragraph {
                 }
             }
         }
+        whitespace::finalize(data, start, &mut scan, available, indent, &mut sat);
         let alignment = align::apply(
             data, start, &mut scan, &options, available, indent, &mut sat,
         );

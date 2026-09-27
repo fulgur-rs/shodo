@@ -61,6 +61,7 @@ impl Paragraph {
         let mut word_start = data.units.first().map_or(0, |u| u.text.start);
         let mut total = indent;
         let mut trailing = LayoutUnit::ZERO;
+        let mut word_trailing = LayoutUnit::ZERO;
         let mut left = LayoutUnit::ZERO;
         let mut right = LayoutUnit::ZERO;
         let mut i = 0;
@@ -76,7 +77,7 @@ impl Paragraph {
                 let suffix = super::decoration::width(data, i, false, &mut sat);
                 min = min.max(
                     word.add(kept_word_spacing, &mut sat)
-                        .sub(trailing, &mut sat)
+                        .sub(word_trailing, &mut sat)
                         .add(suffix, &mut sat),
                 );
                 max = max.max(
@@ -117,6 +118,7 @@ impl Paragraph {
                     .map_or(data.text.len() as u32, |u| u.text.start);
                 total = word;
                 trailing = LayoutUnit::ZERO;
+                word_trailing = LayoutUnit::ZERO;
                 left = LayoutUnit::ZERO;
                 right = LayoutUnit::ZERO;
                 word_spacing = Default::default();
@@ -224,13 +226,20 @@ impl Paragraph {
             super::spacing::push(data, &mut word_spacing, i);
             super::spacing::push(data, &mut total_spacing, i);
             match u.kind {
-                UnitKind::Cluster { space: true, .. } => trailing = trailing.add(hi, &mut sat),
-                UnitKind::Close { .. }
-                | UnitKind::BidiControl
-                | UnitKind::Absolute { .. }
-                | UnitKind::Float { .. } => {}
+                _ if super::whitespace::fits_hanging(data, i) => {
+                    word_trailing = word_trailing.add(lo, &mut sat);
+                    if super::whitespace::preserved(data, i) {
+                        // Conditional trailing whitespace contributes to max-content,
+                        // including its tracking, even though min-content excludes it.
+                        kept_total_spacing = total_spacing.summary(Some(data)).width(&mut sat);
+                    } else {
+                        trailing = trailing.add(hi, &mut sat);
+                    }
+                }
+                _ if super::whitespace::transparent(data, i) => {}
                 _ => {
                     trailing = LayoutUnit::ZERO;
+                    word_trailing = LayoutUnit::ZERO;
                     kept_word_spacing = word_spacing.summary(Some(data)).width(&mut sat);
                     kept_total_spacing = total_spacing.summary(Some(data)).width(&mut sat);
                 }
@@ -260,21 +269,10 @@ impl Paragraph {
                     kept_word_spacing
                 };
                 let measured_word = word.add(tracking, &mut sat).add(delta, &mut sat);
-                min = min.max(
-                    measured_word
-                        .sub(
-                            if matches!(u.kind, UnitKind::Cluster { space: true, .. }) {
-                                lo
-                            } else {
-                                LayoutUnit::ZERO
-                            },
-                            &mut sat,
-                        )
-                        .add(
-                            super::decoration::width(data, i + 1, false, &mut sat),
-                            &mut sat,
-                        ),
-                );
+                min = min.max(measured_word.sub(word_trailing, &mut sat).add(
+                    super::decoration::width(data, i + 1, false, &mut sat),
+                    &mut sat,
+                ));
                 let next = i + 1;
                 let next_text = u.text.end;
                 if alternate
@@ -292,6 +290,7 @@ impl Paragraph {
                     word = super::text_indent(&options, 0, &mut sat)
                         .add(super::decoration::width(data, i, true, &mut sat), &mut sat);
                     trailing = LayoutUnit::ZERO;
+                    word_trailing = LayoutUnit::ZERO;
                     word_spacing = Default::default();
                     kept_word_spacing = LayoutUnit::ZERO;
                     continue;
@@ -300,6 +299,7 @@ impl Paragraph {
                 word_start = next_text;
                 word_spacing = Default::default();
                 kept_word_spacing = LayoutUnit::ZERO;
+                word_trailing = LayoutUnit::ZERO;
                 word = super::text_indent(&options, 0, &mut sat).add(
                     super::decoration::width(data, next, true, &mut sat),
                     &mut sat,
@@ -312,7 +312,7 @@ impl Paragraph {
             .max(
                 word.add(kept_word_spacing, &mut sat)
                     .add(final_delta, &mut sat)
-                    .sub(trailing, &mut sat),
+                    .sub(word_trailing, &mut sat),
             )
             .max(LayoutUnit::ZERO);
         max = max

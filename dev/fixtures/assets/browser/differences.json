@@ -3,7 +3,7 @@
   "inputs_sha256": "be582c013c19967078ea3ab35c6e398d6b303aeeaa02e1c93ef927c013349aad",
   "capture_sha256": "9a51ece89fea3ae27882e0cfe4f2c8e6f799fc684f61a052e824070370dcf253",
   "notes": [
-    "401/458 source endpoints match at raw widths; 44 boundary-drift observations, 8 CJK spacing observations and 5 hanging-tab observations are retained exactly, not suppressed by a tolerance.",
+    "404/458 source endpoints match at raw widths; 46 boundary-drift observations and 8 CJK spacing observations are retained exactly, not suppressed by a tolerance. The hanging-tab fix removes three mismatches and reduces its target threshold delta2054 to2 subpixels; the remaining two tab probes are numerical drift.",
     "Atomic bottom-baseline policy is shared. Raw font/line baseline differs by0.203125px. At3812 subpixels, the one-unit line transition also moves the atomic by40px; both geometry vectors are checked exactly. Numeric cause attribution is observational, not a full Chromium internal arithmetic audit."
   ],
   "transitions": [
@@ -379,9 +379,9 @@
       "id": "pre-wrap-tab",
       "target": 9,
       "browser_subpixels": 4336,
-      "shodo_subpixels": 6390,
+      "shodo_subpixels": 4338,
       "shodo_at": 9,
-      "delta_subpixels": 2054
+      "delta_subpixels": 2
     },
     {
       "id": "japanese-punctuation",
@@ -1019,45 +1019,18 @@
       "width_subpixels": 4336,
       "expected": 9,
       "actual": 5,
-      "category": "css-tab-hanging",
-      "evidence": "Target sourceend9 threshold Chrome4336 vs shodo6390 subpixels. Real break-spaces probe at120px gives target9 threshold6389; original pre-wrap at90px ends9, shodo5. Trailing preserved tab hanging requires separate core fix.",
-      "issue": "shodo-p2m.15"
+      "category": "boundary-drift",
+      "evidence": "After shodo-p2m.15 hanging-tab fix, same target sourceend9: measured Chrome threshold4336 vs shodo4338 (delta2 integer subpixels). This exact probe lies between those thresholds; +/-1px and90px agree. No added width slack. Previously shodo6390; the semantic tab-width gap is resolved.",
+      "issue": null
     },
     {
       "id": "pre-wrap-tab",
       "width_subpixels": 4337,
       "expected": 9,
       "actual": 5,
-      "category": "css-tab-hanging",
-      "evidence": "Target sourceend9 threshold Chrome4336 vs shodo6390 subpixels. Real break-spaces probe at120px gives target9 threshold6389; original pre-wrap at90px ends9, shodo5. Trailing preserved tab hanging requires separate core fix.",
-      "issue": "shodo-p2m.15"
-    },
-    {
-      "id": "pre-wrap-tab",
-      "width_subpixels": 4338,
-      "expected": 9,
-      "actual": 5,
-      "category": "css-tab-hanging",
-      "evidence": "Target sourceend9 threshold Chrome4336 vs shodo6390 subpixels. Real break-spaces probe at120px gives target9 threshold6389; original pre-wrap at90px ends9, shodo5. Trailing preserved tab hanging requires separate core fix.",
-      "issue": "shodo-p2m.15"
-    },
-    {
-      "id": "pre-wrap-tab",
-      "width_subpixels": 4400,
-      "expected": 9,
-      "actual": 5,
-      "category": "css-tab-hanging",
-      "evidence": "Target sourceend9 threshold Chrome4336 vs shodo6390 subpixels. Real break-spaces probe at120px gives target9 threshold6389; original pre-wrap at90px ends9, shodo5. Trailing preserved tab hanging requires separate core fix.",
-      "issue": "shodo-p2m.15"
-    },
-    {
-      "id": "pre-wrap-tab",
-      "width_subpixels": 5760,
-      "expected": 9,
-      "actual": 5,
-      "category": "css-tab-hanging",
-      "evidence": "Target sourceend9 threshold Chrome4336 vs shodo6390 subpixels. Real break-spaces probe at120px gives target9 threshold6389; original pre-wrap at90px ends9, shodo5. Trailing preserved tab hanging requires separate core fix.",
-      "issue": "shodo-p2m.15"
+      "category": "boundary-drift",
+      "evidence": "After shodo-p2m.15 hanging-tab fix, same target sourceend9: measured Chrome threshold4336 vs shodo4338 (delta2 integer subpixels). This exact probe lies between those thresholds; +/-1px and90px agree. No added width slack. Previously shodo6390; the semantic tab-width gap is resolved.",
+      "issue": null
     },
     {
       "id": "atomic-baseline",

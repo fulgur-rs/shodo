@@ -242,16 +242,7 @@ impl Line {
                 ))
             })
             .unwrap_or(0..0);
-        let hanging_end = data.units[scan.hang_start..scan.end]
-            .iter()
-            .zip(&scan.widths[scan.hang_start - token.unit as usize..])
-            .filter(|(unit, _)| {
-                matches!(
-                    unit.kind,
-                    crate::analysis::units::UnitKind::Cluster { space: true, .. }
-                )
-            })
-            .fold(LayoutUnit::ZERO, |sum, (_, w)| sum.add(*w, sat));
+        let hanging_end = scan.hanging_end;
         Line {
             data: Arc::clone(&para.data),
             break_token: BreakToken {

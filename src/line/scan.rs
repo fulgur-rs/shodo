@@ -58,17 +58,12 @@ pub(super) fn scan(
         .add(data.unit_spacing[i].word, sat);
         super::spacing::push(data, &mut spacing, i);
         let tracking = spacing.summary(Some(data)).width(sat);
-        // Trailing spaces hang and never cause a break (CSS Text 3 §4.1.3).
-        let hangs = matches!(unit.kind, UnitKind::Cluster { space: true, .. });
+        // Fit excludes eligible trailing space/tab advances (CSS Text 3 §4.1.2).
+        let hangs = super::whitespace::fits_hanging(data, i);
         let suffix = super::decoration::width(data, i + 1, false, sat);
         let (edge_delta, viable) = super::windows::candidate(data, start, i + 1, cx, sat);
-        let transparent = matches!(
-            unit.kind,
-            UnitKind::Close { .. }
-                | UnitKind::BidiControl
-                | UnitKind::Float { .. }
-                | UnitKind::Absolute { .. }
-        );
+        let transparent =
+            super::whitespace::transparent(data, i) && !matches!(unit.kind, UnitKind::ForcedBreak);
         let extent = pos
             .add(w, sat)
             .add(tracking, sat)
@@ -107,11 +102,8 @@ pub(super) fn scan(
         widths.push(w);
         pos = pos.add(w, sat);
         match unit.kind {
-            UnitKind::Cluster { space: true, .. } => hanging = hanging.add(w, sat),
-            UnitKind::Close { .. }
-            | UnitKind::BidiControl
-            | UnitKind::Float { .. }
-            | UnitKind::Absolute { .. } => {}
+            _ if hangs => hanging = hanging.add(w, sat),
+            _ if super::whitespace::transparent(data, i) => {}
             _ => {
                 hanging = LayoutUnit::ZERO;
                 kept_spacing = tracking;
@@ -179,22 +171,7 @@ pub(super) fn scan(
     let total = widths
         .iter()
         .fold(LayoutUnit::ZERO, |acc, w| acc.add(*w, sat));
-    let mut trailing = LayoutUnit::ZERO;
-    let mut hang_start = i;
-    for (k, unit) in units[start..i].iter().enumerate().rev() {
-        match unit.kind {
-            UnitKind::Cluster { space: true, .. } => {
-                trailing = trailing.add(widths[k], sat);
-                hang_start = start + k;
-            }
-            UnitKind::Close { .. }
-            | UnitKind::BidiControl
-            | UnitKind::Float { .. }
-            | UnitKind::Absolute { .. }
-            | UnitKind::ForcedBreak => {}
-            _ => break,
-        }
-    }
+    let (hang_start, trailing) = super::whitespace::trailing(data, start, i, &widths, sat);
     let mut result = Scan {
         prepared: false,
         overlays: Vec::new(),
@@ -208,6 +185,7 @@ pub(super) fn scan(
             .add(prefix, sat)
             .add(super::decoration::width(data, i, false, sat), sat),
         hang_start,
+        hanging_end: LayoutUnit::ZERO,
     };
     if let Some(end) = taken_hyphen
         && let Some(windows) = super::hyphen::line(data, start, end, cx, sat)

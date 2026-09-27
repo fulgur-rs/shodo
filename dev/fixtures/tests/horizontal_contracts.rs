@@ -864,7 +864,9 @@ fn final_line_metrics_and_ink_overflow_are_explicit() {
     );
     close(ink.block_size, bounds.y_max - bounds.y_min);
     close(line.hang_start(), 0.0);
-    close(line.hang_end(), run.glyphs().last().unwrap().advance);
+    // Preserved whitespace at paragraph end hangs conditionally. This wide
+    // line retains the fitting final space, so it has no hanging advance.
+    close(line.hang_end(), 0.0);
 }
 
 #[test]

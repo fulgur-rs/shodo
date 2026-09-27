@@ -78,22 +78,7 @@ pub(super) fn selected(
         pos = pos.add(w, sat);
         widths.push(w);
     }
-    let mut trailing = LayoutUnit::ZERO;
-    let mut hang_start = end;
-    for i in (start..end).rev() {
-        match data.units[i].kind {
-            UnitKind::Cluster { space: true, .. } => {
-                trailing = trailing.add(widths[i - start], sat);
-                hang_start = i;
-            }
-            UnitKind::Close { .. }
-            | UnitKind::BidiControl
-            | UnitKind::Float { .. }
-            | UnitKind::Absolute { .. }
-            | UnitKind::ForcedBreak => {}
-            _ => break,
-        }
-    }
+    let (hang_start, trailing) = super::whitespace::trailing(data, start, end, &widths, sat);
     let reason = if end > start && matches!(data.units[end - 1].kind, UnitKind::ForcedBreak) {
         BreakReason::Forced
     } else if end == data.units.len() {
@@ -116,6 +101,7 @@ pub(super) fn selected(
             .sub(trailing, sat)
             .add(decoration::width(data, end, false, sat), sat),
         hang_start,
+        hanging_end: LayoutUnit::ZERO,
     };
     if let Some(windows) = hyphen {
         super::reshape::apply_windows(data, start, &mut scan, windows, cx, sat);
