@@ -23,7 +23,8 @@ pub struct Limits {
     /// UTF-8 bytes per line-edge reshape window (4096); exceeding it warns
     /// and preserves shared glyphs rather than failing line layout.
     pub max_reshape_window_bytes: Option<u64>,
-    /// UTF-8 bytes per shaping run (64 KiB); reserved for the real shaper.
+    /// UTF-8 bytes per shaping run (64 KiB); giant graphemes warn and
+    /// split shaping work at scalar boundaries without creating layout breaks.
     pub max_shaping_run_bytes: Option<u64>,
     /// Binary-search iterations for balance plans (16). Zero uses greedy.
     pub max_balance_iterations: Option<u64>,

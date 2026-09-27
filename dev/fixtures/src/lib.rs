@@ -136,8 +136,7 @@ pub fn load_fonts(limits: &Limits) -> Result<FixtureFonts, FontError> {
 
 impl FixtureCase {
     /// Build through the public paragraph API with the fixed case settings.
-    /// Paragraph shaping is the S0 stub until S2; do not render its codepoints
-    /// as glyph IDs from these real fonts.
+    /// Paragraph glyph IDs belong to the actual fixed fonts retained by each run.
     pub fn build(
         &self,
         cx: &mut LayoutContext,

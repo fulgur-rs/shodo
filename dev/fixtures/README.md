@@ -26,12 +26,15 @@ bytes/face index/identity for renderers or browser font embedding. `FixtureFonts
 are runtime FontIds for that collection, ordered like `FONTS`; use stable string
 IDs in snapshots/recorded data, not those runtime IDs.
 
-The font-information example reads real S1 metrics and shaping data. The paragraph
-layout example still uses the S0 stub until S2 integrates real shaping: its output
-labels this limitation. These line counts are not real-font Chrome baselines, and
-stub codepoints must not be interpreted as these fonts' glyph IDs. The acceptance
-test directly shapes Arabic with harfrust to check retained GSUB/GPOS without
-pretending that the paragraph pipeline already does so.
+The font-information example reads real metrics and shaping data. The paragraph
+layout example shapes with the fixed fonts through shodo and reports real glyph
+counts. Corpus tests check actual face IDs, contextual Arabic shaping, Latin
+ligatures/kerning, source ranges and finite positions. These results are not
+Chrome reference baselines; a browser comparison needs its own recorder.
+
+`cargo run -p shodo-fixtures --example shape_timing` measures paragraph builds for
+all 12 cases before and after context reuse and `shrink_to(0)`, excluding font
+registration. See [the measurement record](../../docs/shaping-measurements.md).
 
 ## Data and provenance
 

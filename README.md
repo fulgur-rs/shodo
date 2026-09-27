@@ -2,14 +2,18 @@
 
 A Rust text typesetting library for [raikiri](https://github.com/fulgur-rs/raikiri), intended as a replacement for parley. shodo lays out the inline content of a single block container (a paragraph).
 
-shodo is in early development. Paragraph construction, whitespace processing, bidirectional text, basic line breaking, and fragment output are implemented, but typesetting with real fonts is not yet supported. Public APIs may change.
+shodo is in early development. Paragraph construction, CSS text analysis, real-font shaping, line breaking, and fragment output are implemented. Public APIs may change.
 
 ## Current implementation
 
 - `ParagraphBuilder` for text, nested inline boxes, atomic inlines such as images, and forced line breaks.
 - `RichText` for styled text without a DOM.
 - Whitespace processing across nodes and mapping back to UTF-8 byte offsets in the source text with `OffsetMapping`.
-- Bidirectional text analysis using `unicode-bidi` and visual ordering within lines.
+- CSS text transforms and ICU Unicode line/grapheme boundaries across nodes, with locale-sensitive casing and Japanese break restrictions.
+- Bidirectional text analysis using `unicode-bidi`, inline isolates/overrides/plaintext, and visual ordering within lines.
+- Whole-grapheme font matching and harfrust GSUB/GPOS shaping with script, language, OpenType features, variations, and CSS spacing.
+- Bounded contextual line-edge reshaping, shared-ligature slices, and manual soft hyphens with actual candidate widths.
+- Alternate `::first-line` fonts, transforms, features, and metrics with exact source continuation.
 - Greedy line breaking, tabs, indentation, participating inline/atomic line boxes, vertical alignment, and height-limit retries through `Paragraph::next_line`.
 - Alignment and justification without copying shared glyphs, plus cluster views with adjusted advances.
 - Incremental float reporting and withdrawal, with a single bounded partial-line cache.
@@ -22,11 +26,11 @@ shodo is in early development. Paragraph construction, whitespace processing, bi
 
 ### Limitations and planned features
 
-Shaping is a placeholder: it generally produces one glyph per character with a 1em advance. The independent font APIs provide real matching and metrics, but paragraph construction still uses the S0 primary face and stub shaper. Registering a font does not yet provide actual paragraph glyph shapes or character advances.
+Hit testing, vertical shaping/orientation, and ruby layout are planned. APIs described in the design documents are not necessarily implemented.
 
-Soft line break opportunities are currently limited to spaces, tabs, and atomic inlines. Unicode line breaking (UAX #14) and Japanese line breaking restrictions are not yet supported.
+`word-break: auto-phrase` warns and uses normal breaking. Automatic dictionary hyphenation warns and uses manual soft-hyphen opportunities. Invalid locale tags warn and use the root locale; valid but unknown shaping languages warn and use OpenType's default language system. If no registered or fallback face covers a grapheme, layout warns and emits deterministic glyph 0 with a 1em base advance and zero advance for combining marks/default ignorables. This fallback is not a drawable substitute for font data.
 
-Some style and result types reserve future functionality. `::first-line`, real paragraph shaping/font selection, full CSS spacing, hyphenation, hit testing, vertical shaping, and ruby are not implemented. Line-edge reshaping currently uses the stub shaper; it does not provide real-script contextual shaping. APIs described in the design documents are not necessarily implemented.
+The default `complex-scripts` feature enables ICU dictionary/neural segmentation for complex-context scripts. With it disabled, those scripts retain Unicode/grapheme safety but use the non-dictionary fallback and report the degradation. Arabic and other OpenType shaping remains available in either mode.
 
 Float placement remains the caller's responsibility. The protocol reports anchors and displaced floats; it is not a BFC or a production renderer integration. A `BreakPlan` is ignored when its paragraph, width, options, atomic revision, or float constraints do not match.
 
@@ -63,8 +67,8 @@ names and downloaded font data in order. WOFF/WOFF2 decoding is also exposed as
 `decode_web_font`. URL fetching belongs to the caller. See the executable and
 file-based examples in the `shodo::font` module documentation.
 
-Default features are `system-fonts` and `web-fonts`. Disable default features for
-bundled sfnt-only applications; both font matching and metrics still work. The
+Default features are `system-fonts`, `web-fonts`, and `complex-scripts`. Disable default features for
+bundled sfnt-only applications; font matching, metrics, and shaping still work. Add `features = ["complex-scripts"]` to retain dictionary segmentation without system/web font support. The
 system backend is available only on supported native platforms, while wasm builds
 use memory-backed fonts. Linux builds with `system-fonts` require Fontconfig
 development files and pkg-config (on Debian/Ubuntu, `libfontconfig1-dev`).
@@ -75,7 +79,7 @@ allocate beyond the retained-blob budget. `wuff` rejects reconstructed output ab
 
 ## Usage
 
-Build a paragraph and lay it out one line at a time at a given width. This example demonstrates the layout API; character widths currently come from the placeholder shaper.
+Build a paragraph and lay it out one line at a time at a given width. Glyphs and advances come from the matched fonts.
 
 ```rust
 use shodo::font::FontCollection;
@@ -113,7 +117,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &AtomicSizes::EMPTY,
         ) {
             LineResult::Line(line) => {
-                println!("{}", &paragraph.text()[line.text_range()]);
+                println!("{}", &line.text()[line.text_range()]);
                 token = line.break_token();
                 constraint.block_offset += line.block_size();
             }
@@ -133,25 +137,62 @@ For fixed-width content without float placement, the loop can be replaced with:
 ```rust,ignore
 let lines = paragraph.break_all(&mut cx, &options, 160.0, &AtomicSizes::EMPTY);
 for line in &lines {
-    println!("{}", &paragraph.text()[line.text_range()]);
+    println!("{}", &line.text()[line.text_range()]);
 }
 ```
 
 `break_all` keeps floats as zero-width anchors and splits at block boundaries. For incremental float layout, retain the cursor across lines, retry from `line_start`, and withdraw displaced floats in reverse order, one at a time. Re-reported withdrawn floats must be deferred for that line. Accept only lines with no displaced floats, and save/restore token, cursor, placements, deferred floats, and withdrawal records together when discarding lookahead or moving to another page.
 
-`lines` handles `FloatEncountered` and `BlockSizeExceeded` through its constraint callback. The callback must change the constraint to make progress; retry an over-tall first-page line with `max_block_size: None`. `LayoutContext::shrink_to(0)` releases the retained partial line.
+`lines` handles `FloatEncountered` and `BlockSizeExceeded` through its constraint callback. The callback must change the constraint to make progress; retry an over-tall first-page line with `max_block_size: None`. `LayoutContext::shrink_to(0)` releases the retained partial line, shaping scratch, and plans.
 
 For DOM integration, pass `NodeId` and `TextSource` values to `ParagraphBuilder`. The caller computes sizes and baselines for images and other atomic inlines and supplies them through `AtomicSizes`. Rendering is also the caller's responsibility; use `Line::fragments()` to read the layout output.
 
 Read build warnings through `Paragraph::warnings()` and line layout warnings through `LayoutContext::take_warnings()`. Resource limit violations are returned as `LimitExceeded`.
 
+## Shaping data and budgets
+
+A `GlyphRun` exposes the actual font ID and retained `FontData`, effective size,
+normalized variation coordinates, resolved variations, script, language, and
+synthetic `embolden`/`skew` requests. Render the returned glyph IDs against that
+face and instance; synthesis is a renderer request, not an outline transformation
+performed by shodo. Runs retain their font layer after the collection is dropped.
+
+Set `ParagraphStyle::first_line` by cloning the normal root and changing the
+applicable properties. A descendant value equal to the normal root inherits the
+first-line value; a differing descendant value is preserved. Resolved styles do
+not encode whether an equal child value was explicitly declared. Only the first
+formatted line uses the alternate set, including after a float retry; forced or
+block boundaries discontinue it. `Line::text()` and `Line::offset_mapping()` expose
+the chosen set, so slice that text with `Line::text_range()` rather than slicing
+`Paragraph::text()` for a transformed first line.
+
+Main and first-line processed text, items, styles, and glyphs share each build
+budget. Default shaping runs are bounded by 64 KiB and paragraph glyph output by
+2^22; checks precede copying into retained glyph storage. A giant grapheme or tiny
+run budget warns and makes scalar-level shaping progress while preserving the
+original grapheme as an indivisible layout unit. A run's pen is bounded to ±2^30
+layout units. Line-edge windows are bounded to 4096 UTF-8 bytes; cuts whose prefix
+or continuation cannot be safely reshaped preserve the whole shared cluster and
+warn. The line's owned windows also share the glyph-output budget.
+
+Each `LayoutContext` is `Send` and deliberately not `Sync`: use one per thread.
+It reuses shaping scratch and at most 64 font-qualified shaping plans; no word
+cache is retained. `shrink_to(bytes)` drops all plans and caps the combined
+accounted scratch/partial-line buffers, preferring scratch when it fits. It does
+not measure separately shared paragraph/font allocations. Shaping also releases
+scratch exceeding the current run budget's conservative storage bound. See the
+[measurement record](docs/shaping-measurements.md) and
+[unsent harfrust status proposal](docs/harfrust-shaping-status-proposal.md).
+
 ## Development
 
 ```sh
-cargo fmt --check
-cargo clippy --all-targets -- -D warnings
-cargo test
-cargo doc --no-deps
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo test -p shodo --no-default-features
+cargo test -p shodo --no-default-features --features complex-scripts
+cargo doc --workspace --no-deps
 ```
 
 ## Design documents
