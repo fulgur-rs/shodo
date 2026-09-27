@@ -282,3 +282,7 @@ instructions. Use `cargo test --workspace` to include its checks and
 `cargo run -p shodo-fixtures --example inspect_fonts` to inspect the fixed font set.
 The root library remains the default workspace member; normal shodo builds do not
 include these assets or tooling dependencies.
+
+The [shared glyph contract](docs/shared-glyph-contract.md) describes one-time
+paint ownership and separate source-node regions for links, decorations,
+selection and hit testing, with fixed-font Latin/Arabic connection tests.

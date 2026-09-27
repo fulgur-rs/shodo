@@ -539,6 +539,13 @@ impl<'a> GlyphRunView<'a> {
         &self.line.data
     }
 
+    /// Paint owner of this run: the source item's [`NodeId`], normally supplied
+    /// by [`crate::node::TextSource`], rather than its enclosing inline box.
+    /// A cluster shared across nodes belongs to the item supplying its first
+    /// scalar. Iterate the returned glyphs once; do not repaint them for every
+    /// source node overlapping [`Self::text_range`]. Resolve paint style in the
+    /// caller. Use the line's offset mapping and [`crate::hit::LineLayout`] for
+    /// each source node's selection, link, decoration and caret regions.
     pub fn node(&self) -> Option<NodeId> {
         self.data().items[self.item as usize].node
     }
@@ -595,6 +602,9 @@ impl<'a> GlyphRunView<'a> {
         self.record.level
     }
 
+    /// Processed-text range covered by this run. A shared cluster can include
+    /// text from several source nodes despite having one paint owner. This is
+    /// a range in the accepted line's [`Line::text`] dataset, not a DOM range.
     pub fn text_range(&self) -> Range<usize> {
         self.text.0 as usize..self.text.1 as usize
     }
