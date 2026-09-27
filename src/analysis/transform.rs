@@ -19,6 +19,11 @@ pub(crate) fn transform(
         .iter()
         .all(|s| s.text_transform == TextTransform::None)
     {
+        Limits::check(
+            limits.max_text_bytes,
+            LimitKind::TextBytes,
+            input.text.len() as u64,
+        )?;
         return Ok(input);
     }
     let locales: Vec<LanguageIdentifier> = styles

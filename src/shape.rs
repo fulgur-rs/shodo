@@ -386,7 +386,13 @@ pub(crate) fn shape_items(
 }
 
 pub(crate) fn is_mark(c: char) -> bool {
-    ('\u{300}'..='\u{36F}').contains(&c)
+    use icu_properties::{CodePointMapData, props::GeneralCategory};
+    matches!(
+        CodePointMapData::<GeneralCategory>::new().get(c),
+        GeneralCategory::NonspacingMark
+            | GeneralCategory::SpacingMark
+            | GeneralCategory::EnclosingMark
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -413,7 +419,12 @@ pub(crate) fn shape_item(
             store.len() as u64 + 1,
         )?;
         let mark = is_mark(c);
-        let advance = if mark || c == '\u{ad}' {
+        let advance = if mark
+            || icu_properties::CodePointSetData::new::<
+                icu_properties::props::DefaultIgnorableCodePoint,
+            >()
+            .contains(c)
+        {
             LayoutUnit::ZERO
         } else {
             em

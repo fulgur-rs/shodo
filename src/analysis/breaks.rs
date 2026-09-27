@@ -98,6 +98,33 @@ impl Projection {
     }
 }
 
+/// Common input grapheme cuts include the transparent-marker gap at a cut.
+/// A transform can consume a combining scalar beyond such a marker; only
+/// these source cuts may switch from the alternate to the normal text set.
+pub(crate) fn source_cursor_ranges(input: &Processed) -> Vec<std::ops::RangeInclusive<u32>> {
+    let projection = Projection::new(input);
+    GraphemeClusterSegmenter::new()
+        .segment_str(&projection.text)
+        .map(|offset| {
+            let before = if offset == 0 {
+                0
+            } else {
+                projection.upstream(offset)
+            };
+            let index = projection
+                .spans
+                .partition_point(|s| s.projected.end <= offset as u32);
+            let after = projection
+                .spans
+                .get(index)
+                .map_or(input.text.len() as u32, |s| {
+                    s.original.start + offset as u32 - s.projected.start
+                });
+            before..=after
+        })
+        .collect()
+}
+
 // Only these options affect ICU's rule selection: at most4*3*2=24 full
 // segmenter passes, independently of the number of distinct inline styles.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

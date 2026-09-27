@@ -618,3 +618,467 @@ fn forced_break_does_not_restart_first_line_style() {
     assert_eq!(glyphs(&actual[0])[0].1, 32.0);
     assert_eq!(glyphs(&actual[1])[0].1, 16.0);
 }
+
+#[test]
+fn first_line_intrinsic_widths_follow_the_actual_unbreakable_word() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    for size in [8.0, 32.0] {
+        let first = InlineStyle {
+            font_size: size,
+            ..Default::default()
+        };
+        let style = ParagraphStyle {
+            first_line: Some(first.clone()),
+            ..Default::default()
+        };
+        let mut b = ParagraphBuilder::new(&style, &Limits::default());
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "WWWW");
+        let p = b
+            .build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap();
+        let actual = p.intrinsic_sizes(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            &Default::default(),
+        );
+        let mut reference = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: first,
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        reference.push_text(TextSource::Generated { node: NodeId(1) }, "WWWW");
+        let expected = reference
+            .build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap()
+            .intrinsic_sizes(
+                &mut LayoutContext::new(),
+                &Default::default(),
+                &Default::default(),
+            );
+        assert_eq!(
+            (actual.min_content, actual.max_content),
+            (expected.min_content, expected.max_content),
+            "first-line {size}px"
+        );
+    }
+}
+
+#[test]
+fn first_line_intrinsics_use_normal_words_after_the_first_soft_break() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    for size in [8.0, 32.0] {
+        let first = InlineStyle {
+            font_size: size,
+            ..Default::default()
+        };
+        let style = ParagraphStyle {
+            first_line: Some(first.clone()),
+            ..Default::default()
+        };
+        let measure = |text: &str, root: InlineStyle| {
+            let mut b = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    root,
+                    ..Default::default()
+                },
+                &Limits::default(),
+            );
+            b.push_text(TextSource::Generated { node: NodeId(1) }, text);
+            b.build(&mut LayoutContext::new(), &fonts.collection)
+                .unwrap()
+                .intrinsic_sizes(
+                    &mut LayoutContext::new(),
+                    &Default::default(),
+                    &Default::default(),
+                )
+        };
+        let mut b = ParagraphBuilder::new(&style, &Limits::default());
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "a WWWW");
+        let p = b
+            .build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap();
+        let actual = p.intrinsic_sizes(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            &Default::default(),
+        );
+        let min = measure("a", first.clone())
+            .min_content
+            .max(measure("WWWW", InlineStyle::default()).min_content);
+        let max = measure("a WWWW", first).max_content.max(min);
+        assert_eq!(
+            (actual.min_content, actual.max_content),
+            (min, max),
+            "first-line {size}px"
+        );
+    }
+}
+
+#[test]
+fn first_line_intrinsics_stop_at_forced_and_block_boundaries() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let style = ParagraphStyle {
+        first_line: Some(InlineStyle {
+            font_size: 8.0,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    for forced in [false, true] {
+        for leading in [false, true] {
+            let mut b = ParagraphBuilder::new(&style, &Limits::default());
+            if !leading {
+                b.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+            }
+            if forced {
+                b.push_forced_break(NodeId(2));
+            } else {
+                b.push_block_in_inline(NodeId(2));
+            }
+            b.push_text(TextSource::Generated { node: NodeId(3) }, "WWWW");
+            let p = b
+                .build(&mut LayoutContext::new(), &fonts.collection)
+                .unwrap();
+            let actual = p.intrinsic_sizes(
+                &mut LayoutContext::new(),
+                &Default::default(),
+                &Default::default(),
+            );
+            let mut reference =
+                ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+            reference.push_text(TextSource::Generated { node: NodeId(3) }, "WWWW");
+            let expected = reference
+                .build(&mut LayoutContext::new(), &fonts.collection)
+                .unwrap()
+                .intrinsic_sizes(
+                    &mut LayoutContext::new(),
+                    &Default::default(),
+                    &Default::default(),
+                );
+            assert_eq!(actual, expected, "forced={forced}, leading={leading}");
+        }
+    }
+}
+
+#[test]
+fn first_line_intrinsic_manual_hyphen_uses_joint_shaping_before_normal_tail() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let first = InlineStyle {
+        font_size: 32.0,
+        ..Default::default()
+    };
+    let style = ParagraphStyle {
+        first_line: Some(first.clone()),
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&style, &Limits::default());
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "T\u{ad}iii");
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let actual = p.intrinsic_sizes(
+        &mut LayoutContext::new(),
+        &Default::default(),
+        &Default::default(),
+    );
+    let mut reference = ParagraphBuilder::new(
+        &ParagraphStyle {
+            root: first,
+            ..Default::default()
+        },
+        &Limits::default(),
+    );
+    reference.push_text(TextSource::Generated { node: NodeId(1) }, "T-");
+    let expected = reference
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap()
+        .intrinsic_sizes(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            &Default::default(),
+        );
+    assert_eq!(actual.min_content, expected.max_content);
+}
+
+#[test]
+fn first_line_casing_does_not_leave_a_deleted_mark_for_the_normal_line() {
+    use shodo::node::OutOfFlowKind;
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    for mapping in [false, true] {
+        let style = ParagraphStyle {
+            first_line: Some(InlineStyle {
+                text_transform: TextTransform::Uppercase,
+                lang: Some("lt".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let mut b = ParagraphBuilder::new(&style, &Limits::default());
+        b.with_offset_mapping(mapping)
+            .push_text(TextSource::Generated { node: NodeId(1) }, "i")
+            .push_out_of_flow(NodeId(2), OutOfFlowKind::Float)
+            .push_text(TextSource::Generated { node: NodeId(3) }, "\u{307}");
+        let p = b
+            .build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap();
+        let actual = p.break_all(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            0.0,
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(
+            actual.len(),
+            1,
+            "mapping={mapping}: original grapheme is indivisible"
+        );
+        assert_eq!(actual[0].text(), "I\u{fffc}");
+        assert_eq!(actual[0].text_range(), 0..4);
+        assert_eq!(
+            glyphs(&actual[0]).len(),
+            1,
+            "deleted dot is never restored on a normal line"
+        );
+    }
+}
+
+#[test]
+fn first_line_composed_kana_consumes_voicing_mark_across_float_once() {
+    use shodo::node::OutOfFlowKind;
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    for mapping in [false, true] {
+        let style = ParagraphStyle {
+            first_line: Some(InlineStyle {
+                text_transform: TextTransform::FullWidth,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let mut b = ParagraphBuilder::new(&style, &Limits::default());
+        b.with_offset_mapping(mapping)
+            .push_text(TextSource::Generated { node: NodeId(1) }, "ｶ")
+            .push_out_of_flow(NodeId(2), OutOfFlowKind::Float)
+            .push_text(TextSource::Generated { node: NodeId(3) }, "ﾞ")
+            .push_text(TextSource::Generated { node: NodeId(4) }, "A");
+        let p = b
+            .build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap();
+        let actual = p.break_all(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            16.0,
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(
+            actual.len(),
+            2,
+            "mapping={mapping}: composed original grapheme is consumed once"
+        );
+        assert_eq!(actual[0].text(), "ガ\u{fffc}Ａ");
+        assert_eq!(
+            actual[0].text_range(),
+            0..6,
+            "float stays inside the consumed original grapheme"
+        );
+        assert_eq!(glyphs(&actual[0]).len(), 1);
+        assert_eq!(actual[1].text_range(), 9..10);
+        assert_eq!(
+            glyphs(&actual[1]).len(),
+            1,
+            "voicing mark is never restored on the normal line"
+        );
+    }
+}
+
+#[test]
+fn first_line_shrinking_transform_uses_final_aggregate_text_size() {
+    let limits = Limits {
+        max_text_bytes: Some(4),
+        max_shaped_glyphs: Some(3),
+        ..Default::default()
+    };
+    let fonts = load_fonts(&limits).unwrap();
+    let style = ParagraphStyle {
+        first_line: Some(InlineStyle {
+            text_transform: TextTransform::Uppercase,
+            lang: Some("lt".into()),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "i\u{307}");
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let actual = p.break_all(
+        &mut LayoutContext::new(),
+        &Default::default(),
+        1000.0,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(p.text().len() + actual[0].text().len(), 4);
+    assert_eq!(actual[0].text(), "I");
+    assert_eq!(actual.len(), 1);
+}
+
+#[test]
+fn first_line_aggregate_limits_accept_the_exact_retained_boundary() {
+    let limits = Limits {
+        max_text_bytes: Some(6),
+        max_items: Some(2),
+        max_styles: Some(2),
+        max_shaped_glyphs: Some(4),
+        ..Default::default()
+    };
+    let fonts = load_fonts(&limits).unwrap();
+    let style = ParagraphStyle {
+        first_line: Some(InlineStyle {
+            text_transform: TextTransform::Uppercase,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "ffi");
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &Default::default(),
+        1000.0,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(
+        glyphs(&lines[0]).len(),
+        3,
+        "one normal ligature plus three alternate glyphs fit budget4"
+    );
+    assert_eq!(p.text().len() + lines[0].text().len(), 6);
+    for (limits, kind, expected_limit, actual) in [
+        (
+            Limits {
+                max_text_bytes: Some(5),
+                ..Default::default()
+            },
+            LimitKind::TextBytes,
+            5,
+            6,
+        ),
+        (
+            Limits {
+                max_items: Some(1),
+                ..Default::default()
+            },
+            LimitKind::Items,
+            1,
+            2,
+        ),
+        (
+            Limits {
+                max_styles: Some(1),
+                ..Default::default()
+            },
+            LimitKind::Styles,
+            1,
+            2,
+        ),
+        (
+            Limits {
+                max_shaped_glyphs: Some(3),
+                ..Default::default()
+            },
+            LimitKind::ShapedGlyphs,
+            3,
+            4,
+        ),
+    ] {
+        let mut b = ParagraphBuilder::new(&style, &limits);
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "ffi");
+        let error = b
+            .build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap_err();
+        assert_eq!(
+            (error.kind, error.limit, error.actual),
+            (kind, expected_limit, actual)
+        );
+    }
+}
+
+#[test]
+fn first_line_plan_validity_compares_sanitized_inputs() {
+    use shodo::style::LineOptions;
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let style = ParagraphStyle {
+        first_line: Some(InlineStyle {
+            text_transform: TextTransform::Uppercase,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&style, &Limits::default());
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "a b");
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let mut options = LineOptions::default();
+    options.text_indent.length = f32::NAN;
+    let mut cx = LayoutContext::new();
+    let plan = p.plan_breaks(&mut cx, &options, f32::NAN, &AtomicSizes::EMPTY);
+    cx.take_warnings();
+    let mut constraint = LineConstraint::new(f32::NAN);
+    constraint.break_plan = Some(&plan);
+    assert!(matches!(
+        p.next_line(
+            &mut cx,
+            p.start_token(),
+            &options,
+            &constraint,
+            &AtomicSizes::EMPTY
+        ),
+        LineResult::Line(_)
+    ));
+    let warnings = cx.take_warnings();
+    assert!(
+        !warnings
+            .iter()
+            .any(|w| w.kind == shodo::limits::WarningKind::Unsupported),
+        "valid plan must match after input normalization: {warnings:?}"
+    );
+}
+
+#[test]
+fn first_line_intrinsic_break_after_consumed_mark_and_float_uses_normal_tail() {
+    use shodo::node::OutOfFlowKind;
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let style = ParagraphStyle {
+        first_line: Some(InlineStyle {
+            text_transform: TextTransform::FullWidth,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&style, &Limits::default());
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "ｶ")
+        .push_out_of_flow(NodeId(2), OutOfFlowKind::Float)
+        .push_text(TextSource::Generated { node: NodeId(3) }, "ﾞA");
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let actual = p.intrinsic_sizes(
+        &mut LayoutContext::new(),
+        &Default::default(),
+        &Default::default(),
+    );
+    assert_eq!(
+        actual.min_content, 16.0,
+        "break follows the consumed source grapheme"
+    );
+    assert_eq!(
+        actual.max_content, 32.0,
+        "unbroken first line remains full-width"
+    );
+}

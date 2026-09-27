@@ -38,6 +38,7 @@ pub struct Line {
     pub(crate) break_token: BreakToken,
     pub(crate) reason: BreakReason,
     pub(crate) units: Range<u32>,
+    text_range: Range<u32>,
     pub(crate) inline_size: LayoutUnit,
     pub(crate) block_size: LayoutUnit,
     pub(crate) baseline: LayoutUnit,
@@ -99,6 +100,18 @@ impl Line {
         );
         let metrics =
             crate::line::metrics::measure(data, token.unit as usize..scan.end, &records, sat);
+        // Resource-limited whole clusters can overlap following transparent
+        // markers in source order. Their complete source extent still belongs
+        // to this line. Cache it so public range queries remain constant-time.
+        let text_range = data.units[token.unit as usize..scan.end]
+            .iter()
+            .fold(None, |range, u| {
+                Some(range.map_or_else(
+                    || u.text.clone(),
+                    |range: Range<u32>| range.start.min(u.text.start)..range.end.max(u.text.end),
+                ))
+            })
+            .unwrap_or(0..0);
         Line {
             data: Arc::clone(&para.data),
             break_token: BreakToken {
@@ -108,6 +121,7 @@ impl Line {
             },
             reason: scan.reason,
             units: token.unit..scan.end as u32,
+            text_range,
             inline_size: scan.content,
             block_size: metrics.block_size,
             baseline: metrics.baseline,
@@ -185,11 +199,7 @@ impl Line {
 
     /// Range of [`Self::text`] covered by this line.
     pub fn text_range(&self) -> Range<usize> {
-        let units = &self.data.units[self.units.start as usize..self.units.end as usize];
-        match (units.first(), units.last()) {
-            (Some(first), Some(last)) => first.text.start as usize..last.text.end as usize,
-            _ => 0..0,
-        }
+        self.text_range.start as usize..self.text_range.end as usize
     }
 
     /// Floats reported for this line whose anchors ended up after its end.

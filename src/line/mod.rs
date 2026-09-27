@@ -62,13 +62,23 @@ impl Paragraph {
         if token.flags & BreakToken::FIRST_LINE != 0
             && let Some(first) = &data.first_line
         {
+            let mut sat = Saturation::default();
+            let constraint = crate::sanitize::constraint(*constraint, &mut cx.warnings, &mut sat);
+            let mut options = *options;
+            options.text_indent.length = crate::sanitize::layout_length(
+                options.text_indent.length,
+                false,
+                &mut cx.warnings,
+                &mut sat,
+            );
+            cx.warnings.record_saturation(&sat);
             let alternate = Paragraph {
                 data: std::sync::Arc::clone(&first.data),
             };
             let mut alternate_token = token;
             alternate_token.unit = 0;
             let planned_end = constraint.break_plan.and_then(|p| {
-                if plan::matches(p, self, options, constraint, atomics) {
+                if plan::matches(p, self, &options, &constraint, atomics) {
                     let normal_end = *p.ends.first()?;
                     first.alternate_cursor(normal_end)
                 } else {
@@ -79,12 +89,12 @@ impl Paragraph {
                     None
                 }
             });
-            let mut alternate_constraint = *constraint;
+            let mut alternate_constraint = constraint;
             alternate_constraint.break_plan = None;
             let mut result = alternate.next_line_in_set(
                 cx,
                 alternate_token,
-                options,
+                &options,
                 &alternate_constraint,
                 atomics,
                 planned_end,

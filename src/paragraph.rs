@@ -217,6 +217,9 @@ impl Paragraph {
                 .collect::<Vec<_>>()
         });
         let processed = process(&text, &items, &styles, offset_mapping, &limits)?;
+        let source_cuts = alternate_styles
+            .as_ref()
+            .map(|_| crate::analysis::breaks::source_cursor_ranges(&processed));
         let mut processed = transform(processed, &styles, &limits, &mut warnings)?;
         if alternate_styles.is_none() {
             processed.source_spans = Vec::new();
@@ -246,7 +249,12 @@ impl Paragraph {
             remaining.max_items = limits
                 .max_items
                 .map(|max| max.saturating_sub(data.items.len() as u64));
-            let alternate = process(&text, &items, &data.styles, offset_mapping, &remaining)
+            // The transient common input is bounded independently; a shrinking
+            // transform may fit the remaining retained-text budget even when
+            // its input is larger. Every output append uses the remaining cap.
+            let mut input_limits = remaining.clone();
+            input_limits.max_text_bytes = limits.max_text_bytes;
+            let alternate = process(&text, &items, &data.styles, offset_mapping, &input_limits)
                 .and_then(|p| transform(p, &alternate_styles, &remaining, &mut warnings))
                 .map_err(|mut e| {
                     if e.kind == LimitKind::TextBytes
@@ -295,13 +303,46 @@ impl Paragraph {
             let mut normal_cursors: Vec<_> = alternate
                 .units
                 .iter()
-                .map(|u| normal_cursor(&data, &alternate, u))
+                .map(|u| normal_cursor(&data, &alternate, u, source_cuts.as_ref().unwrap()))
                 .collect();
             normal_cursors.push(Some(data.units.len() as u32));
-            for (i, unit) in alternate.units.iter_mut().enumerate() {
-                if normal_cursors[i + 1].is_none() {
-                    unit.break_after = crate::analysis::units::BreakClass::Prohibited;
-                    unit.emergency_min_content = false;
+            for i in 0..alternate.units.len() {
+                if normal_cursors[i + 1].is_some() {
+                    continue;
+                }
+                let class = alternate.units[i].break_after;
+                let min_content = alternate.units[i].emergency_min_content;
+                alternate.units[i].break_after = crate::analysis::units::BreakClass::Prohibited;
+                alternate.units[i].emergency_min_content = false;
+                if matches!(
+                    class,
+                    crate::analysis::units::BreakClass::Allowed
+                        | crate::analysis::units::BreakClass::Emergency
+                ) {
+                    // Preserve the transformed opportunity beyond markers
+                    // inside a source grapheme whose trailing scalar was consumed.
+                    for j in i + 1..alternate.units.len() {
+                        use crate::analysis::units::UnitKind;
+                        if !matches!(
+                            alternate.units[j].kind,
+                            UnitKind::Float { .. }
+                                | UnitKind::Absolute { .. }
+                                | UnitKind::Open { .. }
+                                | UnitKind::Close { .. }
+                                | UnitKind::BidiControl
+                        ) {
+                            break;
+                        }
+                        if normal_cursors[j + 1].is_some() {
+                            if alternate.units[j].break_after
+                                == crate::analysis::units::BreakClass::Prohibited
+                            {
+                                alternate.units[j].break_after = class;
+                                alternate.units[j].emergency_min_content = min_content;
+                            }
+                            break;
+                        }
+                    }
                 }
             }
             data.source_spans = Vec::new();
@@ -458,10 +499,22 @@ fn finalize_data(
     data.floats = floats;
 }
 
-fn normal_cursor(normal: &ParagraphData, alternate: &ParagraphData, u: &Unit) -> Option<u32> {
+fn normal_cursor(
+    normal: &ParagraphData,
+    alternate: &ParagraphData,
+    u: &Unit,
+    source_cuts: &[std::ops::RangeInclusive<u32>],
+) -> Option<u32> {
     use crate::analysis::units::UnitKind;
     use crate::mapping::TransformSpan;
     let source = TransformSpan::source_position(&alternate.source_spans, u.text.start);
+    let cut = source_cuts.partition_point(|cut| *cut.end() < source);
+    if !source_cuts
+        .get(cut)
+        .is_some_and(|cut| cut.contains(&source))
+    {
+        return None;
+    }
     if TransformSpan::map_position(&alternate.source_spans, source) != u.text.start {
         return None;
     }
@@ -701,6 +754,8 @@ impl LineConstraint<'_> {
 }
 
 /// Outcome of [`Paragraph::next_line`].
+// Keep the public by-value line result without a heap allocation on every line.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum LineResult {

@@ -4,6 +4,7 @@ use crate::geometry::{LayoutUnit, Saturation};
 use crate::limits::WarningKind;
 use crate::paragraph::{
     AtomicIntrinsics, AtomicSizes, BreakToken, FloatClear, FloatSide, IntrinsicSizes, Paragraph,
+    ParagraphData,
 };
 use crate::style::LineOptions;
 
@@ -16,6 +17,32 @@ impl Paragraph {
         options: &LineOptions,
         inputs: &AtomicIntrinsics,
     ) -> IntrinsicSizes {
+        if self.data.first_line.is_some() {
+            let min = self
+                .measure_intrinsics(cx, options, inputs, true)
+                .min_content;
+            let max = self
+                .measure_intrinsics(cx, options, inputs, false)
+                .max_content;
+            IntrinsicSizes {
+                min_content: min,
+                max_content: max.max(min),
+            }
+        } else {
+            self.measure_intrinsics(cx, options, inputs, false)
+        }
+    }
+
+    fn measure_intrinsics(
+        &self,
+        cx: &mut LayoutContext,
+        options: &LineOptions,
+        inputs: &AtomicIntrinsics,
+        switch_at_soft_break: bool,
+    ) -> IntrinsicSizes {
+        let first = self.data.first_line.as_ref();
+        let mut alternate = first.is_some();
+        let mut data: &ParagraphData = first.map_or(&self.data, |f| &f.data);
         cx.warnings.set_max(self.data.limits.max_warnings);
         let mut sat = Saturation::default();
         let mut options = *options;
@@ -25,23 +52,24 @@ impl Paragraph {
             &mut cx.warnings,
             &mut sat,
         );
-        let rtl = self.data.base_level % 2 == 1;
+        let rtl = data.base_level % 2 == 1;
         let mut indent = super::text_indent(&options, BreakToken::FIRST_LINE, &mut sat);
         let mut min = LayoutUnit::ZERO;
         let mut max = LayoutUnit::ZERO;
         let mut word = indent;
         let mut word_unit = 0;
-        let mut word_start = self.data.units.first().map_or(0, |u| u.text.start);
+        let mut word_start = data.units.first().map_or(0, |u| u.text.start);
         let mut total = indent;
         let mut trailing = LayoutUnit::ZERO;
         let mut left = LayoutUnit::ZERO;
         let mut right = LayoutUnit::ZERO;
-        for (i, u) in self.data.units.iter().enumerate() {
+        let mut i = 0;
+        while let Some(u) = data.units.get(i) {
             if matches!(
                 u.kind,
                 UnitKind::ForcedBreak | UnitKind::BlockInInline { .. }
             ) {
-                let suffix = super::decoration::width(&self.data, i, false, &mut sat);
+                let suffix = super::decoration::width(data, i, false, &mut sat);
                 min = min.max(word.sub(trailing, &mut sat).add(suffix, &mut sat));
                 max = max.max(
                     total
@@ -59,14 +87,25 @@ impl Paragraph {
                     },
                     &mut sat,
                 );
-                let prefix = super::decoration::width(&self.data, i + 1, true, &mut sat);
+                let next = i + 1;
+                i = if alternate {
+                    if let Some(normal) = first.unwrap().normal_cursors[next] {
+                        alternate = false;
+                        data = &self.data;
+                        normal as usize
+                    } else {
+                        next
+                    }
+                } else {
+                    next
+                };
+                let prefix = super::decoration::width(data, i, true, &mut sat);
                 word = indent.add(prefix, &mut sat);
-                word_unit = i + 1;
-                word_start = self
-                    .data
+                word_unit = i;
+                word_start = data
                     .units
-                    .get(i + 1)
-                    .map_or(u.text.end, |next| next.text.start);
+                    .get(i)
+                    .map_or(data.text.len() as u32, |u| u.text.start);
                 total = word;
                 trailing = LayoutUnit::ZERO;
                 left = LayoutUnit::ZERO;
@@ -120,9 +159,10 @@ impl Paragraph {
                 let side = if is_left { &mut left } else { &mut right };
                 *side = side.add(LayoutUnit::from_f32_round(hi, &mut sat), &mut sat);
                 min = min.max(LayoutUnit::from_f32_round(lo, &mut sat));
-                continue;
             }
-            let (lo, hi) = if let UnitKind::Atomic { node } = u.kind {
+            let (lo, hi) = if matches!(u.kind, UnitKind::Float { .. }) {
+                (LayoutUnit::ZERO, LayoutUnit::ZERO)
+            } else if let UnitKind::Atomic { node } = u.kind {
                 let a = inputs.atomics.get(&node).copied().unwrap_or_else(|| {
                     cx.warnings.push(
                         WarningKind::MissingAtomicSize,
@@ -140,17 +180,11 @@ impl Paragraph {
                     LayoutUnit::from_f32_round(hi, &mut sat),
                 )
             } else {
-                let width = super::scan::unit_width(
-                    &self.data,
-                    u,
-                    total,
-                    &AtomicSizes::EMPTY,
-                    cx,
-                    &mut sat,
-                );
+                let width =
+                    super::scan::unit_width(data, u, total, &AtomicSizes::EMPTY, cx, &mut sat);
                 let min_width = if u.shared_cluster.is_some() {
                     super::scan::unit_width_from(
-                        &self.data,
+                        data,
                         u,
                         word_start,
                         word,
@@ -167,11 +201,14 @@ impl Paragraph {
             total = total.add(hi, &mut sat);
             match u.kind {
                 UnitKind::Cluster { space: true, .. } => trailing = trailing.add(hi, &mut sat),
-                UnitKind::Close { .. } | UnitKind::BidiControl | UnitKind::Absolute { .. } => {}
+                UnitKind::Close { .. }
+                | UnitKind::BidiControl
+                | UnitKind::Absolute { .. }
+                | UnitKind::Float { .. } => {}
                 _ => trailing = LayoutUnit::ZERO,
             }
             let hyphen = if u.break_after == BreakClass::Hyphen {
-                super::hyphen::line(&self.data, word_unit, i + 1, cx, &mut sat)
+                super::hyphen::line(data, word_unit, i + 1, cx, &mut sat)
                     .map(|windows| super::windows::cost(&windows, i + 1, &mut sat))
             } else {
                 None
@@ -183,9 +220,10 @@ impl Paragraph {
                 let (delta, viable) = if let Some(delta) = hyphen {
                     (delta, true)
                 } else {
-                    super::windows::candidate(&self.data, word_unit, i + 1, cx, &mut sat)
+                    super::windows::candidate(data, word_unit, i + 1, cx, &mut sat)
                 };
                 if !viable {
+                    i += 1;
                     continue;
                 }
                 let measured_word = word.add(delta, &mut sat);
@@ -200,20 +238,39 @@ impl Paragraph {
                             &mut sat,
                         )
                         .add(
-                            super::decoration::width(&self.data, i + 1, false, &mut sat),
+                            super::decoration::width(data, i + 1, false, &mut sat),
                             &mut sat,
                         ),
                 );
-                word_unit = i + 1;
-                word_start = u.text.end;
+                let next = i + 1;
+                let next_text = u.text.end;
+                if alternate
+                    && switch_at_soft_break
+                    && let Some(normal) = first.unwrap().normal_cursors[next]
+                {
+                    alternate = false;
+                    data = &self.data;
+                    i = normal as usize;
+                    word_unit = i;
+                    word_start = data
+                        .units
+                        .get(i)
+                        .map_or(data.text.len() as u32, |u| u.text.start);
+                    word = super::text_indent(&options, 0, &mut sat)
+                        .add(super::decoration::width(data, i, true, &mut sat), &mut sat);
+                    trailing = LayoutUnit::ZERO;
+                    continue;
+                }
+                word_unit = next;
+                word_start = next_text;
                 word = super::text_indent(&options, 0, &mut sat).add(
-                    super::decoration::width(&self.data, i + 1, true, &mut sat),
+                    super::decoration::width(data, next, true, &mut sat),
                     &mut sat,
                 );
             }
+            i += 1;
         }
-        let final_delta =
-            super::windows::delta(&self.data, word_unit, self.data.units.len(), cx, &mut sat);
+        let final_delta = super::windows::delta(data, word_unit, data.units.len(), cx, &mut sat);
         min = min
             .max(word.add(final_delta, &mut sat).sub(trailing, &mut sat))
             .max(LayoutUnit::ZERO);

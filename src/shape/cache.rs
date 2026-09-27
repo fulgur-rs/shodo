@@ -15,7 +15,7 @@ impl std::fmt::Debug for PlanCache {
 }
 impl PlanCache {
     pub(crate) fn clear(&mut self) {
-        self.entries.clear();
+        self.entries = VecDeque::new();
     }
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
@@ -99,6 +99,11 @@ mod tests {
         cx.scratch.as_mut().unwrap().push_str("retained");
         cx.shrink_to(0);
         assert_eq!(cx.plans.len(), 0);
+        assert_eq!(
+            cx.plans.entries.capacity(),
+            0,
+            "no retained plan allocation"
+        );
         assert!(cx.scratch.is_none());
         assert_eq!(a.direction(), harfrust::Direction::LeftToRight);
     }

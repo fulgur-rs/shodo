@@ -94,9 +94,9 @@
 
 **Interfaces:** ParagraphData retains `first_line:Option<Arc<FirstLineData>>` with transformed text/items/mapping/styles/glyphs/runs/units; main and alternate offset/token correspondence from source positions. Build budgets sum all raw/processed bytes and glyphs; first_line selection uses BreakToken flags and discontinues after BlockInInline.
 
-- [ ] RED `first_line_features_transform_and_fonts`, `first_line_then_normal_token_correspondence`, `block_in_inline_disables_first_line`, `first_line_aggregate_text_glyph_limits`, `tiny_limit_combining_sequence_terminates`, `out_of_flow_cross_node_cluster_no_duplicates`, `shrink_zero_releases_layers_and_buffers`, `all_corpus_public_glyph_ids_have_font_data`.
-- [ ] Implement alternate first-line set with exact source token correspondence, no copying whole Paragraph per line, no first-line restart after forced blocks. Sum alternate resources before retention and obey warning caps. Replace obsolete stub-ID expectations with meaningful real-font or explicit missing-font tests; preserve all float rollback/cache/progress checks.
-- [ ] Confirm root/fixture graph remains unchanged except development APIs; no normal dependency on shodo-fixtures. Run entire workspace default/no-default/complex-feature combinations and property-style cases, commit `feat: preserve first-line analysis and shaping resource contracts`.
+- [x] RED `first_line_features_transform_and_fonts`, `first_line_then_normal_token_correspondence`, `block_in_inline_disables_first_line`, `first_line_aggregate_text_glyph_limits`, `tiny_limit_combining_sequence_terminates`, `out_of_flow_cross_node_cluster_no_duplicates`, `shrink_zero_releases_layers_and_buffers`, `all_corpus_public_glyph_ids_have_font_data`.
+- [x] Implement alternate first-line set with exact source token correspondence, no copying whole Paragraph per line, no first-line restart after forced blocks. Sum alternate resources before retention and obey warning caps. Replace obsolete stub-ID expectations with meaningful real-font or explicit missing-font tests; preserve all float rollback/cache/progress checks.
+- [x] Confirm root/fixture graph remains unchanged except development APIs; no normal dependency on shodo-fixtures. Run entire workspace default/no-default/complex-feature combinations and property-style cases, commit `feat: preserve first-line analysis and shaping resource contracts`.
 
 ### Task 7: Documentation, verification, final review and integration
 

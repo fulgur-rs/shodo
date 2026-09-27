@@ -43,7 +43,8 @@ impl LayoutContext {
         }
     }
 
-    /// Releases retained shaping plans and buffers exceeding `bytes`.
+    /// Releases shaping plans and bounds the combined accounted storage of
+    /// shaping scratch and partial-line buffers by `bytes`.
     /// `shrink_to(0)` also releases any partial line's paragraph reference.
     pub fn shrink_to(&mut self, bytes: usize) {
         // Harfrust does not expose a plan's heap size; dropping the bounded
@@ -53,8 +54,67 @@ impl LayoutContext {
             self.scratch = None;
             self.scratch_bytes = 0;
         }
-        if self.partial.as_ref().is_some_and(|p| p.bytes() > bytes) {
+        let remaining = bytes.saturating_sub(self.scratch_bytes);
+        if self.partial.as_ref().is_some_and(|p| p.bytes() > remaining) {
             self.partial = None;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::font::{FontCollection, FontOptions};
+    use crate::limits::Limits;
+    use crate::node::{NodeId, OutOfFlowKind, TextSource};
+    use crate::style::ParagraphStyle;
+    use crate::{AtomicSizes, LineConstraint, LineResult, ParagraphBuilder};
+
+    #[test]
+    fn shrink_budget_is_shared_by_real_shaping_and_partial_line_buffers() {
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register(include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").to_vec())
+            .unwrap();
+        let mut style = ParagraphStyle::default();
+        style.first_line = Some(style.root.clone());
+        let mut b = ParagraphBuilder::new(&style, &limits);
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "ffi before ")
+            .push_out_of_flow(NodeId(2), OutOfFlowKind::Float)
+            .push_text(TextSource::Generated { node: NodeId(3) }, "after");
+        let mut cx = LayoutContext::new();
+        let p = b.build(&mut cx, &fonts).unwrap();
+        assert!(matches!(
+            p.next_line(
+                &mut cx,
+                p.start_token(),
+                &Default::default(),
+                &LineConstraint::new(1000.0),
+                &AtomicSizes::EMPTY
+            ),
+            LineResult::FloatEncountered { .. }
+        ));
+        assert!(cx.scratch.is_some());
+        assert!(cx.plans.len() > 0);
+        let partial = cx.partial.as_ref().unwrap().bytes();
+        assert!(partial > 0 && cx.scratch_bytes > 0);
+        let cap = partial.max(cx.scratch_bytes);
+        cx.shrink_to(cap);
+        let retained = cx.scratch_bytes + cx.partial.as_ref().map_or(0, |p| p.bytes());
+        assert!(
+            retained <= cap,
+            "retained {retained} exceeds aggregate cap {cap}"
+        );
+        cx.shrink_to(0);
+        assert!(cx.scratch.is_none() && cx.partial.is_none());
+        assert_eq!(cx.scratch_bytes, 0);
+        assert_eq!(cx.plans.len(), 0);
     }
 }
