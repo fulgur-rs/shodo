@@ -7,10 +7,12 @@ use shodo_bench::{
 };
 use std::{hint::black_box, path::Path, time::Duration};
 fn main() {
-    assert!(
-        !cfg!(feature = "allocation-counting"),
-        "time benchmarks require a build without allocation-counting"
-    );
+    const {
+        assert!(
+            !cfg!(feature = "allocation-counting"),
+            "time benchmarks require a build without allocation-counting"
+        );
+    }
     let selected = std::env::var("SHODO_BENCH_CASE").ok();
     let work: Vec<_> = workloads()
         .into_iter()

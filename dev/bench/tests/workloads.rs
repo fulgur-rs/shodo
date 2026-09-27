@@ -201,7 +201,9 @@ fn invalid_workloads_and_foreign_fonts_are_not_successful_measurements() {
     let ps = w.build(&mut cx, &fonts, &limits).unwrap();
     let run = layout(&w, &ps, &mut cx, &fonts, &limits, Operation::AllLines).unwrap();
     assert!(digest(&run, &other).is_err());
-    let mut tiny = Limits::default();
-    tiny.max_text_bytes = Some(1);
+    let tiny = Limits {
+        max_text_bytes: Some(1),
+        ..Default::default()
+    };
     assert!(w.build(&mut cx, &fonts, &tiny).is_err());
 }
