@@ -171,3 +171,6 @@ impl FixtureCase {
             .build(cx, &fonts.collection)
     }
 }
+
+/// Development-only saved browser comparisons.
+pub mod browser;

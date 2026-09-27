@@ -1,0 +1,1033 @@
+{
+  "format_version": 1,
+  "generator": "xorshift32-v1; seeds 1..16; corpus words/30-scalar slices; named structural seeds1001..1007",
+  "cases": [
+    {
+      "id": "latin-01",
+      "seed": 1,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16.25,
+      "width_subpixels": 7040,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "compare doors compare A doors A keeps open. doors open.",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "latin-02",
+      "seed": 2,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16.5,
+      "width_subpixels": 8320,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "keeps words, spaces, keeps spaces, A compare Readers A spaces,",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "latin-03",
+      "seed": 3,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16.75,
+      "width_subpixels": 9600,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "and Readers keeps spaces, open. compare lines. spaces, lines. its",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "latin-04",
+      "seed": 4,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16.0,
+      "width_subpixels": 10880,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "open. doors Readers open. and compare open. compare A Readers",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "latin-05",
+      "seed": 5,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16.25,
+      "width_subpixels": 5760,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "quiet spaces, doors its words, words, spaces, words, A and",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "latin-06",
+      "seed": 6,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16.5,
+      "width_subpixels": 7040,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "words, A doors lines. doors library words, spaces, its keeps",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "latin-07",
+      "seed": 7,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16.75,
+      "width_subpixels": 8320,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "its and and keeps A open. its spaces, keeps library",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "latin-08",
+      "seed": 8,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16.0,
+      "width_subpixels": 9600,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "lines. spaces, compare doors compare spaces, Readers A compare keeps",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "latin-09",
+      "seed": 9,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16.25,
+      "width_subpixels": 10880,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "Readers library lines. lines. quiet spaces, library lines. words, keeps",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "latin-10",
+      "seed": 10,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16.5,
+      "width_subpixels": 5760,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "library open. and words, keeps open. spaces, words, A its",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "latin-11",
+      "seed": 11,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16.75,
+      "width_subpixels": 7040,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "spaces, its A open. doors library Readers Readers words, spaces,",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "latin-12",
+      "seed": 12,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16.0,
+      "width_subpixels": 8320,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "doors A its compare and lines. spaces, lines. keeps quiet",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "latin-13",
+      "seed": 13,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16.25,
+      "width_subpixels": 9600,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "A doors open. quiet open. its and lines. A A",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "latin-14",
+      "seed": 14,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16.5,
+      "width_subpixels": 10880,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "compare compare compare spaces, library Readers quiet A open. quiet",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "latin-15",
+      "seed": 15,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16.75,
+      "width_subpixels": 5760,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "keeps open. doors library words, words, quiet doors library lines.",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "latin-16",
+      "seed": 16,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16.0,
+      "width_subpixels": 7040,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "doors and words, its its open. open. Readers library quiet",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-01",
+      "seed": 1,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16.25,
+      "width_subpixels": 7040,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "文章」を、同じ条件で比べます。日本語の組版では、句読点や空白",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-02",
+      "seed": 2,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16.5,
+      "width_subpixels": 8320,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "空白を調整します。「読みやすい文章」を、同じ条件で比べます。",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-03",
+      "seed": 3,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16.75,
+      "width_subpixels": 9600,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "す。日本語の組版では、句読点や空白を調整します。「読みやすい",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-04",
+      "seed": 4,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16.0,
+      "width_subpixels": 10880,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "すい文章」を、同じ条件で比べます。日本語の組版では、句読点や",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-05",
+      "seed": 5,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16.25,
+      "width_subpixels": 5760,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "点や空白を調整します。「読みやすい文章」を、同じ条件で比べま",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-06",
+      "seed": 6,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16.5,
+      "width_subpixels": 7040,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "べます。日本語の組版では、句読点や空白を調整します。「読みや",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-07",
+      "seed": 7,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16.75,
+      "width_subpixels": 8320,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "みやすい文章」を、同じ条件で比べます。日本語の組版では、句読",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-08",
+      "seed": 8,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16.0,
+      "width_subpixels": 9600,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "句読点や空白を調整します。「読みやすい文章」を、同じ条件で比",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-09",
+      "seed": 9,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16.25,
+      "width_subpixels": 10880,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "で比べます。日本語の組版では、句読点や空白を調整します。「読",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-10",
+      "seed": 10,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16.5,
+      "width_subpixels": 5760,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "「読みやすい文章」を、同じ条件で比べます。日本語の組版では、",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-11",
+      "seed": 11,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16.75,
+      "width_subpixels": 7040,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "は、句読点や空白を調整します。「読みやすい文章」を、同じ条件",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-12",
+      "seed": 12,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16.0,
+      "width_subpixels": 8320,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "条件で比べます。日本語の組版では、句読点や空白を調整します。",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-13",
+      "seed": 13,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16.25,
+      "width_subpixels": 9600,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "す。「読みやすい文章」を、同じ条件で比べます。日本語の組版で",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-14",
+      "seed": 14,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16.5,
+      "width_subpixels": 10880,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "版では、句読点や空白を調整します。「読みやすい文章」を、同じ",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-15",
+      "seed": 15,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16.75,
+      "width_subpixels": 5760,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "同じ条件で比べます。日本語の組版では、句読点や空白を調整しま",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-16",
+      "seed": 16,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16.0,
+      "width_subpixels": 7040,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "、句読点や空白を調整します。「読みやすい文章」を、同じ条件で",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "arabic-01",
+      "seed": 1,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16.25,
+      "width_subpixels": 7040,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "مرحبا جميلة، الحروف الكلمات. الكلمات. في بالعالم. الحروف وتتصل جميلة،",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "arabic-02",
+      "seed": 2,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16.5,
+      "width_subpixels": 8320,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "مرحبا العربية الكتابة بالعالم. في بالعالم. بالعالم. في وتتصل مرحبا",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "arabic-03",
+      "seed": 3,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16.75,
+      "width_subpixels": 9600,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "مرحبا الكتابة مرحبا العربية جميلة، جميلة، جميلة، مرحبا في وتتصل",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "arabic-04",
+      "seed": 4,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16.0,
+      "width_subpixels": 10880,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "مرحبا الحروف جميلة، الكتابة بالعالم. جميلة، الكتابة جميلة، الحروف العربية",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "arabic-05",
+      "seed": 5,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16.25,
+      "width_subpixels": 5760,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "مرحبا بالعالم. الكتابة العربية بالعالم. جميلة، الكلمات. وتتصل بالعالم. الكتابة",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "arabic-06",
+      "seed": 6,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16.5,
+      "width_subpixels": 7040,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "مرحبا الكلمات. وتتصل مرحبا الكتابة وتتصل الحروف الحروف العربية العربية",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "arabic-07",
+      "seed": 7,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16.75,
+      "width_subpixels": 8320,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "مرحبا في جميلة، العربية جميلة، الحروف بالعالم. في الكتابة الكتابة",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "arabic-08",
+      "seed": 8,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16.0,
+      "width_subpixels": 9600,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "مرحبا العربية وتتصل جميلة، العربية العربية الكتابة في مرحبا الكتابة",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "arabic-09",
+      "seed": 9,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16.25,
+      "width_subpixels": 10880,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "مرحبا في الحروف بالعالم. العربية بالعالم. العربية بالعالم. الحروف مرحبا",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "arabic-10",
+      "seed": 10,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16.5,
+      "width_subpixels": 5760,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "مرحبا الحروف في في الحروف وتتصل مرحبا مرحبا وتتصل بالعالم.",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "arabic-11",
+      "seed": 11,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16.75,
+      "width_subpixels": 7040,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "مرحبا وتتصل مرحبا بالعالم. بالعالم. الحروف بالعالم. العربية جميلة، بالعالم.",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "arabic-12",
+      "seed": 12,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16.0,
+      "width_subpixels": 8320,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "مرحبا في في جميلة، العربية الكتابة الكتابة بالعالم. وتتصل الحروف",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "arabic-13",
+      "seed": 13,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16.25,
+      "width_subpixels": 9600,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "مرحبا الكتابة الكلمات. في جميلة، بالعالم. الحروف مرحبا مرحبا مرحبا",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "arabic-14",
+      "seed": 14,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16.5,
+      "width_subpixels": 10880,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "مرحبا مرحبا الكلمات. العربية العربية الحروف الكتابة جميلة، الكلمات. الكلمات.",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "arabic-15",
+      "seed": 15,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16.75,
+      "width_subpixels": 5760,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "مرحبا الكلمات. بالعالم. جميلة، وتتصل في بالعالم. الكلمات. مرحبا وتتصل",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "arabic-16",
+      "seed": 16,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16.0,
+      "width_subpixels": 7040,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "الحروف الكتابة في الكتابة العربية الحروف الكتابة الكلمات. وتتصل في",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "nested-inline",
+      "seed": 1001,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16,
+      "width_subpixels": 8960,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "Readers ",
+          "depth": 0
+        },
+        {
+          "text": "compare ",
+          "depth": 1
+        },
+        {
+          "text": "office ",
+          "depth": 2
+        },
+        {
+          "text": "words ",
+          "depth": 1
+        },
+        {
+          "text": "and lines.",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "color-ffi",
+      "seed": 1002,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16,
+      "width_subpixels": 8960,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "f",
+          "depth": 1,
+          "color": "#ff0000"
+        },
+        {
+          "text": "f",
+          "depth": 2,
+          "color": "#0000ff"
+        },
+        {
+          "text": "i office readers compare words.",
+          "depth": 1,
+          "color": "#008000"
+        }
+      ]
+    },
+    {
+      "id": "arabic-wrap",
+      "seed": 1003,
+      "font_ids": [
+        "arabic"
+      ],
+      "lang": "ar",
+      "direction": "rtl",
+      "font_size": 16,
+      "width_subpixels": 8320,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات.",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "pre-wrap-tab",
+      "seed": 1004,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16,
+      "width_subpixels": 5760,
+      "white_space": "pre-wrap",
+      "parts": [
+        {
+          "text": "One  two\tthree\nFour five.",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-punctuation",
+      "seed": 1005,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16,
+      "width_subpixels": 7168,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "日本語の組版では、句読点や空白を調整します。「読みやすい文章」を、同じ条件で比べます。",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "atomic-baseline",
+      "seed": 1006,
+      "font_ids": [
+        "latin"
+      ],
+      "lang": "en",
+      "direction": "ltr",
+      "font_size": 16,
+      "width_subpixels": 5760,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "One ",
+          "depth": 0
+        },
+        {
+          "text": "￼",
+          "depth": 1,
+          "atomic_width": 24,
+          "atomic_height": 18
+        },
+        {
+          "text": " two three.",
+          "depth": 0
+        }
+      ]
+    },
+    {
+      "id": "supplementary",
+      "seed": 1007,
+      "font_ids": [
+        "cjk"
+      ],
+      "lang": "ja",
+      "direction": "ltr",
+      "font_size": 16,
+      "width_subpixels": 5120,
+      "white_space": "normal",
+      "parts": [
+        {
+          "text": "𠮷と吉、ひらがな、カタカナ、ＡＢＣ。",
+          "depth": 0
+        }
+      ]
+    }
+  ]
+}
