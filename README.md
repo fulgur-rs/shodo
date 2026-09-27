@@ -203,6 +203,11 @@ line edge. Word spacing and justification affect layout advances while keeping
 natural `Cluster::shaping_advance` available. Cursive runs use word-level tracking
 fallback without elongation or arbitrary inter-letter gaps. Tabs measure the root
 font's space/ch with root spacing, even inside differently sized text.
+Inter-character justification counts legal typographic boundaries inside retained
+ligatures and aggregates their expansion onto the final glyph cluster. Combining
+continuations and indivisible transforms stay closed. An unexpandable justified
+line uses `text-align-last`; a `justify` fallback centers it. `JustifyAll` implies
+last-line justification, including this fallback when expansion is disabled.
 `TextAutospace::Normal` adds one eighth of the containing inline's actual ic
 between eligible visual CJK/letter/digit neighbors. Intervening box edges block
 it, and a soft wrap removes the boundary gap. `Cluster::source_char` and `flags`

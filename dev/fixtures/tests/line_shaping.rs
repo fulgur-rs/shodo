@@ -970,7 +970,9 @@ fn unbroken_ligature_slices_do_not_overwrite_justified_glyph_positions() {
     assert!((glyphs[0].inline_position).abs() < 0.02);
     assert!((glyphs[2].inline_position - (100.0 - direct_width("x"))).abs() < 0.04);
     let spare = 100.0 - direct_width("ffi x");
-    assert!((glyphs[1].inline_position - (direct_width("ffi") + spare / 2.0)).abs() < 0.05);
+    // Four typographic boundaries: f|f, f|i, i|space, space|x. The
+    // retained ffi owns three of them; shaping-cluster count is irrelevant.
+    assert!((glyphs[1].inline_position - (direct_width("ffi") + 3.0 * spare / 4.0)).abs() < 0.05);
     assert!((glyphs.iter().map(|g| g.advance).sum::<f32>() - 100.0).abs() < 0.02);
 }
 

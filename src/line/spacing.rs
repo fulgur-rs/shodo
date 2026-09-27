@@ -211,12 +211,52 @@ pub(super) fn push(data: &ParagraphData, cursor: &mut Cursor, index: usize) {
     cursor.push(level, data.unit_spacing[index].summary, Some(data));
 }
 
-pub(super) fn intercharacter_allowed(data: &ParagraphData, left: usize, right: usize) -> bool {
-    !data.unit_spacing[left]
-        .summary
-        .last
-        .zip(data.unit_spacing[right].summary.first)
-        .is_some_and(|(a, b)| a.kind == Kind::Cursive && b.kind == Kind::Cursive)
+/// Legal typographic starts in a final shaping cluster. Keeping source cuts
+/// excludes combining continuations and indivisible transform expansions.
+pub(super) fn justification_metadata(
+    data: &ParagraphData,
+    text: std::ops::Range<u32>,
+    visible_hyphen: Option<u32>,
+) -> (usize, Option<Kind>, Option<Kind>) {
+    if text.start >= text.end {
+        return (0, None, None);
+    }
+    let category = CodePointMapData::<GeneralCategory>::new();
+    let script = CodePointMapData::<Script>::new();
+    let cuts = &data.breaks.caret_cuts;
+    let begin = cuts.partition_point(|c| *c < text.start);
+    let end = cuts.partition_point(|c| *c < text.end);
+    let (mut count, mut first, mut last) = (0, None, None);
+    for &offset in &cuts[begin..end] {
+        let Some(ch) = data.text[offset as usize..].chars().next() else {
+            continue;
+        };
+        let gc = category.get(ch);
+        if matches!(gc, GeneralCategory::Format | GeneralCategory::Control)
+            && visible_hyphen != Some(offset)
+        {
+            continue;
+        }
+        let cursive = matches!(
+            script.get(ch),
+            Script::Arabic
+                | Script::HanifiRohingya
+                | Script::Mandaic
+                | Script::Mongolian
+                | Script::Nko
+                | Script::PhagsPa
+                | Script::Syriac
+        ) && icu_properties::props::GeneralCategoryGroup::Letter.contains(gc);
+        let kind = if cursive { Kind::Cursive } else { Kind::Text };
+        if let Some(previous) = last
+            && !(previous == Kind::Cursive && kind == Kind::Cursive)
+        {
+            count += 1;
+        }
+        first.get_or_insert(kind);
+        last = Some(kind);
+    }
+    (count, first, last)
 }
 
 pub(super) fn hyphen(

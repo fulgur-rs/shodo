@@ -525,6 +525,283 @@ fn real_font_empty_block_prefix_and_missing_atomic_keep_output_contracts() {
     );
     assert!(!line.is_empty());
 }
+
+#[test]
+fn unexpandable_justification_uses_last_alignment_and_direction() {
+    use shodo::geometry::Direction;
+    use shodo::style::{LineOptions, TextAlign, TextAlignLast, TextJustify};
+    let limits = Default::default();
+    let fonts = load_fonts(&limits).unwrap();
+    for (direction, plaintext) in [
+        (Direction::Ltr, false),
+        (Direction::Rtl, false),
+        (Direction::Rtl, true),
+    ] {
+        let mut style = fixed_style();
+        style.direction = direction;
+        style.root.direction = direction;
+        style.unicode_bidi_plaintext = plaintext;
+        let mut b = ParagraphBuilder::new(&style, &limits);
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "aaaa bbbb");
+        let p = b
+            .build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap();
+        for justify in [TextJustify::None, TextJustify::InterWord] {
+            for (last, factor) in [
+                (TextAlignLast::Start, 0.0),
+                (TextAlignLast::End, 1.0),
+                (TextAlignLast::Center, 0.5),
+                (TextAlignLast::Justify, 0.5),
+            ] {
+                let options = LineOptions {
+                    text_align: TextAlign::Justify,
+                    text_align_last: last,
+                    text_justify: justify,
+                    ..Default::default()
+                };
+                let plain = p.break_all(
+                    &mut LayoutContext::new(),
+                    &Default::default(),
+                    60.0,
+                    &AtomicSizes::EMPTY,
+                );
+                let actual = p.break_all(
+                    &mut LayoutContext::new(),
+                    &options,
+                    60.0,
+                    &AtomicSizes::EMPTY,
+                );
+                assert!(actual.len() > 1);
+                let first_run = |line: &shodo::Line| {
+                    line.fragments()
+                        .find_map(|f| {
+                            if let Fragment::GlyphRun(r) = f {
+                                Some(r.inline_start())
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap()
+                };
+                // RTL plaintext English reverses the line's start/end
+                // relative to the container's logical axis.
+                let sign = if direction == Direction::Rtl && plaintext {
+                    -1.0
+                } else {
+                    1.0
+                };
+                close(
+                    first_run(&actual[0]),
+                    first_run(&plain[0]) + (60.0 - actual[0].inline_size()) * factor * sign,
+                );
+            }
+        }
+    }
+    let style = fixed_style();
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let options = LineOptions {
+        text_align_last: TextAlignLast::Justify,
+        text_justify: TextJustify::InterWord,
+        ..Default::default()
+    };
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &options,
+        100.0,
+        &AtomicSizes::EMPTY,
+    );
+    close(
+        glyphs(&lines[0])[0].inline_position,
+        (100.0 - lines[0].inline_size()) / 2.0,
+    );
+}
+
+#[test]
+fn retained_ligatures_justify_each_legal_typographic_boundary() {
+    use shodo::style::{FontFeature, LineOptions, TextAlign, TextJustify};
+    let limits = Default::default();
+    let fonts = load_fonts(&limits).unwrap();
+    let mut style = fixed_style();
+    style.root.font_features.push(FontFeature {
+        tag: *b"liga",
+        value: 1,
+    });
+    let options = LineOptions {
+        text_align: TextAlign::JustifyAll,
+        text_justify: TextJustify::InterCharacter,
+        ..Default::default()
+    };
+    for text in ["ffi", "ffia", "a\u{301}ffi"] {
+        let mut b = ParagraphBuilder::new(&style, &limits);
+        b.push_text(TextSource::Generated { node: NodeId(1) }, text);
+        let p = b
+            .build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap();
+        let plain = p.break_all(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            100.0,
+            &AtomicSizes::EMPTY,
+        );
+        let actual = p.break_all(
+            &mut LayoutContext::new(),
+            &options,
+            100.0,
+            &AtomicSizes::EMPTY,
+        );
+        close(actual[0].inline_size(), 100.0);
+        assert_eq!(
+            glyphs(&plain[0]).iter().map(|g| g.id).collect::<Vec<_>>(),
+            glyphs(&actual[0]).iter().map(|g| g.id).collect::<Vec<_>>()
+        );
+        let clusters = |line: &shodo::Line| {
+            line.fragments()
+                .flat_map(|f| match f {
+                    Fragment::GlyphRun(r) => r.clusters().collect(),
+                    _ => Vec::new(),
+                })
+                .collect::<Vec<_>>()
+        };
+        let before = clusters(&plain[0]);
+        let after = clusters(&actual[0]);
+        let count = if text == "ffi" { 2.0 } else { 3.0 };
+        let quantum = (100.0 - plain[0].inline_size()) / count;
+        for (a, b) in before.iter().zip(&after) {
+            close(a.shaping_advance, b.shaping_advance);
+            let opportunities = match &actual[0].text()[b.text_range.clone()] {
+                "ffi" => {
+                    if text.ends_with("ffi") {
+                        2.0
+                    } else {
+                        3.0
+                    }
+                }
+                "a\u{301}" => 1.0,
+                _ => 0.0,
+            };
+            close(b.advance - a.advance, opportunities * quantum);
+        }
+        let index = shodo::hit::LineLayout::new(&actual);
+        let end = shodo::hit::TextPosition {
+            line: 0,
+            offset: text.len() as u32,
+            affinity: shodo::mapping::Affinity::Upstream,
+        };
+        close(index.caret(end).unwrap().rect.inline_start, 100.0);
+    }
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "ff");
+    let ff = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap()
+        .break_all(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            100.0,
+            &AtomicSizes::EMPTY,
+        );
+    let natural_ff = ff[0].inline_size();
+    style.root.overflow_wrap = shodo::style::OverflowWrap::Anywhere;
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "ffia");
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let width = natural_ff + 0.5;
+    let actual = p.break_all(
+        &mut LayoutContext::new(),
+        &options,
+        width,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(
+        actual[0].text_range(),
+        0..2,
+        "the accepted owned window must slice inside ffi"
+    );
+    close(actual[0].inline_size(), width);
+    close(glyphs(&actual[0]).iter().map(|g| g.advance).sum(), width);
+    let cluster = actual[0]
+        .fragments()
+        .find_map(|f| match f {
+            Fragment::GlyphRun(r) => r.clusters().next(),
+            _ => None,
+        })
+        .unwrap();
+    close(cluster.shaping_advance, natural_ff);
+    let index = shodo::hit::LineLayout::new(&actual);
+    close(
+        index
+            .caret(shodo::hit::TextPosition {
+                line: 0,
+                offset: 2,
+                affinity: shodo::mapping::Affinity::Upstream,
+            })
+            .unwrap()
+            .rect
+            .inline_start,
+        width,
+    );
+}
+
+#[test]
+fn justification_does_not_open_indivisible_transforms_or_empty_lines() {
+    use shodo::style::{LineOptions, TextAlign, TextJustify, TextTransform};
+    let limits = Default::default();
+    let fonts = load_fonts(&limits).unwrap();
+    let mut style = fixed_style();
+    style.root.text_transform = TextTransform::Uppercase;
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "ßa");
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let options = LineOptions {
+        text_align: TextAlign::JustifyAll,
+        text_justify: TextJustify::InterCharacter,
+        ..Default::default()
+    };
+    let plain = p.break_all(
+        &mut LayoutContext::new(),
+        &Default::default(),
+        100.0,
+        &AtomicSizes::EMPTY,
+    );
+    let actual = p.break_all(
+        &mut LayoutContext::new(),
+        &options,
+        100.0,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(actual[0].text(), "SSA");
+    let before = glyphs(&plain[0]);
+    let after = glyphs(&actual[0]);
+    assert_eq!(after.len(), 3);
+    close(actual[0].inline_size(), 100.0);
+    close(before[0].advance, after[0].advance);
+    close(before[1].inline_position, after[1].inline_position);
+    close(
+        after[1].advance - before[1].advance,
+        100.0 - plain[0].inline_size(),
+    );
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_forced_break(NodeId(2));
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &options,
+        100.0,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(lines.len(), 1);
+    assert!(glyphs(&lines[0]).is_empty());
+}
 #[test]
 fn final_line_metrics_and_ink_overflow_are_explicit() {
     let limits = Default::default();

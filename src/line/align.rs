@@ -6,6 +6,73 @@ use crate::paragraph::ParagraphData;
 use crate::style::{LineOptions, TextAlign, TextAlignLast, TextJustify};
 use unicode_bidi::{BidiInfo, Level};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Point {
+    unit: usize,
+    owned: Option<(usize, usize)>,
+}
+
+#[derive(Clone, Copy)]
+struct Opportunity {
+    point: Point,
+    count: i64,
+}
+
+fn add_opportunity(opportunities: &mut Vec<Opportunity>, point: Point, count: usize) {
+    if count == 0 {
+        return;
+    }
+    if let Some(previous) = opportunities.last_mut()
+        && previous.point == point
+    {
+        previous.count += count as i64;
+    } else {
+        opportunities.push(Opportunity {
+            point,
+            count: count as i64,
+        });
+    }
+}
+
+fn shift_for(
+    align: TextAlign,
+    spare: LayoutUnit,
+    reversed_start: bool,
+    rtl: bool,
+    indent: LayoutUnit,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    let end = match align {
+        TextAlign::End => !reversed_start,
+        TextAlign::Left => rtl,
+        TextAlign::Right => !rtl,
+        _ => reversed_start,
+    };
+    let shift = if align == TextAlign::Center {
+        spare.div_i32(2)
+    } else if end {
+        spare
+    } else {
+        LayoutUnit::ZERO
+    };
+    if reversed_start {
+        shift.sub(indent, sat)
+    } else {
+        shift
+    }
+}
+
+fn unexpandable_alignment(options: &LineOptions) -> TextAlign {
+    match options.text_align_last {
+        TextAlignLast::Auto if options.text_align == TextAlign::JustifyAll => TextAlign::Center,
+        TextAlignLast::Auto | TextAlignLast::Start => TextAlign::Start,
+        TextAlignLast::End => TextAlign::End,
+        TextAlignLast::Left => TextAlign::Left,
+        TextAlignLast::Right => TextAlign::Right,
+        TextAlignLast::Center | TextAlignLast::Justify => TextAlign::Center,
+    }
+}
+
 pub(super) struct Alignment {
     pub(super) shift: LayoutUnit,
     pub(super) justified: bool,
@@ -42,30 +109,32 @@ pub(super) fn apply(
         .bidi_paragraph_at_unit(start)
         .map_or(data.base_level, |p| p.inline_level);
     let reversed_start = inline_level % 2 != data.base_level % 2;
-    let end = match align {
-        TextAlign::End => !reversed_start,
-        TextAlign::Left => data.base_level % 2 == 1,
-        TextAlign::Right => data.base_level.is_multiple_of(2),
-        _ => reversed_start,
-    };
-    let mut shift = if align == TextAlign::Center {
-        spare.div_i32(2)
-    } else if end {
-        spare
-    } else {
-        LayoutUnit::ZERO
-    };
-    if reversed_start {
-        shift = shift.sub(indent, sat);
-    }
     let mut result = Alignment {
-        shift,
+        shift: shift_for(
+            align,
+            spare,
+            reversed_start,
+            data.base_level % 2 == 1,
+            indent,
+            sat,
+        ),
         justified: false,
     };
-    if !matches!(align, TextAlign::Justify | TextAlign::JustifyAll)
-        || options.text_justify == TextJustify::None
-        || spare == LayoutUnit::ZERO
-    {
+    if !matches!(align, TextAlign::Justify | TextAlign::JustifyAll) || spare == LayoutUnit::ZERO {
+        return result;
+    }
+    let fallback = |sat: &mut Saturation| {
+        shift_for(
+            unexpandable_alignment(options),
+            spare,
+            reversed_start,
+            data.base_level % 2 == 1,
+            indent,
+            sat,
+        )
+    };
+    if options.text_justify == TextJustify::None {
+        result.shift = fallback(sat);
         return result;
     }
     // Owned windows may have a different number of clusters from their
@@ -123,7 +192,13 @@ pub(super) fn apply(
                         || visible_hyphen == Some(cluster))
                 {
                     let space = data.text[cluster as usize..].starts_with(' ');
-                    clusters.push((unit, space, Some((w, end - 1))));
+                    let text_end = window
+                        .store
+                        .cluster
+                        .get(end)
+                        .copied()
+                        .unwrap_or(window.text.end);
+                    clusters.push((unit, space, Some((w, end - 1)), cluster..text_end));
                 }
                 g = end;
             }
@@ -131,41 +206,80 @@ pub(super) fn apply(
             let end = c.slices.partition_point(|i| *i < scan.hang_start);
             end > 0 && c.slices[end - 1] == i
         }) {
-            clusters.push((i, *space, None));
+            clusters.push((i, *space, None, data.units[i].shaping_text().clone()));
         }
     }
-    let mut opportunities: Vec<_> = clusters
-        .iter()
-        .enumerate()
-        .filter(|(j, (_, space, _))| {
-            if options.text_justify == TextJustify::InterCharacter {
-                *j + 1 < clusters.len()
-                    && super::spacing::intercharacter_allowed(
-                        data,
-                        clusters[*j].0,
-                        clusters[*j + 1].0,
-                    )
-            } else {
-                *space
+    let mut opportunities = Vec::new();
+    if clusters.is_empty() {
+        result.shift = fallback(sat);
+        return result;
+    }
+    if options.text_justify == TextJustify::InterCharacter {
+        let mut previous = None;
+        let content_end = data.units[scan.hang_start - 1].text.end;
+        for (unit, _, owned, text) in &clusters {
+            let text = text.start.max(data.units[start].text.start)..text.end.min(content_end);
+            let point = Point {
+                unit: *unit,
+                owned: *owned,
+            };
+            let (internal, first, last) =
+                super::spacing::justification_metadata(data, text.clone(), visible_hyphen);
+            if let Some(first) = first {
+                if let Some((previous_point, previous_kind)) = previous
+                    && !(previous_kind == super::spacing_summary::Kind::Cursive
+                        && first == super::spacing_summary::Kind::Cursive)
+                {
+                    add_opportunity(&mut opportunities, previous_point, 1);
+                }
+                add_opportunity(&mut opportunities, point, internal);
+                previous = Some((point, last.unwrap()));
+            } else if data.breaks.caret_cuts.binary_search(&text.start).is_err()
+                && let Some((previous_point, _)) = &mut previous
+            {
+                // A mark or indivisible transformed continuation belongs to
+                // the preceding typographic unit; place its following gap
+                // after the final glyph piece, rather than inside the unit.
+                *previous_point = point;
             }
-        })
-        .map(|(_, point)| *point)
-        .collect();
+        }
+    } else {
+        for (unit, space, owned, _) in &clusters {
+            if *space {
+                add_opportunity(
+                    &mut opportunities,
+                    Point {
+                        unit: *unit,
+                        owned: *owned,
+                    },
+                    1,
+                );
+            }
+        }
+    }
     if opportunities.is_empty() {
+        result.shift = fallback(sat);
         return result;
     }
     let levels: Vec<_> = opportunities
         .iter()
-        .map(|(i, _, _)| Level::new(data.units[*i].level).unwrap())
+        .map(|o| Level::new(data.units[o.point.unit].level).unwrap())
         .collect();
     let mut order = BidiInfo::reorder_visual(&levels);
     if data.base_level % 2 == 1 {
         order.reverse();
     }
     opportunities = order.into_iter().map(|i| opportunities[i]).collect();
-    let n = opportunities.len() as i32;
-    for (j, (i, _, owned)) in opportunities.into_iter().enumerate() {
-        let extra = LayoutUnit::from_raw(spare.raw() / n + i32::from((j as i32) < spare.raw() % n));
+    // Aggregate internal boundaries per final glyph cluster instead of
+    // retaining one allocation record per character in a compressed ligature.
+    let n: i64 = opportunities.iter().map(|o| o.count).sum();
+    let mut remainder = i64::from(spare.raw()) % n;
+    let per_boundary = i64::from(spare.raw()) / n;
+    for opportunity in opportunities {
+        let Point { unit: i, owned } = opportunity.point;
+        let residual = remainder.min(opportunity.count);
+        remainder -= residual;
+        let extra = LayoutUnit::from_raw((per_boundary * opportunity.count + residual) as i32);
         scan.widths[i - start] = scan.widths[i - start].add(extra, sat);
         if let Some((window, g)) = owned {
             let store = &mut scan.overlays[window].store;
