@@ -1,0 +1,51 @@
+name: Performance artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      case:
+        description: Workload (all includes every case at scales 1, 8 and 64)
+        type: choice
+        default: latin-short
+        options:
+          - all
+          - latin-short
+          - japanese-short
+          - mixed-scripts
+          - nested-atomic
+          - preserved-tabs
+          - float-retry
+          - justify
+          - fallback
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Fontconfig development files
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig1-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Measure release builds
+        env:
+          SELECTED_CASE: ${{ inputs.case }}
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target/performance-harness
+          RUSTFLAGS: -D warnings
+        shell: bash
+        run: |
+          args=(--output performance-results --quick --cold-samples 3)
+          if [[ "$SELECTED_CASE" != all ]]; then
+            args+=(--case "$SELECTED_CASE")
+          fi
+          python dev/bench/tools/run.py "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: performance-${{ github.sha }}-${{ inputs.case }}
+          path: performance-results/
+          if-no-files-found: error
