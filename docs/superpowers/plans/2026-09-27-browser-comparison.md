@@ -55,5 +55,5 @@
 **Files:** docs/browser-comparison.md, dev/fixtures/README.md, README.md, CI only if necessary for normal saved-data checks.
 - [x] Document exact collection/update commands, browser/font/input metadata, source conversion, measured tolerance/difference rationale and supported scope.
 - [x] Stable/MSRV workspace tests, Python fixture tests, Clippy/docs/fmt/diff; actual collection reproducibility complete.
-- [ ] One fresh final whole-branch reviewer, meaningful RED/GREEN fixes for material findings.
+- [x] One fresh final whole-branch reviewer, meaningful RED/GREEN fixes for material findings.
 - [ ] Push/PR; exact HEAD full CI SUCCESS; merge/readback/ancestor verification, bd close and owned workspace cleanup; resume bd ready.

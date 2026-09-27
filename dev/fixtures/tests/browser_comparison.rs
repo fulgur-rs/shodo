@@ -208,3 +208,44 @@ fn full_offline_comparison_checks_exact_boundaries_geometry_and_known_difference
         .is_err()
     );
 }
+
+#[test]
+fn capture_validation_rejects_inconsistent_transitions_and_missing_probes() {
+    let original = browser::capture().unwrap();
+    original.validate(browser::cases()).unwrap();
+    for defect in [
+        0,
+        u32::MAX,
+        1,
+        7769,
+        7831,
+        7832,
+        7833,
+        7834,
+        7835,
+        7897,
+        8960,
+    ] {
+        let mut data = browser::capture().unwrap();
+        let r = data
+            .records
+            .iter_mut()
+            .find(|r| r.id == "color-ffi")
+            .unwrap();
+        match defect {
+            0 => {
+                r.boundary_subpixels = None;
+                r.samples.retain(|s| matches!(s.width_subpixels, 1 | 8960));
+            }
+            u32::MAX => {
+                r.samples[0].end_utf16 = 19;
+                r.samples[0].end_utf8 = 19;
+            }
+            width => r.samples.retain(|s| s.width_subpixels != width),
+        }
+        assert!(
+            data.validate(browser::cases()).is_err(),
+            "accepted defect {defect}"
+        );
+    }
+}

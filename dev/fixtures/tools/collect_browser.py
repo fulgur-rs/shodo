@@ -84,7 +84,18 @@ def validate_capture(result, inputs, fonts):
                 if atomic['width'] != atomic_part['atomic_width'] or atomic['height'] != atomic_part['atomic_height'] or abs(atomic['bottom']-atomic['top']-atomic['height']) > 0.001:
                     raise ValueError('atomic dimensions differ')
         boundary = record['boundary_subpixels']
-        if boundary is not None:
+        target = record['initial']['end_utf16']
+        minimum = samples[0]['end_utf16']
+        if boundary is None:
+            if minimum < target:
+                raise ValueError('missing transition for unreached initial target')
+        else:
+            if type(boundary) is not int or minimum >= target:
+                raise ValueError('invalid transition for minimum endpoint')
+            required = {1, case['width_subpixels']}
+            required.update(boundary + delta for delta in [-64, -2, -1, 0, 1, 2, 64] if boundary + delta > 0)
+            if not required.issubset(widths):
+                raise ValueError('missing required boundary probes')
             by_width = {s['width_subpixels']: s for s in samples}
             if boundary <= 1 or boundary > case['width_subpixels'] or boundary-1 not in by_width or boundary not in by_width:
                 raise ValueError('boundary has no adjacent probes')

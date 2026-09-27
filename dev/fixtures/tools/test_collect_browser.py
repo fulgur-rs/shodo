@@ -42,5 +42,30 @@ class CollectorValidationTests(unittest.TestCase):
                     collector.save_capture(path, data, inputs, original['fonts'])
                 self.assertEqual(path.read_text(encoding='utf-8'), 'previous')
 
+    def test_inconsistent_transition_and_missing_probes_preserve_previous_file(self):
+        original = json.loads((collector.ROOT/'assets/browser/chromium.json').read_text(encoding='utf-8'))
+        inputs = json.loads((collector.ROOT/'assets/browser-inputs.json').read_text(encoding='utf-8'))
+        collector.validate_capture(original, inputs, original['fonts'])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'capture.json'
+            path.write_text('previous', encoding='utf-8')
+            for defect in ['null', 'already-reached', 1, 7769, 7831, 7832, 7833, 7834, 7835, 7897, 8960]:
+                with self.subTest(defect=defect):
+                    path.write_text('previous', encoding='utf-8')
+                    data = json.loads(json.dumps(original))
+                    record = next(r for r in data['records'] if r['id'] == 'color-ffi')
+                    if defect == 'null':
+                        record['boundary_subpixels'] = None
+                        record['samples'] = [record['samples'][0], record['initial']]
+                    elif defect == 'already-reached':
+                        record['samples'][0]['end_utf16'] = 19
+                        record['samples'][0]['end_utf8'] = 19
+                    else:
+                        record['samples'] = [s for s in record['samples'] if s['width_subpixels'] != defect]
+                    with self.assertRaises(ValueError):
+                        collector.save_capture(path, data, inputs, original['fonts'])
+                    self.assertEqual(path.read_text(encoding='utf-8'), 'previous')
+                    self.assertEqual(list(Path(tmp).iterdir()), [path])
+
 if __name__ == '__main__':
     unittest.main()

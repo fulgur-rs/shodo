@@ -140,7 +140,31 @@ impl BrowserCapture {
                     }
                 }
             }
+            let minimum = r.samples[0].end_utf8;
+            if r.boundary_subpixels.is_none() && minimum < r.initial.end_utf8 {
+                return Err(format!(
+                    "{}: missing transition for unreached initial target",
+                    c.id
+                ));
+            }
             if let Some(width) = r.boundary_subpixels {
+                if minimum >= r.initial.end_utf8 {
+                    return Err(format!("{}: invalid transition for minimum endpoint", c.id));
+                }
+                for delta in [-64_i64, -2, -1, 0, 1, 2, 64] {
+                    let required = i64::from(width) + delta;
+                    if required > 0
+                        && !r
+                            .samples
+                            .iter()
+                            .any(|s| i64::from(s.width_subpixels) == required)
+                    {
+                        return Err(format!(
+                            "{}: missing required boundary probe {required}",
+                            c.id
+                        ));
+                    }
+                }
                 let before = width
                     .checked_sub(1)
                     .and_then(|w| r.samples.iter().find(|s| s.width_subpixels == w));
