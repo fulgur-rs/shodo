@@ -79,7 +79,9 @@ pub(crate) struct Tree {
 }
 
 impl Tree {
-    pub(super) fn outer_clear(&self, node: usize, left: bool) -> bool {
+    /// Clone edges exist on every fragment. Slice edges are represented by
+    /// their actual Open/Close markers in the candidate's visual summary.
+    pub(super) fn cloned_outer_clear(&self, node: usize, left: bool) -> bool {
         if left {
             self.hang_left[node] == 0
         } else {
@@ -125,8 +127,11 @@ impl Tree {
             let rtl = data.styles[b.style as usize].direction == Direction::Rtl;
             tree.left[node] = tree.left[parent] + u32::from(if rtl { end } else { start });
             tree.right[node] = tree.right[parent] + u32::from(if rtl { start } else { end });
-            let hang_start = e.border.inline_start != 0.0 || e.padding.inline_start != 0.0;
-            let hang_end = e.border.inline_end != 0.0 || e.padding.inline_end != 0.0;
+            let cloned = data.styles[b.style as usize].box_decoration_break
+                == crate::style::BoxDecorationBreak::Clone;
+            let hang_start =
+                cloned && (e.border.inline_start != 0.0 || e.padding.inline_start != 0.0);
+            let hang_end = cloned && (e.border.inline_end != 0.0 || e.padding.inline_end != 0.0);
             tree.hang_left[node] =
                 tree.hang_left[parent] + u32::from(if rtl { hang_end } else { hang_start });
             tree.hang_right[node] =

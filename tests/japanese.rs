@@ -1127,3 +1127,311 @@ fn planned_greedy_breaks_preserve_punctuation_measure_and_positions() {
         LineResult::Done
     ));
 }
+
+#[test]
+fn first_and_last_hanging_share_one_typographic_advance() {
+    for text in ["\"", "”", "“"] {
+        for trim in [
+            TextSpacingTrim::SpaceAll,
+            TextSpacingTrim::TrimBoth,
+            TextSpacingTrim::TrimAll,
+        ] {
+            let para = japanese(text, trim);
+            let options = LineOptions {
+                hanging_punctuation: HangingPunctuation {
+                    first: true,
+                    last: true,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let line = first_line(&para, 100.0, &options, &AtomicSizes::EMPTY);
+            assert_eq!(line.inline_size(), 0.0, "{text:?} {trim:?}");
+            assert_eq!(line.hang_end(), 0.0, "already hung at the start");
+            assert!(line.hang_start() > 0.0);
+            assert_eq!(line.text_range(), 0..text.len());
+            let sizes = para.intrinsic_sizes(
+                &mut LayoutContext::new(),
+                &options,
+                &AtomicIntrinsics::default(),
+            );
+            assert_eq!((sizes.min_content, sizes.max_content), (0.0, 0.0));
+            let plain = first_line(
+                &japanese(text, TextSpacingTrim::SpaceAll),
+                100.0,
+                &LineOptions::default(),
+                &AtomicSizes::EMPTY,
+            );
+            assert_eq!(glyphs(&line)[0].inline_position, -glyphs(&plain)[0].advance);
+        }
+    }
+}
+
+#[test]
+fn slice_inline_end_padding_blocks_hanging_only_on_its_actual_end() {
+    use shodo::style::BoxDecorationBreak;
+    let options = LineOptions {
+        hanging_punctuation: HangingPunctuation {
+            force_end: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    for (decoration, text, width, end, measure, hang, min_content, max_content) in [
+        (
+            BoxDecorationBreak::Slice,
+            "日本、日本",
+            32.0,
+            9,
+            32.0,
+            16.0,
+            20.0,
+            84.0,
+        ),
+        (
+            BoxDecorationBreak::Clone,
+            "日本、日本",
+            32.0,
+            3,
+            20.0,
+            0.0,
+            36.0,
+            84.0,
+        ),
+        (
+            BoxDecorationBreak::Slice,
+            "日本、",
+            100.0,
+            9,
+            52.0,
+            0.0,
+            36.0,
+            52.0,
+        ),
+    ] {
+        let style = japanese_style(TextSpacingTrim::SpaceAll);
+        let inline = InlineStyle {
+            box_decoration_break: decoration,
+            ..style.root.clone()
+        };
+        let para = japanese_with(style, Limits::default(), |b| {
+            b.open_inline(
+                NodeId(2),
+                &inline,
+                InlineEdges {
+                    padding: Sides {
+                        inline_end: 4.0,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .push_text(TextSource::Generated { node: NodeId(3) }, text)
+            .close_inline();
+        });
+        let sizes = para.intrinsic_sizes(
+            &mut LayoutContext::new(),
+            &options,
+            &AtomicIntrinsics::default(),
+        );
+        assert_eq!(
+            (sizes.min_content, sizes.max_content),
+            (min_content, max_content),
+            "{decoration:?} {text}"
+        );
+        let line = first_line(&para, width, &options, &AtomicSizes::EMPTY);
+        assert_eq!(line.text_range(), 0..end, "{decoration:?} {text}");
+        assert_eq!((line.inline_size(), line.hang_end()), (measure, hang));
+        assert_eq!(glyphs(&line)[0].inline_position, 0.0);
+        if hang > 0.0 {
+            assert_eq!(glyphs(&line)[2].inline_position, 32.0);
+        }
+        let plan = para.plan_breaks(
+            &mut LayoutContext::new(),
+            &options,
+            width,
+            &AtomicSizes::EMPTY,
+        );
+        let mut constraint = LineConstraint::new(width);
+        constraint.break_plan = Some(&plan);
+        let LineResult::Line(planned) = para.next_line(
+            &mut LayoutContext::new(),
+            para.start_token(),
+            &options,
+            &constraint,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("planned line")
+        };
+        assert_eq!(
+            (
+                planned.text_range(),
+                planned.inline_size(),
+                planned.hang_end()
+            ),
+            (line.text_range(), measure, hang)
+        );
+    }
+}
+
+#[test]
+fn slice_inline_start_padding_does_not_block_trim_on_a_continuation() {
+    use shodo::style::BoxDecorationBreak;
+    for (decoration, end, measure, position) in [
+        (BoxDecorationBreak::Slice, 9, 24.0, -8.0),
+        // Opening punctuation stays with the following ideograph even when
+        // the untrimmed pair and cloned padding overflow the 32px constraint.
+        (BoxDecorationBreak::Clone, 9, 36.0, 4.0),
+    ] {
+        let style = japanese_style(TextSpacingTrim::TrimStart);
+        let inline = InlineStyle {
+            box_decoration_break: decoration,
+            ..style.root.clone()
+        };
+        let para = japanese_with(style, Limits::default(), |b| {
+            b.open_inline(
+                NodeId(2),
+                &inline,
+                InlineEdges {
+                    padding: Sides {
+                        inline_start: 4.0,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .push_text(TextSource::Generated { node: NodeId(3) }, "日「日本")
+            .close_inline();
+        });
+        let first = first_line(&para, 32.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(first.text_range(), 0..3);
+        let LineResult::Line(line) = para.next_line(
+            &mut LayoutContext::new(),
+            first.break_token(),
+            &LineOptions::default(),
+            &LineConstraint::new(32.0),
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("continuation")
+        };
+        assert_eq!(line.text_range(), 3..end, "{decoration:?}");
+        assert_eq!(line.inline_size(), measure);
+        assert_eq!(glyphs(&line)[0].inline_position, position);
+    }
+}
+
+#[test]
+fn slice_end_padding_keeps_hanging_consistent_through_a_float_retry() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let inline = style.root.clone();
+    let para = japanese_with(style, Limits::default(), |b| {
+        b.push_out_of_flow(NodeId(20), OutOfFlowKind::Float)
+            .open_inline(
+                NodeId(2),
+                &inline,
+                InlineEdges {
+                    padding: Sides {
+                        inline_end: 4.0,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .push_text(TextSource::Generated { node: NodeId(3) }, "日本、日本")
+            .close_inline();
+    });
+    let options = LineOptions {
+        hanging_punctuation: HangingPunctuation {
+            force_end: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let token = para.start_token();
+    let mut cx = LayoutContext::new();
+    let LineResult::FloatEncountered { float_cursor, .. } = para.next_line(
+        &mut cx,
+        token,
+        &options,
+        &LineConstraint::new(200.0),
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!("float")
+    };
+    let mut constraint = LineConstraint::new(32.0);
+    constraint.inline_start_offset = 12.0;
+    constraint.floats_placed_through = Some(float_cursor);
+    let LineResult::Line(cached) =
+        para.next_line(&mut cx, token, &options, &constraint, &AtomicSizes::EMPTY)
+    else {
+        panic!("cached")
+    };
+    let LineResult::Line(fresh) = para.next_line(
+        &mut LayoutContext::new(),
+        token,
+        &options,
+        &constraint,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!("fresh")
+    };
+    assert_eq!(cached.text_range(), 0..12);
+    assert_eq!((cached.inline_size(), cached.hang_end()), (32.0, 16.0));
+    assert_eq!(glyphs(&cached)[2].inline_position, 44.0);
+    assert_eq!(
+        (fresh.text_range(), fresh.inline_size(), fresh.hang_end()),
+        (cached.text_range(), 32.0, 16.0)
+    );
+    assert_eq!(
+        glyphs(&cached)
+            .iter()
+            .map(|g| (g.id, g.inline_position))
+            .collect::<Vec<_>>(),
+        glyphs(&fresh)
+            .iter()
+            .map(|g| (g.id, g.inline_position))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn rtl_slice_padding_blocks_the_actual_logical_hanging_edge() {
+    for (start, end, expected_start, expected_end) in [(4.0, 0.0, 0.0, 16.0), (0.0, 4.0, 16.0, 0.0)]
+    {
+        let mut style = japanese_style(TextSpacingTrim::SpaceAll);
+        style.direction = shodo::geometry::Direction::Rtl;
+        style.root.direction = shodo::geometry::Direction::Rtl;
+        let inline = style.root.clone();
+        let para = japanese_with(style, Limits::default(), |b| {
+            b.open_inline(
+                NodeId(2),
+                &inline,
+                InlineEdges {
+                    padding: Sides {
+                        inline_start: start,
+                        inline_end: end,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .push_text(TextSource::Generated { node: NodeId(3) }, "「日本」")
+            .close_inline();
+        });
+        let options = LineOptions {
+            hanging_punctuation: HangingPunctuation {
+                first: true,
+                last: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let line = first_line(&para, 100.0, &options, &AtomicSizes::EMPTY);
+        assert_eq!(line.text_range(), 0..12);
+        assert_eq!(
+            (line.hang_start(), line.hang_end()),
+            (expected_start, expected_end)
+        );
+        assert_eq!(line.inline_size(), 52.0);
+    }
+}

@@ -26,6 +26,7 @@ pub(crate) enum PunctuationClass {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Punctuation {
+    pub(crate) source: u32,
     pub(crate) class: PunctuationClass,
     pub(crate) size: f32,
     pub(crate) trim: TextSpacingTrim,
@@ -161,6 +162,7 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
                 ch
             };
             Punctuation {
+                source: offset,
                 class: classify(shaped, style.lang.as_deref()),
                 size: style.font_size,
                 trim: style.text_spacing_trim,
@@ -393,10 +395,13 @@ pub(super) fn edges(
     if let Some(first) = first {
         value.start_unit = Some(first.unit);
         let p = first.punctuation;
-        let blocked = summary.before
-            || !data
-                .spacing_tree
-                .outer_clear(first.box_node as usize, data.base_level.is_multiple_of(2));
+        let blocked = (if ltr {
+            summary.hang_before
+        } else {
+            summary.hang_after
+        }) || !data
+            .spacing_tree
+            .cloned_outer_clear(first.box_node as usize, data.base_level.is_multiple_of(2));
         if !blocked {
             if p.class
                 == if ltr {
@@ -423,15 +428,29 @@ pub(super) fn edges(
     if let Some(end) = end {
         value.end_unit = Some(end.unit);
         let p = end.punctuation;
-        let blocked = summary.after
-            || !data
-                .spacing_tree
-                .outer_clear(end.box_node as usize, !data.base_level.is_multiple_of(2));
+        let blocked = (if ltr {
+            summary.hang_after
+        } else {
+            summary.hang_before
+        }) || !data
+            .spacing_tree
+            .cloned_outer_clear(end.box_node as usize, !data.base_level.is_multiple_of(2));
         if !blocked {
             let need = natural
                 .sub(value.start_trim, sat)
                 .sub(value.hang_start, sat)
                 .sub(available, sat);
+            // Storage units may contain several typographic characters. Only
+            // deductions on this very source character share its advance.
+            let start_removed = first
+                .filter(|first| first.punctuation.source == p.source)
+                .map_or(LayoutUnit::ZERO, |_| {
+                    value.start_trim.add(value.hang_start, sat)
+                });
+            let remaining = p
+                .layout_advance(sat)
+                .sub(start_removed, sat)
+                .max(LayoutUnit::ZERO);
             if p.class
                 == if ltr {
                     PunctuationClass::Closing
@@ -446,12 +465,9 @@ pub(super) fn edges(
                             | TextSpacingTrim::SpaceFirst
                     ) && need > LayoutUnit::ZERO)
             {
-                value.end_trim = if ltr { p.right } else { p.left };
+                value.end_trim = (if ltr { p.right } else { p.left }).min(remaining);
             }
-            let advance = p
-                .layout_advance(sat)
-                .sub(value.end_trim, sat)
-                .max(LayoutUnit::ZERO);
+            let advance = remaining.sub(value.end_trim, sat).max(LayoutUnit::ZERO);
             if options.hanging_punctuation.force_end && p.stop
                 || last && options.hanging_punctuation.last && p.last
             {

@@ -158,6 +158,21 @@ pub(crate) fn build(
                         value.summary = Summary::barrier();
                     }
                 }
+                UnitKind::Open { box_index } | UnitKind::Close { box_index } => {
+                    let edges = data.boxes[box_index as usize].edges;
+                    let (border, padding) = if matches!(unit.kind, UnitKind::Open { .. }) {
+                        (edges.border.inline_start, edges.padding.inline_start)
+                    } else {
+                        (edges.border.inline_end, edges.padding.inline_end)
+                    };
+                    if border != 0.0 || padding != 0.0 {
+                        // Nonempty inline boundaries are checked physically
+                        // by the indexed tree for inter-character spacing.
+                        // Record their presence separately for line edges.
+                        value.summary.hang_before = true;
+                        value.summary.hang_after = true;
+                    }
+                }
                 _ => {}
             }
             value.gaps.1 = gaps.len();

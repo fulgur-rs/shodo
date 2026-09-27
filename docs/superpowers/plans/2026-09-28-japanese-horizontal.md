@@ -140,9 +140,9 @@ Create `docs/japanese-layout.md`。
 
 ## 最終検証と統合
 
-- [ ] fmt、stable/MSRV workspace、Clippy `-D warnings`、doc、wasmと既存dev gatesを実行する。
+- [x] fmt、stable/MSRV workspace、Clippy `-D warnings`、doc、wasmと既存dev gatesを実行する。
   CI workflowを読んで対象を列挙し、結果をartifactに記録する。
-- [ ] whole-branchのfresh reviewerを一度だけ依頼する。重要指摘があればRED→GREENで修正して全gateを実行する。
+- [x] whole-branchのfresh reviewerを一度だけ依頼する。重要指摘があればRED→GREENで修正して全gateを実行する。
 - [ ] pushしてPRを作成し、exact HEADに対する全required CI成功を確認する。
 - [ ] PRをmergeし、remote mainにcommitが含まれることを確認して `bd close shodo-unc.1`。
 - [ ] ledgerと検証記録を保存後、所有worktree/local branchを片付け、`bd ready` で次のissueへ進む。

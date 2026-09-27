@@ -89,11 +89,18 @@ the measure is32px and the hang is16. If trimming already removed8px from the
 punctuation, only its remaining8px can hang. `force_end` takes precedence if a
 caller sets both end flags.
 
+If one typographic character qualifies for both `first` and `last`, the start
+deduction takes priority and the end uses only its remaining advance. A single
+quote therefore has a zero measure, rather than a negative one.
+
 `Line::inline_size()` excludes punctuation hangs; `hang_start()`/`hang_end()`
 report actual excluded amounts, including eligible trailing whitespace.
 Glyphs, carets and source mappings remain present. `overflow_rect()` includes
 the positioned ink. Inline borders/padding block edge hanging; margins alone
-do not. Start/end are logical edges in RTL paragraphs.
+do not. With `box-decoration-break: Slice`, a border/padding blocks only the
+fragment where its actual edge occurs; `Clone` repeats that edge on every
+fragment. The same rule governs line-edge trimming. Start/end are logical
+edges in RTL paragraphs.
 
 Conditional end hanging is excluded from min-content but retained in
 max-content. Forced hanging is excluded from both. First-line alternatives,

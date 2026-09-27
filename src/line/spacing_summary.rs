@@ -44,6 +44,8 @@ pub(crate) struct Summary {
     pub(super) cost: i64,
     pub(super) before: bool,
     pub(super) after: bool,
+    pub(super) hang_before: bool,
+    pub(super) hang_after: bool,
 }
 
 impl Summary {
@@ -55,6 +57,8 @@ impl Summary {
             cost: -i64::from(left.raw()) - i64::from(right.raw()),
             before: false,
             after: false,
+            hang_before: false,
+            hang_after: false,
         }
     }
 
@@ -62,6 +66,8 @@ impl Summary {
         Self {
             before: true,
             after: true,
+            hang_before: true,
+            hang_after: true,
             ..Default::default()
         }
     }
@@ -92,6 +98,16 @@ impl Summary {
             } else {
                 self.after || other.after
             },
+            hang_before: if self.first.is_some() {
+                self.hang_before
+            } else {
+                self.hang_before || other.hang_before
+            },
+            hang_after: if other.last.is_some() {
+                other.hang_after
+            } else {
+                self.hang_after || other.hang_after
+            },
         }
     }
 
@@ -101,6 +117,8 @@ impl Summary {
             last: self.first,
             before: self.after,
             after: self.before,
+            hang_before: self.hang_after,
+            hang_after: self.hang_before,
             ..self
         }
     }
