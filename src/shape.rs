@@ -17,6 +17,51 @@ use std::ops::Range;
 use crate::font::FontId;
 use crate::geometry::{LayoutUnit, Saturation, WritingMode};
 use crate::limits::{LimitExceeded, LimitKind, Limits};
+use skrifa::{MetadataProvider, raw::TableProvider};
+
+// Harfrust's vertical-origin fallback only reads glyf bounds. For a CFF face
+// without VORG, OpenType instead requires the CFF outline top plus vmtx TSB.
+fn cff_vertical_origin_delta(
+    font: &skrifa::FontRef<'_>,
+    glyph_id: u32,
+    coords: &[skrifa::instance::NormalizedCoord],
+) -> Option<f32> {
+    let glyph = skrifa::GlyphId::new(glyph_id);
+    let bounds = font
+        .glyph_metrics(
+            skrifa::instance::Size::unscaled(),
+            skrifa::instance::LocationRef::new(coords),
+        )
+        .bounds(glyph)?;
+    let tsb = f32::from(font.vmtx().ok()?.side_bearing(glyph)?);
+    let vvar = font.vvar().ok();
+    let origin = bounds.y_max
+        + tsb
+        + vvar
+            .as_ref()
+            .and_then(|v| v.tsb_delta(glyph, coords).ok())
+            .map_or(0.0, |delta| delta.to_f32())
+        + vvar
+            .as_ref()
+            .and_then(|v| v.v_org_delta(glyph, coords).ok())
+            .map_or(0.0, |delta| delta.to_f32());
+    let ascent = font
+        .os2()
+        .ok()
+        .map(|os2| f32::from(os2.s_typo_ascender()))
+        .or_else(|| {
+            font.hhea()
+                .ok()
+                .map(|hhea| f32::from(hhea.ascender().to_i16()))
+        })
+        .unwrap_or(0.0);
+    let ascent_delta = font
+        .mvar()
+        .ok()
+        .and_then(|mvar| mvar.metric_delta(skrifa::Tag::new(b"hasc"), coords).ok())
+        .map_or(0.0, |delta| delta.to_f32());
+    Some(origin - ascent - ascent_delta)
+}
 
 /// A run is closed before its pen position would exceed this value, so
 /// differences between pen positions within a run never saturate.
@@ -212,6 +257,18 @@ pub(crate) fn shape_items(
             let (instance, run_instance, font_size) = resolved.as_ref().expect("matched instance");
             let font_size = *font_size;
             let shaper = shared.shaper(&font).instance(Some(instance)).build();
+            let cff_without_vorg = if item.orientation == orientation::RunOrientation::Upright {
+                skrifa::FontRef::from_index(data.data.as_ref(), data.index)
+                    .ok()
+                    .filter(|font| {
+                        font.vorg().is_err()
+                            && (font.cff().is_ok() || font.cff2().is_ok())
+                            && font.vmtx().is_ok()
+                    })
+            } else {
+                None
+            };
+            let mut cff_origin_deltas = std::collections::HashMap::new();
             let mut buffer = cx.scratch.take().unwrap_or_default();
             buffer.clear();
             for scalar in &item.scalars {
@@ -352,7 +409,26 @@ pub(crate) fn shape_items(
                         store.advance.push(advance);
                         store.pen.push(pen);
                         let offset = LayoutUnit::from_f32_round(
-                            if upright { -pos.y_offset } else { pos.x_offset } as f32 * scale,
+                            (if upright { -pos.y_offset } else { pos.x_offset } as f32
+                                + if upright {
+                                    cff_without_vorg
+                                        .as_ref()
+                                        .and_then(|font| {
+                                            *cff_origin_deltas.entry(info.glyph_id).or_insert_with(
+                                                || {
+                                                    cff_vertical_origin_delta(
+                                                        font,
+                                                        info.glyph_id,
+                                                        instance.coords(),
+                                                    )
+                                                },
+                                            )
+                                        })
+                                        .unwrap_or(0.0)
+                                } else {
+                                    0.0
+                                })
+                                * scale,
                             sat,
                         );
                         let offset = if item.level % 2 == 1 {
@@ -711,6 +787,93 @@ mod tests {
     use crate::font::FontCollection;
     use crate::geometry::LayoutUnit;
     use crate::limits::{LimitExceeded, LimitKind, Limits};
+    use skrifa::MetadataProvider;
+    use skrifa::raw::TableProvider;
+
+    #[test]
+    fn missing_vorg_uses_vmtx_top_bearing_for_vertical_origin() {
+        // CJK 水 has yMax=838 in this pinned outline and vmtx TSB=42.
+        // Remove VORG and change only its TSB to 142: origin becomes 980.
+        let original = include_bytes!("../dev/fixtures/assets/fonts/cjk.otf");
+        let face = skrifa::FontRef::from_index(original, 0).unwrap();
+        let gid = face.charmap().map('水').unwrap().to_u32() as usize;
+        let mut tables = Vec::new();
+        let count = u16::from_be_bytes(original[4..6].try_into().unwrap()) as usize;
+        for n in 0..count {
+            let at = 12 + n * 16;
+            let tag: [u8; 4] = original[at..at + 4].try_into().unwrap();
+            if &tag == b"VORG" {
+                continue;
+            }
+            let start = u32::from_be_bytes(original[at + 8..at + 12].try_into().unwrap()) as usize;
+            let len = u32::from_be_bytes(original[at + 12..at + 16].try_into().unwrap()) as usize;
+            let mut data = original[start..start + len].to_vec();
+            if &tag == b"vmtx" {
+                data[gid * 4 + 2..gid * 4 + 4].copy_from_slice(&142i16.to_be_bytes());
+            }
+            tables.push((tag, data));
+        }
+        let bytes = crate::font::sfnt::build_sfnt(&tables);
+        let derived = skrifa::FontRef::from_index(&bytes, 0).unwrap();
+        assert!(derived.vorg().is_err());
+        assert_eq!(
+            derived
+                .vmtx()
+                .unwrap()
+                .side_bearing(skrifa::GlyphId::new(gid as u32)),
+            Some(142)
+        );
+        let bounds = derived
+            .glyph_metrics(
+                skrifa::instance::Size::unscaled(),
+                skrifa::instance::LocationRef::default(),
+            )
+            .bounds(skrifa::GlyphId::new(gid as u32))
+            .unwrap();
+        assert_eq!(bounds.y_max, 838.0);
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        let registered = fonts
+            .register_face(
+                bytes,
+                0,
+                crate::font::FontFaceDescriptor {
+                    family: "No VORG".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let style = crate::style::ParagraphStyle {
+            writing_mode: crate::geometry::WritingMode::VerticalRl,
+            root: crate::style::InlineStyle {
+                font_size: 16.0,
+                font_families: vec![crate::style::FontFamily::Named("No VORG".into())],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        builder.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            "水",
+        );
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        assert_eq!(paragraph.data.runs[0].font, registered);
+        assert_eq!(paragraph.data.glyphs.id[0], gid as u32);
+        assert_eq!(paragraph.data.glyphs.advance[0].to_f32(), 16.0);
+        assert_eq!(paragraph.data.glyphs.offset_inline[0].to_f32(), 15.6875);
+        assert_eq!(paragraph.data.glyphs.offset_block[0].to_f32(), 8.0);
+    }
 
     fn shape(
         text: &str,

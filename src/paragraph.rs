@@ -415,7 +415,15 @@ fn build_data(
     let mut shape_limits = limits.clone();
     shape_limits.max_shaped_glyphs = glyph_budget;
     let breaks = crate::analysis::breaks::analyze_breaks(&processed, &styles, warnings);
-    let bidi = analyze_bidi(&processed.text, &style, &styles);
+    let used_direction = crate::analysis::bidi::used_root_direction(&style, &styles[0]);
+    let bidi_text =
+        crate::analysis::bidi::upright_analysis_text(&processed, &styles, style.writing_mode);
+    let bidi = analyze_bidi(
+        bidi_text.as_deref().unwrap_or(&processed.text),
+        &style,
+        &styles,
+        used_direction,
+    );
     let shape_items_input = crate::analysis::itemize::itemize(
         &processed,
         &styles,
@@ -434,7 +442,7 @@ fn build_data(
         warnings,
         sat,
     )?;
-    let base_level = u8::from(style.direction == Direction::Rtl);
+    let base_level = u8::from(used_direction == Direction::Rtl);
     let UnitList {
         units,
         boxes,

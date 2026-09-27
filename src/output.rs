@@ -71,18 +71,26 @@ impl fmt::Debug for Line {
     }
 }
 
-/// Final line-box extents and root font edges, in line-local block coordinates.
+/// Final line-box extents and root font edges, in line-local logical block coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LineMetrics {
-    /// Distances from the alphabetic baseline to the line-box top/bottom.
+    /// Distances from the dominant baseline to logical block-start/end.
     pub ascent: f32,
     pub descent: f32,
+    /// Dominant baseline position from logical block-start.
     pub baseline: f32,
+    /// Root font edge on the line-over side (block-end in `vertical-lr`).
     pub text_over: f32,
+    /// Root font edge on the line-under side (block-start in `vertical-lr`).
     pub text_under: f32,
 }
 
 impl Line {
+    /// Effective inline direction for paint coordinate conversion. Vertical
+    /// `text-orientation: upright` uses LTR without changing inherited style.
+    pub fn used_direction(&self) -> crate::geometry::Direction {
+        crate::analysis::bidi::used_root_direction(&self.data.style, &self.data.styles[0])
+    }
     pub fn metrics(&self) -> LineMetrics {
         let baseline = self.baseline.to_f32();
         let root_style = &self.data.styles[0];
@@ -103,8 +111,17 @@ impl Line {
             ascent: baseline,
             descent: self.block_size.to_f32() - baseline,
             baseline,
-            text_over: baseline - a,
-            text_under: baseline + d,
+            text_over: if self.data.style.writing_mode == crate::geometry::WritingMode::VerticalLr {
+                baseline + a
+            } else {
+                baseline - a
+            },
+            text_under: if self.data.style.writing_mode == crate::geometry::WritingMode::VerticalLr
+            {
+                baseline - d
+            } else {
+                baseline + d
+            },
         }
     }
     /// Leading hanging amount; punctuation hanging is reserved for Japanese
@@ -365,17 +382,23 @@ impl Line {
         self.block_offset
     }
 
-    /// Position of a baseline, from the top of the line box. Only the
-    /// alphabetic baseline comes from font data; the others are derived from
-    /// the strut's ascent and descent.
+    /// Position of a baseline in logical block coordinates from block-start.
+    /// The dominant baseline uses font data; the others derive from the
+    /// strut's line-over and line-under metrics.
     pub fn baseline(&self, kind: BaselineKind) -> f32 {
         let alphabetic = self.baseline.to_f32();
         let (ascent, descent) = (self.ascent.to_f32(), self.descent.to_f32());
+        let over_sign = if self.data.style.writing_mode == crate::geometry::WritingMode::VerticalLr
+        {
+            1.0
+        } else {
+            -1.0
+        };
         match kind {
             BaselineKind::Alphabetic => alphabetic,
-            BaselineKind::Central => alphabetic - (ascent - descent) / 2.0,
-            BaselineKind::Ideographic => alphabetic + descent,
-            BaselineKind::Hanging => alphabetic - 0.8 * ascent,
+            BaselineKind::Central => alphabetic + over_sign * (ascent - descent) / 2.0,
+            BaselineKind::Ideographic => alphabetic - over_sign * descent,
+            BaselineKind::Hanging => alphabetic + over_sign * 0.8 * ascent,
         }
     }
 
@@ -617,7 +640,7 @@ impl<'a> GlyphRunView<'a> {
         use crate::GlyphOrientation as O;
         use crate::geometry::{Direction, WritingMode};
         let mode = self.data().style.writing_mode;
-        let ltr = self.data().style.direction == Direction::Ltr;
+        let ltr = self.line.used_direction() == Direction::Ltr;
         let inline_sign = if mode == WritingMode::SidewaysLr {
             if ltr { -1.0 } else { 1.0 }
         } else if ltr {
@@ -672,7 +695,7 @@ impl<'a> GlyphRunView<'a> {
             GlyphSource::Overlay { .. } => self.line.overlay.as_deref()?,
         };
         let mode = self.data().style.writing_mode;
-        let ltr = self.data().style.direction == crate::geometry::Direction::Ltr;
+        let ltr = self.line.used_direction() == crate::geometry::Direction::Ltr;
         let negative_inline = if mode == crate::geometry::WritingMode::SidewaysLr {
             ltr
         } else {
@@ -749,7 +772,7 @@ impl<'a> GlyphRunView<'a> {
         self.record.inline_size.to_f32()
     }
 
-    /// Alphabetic baseline from the top of the line box.
+    /// Dominant baseline in logical block coordinates from block-start.
     pub fn baseline(&self) -> f32 {
         (self.line.baseline + self.block_shift).to_f32()
     }

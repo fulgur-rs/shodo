@@ -1,6 +1,7 @@
 //! UAX #9 paragraphs and CSS plaintext line direction. Byte offsets stay unchanged.
-use crate::geometry::Direction;
-use crate::style::{InlineStyle, ParagraphStyle, UnicodeBidi};
+use super::{ItemKind, whitespace::Processed};
+use crate::geometry::{Direction, WritingMode};
+use crate::style::{InlineStyle, ParagraphStyle, TextOrientation, UnicodeBidi};
 use std::ops::Range;
 use unicode_bidi::{BidiClass, BidiInfo, Level, bidi_class};
 
@@ -17,10 +18,67 @@ pub(crate) struct BidiAnalysis {
     pub(crate) paragraphs: Vec<BidiParagraph>,
 }
 
-pub(crate) fn needs_bidi(text: &str, style: &ParagraphStyle, styles: &[InlineStyle]) -> bool {
+/// CSS upright changes the used inline direction, without changing the
+/// computed `direction` that children may inherit into horizontal flows.
+pub(crate) fn used_root_direction(style: &ParagraphStyle, root: &InlineStyle) -> Direction {
+    if matches!(
+        style.writing_mode,
+        WritingMode::VerticalRl | WritingMode::VerticalLr
+    ) && root.text_orientation == TextOrientation::Upright
+    {
+        Direction::Ltr
+    } else {
+        style.direction
+    }
+}
+
+/// A same-byte-length view for UAX #9. The original Processed text and all
+/// source mappings remain untouched; text in upright style is strong LTR.
+pub(crate) fn upright_analysis_text(
+    input: &Processed,
+    styles: &[InlineStyle],
+    mode: WritingMode,
+) -> Option<String> {
+    if !matches!(mode, WritingMode::VerticalRl | WritingMode::VerticalLr)
+        || !input.items.iter().any(|item| {
+            matches!(item.kind, ItemKind::Text)
+                && styles[item.style as usize].text_orientation == TextOrientation::Upright
+        })
+    {
+        return None;
+    }
+    let mut bytes = input.text.as_bytes().to_vec();
+    for item in &input.items {
+        if !matches!(item.kind, ItemKind::Text)
+            || styles[item.style as usize].text_orientation != TextOrientation::Upright
+        {
+            continue;
+        }
+        let start = item.text.start as usize;
+        let end = item.text.end as usize;
+        for (offset, c) in input.text[start..end].char_indices() {
+            let ltr: &[u8] = match c.len_utf8() {
+                1 => b"A",
+                2 => "À".as_bytes(),
+                3 => "अ".as_bytes(),
+                4 => "𐐀".as_bytes(),
+                _ => unreachable!("UTF-8 scalar length"),
+            };
+            bytes[start + offset..start + offset + ltr.len()].copy_from_slice(ltr);
+        }
+    }
+    Some(String::from_utf8(bytes).expect("same-width Unicode scalar replacement"))
+}
+
+pub(crate) fn needs_bidi(
+    text: &str,
+    style: &ParagraphStyle,
+    styles: &[InlineStyle],
+    direction: Direction,
+) -> bool {
     use BidiClass::*;
     style.unicode_bidi_plaintext
-        || style.direction == Direction::Rtl
+        || direction == Direction::Rtl
         || styles
             .iter()
             .any(|s| s.direction != Direction::Ltr || s.unicode_bidi != UnicodeBidi::Normal)
@@ -51,9 +109,10 @@ pub(crate) fn analyze_bidi(
     text: &str,
     style: &ParagraphStyle,
     styles: &[InlineStyle],
+    direction: Direction,
 ) -> BidiAnalysis {
-    let coordinate_level = u8::from(style.direction == Direction::Rtl);
-    if !needs_bidi(text, style, styles) {
+    let coordinate_level = u8::from(direction == Direction::Rtl);
+    if !needs_bidi(text, style, styles, direction) {
         let mut paragraphs = Vec::new();
         let mut start = 0;
         for (pos, c) in text.char_indices() {
@@ -132,6 +191,7 @@ mod tests {
             "abc\nאב\n123\nxyz",
             &style,
             std::slice::from_ref(&style.root),
+            style.direction,
         );
         assert_eq!(
             a.paragraphs
@@ -149,7 +209,12 @@ mod tests {
             unicode_bidi_plaintext: true,
             ..Default::default()
         };
-        let a = analyze_bidi("אב\u{2028}abc", &style, std::slice::from_ref(&style.root));
+        let a = analyze_bidi(
+            "אב\u{2028}abc",
+            &style,
+            std::slice::from_ref(&style.root),
+            style.direction,
+        );
         assert_eq!(
             a.paragraphs
                 .iter()
@@ -171,6 +236,7 @@ mod tests {
             "\u{2066}abc\u{2069} 123\nabc",
             &style,
             std::slice::from_ref(&style.root),
+            style.direction,
         );
         assert_eq!(
             a.paragraphs
@@ -185,15 +251,25 @@ mod tests {
     fn bidi_fast_path_conditions() {
         let style = ParagraphStyle::default();
         let mut inline = style.root.clone();
-        assert!(!needs_bidi("abc", &style, &[inline.clone()]));
+        assert!(!needs_bidi(
+            "abc",
+            &style,
+            &[inline.clone()],
+            style.direction
+        ));
         for text in ["אב", "ع", "\u{2066}abc\u{2069}"] {
-            assert!(needs_bidi(text, &style, &[inline.clone()]));
+            assert!(needs_bidi(text, &style, &[inline.clone()], style.direction));
         }
         inline.direction = Direction::Rtl;
-        assert!(needs_bidi("abc", &style, &[inline.clone()]));
+        assert!(needs_bidi(
+            "abc",
+            &style,
+            &[inline.clone()],
+            style.direction
+        ));
         inline.direction = Direction::Ltr;
         inline.unicode_bidi = UnicodeBidi::Embed;
-        assert!(needs_bidi("abc", &style, &[inline]));
+        assert!(needs_bidi("abc", &style, &[inline], style.direction));
         let plaintext = ParagraphStyle {
             unicode_bidi_plaintext: true,
             ..style.clone()
@@ -201,13 +277,14 @@ mod tests {
         assert!(needs_bidi(
             "abc",
             &plaintext,
-            std::slice::from_ref(&style.root)
+            std::slice::from_ref(&style.root),
+            plaintext.direction,
         ));
         let rtl = ParagraphStyle {
             direction: Direction::Rtl,
             ..style.clone()
         };
-        assert!(needs_bidi("abc", &rtl, &[style.root]));
+        assert!(needs_bidi("abc", &rtl, &[style.root], rtl.direction));
     }
 
     #[test]

@@ -3,13 +3,18 @@ mod common;
 use common::{first_line, glyphs};
 use shodo::font::{FontCollection, FontFaceDescriptor, FontOptions};
 use shodo::geometry::{BaselineKind, Direction, PhysicalConverter, PhysicalSize, WritingMode};
+use shodo::hit::{LineLayout, TextPosition};
 use shodo::limits::Limits;
-use shodo::node::{NodeId, TextSource};
+use shodo::mapping::Affinity;
+use shodo::node::{InlineEdges, NodeId, OutOfFlowKind, TextSource};
 use shodo::style::{
     FontFamily, FontFeature, FontKerning, InlineStyle, LineOptions, ParagraphStyle,
-    TextOrientation, TextSpacingTrim,
+    TextOrientation, TextSpacingTrim, VerticalAlign,
 };
-use shodo::{AtomicSizes, Fragment, LayoutContext, Paragraph, ParagraphBuilder};
+use shodo::{
+    AtomicSize, AtomicSizes, Fragment, LayoutContext, LineConstraint, LineResult, Paragraph,
+    ParagraphBuilder,
+};
 
 fn style(mode: WritingMode, orientation: TextOrientation) -> ParagraphStyle {
     ParagraphStyle {
@@ -252,7 +257,7 @@ fn public_vertical_glyph_matrix_keeps_font_outline_upright() {
             let t = run.glyph_transform();
             let converter = PhysicalConverter::new(
                 mode,
-                direction,
+                line.used_direction(),
                 PhysicalSize {
                     width: 100.0,
                     height: 80.0,
@@ -263,13 +268,919 @@ fn public_vertical_glyph_matrix_keeps_font_outline_upright() {
             let glyph = run.glyphs().next().unwrap();
             let (inline, block) = run.glyph_origin(0).unwrap();
             assert_eq!(block, run.baseline() + glyph.block_offset);
-            if direction == Direction::Rtl {
+            if line.used_direction() == Direction::Rtl {
                 assert_eq!(inline, glyph.inline_position + 16.0);
             } else {
                 assert_eq!(inline, glyph.inline_position);
             }
         }
     }
+}
+
+#[test]
+fn public_glyph_transform_has_literal_physical_axes_in_every_writing_mode() {
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+        WritingMode::SidewaysRl,
+        WritingMode::SidewaysLr,
+    ] {
+        for orientation in [
+            TextOrientation::Mixed,
+            TextOrientation::Upright,
+            TextOrientation::Sideways,
+        ] {
+            for direction in [Direction::Ltr, Direction::Rtl] {
+                let mut style = style(mode, orientation);
+                style.direction = direction;
+                let paragraph = paragraph(&style, "A");
+                let line = first_line(
+                    &paragraph,
+                    100.0,
+                    &LineOptions::default(),
+                    &AtomicSizes::EMPTY,
+                );
+                let run = line
+                    .fragments()
+                    .find_map(|fragment| match fragment {
+                        Fragment::GlyphRun(run) => Some(run),
+                        _ => None,
+                    })
+                    .unwrap();
+                let expected = match (mode, orientation) {
+                    (WritingMode::HorizontalTb, _) => shodo::GlyphOrientation::Horizontal,
+                    (
+                        WritingMode::VerticalRl | WritingMode::VerticalLr,
+                        TextOrientation::Upright,
+                    ) => shodo::GlyphOrientation::Upright,
+                    (WritingMode::SidewaysLr, _) => {
+                        shodo::GlyphOrientation::SidewaysCounterClockwise
+                    }
+                    _ => shodo::GlyphOrientation::SidewaysClockwise,
+                };
+                assert_eq!(
+                    run.orientation(),
+                    expected,
+                    "{mode:?}/{orientation:?}/{direction:?}"
+                );
+                let transform = run.glyph_transform();
+                let converter = PhysicalConverter::new(
+                    mode,
+                    line.used_direction(),
+                    PhysicalSize {
+                        width: 100.0,
+                        height: 80.0,
+                    },
+                );
+                let axes = match expected {
+                    shodo::GlyphOrientation::Horizontal | shodo::GlyphOrientation::Upright => {
+                        ((1.0, 0.0), (0.0, 1.0))
+                    }
+                    shodo::GlyphOrientation::SidewaysClockwise => ((0.0, 1.0), (-1.0, 0.0)),
+                    shodo::GlyphOrientation::SidewaysCounterClockwise => ((0.0, -1.0), (1.0, 0.0)),
+                };
+                assert_eq!(
+                    converter.vector(transform.inline_x, transform.block_x),
+                    axes.0,
+                    "x axis {mode:?}/{orientation:?}/{direction:?}",
+                );
+                assert_eq!(
+                    converter.vector(transform.inline_y, transform.block_y),
+                    axes.1,
+                    "y axis {mode:?}/{orientation:?}/{direction:?}",
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn upright_vertical_text_uses_ltr_for_bidi_and_keeps_logical_source_order() {
+    // The computed RTL value stays in the caller's style, but CSS upright
+    // makes the used inline direction LTR and treats Hebrew as strong LTR.
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let mut style = style(mode, TextOrientation::Upright);
+        style.direction = Direction::Rtl;
+        let p = paragraph(&style, "אב");
+        let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(line.used_direction(), Direction::Ltr);
+        let glyphs = glyphs(&line);
+        assert_eq!(
+            glyphs.iter().map(|g| g.cluster).collect::<Vec<_>>(),
+            vec![0, 2]
+        );
+        assert!(glyphs[0].inline_position < glyphs[1].inline_position);
+    }
+}
+
+#[test]
+fn upright_arabic_isolated_forms_differ_from_mixed_joined_forms() {
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            include_bytes!("../dev/fixtures/assets/fonts/arabic.ttf").to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Shodo Fixture Arabic".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let ids = |orientation, text| {
+        let mut style = style(WritingMode::VerticalRl, orientation);
+        style.root.font_families = vec![FontFamily::Named("Shodo Fixture Arabic".into())];
+        let mut builder = ParagraphBuilder::new(&style, &limits);
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
+        let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        let line = first_line(
+            &paragraph,
+            100.0,
+            &LineOptions::default(),
+            &AtomicSizes::EMPTY,
+        );
+        glyphs(&line)
+            .iter()
+            .map(|glyph| glyph.id)
+            .collect::<Vec<_>>()
+    };
+    let isolated = ids(TextOrientation::Upright, "ب");
+    assert_eq!(isolated.len(), 1);
+    assert_eq!(ids(TextOrientation::Upright, "بب"), vec![isolated[0]; 2]);
+    assert_ne!(ids(TextOrientation::Mixed, "بب"), vec![isolated[0]; 2]);
+}
+
+#[test]
+fn missing_font_keeps_upright_orientation_and_one_em_advances() {
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let mut style = style(mode, TextOrientation::Upright);
+        style.root.font_families = vec![FontFamily::Named("Definitely absent".into())];
+        style.root.text_autospace = shodo::style::TextAutospace::NoAutospace;
+        let mut builder = ParagraphBuilder::new(&style, &limits);
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, "水A");
+        let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        let line = first_line(
+            &paragraph,
+            100.0,
+            &LineOptions::default(),
+            &AtomicSizes::EMPTY,
+        );
+        let runs: Vec<_> = line
+            .fragments()
+            .filter_map(|fragment| match fragment {
+                Fragment::GlyphRun(run) => Some(run),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            runs.iter()
+                .all(|run| run.orientation() == shodo::GlyphOrientation::Upright)
+        );
+        let glyphs = glyphs(&line);
+        assert_eq!(
+            glyphs.iter().map(|glyph| glyph.id).collect::<Vec<_>>(),
+            vec![0, 0]
+        );
+        assert_eq!(
+            glyphs.iter().map(|glyph| glyph.advance).collect::<Vec<_>>(),
+            vec![16.0, 16.0]
+        );
+    }
+}
+
+#[test]
+fn latin_font_without_vertical_tables_synthesizes_ttb_advance_and_central_baseline() {
+    // The pinned Latin face has UPEM=1000, A hmtx advance=639, no vhea/vmtx.
+    // Harfrust synthesizes TTB advance from OS/2 typo ascent/descent 1069/−293.
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Shodo Fixture Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    for (orientation, expected_advance) in [
+        (TextOrientation::Upright, 21.796875),
+        (TextOrientation::Sideways, 10.21875),
+    ] {
+        let mut style = style(WritingMode::VerticalRl, orientation);
+        style.root.font_families = vec![FontFamily::Named("Shodo Fixture Latin".into())];
+        let mut builder = ParagraphBuilder::new(&style, &limits);
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, "A");
+        let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        let line = first_line(
+            &paragraph,
+            100.0,
+            &LineOptions::default(),
+            &AtomicSizes::EMPTY,
+        );
+        let run = line
+            .fragments()
+            .find_map(|fragment| match fragment {
+                Fragment::GlyphRun(run) => Some(run),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(run.vertical_metrics(), None);
+        assert_eq!(glyphs(&line)[0].advance, expected_advance);
+        if orientation == TextOrientation::Upright {
+            assert_eq!(line.block_size(), 16.0);
+            assert_eq!(line.baseline(BaselineKind::Central), 8.0);
+        }
+    }
+}
+
+#[test]
+fn mixed_vertical_line_keeps_distinct_font_instances_and_metrics() {
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    let cjk = fonts
+        .register_face(
+            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let latin = fonts
+        .register_face(
+            include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Shodo Fixture Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut style = style(WritingMode::VerticalRl, TextOrientation::Mixed);
+    style.root.text_autospace = shodo::style::TextAutospace::NoAutospace;
+    let mut child = style.root.clone();
+    child.font_families = vec![FontFamily::Named("Shodo Fixture Latin".into())];
+    child.font_size = 20.0;
+    let mut builder = ParagraphBuilder::new(&style, &limits);
+    builder
+        .push_text(TextSource::Generated { node: NodeId(1) }, "水")
+        .open_inline(NodeId(2), &child, InlineEdges::default())
+        .push_text(TextSource::Generated { node: NodeId(3) }, "A")
+        .close_inline();
+    let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+    let line = first_line(
+        &paragraph,
+        100.0,
+        &LineOptions::default(),
+        &AtomicSizes::EMPTY,
+    );
+    let runs = line
+        .fragments()
+        .filter_map(|fragment| match fragment {
+            Fragment::GlyphRun(run) => Some(run),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(runs.len(), 2);
+    assert_eq!(runs[0].font(), cjk);
+    assert_eq!(runs[1].font(), latin);
+    assert_eq!(runs[0].font_size(), 16.0);
+    assert_eq!(runs[1].font_size(), 20.0);
+    assert_eq!(runs[0].orientation(), shodo::GlyphOrientation::Upright);
+    assert_eq!(
+        runs[1].orientation(),
+        shodo::GlyphOrientation::SidewaysClockwise
+    );
+    assert_eq!(
+        glyphs(&line).iter().map(|g| g.advance).collect::<Vec<_>>(),
+        vec![16.0, 12.78125]
+    );
+    assert!(line.block_size() >= 29.375);
+}
+
+#[test]
+fn vertical_planned_and_cached_lines_keep_glyphs_and_orientation() {
+    let paragraph = paragraph(
+        &style(WritingMode::VerticalRl, TextOrientation::Mixed),
+        "水 A 水 A 水 A",
+    );
+    let options = LineOptions::default();
+    let width = 40.0;
+    let plan = paragraph.plan_breaks(
+        &mut LayoutContext::new(),
+        &options,
+        width,
+        &AtomicSizes::EMPTY,
+    );
+    let collect = |cx: &mut LayoutContext, planned| {
+        let mut constraint = LineConstraint::new(width);
+        constraint.break_plan = planned;
+        let mut token = paragraph.start_token();
+        let mut output = Vec::new();
+        loop {
+            match paragraph.next_line(cx, token, &options, &constraint, &AtomicSizes::EMPTY) {
+                LineResult::Line(line) => {
+                    token = line.break_token();
+                    let orientations = line
+                        .fragments()
+                        .filter_map(|fragment| match fragment {
+                            Fragment::GlyphRun(run) => {
+                                Some((run.orientation(), run.glyph_transform()))
+                            }
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>();
+                    output.push((line.text_range(), glyphs(&line), orientations));
+                }
+                LineResult::Done => break,
+                other => panic!("{other:?}"),
+            }
+        }
+        output
+    };
+    let fresh = collect(&mut LayoutContext::new(), None);
+    assert!(fresh.len() > 1);
+    let mut cached = LayoutContext::new();
+    assert_eq!(collect(&mut cached, None), fresh);
+    assert_eq!(collect(&mut cached, None), fresh);
+    assert_eq!(collect(&mut LayoutContext::new(), Some(&plan)), fresh);
+}
+
+#[test]
+fn vertical_float_and_height_retry_replay_the_same_glyphs() {
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let style = style(WritingMode::VerticalRl, TextOrientation::Mixed);
+    let mut builder = ParagraphBuilder::new(&style, &limits);
+    builder
+        .push_text(TextSource::Generated { node: NodeId(1) }, "水")
+        .push_out_of_flow(NodeId(2), OutOfFlowKind::Float)
+        .push_text(TextSource::Generated { node: NodeId(3) }, "A水");
+    let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+    let mut cx = LayoutContext::new();
+    let options = LineOptions::default();
+    let mut constraint = LineConstraint::new(100.0);
+    let mut report = None;
+    for _ in 0..2 {
+        let LineResult::FloatEncountered {
+            node,
+            line_start,
+            float_cursor,
+            ..
+        } = paragraph.next_line(
+            &mut cx,
+            paragraph.start_token(),
+            &options,
+            &constraint,
+            &AtomicSizes::EMPTY,
+        )
+        else {
+            panic!("expected the same float report before placement")
+        };
+        assert_eq!(node, NodeId(2));
+        assert_eq!(line_start, paragraph.start_token());
+        if let Some(previous) = report {
+            assert_eq!(float_cursor, previous);
+        }
+        report = Some(float_cursor);
+    }
+    constraint.floats_placed_through = report;
+    constraint.max_block_size = Some(1.0);
+    assert!(matches!(
+        paragraph.next_line(
+            &mut cx,
+            paragraph.start_token(),
+            &options,
+            &constraint,
+            &AtomicSizes::EMPTY,
+        ),
+        LineResult::BlockSizeExceeded { .. }
+    ));
+    constraint.max_block_size = None;
+    let get = |cx: &mut LayoutContext| {
+        let LineResult::Line(line) = paragraph.next_line(
+            cx,
+            paragraph.start_token(),
+            &options,
+            &constraint,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("expected replayed vertical line")
+        };
+        let orientations = line
+            .fragments()
+            .filter_map(|fragment| match fragment {
+                Fragment::GlyphRun(run) => Some(run.orientation()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        (line.text_range(), glyphs(&line), orientations)
+    };
+    let first = get(&mut cx);
+    assert_eq!(first, get(&mut cx));
+    assert_eq!(first, get(&mut LayoutContext::new()));
+}
+
+#[test]
+fn vertical_first_line_font_change_does_not_leak_into_following_lines() {
+    let mut style = style(WritingMode::VerticalRl, TextOrientation::Upright);
+    let mut first = style.root.clone();
+    first.font_size = 24.0;
+    style.first_line = Some(first);
+    let paragraph = paragraph(&style, "水水水");
+    let mut cx = LayoutContext::new();
+    let options = LineOptions::default();
+    let constraint = LineConstraint::new(30.0);
+    let LineResult::Line(first) = paragraph.next_line(
+        &mut cx,
+        paragraph.start_token(),
+        &options,
+        &constraint,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!("expected first vertical line")
+    };
+    assert_eq!(glyphs(&first)[0].advance, 24.0);
+    assert_eq!(first.baseline(BaselineKind::Central), 12.0);
+    let LineResult::Line(second) = paragraph.next_line(
+        &mut cx,
+        first.break_token(),
+        &options,
+        &constraint,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!("expected second vertical line")
+    };
+    assert_eq!(glyphs(&second)[0].advance, 16.0);
+    assert_eq!(second.baseline(BaselineKind::Central), 8.0);
+    assert!(second.fragments().all(|fragment| match fragment {
+        Fragment::GlyphRun(run) => run.orientation() == shodo::GlyphOrientation::Upright,
+        _ => true,
+    }));
+}
+
+#[test]
+fn small_vertical_shaping_windows_preserve_glyphs_and_orientation() {
+    let style = style(WritingMode::VerticalRl, TextOrientation::Mixed);
+    let text = "水水A\u{0301}水水";
+    let normal = paragraph(&style, text);
+    let small_limits = Limits {
+        max_shaping_run_bytes: Some(3),
+        ..Limits::default()
+    };
+    let fonts = FontCollection::with_options(
+        &small_limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut builder = ParagraphBuilder::new(&style, &small_limits);
+    builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
+    let limited = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+    let snapshot = |paragraph: &Paragraph| {
+        let line = first_line(
+            paragraph,
+            100.0,
+            &LineOptions::default(),
+            &AtomicSizes::EMPTY,
+        );
+        let orientations = line
+            .fragments()
+            .filter_map(|fragment| match fragment {
+                Fragment::GlyphRun(run) => Some((run.orientation(), run.glyphs().count())),
+                _ => None,
+            })
+            .flat_map(|(orientation, count)| std::iter::repeat_n(orientation, count))
+            .collect::<Vec<_>>();
+        (glyphs(&line), orientations)
+    };
+    assert_eq!(snapshot(&normal), snapshot(&limited));
+    let glyph_limits = Limits {
+        max_shaped_glyphs: Some(2),
+        max_shaping_run_bytes: Some(3),
+        ..Limits::default()
+    };
+    let mut builder = ParagraphBuilder::new(&style, &glyph_limits);
+    builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
+    let error = builder
+        .build(&mut LayoutContext::new(), &fonts)
+        .unwrap_err();
+    assert_eq!(error.kind, shodo::limits::LimitKind::ShapedGlyphs);
+}
+
+#[test]
+fn vertical_lr_uses_right_line_over_with_asymmetric_vhea() {
+    let mut bytes = include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec();
+    let count = u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize;
+    let vhea = (0..count)
+        .find_map(|index| {
+            let record = 12 + index * 16;
+            (&bytes[record..record + 4] == b"vhea").then(|| {
+                u32::from_be_bytes(bytes[record + 8..record + 12].try_into().unwrap()) as usize
+            })
+        })
+        .unwrap();
+    bytes[vhea + 4..vhea + 6].copy_from_slice(&600i16.to_be_bytes());
+    bytes[vhea + 6..vhea + 8].copy_from_slice(&(-400i16).to_be_bytes());
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            bytes,
+            0,
+            FontFaceDescriptor {
+                family: "Asymmetric CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    for (mode, expected_baseline, expected_over, expected_under) in [
+        (WritingMode::VerticalRl, 9.59375, 0.0, 16.0),
+        (WritingMode::VerticalLr, 6.40625, 16.0, 0.0),
+    ] {
+        let mut style = style(mode, TextOrientation::Upright);
+        style.root.font_families = vec![FontFamily::Named("Asymmetric CJK".into())];
+        let mut builder = ParagraphBuilder::new(&style, &limits);
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, "水");
+        let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        let line = first_line(
+            &paragraph,
+            100.0,
+            &LineOptions::default(),
+            &AtomicSizes::EMPTY,
+        );
+        let run = line
+            .fragments()
+            .find_map(|fragment| match fragment {
+                Fragment::GlyphRun(run) => Some(run),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(line.block_size(), 16.0);
+        assert_eq!(run.baseline(), expected_baseline, "{mode:?}");
+        assert_eq!(line.baseline(BaselineKind::Central), 8.0, "{mode:?}");
+        let metrics = line.metrics();
+        assert!((metrics.text_over - expected_over).abs() < 1.0 / 64.0);
+        assert!((metrics.text_under - expected_under).abs() < 1.0 / 64.0);
+        let lines = [line];
+        let selection = LineLayout::new(&lines).selection_rects(
+            TextPosition {
+                line: 0,
+                offset: 0,
+                affinity: Affinity::Downstream,
+            },
+            TextPosition {
+                line: 0,
+                offset: "水".len() as u32,
+                affinity: Affinity::Upstream,
+            },
+        );
+        assert_eq!(selection.len(), 1);
+        assert!(selection[0].block_start.abs() < 1.0 / 64.0, "{mode:?}");
+        assert!(
+            (selection[0].block_size - 16.0).abs() < 1.0 / 64.0,
+            "{mode:?}"
+        );
+    }
+}
+
+#[test]
+fn vertical_line_over_and_under_align_inline_boxes_in_both_column_directions() {
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        for align in [VerticalAlign::Top, VerticalAlign::Bottom] {
+            let style = style(mode, TextOrientation::Upright);
+            let mut child = style.root.clone();
+            child.font_size = 8.0;
+            child.vertical_align = align;
+            let mut builder = ParagraphBuilder::new(&style, &limits);
+            builder
+                .push_text(TextSource::Generated { node: NodeId(1) }, "水")
+                .open_inline(NodeId(2), &child, InlineEdges::default())
+                .push_text(TextSource::Generated { node: NodeId(3) }, "水")
+                .close_inline();
+            let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+            let line = first_line(
+                &paragraph,
+                100.0,
+                &LineOptions::default(),
+                &AtomicSizes::EMPTY,
+            );
+            let child_run = line
+                .fragments()
+                .find_map(|fragment| match fragment {
+                    Fragment::GlyphRun(run) if run.node() == Some(NodeId(3)) => Some(run),
+                    _ => None,
+                })
+                .unwrap();
+            let metrics = child_run.vertical_metrics().unwrap();
+            let over = if mode == WritingMode::VerticalLr {
+                child_run.baseline() + metrics.ascent
+            } else {
+                child_run.baseline() - metrics.ascent
+            };
+            let under = if mode == WritingMode::VerticalLr {
+                child_run.baseline() - metrics.descent
+            } else {
+                child_run.baseline() + metrics.descent
+            };
+            let expected_over = if mode == WritingMode::VerticalLr {
+                line.block_size()
+            } else {
+                0.0
+            };
+            let expected_under = if mode == WritingMode::VerticalLr {
+                0.0
+            } else {
+                line.block_size()
+            };
+            if align == VerticalAlign::Top {
+                assert!((over - expected_over).abs() < 1.0 / 64.0, "{mode:?}");
+            } else {
+                assert!((under - expected_under).abs() < 1.0 / 64.0, "{mode:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn vertical_text_edges_align_to_parent_vertical_font_metrics() {
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        for align in [VerticalAlign::TextTop, VerticalAlign::TextBottom] {
+            let style = style(mode, TextOrientation::Upright);
+            let mut child = style.root.clone();
+            child.font_size = 8.0;
+            child.vertical_align = align;
+            let mut builder = ParagraphBuilder::new(&style, &limits);
+            builder
+                .push_text(TextSource::Generated { node: NodeId(1) }, "水")
+                .open_inline(NodeId(2), &child, InlineEdges::default())
+                .push_text(TextSource::Generated { node: NodeId(3) }, "水")
+                .close_inline();
+            let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+            let line = first_line(
+                &paragraph,
+                100.0,
+                &LineOptions::default(),
+                &AtomicSizes::EMPTY,
+            );
+            let child_run = line
+                .fragments()
+                .find_map(|fragment| match fragment {
+                    Fragment::GlyphRun(run) if run.node() == Some(NodeId(3)) => Some(run),
+                    _ => None,
+                })
+                .unwrap();
+            let v = child_run.vertical_metrics().unwrap();
+            let over = if mode == WritingMode::VerticalLr {
+                child_run.baseline() + v.ascent
+            } else {
+                child_run.baseline() - v.ascent
+            };
+            let under = if mode == WritingMode::VerticalLr {
+                child_run.baseline() - v.descent
+            } else {
+                child_run.baseline() + v.descent
+            };
+            assert_eq!(line.block_size(), 16.0, "{mode:?}/{align:?}");
+            if align == VerticalAlign::TextTop {
+                assert_eq!(
+                    over,
+                    if mode == WritingMode::VerticalLr {
+                        16.0
+                    } else {
+                        0.0
+                    }
+                );
+            } else {
+                assert_eq!(
+                    under,
+                    if mode == WritingMode::VerticalLr {
+                        0.0
+                    } else {
+                        16.0
+                    }
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn vertical_atomic_without_baseline_uses_margin_box_centre() {
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let style = style(mode, TextOrientation::Upright);
+        let mut builder = ParagraphBuilder::new(&style, &limits);
+        builder
+            .push_text(TextSource::Generated { node: NodeId(1) }, "水")
+            .push_atomic(NodeId(2), &style.root, InlineEdges::default());
+        let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        assert_eq!(
+            paragraph.required_baseline(NodeId(2)),
+            Some(BaselineKind::Central)
+        );
+        let mut sizes = AtomicSizes::new();
+        sizes.insert(
+            NodeId(2),
+            AtomicSize {
+                inline_size: 10.0,
+                block_size: 20.0,
+                ..Default::default()
+            },
+        );
+        let line = first_line(&paragraph, 100.0, &LineOptions::default(), &sizes);
+        let atomic = line
+            .fragments()
+            .find_map(|fragment| match fragment {
+                Fragment::Atomic(atomic) => Some(atomic),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(line.block_size(), 20.0);
+        assert_eq!(atomic.baseline, 10.0);
+        assert_eq!(atomic.margin_rect.block_start, 0.0);
+        assert_eq!(atomic.margin_rect.block_size, 20.0);
+    }
+}
+
+#[test]
+fn vertical_grapheme_shared_across_nodes_keeps_one_orientation_and_owner() {
+    let style = style(WritingMode::VerticalRl, TextOrientation::Mixed);
+    let unsplit = paragraph(&style, "A\u{0301}");
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut builder = ParagraphBuilder::new(&style, &limits);
+    builder
+        .push_text(
+            TextSource::Dom {
+                node: NodeId(1),
+                offset: 0,
+            },
+            "A",
+        )
+        .push_text(
+            TextSource::Dom {
+                node: NodeId(2),
+                offset: 0,
+            },
+            "\u{0301}",
+        );
+    let split = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+    let snapshot = |paragraph: &Paragraph| {
+        let line = first_line(
+            paragraph,
+            100.0,
+            &LineOptions::default(),
+            &AtomicSizes::EMPTY,
+        );
+        let runs = line
+            .fragments()
+            .filter_map(|fragment| match fragment {
+                Fragment::GlyphRun(run) => Some((run.node(), run.orientation())),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        (glyphs(&line), runs)
+    };
+    let single = snapshot(&unsplit);
+    let divided = snapshot(&split);
+    assert_eq!(single.0, divided.0);
+    assert_eq!(
+        divided.1,
+        vec![(Some(NodeId(1)), shodo::GlyphOrientation::SidewaysClockwise)]
+    );
 }
 
 #[test]

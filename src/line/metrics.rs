@@ -37,13 +37,22 @@ fn extents(
     (a + lead, d + lead)
 }
 
-fn shift(s: &InlineStyle, parent: StyleMetrics, a: f32, d: f32) -> f32 {
+fn shift(s: &InlineStyle, parent: StyleMetrics, parent_upright: bool, a: f32, d: f32) -> f32 {
+    let (parent_over, parent_under) = if parent_upright {
+        parent
+            .vertical_metrics
+            .map_or((parent.size / 2.0, parent.size / 2.0), |v| {
+                (v.ascent, v.descent)
+            })
+    } else {
+        (parent.metrics.ascent, parent.metrics.descent)
+    };
     match s.vertical_align {
         VerticalAlign::Length(v) => -v,
         VerticalAlign::Sub => parent.metrics.subscript_offset,
         VerticalAlign::Super => -parent.metrics.superscript_offset,
-        VerticalAlign::TextTop => a - parent.metrics.ascent,
-        VerticalAlign::TextBottom => parent.metrics.descent - d,
+        VerticalAlign::TextTop => a - parent_over,
+        VerticalAlign::TextBottom => parent_under - d,
         VerticalAlign::Middle => (a - d) / 2.0 - parent.metrics.x_height / 2.0,
         _ => 0.0,
     }
@@ -70,6 +79,11 @@ fn box_shift(
         let b = &data.boxes[index as usize];
         let s = &data.styles[b.style as usize];
         let parent_style = b.parent.map_or(0, |p| data.boxes[p as usize].style) as usize;
+        let parent_upright = matches!(
+            data.style.writing_mode,
+            crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
+        ) && data.styles[parent_style].text_orientation
+            != crate::style::TextOrientation::Sideways;
         let style_metrics = data.style_metrics[b.style as usize];
         let upright = matches!(
             data.style.writing_mode,
@@ -85,7 +99,7 @@ fn box_shift(
             matches!(s.vertical_align, VerticalAlign::Top | VerticalAlign::Bottom).then_some(index)
         });
         value = (
-            value.0 + shift(s, data.style_metrics[parent_style], a, d),
+            value.0 + shift(s, data.style_metrics[parent_style], parent_upright, a, d),
             group,
         );
         cache.insert(index, value);
@@ -193,6 +207,12 @@ pub(crate) fn measure(
                 let s = &data.styles[data.items[item as usize].style as usize];
                 let parent_style = parent_box.map_or(0, |p| data.boxes[p as usize].style) as usize;
                 let parent = data.style_metrics[parent_style];
+                let parent_upright = matches!(
+                    data.style.writing_mode,
+                    crate::geometry::WritingMode::VerticalRl
+                        | crate::geometry::WritingMode::VerticalLr
+                ) && data.styles[parent_style].text_orientation
+                    != crate::style::TextOrientation::Sideways;
                 let (base, group) =
                     parent_box.map_or((0.0, None), |b| box_shift(data, b, &mut cache));
                 let height = size.block_size + size.margins.block_start + size.margins.block_end;
@@ -226,6 +246,7 @@ pub(crate) fn measure(
                         + shift(
                             s,
                             parent,
+                            parent_upright,
                             baseline - dominant_shift,
                             height - baseline + dominant_shift,
                         ),
@@ -301,12 +322,21 @@ pub(crate) fn measure(
             };
         }
     }
+    let block_size = LayoutUnit::from_f32_ceil(if empty { 0.0 } else { height }, sat);
+    let over_baseline = LayoutUnit::from_f32_round(above, sat);
+    // The over side is the physical right in vertical-lr, opposite block-start.
+    // Reflect the line-relative solution into logical block coordinates once.
+    let reverse_over = data.style.writing_mode == crate::geometry::WritingMode::VerticalLr;
     LineMetrics {
-        baseline: LayoutUnit::from_f32_round(above, sat),
-        block_size: LayoutUnit::from_f32_ceil(if empty { 0.0 } else { height }, sat),
+        baseline: if reverse_over {
+            block_size.sub(over_baseline, sat)
+        } else {
+            over_baseline
+        },
+        block_size,
         shifts: shifts
             .into_iter()
-            .map(|v| LayoutUnit::from_f32_round(v, sat))
+            .map(|v| LayoutUnit::from_f32_round(if reverse_over { -v } else { v }, sat))
             .collect(),
         empty,
     }

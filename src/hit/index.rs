@@ -42,11 +42,28 @@ impl LineIndex {
                 Fragment::GlyphRun(run) => {
                     let reversed = run.bidi_level() % 2 != line.data.base_level % 2;
                     let metrics = run.metrics();
+                    let vertical = matches!(
+                        line.data.style.writing_mode,
+                        crate::geometry::WritingMode::VerticalRl
+                            | crate::geometry::WritingMode::VerticalLr
+                    );
+                    let (over, under) =
+                        if vertical && run.orientation() == crate::GlyphOrientation::Upright {
+                            run.vertical_metrics()
+                                .map_or((run.font_size() / 2.0, run.font_size() / 2.0), |v| {
+                                    (v.ascent, v.descent)
+                                })
+                        } else {
+                            (metrics.ascent, metrics.descent)
+                        };
+                    let line_over_at_block_end =
+                        line.data.style.writing_mode == crate::geometry::WritingMode::VerticalLr;
                     let rect = LogicalRect {
                         inline_start: 0.0,
                         inline_size: 0.0,
-                        block_start: line.block_offset() + run.baseline() - metrics.ascent,
-                        block_size: (metrics.ascent + metrics.descent).max(0.0),
+                        block_start: line.block_offset() + run.baseline()
+                            - if line_over_at_block_end { under } else { over },
+                        block_size: (over + under).max(0.0),
                     };
                     let glyphs: Vec<_> = run.glyphs().collect();
                     let mut pen = 0.0;
