@@ -14,6 +14,7 @@ From the repository root:
 cargo test --workspace
 cargo run -p shodo-fixtures --example inspect_fonts
 cargo run -p shodo-fixtures --example layout_cases
+cargo run -p shodo-fixtures --example float_png -- target/shodo-floats.png
 cargo run -p shodo-fixtures --example layout_cases -- arabic-short
 python3 dev/fixtures/tools/regenerate.py --check
 ```
@@ -112,3 +113,7 @@ is development-only; ordinary cargo users do not need Python. The separate
 `--rebuild` maintainer check verifies reproducibility against the original sources.
 
 The CJK subset also retains 水 (U+6C34) for size-adjust metric verification.
+
+The [float caller harness](../../docs/float-integration-harness.md) shares an owned
+Taffy checkpoint driver between numeric regressions and the fixed-font PNG example.
+It remains dev-only; root shodo consumers acquire no Taffy dependency.
