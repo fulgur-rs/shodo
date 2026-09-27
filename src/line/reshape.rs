@@ -9,7 +9,7 @@ pub(crate) struct EdgeOverlay {
     pub(crate) glyphs: std::ops::Range<u32>,
     pub(crate) text: std::ops::Range<u32>,
     pub(crate) store: GlyphStore,
-    pub(crate) metadata: Option<crate::shape::ShapedRun>,
+    pub(crate) runs: Vec<crate::shape::ShapedRun>,
 }
 
 /// Expose real grapheme opportunities inside a ligature without replacing
@@ -73,6 +73,15 @@ pub(crate) fn initialize_slices(
                 .advance
                 .iter()
                 .fold(LayoutUnit::ZERO, |p, w| p.add(*w, sat));
+            // A break must leave a renderable remainder. Keeping only the
+            // initial prefixes can accept a ligature slice whose suffix
+            // expands past the glyph budget and then reuse the whole glyph.
+            drop(store);
+            let mut suffix = unit.clone();
+            suffix.text.start = boundary.offset;
+            if crate::shape::shape_window(data, &suffix, cx, warnings, sat).is_none() {
+                break;
+            }
             measured.push(width);
         }
         if measured.len() != boundaries.len() {
@@ -82,6 +91,7 @@ pub(crate) fn initialize_slices(
         let shared = std::sync::Arc::new(SharedCluster {
             text: unit.text.clone(),
             glyphs: glyphs.clone(),
+            units: units.len()..units.len() + boundaries.len() + 1,
         });
         let mut start = unit.text.start;
         let mut previous = LayoutUnit::ZERO;
@@ -119,72 +129,23 @@ pub(super) fn prepare(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) {
-    let clusters: Vec<_> = (start..scan.end)
-        .filter(|i| matches!(data.units[*i].kind, UnitKind::Cluster { .. }))
-        .collect();
-    for at in clusters.first().into_iter().chain(clusters.last()).copied() {
-        let u = &data.units[at];
-        let UnitKind::Cluster { glyphs, .. } = &u.kind else {
-            unreachable!()
-        };
-        if scan.overlays.iter().any(|w| &w.glyphs == glyphs) {
+    if scan.prepared {
+        return;
+    }
+    scan.prepared = true;
+    for window in super::windows::measure(data, start, scan.end, cx, sat) {
+        if scan.overlays.iter().any(|existing| {
+            existing.glyphs.start < window.overlay.glyphs.end
+                && window.overlay.glyphs.start < existing.glyphs.end
+        }) {
             continue;
         }
-        let mut selected = vec![at];
-        let mut window = u.clone();
-        let partial = if let Some(shared) = &u.shared_cluster {
-            selected = clusters
-                .iter()
-                .copied()
-                .filter(|i| {
-                    data.units[*i]
-                        .shared_cluster
-                        .as_ref()
-                        .is_some_and(|other| std::sync::Arc::ptr_eq(other, shared))
-                })
-                .collect();
-            window.text = data.units[*selected.first().unwrap()].text.start
-                ..data.units[*selected.last().unwrap()].text.end;
-            window.text != shared.text
-        } else {
-            false
-        };
-        let previous_unsafe = start
-            .checked_sub(1)
-            .is_some_and(|i| data.units[i].unsafe_to_break);
-        let first = clusters.first() == Some(&at);
-        let last = clusters.last() == Some(&at);
-        if !(partial
-            || first && start > 0 && (u.unsafe_to_concat || previous_unsafe)
-            || last && u.unsafe_to_break)
-        {
-            continue;
-        }
-        if u.shared_cluster.is_none()
-            && clusters
-                .iter()
-                .any(|other| *other != at && data.units[*other].text == u.text)
-        {
-            cx.warnings.push(
-                crate::limits::WarningKind::Unsupported,
-                "resource-split shaping cluster retained whole at line edge",
-            );
-            continue;
-        }
-        let mut warnings = crate::limits::WarningSink::new(data.limits.max_warnings);
-        let shaped = crate::shape::shape_window(data, &window, cx, &mut warnings, sat);
-        for warning in warnings.take() {
-            cx.warnings.push(warning.kind, warning.message);
-        }
-        let Some((store, runs)) = shaped else {
-            continue;
-        };
         let count = scan
             .overlays
             .iter()
             .map(|w| w.store.len() as u64)
             .sum::<u64>()
-            + store.len() as u64;
+            + window.overlay.store.len() as u64;
         if data.limits.max_shaped_glyphs.is_some_and(|max| count > max) {
             cx.warnings.push(
                 crate::limits::WarningKind::Unsupported,
@@ -192,40 +153,72 @@ pub(super) fn prepare(
             );
             continue;
         }
-        let width = store
-            .advance
-            .iter()
-            .fold(LayoutUnit::ZERO, |p, w| p.add(*w, sat));
-        let old = selected
-            .iter()
-            .fold(LayoutUnit::ZERO, |p, i| p.add(scan.widths[*i - start], sat));
-        for i in &selected {
-            scan.widths[*i - start] = LayoutUnit::ZERO;
+        for (index, _, new) in window.changes {
+            let old = scan.widths[index - start];
+            scan.widths[index - start] = new;
+            if index < scan.hang_start {
+                scan.content = scan.content.sub(old, sat).add(new, sat);
+            }
         }
-        scan.widths[selected[0] - start] = width;
-        if selected[0] < scan.hang_start {
-            scan.content = scan.content.sub(old, sat).add(width, sat);
-        }
-        scan.overlays.push(EdgeOverlay {
-            glyphs: glyphs.clone(),
-            text: window.text,
-            store,
-            metadata: if partial {
-                runs.into_iter().next()
-            } else {
-                None
-            },
-        });
+        scan.overlays.push(window.overlay);
     }
 }
 
+struct OwnedPart {
+    glyphs: std::ops::Range<u32>,
+    clusters: std::ops::Range<u32>,
+    run: u32,
+}
 struct SourceWindow {
     shared: std::ops::Range<u32>,
     text: std::ops::Range<u32>,
-    glyphs: (u32, u32),
-    clusters: (u32, u32),
-    delta: LayoutUnit,
-    run: Option<u32>,
+    glyphs: std::ops::Range<u32>,
+    parts: Vec<OwnedPart>,
+}
+
+fn shared_pen(
+    line: &Line,
+    record: &crate::line::fragments::FragmentRecord,
+    sources: &[SourceWindow],
+    overlay: &GlyphStore,
+    g: u32,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    let RecordKind::Glyphs { glyphs, text, .. } = &record.kind else {
+        unreachable!()
+    };
+    if g == glyphs.end {
+        return record.inline_size;
+    }
+    if let Some((start, positions)) = &line.positions {
+        return positions[(g - start) as usize] - positions[(glyphs.start - start) as usize];
+    }
+    let mut p = line.data.glyphs.pen[g as usize] - line.data.glyphs.pen[glyphs.start as usize];
+    for window in sources {
+        let begin = window.shared.start.max(glyphs.start);
+        let end = window.shared.end.min(g);
+        if begin >= end {
+            continue;
+        }
+        let from = line.data.glyphs.cluster[begin as usize]
+            .max(text.start)
+            .max(window.text.start);
+        let to = line.data.glyphs.cluster[end as usize].min(text.end);
+        let actual = &overlay.cluster[window.glyphs.start as usize..window.glyphs.end as usize];
+        let a = actual.partition_point(|c| *c < from) + window.glyphs.start as usize;
+        let b = actual.partition_point(|c| *c < to) + window.glyphs.start as usize;
+        let new = (a..b).fold(LayoutUnit::ZERO, |p, g| {
+            p.add(overlay.advance[g], sat).add(
+                overlay.spacing.as_ref().map_or(LayoutUnit::ZERO, |s| s[g]),
+                sat,
+            )
+        });
+        let old = line.data.glyphs.advance[begin as usize..end as usize]
+            .iter()
+            .fold(LayoutUnit::ZERO, |p, w| p.add(*w, sat));
+        p = p.add(new.sub(old, sat), sat);
+    }
+    p
 }
 
 pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturation) {
@@ -237,33 +230,48 @@ pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturati
     let mut sources = Vec::new();
     let mut overlay_clusters = Vec::new();
     let mut overlay_runs = Vec::new();
-    for mut window in windows {
-        let original_width = window.glyphs.clone().fold(LayoutUnit::ZERO, |p, g| {
-            p.add(line.data.glyphs.advance[g as usize], sat)
-        });
-        let shaped_width = window
-            .store
-            .advance
-            .iter()
-            .fold(LayoutUnit::ZERO, |p, w| p.add(*w, sat));
-        let delta = shaped_width.sub(original_width, sat);
+    for window in windows {
         let start = overlay.len() as u32;
-        let cluster_start = overlay_clusters.len() as u32;
-        let mut g = 0;
-        while g < window.store.len() {
-            let mut end = g + 1;
-            while end < window.store.len() && window.store.cluster[end] == window.store.cluster[g] {
-                end += 1;
+        let mut parts = Vec::new();
+        for mut run in window.runs {
+            let cluster_start = overlay_clusters.len() as u32;
+            let mut g = run.glyphs.start as usize;
+            while g < run.glyphs.end as usize {
+                let mut end = g + 1;
+                while end < run.glyphs.end as usize
+                    && window.store.cluster[end] == window.store.cluster[g]
+                {
+                    end += 1;
+                }
+                overlay_clusters.push(crate::output::OverlayCluster {
+                    glyphs: start + g as u32..start + end as u32,
+                    text: window.store.cluster[g]..if end < run.glyphs.end as usize {
+                        window.store.cluster[end]
+                    } else {
+                        run.text.end
+                    },
+                });
+                g = end;
             }
-            overlay_clusters.push(crate::output::OverlayCluster {
-                glyphs: start + g as u32..start + end as u32,
-                text: window.store.cluster[g]..if end < window.store.len() {
-                    window.store.cluster[end]
-                } else {
-                    window.text.end
-                },
+            run.glyphs = start + run.glyphs.start..start + run.glyphs.end;
+            let index = overlay_runs.len() as u32;
+            parts.push(OwnedPart {
+                glyphs: run.glyphs.clone(),
+                clusters: cluster_start..overlay_clusters.len() as u32,
+                run: index,
             });
-            g = end;
+            overlay_runs.push(run);
+        }
+        if window.store.spacing.is_some() || overlay.spacing.is_some() {
+            let spacing = overlay
+                .spacing
+                .get_or_insert_with(|| vec![LayoutUnit::ZERO; start as usize]);
+            spacing.extend(
+                window
+                    .store
+                    .spacing
+                    .unwrap_or_else(|| vec![LayoutUnit::ZERO; window.store.id.len()]),
+            );
         }
         overlay.flags.extend(window.store.flags);
         overlay.id.extend(window.store.id);
@@ -272,20 +280,11 @@ pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturati
         overlay.offset_inline.extend(window.store.offset_inline);
         overlay.offset_block.extend(window.store.offset_block);
         overlay.cluster.extend(window.store.cluster);
-        let run = window.metadata.take().map(|mut run| {
-            run.glyphs = start..overlay.len() as u32;
-            run.text = window.text.clone();
-            let index = overlay_runs.len() as u32;
-            overlay_runs.push(run);
-            index
-        });
         sources.push(SourceWindow {
             shared: window.glyphs,
             text: window.text,
-            glyphs: (start, overlay.len() as u32),
-            clusters: (cluster_start, overlay_clusters.len() as u32),
-            delta,
-            run,
+            glyphs: start..overlay.len() as u32,
+            parts,
         });
     }
     let mut records = Vec::new();
@@ -299,74 +298,116 @@ pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturati
             continue;
         };
         let mut cuts = vec![glyphs.start, glyphs.end];
-        for w in &sources {
-            if w.shared.start >= glyphs.start && w.shared.end <= glyphs.end {
-                cuts.push(w.shared.start);
-                cuts.push(w.shared.end);
+        for window in &sources {
+            if window.shared.start < glyphs.end && glyphs.start < window.shared.end {
+                cuts.push(window.shared.start.max(glyphs.start));
+                cuts.push(window.shared.end.min(glyphs.end));
             }
         }
         cuts.sort_unstable();
         cuts.dedup();
-        let mut pen = |g: u32| -> LayoutUnit {
-            if g == glyphs.end {
-                record.inline_size
-            } else if let Some((start, positions)) = &line.positions {
-                positions[(g - start) as usize] - positions[(glyphs.start - start) as usize]
-            } else {
-                let mut p =
-                    line.data.glyphs.pen[g as usize] - line.data.glyphs.pen[glyphs.start as usize];
-                for w in &sources {
-                    if w.shared.start >= glyphs.start && w.shared.end <= g {
-                        p = p.add(w.delta, sat);
-                    }
-                }
-                p
-            }
-        };
         let reversed = record.level % 2 != line.data.base_level % 2;
         let mut parts = Vec::new();
         for pair in cuts.windows(2) {
             let (begin, end) = (pair[0], pair[1]);
-            let mut part = record.clone();
-            let left = pen(begin);
-            let right = pen(end);
-            part.inline_start = record.inline_start
-                + if reversed {
-                    record.inline_size - right
-                } else {
-                    left
-                };
-            part.inline_size = right - left;
-            if let RecordKind::Glyphs {
-                glyphs: part_glyphs,
-                text: part_text,
-                source,
-                item: part_item,
-                ..
-            } = &mut part.kind
+            let left = shared_pen(line, record, &sources, &overlay, begin, sat);
+            let right = shared_pen(line, record, &sources, &overlay, end, sat);
+            let width = right.sub(left, sat);
+            let from = line.data.glyphs.cluster[begin as usize].max(text.start);
+            let to = if end == glyphs.end {
+                text.end
+            } else {
+                line.data.glyphs.cluster[end as usize]
+            };
+            if let Some(window) = sources
+                .iter()
+                .find(|w| w.shared.start <= begin && end <= w.shared.end)
             {
-                *part_glyphs = begin..end;
-                *part_text = line.data.glyphs.cluster[begin as usize]..if end == glyphs.end {
-                    text.end
-                } else {
-                    line.data.glyphs.cluster[end as usize]
-                };
-                *source = sources
-                    .iter()
-                    .find(|w| w.shared.start == begin && w.shared.end == end)
-                    .map_or(GlyphSource::Shared, |w| {
-                        *part_text = w.text.clone();
-                        if let Some(run) = w.run {
-                            *part_item = overlay_runs[run as usize].item;
-                        }
-                        GlyphSource::Overlay {
-                            glyphs: w.glyphs,
-                            clusters: w.clusters,
-                            run: w.run,
-                        }
+                let mut selected = Vec::new();
+                for owner in &window.parts {
+                    let clusters =
+                        &overlay.cluster[owner.glyphs.start as usize..owner.glyphs.end as usize];
+                    let a = owner.glyphs.start + clusters.partition_point(|c| *c < from) as u32;
+                    let b = owner.glyphs.start + clusters.partition_point(|c| *c < to) as u32;
+                    if a < b {
+                        selected.push((owner, a..b));
+                    }
+                }
+                let mut consumed = LayoutUnit::ZERO;
+                for (position, (owner, actual)) in selected.iter().enumerate() {
+                    let natural = actual.clone().fold(LayoutUnit::ZERO, |p, g| {
+                        let g = g as usize;
+                        p.add(overlay.advance[g], sat).add(
+                            overlay.spacing.as_ref().map_or(LayoutUnit::ZERO, |s| s[g]),
+                            sat,
+                        )
                     });
+                    let advance = if position + 1 == selected.len() {
+                        width.sub(consumed, sat)
+                    } else {
+                        natural
+                    };
+                    let mut part = record.clone();
+                    part.inline_start = record.inline_start
+                        + if reversed {
+                            record.inline_size - left - consumed - advance
+                        } else {
+                            left + consumed
+                        };
+                    part.inline_size = advance;
+                    let c = &overlay_clusters
+                        [owner.clusters.start as usize..owner.clusters.end as usize];
+                    let ca = owner.clusters.start
+                        + c.partition_point(|c| c.glyphs.end <= actual.start) as u32;
+                    let cb = owner.clusters.start
+                        + c.partition_point(|c| c.glyphs.start < actual.end) as u32;
+                    if let RecordKind::Glyphs {
+                        glyphs,
+                        text,
+                        source,
+                        item,
+                        ..
+                    } = &mut part.kind
+                    {
+                        *glyphs = begin..end;
+                        *text = overlay.cluster[actual.start as usize]
+                            ..if actual.end == owner.glyphs.end {
+                                overlay_runs[owner.run as usize].text.end
+                            } else {
+                                overlay.cluster[actual.end as usize]
+                            };
+                        *item = overlay_runs[owner.run as usize].item;
+                        *source = GlyphSource::Overlay {
+                            glyphs: (actual.start, actual.end),
+                            clusters: (ca, cb),
+                            run: Some(owner.run),
+                        };
+                    }
+                    parts.push(part);
+                    consumed = consumed.add(advance, sat);
+                }
+            } else {
+                let mut part = record.clone();
+                part.inline_start = record.inline_start
+                    + if reversed {
+                        record.inline_size - right
+                    } else {
+                        left
+                    };
+                part.inline_size = width;
+                if let RecordKind::Glyphs {
+                    glyphs,
+                    text,
+                    source,
+                    ..
+                } = &mut part.kind
+                {
+                    *glyphs = begin..end;
+                    *text = from..to;
+                    *source = GlyphSource::Shared;
+                }
+                parts.push(part);
             }
-            parts.push(part);
         }
         if reversed {
             parts.reverse();
@@ -476,6 +517,58 @@ mod tests {
         assert!((run.inline_size() - natural).abs() < 0.02);
         assert!((line.inline_size() - natural).abs() < 0.02);
         assert_eq!(p.data.glyphs.len(), 1);
+        let original: Vec<_> = run.glyphs().collect();
+        let options = crate::style::LineOptions {
+            text_align: crate::style::TextAlign::JustifyAll,
+            text_align_last: crate::style::TextAlignLast::Justify,
+            text_justify: crate::style::TextJustify::InterCharacter,
+            ..Default::default()
+        };
+        let LineResult::Line(justified) = p.next_line(
+            &mut LayoutContext::new(),
+            p.start_token(),
+            &options,
+            &LineConstraint::new(100.0),
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!()
+        };
+        let run = justified
+            .fragments()
+            .find_map(|f| match f {
+                Fragment::GlyphRun(r) => Some(r),
+                _ => None,
+            })
+            .unwrap();
+        let extra = (100.0 - natural) / 2.0;
+        assert!((justified.inline_size() - 100.0).abs() < 0.02);
+        for (i, g) in run.glyphs().enumerate() {
+            assert!(
+                (g.inline_position - original[i].inline_position - extra * i as f32).abs() < 0.03
+            );
+            assert!(
+                (g.advance - original[i].advance - if i < 2 { extra } else { 0.0 }).abs() < 0.03
+            );
+        }
+        assert!((run.clusters().map(|c| c.shaping_advance).sum::<f32>() - natural).abs() < 0.02);
+        let LineResult::Line(extreme) = p.next_line(
+            &mut LayoutContext::new(),
+            p.start_token(),
+            &options,
+            &LineConstraint::new(30_000_000.0),
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!()
+        };
+        assert!(
+            extreme
+                .overlay
+                .as_ref()
+                .unwrap()
+                .pen
+                .iter()
+                .all(|p| p.raw().abs() <= crate::shape::RUN_PEN_LIMIT)
+        );
     }
 
     #[test]

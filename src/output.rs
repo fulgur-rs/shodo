@@ -415,7 +415,9 @@ impl<'a> GlyphRunView<'a> {
             (rel, end - rel)
         } else {
             let rel = store.pen[gi] - store.pen[first];
-            let advance = if matches!(self.source, GlyphSource::Overlay { .. })
+            let advance = if let Some(spacing) = &store.spacing {
+                store.advance[gi] + spacing[gi]
+            } else if matches!(self.source, GlyphSource::Overlay { .. })
                 && self.line.positions.is_some()
                 && g + 1 == self.glyphs.1
             {

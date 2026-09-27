@@ -27,6 +27,7 @@ pub(super) fn scan(
     let mut first_hyphen = None;
     let mut last_emergency: Option<usize> = None;
     let mut overflowing = false;
+    let mut hanging = LayoutUnit::ZERO;
     let mut i = start;
     let reason = loop {
         let Some(unit) = units.get(i) else {
@@ -53,7 +54,23 @@ pub(super) fn scan(
         // Trailing spaces hang and never cause a break (CSS Text 3 §4.1.3).
         let hangs = matches!(unit.kind, UnitKind::Cluster { space: true, .. });
         let suffix = super::decoration::width(data, i + 1, false, sat);
-        if !hangs && !overflowing && i > start && pos.add(w, sat).add(suffix, sat) > available {
+        let (edge_delta, viable) = super::windows::candidate(data, start, i + 1, cx, sat);
+        let transparent = matches!(
+            unit.kind,
+            UnitKind::Close { .. }
+                | UnitKind::BidiControl
+                | UnitKind::Float { .. }
+                | UnitKind::Absolute { .. }
+        );
+        let extent = pos.add(w, sat).add(edge_delta, sat).add(suffix, sat).sub(
+            if transparent {
+                hanging
+            } else {
+                LayoutUnit::ZERO
+            },
+            sat,
+        );
+        if !hangs && !overflowing && extent > available {
             if let Some((b, edge)) = last_break.take() {
                 taken_hyphen = edge;
                 widths.truncate(b - start);
@@ -77,34 +94,47 @@ pub(super) fn scan(
         }
         widths.push(w);
         pos = pos.add(w, sat);
+        match unit.kind {
+            UnitKind::Cluster { space: true, .. } => hanging = hanging.add(w, sat),
+            UnitKind::Close { .. }
+            | UnitKind::BidiControl
+            | UnitKind::Float { .. }
+            | UnitKind::Absolute { .. } => {}
+            _ => hanging = LayoutUnit::ZERO,
+        }
+        let required = pos.add(edge_delta, sat).sub(hanging, sat).add(suffix, sat);
         i += 1;
         match unit.break_after {
             BreakClass::Mandatory => break BreakReason::Forced,
-            BreakClass::Allowed => {
+            BreakClass::Allowed if viable => {
                 if overflowing {
                     break BreakReason::Regular;
                 }
-                last_break = Some((i, None));
+                if required <= available {
+                    last_break = Some((i, None));
+                }
             }
-            BreakClass::Hyphen => {
+            BreakClass::Hyphen if viable => {
                 if let Some(edge) = super::hyphen::shape(data, unit, cx, sat) {
                     let extra = super::hyphen::width(&edge, sat).sub(w, sat);
                     if overflowing {
                         taken_hyphen = Some(edge);
                         break BreakReason::Regular;
                     }
-                    if pos.add(extra, sat).add(suffix, sat) <= available {
+                    if required.add(extra, sat) <= available {
                         last_break = Some((i, Some(edge)));
                     } else if first_hyphen.is_none() {
                         first_hyphen = Some((i, edge));
                     }
                 }
             }
-            BreakClass::Emergency => {
+            BreakClass::Emergency if viable => {
                 if overflowing {
                     break BreakReason::Emergency;
                 }
-                last_emergency = Some(i);
+                if required <= available {
+                    last_emergency = Some(i);
+                }
             }
             _ => {}
         }
@@ -145,6 +175,7 @@ pub(super) fn scan(
         }
     }
     Scan {
+        prepared: false,
         overlays: taken_hyphen.into_iter().collect(),
         end: i,
         reason,

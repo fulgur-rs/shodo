@@ -11,6 +11,7 @@ pub(crate) mod metrics;
 mod plan;
 pub(crate) mod reshape;
 mod scan;
+mod windows;
 
 use crate::analysis::units::UnitKind;
 use crate::context::LayoutContext;
@@ -25,6 +26,7 @@ use crate::style::LineOptions;
 /// Result of scanning one line.
 #[derive(Clone, Debug)]
 pub(crate) struct Scan {
+    pub(crate) prepared: bool,
     pub(crate) end: usize,
     pub(crate) reason: BreakReason,
     /// Width of every unit in the line, in order.
@@ -138,6 +140,7 @@ impl Paragraph {
                 }
             }
         };
+        reshape::prepare(data, start, &mut scan, cx, &mut sat);
         // Select the break before reporting an anchor: floats do not create
         // opportunities, and a word containing one may belong to the next line.
         let mut float_pos = indent.add(decoration::width(data, start, true, &mut sat), &mut sat);
@@ -175,7 +178,6 @@ impl Paragraph {
                 }
             }
         }
-        reshape::prepare(data, start, &mut scan, cx, &mut sat);
         let alignment = align::apply(
             data, start, &mut scan, &options, available, indent, &mut sat,
         );

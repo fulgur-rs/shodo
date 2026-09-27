@@ -99,7 +99,8 @@ pub(super) fn selected(
     } else {
         super::soft_break_reason(data, start, end)
     };
-    Scan {
+    let mut scan = Scan {
+        prepared: false,
         overlays: hyphen.into_iter().map(|(_, edge)| edge).collect(),
         end,
         reason,
@@ -109,7 +110,9 @@ pub(super) fn selected(
             .sub(trailing, sat)
             .add(decoration::width(data, end, false, sat), sat),
         hang_start,
-    }
+    };
+    super::reshape::prepare(data, start, &mut scan, cx, sat);
+    scan
 }
 
 impl Paragraph {
@@ -228,7 +231,13 @@ impl Paragraph {
                             for end in candidates {
                                 let mut best = (f64::INFINITY, 0);
                                 for (k, &(begin, cost)) in previous.iter().enumerate() {
-                                    if begin >= end || !cost.is_finite() {
+                                    if begin >= end
+                                        || !cost.is_finite()
+                                        || !super::windows::candidate(
+                                            &self.data, begin, end, cx, &mut sat,
+                                        )
+                                        .1
+                                    {
                                         continue;
                                     }
                                     let flags = if begin == 0 {

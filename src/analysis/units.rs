@@ -54,6 +54,7 @@ pub(crate) enum UnitKind {
 pub(crate) struct SharedCluster {
     pub(crate) text: Range<u32>,
     pub(crate) glyphs: Range<u32>,
+    pub(crate) units: Range<usize>,
 }
 
 #[derive(Clone, Debug)]

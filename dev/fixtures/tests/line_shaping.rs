@@ -1032,3 +1032,209 @@ fn rtl_ligature_slices_preserve_graphemes_joining_and_mark_attachments() {
         assert!((line.inline_size() - pen).abs() < 0.04);
     }
 }
+
+#[test]
+fn unsafe_edge_width_is_measured_before_choosing_an_emergency_break() {
+    let p = build(
+        "iAV",
+        InlineStyle {
+            overflow_wrap: OverflowWrap::Anywhere,
+            ..Default::default()
+        },
+    );
+    let unbroken_prefix = direct_width("iAV") - direct_width("V");
+    let actual_prefix = direct_width("iA");
+    assert!(
+        actual_prefix - unbroken_prefix > 0.1,
+        "oracle needs a real AV GPOS difference"
+    );
+    let width = (unbroken_prefix + actual_prefix) / 2.0;
+    let actual = lines(&p, width);
+    assert_eq!(
+        actual.iter().map(|l| l.text_range()).collect::<Vec<_>>(),
+        vec![0..1, 1..2, 2..3]
+    );
+    assert!(actual.iter().all(|l| l.inline_size() <= width + 0.02));
+}
+
+#[test]
+fn cached_unsafe_edge_candidate_width_matches_cold_retry() {
+    use shodo::node::OutOfFlowKind;
+    use shodo::{LineConstraint, LineResult};
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let style = ParagraphStyle {
+        root: InlineStyle {
+            overflow_wrap: OverflowWrap::Anywhere,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&style, &Limits::default());
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "iAV")
+        .push_out_of_flow(NodeId(2), OutOfFlowKind::Float);
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let mut warm = LayoutContext::new();
+    let LineResult::FloatEncountered { float_cursor, .. } = p.next_line(
+        &mut warm,
+        p.start_token(),
+        &Default::default(),
+        &shodo::LineConstraint::new(1000.0),
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!()
+    };
+    let width = (direct_width("iA") + direct_width("iAV") - direct_width("V")) / 2.0;
+    for width in [width, 10.5, 1.0] {
+        let mut c = LineConstraint::new(width);
+        c.floats_placed_through = Some(float_cursor);
+        let LineResult::Line(actual) = p.next_line(
+            &mut warm,
+            p.start_token(),
+            &Default::default(),
+            &c,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!()
+        };
+        let LineResult::Line(expected) = p.next_line(
+            &mut LayoutContext::new(),
+            p.start_token(),
+            &Default::default(),
+            &c,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!()
+        };
+        assert_eq!(actual.text_range(), expected.text_range());
+        assert_eq!(actual.inline_size(), expected.inline_size());
+        assert_eq!(glyph_ids(&actual), glyph_ids(&expected));
+    }
+}
+
+#[test]
+fn unsafe_window_across_nodes_preserves_actual_advances_and_owners() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let style = ParagraphStyle {
+        root: InlineStyle {
+            overflow_wrap: OverflowWrap::Anywhere,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&style, &Limits::default());
+    for (node, text) in [(NodeId(1), "i"), (NodeId(2), "A"), (NodeId(3), "V")] {
+        b.push_text(TextSource::Dom { node, offset: 0 }, text);
+    }
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let actual = lines(&p, direct_width("iA") + 0.1);
+    assert_eq!(
+        actual.iter().map(|l| l.text_range()).collect::<Vec<_>>(),
+        vec![0..2, 2..3]
+    );
+    let runs: Vec<_> = actual[0]
+        .fragments()
+        .filter_map(|f| match f {
+            Fragment::GlyphRun(r) => Some(r),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        runs.iter().map(|r| r.node()).collect::<Vec<_>>(),
+        vec![Some(NodeId(1)), Some(NodeId(2))]
+    );
+    let glyphs: Vec<_> = runs.iter().flat_map(|r| r.glyphs()).collect();
+    assert!((glyphs.iter().map(|g| g.advance).sum::<f32>() - direct_width("iA")).abs() < 0.04);
+    assert!((glyphs[1].inline_position - direct_width("i")).abs() < 0.04);
+    let width = direct_width("iA") + 1.0;
+    let options = LineOptions {
+        text_align: shodo::style::TextAlign::Justify,
+        text_justify: shodo::style::TextJustify::InterCharacter,
+        ..Default::default()
+    };
+    let justified = p.break_all(
+        &mut LayoutContext::new(),
+        &options,
+        width,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(justified[0].text_range(), 0..2);
+    let runs: Vec<_> = justified[0]
+        .fragments()
+        .filter_map(|f| match f {
+            Fragment::GlyphRun(r) => Some(r),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        runs.iter().map(|r| r.node()).collect::<Vec<_>>(),
+        vec![Some(NodeId(1)), Some(NodeId(2))]
+    );
+    let glyphs: Vec<_> = runs.iter().flat_map(|r| r.glyphs()).collect();
+    assert!((glyphs[1].inline_position - direct_width("i") - 1.0).abs() < 0.04);
+    assert!((glyphs[0].advance - direct_width("i") - 1.0).abs() < 0.04);
+    assert!((glyphs.iter().map(|g| g.advance).sum::<f32>() - width).abs() < 0.04);
+}
+
+#[test]
+fn intrinsic_min_content_includes_actual_unsafe_edge_advance() {
+    let p = build(
+        "Wa",
+        InlineStyle {
+            overflow_wrap: OverflowWrap::Anywhere,
+            ..Default::default()
+        },
+    );
+    let expected = direct_width("W").max(direct_width("a"));
+    let original = direct_width("Wa") - direct_width("a");
+    assert!(
+        direct_width("W") - original > 0.1,
+        "oracle needs a real Wa GPOS difference"
+    );
+    let actual = p.intrinsic_sizes(
+        &mut LayoutContext::new(),
+        &Default::default(),
+        &Default::default(),
+    );
+    assert!(
+        (actual.min_content - expected).abs() < 0.04,
+        "{} versus {expected}",
+        actual.min_content
+    );
+    assert!((actual.max_content - direct_width("Wa")).abs() < 0.04);
+}
+
+#[test]
+fn hidden_soft_hyphen_does_not_consume_justification_spacing() {
+    use shodo::style::{TextAlign, TextAlignLast, TextJustify};
+    let options = LineOptions {
+        text_align: TextAlign::JustifyAll,
+        text_align_last: TextAlignLast::Justify,
+        text_justify: TextJustify::InterCharacter,
+        ..Default::default()
+    };
+    let layout = |text| {
+        let p = build(text, InlineStyle::default());
+        let line = p
+            .break_all(
+                &mut LayoutContext::new(),
+                &options,
+                100.0,
+                &AtomicSizes::EMPTY,
+            )
+            .remove(0);
+        assert!((line.inline_size() - 100.0).abs() < 0.02);
+        line.fragments()
+            .filter_map(|f| match f {
+                Fragment::GlyphRun(r) => Some(r),
+                _ => None,
+            })
+            .flat_map(|r| r.glyphs())
+            .map(|g| (g.id, g.advance, g.inline_position))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(layout("a\u{ad}b"), layout("ab"));
+}

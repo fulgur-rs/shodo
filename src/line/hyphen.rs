@@ -74,18 +74,21 @@ pub(super) fn shape(
     for w in warnings.take() {
         cx.warnings.push(w.kind, w.message);
     }
-    let Ok((store, runs)) = shaped else {
+    let Ok((store, mut runs)) = shaped else {
         cx.warnings.push(
             WarningKind::Unsupported,
             "hyphen glyph budget exceeded; retaining unbroken word",
         );
         return None;
     };
+    for run in &mut runs {
+        run.text = unit.text.clone();
+    }
     Some(EdgeOverlay {
         glyphs: glyphs.clone(),
         text: unit.text.clone(),
         store,
-        metadata: runs.into_iter().next(),
+        runs,
     })
 }
 

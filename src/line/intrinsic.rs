@@ -30,6 +30,7 @@ impl Paragraph {
         let mut min = LayoutUnit::ZERO;
         let mut max = LayoutUnit::ZERO;
         let mut word = indent;
+        let mut word_unit = 0;
         let mut word_start = self.data.units.first().map_or(0, |u| u.text.start);
         let mut total = indent;
         let mut trailing = LayoutUnit::ZERO;
@@ -60,6 +61,7 @@ impl Paragraph {
                 );
                 let prefix = super::decoration::width(&self.data, i + 1, true, &mut sat);
                 word = indent.add(prefix, &mut sat);
+                word_unit = i + 1;
                 word_start = self
                     .data
                     .units
@@ -178,7 +180,14 @@ impl Paragraph {
                 || hyphen.is_some()
                 || u.break_after == BreakClass::Emergency && u.emergency_min_content
             {
-                let measured_word = word.add(hyphen.unwrap_or(LayoutUnit::ZERO), &mut sat);
+                let (delta, viable) =
+                    super::windows::candidate(&self.data, word_unit, i + 1, cx, &mut sat);
+                if !viable {
+                    continue;
+                }
+                let measured_word = word
+                    .add(hyphen.unwrap_or(LayoutUnit::ZERO), &mut sat)
+                    .add(delta, &mut sat);
                 min = min.max(
                     measured_word
                         .sub(
@@ -194,6 +203,7 @@ impl Paragraph {
                             &mut sat,
                         ),
                 );
+                word_unit = i + 1;
                 word_start = u.text.end;
                 word = super::text_indent(&options, 0, &mut sat).add(
                     super::decoration::width(&self.data, i + 1, true, &mut sat),
@@ -201,7 +211,11 @@ impl Paragraph {
                 );
             }
         }
-        min = min.max(word.sub(trailing, &mut sat)).max(LayoutUnit::ZERO);
+        let final_delta =
+            super::windows::delta(&self.data, word_unit, self.data.units.len(), cx, &mut sat);
+        min = min
+            .max(word.add(final_delta, &mut sat).sub(trailing, &mut sat))
+            .max(LayoutUnit::ZERO);
         max = max
             .max(
                 total

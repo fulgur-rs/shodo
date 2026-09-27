@@ -32,6 +32,9 @@ pub(crate) struct GlyphStore {
     pub(crate) cluster: Vec<u32>,
     /// Bits0/1: unsafe to break/concat before this shaping cluster.
     pub(crate) flags: Vec<u8>,
+    /// Per-glyph layout spacing, allocated only for justified owned windows.
+    /// Shaping advances remain unchanged for public cluster measurements.
+    pub(crate) spacing: Option<Vec<LayoutUnit>>,
 }
 
 impl GlyphStore {
@@ -480,6 +483,17 @@ pub(crate) fn shape_window(
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
 ) -> Option<(GlyphStore, Vec<ShapedRun>)> {
+    shape_window_budget(data, unit, data.limits.max_shaped_glyphs, cx, warnings, sat)
+}
+
+pub(crate) fn shape_window_budget(
+    data: &crate::paragraph::ParagraphData,
+    unit: &crate::analysis::units::Unit,
+    glyph_budget: Option<u64>,
+    cx: &mut crate::LayoutContext,
+    warnings: &mut crate::limits::WarningSink,
+    sat: &mut Saturation,
+) -> Option<(GlyphStore, Vec<ShapedRun>)> {
     if data
         .limits
         .max_reshape_window_bytes
@@ -527,12 +541,14 @@ pub(crate) fn shape_window(
             .take(5)
             .collect(),
     };
+    let mut limits = data.limits.clone();
+    limits.max_shaped_glyphs = glyph_budget;
     match shape_items(
         cx,
         &[item],
         &data.styles,
         &data.fonts,
-        &data.limits,
+        &limits,
         warnings,
         sat,
     ) {
