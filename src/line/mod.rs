@@ -12,6 +12,8 @@ pub(crate) mod metrics;
 mod plan;
 pub(crate) mod reshape;
 mod scan;
+pub(crate) mod spacing;
+mod spacing_summary;
 mod windows;
 
 use crate::analysis::units::UnitKind;
@@ -32,6 +34,7 @@ pub(crate) struct Scan {
     pub(crate) reason: BreakReason,
     /// Width of every unit in the line, in order.
     pub(crate) widths: Vec<LayoutUnit>,
+    pub(crate) leading: Option<Vec<LayoutUnit>>,
     pub(crate) overlays: Vec<reshape::EdgeOverlay>,
     /// Content width, excluding text-indent and hanging trailing spaces.
     pub(crate) content: LayoutUnit,
@@ -217,6 +220,7 @@ impl Paragraph {
             }
         };
         reshape::prepare(data, start, &mut scan, cx, &mut sat);
+        spacing::apply(data, start, &mut scan, &mut sat);
         // Select the break before reporting an anchor: floats do not create
         // opportunities, and a word containing one may belong to the next line.
         let mut float_pos = indent.add(decoration::width(data, start, true, &mut sat), &mut sat);
@@ -257,6 +261,8 @@ impl Paragraph {
         let alignment = align::apply(
             data, start, &mut scan, &options, available, indent, &mut sat,
         );
+        let (positions, glyph_spacing) =
+            spacing::positions(data, start, &mut scan, alignment.justified, &mut sat);
         let origin = offset.add(indent, &mut sat).add(alignment.shift, &mut sat);
         let mut line = Line::new(
             self,
@@ -267,7 +273,8 @@ impl Paragraph {
             atomics,
             &mut sat,
         );
-        line.positions = alignment.positions;
+        line.positions = positions;
+        line.glyph_spacing = glyph_spacing;
         line.displaced = displaced;
         reshape::apply(&mut line, cx, &mut sat);
         line.measure_metrics(&mut sat);

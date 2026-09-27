@@ -8,7 +8,7 @@ use unicode_bidi::{BidiInfo, Level};
 
 pub(super) struct Alignment {
     pub(super) shift: LayoutUnit,
-    pub(super) positions: Option<(u32, Vec<LayoutUnit>)>,
+    pub(super) justified: bool,
 }
 
 pub(super) fn apply(
@@ -60,7 +60,7 @@ pub(super) fn apply(
     }
     let mut result = Alignment {
         shift,
-        positions: None,
+        justified: false,
     };
     if !matches!(align, TextAlign::Justify | TextAlign::JustifyAll)
         || options.text_justify == TextJustify::None
@@ -140,6 +140,11 @@ pub(super) fn apply(
         .filter(|(j, (_, space, _))| {
             if options.text_justify == TextJustify::InterCharacter {
                 *j + 1 < clusters.len()
+                    && super::spacing::intercharacter_allowed(
+                        data,
+                        clusters[*j].0,
+                        clusters[*j + 1].0,
+                    )
             } else {
                 *space
             }
@@ -170,18 +175,6 @@ pub(super) fn apply(
             spacing[g] = spacing[g].add(extra, sat);
         }
     }
-    for window in &mut scan.overlays {
-        if let Some(spacing) = &window.store.spacing {
-            for run in &window.runs {
-                let mut shift = LayoutUnit::ZERO;
-                for g in run.glyphs.clone() {
-                    let g = g as usize;
-                    window.store.pen[g] = window.store.pen[g].add(shift, sat);
-                    shift = shift.add(spacing[g], sat);
-                }
-            }
-        }
-    }
     scan.content = scan.content.add(spare, sat);
     // Successful justification consumes the spare width in either direction;
     // the start-alignment fallback shift is only appropriate without expansion.
@@ -190,37 +183,7 @@ pub(super) fn apply(
     } else {
         LayoutUnit::ZERO
     };
-    let ranges: Vec<_> = data.units[start..scan.end]
-        .iter()
-        .filter_map(|u| match &u.kind {
-            UnitKind::Cluster { glyphs, .. } => Some(glyphs.clone()),
-            _ => None,
-        })
-        .collect();
-    if let (Some(first), Some(last)) = (ranges.first(), ranges.last()) {
-        let mut positions = vec![LayoutUnit::ZERO; (last.end - first.start) as usize];
-        let mut pos = LayoutUnit::ZERO;
-        for (k, (u, width)) in data.units[start..scan.end]
-            .iter()
-            .zip(&scan.widths)
-            .enumerate()
-        {
-            if let UnitKind::Cluster { glyphs, .. } = &u.kind
-                && u.shared_cluster
-                    .as_ref()
-                    .is_none_or(|c| c.slices[c.slices.partition_point(|i| *i < start)] == start + k)
-            {
-                for g in glyphs.clone() {
-                    positions[(g - first.start) as usize] = pos.add(
-                        data.glyphs.pen[g as usize] - data.glyphs.pen[glyphs.start as usize],
-                        sat,
-                    );
-                }
-            }
-            pos = pos.add(*width, sat);
-        }
-        result.positions = Some((first.start, positions));
-    }
+    result.justified = true;
     result
 }
 

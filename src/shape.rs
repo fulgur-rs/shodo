@@ -33,9 +33,11 @@ pub(crate) struct GlyphStore {
     pub(crate) cluster: Vec<u32>,
     /// Bits0/1: unsafe to break/concat before this shaping cluster.
     pub(crate) flags: Vec<u8>,
-    /// Per-glyph layout spacing, allocated only for justified owned windows.
+    /// Per-glyph layout spacing for tracked/word-spaced/justified owned windows.
     /// Shaping advances remain unchanged for public cluster measurements.
     pub(crate) spacing: Option<Vec<LayoutUnit>>,
+    /// Logical leading space, kept separate from the pen shared by marks.
+    pub(crate) leading: Option<Vec<LayoutUnit>>,
 }
 
 impl GlyphStore {

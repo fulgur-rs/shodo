@@ -37,6 +37,7 @@ pub(crate) enum RecordKind {
     Atomic {
         node: NodeId,
         size: AtomicSize,
+        unit: u32,
     },
     InlineBox {
         box_index: u32,
@@ -219,7 +220,11 @@ fn build_logical(
             UnitKind::Atomic { node } => {
                 let size = normalized_size(atomics, *node);
                 out.push(FragmentRecord {
-                    kind: RecordKind::Atomic { node: *node, size },
+                    kind: RecordKind::Atomic {
+                        node: *node,
+                        size,
+                        unit: i as u32,
+                    },
                     inline_start: pos,
                     inline_size: w,
                     level: unit.level,
@@ -525,7 +530,11 @@ fn build_bidi(
             }
             UnitKind::Atomic { node } => {
                 let size = normalized_size(atomics, *node);
-                let kind = RecordKind::Atomic { node: *node, size };
+                let kind = RecordKind::Atomic {
+                    node: *node,
+                    size,
+                    unit: i as u32,
+                };
                 Piece {
                     record: Some(record(kind)),
                     width: w,

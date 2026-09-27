@@ -99,6 +99,7 @@ pub(crate) struct PartialLine {
     width: LayoutUnit,
     scan: Scan,
     prefix: Vec<LayoutUnit>,
+    tracking: Vec<LayoutUnit>,
     thresholds: Vec<(usize, LayoutUnit)>,
     breaks: Candidates,
     emergencies: Candidates,
@@ -123,6 +124,7 @@ impl PartialLine {
             + self.scan.widths.capacity() * std::mem::size_of::<LayoutUnit>()
             + self.scan.overlays.capacity() * std::mem::size_of::<super::reshape::EdgeOverlay>()
             + self.prefix.capacity() * 4
+            + self.tracking.capacity() * 4
             + self.thresholds.capacity() * std::mem::size_of::<(usize, LayoutUnit)>()
             + self.breaks.bytes()
             + self.emergencies.bytes()
@@ -238,7 +240,8 @@ pub(super) fn resolve(
         // discretionary glyph is materialized afresh after choosing an end.
         let natural_widths: Vec<_> = units
             .iter()
-            .map(|u| {
+            .enumerate()
+            .map(|(k, u)| {
                 super::scan::unit_width_from(
                     data,
                     u,
@@ -248,6 +251,7 @@ pub(super) fn resolve(
                     cx,
                     sat,
                 )
+                .add(data.unit_spacing[start + k].word, sat)
             })
             .collect();
         if natural_widths.iter().any(|w| *w < LayoutUnit::ZERO) {
@@ -261,7 +265,13 @@ pub(super) fn resolve(
         let mut floats = Vec::new();
         let mut max = LayoutUnit::ZERO;
         let mut hanging = LayoutUnit::ZERO;
+        let mut spacing = super::spacing_summary::Cursor::default();
+        let mut tracking = vec![LayoutUnit::ZERO];
+        let mut kept_spacing = LayoutUnit::ZERO;
         for (k, (u, w)) in units.iter().zip(&natural_widths).enumerate() {
+            super::spacing::push(data, &mut spacing, start + k);
+            let spacing_width = spacing.summary().width(sat);
+            tracking.push(spacing_width);
             if let UnitKind::Float { node, ordinal } = u.kind {
                 floats.push((start + k, node, ordinal));
             }
@@ -282,26 +292,41 @@ pub(super) fn resolve(
                     UnitKind::Cluster { space: true, .. } | UnitKind::ForcedBreak
                 )
             {
-                let extent = next.add(delta, sat).add(suffix, sat).sub(
-                    if transparent {
-                        hanging
-                    } else {
-                        LayoutUnit::ZERO
-                    },
-                    sat,
-                );
+                let extent = next
+                    .add(spacing_width, sat)
+                    .add(delta, sat)
+                    .add(suffix, sat)
+                    .sub(
+                        if transparent {
+                            hanging.add(spacing_width.sub(kept_spacing, sat), sat)
+                        } else {
+                            LayoutUnit::ZERO
+                        },
+                        sat,
+                    );
                 max = max.max(extent);
                 thresholds.push((start + k, max));
             }
             match u.kind {
                 UnitKind::Cluster { space: true, .. } => hanging = hanging.add(*w, sat),
                 _ if transparent => {}
-                _ => hanging = LayoutUnit::ZERO,
+                _ => {
+                    hanging = LayoutUnit::ZERO;
+                    kept_spacing = spacing_width;
+                }
             }
-            let required = next.add(delta, sat).sub(hanging, sat).add(suffix, sat);
+            if hanging == LayoutUnit::ZERO {
+                kept_spacing = spacing_width;
+            }
+            let required = next
+                .add(kept_spacing, sat)
+                .add(delta, sat)
+                .sub(hanging, sat)
+                .add(suffix, sat);
             if u.break_after == BreakClass::Hyphen {
                 if let Some(windows) = hyphen::line(data, start, start + k + 1, cx, sat) {
                     let required = next
+                        .add(super::spacing::hyphen(data, &spacing, start + k, sat), sat)
                         .sub(hanging, sat)
                         .add(suffix, sat)
                         .add(super::windows::cost(&windows, start + k + 1, sat), sat);
@@ -333,6 +358,7 @@ pub(super) fn resolve(
             width: available,
             scan: scanned,
             prefix,
+            tracking,
             thresholds,
             breaks,
             emergencies,
@@ -354,7 +380,9 @@ pub(super) fn resolve(
     if let Some(&(i, node, ordinal)) = p.floats.get(p.float_index)
         && i < end
     {
-        let position = indent.add(p.prefix[i - start], sat);
+        let position = indent
+            .add(p.prefix[i - start], sat)
+            .add(p.tracking[i - start], sat);
         let data = Arc::clone(&p.data);
         let windows = selected_hyphen
             .and_then(|h| hyphen::line(&data, start, h, cx, sat))
@@ -392,8 +420,10 @@ pub(super) fn resolve(
             super::soft_break_reason(&p.data, start, end)
         },
         widths: p.scan.widths[..end - start].to_vec(),
+        leading: None,
         content: p.prefix[end - start]
             .sub(trailing, sat)
+            .add(p.tracking[hang_start - start], sat)
             .add(decoration::width(&p.data, end, false, sat), sat),
         hang_start,
     };
@@ -401,6 +431,20 @@ pub(super) fn resolve(
         && let Some(windows) = hyphen::line(&data, start, end, cx, sat)
     {
         super::reshape::apply_windows(&data, start, &mut result, windows, cx, sat);
+        let visible = result
+            .overlays
+            .iter()
+            .find_map(|w| w.hyphen.as_ref().map(|t| t.start));
+        result.content = result
+            .content
+            .sub(
+                super::spacing::width(&data, start, result.hang_start, None, sat),
+                sat,
+            )
+            .add(
+                super::spacing::width(&data, start, result.hang_start, visible, sat),
+                sat,
+            );
     }
     Ok(result)
 }

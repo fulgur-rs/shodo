@@ -60,16 +60,19 @@ pub(super) fn selected(
     let hyphen =
         hyphen_end(data, end).and_then(|end| super::hyphen::line(data, start, end, cx, sat));
     let mut widths = Vec::with_capacity(end - start);
-    for u in &data.units[start..end] {
+    let mut spacing = super::spacing_summary::Cursor::default();
+    for (i, u) in data.units[start..end].iter().enumerate() {
         let w = super::scan::unit_width_from(
             data,
             u,
             data.units[start].text.start,
-            offset.add(pos, sat),
+            offset.add(pos, sat).add(spacing.summary().width(sat), sat),
             atomics,
             cx,
             sat,
-        );
+        )
+        .add(data.unit_spacing[start + i].word, sat);
+        super::spacing::push(data, &mut spacing, start + i);
         pos = pos.add(w, sat);
         widths.push(w);
     }
@@ -104,6 +107,7 @@ pub(super) fn selected(
         end,
         reason,
         widths,
+        leading: None,
         content: pos
             .sub(indent, sat)
             .sub(trailing, sat)
@@ -115,6 +119,14 @@ pub(super) fn selected(
     } else {
         super::reshape::prepare(data, start, &mut scan, cx, sat);
     }
+    let visible_hyphen = scan
+        .overlays
+        .iter()
+        .find_map(|w| w.hyphen.as_ref().map(|t| t.start));
+    scan.content = scan.content.add(
+        super::spacing::width(data, start, hang_start, visible_hyphen, sat),
+        sat,
+    );
     scan
 }
 

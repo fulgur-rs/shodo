@@ -50,6 +50,7 @@ pub struct Line {
     pub(crate) block_shifts: Vec<LayoutUnit>,
     pub(crate) empty: bool,
     pub(crate) positions: Option<(u32, Vec<LayoutUnit>)>,
+    pub(crate) glyph_spacing: Option<(u32, Vec<crate::line::spacing::GlyphSpacing>)>,
     pub(crate) overlay: Option<Box<GlyphStore>>,
     pub(crate) overlay_clusters: Box<[OverlayCluster]>,
     pub(crate) overlay_runs: Box<[crate::shape::ShapedRun]>,
@@ -87,7 +88,7 @@ impl Line {
             .overlays
             .iter()
             .find_map(|w| w.hyphen.as_ref().map(|text| text.start));
-        let records = fragments::build(
+        let mut records = fragments::build(
             data,
             origin_units,
             scan.hang_start,
@@ -96,6 +97,25 @@ impl Line {
             atomics,
             visible_hyphen,
         );
+        if let Some(leading) = &scan.leading {
+            for record in &mut records {
+                let RecordKind::Atomic { size, unit, .. } = &record.kind else {
+                    continue;
+                };
+                let natural = LayoutUnit::from_f32_round(
+                    size.inline_size.max(0.0) + size.margins.inline_sum(),
+                    sat,
+                );
+                let before = leading[*unit as usize - token.unit as usize];
+                let before = if record.level % 2 != data.base_level % 2 {
+                    record.inline_size.sub(natural, sat).sub(before, sat)
+                } else {
+                    before
+                };
+                record.inline_start = record.inline_start.add(before, sat);
+                record.inline_size = natural;
+            }
+        }
         // Resource-limited whole clusters can overlap following transparent
         // markers in source order. Their complete source extent still belongs
         // to this line. Cache it so public range queries remain constant-time.
@@ -129,6 +149,7 @@ impl Line {
             fragments: records,
             empty: false,
             positions: None,
+            glyph_spacing: None,
             overlay: None,
             overlay_clusters: Box::default(),
             overlay_runs: Box::default(),
@@ -283,6 +304,8 @@ pub struct Glyph {
     pub id: u32,
     pub inline_position: f32,
     pub block_offset: f32,
+    /// Layout advance, including the cluster's assigned spacing. Half spacing
+    /// can precede its ink; `inline_position` remains the actual glyph origin.
     pub advance: f32,
     pub cluster: u32,
 }
@@ -446,15 +469,25 @@ impl<'a> GlyphRunView<'a> {
             && let Some((start, positions)) = &self.line.positions
         {
             let pen = positions[(g - start) as usize];
-            let rel = pen - positions[(self.glyphs.0 - start) as usize];
+            let spacing = self
+                .line
+                .glyph_spacing
+                .as_ref()
+                .map(|(start, v)| v[(g - start) as usize]);
+            let rel = pen - positions[(self.glyphs.0 - start) as usize]
+                + spacing.map_or(LayoutUnit::ZERO, |s| s.leading);
             let end = if g + 1 < self.glyphs.1 {
                 positions[(g + 1 - start) as usize] - positions[(self.glyphs.0 - start) as usize]
             } else {
                 self.record.inline_size
             };
-            (rel, end - rel)
+            (
+                rel,
+                spacing.map_or(end - rel, |s| store.advance[gi] + s.extra),
+            )
         } else {
-            let rel = store.pen[gi] - store.pen[first];
+            let rel = store.pen[gi] - store.pen[first]
+                + store.leading.as_ref().map_or(LayoutUnit::ZERO, |v| v[gi]);
             let advance = if let Some(spacing) = &store.spacing {
                 store.advance[gi] + spacing[gi]
             } else if matches!(self.source, GlyphSource::Overlay { .. })
@@ -578,7 +611,7 @@ impl Line {
                 item: *item,
                 text: (text.start, text.end),
             }),
-            RecordKind::Atomic { node, size } => {
+            RecordKind::Atomic { node, size, .. } => {
                 let margin_block = size.margins.block_start + size.margins.block_end;
                 let height = size.block_size + margin_block;
                 let kind = self.data.baseline_kind(*node);

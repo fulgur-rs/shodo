@@ -141,7 +141,7 @@ pub(crate) fn measure(
                 let (base, group) = box_shift(data, *box_index, &mut cache);
                 (a, d, base, group, None)
             }
-            RecordKind::Atomic { node, size } => {
+            RecordKind::Atomic { node, size, .. } => {
                 empty = false;
                 let (item, parent_box) = atomic_styles[node];
                 let s = &data.styles[data.items[item as usize].style as usize];

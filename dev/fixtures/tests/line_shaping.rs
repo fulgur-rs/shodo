@@ -1814,7 +1814,7 @@ fn generated_hyphen_does_not_join_across_an_atomic_boundary() {
 }
 
 #[test]
-fn rtl_owned_justification_keeps_marks_attached_to_their_clusters() {
+fn cursive_owned_lines_keep_marks_without_forbidden_gaps() {
     use shodo::style::{TextAlign, TextJustify};
     let limits = Limits::default();
     let fonts = load_fonts(&limits).unwrap();
@@ -1852,7 +1852,9 @@ fn rtl_owned_justification_keeps_marks_attached_to_their_clusters() {
             &AtomicSizes::EMPTY,
         );
         assert_eq!(actual[0].text_range(), 0..8);
-        assert!((actual[0].inline_size() - width).abs() < 0.03);
+        // CSS Text3 §6.4.4 forbids inserting inter-character gaps inside a
+        // cursive word. Without elongation, this line keeps its natural width.
+        assert!((actual[0].inline_size() - plain[0].inline_size()).abs() < 0.03);
         let glyphs = |line: &Line| {
             line.fragments()
                 .filter_map(|f| match f {

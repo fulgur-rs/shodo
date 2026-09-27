@@ -30,9 +30,9 @@ vertical-align の Baseline/Length/Sub/Super/TextTop/TextBottom/Middle/Top/Botto
 
 processed typographic character units を ICU grapheme から得る。透明な inline/out-of-flow/control は文字間の連続性を壊さず、atomic/tab/forced/block はそれぞれの spacing 契約を持つ。text の追加や shaping のやり直しによって疑似 space glyph を挿入しない。
 
-letter-spacing は bidi reordering 後の両隣の各半分を合成し、行の両外側を除く。異なる style の境界では平均を使う。formatting-only units と combining marks に追加しない。連続 atomic は一つの typographic unit として扱う。負の値も飽和演算で扱い、natural advance を変更しない。低レベルの feature により残る ligature 内でも typographic 境界の spacing を失わない。
+letter-spacing は bidi reordering 後の両隣の各半分を合成し、行の両外側を除く。異なる style の境界では平均を使う。formatting-only units と combining marks に追加しない。連続 atomic は一つの typographic unit として扱う。負の値も飽和演算で扱い、natural advance を変更しない。低レベルの feature により残る ligature 内でも typographic 境界の spacing を失わない。Arabic 等の cursive letter run は CSS Text3 の word-level fallback を使い、elongation がない本実装では字間の tracking/InterCharacter justification を挿入しない。
 
-word-spacing は対象の word separator の layout advance に追加する。preserved/hanging/collapsed spaces、NBSP、generated SHY と default ignorables を区別する。Spaces tab interval は該当 style の選択フォントの U+0020 advance と適用 spacing を使い、Px tab は直接長さを使う。位置・indent・inline-start offset・float retry のたびに tab を再評価する。
+word-spacing は対象の word separator の両側へ半分ずつ追加し、layout advance と ink の中心を保持する。preserved/hanging/collapsed spaces、NBSP、generated SHY と default ignorables を区別する。Spaces tab interval は最寄りの block container（本 API では root）の U+0020 advance と root の letter/word-spacing を使い、tab-size の値は tab の所属 style から得る。Px tab は直接長さを使う。次の stop までが root の 0.5ch 未満ならさらに次の stop を使い、tab-size=0 はゼロ幅とする。位置・indent・inline-start offset・float retry のたびに tab を再評価する。
 
 TextAutospace::Normal は ideograph と non-ideographic letter/decimal digit の visual 境界に追加する。ICU script-extension/category/EastAsianWidth で分類し、1/8ic は境界を包含する最内 inline の選択フォント・size から解決する。NoAutospace は無効化する。空白・句読点・atomic・非ゼロ margin/border/padding が境界を遮る。inline style/first-line、bidi reorder、透明 float の跨ぎを処理し、改行で切れた境界には追加しない。
 

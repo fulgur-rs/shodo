@@ -86,6 +86,7 @@ pub(crate) struct ParagraphData {
     pub(crate) items: Vec<Item>,
     pub(crate) styles: Vec<InlineStyle>,
     pub(crate) style_metrics: Vec<crate::line::font_metrics::StyleMetrics>,
+    pub(crate) unit_spacing: Vec<crate::line::spacing::UnitSpacing>,
     pub(crate) glyphs: GlyphStore,
     /// Unit index for each shaping cluster and cluster index for each glyph.
     pub(crate) clusters: Vec<u32>,
@@ -456,6 +457,7 @@ fn build_data(
         items: processed.items,
         styles,
         style_metrics,
+        unit_spacing: Vec::new(),
         glyphs,
         clusters: Vec::new(),
         glyph_clusters: Vec::new(),
@@ -486,6 +488,7 @@ fn finalize_data(
     sat: &mut Saturation,
 ) {
     crate::line::reshape::initialize_slices(data, cx, warnings, sat);
+    data.unit_spacing = crate::line::spacing::build(data, sat);
     let mut clusters = Vec::new();
     let mut glyph_clusters = vec![0; data.glyphs.len()];
     let mut floats = Vec::new();

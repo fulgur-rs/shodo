@@ -57,11 +57,11 @@
 
 **Interfaces:** consumes Task1 style/space metrics; produces one candidate-spacing/placement contract used by all width consumers, with natural versus layout advances preserved。
 
-- [ ] Write and run RED `tracking_changes_breaks_and_glyph_advances`, `different_style_tracking_uses_visual_half_spacing`, `word_spacing_and_tabs_use_real_space_metrics`. For real Latin `ab`, tracking2 adds exactly2 total, not4; first/last outside halves absent. Nonzero word spacing is observable on U+0020/NBSP. Spaces tab uses direct selected space advance, Px tab unaffected。
-- [ ] Build typographic metadata from processed graphemes and markers. Implement bounded bidi-level summaries that combine visual boundary spacing without full-prefix reordering per candidate. Handle consecutive atomics, ignored formatting, grapheme marks, low-level forced ligatures, signed spacing and saturated arithmetic。
-- [ ] Integrate exact spacing into scan/cache/float positions/intrinsic/Balance/Pretty, including contextual and synthetic SHY widths, hanging spaces, whole-cluster fallback and source continuations. Retain cache frontier/tab re-evaluation bounds。
-- [ ] Apply the same spacing to shared and owned final positions/Cluster.advance. Compose justification afterwards, preserve marks and immutable other-line positions. Test both block directions and mixed levels。
-- [ ] Add `bidi_spacing_candidates_match_final_geometry` with independent small-prefix visual oracle; add large alternating-level/style operation-count check. Add cached/cold float/tab retries, negative spacing and explicit ffi feature tests; run full workspace and no-default; commit `feat: apply consistent character and word spacing to line layout`。
+- [x] Write and run RED `tracking_changes_breaks_and_glyph_advances`, `different_style_tracking_uses_visual_half_spacing`, `word_spacing_and_tabs_use_real_space_metrics`. For real Latin `ab`, tracking2 adds exactly2 total, not4; first/last outside halves absent. Nonzero word spacing is observable on U+0020/NBSP. Spaces tab uses direct selected space advance, Px tab unaffected。
+- [x] Build typographic metadata from processed graphemes and markers. Implement bounded bidi-level summaries that combine visual boundary spacing without full-prefix reordering per candidate. Handle consecutive atomics, ignored formatting, grapheme marks, low-level forced ligatures, signed spacing and saturated arithmetic。
+- [x] Integrate exact spacing into scan/cache/float positions/intrinsic/Balance/Pretty, including contextual and synthetic SHY widths, hanging spaces, whole-cluster fallback and source continuations. Retain cache frontier/tab re-evaluation bounds。
+- [x] Apply the same spacing to shared and owned final positions/Cluster.advance. Compose justification afterwards, preserve marks and immutable other-line positions. Test both block directions and mixed levels。
+- [x] Add `bidi_spacing_candidates_match_final_geometry` with independent small-prefix visual oracle; add large alternating-level/style operation-count check. Add cached/cold float/tab retries, negative spacing and explicit ffi feature tests; run full workspace and no-default; commit `feat: apply consistent character and word spacing to line layout`。
 
 ### Task 3: Visual inter-script autospace
 
