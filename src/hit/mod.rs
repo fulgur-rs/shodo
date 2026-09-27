@@ -5,6 +5,8 @@
 //! uses the same logical coordinates as glyphs, with line block offsets added.
 //! Unsupported or absent GDEF ligature carets use proportional grapheme stops.
 mod index;
+mod navigation;
+mod selection;
 mod spatial;
 use crate::Line;
 use crate::geometry::LogicalRect;
@@ -91,5 +93,66 @@ impl<'a> LineLayout<'a> {
                 .and_then(|m| m.text_to_dom(stop.position.offset, stop.position.affinity)),
             inside: index.inside(inline, block),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn repeated_hits_and_navigation_do_not_rebuild_glyph_indexes() {
+        let limits = Default::default();
+        let fonts = crate::font::FontCollection::with_options(
+            &limits,
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        let style = crate::style::ParagraphStyle::default();
+        let mut b = crate::ParagraphBuilder::new(&style, &limits);
+        b.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            &"a".repeat(10_000),
+        );
+        let p = b.build(&mut crate::LayoutContext::new(), &fonts).unwrap();
+        let lines = p.break_all(
+            &mut crate::LayoutContext::new(),
+            &Default::default(),
+            1_000_000.0,
+            &crate::AtomicSizes::EMPTY,
+        );
+        let layout = LineLayout::new(&lines);
+        let before = p
+            .data
+            .cluster_queries
+            .load(std::sync::atomic::Ordering::Relaxed);
+        for _ in 0..1000 {
+            let hit = layout.hit_test(1.0, 8.0).unwrap();
+            let next = layout
+                .move_caret(
+                    hit.position,
+                    CaretDirection::Forward,
+                    NavigationOrder::Logical,
+                )
+                .unwrap();
+            assert_eq!(next.offset, 1);
+            let next = layout
+                .move_caret(
+                    hit.position,
+                    CaretDirection::Forward,
+                    NavigationOrder::Visual,
+                )
+                .unwrap();
+            assert_eq!(next.offset, 1);
+        }
+        assert_eq!(
+            p.data
+                .cluster_queries
+                .load(std::sync::atomic::Ordering::Relaxed),
+            before
+        );
     }
 }

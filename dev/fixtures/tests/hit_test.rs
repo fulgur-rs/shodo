@@ -600,3 +600,318 @@ fn whole_cluster_resource_fallback_carets_use_accepted_source() {
         .inline_start;
     assert!(a > 0.0 && b > a && b < lines[0].inline_size());
 }
+
+#[test]
+fn selections_keep_bidi_gaps_and_partial_ligatures() {
+    let lines = layout("aאבz", false);
+    let index = LineLayout::new(&lines);
+    let rects = index.selection_rects(
+        position(0, Affinity::Downstream),
+        position(3, Affinity::Upstream),
+    );
+    assert_eq!(rects.len(), 2);
+    let a = index
+        .caret(position(1, Affinity::Upstream))
+        .unwrap()
+        .rect
+        .inline_start;
+    let m = index
+        .caret(position(3, Affinity::Upstream))
+        .unwrap()
+        .rect
+        .inline_start;
+    let end = index
+        .caret(position(1, Affinity::Downstream))
+        .unwrap()
+        .rect
+        .inline_start;
+    close(rects[0].inline_start, 0.0);
+    close(rects[0].inline_size, a);
+    close(rects[1].inline_start, m);
+    close(rects[1].inline_size, end - m);
+    assert_eq!(
+        rects,
+        index.selection_rects(
+            position(3, Affinity::Upstream),
+            position(0, Affinity::Downstream)
+        )
+    );
+    assert!(
+        index
+            .selection_rects(
+                position(1, Affinity::Upstream),
+                position(1, Affinity::Downstream)
+            )
+            .is_empty()
+    );
+    let lines = layout("ffi", false);
+    let index = LineLayout::new(&lines);
+    let rect = index.selection_rects(
+        position(1, Affinity::Downstream),
+        position(2, Affinity::Upstream),
+    );
+    assert_eq!(rect.len(), 1);
+    close(rect[0].inline_start, lines[0].inline_size() / 3.0);
+    close(rect[0].inline_size, lines[0].inline_size() / 3.0);
+}
+
+#[test]
+fn logical_and_visual_navigation_keep_distinct_bidi_affinities() {
+    use shodo::hit::{CaretDirection, NavigationOrder};
+    let lines = layout("aאבz", false);
+    let index = LineLayout::new(&lines);
+    for (order, expected) in [
+        (NavigationOrder::Logical, vec![0, 1, 3, 5, 6]),
+        (NavigationOrder::Visual, vec![0, 1, 3, 1, 6]),
+    ] {
+        let mut stop = position(0, Affinity::Downstream);
+        let mut offsets = vec![0];
+        let mut xs = vec![0.0];
+        while let Some(next) = index.move_caret(stop, CaretDirection::Forward, order) {
+            stop = next;
+            offsets.push(stop.offset);
+            xs.push(index.caret(stop).unwrap().rect.inline_start);
+            assert!(offsets.len() < 10);
+        }
+        assert_eq!(offsets, expected);
+        if order == NavigationOrder::Visual {
+            assert!(xs.windows(2).all(|w| w[1] > w[0]));
+        }
+        for _ in 1..offsets.len() {
+            stop = index
+                .move_caret(stop, CaretDirection::Backward, order)
+                .unwrap();
+        }
+        assert_eq!(stop.offset, 0);
+        assert!(
+            index
+                .move_caret(stop, CaretDirection::Backward, order)
+                .is_none()
+        );
+    }
+}
+
+#[test]
+fn cross_line_selection_and_navigation_survive_owner_drop() {
+    use shodo::hit::{CaretDirection, NavigationOrder};
+    let lines = {
+        let limits = Default::default();
+        let fonts = load_fonts(&limits).unwrap();
+        let mut b = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: style(),
+                ..Default::default()
+            },
+            &limits,
+        );
+        b.push_text(
+            TextSource::Dom {
+                node: NodeId(1),
+                offset: 0,
+            },
+            "a",
+        )
+        .push_forced_break(NodeId(2))
+        .push_text(
+            TextSource::Dom {
+                node: NodeId(3),
+                offset: 0,
+            },
+            "b",
+        );
+        b.build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap()
+            .break_all(
+                &mut LayoutContext::new(),
+                &Default::default(),
+                1000.0,
+                &AtomicSizes::EMPTY,
+            )
+    };
+    assert_eq!(lines.len(), 2);
+    let index = LineLayout::new(&lines);
+    let start = position(lines[0].text_range().start as u32, Affinity::Downstream);
+    let end = TextPosition {
+        line: 1,
+        offset: lines[1].text_range().end as u32,
+        affinity: Affinity::Upstream,
+    };
+    let rects = index.selection_rects(start, end);
+    assert_eq!(rects.len(), 2);
+    close(rects[0].inline_size, lines[0].inline_size());
+    close(rects[1].inline_size, lines[1].inline_size());
+    assert!(rects[1].block_start > rects[0].block_start);
+    assert_eq!(rects, index.selection_rects(end, start));
+    for order in [NavigationOrder::Logical, NavigationOrder::Visual] {
+        let boundary = position(lines[0].text_range().end as u32, Affinity::Upstream);
+        let next = index
+            .move_caret(boundary, CaretDirection::Forward, order)
+            .unwrap();
+        assert_eq!(next.line, 1);
+        assert_eq!(next.offset, lines[1].text_range().start as u32);
+        assert!(
+            index
+                .move_caret(end, CaretDirection::Forward, order)
+                .is_none()
+        );
+    }
+    assert!(
+        index
+            .selection_rects(start, TextPosition { line: 99, ..end })
+            .is_empty()
+    );
+    assert!(index.hit_test(0.0, f32::INFINITY).unwrap().position.line == 1);
+}
+
+#[test]
+fn expanded_selection_and_control_navigation_terminate() {
+    use shodo::hit::{CaretDirection, NavigationOrder};
+    let limits = Default::default();
+    let fonts = load_fonts(&limits).unwrap();
+    let mut root = style();
+    root.text_transform = shodo::style::TextTransform::Uppercase;
+    let mut b = ParagraphBuilder::new(
+        &ParagraphStyle {
+            root,
+            ..Default::default()
+        },
+        &limits,
+    );
+    b.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        "ß",
+    );
+    let lines = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap()
+        .break_all(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            1000.0,
+            &AtomicSizes::EMPTY,
+        );
+    let index = LineLayout::new(&lines);
+    let rect = index.selection_rects(
+        position(1, Affinity::Upstream),
+        position(1, Affinity::Downstream),
+    );
+    assert_eq!(rect.len(), 1);
+    close(rect[0].inline_size, lines[0].inline_size());
+    for order in [NavigationOrder::Logical, NavigationOrder::Visual] {
+        let next = index
+            .move_caret(
+                position(0, Affinity::Downstream),
+                CaretDirection::Forward,
+                order,
+            )
+            .unwrap();
+        assert_eq!(next.offset, 2);
+        assert!(
+            index
+                .move_caret(next, CaretDirection::Forward, order)
+                .is_none()
+        );
+    }
+    let lines = layout("\u{200e}\u{200e}", false);
+    let index = LineLayout::new(&lines);
+    if !lines.is_empty() {
+        for order in [NavigationOrder::Logical, NavigationOrder::Visual] {
+            let mut p = position(0, Affinity::Downstream);
+            for step in 0..5 {
+                let Some(next) = index.move_caret(p, CaretDirection::Forward, order) else {
+                    break;
+                };
+                p = next;
+                assert!(step < 4);
+            }
+        }
+    }
+}
+
+#[test]
+fn collapsed_mapping_and_first_line_selections_use_line_sources() {
+    let lines = layout("a   b", true);
+    assert_eq!(lines[0].text(), "a b");
+    let index = LineLayout::new(&lines);
+    let rect = index.selection_rects(
+        position(2, Affinity::Downstream),
+        position(3, Affinity::Upstream),
+    );
+    assert_eq!(rect.len(), 1);
+    let run = lines[0]
+        .fragments()
+        .find_map(|f| {
+            if let Fragment::GlyphRun(r) = f {
+                Some(r)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+    let glyph = run.glyphs().find(|g| g.cluster == 2).unwrap();
+    close(rect[0].inline_start, glyph.inline_position);
+    close(rect[0].inline_size, glyph.advance);
+    let hit = index
+        .hit_test(
+            rect[0].inline_start + 0.01,
+            rect[0].block_start + rect[0].block_size / 2.0,
+        )
+        .unwrap();
+    assert_eq!(
+        hit.origin,
+        Some(shodo::mapping::TextOrigin::Dom {
+            node: NodeId(1),
+            offset: 4
+        })
+    );
+    let limits = Default::default();
+    let fonts = load_fonts(&limits).unwrap();
+    let mut first = style();
+    first.text_transform = shodo::style::TextTransform::Uppercase;
+    let mut b = ParagraphBuilder::new(
+        &ParagraphStyle {
+            root: style(),
+            first_line: Some(first),
+            ..Default::default()
+        },
+        &limits,
+    );
+    b.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        "ßa",
+    )
+    .push_forced_break(NodeId(2))
+    .push_text(
+        TextSource::Dom {
+            node: NodeId(3),
+            offset: 0,
+        },
+        "ßa",
+    );
+    let lines = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap()
+        .break_all(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            1000.0,
+            &AtomicSizes::EMPTY,
+        );
+    let index = LineLayout::new(&lines);
+    let start = position(0, Affinity::Downstream);
+    let end = TextPosition {
+        line: 1,
+        offset: lines[1].text_range().end as u32,
+        affinity: Affinity::Upstream,
+    };
+    let rects = index.selection_rects(start, end);
+    assert_eq!(rects.len(), 2);
+    close(rects[0].inline_size, lines[0].inline_size());
+    close(rects[1].inline_size, lines[1].inline_size());
+}

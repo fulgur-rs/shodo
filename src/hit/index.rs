@@ -223,6 +223,9 @@ impl LineIndex {
                         .cmp(&result.stops[*b].position.offset),
                 )
         });
+        result.visual.dedup_by(|a, b| {
+            result.stops[*a].rect.inline_start == result.stops[*b].rect.inline_start
+        });
         result.spatial = super::spatial::Tree::new(
             result
                 .segments

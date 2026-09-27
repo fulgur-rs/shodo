@@ -92,11 +92,11 @@
 
 **Interfaces:** consumes Task4 index; adds `selection_rects(start,end)` and `move_caret(position,direction,order)` without rebuilding glyph/Paragraph data。
 
-- [ ] Write/run RED for RTL discontiguous selection, partial ligature selection, logical-versus-visual mixed-bidi movement and cross-line transitions. Assert exact intervals/stops, not only nonempty output。
-- [ ] Implement source-order range normalization and visual interval grouping; preserve bidi gaps, zero selection, invalid endpoints, atomic/tab/visible SHY and font/line-height rects. Merge only touching same-line intervals。
-- [ ] Implement separate logical and visual index traversal, canonical duplicate-position handling, source-order line transition and terminal None. Retain distinct affinity locations without repeated same-location loops。
-- [ ] Add collapsed/expanded mapping and first-line multi-line selection/navigation, reverse endpoints, zero-width/control-only/forced/block boundaries and dropped Paragraph/FontCollection lifetime cases. Counter test ensures repeated hit/navigation does not rescan glyphs。
-- [ ] Run workspace and feature-mode tests; commit `feat: add visual selection and caret navigation`。
+- [x] Write/run RED for RTL discontiguous selection, partial ligature selection, logical-versus-visual mixed-bidi movement and cross-line transitions. Assert exact intervals/stops, not only nonempty output。
+- [x] Implement source-order range normalization and visual interval grouping; preserve bidi gaps, zero selection, invalid endpoints, atomic/tab/visible SHY and font/line-height rects. Merge only touching same-line intervals。
+- [x] Implement separate logical and visual index traversal, canonical duplicate-position handling, source-order line transition and terminal None. Retain distinct affinity locations without repeated same-location loops。
+- [x] Add collapsed/expanded mapping and first-line multi-line selection/navigation, reverse endpoints, zero-width/control-only/forced/block boundaries and dropped Paragraph/FontCollection lifetime cases. Counter test ensures repeated hit/navigation does not rescan glyphs。
+- [x] Run workspace and feature-mode tests; commit `feat: add visual selection and caret navigation`。
 
 ### Task 6: Full horizontal contract and resource audit
 
