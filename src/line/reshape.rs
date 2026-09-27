@@ -23,9 +23,16 @@ pub(crate) fn initialize_slices(
     use crate::analysis::units::{BreakClass, SharedCluster};
     let original = std::mem::take(&mut data.units);
     let mut units = Vec::with_capacity(original.len());
+    let mut markers = Vec::new();
+    for (i, unit) in original.iter().enumerate() {
+        if !matches!(unit.kind, UnitKind::Cluster { .. }) {
+            markers.push((i, unit.clone()));
+        }
+    }
+    let mut offsets: Vec<_> = markers.iter().map(|(_, u)| u.text.start).collect();
+    offsets.dedup();
     for (i, unit) in original.iter().enumerate() {
         let UnitKind::Cluster { glyphs, .. } = &unit.kind else {
-            units.push(unit.clone());
             continue;
         };
         let begin = data
@@ -36,17 +43,24 @@ pub(crate) fn initialize_slices(
             .breaks
             .opportunities
             .partition_point(|o| o.offset < unit.text.end);
-        let boundaries: Vec<_> = data.breaks.opportunities[begin..end]
+        let mut boundaries: Vec<_> = data.breaks.opportunities[begin..end]
             .iter()
             .filter(|o| o.class != BreakClass::Prohibited)
             .copied()
             .collect();
+        let marker_start = offsets.partition_point(|o| *o <= unit.text.start);
+        let marker_end = offsets.partition_point(|o| *o < unit.text.end);
+        for offset in &offsets[marker_start..marker_end] {
+            boundaries.push(data.breaks.at(*offset));
+        }
+        boundaries.sort_unstable_by_key(|b| b.offset);
+        boundaries.dedup_by_key(|b| b.offset);
         let storage_split = i > 0 && original[i - 1].text == unit.text
             || original
                 .get(i + 1)
                 .is_some_and(|next| next.text == unit.text);
         if boundaries.is_empty() || storage_split {
-            units.push(unit.clone());
+            units.push((i, unit.clone()));
             continue;
         }
         if data
@@ -58,7 +72,7 @@ pub(crate) fn initialize_slices(
                 crate::limits::WarningKind::Unsupported,
                 "intra-cluster reshape window exceeded; retaining whole cluster",
             );
-            units.push(unit.clone());
+            units.push((i, unit.clone()));
             continue;
         }
         let mut measured = Vec::with_capacity(boundaries.len());
@@ -85,13 +99,14 @@ pub(crate) fn initialize_slices(
             measured.push(width);
         }
         if measured.len() != boundaries.len() {
-            units.push(unit.clone());
+            units.push((i, unit.clone()));
             continue;
         }
         let shared = std::sync::Arc::new(SharedCluster {
             text: unit.text.clone(),
             glyphs: glyphs.clone(),
-            units: units.len()..units.len() + boundaries.len() + 1,
+            units: 0..0,
+            slices: Vec::new(),
         });
         let mut start = unit.text.start;
         let mut previous = LayoutUnit::ZERO;
@@ -104,7 +119,7 @@ pub(crate) fn initialize_slices(
             slice.emergency_min_content = boundary.min_content;
             slice.unsafe_to_break = true;
             slice.unsafe_to_concat |= start > unit.text.start;
-            units.push(slice);
+            units.push((i, slice));
             previous = width;
             start = boundary.offset;
         }
@@ -116,9 +131,71 @@ pub(crate) fn initialize_slices(
         last.slice_advance = total.sub(previous, sat);
         last.text.start = start;
         last.unsafe_to_concat = true;
-        units.push(last);
+        units.push((i, last));
     }
-    data.units = units;
+    // Merge text slices and original markers in source order. A marker at
+    // a continuation's start precedes that continuation, even though the
+    // original ligature owner came from an earlier item.
+    let mut merged = Vec::with_capacity(units.len() + markers.len());
+    let mut markers = markers.into_iter().peekable();
+    for (ordinal, unit) in units {
+        while markers.peek().is_some_and(|(i, marker)| {
+            marker.text.start < unit.text.start
+                || marker.text.start == unit.text.start
+                    && (*i < ordinal
+                        || unit
+                            .shared_cluster
+                            .as_ref()
+                            .is_some_and(|c| unit.text.start > c.text.start))
+        }) {
+            merged.push(markers.next().unwrap().1);
+        }
+        merged.push(unit);
+    }
+    merged.extend(markers.map(|(_, unit)| unit));
+    // Rebuild group indices once. Window work visits only text slices,
+    // so arbitrarily many zero-width markers do not multiply shaping work.
+    let mut group: Vec<usize> = Vec::new();
+    let finish = |group: &mut Vec<usize>, units: &mut Vec<crate::analysis::units::Unit>| {
+        if group.is_empty() {
+            return;
+        }
+        let previous = units[group[0]].shared_cluster.as_ref().unwrap();
+        let shared = std::sync::Arc::new(SharedCluster {
+            text: previous.text.clone(),
+            glyphs: previous.glyphs.clone(),
+            units: group[0]..group.last().unwrap() + 1,
+            slices: group.clone(),
+        });
+        for i in group.drain(..) {
+            units[i].shared_cluster = Some(std::sync::Arc::clone(&shared));
+        }
+    };
+    let mut stack = Vec::new();
+    for i in 0..merged.len() {
+        match merged[i].kind {
+            UnitKind::Open { box_index } => {
+                merged[i].parent_box = stack.last().copied();
+                stack.push(box_index);
+            }
+            UnitKind::Close { .. } => {
+                stack.pop();
+                merged[i].parent_box = stack.last().copied();
+            }
+            _ => merged[i].parent_box = stack.last().copied(),
+        }
+        if !matches!(merged[i].kind, UnitKind::Cluster { .. }) {
+            continue;
+        }
+        if !group.is_empty() && !merged[group[0]].shares_cluster(&merged[i]) {
+            finish(&mut group, &mut merged);
+        }
+        if merged[i].shared_cluster.is_some() {
+            group.push(i);
+        }
+    }
+    finish(&mut group, &mut merged);
+    data.units = merged;
 }
 
 /// Materialize selected edge shapes before alignment reads their widths.

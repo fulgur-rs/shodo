@@ -113,11 +113,10 @@ pub(super) fn apply(
                         .saturating_sub(1);
                 let mut unit = data.clusters[data.glyph_clusters[old] as usize] as usize;
                 if let Some(shared) = &data.units[unit].shared_cluster {
-                    let slices = &data.units[shared.units.clone()];
-                    unit = shared.units.start
-                        + slices
-                            .partition_point(|u| u.text.start <= cluster)
-                            .saturating_sub(1);
+                    unit = shared.slices[shared
+                        .slices
+                        .partition_point(|i| data.units[*i].text.start <= cluster)
+                        .saturating_sub(1)];
                 }
                 if unit >= start
                     && unit < scan.hang_start
@@ -129,7 +128,10 @@ pub(super) fn apply(
                 }
                 g = end;
             }
-        } else if i + 1 >= scan.hang_start || !data.units[i].shares_cluster(&data.units[i + 1]) {
+        } else if data.units[i].shared_cluster.as_ref().is_none_or(|c| {
+            let end = c.slices.partition_point(|i| *i < scan.hang_start);
+            end > 0 && c.slices[end - 1] == i
+        }) {
             clusters.push((i, *space, None));
         }
     }
@@ -198,7 +200,9 @@ pub(super) fn apply(
             .enumerate()
         {
             if let UnitKind::Cluster { glyphs, .. } = &u.kind
-                && (k == 0 || !u.shares_cluster(&data.units[start + k - 1]))
+                && u.shared_cluster
+                    .as_ref()
+                    .is_none_or(|c| c.slices[c.slices.partition_point(|i| *i < start)] == start + k)
             {
                 for g in glyphs.clone() {
                     positions[(g - first.start) as usize] = pos.add(

@@ -31,8 +31,10 @@ fn first(data: &ParagraphData, at: usize, end: usize) -> Option<usize> {
     if matches!(data.units[at].kind, UnitKind::Cluster { .. }) {
         return Some(at);
     }
-    let i = data.clusters.partition_point(|i| (*i as usize) < at);
-    data.clusters
+    let i = data
+        .selectable_clusters
+        .partition_point(|i| (*i as usize) < at);
+    data.selectable_clusters
         .get(i)
         .map(|i| *i as usize)
         .filter(|i| *i < end)
@@ -44,10 +46,10 @@ fn last(data: &ParagraphData, start: usize, end: usize) -> Option<usize> {
     if matches!(data.units[end - 1].kind, UnitKind::Cluster { .. }) {
         return Some(end - 1);
     }
-    let i = data.clusters.partition_point(|i| (*i as usize) < end);
-    let at = *data.clusters.get(i.checked_sub(1)?)? as usize;
-    let range = group(data, at);
-    let at = range.end.min(end) - 1;
+    let i = data
+        .selectable_clusters
+        .partition_point(|i| (*i as usize) < end);
+    let at = *data.selectable_clusters.get(i.checked_sub(1)?)? as usize;
     (at >= start).then_some(at)
 }
 fn group(data: &ParagraphData, at: usize) -> Range<usize> {
@@ -55,6 +57,12 @@ fn group(data: &ParagraphData, at: usize) -> Range<usize> {
         .shared_cluster
         .as_ref()
         .map_or(at..at + 1, |c| c.units.clone())
+}
+fn clipped_group(data: &ParagraphData, at: usize, line: &Range<usize>) -> Range<usize> {
+    let group = group(data, at);
+    let start = first(data, group.start.max(line.start), at + 1).unwrap();
+    let end = last(data, at, group.end.min(line.end)).unwrap() + 1;
+    start..end
 }
 fn compatible(data: &ParagraphData, a: usize, b: usize) -> bool {
     let (UnitKind::Cluster { run: a_run, .. }, UnitKind::Cluster { run: b_run, .. }) =
@@ -111,13 +119,13 @@ fn expand_original(data: &ParagraphData, line: &Range<usize>, range: &mut Range<
         && compatible(data, previous, range.start)
         && unsafe_join(data, previous, range.start)
     {
-        range.start = group(data, previous).start.max(line.start);
+        range.start = clipped_group(data, previous, line).start;
     }
     while let Some(next) = first(data, range.end, line.end)
         && compatible(data, range.end - 1, next)
         && unsafe_join(data, range.end - 1, next)
     {
-        range.end = group(data, next).end.min(line.end);
+        range.end = clipped_group(data, next, line).end;
     }
 }
 
@@ -145,14 +153,14 @@ fn materialize(
             && let Some(previous) = last(data, line.start, range.start)
             && compatible(data, previous, range.start)
         {
-            range.start = group(data, previous).start.max(line.start);
+            range.start = clipped_group(data, previous, line).start;
             expand_original(data, line, &mut range);
             continue;
         }
         if let Some(next) = first(data, range.end, line.end)
             && compatible(data, range.end - 1, next)
         {
-            let probe = range.start..group(data, next).end.min(line.end);
+            let probe = range.start..clipped_group(data, next, line).end;
             // Keep only one temporary SoA at a time during validation.
             drop(store);
             drop(runs);
@@ -175,7 +183,16 @@ fn materialize(
         let mut at = range.start;
         while let Some(i) = first(data, at, range.end) {
             let end = group(data, i).end.min(range.end);
-            for index in i..end {
+            let begin = data
+                .selectable_clusters
+                .partition_point(|u| (*u as usize) < i);
+            let finish = data
+                .selectable_clusters
+                .partition_point(|u| (*u as usize) < end);
+            for index in data.selectable_clusters[begin..finish]
+                .iter()
+                .map(|i| *i as usize)
+            {
                 let old = super::scan::unit_width_from(
                     data,
                     &data.units[index],
@@ -226,8 +243,8 @@ pub(super) fn measure(
     let (Some(first_at), Some(last_at)) = (first(data, start, end), last(data, start, end)) else {
         return Vec::new();
     };
-    let first_range = group(data, first_at).start.max(start)..group(data, first_at).end.min(end);
-    let last_range = group(data, last_at).start.max(start)..group(data, last_at).end.min(end);
+    let first_range = clipped_group(data, first_at, &line);
+    let last_range = clipped_group(data, last_at, &line);
     let before = last(data, 0, start);
     let needs_first = partial(data, &first_range)
         || start > 0
@@ -300,7 +317,7 @@ fn covers_partial_edges(
         .into_iter()
         .flatten()
         .all(|at| {
-            let range = group(data, at).start.max(start)..group(data, at).end.min(end);
+            let range = clipped_group(data, at, &(start..end));
             !partial(data, &range)
                 || windows.iter().any(|window| {
                     window.overlay.text.start <= data.units[range.start].text.start

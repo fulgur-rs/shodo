@@ -55,6 +55,8 @@ pub(crate) struct SharedCluster {
     pub(crate) text: Range<u32>,
     pub(crate) glyphs: Range<u32>,
     pub(crate) units: Range<usize>,
+    /// Text slices only; transparent markers can occur between them.
+    pub(crate) slices: Vec<usize>,
 }
 
 #[derive(Clone, Debug)]

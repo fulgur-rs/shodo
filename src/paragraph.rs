@@ -65,6 +65,7 @@ pub(crate) struct ParagraphData {
     pub(crate) glyphs: GlyphStore,
     /// Unit index for each shaping cluster and cluster index for each glyph.
     pub(crate) clusters: Vec<u32>,
+    pub(crate) selectable_clusters: Vec<u32>,
     pub(crate) glyph_clusters: Vec<u32>,
     /// Unit index and node, in float ordinal order.
     pub(crate) floats: Vec<(u32, NodeId)>,
@@ -235,6 +236,7 @@ impl Paragraph {
             glyphs,
             clusters: Vec::new(),
             glyph_clusters: Vec::new(),
+            selectable_clusters: Vec::new(),
             floats: Vec::new(),
             runs,
             shape_items: shape_items_input,
@@ -254,16 +256,16 @@ impl Paragraph {
         let mut clusters = Vec::new();
         let mut glyph_clusters = vec![0; data.glyphs.len()];
         let mut floats = Vec::new();
+        let mut selectable_clusters = Vec::new();
+        let mut previous_cluster = None;
         for (i, u) in data.units.iter().enumerate() {
             match &u.kind {
                 crate::analysis::units::UnitKind::Cluster { glyphs, .. } => {
-                    if i > 0
-                        && u.shared_cluster.is_some()
-                        && data.units[i - 1]
-                            .shared_cluster
-                            .as_ref()
-                            .is_some_and(|previous| previous.text == *u.shaping_text())
-                    {
+                    selectable_clusters.push(i as u32);
+                    let same = previous_cluster
+                        .is_some_and(|previous: usize| u.shares_cluster(&data.units[previous]));
+                    previous_cluster = Some(i);
+                    if same {
                         continue;
                     }
                     let cluster = clusters.len() as u32;
@@ -277,6 +279,7 @@ impl Paragraph {
             }
         }
         data.clusters = clusters;
+        data.selectable_clusters = selectable_clusters;
         data.glyph_clusters = glyph_clusters;
         data.floats = floats;
         warnings.record_saturation(&sat);

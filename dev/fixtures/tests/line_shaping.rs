@@ -1238,3 +1238,343 @@ fn hidden_soft_hyphen_does_not_consume_justification_spacing() {
     };
     assert_eq!(layout("a\u{ad}b"), layout("ab"));
 }
+
+#[test]
+fn float_inside_ligature_reports_its_actual_source_position() {
+    use shodo::node::OutOfFlowKind;
+    use shodo::{LineConstraint, LineResult};
+    let limits = Limits::default();
+    let fonts = load_fonts(&limits).unwrap();
+    let style = ParagraphStyle::default();
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        "f",
+    )
+    .push_out_of_flow(NodeId(2), OutOfFlowKind::Float)
+    .push_text(
+        TextSource::Dom {
+            node: NodeId(3),
+            offset: 0,
+        },
+        "fi",
+    );
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let LineResult::FloatEncountered {
+        node,
+        inline_position,
+        float_cursor,
+        ..
+    } = p.next_line(
+        &mut LayoutContext::new(),
+        p.start_token(),
+        &Default::default(),
+        &LineConstraint::new(1000.0),
+        &AtomicSizes::EMPTY,
+    )
+    else {
+        panic!("source float must be reported");
+    };
+    assert_eq!(node, NodeId(2));
+    assert!(
+        (inline_position - direct_width("f")).abs() < 0.04,
+        "float at {inline_position}, source prefix {}",
+        direct_width("f")
+    );
+    let mut constraint = LineConstraint::new(1000.0);
+    constraint.floats_placed_through = Some(float_cursor);
+    let LineResult::Line(line) = p.next_line(
+        &mut LayoutContext::new(),
+        p.start_token(),
+        &Default::default(),
+        &constraint,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!()
+    };
+    assert_eq!(
+        glyph_ids(&line).len(),
+        1,
+        "one shared ligature across the anchor"
+    );
+    assert!((line.inline_size() - direct_width("ffi")).abs() < 0.04);
+}
+
+#[test]
+fn internal_float_uses_source_line_tokens_and_cached_continuation() {
+    use shodo::node::{InlineEdges, OutOfFlowKind};
+    use shodo::{LineConstraint, LineResult};
+    let limits = Limits::default();
+    let fonts = load_fonts(&limits).unwrap();
+    let style = ParagraphStyle {
+        root: InlineStyle {
+            overflow_wrap: OverflowWrap::Anywhere,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        "f",
+    )
+    .push_out_of_flow(NodeId(2), OutOfFlowKind::Float)
+    .open_inline(NodeId(10), &style.root, InlineEdges::default())
+    .push_text(
+        TextSource::Dom {
+            node: NodeId(3),
+            offset: 0,
+        },
+        "fi",
+    )
+    .close_inline();
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let mut warm = LayoutContext::new();
+    let LineResult::FloatEncountered { float_cursor, .. } = p.next_line(
+        &mut warm,
+        p.start_token(),
+        &Default::default(),
+        &LineConstraint::new(1000.0),
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!()
+    };
+    let width = direct_width("f") + 0.1;
+    let mut c = LineConstraint::new(width);
+    c.floats_placed_through = Some(float_cursor);
+    let LineResult::Line(first) = p.next_line(
+        &mut warm,
+        p.start_token(),
+        &Default::default(),
+        &c,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!()
+    };
+    assert_eq!(first.text_range(), 0..1);
+    assert_eq!(first.displaced_floats(), &[(NodeId(2), float_cursor)]);
+    let token = first.break_token();
+    let LineResult::FloatEncountered {
+        inline_position, ..
+    } = p.next_line(
+        &mut warm,
+        token,
+        &Default::default(),
+        &LineConstraint::new(1000.0),
+        &AtomicSizes::EMPTY,
+    )
+    else {
+        panic!("float belongs to the source continuation");
+    };
+    assert_eq!(inline_position, 0.0);
+    for width in [
+        1000.0,
+        direct_width("fi") + 0.1,
+        direct_width("f") + 0.1,
+        1.0,
+        0.0,
+    ] {
+        let mut c = LineConstraint::new(width);
+        c.floats_placed_through = Some(float_cursor);
+        let LineResult::Line(actual) = p.next_line(
+            &mut warm,
+            token,
+            &Default::default(),
+            &c,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!()
+        };
+        let LineResult::Line(expected) = p.next_line(
+            &mut LayoutContext::new(),
+            token,
+            &Default::default(),
+            &c,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!()
+        };
+        assert!(
+            !glyph_ids(&actual).is_empty(),
+            "marker span must not create an empty emergency line"
+        );
+        assert_eq!(actual.text_range(), expected.text_range());
+        assert_eq!(actual.inline_size(), expected.inline_size());
+        assert_eq!(glyph_ids(&actual), glyph_ids(&expected));
+        let run = actual
+            .fragments()
+            .find_map(|f| match f {
+                Fragment::GlyphRun(r) => Some(r),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(run.node(), Some(NodeId(3)));
+        assert!(
+            actual
+                .fragments()
+                .any(|f| matches!(f, Fragment::InlineBox(b) if b.node == NodeId(10))),
+            "continuation text must remain in its source box"
+        );
+        assert_eq!(run.clusters().next().unwrap().text_range, run.text_range());
+    }
+}
+
+#[test]
+fn internal_inline_boxes_follow_source_slices_and_keep_parent_links() {
+    use shodo::node::InlineEdges;
+    let limits = Limits::default();
+    let fonts = load_fonts(&limits).unwrap();
+    let style = ParagraphStyle {
+        root: InlineStyle {
+            overflow_wrap: OverflowWrap::Anywhere,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        "f",
+    )
+    .open_inline(NodeId(10), &style.root, InlineEdges::default())
+    .push_text(
+        TextSource::Dom {
+            node: NodeId(2),
+            offset: 0,
+        },
+        "f",
+    )
+    .open_inline(NodeId(11), &style.root, InlineEdges::default())
+    .push_text(
+        TextSource::Dom {
+            node: NodeId(3),
+            offset: 0,
+        },
+        "i",
+    )
+    .close_inline()
+    .close_inline();
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let actual = lines(&p, direct_width("f") + 0.1);
+    assert_eq!(
+        actual.iter().map(|l| l.text_range()).collect::<Vec<_>>(),
+        vec![0..1, 1..2, 2..3]
+    );
+    assert!(
+        actual[0]
+            .fragments()
+            .all(|f| !matches!(f, Fragment::InlineBox(_)))
+    );
+    let boxes: Vec<_> = actual[1]
+        .fragments()
+        .filter_map(|f| match f {
+            Fragment::InlineBox(b) => Some(b),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(boxes.len(), 1);
+    assert_eq!(boxes[0].node, NodeId(10));
+    assert!(boxes[0].has_start_edge && !boxes[0].has_end_edge);
+    let fragments: Vec<_> = actual[2].fragments().collect();
+    let boxes: Vec<_> = fragments
+        .iter()
+        .enumerate()
+        .filter_map(|(i, f)| match f {
+            Fragment::InlineBox(b) => Some((i, b)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(boxes.len(), 2);
+    assert_eq!(boxes[0].1.node, NodeId(10));
+    assert!(!boxes[0].1.has_start_edge && boxes[0].1.has_end_edge);
+    assert_eq!(boxes[1].1.node, NodeId(11));
+    assert_eq!(boxes[1].1.parent, Some(boxes[0].0));
+    assert!(boxes[1].1.has_start_edge && boxes[1].1.has_end_edge);
+    assert!((boxes[0].1.rect.inline_size - direct_width("i")).abs() < 0.04);
+    for (i, line) in actual.iter().enumerate() {
+        assert_eq!(glyph_ids(line).len(), 1);
+        let run = line
+            .fragments()
+            .find_map(|f| match f {
+                Fragment::GlyphRun(r) => Some(r),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(run.node(), Some(NodeId(i as u64 + 1)));
+    }
+    let wide = lines(&p, 1000.0);
+    assert_eq!(glyph_ids(&wide[0]).len(), 1);
+    assert!((wide[0].inline_size() - direct_width("ffi")).abs() < 0.04);
+}
+
+#[test]
+fn shared_ligature_across_anchor_keeps_visual_glyphs_in_both_directions() {
+    use shodo::node::OutOfFlowKind;
+    let limits = Limits::default();
+    let fonts = load_fonts(&limits).unwrap();
+    for direction in [Direction::Ltr, Direction::Rtl] {
+        let style = ParagraphStyle {
+            direction,
+            ..Default::default()
+        };
+        let mut plain = ParagraphBuilder::new(&style, &limits);
+        plain.push_text(TextSource::Generated { node: NodeId(1) }, "ffi");
+        let plain = plain
+            .build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap();
+        let reference = lines(&plain, 1000.0);
+        let mut split = ParagraphBuilder::new(&style, &limits);
+        split
+            .push_text(TextSource::Generated { node: NodeId(1) }, "f")
+            .push_out_of_flow(NodeId(2), OutOfFlowKind::Absolute)
+            .push_text(TextSource::Generated { node: NodeId(3) }, "fi");
+        let split = split
+            .build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap();
+        let actual = lines(&split, 1000.0);
+        assert_eq!(glyph_ids(&actual[0]), glyph_ids(&reference[0]));
+        let positions = |line: &Line| {
+            line.fragments()
+                .filter_map(|f| match f {
+                    Fragment::GlyphRun(r) => Some(r),
+                    _ => None,
+                })
+                .flat_map(|r| r.glyphs())
+                .map(|g| (g.inline_position, g.advance))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(positions(&actual[0]), positions(&reference[0]));
+        let anchor = actual[0]
+            .fragments()
+            .find_map(|f| match f {
+                Fragment::OutOfFlowAnchor(a) => Some(a),
+                _ => None,
+            })
+            .unwrap();
+        let expected = if direction == Direction::Ltr {
+            direct_width("f")
+        } else {
+            direct_width("ffi") - direct_width("f")
+        };
+        assert!(
+            (anchor.inline_position - expected).abs() < 0.04,
+            "{direction:?} anchor {} vs {expected}",
+            anchor.inline_position
+        );
+    }
+}
