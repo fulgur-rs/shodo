@@ -92,16 +92,8 @@ pub fn paint_lines(
             }
         }
     }
-    let (painted, count) =
-        glyph_paint::try_paint(lines, color, annotations).map_err(|e| e.to_string())?;
-    let mut image = tiny_skia::Pixmap::new(512, 1024).ok_or("cannot allocate snapshot canvas")?;
-    image.fill(tiny_skia::Color::WHITE);
-    if painted.height() > 1024 {
-        return Err("painted output exceeds fixed canvas".into());
-    }
-    let length = painted.data().len();
-    image.data_mut()[..length].copy_from_slice(painted.data());
-    Ok((image, count))
+    glyph_paint::try_paint_on_canvas(lines, color, annotations, 512, 1024)
+        .map_err(|e| e.to_string())
 }
 fn text(b: &mut ParagraphBuilder, node: u64, value: &str) {
     b.push_text(

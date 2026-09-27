@@ -190,3 +190,70 @@ fn synthetic_output_and_content_outside_canvas_fail_instead_of_being_blessed() {
     let outside = accepted_line(400.0, 1100.0);
     assert!(snapshot_cases::paint_lines(&[outside], &[], |_| [0, 0, 0, 255]).is_err());
 }
+
+fn accepted_large_line(block: f32) -> shodo::Line {
+    let limits = Default::default();
+    let fonts = load_fonts(&limits).unwrap();
+    let style = ParagraphStyle {
+        root: InlineStyle {
+            font_families: vec![FontFamily::Named(FONTS[0].family.into())],
+            font_size: 100.0,
+            line_height: shodo::style::LineHeight::Px(1.0),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut builder = ParagraphBuilder::new(&style, &limits);
+    builder.push_text(TextSource::Generated { node: NodeId(1) }, "A");
+    let paragraph = builder
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let constraint = LineConstraint {
+        block_offset: block,
+        ..LineConstraint::new(300.0)
+    };
+    match paragraph.next_line(
+        &mut LayoutContext::new(),
+        paragraph.start_token(),
+        &Default::default(),
+        &constraint,
+        &AtomicSizes::EMPTY,
+    ) {
+        LineResult::Line(line) => line,
+        other => panic!("unexpected accepted line: {other:?}"),
+    }
+}
+
+#[test]
+fn real_outline_outside_canvas_fails_even_when_advance_and_line_box_fit() {
+    let line = accepted_large_line(0.0);
+    assert!(line.inline_size() < 300.0);
+    assert!(line.block_size() < 2.0);
+    assert!(snapshot_cases::paint_lines(&[line], &[], |_| [0, 0, 0, 255]).is_err());
+}
+
+#[test]
+fn real_ink_inside_fixed_canvas_is_not_lost_to_a_short_line_box() {
+    let line = accepted_large_line(100.0);
+    let (image, count) = snapshot_cases::paint_lines(&[line], &[], |_| [0, 0, 0, 255]).unwrap();
+    assert_eq!(count, 1);
+    // The A baseline is near149px including page/origin, although the accepted
+    // one-pixel line box ends near101px. Its lower ink must survive below143px.
+    assert!(
+        image.data()[143 * 512 * 4..]
+            .chunks_exact(4)
+            .any(|pixel| pixel != [255, 255, 255, 255])
+    );
+}
+
+#[test]
+fn source_annotation_outside_actual_canvas_fails_instead_of_being_clipped() {
+    let line = accepted_line(400.0, 0.0);
+    let annotation = shodo::geometry::LogicalRect {
+        inline_start: 600.0,
+        block_start: 0.0,
+        inline_size: 20.0,
+        block_size: 10.0,
+    };
+    assert!(snapshot_cases::paint_lines(&[line], &[annotation], |_| [0, 0, 0, 255]).is_err());
+}
