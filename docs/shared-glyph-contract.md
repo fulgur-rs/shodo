@@ -92,7 +92,7 @@ SHODO_SHARED_GLYPH_PNG=/tmp/shared-glyph.png \
   cargo +stable test --offline -p shodo-fixtures --test shared_glyph
 ```
 
-The fixed-font glyph painter is shared in `tests/support/glyph_paint.rs` for
+The fixed-font glyph painter is shared in `examples/support/glyph_paint.rs` for
 later sample/snapshot work (.11/.7). It only handles unsynthesized outline
 fixtures and a simple source annotation; production synthesis, color fonts,
 full decorations and general page painting remain caller responsibilities.
