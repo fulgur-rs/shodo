@@ -7,6 +7,7 @@
 pub(crate) mod cache;
 mod features;
 mod instance;
+pub(crate) mod orientation;
 use instance::RunInstance;
 pub(crate) use instance::resolve as resolve_instance;
 use std::sync::Arc;
@@ -144,6 +145,7 @@ pub(crate) fn shape_items(
                 level: original.level,
                 script: original.script,
                 font: original.font.clone(),
+                orientation: original.orientation,
                 before: original.before.clone(),
                 after: original.after.clone(),
             };
@@ -605,6 +607,7 @@ pub(crate) fn shape_window_edit(
                 level: original.level,
                 script: original.script,
                 font,
+                orientation: original.orientation,
                 before: before.into_iter().collect(),
                 after: original.scalars[finish..]
                     .iter()
@@ -619,6 +622,7 @@ pub(crate) fn shape_window_edit(
                 && previous.level == part.level
                 && previous.script == part.script
                 && previous.font == part.font
+                && previous.orientation == part.orientation
             {
                 previous.scalars.extend(part.scalars);
                 previous.end = part.end;

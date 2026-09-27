@@ -28,6 +28,7 @@ pub(crate) struct ShapeItem {
     pub(crate) level: u8,
     pub(crate) script: [u8; 4],
     pub(crate) font: Option<FontMatch>,
+    pub(crate) orientation: crate::shape::orientation::RunOrientation,
     pub(crate) before: String,
     pub(crate) after: String,
 }
@@ -121,6 +122,7 @@ pub(crate) fn itemize(
     bidi: &BidiAnalysis,
     breaks: &super::breaks::BreakAnalysis,
     fonts: &FontCollection,
+    mode: crate::geometry::WritingMode,
 ) -> Vec<ShapeItem> {
     // Canonical query identities are built once per style, without searching a
     // growing list of styles or cloning family/language strings per scalar.
@@ -178,6 +180,11 @@ pub(crate) fn itemize(
                     part_end += 1;
                 }
                 let source = &scalars[part_start];
+                let orientation = crate::shape::orientation::resolve(
+                    mode,
+                    styles[style as usize].text_orientation,
+                    scalars[scalar_start].c,
+                );
                 let locale_script: icu_locale_core::subtags::Script =
                     scalar_scripts[part_start].into();
                 let script: [u8; 4] = locale_script
@@ -218,6 +225,7 @@ pub(crate) fn itemize(
                     && previous.level == level
                     && previous.script == script
                     && previous.font == font
+                    && previous.orientation == orientation
                 {
                     previous
                         .scalars
@@ -236,6 +244,7 @@ pub(crate) fn itemize(
                         level,
                         script,
                         font,
+                        orientation,
                         before: scalars[part_start.saturating_sub(5)..part_start]
                             .iter()
                             .map(|s| s.c)
@@ -292,4 +301,202 @@ pub(crate) fn itemize(
     }
     flush(&mut text, &mut scalars, &mut style_indices, &mut result);
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::font::{FontCollection, FontOptions};
+    use crate::geometry::WritingMode;
+    use crate::limits::Limits;
+    use crate::node::{InlineEdges, NodeId, TextSource};
+    use crate::shape::orientation::RunOrientation;
+    use crate::style::{ParagraphStyle, TextOrientation};
+    use crate::{LayoutContext, Paragraph, ParagraphBuilder};
+
+    fn paragraph(mode: WritingMode, text: &str) -> Paragraph {
+        let style = ParagraphStyle {
+            writing_mode: mode,
+            ..Default::default()
+        };
+        build(&style, |builder| {
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
+        })
+    }
+
+    fn build(style: &ParagraphStyle, add: impl FnOnce(&mut ParagraphBuilder)) -> Paragraph {
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        let mut builder = ParagraphBuilder::new(style, &limits);
+        add(&mut builder);
+        builder.build(&mut LayoutContext::new(), &fonts).unwrap()
+    }
+
+    #[test]
+    fn mixed_vertical_orientation_cuts_shaping_items() {
+        // UAX50: section sign is upright, both Latin letters are rotated.
+        // Their script and missing-font identity are equal, so only the
+        // orientation boundary should prevent joining their shaping items.
+        let horizontal = paragraph(WritingMode::HorizontalTb, "a§b");
+        assert_eq!(horizontal.data.shape_items.len(), 1);
+        let vertical = paragraph(WritingMode::VerticalRl, "a§b");
+        assert_eq!(vertical.data.shape_items.len(), 3);
+        let ranges: Vec<_> = vertical
+            .data
+            .shape_items
+            .iter()
+            .map(|item| item.scalars[0].offset..item.end)
+            .collect();
+        assert_eq!(ranges, vec![0..1, 1..3, 3..4]);
+    }
+
+    #[test]
+    fn writing_mode_and_text_orientation_item_matrix() {
+        use RunOrientation::{
+            Horizontal as H, SidewaysClockwise as C, SidewaysCounterClockwise as A, Upright as U,
+        };
+        use TextOrientation::{Mixed, Sideways, Upright};
+        use WritingMode::{HorizontalTb, SidewaysLr, SidewaysRl, VerticalLr, VerticalRl};
+        for (mode, orientation, expected) in [
+            (HorizontalTb, Mixed, vec![H]),
+            (HorizontalTb, Upright, vec![H]),
+            (HorizontalTb, Sideways, vec![H]),
+            (VerticalRl, Mixed, vec![C, U, C]),
+            (VerticalRl, Upright, vec![U]),
+            (VerticalRl, Sideways, vec![C]),
+            (VerticalLr, Mixed, vec![C, U, C]),
+            (VerticalLr, Upright, vec![U]),
+            (VerticalLr, Sideways, vec![C]),
+            (SidewaysRl, Mixed, vec![C]),
+            (SidewaysRl, Upright, vec![C]),
+            (SidewaysRl, Sideways, vec![C]),
+            (SidewaysLr, Mixed, vec![A]),
+            (SidewaysLr, Upright, vec![A]),
+            (SidewaysLr, Sideways, vec![A]),
+        ] {
+            let mut style = ParagraphStyle {
+                writing_mode: mode,
+                ..Default::default()
+            };
+            style.root.text_orientation = orientation;
+            let paragraph = build(&style, |builder| {
+                builder.push_text(TextSource::Generated { node: NodeId(1) }, "a§b");
+            });
+            let actual: Vec<_> = paragraph
+                .data
+                .shape_items
+                .iter()
+                .map(|item| item.orientation)
+                .collect();
+            assert_eq!(actual, expected, "{mode:?}/{orientation:?}");
+        }
+    }
+
+    #[test]
+    fn mixed_orientation_keeps_marks_and_selectors_with_their_grapheme() {
+        use RunOrientation::{SidewaysClockwise as C, Upright as U};
+        // U+2329 is Tr and U+3001 is Tu; both use upright vertical shaping.
+        let paragraph = paragraph(WritingMode::VerticalRl, "a\u{301}§\u{fe0f}〈、");
+        let actual: Vec<_> = paragraph
+            .data
+            .shape_items
+            .iter()
+            .flat_map(|item| {
+                item.scalars
+                    .iter()
+                    .map(move |scalar| (scalar.c, item.orientation))
+            })
+            .collect();
+        assert_eq!(
+            actual,
+            vec![
+                ('a', C),
+                ('\u{301}', C),
+                ('§', U),
+                ('\u{fe0f}', U),
+                ('〈', U),
+                ('、', U)
+            ]
+        );
+    }
+
+    #[test]
+    fn mixed_grapheme_orientation_survives_source_and_style_boundaries() {
+        let style = ParagraphStyle {
+            writing_mode: WritingMode::VerticalRl,
+            ..Default::default()
+        };
+        let mut mark_style = style.root.clone();
+        mark_style.font_size += 1.0;
+        let paragraph = build(&style, |builder| {
+            builder.push_text(
+                TextSource::Dom {
+                    node: NodeId(1),
+                    offset: 0,
+                },
+                "§",
+            );
+            builder.open_inline(NodeId(2), &mark_style, InlineEdges::default());
+            builder.push_text(
+                TextSource::Dom {
+                    node: NodeId(3),
+                    offset: 0,
+                },
+                "\u{301}",
+            );
+            builder.close_inline();
+            builder.push_text(
+                TextSource::Dom {
+                    node: NodeId(4),
+                    offset: 0,
+                },
+                "ab",
+            );
+        });
+        let actual: Vec<_> = paragraph
+            .data
+            .shape_items
+            .iter()
+            .map(|item| (item.scalars[0].offset..item.end, item.orientation))
+            .collect();
+        assert_eq!(
+            actual,
+            vec![
+                (0..2, RunOrientation::Upright),
+                (2..4, RunOrientation::Upright),
+                (4..6, RunOrientation::SidewaysClockwise),
+            ]
+        );
+    }
+
+    #[test]
+    fn different_text_orientation_styles_prevent_horizontal_script_joining() {
+        let style = ParagraphStyle {
+            writing_mode: WritingMode::VerticalRl,
+            ..Default::default()
+        };
+        let mut upright = style.root.clone();
+        upright.text_orientation = TextOrientation::Upright;
+        let paragraph = build(&style, |builder| {
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+            builder.open_inline(NodeId(2), &upright, InlineEdges::default());
+            builder.push_text(TextSource::Generated { node: NodeId(3) }, "b");
+            builder.close_inline();
+        });
+        let actual: Vec<_> = paragraph
+            .data
+            .shape_items
+            .iter()
+            .map(|item| item.orientation)
+            .collect();
+        assert_eq!(
+            actual,
+            vec![RunOrientation::SidewaysClockwise, RunOrientation::Upright]
+        );
+    }
 }

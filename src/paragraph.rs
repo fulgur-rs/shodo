@@ -416,8 +416,14 @@ fn build_data(
     shape_limits.max_shaped_glyphs = glyph_budget;
     let breaks = crate::analysis::breaks::analyze_breaks(&processed, &styles, warnings);
     let bidi = analyze_bidi(&processed.text, &style, &styles);
-    let shape_items_input =
-        crate::analysis::itemize::itemize(&processed, &styles, &bidi, &breaks, fonts);
+    let shape_items_input = crate::analysis::itemize::itemize(
+        &processed,
+        &styles,
+        &bidi,
+        &breaks,
+        fonts,
+        style.writing_mode,
+    );
     let (glyphs, runs) = shape_items(
         cx,
         &shape_items_input,

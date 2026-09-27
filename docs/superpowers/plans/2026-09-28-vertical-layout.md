@@ -40,7 +40,7 @@
 
 **Interfaces:**
 - Consumes: `WritingMode`, `TextOrientation`, ICU `CodePointMapData<VerticalOrientation>`、既存grapheme window。
-- Produces: `RunOrientation { Horizontal, Upright, SidewaysClockwise, SidewaysCounterClockwise, Combined }`。
+- Produces: `RunOrientation { Horizontal, Upright, SidewaysClockwise, SidewaysCounterClockwise }`。
   `orientation::resolve(mode: WritingMode, orientation: TextOrientation, base: char) -> RunOrientation`。
   `ShapeItem.orientation: RunOrientation`。
   `itemize(input, styles, bidi, breaks, fonts, mode: WritingMode) -> Vec<ShapeItem>`。
@@ -100,7 +100,7 @@ Create `tests/vertical.rs`;必要な固定font table fixtureを既存fixture生�
 
 **Interfaces:**
 - Consumes: Task 1 orientation、Task 2 transformとTTB/水平shaping、Processed items/offset map。
-- Produces: `CombineSpan { text: Range<u32>, item: u32, em: f32 }`、
+- Produces: `RunOrientation::Combined`、`CombineSpan { text: Range<u32>, item: u32, em: f32 }`、
   `combine::prepare(processed, styles, mode) -> Vec<CombineSpan>` とcomposition単位のUnit/paint mapping。
   external Unitは1em、内部glyphは水平advanceのまま。transformに圧縮scaleを含める。
   composition idはsource-preserving spansであり、glyph ownershipを一つのnodeへ偽装しない。
