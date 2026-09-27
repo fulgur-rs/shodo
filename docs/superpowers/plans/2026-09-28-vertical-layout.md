@@ -75,22 +75,22 @@ Create `tests/vertical.rs`;必要な固定font table fixtureを既存fixture生�
   `vector(inline: f32, block: f32) -> (f32, f32)` と逆point変換。
   glyph originにmatrixを加えphysical point/vectorを合成する。
 
-- [ ] **Step 1: Write actual-font failing tests** cjkの句読点vert glyph、TTB advance、vmtx top bearing、Latin font欠落時合成、
+- [x] **Step 1: Write actual-font failing tests** cjkの句読点vert glyph、TTB advance、vmtx top bearing、Latin font欠落時合成、
   VORG、VVAR、vhea global metrics、明示vert disable/vrt2 enable、vkrn disableを検証する。
   `cargo +stable test --test vertical --offline -- --nocapture`。
   Expected: 水平advance/glyphのままでassertが失敗する。
-- [ ] **Step 2: Implement TTB and axis normalization** direction/features/instanceをcacheに渡す。
+- [x] **Step 2: Implement TTB and axis normalization** direction/features/instanceをcacheに渡す。
   y advanceをinlineへ、縦originをlogicaloffsetへ一度変換する。runbudget/overlay/windowへ同じ情報を伝える。
   Expected: 上記font testが成功し、font fallbackとresource limitを維持する。
-- [ ] **Step 3: Write failing baseline/transform matrix tests** 全modeとLTR/RTL、mixed sizes/fonts、atomics、VerticalAlignを検証する。
+- [x] **Step 3: Write failing baseline/transform matrix tests** 全modeとLTR/RTL、mixed sizes/fonts、atomics、VerticalAlignを検証する。
   Expected: central位置、outline局所(1,0)/(0,1)の物理方向が独立したliteral表と異なる。
-- [ ] **Step 4: Implement baseline metrics and public contract** 直立em中央とsideways alphabeticを分ける。
+- [x] **Step 4: Implement baseline metrics and public contract** 直立em中央とsideways alphabeticを分ける。
   line-over対応、runmetrics、point/vector/inverse、public docs/exportsを実装する。
   Expected: matrixとbaseline test成功。水平glyphをRTLでmirrorしない。
-- [ ] **Step 5: Write and pass interaction regressions** upright Arabic isolated/LTR、mixed Arabic joining、marks、shared cluster、
+- [x] **Step 5: Write and pass interaction regressions** upright Arabic isolated/LTR、mixed Arabic joining、marks、shared cluster、
   planned/cache/fresh、float retry、first-line、小さなbyte/glyph予算、font-size-adjustを検証する。
   Expected: accepted geometry/glyph/transform/sourceが一致する。
-- [ ] **Step 6: Verify and commit** `cargo +stable test --workspace --offline`。
+- [x] **Step 6: Verify and commit** `cargo +stable test --workspace --offline`。
   Expected: 全workspace成功。`feat: shape and expose vertical glyph runs` をcommit、同commandでtask-done。
 
 ### Task 3: 縦中横のcompositionとsource mapping
