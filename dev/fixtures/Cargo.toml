@@ -20,6 +20,7 @@ raikiri-html = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e61
 raikiri-style = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
 raikiri-traits = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
 tiny-skia = "0.12"
+taffy = { version = "0.14", default-features = false, features = ["std", "float_layout"] }
 
 [[example]]
 name = "render_png"

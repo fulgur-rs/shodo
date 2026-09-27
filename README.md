@@ -34,7 +34,7 @@ Hit testing, vertical shaping/orientation, and ruby layout are planned. APIs des
 
 The default `complex-scripts` feature enables ICU dictionary/neural segmentation for complex-context scripts. With it disabled, those scripts retain Unicode/grapheme safety but use the non-dictionary fallback and report the degradation. Arabic and other OpenType shaping remains available in either mode.
 
-Float placement remains the caller's responsibility. The protocol reports anchors and displaced floats; it is not a BFC or a production renderer integration. A `BreakPlan` is ignored when its paragraph, width, options, atomic revision, or float constraints do not match.
+The [float caller harness](docs/float-integration-harness.md) demonstrates real Taffy placement, retries and complete checkpoints with numeric and PNG tests. Float placement remains the caller's responsibility. The protocol reports anchors and displaced floats; it is not a BFC or a production renderer integration. A `BreakPlan` is ignored when its paragraph, width, options, atomic revision, or float constraints do not match.
 
 ## Getting started
 
