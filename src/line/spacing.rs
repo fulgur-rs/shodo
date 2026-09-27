@@ -226,13 +226,16 @@ pub(super) fn push(data: &ParagraphData, cursor: &mut Cursor, index: usize) {
     cursor.push(level, data.unit_spacing[index].summary, Some(data));
 }
 
+/// A typographic edge's kind and source offset.
+type JustificationEdge = (Kind, u32);
+
 /// Legal typographic starts in a final shaping cluster. Keeping source cuts
 /// excludes combining continuations and indivisible transform expansions.
 pub(super) fn justification_metadata(
     data: &ParagraphData,
     text: std::ops::Range<u32>,
     visible_hyphen: Option<u32>,
-) -> (usize, Option<Kind>, Option<Kind>) {
+) -> (usize, Option<JustificationEdge>, Option<JustificationEdge>) {
     if text.start >= text.end {
         return (0, None, None);
     }
@@ -263,13 +266,14 @@ pub(super) fn justification_metadata(
                 | Script::Syriac
         ) && icu_properties::props::GeneralCategoryGroup::Letter.contains(gc);
         let kind = if cursive { Kind::Cursive } else { Kind::Text };
-        if let Some(previous) = last
+        if let Some((previous, previous_offset)) = last
             && !(previous == Kind::Cursive && kind == Kind::Cursive)
+            && super::punctuation::justify_boundary(data, previous_offset, offset)
         {
             count += 1;
         }
-        first.get_or_insert(kind);
-        last = Some(kind);
+        first.get_or_insert((kind, offset));
+        last = Some((kind, offset));
     }
     (count, first, last)
 }

@@ -225,17 +225,19 @@ pub(super) fn apply(
             };
             let (internal, first, last) =
                 super::spacing::justification_metadata(data, text.clone(), visible_hyphen);
-            if let Some(first) = first {
-                if let Some((previous_point, previous_kind)) = previous
+            if let Some((first, first_offset)) = first {
+                if let Some((previous_point, previous_kind, previous_offset)) = previous
                     && !(previous_kind == super::spacing_summary::Kind::Cursive
                         && first == super::spacing_summary::Kind::Cursive)
+                    && super::punctuation::justify_boundary(data, previous_offset, first_offset)
                 {
                     add_opportunity(&mut opportunities, previous_point, 1);
                 }
                 add_opportunity(&mut opportunities, point, internal);
-                previous = Some((point, last.unwrap()));
+                let (last, last_offset) = last.unwrap();
+                previous = Some((point, last, last_offset));
             } else if data.breaks.caret_cuts.binary_search(&text.start).is_err()
-                && let Some((previous_point, _)) = &mut previous
+                && let Some((previous_point, _, _)) = &mut previous
             {
                 // A mark or indivisible transformed continuation belongs to
                 // the preceding typographic unit; place its following gap

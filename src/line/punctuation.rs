@@ -551,6 +551,59 @@ pub(super) fn intrinsic(
     natural.sub(adjustment.removed(sat), sat)
 }
 
+/// JLREQ expansion exclusions are independent of line-break prohibitions.
+/// Source offsets also work inside an owned or compressed shaping cluster.
+pub(super) fn justify_boundary(data: &ParagraphData, left: u32, right: u32) -> bool {
+    use icu_properties::props::{LineBreak, Script};
+    let profile = |offset: u32| {
+        let ch = data.text[offset as usize..].chars().next().unwrap_or('\0');
+        let item = data.items.partition_point(|i| i.text.end <= offset);
+        let language = data
+            .items
+            .get(item)
+            .and_then(|i| data.styles[i.style as usize].lang.as_deref());
+        let japanese = language.map_or_else(
+            || {
+                matches!(
+                    CodePointMapData::<Script>::new().get(ch),
+                    Script::Han | Script::Hiragana | Script::Katakana
+                ) || ('\u{3000}'..='\u{303f}').contains(&ch)
+                    || CodePointMapData::<EastAsianWidth>::new().get(ch)
+                        == EastAsianWidth::Fullwidth
+            },
+            |lang| {
+                lang.split('-')
+                    .next()
+                    .is_some_and(|l| l.eq_ignore_ascii_case("ja"))
+            },
+        );
+        let protected = matches!(
+            classify(ch, language),
+            PunctuationClass::Opening
+                | PunctuationClass::Closing
+                | PunctuationClass::Middle
+                | PunctuationClass::Space
+                | PunctuationClass::Ps
+                | PunctuationClass::Pe
+        ) || CodePointMapData::<GeneralCategory>::new().get(ch)
+            == GeneralCategory::DashPunctuation
+            || matches!(
+                ch,
+                '\u{ad}' | '\'' | '"' | '！' | '？' | '‼' | '⁇' | '⁈' | '⁉'
+            );
+        (ch, japanese, protected)
+    };
+    let (a, a_japanese, a_protected) = profile(left);
+    let (b, b_japanese, b_protected) = profile(right);
+    if CodePointMapData::<LineBreak>::new().get(a) == LineBreak::Inseparable
+        && CodePointMapData::<LineBreak>::new().get(b) == LineBreak::Inseparable
+        || matches!(a, '—' | '―') && matches!(b, '—' | '―')
+    {
+        return false;
+    }
+    !(a_japanese || b_japanese) || !(a_protected || b_protected)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{PunctuationClass as P, classify};
@@ -584,6 +637,102 @@ mod tests {
         let mut bytes = crate::font::sfnt::build_sfnt(tables);
         bytes[..4].copy_from_slice(b"OTTO");
         bytes
+    }
+
+    #[test]
+    fn justification_filters_boundaries_inside_an_actual_punctuation_ligature() {
+        use crate::Fragment;
+        use crate::style::{TextAlign, TextJustify};
+        let font = FontRef::new(include_bytes!("../../dev/fixtures/assets/fonts/cjk.otf")).unwrap();
+        let ids: Vec<_> = ['「', '日', '」']
+            .iter()
+            .map(|c| font.charmap().map(*c).unwrap().to_u32() as u16)
+            .collect();
+        let mut gsub = Vec::new();
+        let words = |bytes: &mut Vec<u8>, values: &[u16]| {
+            for value in values {
+                bytes.extend(value.to_be_bytes());
+            }
+        };
+        // GSUB1.0: DFLT required rlig, one type4/format1 lookup mapping
+        // 「日」 to the retained 日 outline. Each input keeps its source cut.
+        words(&mut gsub, &[1, 0, 10, 30, 44, 1]);
+        gsub.extend(b"DFLT");
+        words(&mut gsub, &[8, 4, 0, 0, 0, 0, 0, 1]);
+        gsub.extend(b"rlig");
+        words(&mut gsub, &[8, 0, 1, 0, 1, 4, 4, 0, 1, 8]);
+        words(
+            &mut gsub,
+            &[1, 8, 1, 14, 1, 1, ids[0], 1, 4, ids[1], 3, ids[1], ids[2]],
+        );
+        let mut tables = cjk_tables();
+        tables.retain(|(tag, _)| tag != b"GSUB");
+        tables.push((*b"GSUB", gsub));
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register_face(
+                cjk_font(&mut tables),
+                0,
+                FontFaceDescriptor {
+                    family: "Ligature".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let style = ParagraphStyle {
+            root: InlineStyle {
+                font_families: vec![FontFamily::Named("Ligature".into())],
+                font_size: 16.,
+                lang: Some("ja".into()),
+                text_spacing_trim: TextSpacingTrim::SpaceAll,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut builder = ParagraphBuilder::new(&style, &limits);
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, "「日」");
+        let p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        assert_eq!(
+            p.data.glyphs.id,
+            [ids[1] as u32],
+            "fixture must actually ligate"
+        );
+        let options = crate::style::LineOptions {
+            text_align: TextAlign::JustifyAll,
+            text_justify: TextJustify::InterCharacter,
+            ..Default::default()
+        };
+        let LineResult::Line(line) = p.next_line(
+            &mut LayoutContext::new(),
+            p.start_token(),
+            &options,
+            &LineConstraint::new(48.),
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("line")
+        };
+        assert_eq!(line.text_range(), 0..9);
+        assert_eq!(line.inline_size(), 16.);
+        let run = line
+            .fragments()
+            .find_map(|f| {
+                if let Fragment::GlyphRun(r) = f {
+                    Some(r)
+                } else {
+                    None
+                }
+            })
+            .unwrap();
+        let glyphs: Vec<_> = run.glyphs().collect();
+        assert_eq!(glyphs.len(), 1);
+        assert_eq!(glyphs[0].inline_position, 16.);
     }
 
     #[test]

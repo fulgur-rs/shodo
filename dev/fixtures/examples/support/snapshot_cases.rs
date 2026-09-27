@@ -9,7 +9,8 @@ use shodo::hit::{LineLayout, TextPosition};
 use shodo::mapping::Affinity;
 use shodo::node::{InlineEdges, NodeId, OutOfFlowKind, TextSource};
 use shodo::style::{
-    FontFamily, InlineStyle, LineHeight, LineOptions, ParagraphStyle, TabSize, WhiteSpaceCollapse,
+    FontFamily, InlineStyle, LineHeight, LineOptions, ParagraphStyle, TabSize, TextAlign,
+    TextJustify, TextSpacingTrim, WhiteSpaceCollapse,
 };
 use shodo::{
     AtomicSize, AtomicSizes, Fragment, LayoutContext, Line, LineConstraint, LineResult, Paragraph,
@@ -17,7 +18,7 @@ use shodo::{
 };
 use shodo_fixtures::{FONTS, FixtureFonts, load_fonts};
 
-const VARIANTS: [&str; 9] = [
+const VARIANTS: [&str; 14] = [
     "shared-ffi-color",
     "arabic-wrap",
     "nested-atomic-baseline",
@@ -26,8 +27,23 @@ const VARIANTS: [&str; 9] = [
     "hanging-white-space",
     "indent-baseline",
     "japanese-kinsoku",
+    "japanese-trim",
+    "japanese-hanging-first",
+    "japanese-hanging-force-end",
+    "japanese-hanging-allow-end",
+    "japanese-justify",
     "float-pages",
 ];
+fn japanese_feature_case(id: &str) -> bool {
+    matches!(
+        id,
+        "japanese-trim"
+            | "japanese-hanging-first"
+            | "japanese-hanging-force-end"
+            | "japanese-hanging-allow-end"
+            | "japanese-justify"
+    )
+}
 pub struct Rendered {
     pub id: String,
     pub image: tiny_skia::Pixmap,
@@ -198,11 +214,32 @@ fn prepare(
             style.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
             width = 90.0;
         }
-        "japanese-kinsoku" => {
+        "japanese-kinsoku"
+        | "japanese-trim"
+        | "japanese-hanging-first"
+        | "japanese-hanging-force-end"
+        | "japanese-hanging-allow-end"
+        | "japanese-justify" => {
             style.root.font_families = vec![FontFamily::Named(FONTS[1].family.into())];
             style.root.font_size = 16.0;
             style.root.lang = Some("ja".into());
             width = 90.0;
+            if id == "japanese-trim" {
+                style.root.text_spacing_trim = TextSpacingTrim::TrimBoth;
+                width = 128.0;
+            } else if id == "japanese-hanging-first" {
+                style.root.text_spacing_trim = TextSpacingTrim::SpaceAll;
+                width = 56.0;
+            } else if id == "japanese-hanging-force-end" {
+                style.root.text_spacing_trim = TextSpacingTrim::SpaceAll;
+                width = 32.0;
+            } else if id == "japanese-hanging-allow-end" {
+                style.root.text_spacing_trim = TextSpacingTrim::SpaceAll;
+                width = 36.0;
+            } else if id == "japanese-justify" {
+                style.root.text_spacing_trim = TextSpacingTrim::SpaceAll;
+                width = 128.0;
+            }
         }
         "float-pages" => {
             style.root.font_size = 16.0;
@@ -282,6 +319,32 @@ fn prepare(
             text(&mut b, 1, s);
             s
         }
+        "japanese-trim" => {
+            let s = "「日本語」・句読点。";
+            text(&mut b, 1, s);
+            s
+        }
+        "japanese-hanging-first" => {
+            options.text_indent.length = 24.0;
+            options.hanging_punctuation.first = true;
+            let s = "「日本";
+            text(&mut b, 1, s);
+            s
+        }
+        "japanese-hanging-force-end" | "japanese-hanging-allow-end" => {
+            options.hanging_punctuation.force_end = id == "japanese-hanging-force-end";
+            options.hanging_punctuation.allow_end = id == "japanese-hanging-allow-end";
+            let s = "日本、";
+            text(&mut b, 1, s);
+            s
+        }
+        "japanese-justify" => {
+            options.text_align = TextAlign::JustifyAll;
+            options.text_justify = TextJustify::InterCharacter;
+            let s = "日「日本」語";
+            text(&mut b, 1, s);
+            s
+        }
         "float-pages" => {
             b.push_out_of_flow(NodeId(2), OutOfFlowKind::Float);
             let s = "aa bb cc dd ee ff gg hh ii jj";
@@ -290,7 +353,14 @@ fn prepare(
         }
         _ => unreachable!(),
     };
-    let settings = json!({"id":id,"text":input,"width":width,"font_size":style.root.font_size,"line_height":format!("{:?}",style.root.line_height),"direction":format!("{:?}",style.direction),"families":style.root.font_families.iter().map(|f|format!("{f:?}")).collect::<Vec<_>>(),"white_space":format!("{:?}",style.root.white_space_collapse),"tab_px":if id=="preserved-tabs"{Some(16.0)}else{None},"indent":options.text_indent.length});
+    let mut settings = json!({"id":id,"text":input,"width":width,"font_size":style.root.font_size,"line_height":format!("{:?}",style.root.line_height),"direction":format!("{:?}",style.direction),"families":style.root.font_families.iter().map(|f|format!("{f:?}")).collect::<Vec<_>>(),"white_space":format!("{:?}",style.root.white_space_collapse),"tab_px":if id=="preserved-tabs"{Some(16.0)}else{None},"indent":options.text_indent.length});
+    if japanese_feature_case(id) {
+        settings["text_spacing_trim"] = json!(format!("{:?}", style.root.text_spacing_trim));
+        settings["hanging_punctuation"] = json!(format!("{:?}", options.hanging_punctuation));
+        settings["text_align"] = json!(format!("{:?}", options.text_align));
+        settings["text_justify"] = json!(format!("{:?}", options.text_justify));
+        settings["guides"] = json!("logical content edges");
+    }
     let p = b.build(cx, &fonts.collection).map_err(|e| e.to_string())?;
     if id == "float-pages" {
         return Ok((float_pages(&p, cx)?, vec![], settings, true));
@@ -463,6 +533,10 @@ pub fn render(id: &str) -> Result<Rendered, String> {
             let index = lines_json.len();
             let range = line.text_range();
             lines_json.push(json!({"page":page.fragment,"start":range.start,"end":range.end,"block_offset":line.block_offset(),"block_size":line.block_size(),"inline_size":line.inline_size(),"baseline":line.baseline(BaselineKind::Alphabetic)}));
+            if japanese_feature_case(id) {
+                lines_json[index]["hang_start"] = json!(line.hang_start());
+                lines_json[index]["hang_end"] = json!(line.hang_end());
+            }
             for fragment in line.fragments() {
                 match fragment {
                     Fragment::GlyphRun(run) => {
@@ -495,6 +569,25 @@ pub fn render(id: &str) -> Result<Rendered, String> {
                 let mut paint = tiny_skia::Paint::default();
                 paint.set_color_rgba8(160, 160, 160, 255);
                 image.fill_rect(rect, &paint, tiny_skia::Transform::identity(), None);
+            }
+            if japanese_feature_case(id) {
+                let start = if id == "japanese-hanging-first" {
+                    24.0
+                } else {
+                    0.0
+                };
+                let mut paint = tiny_skia::Paint::default();
+                paint.set_color_rgba8(160, 160, 160, 255);
+                for x in [start, start + line.inline_size()] {
+                    let rect = tiny_skia::Rect::from_xywh(
+                        10.0 + x,
+                        10.0 + page.offset + line.block_offset(),
+                        1.0,
+                        line.block_size(),
+                    )
+                    .ok_or("invalid Japanese content edge guide")?;
+                    image.fill_rect(rect, &paint, tiny_skia::Transform::identity(), None);
+                }
             }
         }
         let mut floats = Vec::new();

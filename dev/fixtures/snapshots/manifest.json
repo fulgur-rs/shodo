@@ -100,6 +100,82 @@
       "white_space": "Collapse",
       "width": 180.0
     },
+    "japanese-hanging-allow-end": {
+      "direction": "Ltr",
+      "families": [
+        "Named(\"Shodo Fixture CJK\")"
+      ],
+      "font_size": 16.0,
+      "guides": "logical content edges",
+      "hanging_punctuation": "HangingPunctuation { first: false, force_end: false, allow_end: true, last: false }",
+      "id": "japanese-hanging-allow-end",
+      "indent": 0.0,
+      "line_height": "Px(24.0)",
+      "tab_px": null,
+      "text": "日本、",
+      "text_align": "Start",
+      "text_justify": "Auto",
+      "text_spacing_trim": "SpaceAll",
+      "white_space": "Collapse",
+      "width": 36.0
+    },
+    "japanese-hanging-first": {
+      "direction": "Ltr",
+      "families": [
+        "Named(\"Shodo Fixture CJK\")"
+      ],
+      "font_size": 16.0,
+      "guides": "logical content edges",
+      "hanging_punctuation": "HangingPunctuation { first: true, force_end: false, allow_end: false, last: false }",
+      "id": "japanese-hanging-first",
+      "indent": 24.0,
+      "line_height": "Px(24.0)",
+      "tab_px": null,
+      "text": "「日本",
+      "text_align": "Start",
+      "text_justify": "Auto",
+      "text_spacing_trim": "SpaceAll",
+      "white_space": "Collapse",
+      "width": 56.0
+    },
+    "japanese-hanging-force-end": {
+      "direction": "Ltr",
+      "families": [
+        "Named(\"Shodo Fixture CJK\")"
+      ],
+      "font_size": 16.0,
+      "guides": "logical content edges",
+      "hanging_punctuation": "HangingPunctuation { first: false, force_end: true, allow_end: false, last: false }",
+      "id": "japanese-hanging-force-end",
+      "indent": 0.0,
+      "line_height": "Px(24.0)",
+      "tab_px": null,
+      "text": "日本、",
+      "text_align": "Start",
+      "text_justify": "Auto",
+      "text_spacing_trim": "SpaceAll",
+      "white_space": "Collapse",
+      "width": 32.0
+    },
+    "japanese-justify": {
+      "direction": "Ltr",
+      "families": [
+        "Named(\"Shodo Fixture CJK\")"
+      ],
+      "font_size": 16.0,
+      "guides": "logical content edges",
+      "hanging_punctuation": "HangingPunctuation { first: false, force_end: false, allow_end: false, last: false }",
+      "id": "japanese-justify",
+      "indent": 0.0,
+      "line_height": "Px(24.0)",
+      "tab_px": null,
+      "text": "日「日本」語",
+      "text_align": "JustifyAll",
+      "text_justify": "InterCharacter",
+      "text_spacing_trim": "SpaceAll",
+      "white_space": "Collapse",
+      "width": 128.0
+    },
     "japanese-kinsoku": {
       "direction": "Ltr",
       "families": [
@@ -147,6 +223,25 @@
       "lang": "ja",
       "text": "𠮷と吉、ひらがな、カタカナ、ＡＢＣ。",
       "width": 200.0
+    },
+    "japanese-trim": {
+      "direction": "Ltr",
+      "families": [
+        "Named(\"Shodo Fixture CJK\")"
+      ],
+      "font_size": 16.0,
+      "guides": "logical content edges",
+      "hanging_punctuation": "HangingPunctuation { first: false, force_end: false, allow_end: false, last: false }",
+      "id": "japanese-trim",
+      "indent": 0.0,
+      "line_height": "Px(24.0)",
+      "tab_px": null,
+      "text": "「日本語」・句読点。",
+      "text_align": "Start",
+      "text_justify": "Auto",
+      "text_spacing_trim": "TrimBoth",
+      "white_space": "Collapse",
+      "width": 128.0
     },
     "latin-case-mapping": {
       "direction": "Ltr",

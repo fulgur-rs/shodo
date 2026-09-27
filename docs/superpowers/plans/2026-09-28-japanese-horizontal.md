@@ -126,17 +126,17 @@ Create `docs/japanese-layout.md`。
   left/rightはtypographic source offset。内部・cluster間の双方が同じ分類を使う。
   既存public Lineとtext_justify APIは変更しない。
 
-- [ ] **Step 1: Write failing justify tests** `日「日本」語` は括弧の両側に追加空きを置かず、
+- [x] **Step 1: Write failing justify tests** `日「日本」語` は括弧の両側に追加空きを置かず、
   `日本語` は二箇所に均等分配する。comma/stop/middle/hyphen/和字間隔の両側、
   連続dash/ellipsisを分離しない。Latinの明示inter-characterとcursive/marksの既存契約を維持する。
-- [ ] **Step 2: Run RED** `cargo +stable test --test japanese japanese_justification -- --nocapture`。
-- [ ] **Step 3: Implement opportunity filter** cluster間と圧縮cluster内部の双方に反映し、
+- [x] **Step 2: Run RED** `cargo +stable test --test japanese japanese_justification -- --nocapture`。
+- [x] **Step 3: Implement opportunity filter** cluster間と圧縮cluster内部の双方に反映し、
   last-lineと機会なしfallbackを既存のalignmentで処理する。
-- [ ] **Step 4: Run GREEN** Japanese/alignment/bidi/text_transform testsとworkspaceを通す。
-- [ ] **Step 5: Add fixed-font snapshots** trim、first/end hanging、inter-characterの各caseを追加する。
+- [x] **Step 4: Run GREEN** Japanese/alignment/bidi/text_transform testsとworkspaceを通す。
+- [x] **Step 5: Add fixed-font snapshots** trim、first/end hanging、inter-characterの各caseを追加する。
   通常checkで既存default Normalの差分を取得する。PNG/geometryを目視して意図した差のみ
   full updateし、通常read-only checkを再実行する。仕様判断と例をdocsへ記す。
-- [ ] **Step 6: Commit** `feat: preserve Japanese punctuation boundaries during justification`。
+- [x] **Step 6: Commit** `feat: preserve Japanese punctuation boundaries during justification`。
 
 ## 最終検証と統合
 

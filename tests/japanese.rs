@@ -499,6 +499,165 @@ fn punctuation_hang_composes_with_conditionally_hanging_preserved_space() {
     }
 }
 
+fn inter_character_options() -> LineOptions {
+    LineOptions {
+        text_align: shodo::style::TextAlign::JustifyAll,
+        text_justify: shodo::style::TextJustify::InterCharacter,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn japanese_justification_expands_han_boundaries_but_not_bracket_neighbors() {
+    for (text, width, positions) in [
+        ("日本語", 80., vec![0., 32., 64.]),
+        ("日「日本」語", 128., vec![0., 16., 32., 80., 96., 112.]),
+    ] {
+        let line = first_line(
+            &japanese(text, TextSpacingTrim::SpaceAll),
+            width,
+            &inter_character_options(),
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(line.inline_size(), width, "{text}");
+        assert_eq!(
+            glyphs(&line)
+                .iter()
+                .map(|g| g.inline_position)
+                .collect::<Vec<_>>(),
+            positions,
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn japanese_justification_does_not_expand_either_side_of_protected_punctuation() {
+    for ch in [
+        '「', '」', '、', '。', '・', '：', '；', '！', '？', '‐', '‑', '‒', '–', '—', '―', '〜',
+        '゠', '\u{3000}',
+    ] {
+        let text = format!("日{ch}本");
+        let para = japanese(&text, TextSpacingTrim::SpaceAll);
+        let natural = first_line(&para, 200., &LineOptions::default(), &AtomicSizes::EMPTY);
+        let line = first_line(
+            &para,
+            natural.inline_size() + 32.,
+            &inter_character_options(),
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(line.inline_size(), natural.inline_size(), "{ch}");
+        assert_eq!(
+            glyphs(&line)
+                .iter()
+                .map(|g| g.inline_position)
+                .collect::<Vec<_>>(),
+            glyphs(&natural)
+                .iter()
+                .map(|g| g.inline_position + 16.)
+                .collect::<Vec<_>>(),
+            "{ch}"
+        );
+    }
+}
+
+#[test]
+fn japanese_justification_keeps_consecutive_ellipsis_and_dash_unseparated() {
+    for text in ["……", "――", "——"] {
+        let para = japanese(text, TextSpacingTrim::SpaceAll);
+        let natural = first_line(&para, 200., &LineOptions::default(), &AtomicSizes::EMPTY);
+        let line = first_line(
+            &para,
+            natural.inline_size() + 32.,
+            &inter_character_options(),
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(line.inline_size(), natural.inline_size(), "{text}");
+        assert_eq!(
+            glyphs(&line)
+                .iter()
+                .map(|g| g.inline_position)
+                .collect::<Vec<_>>(),
+            glyphs(&natural)
+                .iter()
+                .map(|g| g.inline_position + 16.)
+                .collect::<Vec<_>>(),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn japanese_justification_preserves_explicit_latin_inter_character_spacing() {
+    for language in ["ja", "en"] {
+        for text in ["abc", "a·b", "a‐b"] {
+            // Japanese hyphens and middle dots have exclusions; the English
+            // override keeps explicit Western inter-character behavior.
+            if language == "ja" && text != "abc" {
+                continue;
+            }
+            let mut style = japanese_style(TextSpacingTrim::SpaceAll);
+            style.root.lang = Some(language.into());
+            let para = japanese_with(style, Limits::default(), |b| {
+                b.push_text(TextSource::Generated { node: NodeId(1) }, text);
+            });
+            let natural = first_line(&para, 200., &LineOptions::default(), &AtomicSizes::EMPTY);
+            let line = first_line(
+                &para,
+                natural.inline_size() + 32.,
+                &inter_character_options(),
+                &AtomicSizes::EMPTY,
+            );
+            assert_eq!(
+                line.inline_size(),
+                natural.inline_size() + 32.,
+                "{language}: {text}"
+            );
+            assert_eq!(
+                glyphs(&line)
+                    .iter()
+                    .map(|g| g.inline_position)
+                    .collect::<Vec<_>>(),
+                glyphs(&natural)
+                    .iter()
+                    .enumerate()
+                    .map(|(i, g)| g.inline_position + i as f32 * 16.)
+                    .collect::<Vec<_>>(),
+                "{language}: {text}"
+            );
+        }
+    }
+}
+
+#[test]
+fn japanese_justification_expands_han_kana_and_preserves_selector_graphemes() {
+    let plain = first_line(
+        &japanese("日あカ本", TextSpacingTrim::SpaceAll),
+        112.,
+        &inter_character_options(),
+        &AtomicSizes::EMPTY,
+    );
+    let visible_ids: Vec<_> = glyphs(&plain).iter().map(|g| g.id).collect();
+    assert!(plain.fragments().all(|f| match f {
+        shodo::Fragment::GlyphRun(r) => r.font_data().is_some(),
+        _ => true,
+    }));
+    for text in ["日あカ本", "日\u{fe00}あカ本"] {
+        let para = japanese(text, TextSpacingTrim::SpaceAll);
+        let line = first_line(&para, 112., &inter_character_options(), &AtomicSizes::EMPTY);
+        assert_eq!(line.text_range(), 0..text.len());
+        assert_eq!(line.inline_size(), 112.);
+        assert_eq!(
+            glyphs(&line)
+                .iter()
+                .filter(|g| visible_ids.contains(&g.id))
+                .map(|g| g.inline_position)
+                .collect::<Vec<_>>(),
+            [0., 32., 64., 96.]
+        );
+    }
+}
+
 #[test]
 fn space_first_preserves_first_and_forced_heads_but_trims_soft_heads() {
     for (text, second_width) in [("「日「日", 24.0), ("「日\n「日", 32.0)] {
