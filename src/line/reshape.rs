@@ -10,6 +10,7 @@ pub(crate) struct EdgeOverlay {
     pub(crate) text: std::ops::Range<u32>,
     pub(crate) store: GlyphStore,
     pub(crate) runs: Vec<crate::shape::ShapedRun>,
+    pub(crate) hyphen: Option<std::ops::Range<u32>>,
 }
 
 /// Expose real grapheme opportunities inside a ligature without replacing
@@ -209,8 +210,20 @@ pub(super) fn prepare(
     if scan.prepared {
         return;
     }
+    let windows = super::windows::measure(data, start, scan.end, cx, sat);
+    apply_windows(data, start, scan, windows, cx, sat);
+}
+
+pub(super) fn apply_windows(
+    data: &crate::paragraph::ParagraphData,
+    start: usize,
+    scan: &mut super::Scan,
+    windows: Vec<super::windows::Window>,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) {
     scan.prepared = true;
-    for window in super::windows::measure(data, start, scan.end, cx, sat) {
+    for window in windows {
         if scan.overlays.iter().any(|existing| {
             existing.glyphs.start < window.overlay.glyphs.end
                 && window.overlay.glyphs.start < existing.glyphs.end

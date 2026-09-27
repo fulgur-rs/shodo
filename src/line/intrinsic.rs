@@ -171,8 +171,8 @@ impl Paragraph {
                 _ => trailing = LayoutUnit::ZERO,
             }
             let hyphen = if u.break_after == BreakClass::Hyphen {
-                super::hyphen::shape(&self.data, u, cx, &mut sat)
-                    .map(|edge| super::hyphen::width(&edge, &mut sat).sub(lo, &mut sat))
+                super::hyphen::line(&self.data, word_unit, i + 1, cx, &mut sat)
+                    .map(|windows| super::windows::cost(&windows, i + 1, &mut sat))
             } else {
                 None
             };
@@ -180,14 +180,15 @@ impl Paragraph {
                 || hyphen.is_some()
                 || u.break_after == BreakClass::Emergency && u.emergency_min_content
             {
-                let (delta, viable) =
-                    super::windows::candidate(&self.data, word_unit, i + 1, cx, &mut sat);
+                let (delta, viable) = if let Some(delta) = hyphen {
+                    (delta, true)
+                } else {
+                    super::windows::candidate(&self.data, word_unit, i + 1, cx, &mut sat)
+                };
                 if !viable {
                     continue;
                 }
-                let measured_word = word
-                    .add(hyphen.unwrap_or(LayoutUnit::ZERO), &mut sat)
-                    .add(delta, &mut sat);
+                let measured_word = word.add(delta, &mut sat);
                 min = min.max(
                     measured_word
                         .sub(

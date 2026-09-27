@@ -1,20 +1,27 @@
 //! A discretionary hyphen is measured and shaped only as a break candidate.
-use super::reshape::EdgeOverlay;
 use crate::analysis::units::{Unit, UnitKind};
 use crate::font::FontQuery;
-use crate::geometry::{LayoutUnit, Saturation};
+use crate::geometry::Saturation;
 use crate::paragraph::ParagraphData;
 use crate::{LayoutContext, limits::WarningKind};
 
-pub(super) fn shape(
+fn replacement(
     data: &ParagraphData,
     unit: &Unit,
     cx: &mut LayoutContext,
-    sat: &mut Saturation,
-) -> Option<EdgeOverlay> {
-    let UnitKind::Cluster { run, glyphs, .. } = &unit.kind else {
+) -> Option<crate::shape::Replacement> {
+    let UnitKind::Cluster { run, .. } = &unit.kind else {
         return None;
     };
+    let (relative, original_char) = data
+        .text
+        .get(unit.text.start as usize..unit.text.end as usize)?
+        .char_indices()
+        .next_back()?;
+    if original_char != '\u{ad}' {
+        return None;
+    }
+    let offset = unit.text.start + relative as u32;
     let original = &data.runs[*run as usize];
     let style = &data.styles[data.items[unit.item as usize].style as usize];
     let query = FontQuery {
@@ -46,55 +53,20 @@ pub(super) fn shape(
         );
         return None;
     }
-    let item = crate::analysis::itemize::ShapeItem {
-        scalars: vec![crate::analysis::itemize::Scalar {
-            c,
-            offset: unit.text.start,
-            item: unit.item,
-            grapheme_start: true,
-        }],
-        end: unit.text.end,
-        style: data.items[unit.item as usize].style,
-        level: unit.level,
-        script: original.instance.script,
+    Some(crate::shape::Replacement {
+        text: offset..unit.text.end,
+        c,
         font: found,
-        before: String::new(),
-        after: String::new(),
-    };
-    let mut warnings = crate::limits::WarningSink::new(data.limits.max_warnings);
-    let shaped = crate::shape::shape_items(
-        cx,
-        &[item],
-        &data.styles,
-        &data.fonts,
-        &data.limits,
-        &mut warnings,
-        sat,
-    );
-    for w in warnings.take() {
-        cx.warnings.push(w.kind, w.message);
-    }
-    let Ok((store, mut runs)) = shaped else {
-        cx.warnings.push(
-            WarningKind::Unsupported,
-            "hyphen glyph budget exceeded; retaining unbroken word",
-        );
-        return None;
-    };
-    for run in &mut runs {
-        run.text = unit.text.clone();
-    }
-    Some(EdgeOverlay {
-        glyphs: glyphs.clone(),
-        text: unit.text.clone(),
-        store,
-        runs,
     })
 }
 
-pub(super) fn width(edge: &EdgeOverlay, sat: &mut Saturation) -> LayoutUnit {
-    edge.store
-        .advance
-        .iter()
-        .fold(LayoutUnit::ZERO, |p, w| p.add(*w, sat))
+pub(super) fn line(
+    data: &ParagraphData,
+    start: usize,
+    end: usize,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> Option<Vec<super::windows::Window>> {
+    let replacement = replacement(data, &data.units[end - 1], cx)?;
+    super::windows::hyphen(data, start, end, &replacement, cx, sat)
 }

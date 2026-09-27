@@ -494,10 +494,34 @@ pub(crate) fn shape_window_budget(
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
 ) -> Option<(GlyphStore, Vec<ShapedRun>)> {
+    shape_window_edit(data, unit, glyph_budget, None, cx, warnings, sat)
+}
+
+pub(crate) struct Replacement {
+    pub(crate) text: Range<u32>,
+    pub(crate) c: char,
+    pub(crate) font: Option<crate::font::FontMatch>,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn shape_window_edit(
+    data: &crate::paragraph::ParagraphData,
+    unit: &crate::analysis::units::Unit,
+    glyph_budget: Option<u64>,
+    replacement: Option<&Replacement>,
+    cx: &mut crate::LayoutContext,
+    warnings: &mut crate::limits::WarningSink,
+    sat: &mut Saturation,
+) -> Option<(GlyphStore, Vec<ShapedRun>)> {
+    let contains_replacement =
+        replacement.is_some_and(|r| unit.text.start <= r.text.start && r.text.end <= unit.text.end);
+    let synthetic_extra = replacement.filter(|_| contains_replacement).map_or(0, |r| {
+        (r.c.len_utf8() as u64).saturating_sub(u64::from(r.text.end - r.text.start))
+    });
     if data
         .limits
         .max_reshape_window_bytes
-        .is_some_and(|max| u64::from(unit.text.end - unit.text.start) > max)
+        .is_some_and(|max| u64::from(unit.text.end - unit.text.start) + synthetic_extra > max)
     {
         warnings.push(
             crate::limits::WarningKind::Unsupported,
@@ -508,51 +532,103 @@ pub(crate) fn shape_window_budget(
     let index = data
         .shape_items
         .partition_point(|item| item.end <= unit.text.start);
-    let original = data.shape_items.get(index)?;
-    let begin = original
-        .scalars
-        .partition_point(|s| s.offset < unit.text.start);
-    let end = original
-        .scalars
-        .partition_point(|s| s.offset < unit.text.end);
-    if begin == end {
-        return Some((GlyphStore::default(), Vec::new()));
+    let mut items: Vec<crate::analysis::itemize::ShapeItem> = Vec::new();
+    for original in data.shape_items[index..]
+        .iter()
+        .take_while(|i| i.scalars.first().is_some_and(|s| s.offset < unit.text.end))
+    {
+        let begin = original
+            .scalars
+            .partition_point(|s| s.offset < unit.text.start);
+        let end = original
+            .scalars
+            .partition_point(|s| s.offset < unit.text.end);
+        if begin == end {
+            continue;
+        }
+        // Font substitution can split an original item; newly identical
+        // adjacent segments join before shaping so GPOS sees the hyphen.
+        let mut at = begin;
+        while at < end {
+            let edited = replacement
+                .filter(|r| contains_replacement && original.scalars[at].offset == r.text.start);
+            let font = edited.map_or_else(|| original.font.clone(), |r| r.font.clone());
+            let mut finish = at + 1;
+            if edited.is_none() {
+                while finish < end
+                    && !replacement.is_some_and(|r| {
+                        contains_replacement && original.scalars[finish].offset == r.text.start
+                    })
+                {
+                    finish += 1;
+                }
+            }
+            let mut before: Vec<_> = original
+                .before
+                .chars()
+                .chain(original.scalars[..at].iter().map(|s| s.c))
+                .rev()
+                .take(5)
+                .collect();
+            before.reverse();
+            let mut scalars = original.scalars[at..finish].to_vec();
+            if let Some(r) = edited {
+                scalars[0].c = r.c;
+            }
+            let part = crate::analysis::itemize::ShapeItem {
+                end: edited.map_or_else(
+                    || scalars.last().unwrap().offset + scalars.last().unwrap().c.len_utf8() as u32,
+                    |r| r.text.end,
+                ),
+                scalars,
+                style: original.style,
+                level: original.level,
+                script: original.script,
+                font,
+                before: before.into_iter().collect(),
+                after: original.scalars[finish..]
+                    .iter()
+                    .map(|s| s.c)
+                    .chain(original.after.chars())
+                    .take(5)
+                    .collect(),
+            };
+            if let Some(previous) = items.last_mut()
+                && previous.style == part.style
+                && previous.level == part.level
+                && previous.script == part.script
+                && previous.font == part.font
+            {
+                previous.scalars.extend(part.scalars);
+                previous.end = part.end;
+                previous.after = part.after;
+            } else {
+                items.push(part);
+            }
+            at = finish;
+        }
     }
-    let mut before: Vec<_> = original
-        .before
-        .chars()
-        .chain(original.scalars[..begin].iter().map(|s| s.c))
-        .rev()
-        .take(5)
-        .collect();
-    before.reverse();
-    let item = crate::analysis::itemize::ShapeItem {
-        scalars: original.scalars[begin..end].to_vec(),
-        end: unit.text.end,
-        style: original.style,
-        level: unit.level,
-        script: original.script,
-        font: original.font.clone(),
-        before: before.into_iter().collect(),
-        after: original.scalars[end..]
-            .iter()
-            .map(|s| s.c)
-            .chain(original.after.chars())
-            .take(5)
-            .collect(),
-    };
     let mut limits = data.limits.clone();
     limits.max_shaped_glyphs = glyph_budget;
     match shape_items(
         cx,
-        &[item],
+        &items,
         &data.styles,
         &data.fonts,
         &limits,
         warnings,
         sat,
     ) {
-        Ok(result) => Some(result),
+        Ok((store, mut runs)) => {
+            if let Some(r) = replacement.filter(|_| contains_replacement) {
+                for run in &mut runs {
+                    if run.text.end == r.text.start + r.c.len_utf8() as u32 {
+                        run.text.end = r.text.end;
+                    }
+                }
+            }
+            Some((store, runs))
+        }
         Err(_) => {
             warnings.push(
                 crate::limits::WarningKind::Unsupported,

@@ -87,12 +87,7 @@ impl Line {
         let visible_hyphen = scan
             .overlays
             .iter()
-            .find(|edge| {
-                data.text
-                    .get(edge.text.start as usize..edge.text.end as usize)
-                    == Some("\u{ad}")
-            })
-            .map(|edge| edge.text.start);
+            .find_map(|w| w.hyphen.as_ref().map(|text| text.start));
         let records = fragments::build(
             data,
             origin_units,
@@ -432,7 +427,9 @@ impl<'a> GlyphRunView<'a> {
         // be reversed twice.
         let reversed = self.record.level % 2 != self.line.data.base_level % 2;
         let pen = if reversed {
-            self.record.inline_size - rel - advance
+            // Layout spacing belongs between clusters; subtracting it from
+            // a glyph's ink origin would detach a mark from its base.
+            self.record.inline_size - rel - store.advance[gi]
         } else {
             rel
         };

@@ -28,6 +28,22 @@ pub(super) fn matches(
         })
 }
 
+fn hyphen_end(data: &ParagraphData, end: usize) -> Option<usize> {
+    if end >= data.units.len() || matches!(data.units[end].kind, UnitKind::BlockInInline { .. }) {
+        return None;
+    }
+    (0..end)
+        .rev()
+        .find(|i| {
+            !matches!(
+                data.units[*i].kind,
+                UnitKind::Close { .. } | UnitKind::BidiControl
+            )
+        })
+        .filter(|i| data.units[*i].break_after == BreakClass::Hyphen)
+        .map(|i| i + 1)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn selected(
     data: &ParagraphData,
@@ -41,36 +57,19 @@ pub(super) fn selected(
 ) -> Scan {
     let prefix = decoration::width(data, start, true, sat);
     let mut pos = indent.add(prefix, sat);
-    let last_content = (start..end).rev().find(|i| {
-        !matches!(
-            data.units[*i].kind,
-            UnitKind::Close { .. } | UnitKind::BidiControl
-        )
-    });
-    let hyphen = last_content
-        .filter(|i| {
-            data.units[*i].break_after == BreakClass::Hyphen
-                && end < data.units.len()
-                && !matches!(data.units[end].kind, UnitKind::BlockInInline { .. })
-        })
-        .and_then(|i| super::hyphen::shape(data, &data.units[i], cx, sat).map(|edge| (i, edge)));
+    let hyphen =
+        hyphen_end(data, end).and_then(|end| super::hyphen::line(data, start, end, cx, sat));
     let mut widths = Vec::with_capacity(end - start);
-    for (at, u) in data.units[start..end].iter().enumerate() {
-        let w = if let Some((i, edge)) = &hyphen
-            && *i == start + at
-        {
-            super::hyphen::width(edge, sat)
-        } else {
-            super::scan::unit_width_from(
-                data,
-                u,
-                data.units[start].text.start,
-                offset.add(pos, sat),
-                atomics,
-                cx,
-                sat,
-            )
-        };
+    for u in &data.units[start..end] {
+        let w = super::scan::unit_width_from(
+            data,
+            u,
+            data.units[start].text.start,
+            offset.add(pos, sat),
+            atomics,
+            cx,
+            sat,
+        );
         pos = pos.add(w, sat);
         widths.push(w);
     }
@@ -101,7 +100,7 @@ pub(super) fn selected(
     };
     let mut scan = Scan {
         prepared: false,
-        overlays: hyphen.into_iter().map(|(_, edge)| edge).collect(),
+        overlays: Vec::new(),
         end,
         reason,
         widths,
@@ -111,7 +110,11 @@ pub(super) fn selected(
             .add(decoration::width(data, end, false, sat), sat),
         hang_start,
     };
-    super::reshape::prepare(data, start, &mut scan, cx, sat);
+    if let Some(windows) = hyphen {
+        super::reshape::apply_windows(data, start, &mut scan, windows, cx, sat);
+    } else {
+        super::reshape::prepare(data, start, &mut scan, cx, sat);
+    }
     scan
 }
 
@@ -206,8 +209,12 @@ impl Paragraph {
                                         let unit = &self.data.units[*j];
                                         unit.break_after == BreakClass::Allowed
                                             || unit.break_after == BreakClass::Hyphen
-                                                && super::hyphen::shape(
-                                                    &self.data, unit, cx, &mut sat,
+                                                && super::hyphen::line(
+                                                    &self.data,
+                                                    greedy[i].units.start as usize,
+                                                    *j + 1,
+                                                    cx,
+                                                    &mut sat,
                                                 )
                                                 .is_some()
                                     })
@@ -233,10 +240,17 @@ impl Paragraph {
                                 for (k, &(begin, cost)) in previous.iter().enumerate() {
                                     if begin >= end
                                         || !cost.is_finite()
-                                        || !super::windows::candidate(
-                                            &self.data, begin, end, cx, &mut sat,
-                                        )
-                                        .1
+                                        || !if let Some(hyphen) = hyphen_end(&self.data, end) {
+                                            super::hyphen::line(
+                                                &self.data, begin, hyphen, cx, &mut sat,
+                                            )
+                                            .is_some()
+                                        } else {
+                                            super::windows::candidate(
+                                                &self.data, begin, end, cx, &mut sat,
+                                            )
+                                            .1
+                                        }
                                     {
                                         continue;
                                     }

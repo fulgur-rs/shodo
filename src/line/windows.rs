@@ -24,6 +24,33 @@ impl Window {
     }
 }
 
+pub(super) fn hyphen(
+    data: &ParagraphData,
+    start: usize,
+    end: usize,
+    replacement: &crate::shape::Replacement,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> Option<Vec<Window>> {
+    if !remaining_valid(data, start, end, cx, sat) {
+        return None;
+    }
+    let windows = measure_edit(data, start, end, Some(replacement), cx, sat);
+    let generated = windows.iter().any(|w| {
+        w.overlay.text.start <= replacement.text.start && replacement.text.end <= w.overlay.text.end
+    });
+    if !generated || !covers_partial_edges(data, start, end, &windows) {
+        return None;
+    }
+    Some(windows)
+}
+
+pub(super) fn cost(windows: &[Window], end: usize, sat: &mut Saturation) -> LayoutUnit {
+    windows
+        .iter()
+        .fold(LayoutUnit::ZERO, |p, w| p.add(w.delta(end, sat), sat))
+}
+
 fn first(data: &ParagraphData, at: usize, end: usize) -> Option<usize> {
     if at >= end {
         return None;
@@ -103,11 +130,13 @@ fn shape(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
     budget: Option<u64>,
+    replacement: Option<&crate::shape::Replacement>,
 ) -> Option<(crate::shape::GlyphStore, Vec<crate::shape::ShapedRun>)> {
     let mut unit = data.units[range.start].clone();
     unit.text = unit.text.start..data.units[range.end - 1].text.end;
     let mut warnings = WarningSink::new(data.limits.max_warnings);
-    let result = crate::shape::shape_window_budget(data, &unit, budget, cx, &mut warnings, sat);
+    let result =
+        crate::shape::shape_window_edit(data, &unit, budget, replacement, cx, &mut warnings, sat);
     for w in warnings.take() {
         cx.warnings.push(w.kind, w.message);
     }
@@ -138,6 +167,7 @@ fn materialize(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
     budget: Option<u64>,
+    replacement: Option<&crate::shape::Replacement>,
 ) -> Option<Window> {
     expand_original(data, line, &mut range);
     loop {
@@ -148,7 +178,7 @@ fn materialize(
             );
             return None;
         }
-        let (mut store, mut runs) = shape(data, &range, cx, sat, budget)?;
+        let (mut store, mut runs) = shape(data, &range, cx, sat, budget, replacement)?;
         if store.flags.first().is_some_and(|f| f & 2 != 0)
             && let Some(previous) = last(data, line.start, range.start)
             && compatible(data, previous, range.start)
@@ -164,7 +194,7 @@ fn materialize(
             // Keep only one temporary SoA at a time during validation.
             drop(store);
             drop(runs);
-            let (tested, _) = shape(data, &probe, cx, sat, budget)?;
+            let (tested, _) = shape(data, &probe, cx, sat, budget, replacement)?;
             let boundary = data.units[next].text.start;
             let unsafe_probe = tested
                 .cluster
@@ -177,7 +207,7 @@ fn materialize(
                 expand_original(data, line, &mut range);
                 continue;
             }
-            (store, runs) = shape(data, &range, cx, sat, budget)?;
+            (store, runs) = shape(data, &range, cx, sat, budget, replacement)?;
         }
         let mut changes = Vec::new();
         let mut at = range.start;
@@ -226,6 +256,12 @@ fn materialize(
                 text: data.units[range.start].text.start..data.units[range.end - 1].text.end,
                 store,
                 runs,
+                hyphen: replacement
+                    .filter(|r| {
+                        data.units[range.start].text.start <= r.text.start
+                            && r.text.end <= data.units[range.end - 1].text.end
+                    })
+                    .map(|r| r.text.clone()),
             },
             changes,
         });
@@ -239,18 +275,43 @@ pub(super) fn measure(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> Vec<Window> {
+    measure_edit(data, start, end, None, cx, sat)
+}
+
+fn measure_edit(
+    data: &ParagraphData,
+    start: usize,
+    end: usize,
+    replacement: Option<&crate::shape::Replacement>,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> Vec<Window> {
     let line = start..end;
     let (Some(first_at), Some(last_at)) = (first(data, start, end), last(data, start, end)) else {
         return Vec::new();
     };
     let first_range = clipped_group(data, first_at, &line);
-    let last_range = clipped_group(data, last_at, &line);
+    let mut last_range = clipped_group(data, last_at, &line);
+    if replacement.is_some()
+        && let Some(previous) = last(data, start, last_range.start)
+        && data.units[previous].level == data.units[last_at].level
+        && data
+            .shaping_barriers
+            .get(
+                data.shaping_barriers
+                    .partition_point(|i| (*i as usize) <= previous),
+            )
+            .is_none_or(|i| (*i as usize) >= last_range.start)
+    {
+        last_range.start = clipped_group(data, previous, &line).start;
+    }
     let before = last(data, 0, start);
     let needs_first = partial(data, &first_range)
         || start > 0
             && (data.units[first_at].unsafe_to_concat
                 || before.is_some_and(|i| data.units[i].unsafe_to_break));
-    let needs_last = partial(data, &last_range) || data.units[last_at].unsafe_to_break;
+    let needs_last =
+        replacement.is_some() || partial(data, &last_range) || data.units[last_at].unsafe_to_break;
     let mut ranges = Vec::new();
     if needs_first {
         ranges.push(first_range);
@@ -275,16 +336,22 @@ pub(super) fn measure(
             .limits
             .max_shaped_glyphs
             .map(|max| max.saturating_sub(retained));
-        if let Some(window) = materialize(data, &line, range, cx, sat, budget) {
+        if let Some(window) = materialize(data, &line, range, cx, sat, budget, replacement) {
             if let Some(previous) = windows.last()
                 && previous.overlay.glyphs.end > window.overlay.glyphs.start
             {
                 // Revalidation may grow two formerly disjoint windows together.
                 let merged = first_at..last_at + 1;
                 windows.clear();
-                if let Some(window) =
-                    materialize(data, &line, merged, cx, sat, data.limits.max_shaped_glyphs)
-                {
+                if let Some(window) = materialize(
+                    data,
+                    &line,
+                    merged,
+                    cx,
+                    sat,
+                    data.limits.max_shaped_glyphs,
+                    replacement,
+                ) {
                     windows.push(window);
                 }
                 break;
@@ -337,18 +404,25 @@ pub(super) fn candidate(
     sat: &mut Saturation,
 ) -> (LayoutUnit, bool) {
     let windows = measure(data, start, end, cx, sat);
-    let valid = covers_partial_edges(data, start, end, &windows);
-    let delta = windows
-        .iter()
-        .fold(LayoutUnit::ZERO, |p, w| p.add(w.delta(end, sat), sat));
+    let delta = cost(&windows, end, sat);
+    let covered = covers_partial_edges(data, start, end, &windows);
     drop(windows);
-    let remainder = last(data, start, end).is_some_and(|at| group(data, at).end > end);
-    let valid = valid
-        && (!remainder || {
-            let windows = measure(data, end, data.units.len(), cx, sat);
-            covers_partial_edges(data, end, data.units.len(), &windows)
-        });
+    let valid = covered && remaining_valid(data, start, end, cx, sat);
     (delta, valid)
+}
+
+fn remaining_valid(
+    data: &ParagraphData,
+    start: usize,
+    end: usize,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> bool {
+    let remainder = last(data, start, end).is_some_and(|at| group(data, at).end > end);
+    !remainder || {
+        let windows = measure(data, end, data.units.len(), cx, sat);
+        covers_partial_edges(data, end, data.units.len(), &windows)
+    }
 }
 
 #[cfg(test)]
@@ -415,6 +489,234 @@ mod tests {
         tables.push((*b"GSUB", gsub));
         tables.sort_by_key(|(tag, _)| *tag);
         crate::font::sfnt::build_sfnt(&tables)
+    }
+
+    fn expanded_hyphen_font(count: u16) -> Vec<u8> {
+        use skrifa::MetadataProvider;
+        let bytes = include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf");
+        let font = skrifa::FontRef::from_index(bytes, 0).unwrap();
+        let dash = font.charmap().map('-').unwrap().to_u32() as u16;
+        let w = font.charmap().map('W').unwrap().to_u32() as u16;
+        let mut gsub = Vec::new();
+        for word in [1u16, 0, 10, 30, 44, 1] {
+            gsub.extend(word.to_be_bytes());
+        }
+        gsub.extend(b"latn");
+        for word in [8u16, 4, 0, 0, 0xffff, 1, 0, 1] {
+            gsub.extend(word.to_be_bytes());
+        }
+        gsub.extend(b"ccmp");
+        for word in [
+            8u16,
+            0,
+            1,
+            0,
+            1,
+            4,
+            2,
+            0,
+            1,
+            8,
+            1,
+            10 + 2 * count,
+            1,
+            8,
+            count,
+        ]
+        .into_iter()
+        .chain(std::iter::repeat_n(w, count as usize))
+        .chain([1, 1, dash])
+        {
+            gsub.extend(word.to_be_bytes());
+        }
+        let mut tables = Vec::new();
+        for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
+            let at = 12 + n * 16;
+            let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
+            let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
+            let tag: [u8; 4] = bytes[at..at + 4].try_into().unwrap();
+            if tag != *b"GSUB" {
+                tables.push((tag, bytes[offset..offset + len].to_vec()));
+            }
+        }
+        tables.push((*b"GSUB", gsub));
+        tables.sort_by_key(|(tag, _)| *tag);
+        crate::font::sfnt::build_sfnt(&tables)
+    }
+
+    #[test]
+    fn generated_hyphen_and_opposite_partial_edge_share_one_glyph_budget() {
+        use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+        use crate::limits::{Limits, WarningKind};
+        use crate::node::{NodeId, OutOfFlowKind, TextSource};
+        use crate::style::{FontFamily, OverflowWrap, ParagraphStyle};
+        use crate::{
+            AtomicSizes, Fragment, LayoutContext, LineConstraint, LineResult, ParagraphBuilder,
+        };
+        let expanded = expanded_hyphen_font(9);
+        let font = harfrust::FontRef::from_index(&expanded, 0).unwrap();
+        let direct = harfrust::ShaperData::new(&font);
+        let shaper = direct.shaper(&font).build();
+        let mut buffer = harfrust::UnicodeBuffer::new();
+        buffer.push_str("-");
+        buffer.guess_segment_properties();
+        assert_eq!(
+            shaper.shape(buffer, Default::default()).len(),
+            9,
+            "real generated GSUB expansion"
+        );
+        for budget in [11, 12] {
+            let limits = Limits {
+                max_shaped_glyphs: Some(budget),
+                ..Default::default()
+            };
+            let fonts = FontCollection::with_options(
+                &limits,
+                FontOptions {
+                    system_fonts: false,
+                    ..Default::default()
+                },
+            );
+            fonts
+                .register_face(
+                    include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+                    0,
+                    FontFaceDescriptor {
+                        family: "Letters".into(),
+                        unicode_ranges: vec![(32, 32), (65, 90), (97, 122), (173, 173)],
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+            fonts
+                .register_face(
+                    include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+                    0,
+                    FontFaceDescriptor {
+                        family: "Other".into(),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+            let dash = fonts
+                .register_face(
+                    expanded.clone(),
+                    0,
+                    FontFaceDescriptor {
+                        family: "Dash".into(),
+                        unicode_ranges: vec![(45, 45)],
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+            let mut style = ParagraphStyle::default();
+            style.root.font_families = vec![
+                FontFamily::Named("Letters".into()),
+                FontFamily::Named("Dash".into()),
+            ];
+            style.root.overflow_wrap = OverflowWrap::Anywhere;
+            let mut large = style.root.clone();
+            large.font_size = 1000.0;
+            let mut prefix = style.root.clone();
+            prefix.font_families = vec![FontFamily::Named("Other".into())];
+            let mut b = ParagraphBuilder::new(&style, &limits);
+            b.open_inline(NodeId(5), &prefix, Default::default())
+                .push_text(TextSource::Generated { node: NodeId(1) }, "x ffi ")
+                .close_inline()
+                .push_out_of_flow(NodeId(2), OutOfFlowKind::Float)
+                .push_text(TextSource::Generated { node: NodeId(1) }, "T\u{ad}")
+                .open_inline(NodeId(3), &large, Default::default())
+                .push_text(TextSource::Generated { node: NodeId(4) }, "ZZZZ")
+                .close_inline();
+            let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+            assert_eq!(p.data.glyphs.len(), 10);
+            let prefixes = p.break_all(
+                &mut LayoutContext::new(),
+                &Default::default(),
+                1.0,
+                &AtomicSizes::EMPTY,
+            );
+            let token = prefixes
+                .iter()
+                .find(|l| l.text_range().end == 3)
+                .unwrap()
+                .break_token();
+            let mut warm = LayoutContext::new();
+            let LineResult::FloatEncountered { float_cursor, .. } = p.next_line(
+                &mut warm,
+                token,
+                &Default::default(),
+                &LineConstraint::new(10000.0),
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!()
+            };
+            let mut c = LineConstraint::new(200.0);
+            c.floats_placed_through = Some(float_cursor);
+            let LineResult::Line(line) = p.next_line(
+                &mut warm,
+                token,
+                &Default::default(),
+                &c,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!()
+            };
+            let LineResult::Line(cold) = p.next_line(
+                &mut LayoutContext::new(),
+                token,
+                &Default::default(),
+                &c,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!()
+            };
+            assert_eq!(line.text_range(), cold.text_range());
+            assert_eq!(line.inline_size(), cold.inline_size());
+            let runs: Vec<_> = line
+                .fragments()
+                .filter_map(|f| match f {
+                    Fragment::GlyphRun(r) => Some(r),
+                    _ => None,
+                })
+                .collect();
+            if budget == 11 {
+                assert_eq!(line.text_range(), 3..6);
+                assert!(runs.iter().all(|r| r.font() != dash));
+                assert!(
+                    warm.warnings
+                        .as_slice()
+                        .iter()
+                        .any(|w| w.kind == WarningKind::Unsupported)
+                );
+            } else {
+                assert_eq!(line.text_range(), 3..12);
+                let generated = runs.iter().find(|r| r.font() == dash).unwrap();
+                assert_eq!(generated.glyphs().len(), 9);
+                assert_eq!(generated.clusters().next().unwrap().text_range, 10..12);
+                let start = p.data.units.iter().position(|u| u.text.start == 3).unwrap();
+                let end = p.data.units.iter().position(|u| u.text.end == 12).unwrap() + 1;
+                let windows = crate::line::hyphen::line(
+                    &p.data,
+                    start,
+                    end,
+                    &mut LayoutContext::new(),
+                    &mut crate::geometry::Saturation::default(),
+                )
+                .unwrap();
+                assert_eq!(windows.len(), 2, "both distinct font edges retained");
+                assert_eq!(
+                    windows.iter().map(|w| w.overlay.store.len()).sum::<usize>(),
+                    12,
+                    "the safe prefix and generated tail share the limit"
+                );
+            }
+            assert!(
+                line.overlay
+                    .as_ref()
+                    .is_none_or(|g| g.len() as u64 <= budget)
+            );
+        }
     }
 
     #[test]

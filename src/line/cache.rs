@@ -236,12 +236,22 @@ pub(super) fn resolve(
         }
         // A cached prefix always describes the unbroken text. The selected
         // discretionary glyph is materialized afresh after choosing an end.
-        let mut natural_widths = scanned.widths.clone();
-        for edge in &scanned.overlays {
-            if let Some(k) = units.iter().position(|u| u.text == edge.text) {
-                natural_widths[k] =
-                    super::scan::unit_width(data, &units[k], LayoutUnit::ZERO, atomics, cx, sat);
-            }
+        let natural_widths: Vec<_> = units
+            .iter()
+            .map(|u| {
+                super::scan::unit_width_from(
+                    data,
+                    u,
+                    data.units[start].text.start,
+                    LayoutUnit::ZERO,
+                    atomics,
+                    cx,
+                    sat,
+                )
+            })
+            .collect();
+        if natural_widths.iter().any(|w| *w < LayoutUnit::ZERO) {
+            return Ok(scanned);
         }
         let mut hyphens = Candidates::default();
         let mut prefix = vec![decoration::width(data, start, true, sat)];
@@ -289,9 +299,12 @@ pub(super) fn resolve(
                 _ => hanging = LayoutUnit::ZERO,
             }
             let required = next.add(delta, sat).sub(hanging, sat).add(suffix, sat);
-            if viable && u.break_after == BreakClass::Hyphen {
-                if let Some(edge) = hyphen::shape(data, u, cx, sat) {
-                    let required = required.sub(*w, sat).add(hyphen::width(&edge, sat), sat);
+            if u.break_after == BreakClass::Hyphen {
+                if let Some(windows) = hyphen::line(data, start, start + k + 1, cx, sat) {
+                    let required = next
+                        .sub(hanging, sat)
+                        .add(suffix, sat)
+                        .add(super::windows::cost(&windows, start + k + 1, sat), sat);
                     hyphens.push(start + k + 1, required);
                 }
             } else if viable && u.break_after == BreakClass::Allowed {
@@ -308,6 +321,7 @@ pub(super) fn resolve(
         // Keep the cold result intact until all cache safety checks pass.
         scanned.widths = natural_widths;
         scanned.overlays.clear();
+        scanned.prepared = false;
         cx.partial = Some(PartialLine {
             threshold_cursor: thresholds.len(),
             float_index: 0,
@@ -342,11 +356,12 @@ pub(super) fn resolve(
     {
         let position = indent.add(p.prefix[i - start], sat);
         let data = Arc::clone(&p.data);
-        let delta = super::windows::measure(&data, start, end, cx, sat)
-            .iter()
-            .fold(LayoutUnit::ZERO, |sum, window| {
-                sum.add(window.delta(i, sat), sat)
-            });
+        let windows = selected_hyphen
+            .and_then(|h| hyphen::line(&data, start, h, cx, sat))
+            .unwrap_or_else(|| super::windows::measure(&data, start, end, cx, sat));
+        let delta = windows.iter().fold(LayoutUnit::ZERO, |sum, window| {
+            sum.add(window.delta(i, sat), sat)
+        });
         return Err((node, ordinal, position.add(delta, sat)));
     }
     let mut hang_start = end;
@@ -383,13 +398,9 @@ pub(super) fn resolve(
         hang_start,
     };
     if let Some(end) = selected_hyphen
-        && let Some(edge) = hyphen::shape(&data, &data.units[end - 1], cx, sat)
+        && let Some(windows) = hyphen::line(&data, start, end, cx, sat)
     {
-        let k = end - 1 - start;
-        let width = hyphen::width(&edge, sat);
-        result.content = result.content.sub(result.widths[k], sat).add(width, sat);
-        result.widths[k] = width;
-        result.overlays.push(edge);
+        super::reshape::apply_windows(&data, start, &mut result, windows, cx, sat);
     }
     Ok(result)
 }

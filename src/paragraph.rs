@@ -66,6 +66,7 @@ pub(crate) struct ParagraphData {
     /// Unit index for each shaping cluster and cluster index for each glyph.
     pub(crate) clusters: Vec<u32>,
     pub(crate) selectable_clusters: Vec<u32>,
+    pub(crate) shaping_barriers: Vec<u32>,
     pub(crate) glyph_clusters: Vec<u32>,
     /// Unit index and node, in float ordinal order.
     pub(crate) floats: Vec<(u32, NodeId)>,
@@ -237,6 +238,7 @@ impl Paragraph {
             clusters: Vec::new(),
             glyph_clusters: Vec::new(),
             selectable_clusters: Vec::new(),
+            shaping_barriers: Vec::new(),
             floats: Vec::new(),
             runs,
             shape_items: shape_items_input,
@@ -257,6 +259,7 @@ impl Paragraph {
         let mut glyph_clusters = vec![0; data.glyphs.len()];
         let mut floats = Vec::new();
         let mut selectable_clusters = Vec::new();
+        let mut shaping_barriers = Vec::new();
         let mut previous_cluster = None;
         for (i, u) in data.units.iter().enumerate() {
             match &u.kind {
@@ -275,9 +278,15 @@ impl Paragraph {
                 crate::analysis::units::UnitKind::Float { node, .. } => {
                     floats.push((i as u32, *node))
                 }
+                crate::analysis::units::UnitKind::Atomic { .. }
+                | crate::analysis::units::UnitKind::ForcedBreak
+                | crate::analysis::units::UnitKind::BlockInInline { .. }
+                | crate::analysis::units::UnitKind::Tab
+                | crate::analysis::units::UnitKind::BidiControl => shaping_barriers.push(i as u32),
                 _ => {}
             }
         }
+        data.shaping_barriers = shaping_barriers;
         data.clusters = clusters;
         data.selectable_clusters = selectable_clusters;
         data.glyph_clusters = glyph_clusters;

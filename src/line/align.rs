@@ -75,8 +75,7 @@ pub(super) fn apply(
     let visible_hyphen = scan
         .overlays
         .iter()
-        .find(|w| data.text.get(w.text.start as usize..w.text.end as usize) == Some("\u{ad}"))
-        .map(|w| w.text.start);
+        .find_map(|w| w.hyphen.as_ref().map(|text| text.start));
     for i in start..scan.hang_start {
         let UnitKind::Cluster { glyphs, space, .. } = &data.units[i].kind else {
             continue;

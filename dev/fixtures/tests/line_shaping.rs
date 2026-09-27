@@ -1578,3 +1578,311 @@ fn shared_ligature_across_anchor_keeps_visual_glyphs_in_both_directions() {
         );
     }
 }
+
+#[test]
+fn discretionary_hyphen_keeps_pair_positioning_with_preceding_text() {
+    let letter = ["T", "Y", "V", "W", "A", "L", "r", "f"]
+        .into_iter()
+        .find(|c| {
+            (direct_width(c) + direct_width("-") - direct_width(&format!("{c}-"))).abs() > 0.1
+        })
+        .expect("pinned font must provide a measurable hyphen pair");
+    let expected = direct_width(&format!("{letter}-"));
+    let p = build(&format!("{letter}\u{ad}ZZZZ"), InlineStyle::default());
+    let actual = lines(&p, expected + 0.1);
+    assert_eq!(actual[0].text_range(), 0..3);
+    assert!(
+        (actual[0].inline_size() - expected).abs() < 0.04,
+        "{letter}- line {} vs jointly shaped {expected}",
+        actual[0].inline_size()
+    );
+}
+
+#[test]
+fn joint_hyphen_cost_selects_break_and_reaches_intrinsics_and_plans() {
+    use shodo::style::TextWrapStyle;
+    use shodo::{LineConstraint, LineResult};
+    let text = "a T\u{ad}iii";
+    let width = direct_width("a T-") + 0.1;
+    assert!(direct_width("a T") + direct_width("-") > width + 0.1);
+    let p = build(text, InlineStyle::default());
+    let actual = lines(&p, width);
+    assert_eq!(actual[0].text_range(), 0..5);
+    assert!((actual[0].inline_size() - direct_width("a T-")).abs() < 0.04);
+    assert_eq!(glyph_ids(&actual[0]).len(), 4);
+    let glyph_advance: f32 = actual[0]
+        .fragments()
+        .filter_map(|f| match f {
+            Fragment::GlyphRun(r) => Some(r),
+            _ => None,
+        })
+        .flat_map(|r| r.glyphs())
+        .map(|g| g.advance)
+        .sum();
+    assert!((glyph_advance - direct_width("a T-")).abs() < 0.04);
+    let intrinsic = p.intrinsic_sizes(
+        &mut LayoutContext::new(),
+        &Default::default(),
+        &Default::default(),
+    );
+    let expected_min = direct_width("a")
+        .max(direct_width("T-"))
+        .max(direct_width("iii"));
+    assert!((intrinsic.min_content - expected_min).abs() < 0.04);
+    for wrap in [
+        TextWrapStyle::Auto,
+        TextWrapStyle::Balance,
+        TextWrapStyle::Pretty,
+    ] {
+        let options = LineOptions {
+            text_wrap_style: wrap,
+            ..Default::default()
+        };
+        let mut cx = LayoutContext::new();
+        let plan = p.plan_breaks(&mut cx, &options, width, &AtomicSizes::EMPTY);
+        let mut c = LineConstraint::new(width);
+        c.break_plan = Some(&plan);
+        let mut token = p.start_token();
+        let mut start = 0;
+        loop {
+            match p.next_line(&mut cx, token, &options, &c, &AtomicSizes::EMPTY) {
+                LineResult::Line(line) => {
+                    let end = line.text_range().end;
+                    let expected = if end == 5 {
+                        text[start..end].replace('\u{ad}', "-")
+                    } else {
+                        text[start..end].replace('\u{ad}', "")
+                    };
+                    assert!(
+                        (line.inline_size() - direct_width(expected.trim_end())).abs() < 0.04,
+                        "{wrap:?} {expected:?}"
+                    );
+                    assert!(line.inline_size() <= width + 0.04);
+                    start = end;
+                    token = line.break_token();
+                }
+                LineResult::Done => break,
+                other => panic!("{other:?}"),
+            }
+        }
+        assert_eq!(start, text.len());
+    }
+}
+
+#[test]
+fn joint_hyphen_cached_float_position_uses_actual_pair_advance() {
+    use shodo::node::OutOfFlowKind;
+    use shodo::{LineConstraint, LineResult};
+    let limits = Limits::default();
+    let fonts = load_fonts(&limits).unwrap();
+    let style = ParagraphStyle::default();
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        "a T",
+    )
+    .push_out_of_flow(NodeId(2), OutOfFlowKind::Float)
+    .push_text(
+        TextSource::Dom {
+            node: NodeId(3),
+            offset: 0,
+        },
+        "\u{ad}iii",
+    );
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let mut warm = LayoutContext::new();
+    assert!(matches!(
+        p.next_line(
+            &mut warm,
+            p.start_token(),
+            &Default::default(),
+            &LineConstraint::new(1000.0),
+            &AtomicSizes::EMPTY
+        ),
+        LineResult::FloatEncountered { .. }
+    ));
+    let width = direct_width("a T-") + 0.1;
+    let LineResult::FloatEncountered {
+        inline_position,
+        float_cursor,
+        ..
+    } = p.next_line(
+        &mut warm,
+        p.start_token(),
+        &Default::default(),
+        &LineConstraint::new(width),
+        &AtomicSizes::EMPTY,
+    )
+    else {
+        panic!()
+    };
+    assert!((inline_position - (direct_width("a T-") - direct_width("-"))).abs() < 0.04);
+    let mut c = LineConstraint::new(width);
+    c.floats_placed_through = Some(float_cursor);
+    let LineResult::Line(actual) = p.next_line(
+        &mut warm,
+        p.start_token(),
+        &Default::default(),
+        &c,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!()
+    };
+    let LineResult::Line(cold) = p.next_line(
+        &mut LayoutContext::new(),
+        p.start_token(),
+        &Default::default(),
+        &c,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!()
+    };
+    assert_eq!(actual.text_range(), 0..8);
+    assert_eq!(actual.text_range(), cold.text_range());
+    assert_eq!(actual.inline_size(), cold.inline_size());
+    assert_eq!(glyph_ids(&actual), glyph_ids(&cold));
+    let runs: Vec<_> = actual
+        .fragments()
+        .filter_map(|f| match f {
+            Fragment::GlyphRun(r) => Some(r),
+            _ => None,
+        })
+        .collect();
+    let hyphen = runs.iter().find(|r| r.node() == Some(NodeId(3))).unwrap();
+    assert_eq!(hyphen.text_range(), 6..8);
+    assert_eq!(hyphen.clusters().next().unwrap().text_range, 6..8);
+    assert!((hyphen.glyphs().next().unwrap().inline_position - inline_position).abs() < 0.04);
+}
+
+#[test]
+fn hyphen_inside_shared_ligature_preserves_prefix_and_source_clusters() {
+    let p = build("ff\u{ad}iZZZZ", InlineStyle::default());
+    let actual = lines(&p, direct_width("ff-") + 0.1);
+    assert_eq!(actual[0].text_range(), 0..4);
+    assert!((actual[0].inline_size() - direct_width("ff-")).abs() < 0.04);
+    assert_eq!(glyph_ids(&actual[0]).len(), 2);
+    let clusters: Vec<_> = actual[0]
+        .fragments()
+        .filter_map(|f| match f {
+            Fragment::GlyphRun(r) => Some(r),
+            _ => None,
+        })
+        .flat_map(|r| r.clusters().map(|c| c.text_range).collect::<Vec<_>>())
+        .collect();
+    assert_eq!(clusters, vec![0..2, 2..4]);
+    assert_eq!(actual[1].text_range(), 4..9);
+}
+
+#[test]
+fn generated_hyphen_does_not_join_across_an_atomic_boundary() {
+    use shodo::node::InlineEdges;
+    use shodo::{AtomicSize, LineConstraint, LineResult};
+    let limits = Limits::default();
+    let fonts = load_fonts(&limits).unwrap();
+    let style = ParagraphStyle::default();
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "T")
+        .push_atomic(NodeId(2), &style.root, InlineEdges::default())
+        .push_text(TextSource::Generated { node: NodeId(3) }, "\u{ad}ZZZZ");
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let mut sizes = AtomicSizes::new();
+    sizes.insert(NodeId(2), AtomicSize::default());
+    let expected = direct_width("T") + direct_width("-");
+    let LineResult::Line(line) = p.next_line(
+        &mut LayoutContext::new(),
+        p.start_token(),
+        &Default::default(),
+        &LineConstraint::new(expected + 0.1),
+        &sizes,
+    ) else {
+        panic!()
+    };
+    assert_eq!(line.text_range(), 0..6);
+    assert!((line.inline_size() - expected).abs() < 0.04);
+    assert_eq!(glyph_ids(&line).len(), 2);
+    assert!(
+        line.fragments()
+            .any(|f| matches!(f, Fragment::Atomic(a) if a.node == NodeId(2)))
+    );
+}
+
+#[test]
+fn rtl_owned_justification_keeps_marks_attached_to_their_clusters() {
+    use shodo::style::{TextAlign, TextJustify};
+    let limits = Limits::default();
+    let fonts = load_fonts(&limits).unwrap();
+    for direction in [Direction::Ltr, Direction::Rtl] {
+        let style = ParagraphStyle {
+            direction,
+            root: InlineStyle {
+                overflow_wrap: OverflowWrap::Anywhere,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut b = ParagraphBuilder::new(&style, &limits);
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "لَبَت");
+        let p = b
+            .build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap();
+        let width = (1..100)
+            .map(|w| w as f32)
+            .find(|w| {
+                let candidate = lines(&p, *w);
+                candidate[0].text_range() == (0..8) && *w - candidate[0].inline_size() > 0.2
+            })
+            .expect("oracle needs a two-cluster soft line with spare width");
+        let plain = lines(&p, width);
+        let options = LineOptions {
+            text_align: TextAlign::JustifyAll,
+            text_justify: TextJustify::InterCharacter,
+            ..Default::default()
+        };
+        let actual = p.break_all(
+            &mut LayoutContext::new(),
+            &options,
+            width,
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(actual[0].text_range(), 0..8);
+        assert!((actual[0].inline_size() - width).abs() < 0.03);
+        let glyphs = |line: &Line| {
+            line.fragments()
+                .filter_map(|f| match f {
+                    Fragment::GlyphRun(r) => Some(r),
+                    _ => None,
+                })
+                .flat_map(|r| r.glyphs())
+                .collect::<Vec<_>>()
+        };
+        let baseline = glyphs(&plain[0]);
+        let justified = glyphs(&actual[0]);
+        assert_eq!(baseline.len(), 4);
+        assert_eq!(
+            baseline.iter().map(|g| g.id).collect::<Vec<_>>(),
+            justified.iter().map(|g| g.id).collect::<Vec<_>>()
+        );
+        let mut clusters = std::collections::BTreeMap::new();
+        for (before, after) in baseline.iter().zip(&justified) {
+            assert_eq!(before.cluster, after.cluster);
+            assert_eq!(before.block_offset, after.block_offset);
+            let first = clusters
+                .entry(before.cluster)
+                .or_insert((before.inline_position, after.inline_position));
+            assert!(
+                ((before.inline_position - first.0) - (after.inline_position - first.1)).abs()
+                    < 0.04,
+                "{direction:?} mark attachment changed in cluster {}",
+                before.cluster
+            );
+        }
+        assert_eq!(clusters.len(), 2);
+    }
+}

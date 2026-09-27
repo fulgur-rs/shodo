@@ -22,7 +22,7 @@ pub(super) fn scan(
     let mut widths = Vec::new();
     let prefix = super::decoration::width(data, start, true, sat);
     let mut pos = indent.add(prefix, sat);
-    let mut last_break: Option<(usize, Option<super::reshape::EdgeOverlay>)> = None;
+    let mut last_break: Option<(usize, bool)> = None;
     let mut taken_hyphen = None;
     let mut first_hyphen = None;
     let mut last_emergency: Option<usize> = None;
@@ -72,7 +72,7 @@ pub(super) fn scan(
         );
         if !hangs && !overflowing && extent > available {
             if let Some((b, edge)) = last_break.take() {
-                taken_hyphen = edge;
+                taken_hyphen = edge.then_some(b);
                 widths.truncate(b - start);
                 i = b;
                 break BreakReason::Regular;
@@ -82,8 +82,8 @@ pub(super) fn scan(
                 i = b;
                 break BreakReason::Emergency;
             }
-            if let Some((b, edge)) = first_hyphen.take() {
-                taken_hyphen = Some(edge);
+            if let Some(b) = first_hyphen.take() {
+                taken_hyphen = Some(b);
                 widths.truncate(b - start);
                 i = b;
                 break BreakReason::Regular;
@@ -111,20 +111,23 @@ pub(super) fn scan(
                     break BreakReason::Regular;
                 }
                 if required <= available {
-                    last_break = Some((i, None));
+                    last_break = Some((i, false));
                 }
             }
-            BreakClass::Hyphen if viable => {
-                if let Some(edge) = super::hyphen::shape(data, unit, cx, sat) {
-                    let extra = super::hyphen::width(&edge, sat).sub(w, sat);
+            BreakClass::Hyphen => {
+                if let Some(windows) = super::hyphen::line(data, start, i, cx, sat) {
+                    let required = pos
+                        .sub(hanging, sat)
+                        .add(suffix, sat)
+                        .add(super::windows::cost(&windows, i, sat), sat);
                     if overflowing {
-                        taken_hyphen = Some(edge);
+                        taken_hyphen = Some(i);
                         break BreakReason::Regular;
                     }
-                    if required.add(extra, sat) <= available {
-                        last_break = Some((i, Some(edge)));
+                    if required <= available {
+                        last_break = Some((i, true));
                     } else if first_hyphen.is_none() {
-                        first_hyphen = Some((i, edge));
+                        first_hyphen = Some(i);
                     }
                 }
             }
@@ -150,11 +153,6 @@ pub(super) fn scan(
             i += 1;
         }
     }
-    if let Some(edge) = &taken_hyphen
-        && let Some(k) = units[start..i].iter().position(|u| u.text == edge.text)
-    {
-        widths[k] = super::hyphen::width(edge, sat);
-    }
     let total = widths
         .iter()
         .fold(LayoutUnit::ZERO, |acc, w| acc.add(*w, sat));
@@ -174,9 +172,9 @@ pub(super) fn scan(
             _ => break,
         }
     }
-    Scan {
+    let mut result = Scan {
         prepared: false,
-        overlays: taken_hyphen.into_iter().collect(),
+        overlays: Vec::new(),
         end: i,
         reason,
         widths,
@@ -185,7 +183,13 @@ pub(super) fn scan(
             .add(prefix, sat)
             .add(super::decoration::width(data, i, false, sat), sat),
         hang_start,
+    };
+    if let Some(end) = taken_hyphen
+        && let Some(windows) = super::hyphen::line(data, start, end, cx, sat)
+    {
+        super::reshape::apply_windows(data, start, &mut result, windows, cx, sat);
     }
+    result
 }
 
 /// A continuation inside a shaping cluster must use its own exact prefix
