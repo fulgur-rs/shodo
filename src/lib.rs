@@ -8,6 +8,7 @@
 
 pub mod font;
 pub mod geometry;
+pub mod hit;
 pub mod limits;
 pub mod mapping;
 pub mod node;

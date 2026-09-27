@@ -80,11 +80,11 @@
 
 **Interfaces:** produces `hit::{LineLayout,TextPosition,HitResult,Caret,CaretDirection,NavigationOrder}` per spec. `LineLayout::new(&[Line])`, `hit_test(inline,block)`, `caret(position)` use finalized accepted Line coordinates and datasets。
 
-- [ ] Add public tests for glyph midpoint hits, coordinate→position→caret round trip, mapping-disabled operation and bidi double affinity. Confirm missing-API RED; use explicit numeric assertions once API compiles, no placeholder methods counted as completion。
-- [ ] Retain legal caret cuts excluding indivisible transformed spans at build without requiring DOM mapping. Construct index from final shared/owned clusters, actual advances and atomic/tab/empty boundaries; source node mapping is optional and dataset-specific。
-- [ ] Support ligature grapheme interiors using available GDEF scaled/variable caret values with documented proportional fallback; no internal mark/ZWJ/expanded-transform stop. Invalid/contour-point unsupported caret data falls back, not panic or per-query reparsing。
-- [ ] Add `first_line_and_indivisible_transform_carets_use_actual_dataset`, `ligature_and_combining_carets_preserve_graphemes`, `bidi_affinity_has_two_visual_locations`, `justified_and_owned_overlay_hit_geometry_matches_glyphs`, tabs/hanging/SHY/atomic/empty/nonfinite cases. Verify multiple lines use block_offset and line-specific processed offsets。
-- [ ] Run workspace/hit tests, document public byte/coordinate/affinity contract; commit `feat: expose caret geometry and coordinate hit testing`。
+- [x] Add public tests for glyph midpoint hits, coordinate→position→caret round trip, mapping-disabled operation and bidi double affinity. Confirm missing-API RED; use explicit numeric assertions once API compiles, no placeholder methods counted as completion。
+- [x] Retain legal caret cuts excluding indivisible transformed spans at build without requiring DOM mapping. Construct index from final shared/owned clusters, actual advances and atomic/tab/empty boundaries; source node mapping is optional and dataset-specific。
+- [x] Support ligature grapheme interiors using available GDEF scaled/variable caret values with documented proportional fallback; no internal mark/ZWJ/expanded-transform stop. Invalid/contour-point unsupported caret data falls back, not panic or per-query reparsing。
+- [x] Add `first_line_and_indivisible_transform_carets_use_actual_dataset`, `ligature_and_combining_carets_preserve_graphemes`, `bidi_affinity_has_two_visual_locations`, `justified_and_owned_overlay_hit_geometry_matches_glyphs`, tabs/hanging/SHY/atomic/empty/nonfinite cases. Verify multiple lines use block_offset and line-specific processed offsets。
+- [x] Run workspace/hit tests, document public byte/coordinate/affinity contract; commit `feat: expose caret geometry and coordinate hit testing`。
 
 ### Task 5: Selection rectangles and logical/visual navigation
 

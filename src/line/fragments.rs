@@ -74,6 +74,14 @@ fn box_reversed(data: &ParagraphData, box_index: u32) -> bool {
     data.styles[info.style as usize].direction != data.style.direction
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct TabSlot {
+    pub(crate) unit: u32,
+    pub(crate) start: LayoutUnit,
+    pub(crate) width: LayoutUnit,
+}
+type Built = (Vec<FragmentRecord>, Vec<TabSlot>);
+
 /// Builds the records of one line in logical order.
 fn build_logical(
     data: &ParagraphData,
@@ -82,7 +90,7 @@ fn build_logical(
     origin: LayoutUnit,
     atomics: &AtomicSizes,
     visible_hyphen: Option<u32>,
-) -> Vec<FragmentRecord> {
+) -> Built {
     let hidden_hyphen = |unit: &Unit| {
         data.text
             .get(unit.text.start as usize..unit.text.end as usize)
@@ -90,6 +98,7 @@ fn build_logical(
             && visible_hyphen != Some(unit.text.start)
     };
     let mut out: Vec<FragmentRecord> = Vec::new();
+    let mut tabs = Vec::new();
     let mut open: Vec<usize> = Vec::new();
     let mut shared_record: Option<(usize, usize)> = None;
     let mut pos = origin;
@@ -244,7 +253,14 @@ fn build_logical(
                     level: unit.level,
                 });
             }
-            UnitKind::Tab => pos = pos + w,
+            UnitKind::Tab => {
+                tabs.push(TabSlot {
+                    unit: i as u32,
+                    start: pos,
+                    width: w,
+                });
+                pos = pos + w;
+            }
             UnitKind::ForcedBreak | UnitKind::BidiControl | UnitKind::BlockInInline { .. } => {}
         }
     }
@@ -266,7 +282,7 @@ fn build_logical(
         }
         out[r].inline_size = pos - out[r].inline_start;
     }
-    out
+    (out, tabs)
 }
 
 /// Builds the records of one line in visual order (UAX #9 L2). Units from
@@ -280,7 +296,7 @@ pub(crate) fn build(
     origin: LayoutUnit,
     atomics: &AtomicSizes,
     visible_hyphen: Option<u32>,
-) -> Vec<FragmentRecord> {
+) -> Built {
     let base = data.base_level;
     if data.units[units.clone()].iter().all(|u| u.level == base) {
         return build_logical(data, units, widths, origin, atomics, visible_hyphen);
@@ -306,6 +322,7 @@ struct Piece {
     owner: Option<u32>,
     /// `(box, is_start)` for inline box edges.
     edge: Option<(u32, bool)>,
+    tab: Option<u32>,
 }
 
 fn inside(data: &ParagraphData, mut b: Option<u32>, target: u32) -> bool {
@@ -351,6 +368,7 @@ fn push_cluster(
             level,
             owner,
             edge: None,
+            tab: None,
         });
         return;
     }
@@ -404,6 +422,7 @@ fn push_cluster(
         level,
         owner,
         edge: None,
+        tab: None,
     });
     *shared_record = unit
         .shared_cluster
@@ -419,7 +438,7 @@ fn build_bidi(
     origin: LayoutUnit,
     atomics: &AtomicSizes,
     visible_hyphen: Option<u32>,
-) -> Vec<FragmentRecord> {
+) -> Built {
     let base = data
         .bidi_paragraph_at_unit(units.start)
         .map_or(data.base_level, |p| p.base_level);
@@ -443,6 +462,7 @@ fn build_bidi(
             level: data.units[units.start].level,
             owner: Some(b),
             edge: Some((b, true)),
+            tab: None,
         });
     }
     let mut shared_record = None;
@@ -481,6 +501,7 @@ fn build_bidi(
                 level,
                 owner: Some(*box_index),
                 edge: Some((*box_index, true)),
+                tab: None,
             },
             UnitKind::Close { box_index } => Piece {
                 record: None,
@@ -488,6 +509,7 @@ fn build_bidi(
                 level,
                 owner: Some(*box_index),
                 edge: Some((*box_index, false)),
+                tab: None,
             },
             UnitKind::Cluster { space, .. } => {
                 if data
@@ -541,6 +563,7 @@ fn build_bidi(
                     level,
                     owner: unit.parent_box,
                     edge: None,
+                    tab: None,
                 }
             }
             UnitKind::Float { node, .. } | UnitKind::Absolute { node } => {
@@ -557,6 +580,7 @@ fn build_bidi(
                     level,
                     owner: unit.parent_box,
                     edge: None,
+                    tab: None,
                 });
                 continue;
             }
@@ -566,6 +590,7 @@ fn build_bidi(
                 level,
                 owner: unit.parent_box,
                 edge: None,
+                tab: Some(i as u32),
             },
             UnitKind::ForcedBreak | UnitKind::BidiControl | UnitKind::BlockInInline { .. } => {
                 continue;
@@ -587,6 +612,7 @@ fn build_bidi(
             level: last_kept.map_or(base, |v| v.0),
             owner: Some(b),
             edge: Some((b, false)),
+            tab: None,
         });
     }
     continuations.extend(
@@ -722,7 +748,18 @@ fn build_bidi(
             *slot = groups[g].parent.map(|p| index_of_group[p] as u32);
         }
     }
-    out.into_iter().map(|(r, _, _)| r).collect()
+    let tabs = pieces
+        .iter()
+        .enumerate()
+        .filter_map(|(p, piece)| {
+            piece.tab.map(|unit| TabSlot {
+                unit,
+                start: starts[p],
+                width: piece.width,
+            })
+        })
+        .collect();
+    (out.into_iter().map(|(r, _, _)| r).collect(), tabs)
 }
 
 /// A visually contiguous part of an inline box on one reordered line.

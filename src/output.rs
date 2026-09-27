@@ -49,6 +49,7 @@ pub struct Line {
     pub(crate) fragments: Vec<FragmentRecord>,
     pub(crate) block_shifts: Vec<LayoutUnit>,
     pub(crate) empty: bool,
+    pub(crate) tabs: Vec<fragments::TabSlot>,
     pub(crate) positions: Option<(u32, Vec<LayoutUnit>)>,
     pub(crate) glyph_spacing: Option<(u32, Vec<crate::line::spacing::GlyphSpacing>)>,
     pub(crate) overlay: Option<Box<GlyphStore>>,
@@ -88,7 +89,7 @@ impl Line {
             .overlays
             .iter()
             .find_map(|w| w.hyphen.as_ref().map(|text| text.start));
-        let mut records = fragments::build(
+        let (mut records, tabs) = fragments::build(
             data,
             origin_units,
             scan.hang_start,
@@ -155,6 +156,7 @@ impl Line {
             overlay_clusters: Box::default(),
             overlay_runs: Box::default(),
             pending_overlays: scan.overlays,
+            tabs,
         }
     }
 
