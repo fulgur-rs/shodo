@@ -35,6 +35,7 @@ Commands in these guides run from the repository root.
 | Saved Chrome measurements, known differences, and recollection | [Browser comparison](browser-comparison.md) |
 | Standalone release timing and allocation measurements | [Performance harness](performance-measurements.md) |
 | Earlier shaping measurements and their scope | [Shaping measurement record](shaping-measurements.md) |
+| Frozen raikiri S4 residual fields, all109 document classification and caller gaps | [raikiri style diagnostics](raikiri-style-diagnostics.md) |
 | An unsent proposal concerning upstream shaping status | [harfrust status proposal](harfrust-shaping-status-proposal.md) |
 
 Performance records describe the recorded machine and toolchain. Snapshot and

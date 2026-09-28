@@ -170,3 +170,8 @@ decoration paths. `ruby_paint` pins source colors, asymmetric vertical outlines,
 nested translations, hidden/ collapsed lanes and strict clipping. See
 [the caller contract](../../docs/ruby.md). The existing browser recorder does not
 measure ruby and its fixture exclusions remain applicable.
+
+The [raikiri style diagnostic](../../docs/raikiri-style-diagnostics.md) replays original
+WPT HTML/CSS with the real pinned parser/cascade, verifies original resource
+bytes, and identifies residual fields from the frozen S4 caller profile. It
+keeps the integration spike separate and emits no WPT image verdict.
