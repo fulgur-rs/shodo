@@ -89,4 +89,4 @@ real outlines with literal physical rotation/compression matrices.
 The [executed verification record](verification/vertical-final-gates.json) lists
 the exact commands and results for the implementation. Stable and Rust 1.89.0
 each passed 653 workspace tests, with 46 exact snapshot matches. The record also
-includes feature, allocator, wasm, font reproduction and measured benchmark gates.
+includes feature, allocator, wasm, font reproduction and measured benchmark checks.

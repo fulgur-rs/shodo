@@ -1,6 +1,6 @@
-# S2 fixed-font shaping measurements
+# Fixed-font shaping measurements
 
-Measured on 2026-09-27 with rustc 1.89.0 after the S2 final review fixes, default
+Measured on 2026-09-27 with rustc 1.89.0, default
 features, the checked-in 12-case corpus, and the three pinned font subsets (404,464 bytes).
 Font loading/registration happens before the clock starts. Each iteration builds
 all paragraphs through the public fixture API and drops those paragraphs.
@@ -41,7 +41,7 @@ first-line paragraph and float retry, verify the nonzero aggregate cap, and veri
 that dropping paragraph/collection then shrinking releases the document font layer.
 Shared paragraph/font allocations are not counted as context buffer bytes.
 
-S2 deliberately adds no word cache. This sample does not show a consistent
+`LayoutContext` has no word cache. This sample does not show a consistent
 context-reuse gain and does not establish a word-cache benefit. A word cache would need to qualify
 text, script, language, features, normalized coordinates, font identity/generation,
 pre/post context, source clusters and discretionary line edges, while respecting

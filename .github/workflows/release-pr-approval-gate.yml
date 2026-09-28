@@ -1,0 +1,122 @@
+name: Release PR approval gate
+
+# Require the release-pr-approval status in the main Ruleset after this
+# workflow is merged. Ordinary PRs pass without a review.
+# This workflow evaluates API metadata without checking out PR files.
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited, closed, ready_for_review]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Pull request number to re-evaluate
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+jobs:
+  resolve:
+    name: Resolve current PR commit
+    # Fork review events have a read-only token. Their initial status is
+    # reported by pull_request_target, and fork PRs are never release PRs.
+    if: >-
+      github.repository == 'fulgur-rs/shodo' &&
+      (github.event_name != 'pull_request_review' || github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    outputs:
+      head_sha: ${{ steps.head.outputs.sha }}
+    steps:
+      - name: Read current commit
+        id: head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number || inputs.pull_request }}
+        run: |
+          set -euo pipefail
+          [[ "$PR" =~ ^[1-9][0-9]*$ ]]
+          sha=$(gh api "repos/$REPO/pulls/$PR" --jq '.head.sha')
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+  gate:
+    name: Require maintainer approval (release PRs)
+    needs: resolve
+    runs-on: ubuntu-latest
+    # All PRs sharing a commit use the same queue and re-read live reviews.
+    concurrency:
+      group: release-pr-approval-${{ needs.resolve.outputs.head_sha }}
+      cancel-in-progress: false
+    steps:
+      - name: Evaluate approval and report status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number || inputs.pull_request }}
+          RESOLVED_SHA: ${{ needs.resolve.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          CONTEXT="release-pr-approval"
+          [[ "$PR" =~ ^[1-9][0-9]*$ ]]
+
+          # Evaluate the commit that owns this queue, even if the source PR
+          # has since moved. The new commit is evaluated in its own queue.
+          HEAD_SHA="$RESOLVED_SHA"
+
+          set_status() {
+            gh api -X POST "repos/$REPO/statuses/$HEAD_SHA" \
+              -f state="$1" -f context="$CONTEXT" -f description="$2" >/dev/null
+          }
+
+          # Clear previous success first. API errors leave the gate waiting.
+          set_status pending "Checking whether a maintainer approval is required"
+
+          # Statuses belong to commits, not PRs. A normal PR sharing a release
+          # head must not overwrite the release's approval gate with success.
+          releases=$(gh api --paginate "repos/$REPO/pulls?state=open&base=main&per_page=100" \
+            | jq -s --arg sha "$HEAD_SHA" --arg repo "$REPO" '
+                add | [ .[] | select(
+                  .head.sha == $sha and .head.repo.full_name == $repo
+                  and (.head.ref | startswith("release-plz-"))
+                ) | {number, author: .user.login} ]')
+
+          if [ "$(jq 'length' <<< "$releases")" -eq 0 ]; then
+            set_status success "Not a release PR - not gated"
+            exit 0
+          fi
+
+          set_status pending "Waiting for a maintainer approval on the current commit"
+          while read -r release; do
+            number=$(jq -r '.number' <<< "$release")
+            author=$(jq -r '.author | ascii_downcase' <<< "$release")
+            reviews=$(gh api --paginate "repos/$REPO/pulls/$number/reviews?per_page=100" \
+              | jq -s 'add')
+            candidates=$(jq -r --arg sha "$HEAD_SHA" --arg author "$author" '
+                [ .[] | select(.user.type == "User")
+                  | select((.user.login | ascii_downcase) != $author)
+                  | select(.state | IN("APPROVED", "CHANGES_REQUESTED", "DISMISSED"))
+                ]
+                | group_by(.user.login | ascii_downcase)
+                | map(max_by(.id))
+                | .[] | select(.state == "APPROVED" and .commit_id == $sha)
+                | select(.author_association | IN("OWNER", "MEMBER", "COLLABORATOR"))
+                | .user.login' <<< "$reviews")
+            approved=false
+            while read -r reviewer; do
+              [ -n "$reviewer" ] || continue
+              permission=$(gh api "repos/$REPO/collaborators/$reviewer/permission" --jq '.permission')
+              case "$permission" in
+                admin|write) approved=true; break ;;
+              esac
+            done <<< "$candidates"
+            if [ "$approved" != true ]; then
+              exit 0
+            fi
+          done < <(jq -c '.[]' <<< "$releases")
+          set_status success "Approved by a maintainer on the current commit"
