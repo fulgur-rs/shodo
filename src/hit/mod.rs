@@ -57,6 +57,17 @@ pub struct LineLayout<'a> {
     block_tree: spatial::Tree,
 }
 impl<'a> LineLayout<'a> {
+    /// Accessibility shares this finalized index rather than reinterpreting
+    /// grapheme cuts or rebuilding source geometry for each character.
+    pub(crate) fn accepted_stops(&self, line: usize) -> &[Caret] {
+        &self.index[line].stops
+    }
+    pub(crate) fn accepted_segments(
+        &self,
+        line: usize,
+    ) -> impl Iterator<Item = (&std::ops::Range<u32>, LogicalRect)> {
+        self.index[line].segments.iter().map(|s| (&s.text, s.rect))
+    }
     pub fn new(lines: &'a [Line]) -> Self {
         Self {
             lines,
