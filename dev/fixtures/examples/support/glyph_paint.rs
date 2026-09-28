@@ -1,5 +1,5 @@
 //! Fixed-font caller example, shared by contract tests. It draws accepted
-//! glyph IDs once; annotations use separate source rectangles. It is not a
+//! glyph IDs once, traversing retained ruby lanes with their transforms. It is not a
 //! general CSS painter (no skip-ink or decoration propagation).
 //! Color-font support is CBDT/CBLC PNG only; other color formats need a backend.
 #[path = "bitmap_paint.rs"]
@@ -65,12 +65,11 @@ pub fn try_paint_styled_on_canvas(
 
 fn draw_decoration(
     image: &mut tiny_skia::Pixmap,
-    line: &Line,
+    space: LineSpace<'_>,
     decoration: shodo::DecorationRect,
 ) -> Result<(), PaintError> {
     // Source decoration rects already include line.block_offset().
-    let rect = converter(line, image.width(), image.height()).rect(decoration.rect);
-    let rect = tiny_skia::Rect::from_xywh(10.0 + rect.x, 10.0 + rect.y, rect.width, rect.height)
+    let rect = mapped_rect(space, decoration.rect, image.width(), image.height(), false)
         .ok_or(PaintError::InvalidAnnotation)?;
     check_bounds(rect, image)?;
     let [r, g, b, a] = decoration.color;
@@ -163,131 +162,20 @@ fn paint(
     image.fill(tiny_skia::Color::WHITE);
     let mut count = 0;
     for line in lines {
-        let spans = if retained {
-            line.paint_spans()
-        } else {
-            Vec::new()
-        };
-        for span in &spans {
-            if let Some(decoration) = span.underline() {
-                draw_decoration(&mut image, line, decoration)?;
-            }
-        }
-        for fragment in line.fragments() {
-            if let Fragment::Atomic(atomic) = fragment {
-                let mut rect = atomic.border_rect;
-                rect.block_start += line.block_offset();
-                if let Some(rect) = physical_rect(line, rect, width, height) {
-                    if canvas.is_some() {
-                        check_bounds(rect, &image)?;
-                    }
-                    let [r, g, b, a] = color(atomic.node);
-                    let mut paint = tiny_skia::Paint::default();
-                    paint.set_color_rgba8(r, g, b, a);
-                    image.fill_rect(rect, &paint, tiny_skia::Transform::identity(), None);
-                }
-                continue;
-            }
-            let Fragment::GlyphRun(run) = fragment else {
-                continue;
-            };
-            if run.embolden() || run.skew().is_some() {
-                return Err(PaintError::UnsupportedSynthesis);
-            }
-            let data = run.font_data().ok_or(PaintError::MissingFont)?;
-            let font = FontRef::from_index(data.data.as_ref(), data.index)
-                .map_err(|_| PaintError::InvalidFont)?;
-            let [r, g, b, a] = if retained {
-                run.paint_style().color
-            } else {
-                color(run.node().ok_or(PaintError::MissingOwner)?)
-            };
-            let mut paint = tiny_skia::Paint::default();
-            paint.set_color_rgba8(r, g, b, a);
-            for (index, glyph) in run.glyphs().enumerate() {
-                let bitmap_transform =
-                    if !retained && line.writing_mode() == WritingMode::HorizontalTb {
-                        tiny_skia::Transform::from_translate(
-                            10.0 + glyph.inline_position,
-                            10.0 + line.block_offset() + run.baseline() + glyph.block_offset,
-                        )
-                    } else {
-                        let converter = converter(line, width, height);
-                        let (inline, block) =
-                            run.glyph_origin(index).ok_or(PaintError::InvalidBitmap)?;
-                        let (x, y) = converter.point(inline, line.block_offset() + block);
-                        let matrix = run.glyph_transform();
-                        let (xx, xy) = converter.vector(matrix.inline_x, matrix.block_x);
-                        let (yx, yy) = converter.vector(matrix.inline_y, matrix.block_y);
-                        // Bitmap coordinates already use y-down, unlike outlines.
-                        tiny_skia::Transform::from_row(xx, xy, yx, yy, 10.0 + x, 10.0 + y)
-                    };
-                if bitmap_paint::paint_bitmap(
-                    &font,
-                    GlyphId::new(glyph.id),
-                    run.font_size(),
-                    bitmap_transform,
-                    &mut image,
-                    canvas.is_some(),
-                )? {
-                    count += 1;
-                    continue;
-                }
-                let outline = font
-                    .outline_glyphs()
-                    .get(GlyphId::new(glyph.id))
-                    .ok_or(PaintError::MissingOutline)?;
-                let mut pen = Pen(tiny_skia::PathBuilder::new());
-                outline
-                    .draw(
-                        DrawSettings::unhinted(
-                            Size::new(run.font_size()),
-                            LocationRef::new(run.normalized_coords()),
-                        ),
-                        &mut pen,
-                    )
-                    .map_err(|_| PaintError::MissingOutline)?;
-                if let Some(path) = pen.0.finish() {
-                    let transform = if !retained && line.writing_mode() == WritingMode::HorizontalTb
-                    {
-                        // Preserve the established horizontal sample coordinates.
-                        tiny_skia::Transform::from_row(
-                            1.0,
-                            0.0,
-                            0.0,
-                            -1.0,
-                            10.0 + glyph.inline_position,
-                            10.0 + line.block_offset() + run.baseline() + glyph.block_offset,
-                        )
-                    } else {
-                        let converter = converter(line, width, height);
-                        let (inline, block) =
-                            run.glyph_origin(index).ok_or(PaintError::MissingOutline)?;
-                        let (x, y) = converter.point(inline, line.block_offset() + block);
-                        let matrix = run.glyph_transform();
-                        let (xx, xy) = converter.vector(matrix.inline_x, matrix.block_x);
-                        let (yx, yy) = converter.vector(matrix.inline_y, matrix.block_y);
-                        // skrifa outlines use y-up; the public matrix uses y-down.
-                        tiny_skia::Transform::from_row(xx, xy, -yx, -yy, 10.0 + x, 10.0 + y)
-                    };
-                    if canvas.is_some() {
-                        let bounds = path
-                            .clone()
-                            .transform(transform)
-                            .and_then(|path| path.compute_tight_bounds())
-                            .ok_or(PaintError::InvalidCanvas)?;
-                        check_bounds(bounds, &image)?;
-                    }
-                    image.fill_path(&path, &paint, tiny_skia::FillRule::Winding, transform, None);
-                }
-                count += 1;
-            }
-        }
-        for span in &spans {
-            if let Some(decoration) = span.strikethrough() {
-                draw_decoration(&mut image, line, decoration)?;
-            }
-        }
+        count += paint_line(
+            &mut image,
+            line,
+            LineSpace {
+                root: line,
+                to_parent: tiny_skia::Transform::identity(),
+                nested: false,
+            },
+            PaintOptions {
+                strict: canvas.is_some(),
+                retained,
+            },
+            &mut color,
+        )?;
     }
     let mut paint = tiny_skia::Paint::default();
     paint.set_color_rgba8(0, 0, 255, 255);
@@ -319,6 +207,223 @@ fn paint(
         image.fill_rect(rect, &paint, tiny_skia::Transform::identity(), None);
     }
     Ok((image, count))
+}
+
+#[derive(Clone, Copy)]
+struct LineSpace<'a> {
+    root: &'a Line,
+    to_parent: tiny_skia::Transform,
+    nested: bool,
+}
+#[derive(Clone, Copy)]
+struct PaintOptions {
+    strict: bool,
+    retained: bool,
+}
+
+fn mapped_rect(
+    space: LineSpace<'_>,
+    rect: LogicalRect,
+    width: u32,
+    height: u32,
+    legacy: bool,
+) -> Option<tiny_skia::Rect> {
+    let mapped = tiny_skia::Rect::from_xywh(
+        rect.inline_start,
+        rect.block_start,
+        rect.inline_size,
+        rect.block_size,
+    )?
+    .transform(space.to_parent)?;
+    let rect = LogicalRect {
+        inline_start: mapped.x(),
+        block_start: mapped.y(),
+        inline_size: mapped.width(),
+        block_size: mapped.height(),
+    };
+    if legacy {
+        return physical_rect(space.root, rect, width, height);
+    }
+    let physical = converter(space.root, width, height).rect(rect);
+    tiny_skia::Rect::from_xywh(
+        10.0 + physical.x,
+        10.0 + physical.y,
+        physical.width,
+        physical.height,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn glyph_to_canvas(
+    run: shodo::GlyphRunView<'_>,
+    index: usize,
+    line: &Line,
+    space: LineSpace<'_>,
+    width: u32,
+    height: u32,
+    retained: bool,
+) -> Result<tiny_skia::Transform, PaintError> {
+    if !retained && !space.nested && line.writing_mode() == WritingMode::HorizontalTb {
+        let glyph = run.glyphs().get(index).ok_or(PaintError::InvalidBitmap)?;
+        return Ok(tiny_skia::Transform::from_translate(
+            10.0 + glyph.inline_position,
+            10.0 + line.block_offset() + run.baseline() + glyph.block_offset,
+        ));
+    }
+    let (inline, block) = run.glyph_origin(index).ok_or(PaintError::InvalidBitmap)?;
+    let matrix = run.glyph_transform();
+    let logical = tiny_skia::Transform::from_row(
+        matrix.inline_x,
+        matrix.block_x,
+        matrix.inline_y,
+        matrix.block_y,
+        inline,
+        line.block_offset() + block,
+    );
+    let composed = space.to_parent.pre_concat(logical);
+    let physical = converter(space.root, width, height);
+    let (x, y) = physical.point(composed.tx, composed.ty);
+    let (xx, xy) = physical.vector(composed.sx, composed.ky);
+    let (yx, yy) = physical.vector(composed.kx, composed.sy);
+    Ok(tiny_skia::Transform::from_row(
+        xx,
+        xy,
+        yx,
+        yy,
+        10.0 + x,
+        10.0 + y,
+    ))
+}
+
+fn paint_line(
+    image: &mut tiny_skia::Pixmap,
+    line: &Line,
+    space: LineSpace<'_>,
+    options: PaintOptions,
+    color: &mut impl FnMut(NodeId) -> [u8; 4],
+) -> Result<usize, PaintError> {
+    let width = image.width();
+    let height = image.height();
+    let retained = options.retained;
+    let mut count = 0;
+    let spans = if retained {
+        line.paint_spans()
+    } else {
+        Vec::new()
+    };
+    for span in &spans {
+        if let Some(decoration) = span.underline() {
+            draw_decoration(image, space, decoration)?;
+        }
+    }
+    for fragment in line.fragments() {
+        if let Fragment::RubyAnnotation(a) = fragment {
+            if a.visibility() == shodo::RubyVisibility::Visible {
+                let t = a.transform();
+                let child_space = LineSpace {
+                    root: space.root,
+                    to_parent: space
+                        .to_parent
+                        .pre_concat(tiny_skia::Transform::from_translate(
+                            0.0,
+                            line.block_offset(),
+                        ))
+                        .pre_concat(tiny_skia::Transform::from_row(
+                            t.inline_inline,
+                            t.block_inline,
+                            t.inline_block,
+                            t.block_block,
+                            t.inline_offset,
+                            t.block_offset,
+                        )),
+                    nested: true,
+                };
+                count += paint_line(image, a.line(), child_space, options, color)?;
+            }
+            continue;
+        }
+        if let Fragment::Atomic(atomic) = fragment {
+            let mut rect = atomic.border_rect;
+            rect.block_start += line.block_offset();
+            if let Some(rect) = mapped_rect(space, rect, width, height, !retained && !space.nested)
+            {
+                if options.strict {
+                    check_bounds(rect, image)?;
+                }
+                let [r, g, b, a] = color(atomic.node);
+                let mut paint = tiny_skia::Paint::default();
+                paint.set_color_rgba8(r, g, b, a);
+                image.fill_rect(rect, &paint, tiny_skia::Transform::identity(), None);
+            }
+            continue;
+        }
+        let Fragment::GlyphRun(run) = fragment else {
+            continue;
+        };
+        if run.embolden() || run.skew().is_some() {
+            return Err(PaintError::UnsupportedSynthesis);
+        }
+        let data = run.font_data().ok_or(PaintError::MissingFont)?;
+        let font = FontRef::from_index(data.data.as_ref(), data.index)
+            .map_err(|_| PaintError::InvalidFont)?;
+        let [r, g, b, a] = if retained {
+            run.paint_style().color
+        } else {
+            color(run.node().ok_or(PaintError::MissingOwner)?)
+        };
+        let mut paint = tiny_skia::Paint::default();
+        paint.set_color_rgba8(r, g, b, a);
+        for (index, glyph) in run.glyphs().enumerate() {
+            let bitmap_transform =
+                glyph_to_canvas(run, index, line, space, width, height, retained)?;
+            if bitmap_paint::paint_bitmap(
+                &font,
+                GlyphId::new(glyph.id),
+                run.font_size(),
+                bitmap_transform,
+                image,
+                options.strict,
+            )? {
+                count += 1;
+                continue;
+            }
+            let outline = font
+                .outline_glyphs()
+                .get(GlyphId::new(glyph.id))
+                .ok_or(PaintError::MissingOutline)?;
+            let mut pen = Pen(tiny_skia::PathBuilder::new());
+            outline
+                .draw(
+                    DrawSettings::unhinted(
+                        Size::new(run.font_size()),
+                        LocationRef::new(run.normalized_coords()),
+                    ),
+                    &mut pen,
+                )
+                .map_err(|_| PaintError::MissingOutline)?;
+            if let Some(path) = pen.0.finish() {
+                // skrifa outlines use y-up; bitmaps and public matrices use y-down.
+                let transform =
+                    bitmap_transform.pre_concat(tiny_skia::Transform::from_scale(1.0, -1.0));
+                if options.strict {
+                    let bounds = path
+                        .clone()
+                        .transform(transform)
+                        .and_then(|path| path.compute_tight_bounds())
+                        .ok_or(PaintError::InvalidCanvas)?;
+                    check_bounds(bounds, image)?;
+                }
+                image.fill_path(&path, &paint, tiny_skia::FillRule::Winding, transform, None);
+            }
+            count += 1;
+        }
+    }
+    for span in &spans {
+        if let Some(decoration) = span.strikethrough() {
+            draw_decoration(image, space, decoration)?;
+        }
+    }
+    Ok(count)
 }
 
 #[derive(Debug, PartialEq, Eq)]

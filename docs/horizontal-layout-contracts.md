@@ -40,5 +40,6 @@ include `Line::block_offset`. The caller converts logical axes for painting.
 Nominal overflow does not include renderer-added strokes, antialiasing or
 decoration effects. Japanese punctuation spacing and hanging are described in
 the [Japanese layout contract](japanese-layout.md); vertical typography is
-described in the [vertical output contract](vertical-layout.md). Ruby layout is
-planned, and emphasis placement belongs to the renderer.
+described in the [vertical output contract](vertical-layout.md). [Ruby layout](ruby.md)
+adds coordinated annotation lanes and ink overflow. Emphasis placement belongs
+to the renderer.

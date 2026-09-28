@@ -16,6 +16,7 @@ their integration contracts. For API reference, run
 | Line metrics, spacing, source positions, and regression evidence | [Horizontal output contracts](horizontal-layout-contracts.md) |
 | Japanese breaks, punctuation spacing, hanging, and justification | [Japanese horizontal layout](japanese-layout.md) |
 | Vertical/sideways glyphs and combined text | [Vertical output](vertical-layout.md) |
+| Paired readings, coordinated wrapping, source metadata and retained painting | [Ruby layout](ruby.md) |
 | Retained colors, underlines, and strike-through | [Text paint](paint-styles.md) |
 | Outline painting and caller-sized atomic inlines | [PNG rendering sample](png-render-sample.md) |
 | Emoji sequences, font fallback, and caller color drawing | [Emoji layout](emoji.md) |

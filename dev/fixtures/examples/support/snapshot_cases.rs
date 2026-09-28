@@ -683,7 +683,9 @@ pub fn render(id: &str) -> Result<Rendered, String> {
                         let r = b.rect;
                         boxes_json.push(json!({"line":index,"node":b.node.0,"inline_start":r.inline_start,"block_start":r.block_start,"width":r.inline_size,"height":r.block_size,"parent":b.parent,"start_edge":b.has_start_edge,"end_edge":b.has_end_edge}));
                     }
-                    Fragment::OutOfFlowAnchor(_) => {}
+                    // This legacy matrix has no ruby cases. The retained
+                    // annotation paint/source example is added with Task6.
+                    Fragment::OutOfFlowAnchor(_) | Fragment::RubyAnnotation(_) => {}
                 }
             }
             if id == "indent-baseline" {

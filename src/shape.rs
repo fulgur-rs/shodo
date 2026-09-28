@@ -214,6 +214,21 @@ pub(crate) fn shape_items(
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
+    shape_items_with_base_scopes(cx, items, styles, fonts, mode, limits, warnings, sat, None)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn shape_items_with_base_scopes(
+    cx: &mut crate::LayoutContext,
+    items: &[crate::analysis::itemize::ShapeItem],
+    styles: &[crate::style::InlineStyle],
+    fonts: &crate::font::FontCollection,
+    mode: WritingMode,
+    limits: &Limits,
+    warnings: &mut crate::limits::WarningSink,
+    sat: &mut Saturation,
+    mut bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
+) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
     cx.bound_shaping_scratch(limits);
     let mut store = GlyphStore::default();
     let mut runs: Vec<ShapedRun> = Vec::new();
@@ -262,6 +277,9 @@ pub(crate) fn shape_items(
         while cursor < original.scalars.len() {
             let start = cursor;
             let budget = limits.max_shaping_run_bytes.unwrap_or(u64::MAX);
+            let budget = bases.as_ref().map_or(budget, |bases| {
+                bases.shaping_run_bytes(original.scalars[start].item as usize, budget)
+            });
             let mut bytes = 0;
             let mut boundary = start;
             while cursor < original.scalars.len() {
@@ -310,6 +328,9 @@ pub(crate) fn shape_items(
                 );
                 let run_instance = missing_instance.as_ref().expect("missing font instance");
                 for scalar in &item.scalars {
+                    if let Some(bases) = &mut bases {
+                        bases.item(scalar.item as usize, LimitKind::ShapedGlyphs, 1)?;
+                    }
                     shape_item(
                         &mut store,
                         &mut runs,
@@ -424,6 +445,15 @@ pub(crate) fn shape_items(
                 LimitKind::ShapedGlyphs,
                 store.len() as u64 + shaped.len() as u64,
             )?;
+            if let Some(bases) = &mut bases {
+                // Ruby boundaries/isolation delimit shaping segments; transparent
+                // DOM node boundaries within a base keep the same scope.
+                bases.item(
+                    item.scalars[0].item as usize,
+                    LimitKind::ShapedGlyphs,
+                    shaped.len() as u64,
+                )?;
+            }
             let scale = font_size / shaper.units_per_em() as f32;
             // Sort clusters into logical order while preserving the shaper's
             // intra-cluster order. Public output positions handle RTL groups.

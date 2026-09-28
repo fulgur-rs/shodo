@@ -326,19 +326,24 @@ pub(super) fn hyphen_summary(
     sat: &mut Saturation,
 ) -> Summary {
     let mut cursor = cursor.clone();
-    let unit = &data.units[index];
-    let style = &data.styles[data.items[unit.item as usize].style as usize];
+    let index = super::hyphen::source_unit(data, 0, index + 1).unwrap_or(index);
     cursor.push(
-        unit.level,
-        Summary::leaf(Edge {
-            tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
-            kind: Kind::Text,
-            unit: index as u32,
-            ..Default::default()
-        }),
+        data.units[index].level,
+        hyphen_leaf(data, index, sat),
         Some(data),
     );
     cursor.summary(Some(data))
+}
+
+pub(super) fn hyphen_leaf(data: &ParagraphData, index: usize, sat: &mut Saturation) -> Summary {
+    let unit = &data.units[index];
+    let style = &data.styles[data.items[unit.item as usize].style as usize];
+    Summary::leaf(Edge {
+        tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
+        kind: Kind::Text,
+        unit: index as u32,
+        ..Default::default()
+    })
 }
 
 pub(super) fn width(

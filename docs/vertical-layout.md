@@ -67,7 +67,8 @@ square once, including compositions consisting only of preserved tabs. Add
 once per square; internal `Cluster::flags.emphasis_excluded` prevents duplicate
 marks. Compression preserves each glyph's source owner. Box boundaries and the
 CSS lookaround rules determine which inherited `all` sequences can combine.
-Only `None` and `All` are exposed; digit-count variants and ruby are not provided.
+Only `None` and `All` are exposed; digit-count variants are not provided.
+Ruby uses the same retained vertical glyph output; see the [ruby contract](ruby.md).
 
 ## Fixed images
 

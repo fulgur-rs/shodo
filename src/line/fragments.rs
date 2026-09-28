@@ -261,7 +261,10 @@ fn build_logical(
                 });
                 pos = pos + w;
             }
-            UnitKind::ForcedBreak | UnitKind::BidiControl | UnitKind::BlockInInline { .. } => {}
+            // Anonymous ruby bases reserve space on their source-free marker.
+            // Ordinary bidi controls retain their zero width.
+            UnitKind::BidiControl => pos = pos + w,
+            UnitKind::ForcedBreak | UnitKind::BlockInInline { .. } => {}
         }
     }
     // Boxes that continue on the next line end here without their end edge.
@@ -313,6 +316,43 @@ pub(crate) fn build(
             visible_hyphen,
         )
     };
+    // Ruby alignment can pad a nested container as one typographic group.
+    // Edge-unit advances move all descendants; remove these external gaps
+    // from the wrapper's own geometry so its annotation shares that move.
+    if let Some(leading) = leading {
+        let mut gaps: std::collections::HashMap<u32, (LayoutUnit, LayoutUnit)> =
+            std::collections::HashMap::new();
+        for (k, i) in units.clone().enumerate() {
+            if leading[k] == LayoutUnit::ZERO {
+                continue;
+            }
+            match data.units[i].kind {
+                UnitKind::Open { box_index } => {
+                    gaps.entry(box_index)
+                        .or_insert((LayoutUnit::ZERO, LayoutUnit::ZERO))
+                        .0 = leading[k]
+                }
+                UnitKind::Close { box_index } => {
+                    gaps.entry(box_index)
+                        .or_insert((LayoutUnit::ZERO, LayoutUnit::ZERO))
+                        .1 = leading[k]
+                }
+                _ => {}
+            }
+        }
+        for record in &mut records {
+            if let RecordKind::InlineBox {
+                box_index,
+                reversed,
+                ..
+            } = record.kind
+                && let Some((before, after)) = gaps.get(&box_index)
+            {
+                record.inline_start = record.inline_start + if reversed { *after } else { *before };
+                record.inline_size = record.inline_size - *before - *after;
+            }
+        }
+    }
     if data.combine_spans.is_empty() {
         return (records, tabs);
     }
@@ -637,6 +677,14 @@ fn build_bidi(
                 owner: unit.parent_box,
                 edge: None,
                 tab: Some(i as u32),
+            },
+            UnitKind::BidiControl if w != LayoutUnit::ZERO => Piece {
+                record: None,
+                width: w,
+                level,
+                owner: unit.parent_box,
+                edge: None,
+                tab: None,
             },
             UnitKind::ForcedBreak | UnitKind::BidiControl | UnitKind::BlockInInline { .. } => {
                 continue;

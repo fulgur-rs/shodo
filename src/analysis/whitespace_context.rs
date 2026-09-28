@@ -33,6 +33,15 @@ fn wide(c: char) -> bool {
 }
 
 pub(super) fn whitespace_flags(text: &str, raw: &[RawItem], styles: &[InlineStyle]) -> Vec<u8> {
+    flags_in_context(text, raw, styles, false)
+}
+
+pub(super) fn flags_in_context(
+    text: &str,
+    raw: &[RawItem],
+    styles: &[InlineStyle],
+    annotation: bool,
+) -> Vec<u8> {
     use WhiteSpaceCollapse::*;
     let mut flags = vec![0; text.len()];
     let mut boundaries = vec![0usize];
@@ -46,7 +55,9 @@ pub(super) fn whitespace_flags(text: &str, raw: &[RawItem], styles: &[InlineStyl
                     if matches!(c, ' ' | '\t' | '\r') && matches!(mode, Collapse | PreserveBreaks) {
                         *f |= COLLAPSE_SPACE;
                     }
-                    if c == '\n' && mode != PreserveSpaces {
+                    if annotation && matches!(c, '\n' | '\u{2028}' | '\u{2029}' | '\u{0085}') {
+                        *f |= BREAK | COLLAPSE_BREAK;
+                    } else if c == '\n' && mode != PreserveSpaces {
                         *f |= BREAK;
                         if mode == Collapse {
                             *f |= COLLAPSE_BREAK;

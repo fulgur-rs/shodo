@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::analysis::bidi::{BidiParagraph, analyze_bidi};
 use crate::analysis::units::{InlineBoxInfo, Unit, UnitList, build_units};
-use crate::analysis::{Item, ItemKind, process, transform};
+use crate::analysis::{Item, ItemKind, transform_with_base_scopes};
 use crate::builder::ParagraphBuilder;
 use crate::font::FontCollection;
 use crate::geometry::{BaselineKind, Direction, Saturation, WritingMode};
@@ -16,7 +16,7 @@ use crate::mapping::OffsetMapping;
 use crate::node::{NodeId, Sides};
 use crate::output::Line;
 use crate::sanitize;
-use crate::shape::{GlyphStore, ShapedRun, shape_items};
+use crate::shape::{GlyphStore, ShapedRun, shape_items_with_base_scopes};
 use crate::style::{InlineStyle, ParagraphStyle, TextOrientation};
 
 static NEXT_PARAGRAPH_ID: AtomicU64 = AtomicU64::new(1);
@@ -69,6 +69,8 @@ impl FirstLineData {
 }
 
 pub(crate) struct ParagraphData {
+    pub(crate) ruby: crate::ruby::prepare::RubyData,
+    pub(crate) ruby_inputs: Vec<crate::ruby::builder::RubyInput>,
     #[cfg(test)]
     pub(crate) spacing_setup_visits: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
@@ -227,6 +229,33 @@ impl Paragraph {
         cx: &mut crate::LayoutContext,
         fonts: &FontCollection,
     ) -> Result<Paragraph, LimitExceeded> {
+        let mut budget = crate::ruby::prepare::RubyBudget::new(!b.rubies.is_empty());
+        Self::from_builder_with_ruby_budget(b, cx, fonts, &mut budget)
+    }
+
+    pub(crate) fn from_builder_with_ruby_budget(
+        b: ParagraphBuilder,
+        cx: &mut crate::LayoutContext,
+        fonts: &FontCollection,
+        budget: &mut crate::ruby::prepare::RubyBudget,
+    ) -> Result<Paragraph, LimitExceeded> {
+        if let Some(error) = b.error {
+            return Err(error);
+        }
+        budget.enter(&b.limits);
+        let result = Self::build_in_ruby_scope(b, cx, fonts, budget);
+        budget.leave();
+        result
+    }
+
+    fn build_in_ruby_scope(
+        b: ParagraphBuilder,
+        cx: &mut crate::LayoutContext,
+        fonts: &FontCollection,
+        budget: &mut crate::ruby::prepare::RubyBudget,
+    ) -> Result<Paragraph, LimitExceeded> {
+        let ruby_first_line = b.has_ruby_first_line();
+        let mut bases = crate::ruby::base_budget::BaseScopes::new(&b.rubies);
         let ParagraphBuilder {
             mut style,
             limits,
@@ -236,6 +265,8 @@ impl Paragraph {
             mut first_line_styles,
             mut warnings,
             offset_mapping,
+            rubies,
+            ruby_annotation,
             ..
         } = b;
         for s in &mut styles {
@@ -249,7 +280,15 @@ impl Paragraph {
         }
         sanitize::items(&mut items, &mut warnings);
         let id = NEXT_PARAGRAPH_ID.fetch_add(1, Ordering::Relaxed);
-        let has_first_line = style.first_line.is_some() || !first_line_styles.is_empty();
+        let has_first_line =
+            style.first_line.is_some() || !first_line_styles.is_empty() || ruby_first_line;
+        bases.check_style_sets(has_first_line)?;
+        if budget.enabled() {
+            budget.check(
+                LimitKind::Styles,
+                styles.len() as u64 * if has_first_line { 2 } else { 1 },
+            )?;
+        }
         if has_first_line {
             Limits::check(
                 limits.max_styles,
@@ -270,17 +309,39 @@ impl Paragraph {
                 )
                 .collect::<Vec<_>>()
         });
-        let processed = process(&text, &items, &styles, offset_mapping, &limits)?;
+        let run_limits = budget.remaining(&limits);
+
+        // The shared transient input is independently bounded; transformed
+        // retained output uses the remaining aggregate cap, as for first-line.
+        let mut input_limits = run_limits.clone();
+        input_limits.max_text_bytes = limits.max_text_bytes;
+        bases.start_pass()?;
+        let processed = crate::analysis::whitespace::process_with_base_scopes(
+            &text,
+            &items,
+            &styles,
+            offset_mapping,
+            &input_limits,
+            ruby_annotation,
+            &mut bases,
+        )
+        .map_err(|error| bases.translate(error, budget))?;
         let source_cuts = alternate_styles
             .as_ref()
             .map(|_| crate::analysis::breaks::source_cursor_ranges(&processed));
-        let mut processed = transform(
+        let mut processed = transform_with_base_scopes(
             processed,
             &styles,
-            &limits,
+            &run_limits,
             &mut warnings,
             style.writing_mode,
-        )?;
+            if bases.enabled() {
+                Some(&mut bases)
+            } else {
+                None
+            },
+        )
+        .map_err(|error| bases.translate(error, budget))?;
         if alternate_styles.is_none() {
             processed.source_spans = Vec::new();
         }
@@ -288,7 +349,7 @@ impl Paragraph {
         let mut data = build_data(
             style.clone(),
             &limits,
-            limits.max_shaped_glyphs,
+            run_limits.max_shaped_glyphs,
             processed,
             styles,
             id,
@@ -296,55 +357,82 @@ impl Paragraph {
             fonts,
             &mut warnings,
             &mut sat,
-        )?;
+            &mut bases,
+        )
+        .map_err(|error| bases.translate(error, budget))?;
+        budget.paragraph(&data)?;
+        data.ruby_inputs = rubies.clone();
         if let Some(mut alternate_styles) = alternate_styles {
             for s in &mut alternate_styles {
                 s.font_size = sanitize_font_size(s.font_size, &mut warnings);
                 sanitize::style(s, &mut warnings);
             }
-            let mut remaining = limits.clone();
-            remaining.max_text_bytes = limits
-                .max_text_bytes
-                .map(|max| max.saturating_sub(data.text.len() as u64));
-            remaining.max_items = limits
-                .max_items
-                .map(|max| max.saturating_sub(data.items.len() as u64));
+            let mut remaining = budget.remaining(&limits);
+            if !budget.enabled() {
+                remaining.max_text_bytes = limits
+                    .max_text_bytes
+                    .map(|max| max.saturating_sub(data.text.len() as u64));
+                remaining.max_items = limits
+                    .max_items
+                    .map(|max| max.saturating_sub(data.items.len() as u64));
+            }
             // The transient common input is bounded independently; a shrinking
             // transform may fit the remaining retained-text budget even when
             // its input is larger. Every output append uses the remaining cap.
             let mut input_limits = remaining.clone();
             input_limits.max_text_bytes = limits.max_text_bytes;
-            let alternate = process(&text, &items, &data.styles, offset_mapping, &input_limits)
-                .and_then(|p| {
-                    transform(
-                        p,
-                        &alternate_styles,
-                        &remaining,
-                        &mut warnings,
-                        style.writing_mode,
-                    )
-                })
-                .map_err(|mut e| {
-                    if e.kind == LimitKind::TextBytes
-                        && let Some(limit) = limits.max_text_bytes
-                    {
-                        e.actual += data.text.len() as u64;
-                        e.limit = limit;
-                    }
-                    if e.kind == LimitKind::Items
-                        && let Some(limit) = limits.max_items
-                    {
-                        e.actual += data.items.len() as u64;
-                        e.limit = limit;
-                    }
-                    e
-                })?;
+            bases.start_pass()?;
+            let alternate = crate::analysis::whitespace::process_with_base_scopes(
+                &text,
+                &items,
+                &data.styles,
+                offset_mapping,
+                &input_limits,
+                ruby_annotation,
+                &mut bases,
+            )
+            .and_then(|p| {
+                transform_with_base_scopes(
+                    p,
+                    &alternate_styles,
+                    &remaining,
+                    &mut warnings,
+                    style.writing_mode,
+                    if bases.enabled() {
+                        Some(&mut bases)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .map_err(|mut e| {
+                if budget.enabled() {
+                    return bases.translate(e, budget);
+                }
+                if e.kind == LimitKind::TextBytes
+                    && let Some(limit) = limits.max_text_bytes
+                {
+                    e.actual += data.text.len() as u64;
+                    e.limit = limit;
+                }
+                if e.kind == LimitKind::Items
+                    && let Some(limit) = limits.max_items
+                {
+                    e.actual += data.items.len() as u64;
+                    e.limit = limit;
+                }
+                e
+            })?;
             let mut alternate_style = style;
             alternate_style.root = alternate_styles[0].clone();
             alternate_style.first_line = None;
-            let remaining_glyphs = limits
-                .max_shaped_glyphs
-                .map(|max| max.saturating_sub(data.glyphs.len() as u64));
+            let remaining_glyphs = if budget.enabled() {
+                remaining.max_shaped_glyphs
+            } else {
+                limits
+                    .max_shaped_glyphs
+                    .map(|max| max.saturating_sub(data.glyphs.len() as u64))
+            };
             let mut alternate = build_data(
                 alternate_style,
                 &limits,
@@ -356,8 +444,12 @@ impl Paragraph {
                 fonts,
                 &mut warnings,
                 &mut sat,
+                &mut bases,
             )
             .map_err(|mut e| {
+                if budget.enabled() {
+                    return bases.translate(e, budget);
+                }
                 if e.kind == LimitKind::ShapedGlyphs
                     && let Some(limit) = limits.max_shaped_glyphs
                 {
@@ -366,6 +458,8 @@ impl Paragraph {
                 }
                 e
             })?;
+            budget.paragraph(&alternate)?;
+            alternate.ruby_inputs = rubies;
             finalize_data(&mut data, cx, &mut warnings, &mut sat);
             finalize_data(&mut alternate, cx, &mut warnings, &mut sat);
             let mut normal_search = 0;
@@ -437,6 +531,21 @@ impl Paragraph {
             data.source_spans = Vec::new();
             finalize_data(&mut data, cx, &mut warnings, &mut sat);
         }
+        let inputs = std::mem::take(&mut data.ruby_inputs);
+        crate::ruby::prepare::prepare(&mut data, &inputs, cx, fonts, budget, &mut bases)?;
+        if let Some(first) = &mut data.first_line {
+            let alternate = Arc::get_mut(&mut first.data)
+                .expect("new first-line data has one owner before publication");
+            alternate.ruby_inputs.clear();
+            crate::ruby::prepare::prepare_alternate(
+                alternate,
+                &inputs,
+                &data.ruby,
+                budget,
+                &first.normal_cursors,
+                &mut bases,
+            )?;
+        }
         warnings.record_saturation(&sat);
         data.warnings = warnings.take();
         Ok(Paragraph {
@@ -457,6 +566,7 @@ fn build_data(
     fonts: &FontCollection,
     warnings: &mut WarningSink,
     sat: &mut Saturation,
+    bases: &mut crate::ruby::base_budget::BaseScopes,
 ) -> Result<ParagraphData, LimitExceeded> {
     let mut shape_limits = limits.clone();
     shape_limits.max_shaped_glyphs = glyph_budget;
@@ -506,7 +616,7 @@ fn build_data(
         style.writing_mode,
         &shape_limits,
     );
-    let (glyphs, runs) = shape_items(
+    let (glyphs, runs) = shape_items_with_base_scopes(
         cx,
         &shape_items_input,
         &styles,
@@ -515,6 +625,7 @@ fn build_data(
         &shape_limits,
         warnings,
         sat,
+        if bases.enabled() { Some(bases) } else { None },
     )?;
     let base_level = u8::from(used_direction == Direction::Rtl);
     let style_metrics: Vec<_> = styles
@@ -590,6 +701,8 @@ fn build_data(
         }
     }
     let data = ParagraphData {
+        ruby: Default::default(),
+        ruby_inputs: Vec::new(),
         #[cfg(test)]
         spacing_setup_visits: Default::default(),
         #[cfg(test)]
@@ -778,7 +891,7 @@ macro_rules! first_line_properties {
     };
 }
 
-fn first_line_style(
+pub(crate) fn first_line_style(
     original: &InlineStyle,
     root: &InlineStyle,
     first: &InlineStyle,

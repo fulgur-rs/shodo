@@ -34,7 +34,59 @@ pub(crate) fn process(
     with_mapping: bool,
     limits: &Limits,
 ) -> Result<Processed, LimitExceeded> {
-    let flags = whitespace_flags(raw_text, raw, styles);
+    process_in_context(raw_text, raw, styles, with_mapping, limits, false, None)
+}
+
+pub(crate) fn process_annotation(
+    raw_text: &str,
+    raw: &[RawItem],
+    styles: &[InlineStyle],
+    with_mapping: bool,
+    limits: &Limits,
+) -> Result<Processed, LimitExceeded> {
+    process_in_context(raw_text, raw, styles, with_mapping, limits, true, None)
+}
+
+pub(crate) fn process_with_base_scopes(
+    raw_text: &str,
+    raw: &[RawItem],
+    styles: &[InlineStyle],
+    with_mapping: bool,
+    limits: &Limits,
+    annotation: bool,
+    bases: &mut crate::ruby::base_budget::BaseScopes,
+) -> Result<Processed, LimitExceeded> {
+    if bases.enabled() {
+        process_in_context(
+            raw_text,
+            raw,
+            styles,
+            with_mapping,
+            limits,
+            annotation,
+            Some(bases),
+        )
+    } else if annotation {
+        process_annotation(raw_text, raw, styles, with_mapping, limits)
+    } else {
+        process(raw_text, raw, styles, with_mapping, limits)
+    }
+}
+
+fn process_in_context(
+    raw_text: &str,
+    raw: &[RawItem],
+    styles: &[InlineStyle],
+    with_mapping: bool,
+    limits: &Limits,
+    annotation: bool,
+    bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
+) -> Result<Processed, LimitExceeded> {
+    let flags = if annotation {
+        super::whitespace_context::flags_in_context(raw_text, raw, styles, true)
+    } else {
+        whitespace_flags(raw_text, raw, styles)
+    };
     let mut p = Processor {
         out: String::with_capacity(
             raw_text.len().min(
@@ -58,9 +110,32 @@ pub(crate) fn process(
         open: Vec::new(),
         limits,
         styles,
+        annotation,
+        bases,
     };
     for item in raw {
+        if let Some(bases) = &mut p.bases {
+            bases.before_raw(item);
+        }
         match item {
+            RawItem::RubyBoundary {
+                ruby,
+                boundary,
+                node,
+                style,
+            } => {
+                p.check_item()?;
+                let at = p.pos();
+                p.push_item(Item {
+                    kind: ItemKind::RubyBoundary {
+                        ruby: *ruby,
+                        boundary: *boundary,
+                    },
+                    text: at..at,
+                    style: *style,
+                    node: *node,
+                })?;
+            }
             RawItem::Text {
                 source,
                 range,
@@ -124,6 +199,9 @@ pub(crate) fn process(
                 p.after_space = true;
             }
         }
+        if let Some(bases) = &mut p.bases {
+            bases.after_raw(item);
+        }
     }
     Ok(Processed {
         width_origins: Vec::new(),
@@ -140,6 +218,8 @@ pub(crate) fn process(
 }
 
 struct Processor<'a> {
+    bases: Option<&'a mut crate::ruby::base_budget::BaseScopes>,
+    annotation: bool,
     out: String,
     items: Vec<Item>,
     mapping: Option<OffsetMapping>,
@@ -170,7 +250,7 @@ impl Processor<'_> {
         Ok(())
     }
 
-    fn check_item(&self) -> Result<(), LimitExceeded> {
+    fn check_item(&mut self) -> Result<(), LimitExceeded> {
         Limits::check(
             Some(u64::from(u32::MAX)),
             LimitKind::Items,
@@ -180,12 +260,26 @@ impl Processor<'_> {
             self.limits.max_items,
             LimitKind::Items,
             self.items.len() as u64 + 1,
-        )
+        )?;
+        if let Some(bases) = &mut self.bases {
+            bases.check_current_item()?;
+        }
+        Ok(())
+    }
+    fn push_item(&mut self, item: Item) -> Result<(), LimitExceeded> {
+        if let Some(bases) = &mut self.bases {
+            bases.record_item()?;
+        }
+        self.items.push(item);
+        Ok(())
     }
     fn append(&mut self, c: char) -> Result<(), LimitExceeded> {
         let len = (self.out.len() as u64).saturating_add(c.len_utf8() as u64);
         Limits::check(Some(u64::from(u32::MAX)), LimitKind::TextBytes, len)?;
         Limits::check(self.limits.max_text_bytes, LimitKind::TextBytes, len)?;
+        if let Some(bases) = &mut self.bases {
+            bases.transient_text(c.len_utf8() as u64)?;
+        }
         self.out.push(c);
         Ok(())
     }
@@ -196,12 +290,12 @@ impl Processor<'_> {
     fn marker(&mut self, kind: ItemKind, style: u32, node: NodeId) -> Result<(), LimitExceeded> {
         self.check_item()?;
         let at = self.pos();
-        self.items.push(Item {
+        self.push_item(Item {
             kind,
             text: at..at,
             style,
             node: Some(node),
-        });
+        })?;
         Ok(())
     }
 
@@ -219,12 +313,12 @@ impl Processor<'_> {
         if let Some(m) = &mut self.mapping {
             m.push_generated(text.clone(), node);
         }
-        self.items.push(Item {
+        self.push_item(Item {
             kind,
             text,
             style,
             node: Some(node),
-        });
+        })?;
         Ok(())
     }
 
@@ -262,7 +356,7 @@ impl Processor<'_> {
         use WhiteSpaceCollapse::*;
         let style = &self.styles[style_index as usize];
         let collapse_spaces = matches!(style.white_space_collapse, Collapse | PreserveBreaks);
-        let preserve_breaks = !matches!(style.white_space_collapse, Collapse);
+        let preserve_breaks = !self.annotation && !matches!(style.white_space_collapse, Collapse);
         // `preserve-spaces` keeps every space uncollapsed but, unlike
         // `preserve`, tabs and segment breaks lose their special meaning and
         // become an ordinary space character (CSS Text 4, `white-space-collapse`).
@@ -286,8 +380,12 @@ impl Processor<'_> {
             } else {
                 raw_c
             };
+            let annotation_break =
+                self.annotation && matches!(raw_c, '\n' | '\u{2028}' | '\u{2029}' | '\u{0085}');
             let control = match c {
-                '\u{2028}' | '\u{2029}' | '\u{0085}' => Some(ItemKind::ForcedBreak),
+                '\u{2028}' | '\u{2029}' | '\u{0085}' if !self.annotation => {
+                    Some(ItemKind::ForcedBreak)
+                }
                 '\n' if preserve_breaks => Some(ItemKind::ForcedBreak),
                 '\t' if !collapse_spaces => Some(ItemKind::Tab),
                 _ => None,
@@ -301,19 +399,19 @@ impl Processor<'_> {
                 let start = self.pos();
                 self.append(c)?;
                 self.map(MappingKind::Identity, node, dom, len, start..self.pos());
-                self.items.push(Item {
+                self.push_item(Item {
                     kind: kind.clone(),
                     text: start..self.pos(),
                     style: style_index,
                     node: Some(node),
-                });
+                })?;
                 self.after_space = matches!(kind, ItemKind::ForcedBreak);
                 if matches!(kind, ItemKind::ForcedBreak) {
                     self.open_bidi_scopes()?;
                 }
                 continue;
             }
-            let collapsible = collapse_spaces && matches!(c, ' ' | '\t' | '\n');
+            let collapsible = annotation_break || collapse_spaces && matches!(c, ' ' | '\t' | '\n');
             if collapsible && self.after_space {
                 let at = self.pos();
                 self.map(MappingKind::Collapsed, node, dom, len, at..at);
@@ -326,7 +424,17 @@ impl Processor<'_> {
             let start = self.pos();
             // A collapsible tab or segment break is kept as one space (same length).
             self.append(if collapsible { ' ' } else { c })?;
-            self.map(MappingKind::Identity, node, dom, len, start..self.pos());
+            self.map(
+                if self.pos() - start == len {
+                    MappingKind::Identity
+                } else {
+                    MappingKind::Expanded
+                },
+                node,
+                dom,
+                len,
+                start..self.pos(),
+            );
             if !ignorable(c) {
                 self.after_space = collapsible;
             }
@@ -344,12 +452,12 @@ impl Processor<'_> {
             let end = self.pos();
             if end > start {
                 self.check_item()?;
-                self.items.push(Item {
+                self.push_item(Item {
                     kind: ItemKind::Text,
                     text: start..end,
                     style,
                     node: Some(node),
-                });
+                })?;
             }
         }
         Ok(())

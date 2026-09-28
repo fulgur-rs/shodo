@@ -13,10 +13,13 @@ pub struct LayoutContext {
     // A context is moved between threads, never concurrently shared.
     _not_sync: std::marker::PhantomData<std::cell::Cell<()>>,
     pub(crate) partial: Option<crate::line::cache::PartialLine>,
+    pub(crate) ruby_ranges: crate::line::range::RangeCache,
     #[cfg(test)]
     pub(crate) cache_visits: usize,
     #[cfg(test)]
     pub(crate) float_search_visits: usize,
+    #[cfg(test)]
+    pub(crate) ruby_measure_visits: usize,
 }
 
 impl LayoutContext {
@@ -44,12 +47,14 @@ impl LayoutContext {
     }
 
     /// Releases shaping plans and bounds the combined accounted storage of
-    /// shaping scratch and partial-line buffers by `bytes`.
+    /// shaping scratch and partial-line buffers by `bytes`. Ruby range indexes
+    /// are released conservatively on every explicit shrink.
     /// `shrink_to(0)` also releases any partial line's paragraph reference.
     pub fn shrink_to(&mut self, bytes: usize) {
         // Harfrust does not expose a plan's heap size; dropping the bounded
         // cache conservatively releases all of it on an explicit shrink.
         self.plans.clear();
+        self.ruby_ranges = Default::default();
         if bytes == 0 || self.scratch_bytes > bytes {
             self.scratch = None;
             self.scratch_bytes = 0;

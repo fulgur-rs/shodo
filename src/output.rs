@@ -2,7 +2,9 @@
 
 use std::fmt;
 mod paint;
+pub(crate) mod ruby;
 pub use paint::{DecorationRect, PaintSpan};
+pub use ruby::{RubyAnnotationView, RubyTransform};
 
 use std::ops::Range;
 use std::sync::Arc;
@@ -37,6 +39,8 @@ pub enum BreakReason {
 /// outlive the `Paragraph` handle and be sent between threads.
 #[derive(Clone)]
 pub struct Line {
+    pub(crate) ruby: Vec<ruby::RubyAnnotationRecord>,
+    pub(crate) ruby_caret_gaps: Vec<crate::ruby::align::CaretGap>,
     pub(crate) data: Arc<ParagraphData>,
     pub(crate) break_token: BreakToken,
     pub(crate) reason: BreakReason,
@@ -121,6 +125,26 @@ impl Line {
             .get(index)
             .filter(|c| c.text_range.start <= offset as usize)
     }
+    pub(crate) fn ruby_caret_padding(&self, text: &Range<u32>) -> (f32, f32) {
+        let begin = self
+            .ruby_caret_gaps
+            .partition_point(|gap| gap.text.end <= text.start);
+        let mut before = LayoutUnit::ZERO;
+        let mut after = LayoutUnit::ZERO;
+        for gap in self.ruby_caret_gaps[begin..]
+            .iter()
+            .take_while(|gap| gap.text.start < text.end)
+        {
+            if text.start <= gap.text.start {
+                before = before + gap.before;
+            }
+            if gap.text.end <= text.end {
+                after = after + gap.after;
+            }
+        }
+        (before.to_f32(), after.to_f32())
+    }
+
     /// Effective inline direction for paint coordinate conversion. Vertical
     /// `text-orientation: upright` uses LTR without changing inherited style.
     pub fn used_direction(&self) -> crate::geometry::Direction {
@@ -198,6 +222,33 @@ impl Line {
         };
         for fragment in self.fragments() {
             match fragment {
+                Fragment::RubyAnnotation(a) => {
+                    if a.visibility() != crate::RubyVisibility::Visible {
+                        continue;
+                    }
+                    let r = a.line().overflow_rect();
+                    let t = a.transform();
+                    let mut left = f32::INFINITY;
+                    let mut right = f32::NEG_INFINITY;
+                    let mut top = f32::INFINITY;
+                    let mut bottom = f32::NEG_INFINITY;
+                    for i in [r.inline_start, r.inline_start + r.inline_size] {
+                        for b in [r.block_start, r.block_start + r.block_size] {
+                            let x = t.inline_inline * i + t.inline_block * b + t.inline_offset;
+                            let y = t.block_inline * i + t.block_block * b + t.block_offset;
+                            left = left.min(x);
+                            right = right.max(x);
+                            top = top.min(y);
+                            bottom = bottom.max(y);
+                        }
+                    }
+                    include(LogicalRect {
+                        inline_start: left,
+                        block_start: top,
+                        inline_size: right - left,
+                        block_size: bottom - top,
+                    });
+                }
                 Fragment::GlyphRun(run) => {
                     let data = run.font_data();
                     let font = data
@@ -311,7 +362,11 @@ impl Line {
             .unwrap_or(0..0);
         let hanging_end = scan.hanging_end;
         let hanging_start = scan.punctuation_edges.hang_start;
+        let mut ruby_caret_gaps = scan.ruby_caret_gaps;
+        ruby_caret_gaps.sort_by_key(|gap| gap.text.start);
         Line {
+            ruby: Vec::new(),
+            ruby_caret_gaps,
             data: Arc::clone(&para.data),
             break_token: BreakToken {
                 para: data.id,
@@ -519,6 +574,7 @@ impl Line {
 /// A positioned piece of a line.
 #[derive(Clone, Copy, Debug)]
 pub enum Fragment<'a> {
+    RubyAnnotation(RubyAnnotationView<'a>),
     GlyphRun(GlyphRunView<'a>),
     Atomic(AtomicFragment),
     InlineBox(InlineBoxFragment),
@@ -1087,11 +1143,11 @@ impl ExactSizeIterator for Glyphs<'_> {}
 impl Line {
     /// Fragments in visual order.
     pub fn fragments(&self) -> impl ExactSizeIterator<Item = Fragment<'_>> + '_ {
-        (0..self.fragments.len()).map(move |i| self.view(i))
+        (0..self.fragments.len() + self.ruby.len()).map(move |i| self.view(i))
     }
 
     pub fn fragment(&self, index: usize) -> Option<Fragment<'_>> {
-        (index < self.fragments.len()).then(|| self.view(index))
+        (index < self.fragments.len() + self.ruby.len()).then(|| self.view(index))
     }
 
     /// Font data of any face used by the paragraph; works without the
@@ -1107,6 +1163,11 @@ impl Line {
     }
 
     fn view(&self, index: usize) -> Fragment<'_> {
+        if index >= self.fragments.len() {
+            return Fragment::RubyAnnotation(RubyAnnotationView {
+                record: &self.ruby[index - self.fragments.len()],
+            });
+        }
         let record = &self.fragments[index];
         let rect = |block_start: f32, block_size: f32, start: f32, size: f32| LogicalRect {
             inline_start: start,

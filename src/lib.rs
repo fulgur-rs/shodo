@@ -13,7 +13,12 @@ pub mod hit;
 pub mod limits;
 pub mod mapping;
 pub mod node;
+pub mod ruby;
 pub mod style;
+pub use ruby::{
+    Ruby, RubyAlign, RubyAnnotation, RubyBase, RubyContent, RubyError, RubyHit, RubyLevel,
+    RubyMerge, RubyOverhang, RubyPosition, RubySpan, RubyStyle, RubyVisibility,
+};
 
 mod analysis;
 mod builder;
@@ -29,7 +34,7 @@ pub use context::LayoutContext;
 pub use output::{
     AnchorFragment, AtomicFragment, BreakReason, Cluster, ClusterFlags, DecorationRect, Fragment,
     Glyph, GlyphRunView, GlyphTransform, Glyphs, InlineBoxFragment, Line, LineMetrics, PaintSpan,
-    TextCombination,
+    RubyAnnotationView, RubyTransform, TextCombination,
 };
 pub use paragraph::{
     AtomicIntrinsic, AtomicIntrinsics, AtomicSize, AtomicSizes, BreakPlan, BreakToken, FloatClear,

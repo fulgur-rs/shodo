@@ -13,6 +13,12 @@ use crate::style::{InlineStyle, ParagraphStyle};
 /// Input as recorded, before white-space processing.
 #[derive(Clone, Debug)]
 pub(crate) enum RawItem {
+    RubyBoundary {
+        ruby: u32,
+        boundary: crate::ruby::builder::Boundary,
+        node: Option<NodeId>,
+        style: u32,
+    },
     Text {
         source: TextSource,
         range: Range<u32>,
@@ -68,6 +74,9 @@ pub struct ParagraphBuilder {
     pub(crate) error: Option<LimitExceeded>,
     pub(crate) warnings: WarningSink,
     pub(crate) offset_mapping: bool,
+    pub(crate) rubies: Vec<crate::ruby::builder::RubyInput>,
+    pub(crate) ruby_cost: crate::ruby::builder::InputCost,
+    pub(crate) ruby_annotation: bool,
 }
 
 impl ParagraphBuilder {
@@ -85,6 +94,9 @@ impl ParagraphBuilder {
             error: None,
             warnings: WarningSink::new(limits.max_warnings),
             offset_mapping: true,
+            rubies: Vec::new(),
+            ruby_cost: Default::default(),
+            ruby_annotation: false,
         };
         builder.styles.push(style.root.clone());
         builder
@@ -175,7 +187,9 @@ impl ParagraphBuilder {
         if self.error.is_some() || text.is_empty() {
             return self;
         }
-        let total = self.text.len() as u64 + text.len() as u64;
+        let total = (self.text.len() as u64)
+            .saturating_add(text.len() as u64)
+            .saturating_add(self.ruby_cost.text);
         // Offsets are stored as u32, so that is a hard ceiling as well.
         let limit = self
             .limits
@@ -244,7 +258,7 @@ impl ParagraphBuilder {
         self.stack.last().copied().unwrap_or(0)
     }
 
-    fn check(&mut self, limit: Option<u64>, kind: LimitKind, actual: u64) -> bool {
+    pub(crate) fn check(&mut self, limit: Option<u64>, kind: LimitKind, actual: u64) -> bool {
         if self.error.is_some() {
             return false;
         }
@@ -257,8 +271,10 @@ impl ParagraphBuilder {
         }
     }
 
-    fn reserve_item(&mut self) -> bool {
-        let count = self.items.len() as u64 + 1;
+    pub(crate) fn reserve_item(&mut self) -> bool {
+        let count = (self.items.len() as u64)
+            .saturating_add(1)
+            .saturating_add(self.ruby_cost.items);
         self.check(self.limits.max_items, LimitKind::Items, count)
     }
 
@@ -266,7 +282,7 @@ impl ParagraphBuilder {
         self.intern_styles(style, None)
     }
 
-    fn intern_styles(
+    pub(crate) fn intern_styles(
         &mut self,
         style: &InlineStyle,
         first_line: Option<&InlineStyle>,
@@ -290,7 +306,8 @@ impl ParagraphBuilder {
         let count = self.styles.len() as u64
             + self.first_line_styles.len() as u64
             + 1
-            + u64::from(first_line.is_some());
+            + u64::from(first_line.is_some())
+            + self.ruby_cost.styles;
         if !self.check(self.limits.max_styles, LimitKind::Styles, count) {
             return None;
         }
@@ -306,13 +323,109 @@ impl ParagraphBuilder {
 }
 
 impl ParagraphBuilder {
-    /// Analyzes and shapes the content. Fails only when a resource limit was
-    /// exceeded; inline boxes left open are closed with a warning.
-    pub fn build(
-        mut self,
-        cx: &mut LayoutContext,
-        fonts: &FontCollection,
-    ) -> Result<Paragraph, LimitExceeded> {
+    /// Append a paired ruby container, preserving the original base sources.
+    pub fn push_ruby(&mut self, node: NodeId, style: &InlineStyle, ruby: crate::Ruby) -> &mut Self {
+        crate::ruby::builder::append(self, node, style, None, ruby);
+        self
+    }
+
+    /// Append ruby with a caller-resolved first-line container style.
+    pub fn push_ruby_with_first_line(
+        &mut self,
+        node: NodeId,
+        normal: &InlineStyle,
+        first_line: &InlineStyle,
+        ruby: crate::Ruby,
+    ) -> &mut Self {
+        crate::ruby::builder::append(self, node, normal, Some(first_line), ruby);
+        self
+    }
+
+    pub(crate) fn into_ruby_content(mut self) -> crate::ruby::input::ContentInput {
+        self.close_unbalanced();
+        let has_first_line = self.style.first_line.is_some()
+            || !self.first_line_styles.is_empty()
+            || self.has_ruby_first_line();
+        crate::ruby::input::ContentInput {
+            style: self.style,
+            limits: self.limits,
+            text: self.text,
+            items: self.items,
+            styles: self.styles,
+            first_line_styles: self.first_line_styles,
+            error: self.error,
+            warnings: self.warnings.take(),
+            offset_mapping: self.offset_mapping,
+            rubies: self.rubies,
+            ruby_cost: self.ruby_cost,
+            has_first_line,
+        }
+    }
+
+    pub(crate) fn has_ruby_first_line(&self) -> bool {
+        crate::ruby::prepare::has_first_line(&self.rubies)
+    }
+
+    pub(crate) fn from_ruby_content(
+        input: &crate::ruby::input::ContentInput,
+        node: NodeId,
+    ) -> Result<Self, LimitExceeded> {
+        if let Some(error) = input.error {
+            return Err(error);
+        }
+        // Restored items are balanced, so they are absent from builder.stack.
+        // Validate the generated isolation wrapper around their real depth
+        // before cloning the snapshot, including any nested ruby descendants.
+        Limits::check(
+            input.limits.max_nesting_depth,
+            LimitKind::NestingDepth,
+            crate::ruby::builder::InputCost::content(input)
+                .depth
+                .saturating_add(1),
+        )?;
+        let mut builder = Self::new(&input.style, &input.limits);
+        builder.text = input.text.clone();
+        builder.items = input.items.clone();
+        builder.styles = input.styles.clone();
+        builder.first_line_styles = input.first_line_styles.clone();
+        builder.offset_mapping = input.offset_mapping;
+        builder.rubies = input.rubies.clone();
+        builder.ruby_cost = input.ruby_cost;
+        builder.ruby_annotation = true;
+        for warning in &input.warnings {
+            builder.warnings.push(warning.kind, warning.message.clone());
+        }
+        crate::ruby::prepare::annotation_breaks(&mut builder)?;
+        let normal = crate::ruby::builder::isolated(&builder.style.root);
+        let first = builder
+            .style
+            .first_line
+            .as_ref()
+            .map(crate::ruby::builder::isolated);
+        match first.as_ref() {
+            Some(first) => {
+                builder.open_inline_with_first_line(node, &normal, first, InlineEdges::default());
+            }
+            None => {
+                builder.open_inline(node, &normal, InlineEdges::default());
+            }
+        }
+        if let Some(error) = builder.error {
+            return Err(error);
+        }
+        let open = builder
+            .items
+            .pop()
+            .expect("successful open_inline records a marker");
+        builder.items.insert(0, open);
+        builder.close_inline();
+        if let Some(error) = builder.error {
+            return Err(error);
+        }
+        Ok(builder)
+    }
+
+    fn close_unbalanced(&mut self) {
         while !self.stack.is_empty() && self.error.is_none() {
             self.warnings.push(
                 WarningKind::UnbalancedInline,
@@ -320,6 +433,15 @@ impl ParagraphBuilder {
             );
             self.close_inline();
         }
+    }
+    /// Analyzes and shapes the content. Fails only when a resource limit was
+    /// exceeded; inline boxes left open are closed with a warning.
+    pub fn build(
+        mut self,
+        cx: &mut LayoutContext,
+        fonts: &FontCollection,
+    ) -> Result<Paragraph, LimitExceeded> {
+        self.close_unbalanced();
         if let Some(e) = self.error {
             return Err(e);
         }
@@ -336,6 +458,13 @@ pub struct RichText {
 }
 
 impl RichText {
+    /// Append ruby, assigning its container through this builder's node counter.
+    pub fn push_ruby(mut self, ruby: crate::Ruby, style: &InlineStyle) -> Self {
+        let node = NodeId(self.next_node);
+        self.next_node += 1;
+        self.builder.push_ruby(node, style, ruby);
+        self
+    }
     pub fn new(style: &ParagraphStyle) -> Self {
         Self::with_limits(style, &Limits::default())
     }

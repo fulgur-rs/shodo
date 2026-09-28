@@ -17,6 +17,8 @@ the source API documentation for current contracts.
   `::first-line` styles, intrinsic widths, and `balance` / `pretty` break plans.
 - Japanese line-break restrictions, punctuation spacing and hanging; vertical and
   sideways writing, glyph orientation, and `text-combine-upright: all`.
+- Ruby pairing, coordinated wrapping, alignment, placement and safe overhang
+  in horizontal and vertical text. See the [ruby contract](docs/ruby.md).
 - Retained glyph/font output, solid text paint and decoration geometry, source
   mapping, caret placement, hit testing, selections, and accessibility text.
 - Shared and document-local font collections, system fonts, WOFF/WOFF2 decoding,
@@ -24,7 +26,7 @@ the source API documentation for current contracts.
 
 The caller supplies computed styles, sizes and baselines for atomic inlines,
 places floats, and renders the accepted fragments. shodo does not resolve CSS,
-lay out an entire page, or rasterize glyphs. Ruby layout is planned.
+lay out an entire page, or rasterize glyphs.
 
 ## Getting started
 

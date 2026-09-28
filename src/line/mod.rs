@@ -9,17 +9,92 @@ pub(crate) mod fragments;
 mod hyphen;
 mod intrinsic;
 mod iter;
+pub(crate) mod metric_index;
 pub(crate) mod metrics;
 mod plan;
 pub(crate) mod punctuation;
+pub(crate) mod range;
 pub(crate) mod reshape;
 mod scan;
 pub(crate) mod spacing;
-mod spacing_summary;
+pub(crate) mod spacing_summary;
 mod whitespace;
 mod windows;
 
 pub(crate) use scan::tab_advance;
+
+/// Use the same bounded edge/spacing machinery as accepted selected fragments.
+/// This measures units, not a rebuilt paragraph or retained child Line.
+pub(crate) fn ruby_range_width(
+    data: &crate::paragraph::ParagraphData,
+    units: std::ops::Range<usize>,
+    atomics: &crate::AtomicSizes,
+    cx: &mut crate::LayoutContext,
+    sat: &mut crate::geometry::Saturation,
+) -> crate::geometry::LayoutUnit {
+    if units.is_empty() {
+        return crate::geometry::LayoutUnit::ZERO;
+    }
+    if let Some(width) = range::width(data, units.clone(), atomics, cx, sat) {
+        return width;
+    }
+    #[cfg(test)]
+    {
+        cx.ruby_measure_visits += units.len();
+    }
+    plan::selected_raw(
+        data,
+        units.start,
+        units.end,
+        crate::geometry::LayoutUnit::ZERO,
+        crate::geometry::LayoutUnit::ZERO,
+        0,
+        &crate::style::LineOptions::default(),
+        crate::geometry::LayoutUnit::MAX,
+        atomics,
+        cx,
+        sat,
+    )
+    .content
+}
+
+/// A base's own continuation decorations contribute to its width. Cloned
+/// ancestors outside that base belong to the parent line, not to the column
+/// constraint against which the annotation's deficit is calculated.
+pub(crate) fn ruby_base_width(
+    data: &crate::paragraph::ParagraphData,
+    scope: std::ops::Range<usize>,
+    selected: std::ops::Range<usize>,
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    if selected.is_empty() {
+        return LayoutUnit::ZERO;
+    }
+    let width = ruby_range_width(data, selected.clone(), atomics, cx, sat);
+    let outer = decoration::chain(data, scope.start);
+    let mut excluded = LayoutUnit::ZERO;
+    for (boundary, start) in [(selected.start, true), (selected.end, false)] {
+        for b in decoration::chain(data, boundary) {
+            if outer.contains(&b) && decoration::cloned(data, b) {
+                let e = data.boxes[b as usize].edges;
+                excluded = excluded.add(
+                    LayoutUnit::from_f32_round(
+                        if start {
+                            e.inline_start_total()
+                        } else {
+                            e.inline_end_total()
+                        },
+                        sat,
+                    ),
+                    sat,
+                );
+            }
+        }
+    }
+    width.sub(excluded, sat)
+}
 
 use crate::analysis::units::UnitKind;
 use crate::context::LayoutContext;
@@ -34,6 +109,8 @@ use crate::style::LineOptions;
 /// Result of scanning one line.
 #[derive(Clone, Debug)]
 pub(crate) struct Scan {
+    pub(crate) ruby: Option<crate::ruby::measure::RubyMeasure>,
+    pub(crate) ruby_caret_gaps: Vec<crate::ruby::align::CaretGap>,
     pub(crate) prepared: bool,
     pub(crate) end: usize,
     pub(crate) reason: BreakReason,
@@ -110,6 +187,7 @@ impl Paragraph {
                 &alternate_constraint,
                 atomics,
                 planned_end,
+                None,
             );
             match &mut result {
                 LineResult::Line(line) => {
@@ -130,7 +208,7 @@ impl Paragraph {
             }
             return result;
         }
-        self.next_line_in_set(cx, token, options, constraint, atomics, None)
+        self.next_line_in_set(cx, token, options, constraint, atomics, None, None)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -142,6 +220,7 @@ impl Paragraph {
         constraint: &LineConstraint<'_>,
         atomics: &AtomicSizes,
         planned_end_override: Option<usize>,
+        annotation_align: Option<crate::ruby::align::AnnotationAlign>,
     ) -> LineResult {
         let data = &*self.data;
         let start = token.unit as usize;
@@ -240,8 +319,13 @@ impl Paragraph {
             }
         };
         reshape::prepare(data, start, &mut scan, cx, &mut sat);
+        crate::ruby::measure::apply(data, start, &mut scan, atomics, cx, &mut sat);
         spacing::apply(data, start, &mut scan, &mut sat);
         punctuation::apply(data, start, &mut scan, &mut sat);
+        crate::ruby::align::bases(data, start, &mut scan, &mut sat);
+        if let Some(align) = annotation_align {
+            crate::ruby::align::annotation(data, start, &mut scan, available, align, &mut sat);
+        }
         // Select the break before reporting an anchor: floats do not create
         // opportunities, and a word containing one may belong to the next line.
         let mut float_pos = indent.add(decoration::width(data, start, true, &mut sat), &mut sat);
@@ -292,6 +376,7 @@ impl Paragraph {
             .add(indent, &mut sat)
             .add(alignment.shift, &mut sat)
             .sub(scan.punctuation_edges.hang_start, &mut sat);
+        let ruby_measure = scan.ruby.take();
         let mut line = Line::new(
             self,
             token,
@@ -306,6 +391,9 @@ impl Paragraph {
         line.displaced = displaced;
         reshape::apply(&mut line, cx, &mut sat);
         line.measure_metrics(&mut sat);
+        if let Some(measure) = ruby_measure {
+            crate::ruby::place::format(data, &measure, &mut line, atomics, cx, &mut sat);
+        }
         cx.warnings.record_saturation(&sat);
         if constraint
             .max_block_size
@@ -316,6 +404,37 @@ impl Paragraph {
             };
         }
         LineResult::Line(line)
+    }
+
+    /// Format the prepared lane's selected dataset and immutable unit range.
+    /// Bypass the root first-line selection and the parent's partial cache.
+    pub(crate) fn ruby_line(
+        &self,
+        cx: &mut LayoutContext,
+        units: std::ops::Range<usize>,
+        width: f32,
+        atomics: &AtomicSizes,
+        align: crate::ruby::align::AnnotationAlign,
+    ) -> Line {
+        let token = BreakToken {
+            para: self.data.id,
+            unit: units.start as u32,
+            flags: 0,
+        };
+        let mut constraint = LineConstraint::new(width);
+        constraint.floats_placed_through = Some(FloatCursor(u32::MAX));
+        match self.next_line_in_set(
+            cx,
+            token,
+            &LineOptions::default(),
+            &constraint,
+            atomics,
+            Some(units.end),
+            Some(align),
+        ) {
+            LineResult::Line(line) => line,
+            _ => unreachable!("prepared annotation ranges contain no block boundaries"),
+        }
     }
 }
 
@@ -359,13 +478,28 @@ pub(super) fn soft_break_reason(
     start: usize,
     end: usize,
 ) -> BreakReason {
-    let last = data.units[start..end]
-        .iter()
-        .rev()
-        .find(|u| !matches!(u.kind, UnitKind::Close { .. } | UnitKind::BidiControl));
+    let last = data.units[start..end].iter().rev().find(|u| {
+        u.break_after != crate::analysis::units::BreakClass::Prohibited
+            || !matches!(u.kind, UnitKind::Close { .. } | UnitKind::BidiControl)
+    });
     if last.is_some_and(|u| u.break_after == crate::analysis::units::BreakClass::Emergency) {
         BreakReason::Emergency
     } else {
         BreakReason::Regular
     }
+}
+
+/// Closing controls may accompany a cut; opening a new paired box must stay
+/// with its continuation so its parent cursor keeps the annotation ranges.
+pub(super) fn pulls_after_break(data: &crate::paragraph::ParagraphData, i: usize) -> bool {
+    let unit = &data.units[i];
+    matches!(unit.kind, UnitKind::Close { .. } | UnitKind::BidiControl)
+        && !matches!(
+            data.items[unit.item as usize].kind,
+            crate::analysis::ItemKind::RubyBoundary {
+                boundary: crate::ruby::builder::Boundary::ContainerOpen
+                    | crate::ruby::builder::Boundary::BaseOpen(_),
+                ..
+            }
+        )
 }
