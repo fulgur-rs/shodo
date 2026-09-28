@@ -72,6 +72,10 @@ Auto annotations pair in order; absent counterparts receive empty anonymous
 boxes. All spans the entire segment. Explicit spans are nonempty, in range
 after automatic empty-base normalization, and non-overlapping in one level;
 invalid spans return RubyError, never panic or silently change pairing.
+Ruby::new validates spans without materializing an expanded pairing table.
+Before normalization/import, the parent checks the projected column/item
+counts against its limits, so surplus annotations cannot allocate an
+unbounded set of anonymous bases before the normal build guards run.
 Multiple levels and spanning annotations are supported. An empty container
 is valid and must not produce a non-progressing line. Nested ruby in content
 uses the same source/output model and shares the nesting limit.
@@ -192,17 +196,28 @@ with a RubyAnnotationView carrying container/base/annotation nodes, level,
 base text range, annotation text range, visibility, logical origin and the
 retained annotation Line. Expose Line::ruby_annotations as a filtered iterator
 and the corresponding Paragraph from the view. Child Line geometry is local;
-the view's origin translates it into parent-line coordinates. Renderer code
-must traverse the retained child output and apply this origin once; it must
+the view's transform maps it into parent-line coordinates. RubyTransform has
+six f32 fields: inline_inline, inline_block, block_inline, block_block,
+inline_offset and block_offset. Same-axis lanes use identity plus translation;
+horizontal InterCharacter ruby requires an axis conversion. origin returns
+(inline_offset, block_offset); transform returns the complete RubyTransform.
+Renderer code must traverse the retained child output and apply the transform
+once before the parent's PhysicalConverter; it must
 not reshape the annotation string or infer a face from its source node.
 
 Main LineLayout navigation and selection retain base reading order and base
 sources. Hitting an annotation in the ordinary API resolves to its paired
-base. A dedicated ruby hit result exposes annotation-local TextPosition and
-mapping for callers that edit annotations. Annotation selection uses its
+base. LineLayout::hit_test_ruby returns Option<RubyHit<'_>>; RubyHit contains
+annotation: RubyAnnotationView and hit: HitResult, where hit.position and
+hit.origin are annotation-local. The retained Paragraph supplies mapping
+for callers that edit annotations. Annotation selection uses its
 retained child LineLayout. Accessibility preserves base logical reading order
 and provides ruby relationships/annotation content as explicit metadata,
 without silently duplicating annotations into the main text stream.
+AccessibleLayout::ruby_annotations returns an iterator of AccessibleRuby,
+with parent_line: usize and annotation: RubyAnnotationView. Its retained child
+Line can be passed to AccessibleLayout for annotation-local characters and
+sources. This keeps both datasets explicit rather than overloading offsets.
 
 Update all exhaustive Fragment consumers, shared PNG painting, accessibility
 and AccessKit exports. Existing outline/color/font-instance/decoration
