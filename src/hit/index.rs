@@ -61,6 +61,7 @@ impl LineIndex {
             match fragment {
                 Fragment::GlyphRun(run) => {
                     if run.orientation() == crate::GlyphOrientation::Combined {
+                        let glyphs: Vec<_> = run.glyphs().collect();
                         for cluster in run.clusters() {
                             let g = line
                                 .data
@@ -81,9 +82,25 @@ impl LineIndex {
                                 1.0
                             };
                             let origin = line.block_offset() + run.baseline() - sign * em / 2.0;
+                            let text =
+                                cluster.text_range.start as u32..cluster.text_range.end as u32;
+                            let cuts = result.cuts(line, &text);
+                            let gs = &glyphs[glyphs.partition_point(|g| g.cluster < text.start)
+                                ..glyphs.partition_point(|g| g.cluster < text.end)];
+                            let scale = line.data.combine_geometry.scales[paint.span];
+                            let carets = if gs.len() == 1 && cuts.len() > 2 {
+                                ligature_carets(
+                                    run,
+                                    gs[0].id,
+                                    cuts.len() - 2,
+                                    cluster.shaping_advance,
+                                )
+                                .map(|carets| carets.into_iter().map(|v| v * scale).collect())
+                            } else {
+                                None
+                            };
                             raw.push(RawCluster {
-                                text: cluster.text_range.start as u32
-                                    ..cluster.text_range.end as u32,
+                                text,
                                 from: origin + sign * paint.from,
                                 to: origin + sign * paint.to,
                                 rect: LogicalRect {
@@ -92,9 +109,8 @@ impl LineIndex {
                                     block_start: 0.0,
                                     block_size: 0.0,
                                 },
-                                natural: cluster.shaping_advance
-                                    * line.data.combine_geometry.scales[paint.span],
-                                carets: None,
+                                natural: cluster.shaping_advance * scale,
+                                carets,
                                 block_axis: true,
                             });
                         }
@@ -685,6 +701,85 @@ mod tests {
         tables.sort_by_key(|v| v.0);
         crate::font::sfnt::build_sfnt(&tables)
     }
+    #[test]
+    fn combined_ligature_carets_follow_gdef_under_horizontal_compression() {
+        use crate::geometry::{Direction, WritingMode};
+        use crate::style::TextCombineUpright;
+        for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+            for direction in [Direction::Ltr, Direction::Rtl] {
+                let limits = Default::default();
+                let fonts = FontCollection::with_options(
+                    &limits,
+                    FontOptions {
+                        system_fonts: false,
+                        ..Default::default()
+                    },
+                );
+                fonts
+                    .register_face(
+                        synthetic_font(1, false),
+                        0,
+                        FontFaceDescriptor {
+                            family: "Caret".into(),
+                            ..Default::default()
+                        },
+                    )
+                    .unwrap();
+                let style = ParagraphStyle {
+                    writing_mode: mode,
+                    direction,
+                    root: InlineStyle {
+                        direction,
+                        font_families: vec![FontFamily::Named("Caret".into())],
+                        font_size: 20.0,
+                        text_combine_upright: TextCombineUpright::All,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+                let mut builder = ParagraphBuilder::new(&style, &limits);
+                builder.push_text(TextSource::Generated { node: NodeId(1) }, "ffiMMMM");
+                let p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+                let lines = p.break_all(
+                    &mut LayoutContext::new(),
+                    &Default::default(),
+                    100.0,
+                    &AtomicSizes::EMPTY,
+                );
+                let run = lines[0]
+                    .fragments()
+                    .find_map(|f| match f {
+                        Fragment::GlyphRun(run) => Some(run),
+                        _ => None,
+                    })
+                    .unwrap();
+                assert_eq!(
+                    run.glyphs().next().unwrap().id,
+                    367,
+                    "fixture must form the actual ffi ligature"
+                );
+                let scale = run.glyph_transform().block_x.abs();
+                assert!(scale < 1.0, "remaining M characters force real compression");
+                let layout = super::super::LineLayout::new(&lines);
+                let at = |offset| {
+                    layout
+                        .caret(TextPosition {
+                            line: 0,
+                            offset,
+                            affinity: Affinity::Downstream,
+                        })
+                        .unwrap()
+                        .rect
+                        .block_start
+                };
+                // The synthetic font declares 200/400-unit caret positions,
+                // unlike a proportional third of the ffi advance.
+                assert!(((at(1) - at(0)).abs() - 4.0 * scale).abs() < 0.032);
+                assert!(((at(2) - at(0)).abs() - 8.0 * scale).abs() < 0.032);
+            }
+        }
+    }
+
     #[test]
     fn gdef_carets_scale_and_apply_actual_variation_with_safe_fallbacks() {
         for format in [1u16, 2, 3] {

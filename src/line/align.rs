@@ -149,6 +149,12 @@ pub(super) fn apply(
         let UnitKind::Cluster { glyphs, space, .. } = &data.units[i].kind else {
             continue;
         };
+        if let Some(span) = data.combine_at_text(data.units[i].text.start) {
+            if data.units[i].text.end == span.text.end {
+                clusters.push((i, false, None, span.text.clone()));
+            }
+            continue;
+        }
         if data
             .text
             .get(data.units[i].text.start as usize..data.units[i].text.end as usize)
@@ -283,6 +289,14 @@ pub(super) fn apply(
         remainder -= residual;
         let extra = LayoutUnit::from_raw((per_boundary * opportunity.count + residual) as i32);
         scan.widths[i - start] = scan.widths[i - start].add(extra, sat);
+        if data.combine_at_text(data.units[i].text.start).is_some()
+            && data.units[i].level % 2 != data.base_level % 2
+        {
+            let leading = scan
+                .leading
+                .get_or_insert_with(|| vec![LayoutUnit::ZERO; scan.widths.len()]);
+            leading[i - start] = leading[i - start].add(extra, sat);
+        }
         if let Some((window, g)) = owned {
             let store = &mut scan.overlays[window].store;
             let spacing = store

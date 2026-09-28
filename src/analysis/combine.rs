@@ -20,6 +20,7 @@ pub(crate) struct Paint {
     pub(crate) x: f32,
     pub(crate) from: f32,
     pub(crate) to: f32,
+    pub(crate) extra: f32,
 }
 
 #[derive(Default)]
@@ -85,10 +86,32 @@ pub(crate) fn geometry(
                 g += 1;
             }
             let width: f32 = glyphs.advance[start..g].iter().map(|v| v.to_f32()).sum();
-            clusters.push((start..g, width));
+            let text_end = if g < end {
+                glyphs.cluster[g]
+            } else {
+                span.text.end
+            };
+            let mut extra = crate::geometry::LayoutUnit::ZERO;
+            let mut sat = crate::geometry::Saturation::default();
+            for (at, ch) in text[cluster as usize..text_end as usize].char_indices() {
+                if crate::line::spacing::word_separator(ch) {
+                    let item = items.partition_point(|item| item.text.end <= cluster + at as u32);
+                    extra = extra.add(
+                        crate::geometry::LayoutUnit::from_f32_round(
+                            styles[items[item].style as usize].word_spacing,
+                            &mut sat,
+                        ),
+                        &mut sat,
+                    );
+                }
+            }
+            clusters.push((start..g, width, extra));
             levels.push(bidi.levels[(cluster - span.text.start) as usize]);
         }
-        let natural: f32 = clusters.iter().map(|(_, width)| width).sum();
+        let natural: f32 = clusters
+            .iter()
+            .map(|(_, width, extra)| width + extra.to_f32())
+            .sum();
         result.scales.push(if natural > 0.0 {
             (span.em / natural).min(1.0)
         } else {
@@ -96,7 +119,13 @@ pub(crate) fn geometry(
         });
         let mut x = 0.0;
         for i in unicode_bidi::BidiInfo::reorder_visual(&levels) {
-            let (range, width) = &clusters[i];
+            let (range, width, extra) = &clusters[i];
+            let layout_width = width + extra.to_f32();
+            let leading = extra.div_i32(2).to_f32();
+            let owner = range
+                .clone()
+                .rfind(|&g| glyphs.advance[g] != crate::geometry::LayoutUnit::ZERO)
+                .unwrap_or(range.end - 1);
             let mut relative = 0.0;
             for g in range.clone() {
                 let advance = glyphs.advance[g].to_f32();
@@ -108,13 +137,22 @@ pub(crate) fn geometry(
                 };
                 result.glyphs[g] = Some(Paint {
                     span: span_index,
-                    x: x + pen,
-                    from: x + if levels[i].is_rtl() { *width } else { 0.0 },
-                    to: x + if levels[i].is_rtl() { 0.0 } else { *width },
+                    x: x + pen + leading,
+                    from: x + if levels[i].is_rtl() {
+                        layout_width
+                    } else {
+                        0.0
+                    },
+                    to: x + if levels[i].is_rtl() {
+                        0.0
+                    } else {
+                        layout_width
+                    },
+                    extra: if g == owner { extra.to_f32() } else { 0.0 },
                 });
                 relative += advance;
             }
-            x += width;
+            x += layout_width;
         }
         // The centering offset is part of paint, never part of shaping.
         let center = (span.em - natural * result.scales[span_index]) / 2.0;

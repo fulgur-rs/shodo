@@ -572,6 +572,9 @@ pub(super) fn intrinsic(
 pub(super) fn justify_boundary(data: &ParagraphData, left: u32, right: u32) -> bool {
     use icu_properties::props::{LineBreak, Script};
     let profile = |offset: u32| {
+        if data.combine_at_text(offset).is_some() {
+            return ('\u{fffc}', false, false);
+        }
         let ch = data.text[offset as usize..].chars().next().unwrap_or('\0');
         let item = data.items.partition_point(|i| i.text.end <= offset);
         let language = data

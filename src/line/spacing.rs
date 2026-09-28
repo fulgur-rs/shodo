@@ -18,6 +18,13 @@ pub(crate) struct UnitSpacing {
     pub(crate) gaps: (usize, usize),
 }
 
+pub(crate) fn word_separator(ch: char) -> bool {
+    matches!(
+        ch,
+        ' ' | '\u{a0}' | '\u{1361}' | '\u{10100}' | '\u{10101}' | '\u{1039f}' | '\u{1091f}'
+    )
+}
+
 pub(crate) fn build(
     data: &ParagraphData,
     sat: &mut Saturation,
@@ -121,15 +128,7 @@ pub(crate) fn build(
                             }
                         }
                         value.summary = value.summary.join(Summary::leaf(edge), Some(data));
-                        if matches!(
-                            ch,
-                            ' ' | '\u{a0}'
-                                | '\u{1361}'
-                                | '\u{10100}'
-                                | '\u{10101}'
-                                | '\u{1039f}'
-                                | '\u{1091f}'
-                        ) {
+                        if word_separator(ch) {
                             value.word = value
                                 .word
                                 .add(LayoutUnit::from_f32_round(style.word_spacing, sat), sat);
@@ -214,6 +213,20 @@ pub(crate) fn build(
             owner = Some(i);
         }
     }
+    let mut combined_owner = None;
+    for (i, unit) in data.units.iter().enumerate() {
+        if let Some(span) = data.combine_at_text(unit.text.start) {
+            let first = if let Some((first, start)) = combined_owner
+                && start == span.text.start
+            {
+                first
+            } else {
+                combined_owner = Some((i, span.text.start));
+                i
+            };
+            result[first].tail = i;
+        }
+    }
     (result, gaps)
 }
 
@@ -268,6 +281,13 @@ pub(super) fn justification_metadata(
 ) -> (usize, Option<JustificationEdge>, Option<JustificationEdge>) {
     if text.start >= text.end {
         return (0, None, None);
+    }
+    if let Some(span) = data.combine_at_text(text.start) {
+        return (
+            0,
+            Some((Kind::Atomic, span.text.start)),
+            Some((Kind::Atomic, span.text.end - 1)),
+        );
     }
     let category = CodePointMapData::<GeneralCategory>::new();
     let script = CodePointMapData::<Script>::new();

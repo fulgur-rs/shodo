@@ -240,6 +240,7 @@ impl Line {
             origin,
             atomics,
             visible_hyphen,
+            scan.leading.as_deref(),
         );
         crate::line::autospace::exclude_from_boxes(data, &mut records, &scan.autospace_gaps, sat);
         if let Some(leading) = &scan.leading {
@@ -883,7 +884,7 @@ impl<'a> GlyphRunView<'a> {
                         span.em - baseline
                     },
                 block_offset: sign * (paint.x - span.em / 2.0),
-                advance: store.advance[gi].to_f32(),
+                advance: store.advance[gi].to_f32() + paint.extra,
                 cluster: store.cluster[gi],
             };
         }
