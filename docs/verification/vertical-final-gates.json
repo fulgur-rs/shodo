@@ -1,0 +1,361 @@
+{
+  "schema": 1,
+  "cwd": "/home/mitz/Work/oss/shodo/target/worktrees/shodo-vertical",
+  "base_commit": "fe89a50f07d61556bd23f2ee18356fed93b6e904",
+  "common_env": {
+    "TMPDIR": "/home/mitz/Work/oss/shodo/target/rust-tmp",
+    "CARGO_BUILD_JOBS": "1",
+    "CARGO_TARGET_DIR": "/home/mitz/Work/oss/shodo/target/first-line-contract",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_INCREMENTAL": "0",
+    "RUSTFLAGS": "-D warnings"
+  },
+  "gates": [
+    {
+      "name": "sideways-origin",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--test",
+        "vertical",
+        "sideways_lr_outline_origin",
+        "--offline"
+      ],
+      "env": {},
+      "started_at": "2026-09-28T01:22:34.697768+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-sideways-origin-attempt6.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.1
+    },
+    {
+      "name": "fmt",
+      "argv": [
+        "cargo",
+        "+stable",
+        "fmt",
+        "--all",
+        "--check"
+      ],
+      "env": {},
+      "started_at": "2026-09-28T01:22:34.797825+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-fmt-attempt6.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 1.034
+    },
+    {
+      "name": "clippy",
+      "argv": [
+        "cargo",
+        "+stable",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--offline"
+      ],
+      "env": {},
+      "started_at": "2026-09-28T01:22:35.833041+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-clippy-attempt6.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 1.079
+    },
+    {
+      "name": "workspace",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--workspace",
+        "--offline"
+      ],
+      "env": {},
+      "started_at": "2026-09-28T01:22:36.912778+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-workspace-attempt6.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 94.709
+    },
+    {
+      "name": "doc",
+      "argv": [
+        "cargo",
+        "+stable",
+        "doc",
+        "--workspace",
+        "--no-deps",
+        "--offline"
+      ],
+      "env": {
+        "RUSTDOCFLAGS": "-D warnings"
+      },
+      "started_at": "2026-09-28T01:24:11.622878+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-doc-attempt6.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 10.698
+    },
+    {
+      "name": "no-default",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "-p",
+        "shodo",
+        "--no-default-features",
+        "--offline"
+      ],
+      "env": {},
+      "started_at": "2026-09-28T01:24:22.323019+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-no-default-attempt6.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 39.715
+    },
+    {
+      "name": "complex-scripts",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "-p",
+        "shodo",
+        "--no-default-features",
+        "--features",
+        "complex-scripts",
+        "--offline"
+      ],
+      "env": {},
+      "started_at": "2026-09-28T01:25:02.041094+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-complex-scripts-attempt6.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 26.16
+    },
+    {
+      "name": "allocator",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "-p",
+        "shodo-bench",
+        "--features",
+        "allocation-counting",
+        "--test",
+        "allocator",
+        "--test",
+        "probe",
+        "--offline"
+      ],
+      "env": {},
+      "started_at": "2026-09-28T01:25:28.202055+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-allocator-attempt6.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 5.669
+    },
+    {
+      "name": "benchmark-ci",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "-p",
+        "shodo-bench",
+        "--bench",
+        "layout",
+        "--offline"
+      ],
+      "env": {
+        "SHODO_BENCH_CASE": "latin-short"
+      },
+      "started_at": "2026-09-28T01:25:33.876527+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-benchmark-ci-attempt6.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 15.273
+    },
+    {
+      "name": "snapshot-matrix",
+      "argv": [
+        "cargo",
+        "+stable",
+        "run",
+        "-p",
+        "shodo-fixtures",
+        "--example",
+        "snapshots",
+        "--offline",
+        "--",
+        "--output",
+        "/home/mitz/Work/oss/shodo/target/vertical-artifacts/task4-snapshots-final-check"
+      ],
+      "env": {},
+      "started_at": "2026-09-28T01:25:49.150511+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-snapshot-matrix-attempt6.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 35.517
+    },
+    {
+      "name": "fixture-python",
+      "argv": [
+        "/tmp/shodo-fonttools-venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "dev/fixtures/tools",
+        "-v"
+      ],
+      "env": {},
+      "started_at": "2026-09-28T01:29:09.831236+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-fixture-python-attempt7.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 34.588
+    },
+    {
+      "name": "benchmark-python",
+      "argv": [
+        "/tmp/shodo-fonttools-venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "dev/bench/tools",
+        "-v"
+      ],
+      "env": {},
+      "started_at": "2026-09-28T01:29:44.419957+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-benchmark-python-attempt7.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.748
+    },
+    {
+      "name": "sfnt-check",
+      "argv": [
+        "/tmp/shodo-fonttools-venv/bin/python",
+        "dev/fixtures/tools/regenerate.py",
+        "--check"
+      ],
+      "env": {},
+      "started_at": "2026-09-28T01:29:45.169052+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-sfnt-check-attempt7.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 0.064
+    },
+    {
+      "name": "sfnt-reproduce",
+      "argv": [
+        "/tmp/shodo-fonttools-venv/bin/python",
+        "dev/fixtures/tools/regenerate.py",
+        "--rebuild",
+        "--sources-dir",
+        "/tmp/shodo-font-sources"
+      ],
+      "env": {},
+      "started_at": "2026-09-28T01:29:45.233794+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-sfnt-reproduce-attempt7.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 1.55
+    },
+    {
+      "name": "wasm",
+      "argv": [
+        "cargo",
+        "+stable",
+        "build",
+        "-p",
+        "shodo",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--offline"
+      ],
+      "env": {},
+      "started_at": "2026-09-28T01:29:46.784114+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-wasm-attempt7.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 2.983
+    },
+    {
+      "name": "msrv-workspace",
+      "argv": [
+        "cargo",
+        "+1.89.0",
+        "test",
+        "--workspace",
+        "--offline"
+      ],
+      "env": {
+        "CARGO_TARGET_DIR": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/msrv-1.89-target"
+      },
+      "started_at": "2026-09-28T01:29:49.768199+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-msrv-workspace-attempt7.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 243.142
+    },
+    {
+      "name": "benchmark-measure",
+      "argv": [
+        "cargo",
+        "+stable",
+        "bench",
+        "-p",
+        "shodo-bench",
+        "--bench",
+        "layout",
+        "--offline"
+      ],
+      "env": {
+        "SHODO_BENCH_CASE": "latin-short",
+        "SHODO_BENCH_QUICK": "1",
+        "SHODO_BENCH_OUTPUT": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/task4-criterion-latin-short"
+      },
+      "started_at": "2026-09-28T01:33:52.911574+00:00",
+      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-benchmark-measure-attempt7.log",
+      "status": "passed",
+      "exit_code": 0,
+      "seconds": 131.522
+    }
+  ],
+  "workspace_results": {
+    "stable_passed": 653,
+    "msrv_1_89_passed": 653,
+    "binaries_per_run": 49,
+    "failed": 0
+  },
+  "snapshots": {
+    "matched": 46,
+    "horizontal_png_geometry_unchanged": 52
+  },
+  "measured_benchmark": {
+    "case": "latin-short",
+    "scales": [
+      1,
+      8,
+      64
+    ],
+    "operations_per_scale": [
+      "all_lines",
+      "build",
+      "intrinsic",
+      "next_line",
+      "page_retry",
+      "rebuild_widths",
+      "reuse_widths"
+    ],
+    "digests": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/task4-criterion-latin-short/digests.json"
+  },
+  "cargo_lock_sha256": "78082b8530a99d9e2bd6028270089462bb3618a16e122b0a687f063c706a43c3"
+}

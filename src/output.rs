@@ -98,6 +98,11 @@ pub struct TextCombination {
 }
 
 impl Line {
+    /// Writing mode used by this line's logical coordinates and glyph transforms.
+    pub fn writing_mode(&self) -> crate::geometry::WritingMode {
+        self.data.style.writing_mode
+    }
+
     /// One square per combined typographic character, including preserved
     /// tabs with no glyphs. Place emphasis once per square; the internal
     /// glyph clusters are excluded from independent emphasis placement.
@@ -387,22 +392,19 @@ impl Line {
         }
         let mut origins = std::collections::HashMap::new();
         for record in &self.fragments {
-            match &record.kind {
-                RecordKind::Glyphs { text, .. } => {
-                    let index = self
-                        .data
-                        .combine_spans
-                        .partition_point(|span| span.text.end <= text.start);
-                    if self
-                        .data
-                        .combine_spans
-                        .get(index)
-                        .is_some_and(|span| span.text.start <= text.start)
-                    {
-                        origins.entry(index).or_insert(record.inline_start.to_f32());
-                    }
+            if let RecordKind::Glyphs { text, .. } = &record.kind {
+                let index = self
+                    .data
+                    .combine_spans
+                    .partition_point(|span| span.text.end <= text.start);
+                if self
+                    .data
+                    .combine_spans
+                    .get(index)
+                    .is_some_and(|span| span.text.start <= text.start)
+                {
+                    origins.entry(index).or_insert(record.inline_start.to_f32());
                 }
-                _ => {}
             }
         }
         for tab in &self.tabs {
@@ -782,9 +784,9 @@ impl<'a> GlyphRunView<'a> {
         }
     }
 
-    /// Font outline origin in line-local logical coordinates. On a negative
-    /// physical inline axis, the stored position names the advance cell's
-    /// start, so use the original shaping advance, excluding layout spacing.
+    /// Font outline origin in line-local logical coordinates. RTL flow uses
+    /// the advance cell's inline end, including the original shaping advance
+    /// and excluding layout spacing. Rotation is applied by `glyph_transform`.
     pub fn glyph_origin(&self, index: usize) -> Option<(f32, f32)> {
         let gi = (self.glyphs.0 as usize).checked_add(index)?;
         if gi >= self.glyphs.1 as usize {
@@ -795,12 +797,9 @@ impl<'a> GlyphRunView<'a> {
             GlyphSource::Shared => &self.data().glyphs,
             GlyphSource::Overlay { .. } => self.line.overlay.as_deref()?,
         };
-        let mode = self.data().style.writing_mode;
         let ltr = self.line.used_direction() == crate::geometry::Direction::Ltr;
         let negative_inline = if self.orientation() == crate::GlyphOrientation::Combined {
             false
-        } else if mode == crate::geometry::WritingMode::SidewaysLr {
-            ltr
         } else {
             !ltr
         };

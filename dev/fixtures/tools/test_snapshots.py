@@ -87,9 +87,9 @@ class SnapshotCliTests(unittest.TestCase):
         if update.returncode:
             cls.shared.cleanup()
             raise AssertionError(update.stderr)
-        if len(files(cls.base)) != 53:
+        if len(files(cls.base)) != 93:
             cls.shared.cleanup()
-            raise AssertionError('full update did not produce 26 PNG/geometry pairs and manifest')
+            raise AssertionError('full update did not produce 46 PNG/geometry pairs and manifest')
 
     @classmethod
     def tearDownClass(cls):
@@ -113,7 +113,7 @@ class SnapshotCliTests(unittest.TestCase):
         report = json.loads((output / 'report.json').read_text())
         self.assertTrue(report['passed'])
         self.assertFalse(report['partial'])
-        self.assertEqual(len(report['cases']), 26)
+        self.assertEqual(len(report['cases']), 46)
         self.assertEqual(files(self.expected), before)
 
     def test_one_changed_pixel_fails_with_triples_and_preserves_expectations(self):

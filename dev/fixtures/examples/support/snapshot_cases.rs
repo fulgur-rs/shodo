@@ -4,13 +4,15 @@ mod flow;
 #[path = "glyph_paint.rs"]
 mod glyph_paint;
 use serde_json::{Value, json};
-use shodo::geometry::{BaselineKind, Direction, LogicalRect};
+use shodo::geometry::{
+    BaselineKind, Direction, LogicalRect, PhysicalConverter, PhysicalSize, WritingMode,
+};
 use shodo::hit::{LineLayout, TextPosition};
 use shodo::mapping::Affinity;
 use shodo::node::{InlineEdges, NodeId, OutOfFlowKind, TextSource};
 use shodo::style::{
     FontFamily, InlineStyle, LineHeight, LineOptions, ParagraphStyle, TabSize, TextAlign,
-    TextJustify, TextSpacingTrim, WhiteSpaceCollapse,
+    TextCombineUpright, TextJustify, TextOrientation, TextSpacingTrim, WhiteSpaceCollapse,
 };
 use shodo::{
     AtomicSize, AtomicSizes, Fragment, LayoutContext, Line, LineConstraint, LineResult, Paragraph,
@@ -34,6 +36,28 @@ const VARIANTS: [&str; 14] = [
     "japanese-justify",
     "float-pages",
 ];
+const VERTICAL_CASES: [&str; 20] = [
+    "vertical-rl-mixed-ltr",
+    "vertical-rl-mixed-rtl",
+    "vertical-lr-mixed-ltr",
+    "vertical-lr-mixed-rtl",
+    "vertical-rl-upright-ltr",
+    "vertical-rl-upright-rtl",
+    "vertical-lr-upright-ltr",
+    "vertical-lr-upright-rtl",
+    "vertical-rl-sideways-ltr",
+    "vertical-rl-sideways-rtl",
+    "vertical-lr-sideways-ltr",
+    "vertical-lr-sideways-rtl",
+    "sideways-rl-ltr",
+    "sideways-rl-rtl",
+    "sideways-lr-ltr",
+    "sideways-lr-rtl",
+    "vertical-rl-tcy-ltr",
+    "vertical-rl-tcy-rtl",
+    "vertical-lr-tcy-ltr",
+    "vertical-lr-tcy-rtl",
+];
 fn japanese_feature_case(id: &str) -> bool {
     matches!(
         id,
@@ -56,6 +80,7 @@ pub fn case_ids() -> Vec<String> {
         .iter()
         .map(|c| c.id.clone())
         .chain(VARIANTS.iter().map(|s| s.to_string()))
+        .chain(VERTICAL_CASES.iter().map(|s| s.to_string()))
         .collect()
 }
 pub fn conditions() -> Value {
@@ -75,9 +100,11 @@ pub fn paint_lines(
     color: impl FnMut(NodeId) -> [u8; 4],
 ) -> Result<(tiny_skia::Pixmap, usize), String> {
     for line in lines {
+        let vertical = line.writing_mode() != WritingMode::HorizontalTb;
         if !line.block_offset().is_finite()
             || line.block_offset() < 0.0
-            || line.block_offset() + line.block_size() + 40.0 > 1024.0
+            || line.block_offset() + line.block_size() + 40.0
+                > if vertical { 512.0 } else { 1024.0 }
         {
             return Err("accepted line exceeds fixed canvas".into());
         }
@@ -85,7 +112,7 @@ pub fn paint_lines(
             match fragment {
                 Fragment::GlyphRun(run) => {
                     fixed_font(run)?;
-                    for g in run.glyphs() {
+                    for g in run.glyphs().filter(|_| !vertical) {
                         if !g.inline_position.is_finite()
                             || g.inline_position + 10.0 < 0.0
                             || g.inline_position + g.advance + 10.0 > 512.0
@@ -96,10 +123,11 @@ pub fn paint_lines(
                 }
                 Fragment::Atomic(a) => {
                     let r = a.border_rect;
-                    if r.inline_start + 10.0 < 0.0
-                        || r.inline_start + r.inline_size + 10.0 > 512.0
-                        || line.block_offset() + r.block_start + 10.0 < 0.0
-                        || line.block_offset() + r.block_start + r.block_size + 10.0 > 1024.0
+                    if !vertical
+                        && (r.inline_start + 10.0 < 0.0
+                            || r.inline_start + r.inline_size + 10.0 > 512.0
+                            || line.block_offset() + r.block_start + 10.0 < 0.0
+                            || line.block_offset() + r.block_start + r.block_size + 10.0 > 1024.0)
                     {
                         return Err("accepted atomic exceeds fixed canvas".into());
                     }
@@ -162,6 +190,74 @@ fn prepare(
     cx: &mut LayoutContext,
 ) -> Result<(Vec<Page>, Vec<LogicalRect>, Value, bool), String> {
     let limits = Default::default();
+    if VERTICAL_CASES.contains(&id) {
+        let mode = if id.starts_with("vertical-rl-") {
+            WritingMode::VerticalRl
+        } else if id.starts_with("vertical-lr-") {
+            WritingMode::VerticalLr
+        } else if id.starts_with("sideways-rl-") {
+            WritingMode::SidewaysRl
+        } else {
+            WritingMode::SidewaysLr
+        };
+        let direction = if id.ends_with("-rtl") {
+            Direction::Rtl
+        } else {
+            Direction::Ltr
+        };
+        let orientation = if id.contains("-upright-") {
+            TextOrientation::Upright
+        } else if id.contains("-sideways-") {
+            TextOrientation::Sideways
+        } else {
+            TextOrientation::Mixed
+        };
+        let combined = id.contains("-tcy-");
+        let style = ParagraphStyle {
+            writing_mode: mode,
+            direction,
+            root: InlineStyle {
+                font_families: [1, 0, 2]
+                    .map(|i| FontFamily::Named(FONTS[i].family.into()))
+                    .to_vec(),
+                font_size: 20.0,
+                line_height: LineHeight::Px(28.0),
+                direction,
+                text_orientation: orientation,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut b = ParagraphBuilder::new(&style, &limits);
+        let value = if combined {
+            text(&mut b, 1, "「水");
+            let mut child = style.root.clone();
+            child.text_combine_upright = TextCombineUpright::All;
+            b.open_inline(NodeId(2), &child, InlineEdges::default());
+            text(&mut b, 3, "12");
+            text(&mut b, 4, "34");
+            b.close_inline();
+            text(&mut b, 5, "水 AF」");
+            "「水1234水 AF」"
+        } else {
+            let value = "「水AF §ب」水 AF";
+            text(&mut b, 1, value);
+            value
+        };
+        let p = b.build(cx, &fonts.collection).map_err(|e| e.to_string())?;
+        let lines = layout(&p, cx, &LineOptions::default(), &AtomicSizes::EMPTY, 96.0)?;
+        return Ok((
+            vec![Page {
+                lines,
+                floats: vec![],
+                offset: 0.0,
+                fragment: 0,
+            }],
+            vec![],
+            json!({"id":id,"text":value,"width":96.0,"font_size":20.0,"writing_mode":format!("{mode:?}"),"text_orientation":format!("{orientation:?}"),"direction":format!("{direction:?}"),"combine":combined}),
+            false,
+        ));
+    }
     if let Some(case) = shodo_fixtures::case(id) {
         let p = case.build(cx, fonts, &limits).map_err(|e| e.to_string())?;
         let lines = layout(&p, cx, &Default::default(), &AtomicSizes::EMPTY, case.width)?;
@@ -499,28 +595,38 @@ pub fn render(id: &str) -> Result<Rendered, String> {
     let mut atomics_json = Vec::new();
     let mut boxes_json = Vec::new();
     let mut pages_json = Vec::new();
+    let mut combinations_json = Vec::new();
     for page in &pages {
         let color = |node: NodeId| {
-            if node == NodeId(9) {
-                [0, 128, 0, 255]
-            } else if id == "shared-ffi-color" && node == NodeId(1) {
+            if (id.contains("-tcy-") && node == NodeId(3))
+                || (id == "shared-ffi-color" && node == NodeId(1))
+            {
                 [255, 0, 0, 255]
+            } else if node == NodeId(9) || (id.contains("-tcy-") && node == NodeId(4)) {
+                [0, 128, 0, 255]
             } else {
                 [0, 0, 0, 255]
             }
         };
         let (painted, count) = paint_lines(&page.lines, &annotations, color)?;
-        let used = page
+        let used = if page
             .lines
-            .iter()
-            .map(|l| l.block_offset() + l.block_size() + 40.0)
-            .chain(
-                page.floats
-                    .iter()
-                    .map(|f| f.rect.block_start + f.rect.block_size + 40.0),
-            )
-            .fold(0.0, f32::max)
-            .ceil() as usize;
+            .first()
+            .is_some_and(|l| l.writing_mode() != WritingMode::HorizontalTb)
+        {
+            1024
+        } else {
+            page.lines
+                .iter()
+                .map(|l| l.block_offset() + l.block_size() + 40.0)
+                .chain(
+                    page.floats
+                        .iter()
+                        .map(|f| f.rect.block_start + f.rect.block_size + 40.0),
+                )
+                .fold(0.0, f32::max)
+                .ceil() as usize
+        };
         let offset = page.offset as usize;
         if offset + used > 1024 {
             return Err("page panel exceeds fixed canvas".into());
@@ -533,6 +639,10 @@ pub fn render(id: &str) -> Result<Rendered, String> {
             let index = lines_json.len();
             let range = line.text_range();
             lines_json.push(json!({"page":page.fragment,"start":range.start,"end":range.end,"block_offset":line.block_offset(),"block_size":line.block_size(),"inline_size":line.inline_size(),"baseline":line.baseline(BaselineKind::Alphabetic)}));
+            for combination in line.text_combinations() {
+                let square = combination.square;
+                combinations_json.push(json!({"line":index,"start":combination.text_range.start,"end":combination.text_range.end,"inline_start":square.inline_start,"inline_size":square.inline_size,"block_start":square.block_start,"block_size":square.block_size}));
+            }
             if japanese_feature_case(id) {
                 lines_json[index]["hang_start"] = json!(line.hang_start());
                 lines_json[index]["hang_end"] = json!(line.hang_end());
@@ -541,8 +651,28 @@ pub fn render(id: &str) -> Result<Rendered, String> {
                 match fragment {
                     Fragment::GlyphRun(run) => {
                         let font = fixed_font(run)?;
-                        for g in run.glyphs() {
+                        for (glyph_index, g) in run.glyphs().enumerate() {
                             glyphs_json.push(json!({"line":index,"owner":run.node().map(|n|n.0),"font":font,"size":run.font_size(),"coords":run.normalized_coords().iter().map(|c|c.to_bits()).collect::<Vec<_>>(),"embolden":run.embolden(),"skew":run.skew(),"id":g.id,"cluster":g.cluster,"inline_position":g.inline_position,"block_offset":g.block_offset,"advance":g.advance,"baseline":run.baseline()}));
+                            if line.writing_mode() != WritingMode::HorizontalTb {
+                                let converter = PhysicalConverter::new(
+                                    line.writing_mode(),
+                                    line.used_direction(),
+                                    PhysicalSize {
+                                        width: 492.0,
+                                        height: 1004.0,
+                                    },
+                                );
+                                let (inline, block) = run
+                                    .glyph_origin(glyph_index)
+                                    .ok_or("missing glyph origin")?;
+                                let (x, y) = converter.point(inline, block + line.block_offset());
+                                let m = run.glyph_transform();
+                                let record = glyphs_json.last_mut().unwrap();
+                                record["orientation"] = json!(format!("{:?}", run.orientation()));
+                                record["physical_origin"] = json!([10.0 + x, 10.0 + y]);
+                                record["transform"] =
+                                    json!([m.inline_x, m.inline_y, m.block_x, m.block_y]);
+                            }
                         }
                     }
                     Fragment::Atomic(a) => {
@@ -620,6 +750,10 @@ pub fn render(id: &str) -> Result<Rendered, String> {
         return Err("snapshot has no valid glyph ink".into());
     }
     let geometry = json!({"schema":1,"lines":lines_json,"glyphs":glyphs_json,"atomics":atomics_json,"inline_boxes":boxes_json,"annotations":annotations.iter().map(|r|json!({"inline_start":r.inline_start,"block_start":r.block_start,"width":r.inline_size,"height":r.block_size})).collect::<Vec<_>>(),"pages":pages_json,"height_rejections":usize::from(rejected),"rejected_token_preserved":rejected});
+    let mut geometry = geometry;
+    if VERTICAL_CASES.contains(&id) {
+        geometry["combinations"] = json!(combinations_json);
+    }
     Ok(Rendered {
         id: id.into(),
         image,

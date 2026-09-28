@@ -69,6 +69,11 @@ is not a general page-rendering promise.
 
 ## Verification and reference
 
+The shared fixture renderer also converts vertical glyph origins and matrices
+through `PhysicalConverter`; see [vertical output](vertical-layout.md).
+An asymmetric real `F` outline is compared against independent literal rotation
+and compression matrices for 48 mode/orientation/direction/combine combinations.
+
 `dev/fixtures/tests/png_render.rs` checks a30×20px atomic on the second accepted
 line at its actual block offset, real glyph ink, unsupported synthetic weight
 and the no-outline stub error. Existing shared-glyph tests check owner colors,

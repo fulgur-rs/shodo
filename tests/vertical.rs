@@ -247,6 +247,43 @@ fn physical_converter_maps_points_and_vectors_without_mirroring_outline() {
 }
 
 #[test]
+fn sideways_lr_outline_origin_stays_inside_its_advance_cell() {
+    for direction in [Direction::Ltr, Direction::Rtl] {
+        let mut style = style(WritingMode::SidewaysLr, TextOrientation::Mixed);
+        style.direction = direction;
+        style.root.direction = direction;
+        let p = paragraph(&style, "F");
+        let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        let run = line
+            .fragments()
+            .find_map(|fragment| match fragment {
+                Fragment::GlyphRun(run) => Some(run),
+                _ => None,
+            })
+            .unwrap();
+        let glyph = run.glyphs().next().unwrap();
+        let converter = PhysicalConverter::new(
+            WritingMode::SidewaysLr,
+            direction,
+            PhysicalSize {
+                width: 100.0,
+                height: 80.0,
+            },
+        );
+        let (inline, block) = run.glyph_origin(0).unwrap();
+        let origin = converter.point(inline, block);
+        // CCW font x advances physically upward. In LTR the cell begins at
+        // its bottom; in RTL its bottom is one advance after its logical start.
+        let expected_y = if direction == Direction::Ltr {
+            80.0 - glyph.inline_position
+        } else {
+            glyph.inline_position + glyph.advance
+        };
+        assert_eq!(origin.1, expected_y, "{direction:?}");
+    }
+}
+
+#[test]
 fn public_vertical_glyph_matrix_keeps_font_outline_upright() {
     // Size has already been applied to outline path. Its local x/y axes are
     // right/down. The converter and run matrix together must keep both axes.
@@ -2352,8 +2389,10 @@ fn combine_all_float_and_height_retry_keep_square_origin_and_font_ownership() {
 fn combine_all_compression_does_not_bypass_the_real_glyph_budget() {
     let mut input = style(WritingMode::VerticalRl, TextOrientation::Mixed);
     input.root.text_combine_upright = TextCombineUpright::All;
-    let mut limits = Limits::default();
-    limits.max_shaped_glyphs = Some(1);
+    let limits = Limits {
+        max_shaped_glyphs: Some(1),
+        ..Default::default()
+    };
     let fonts = FontCollection::with_options(
         &limits,
         FontOptions {

@@ -1,7 +1,7 @@
 //! Fixed-font caller example, shared by contract tests. It draws accepted
 //! glyph IDs once; annotations use separate source rectangles. It is not a
 //! general CSS painter (no skip-ink, decoration propagation or color fonts).
-use shodo::geometry::LogicalRect;
+use shodo::geometry::{LogicalRect, PhysicalConverter, PhysicalSize, WritingMode};
 use shodo::node::NodeId;
 use shodo::{Fragment, Line};
 use skrifa::{
@@ -60,6 +60,36 @@ fn check_bounds(rect: tiny_skia::Rect, image: &tiny_skia::Pixmap) -> Result<(), 
     }
 }
 
+fn converter(line: &Line, width: u32, height: u32) -> PhysicalConverter {
+    PhysicalConverter::new(
+        line.writing_mode(),
+        line.used_direction(),
+        PhysicalSize {
+            width: width as f32 - 20.0,
+            height: height as f32 - 20.0,
+        },
+    )
+}
+
+fn physical_rect(
+    line: &Line,
+    rect: LogicalRect,
+    width: u32,
+    height: u32,
+) -> Option<tiny_skia::Rect> {
+    if line.writing_mode() == WritingMode::HorizontalTb {
+        tiny_skia::Rect::from_xywh(
+            10.0 + rect.inline_start,
+            10.0 + rect.block_start,
+            rect.inline_size,
+            rect.block_size,
+        )
+    } else {
+        let rect = converter(line, width, height).rect(rect);
+        tiny_skia::Rect::from_xywh(10.0 + rect.x, 10.0 + rect.y, rect.width, rect.height)
+    }
+}
+
 fn paint(
     lines: &[Line],
     mut color: impl FnMut(NodeId) -> [u8; 4],
@@ -67,6 +97,25 @@ fn paint(
     canvas: Option<(u32, u32)>,
 ) -> Result<(tiny_skia::Pixmap, usize), PaintError> {
     let (width, height) = canvas.unwrap_or_else(|| {
+        if lines
+            .first()
+            .is_some_and(|line| line.writing_mode() != WritingMode::HorizontalTb)
+        {
+            return (
+                lines
+                    .iter()
+                    .map(|l| l.block_offset() + l.block_size())
+                    .fold(0.0, f32::max)
+                    .ceil() as u32
+                    + 40,
+                lines
+                    .iter()
+                    .map(|l| l.inline_size())
+                    .fold(0.0, f32::max)
+                    .ceil() as u32
+                    + 40,
+            );
+        }
         (
             512,
             lines
@@ -83,13 +132,9 @@ fn paint(
     for line in lines {
         for fragment in line.fragments() {
             if let Fragment::Atomic(atomic) = fragment {
-                let rect = atomic.border_rect;
-                if let Some(rect) = tiny_skia::Rect::from_xywh(
-                    10.0 + rect.inline_start,
-                    10.0 + line.block_offset() + rect.block_start,
-                    rect.inline_size,
-                    rect.block_size,
-                ) {
+                let mut rect = atomic.border_rect;
+                rect.block_start += line.block_offset();
+                if let Some(rect) = physical_rect(line, rect, width, height) {
                     if canvas.is_some() {
                         check_bounds(rect, &image)?;
                     }
@@ -112,7 +157,7 @@ fn paint(
             let [r, g, b, a] = color(run.node().ok_or(PaintError::MissingOwner)?);
             let mut paint = tiny_skia::Paint::default();
             paint.set_color_rgba8(r, g, b, a);
-            for glyph in run.glyphs() {
+            for (index, glyph) in run.glyphs().enumerate() {
                 let outline = font
                     .outline_glyphs()
                     .get(GlyphId::new(glyph.id))
@@ -128,14 +173,27 @@ fn paint(
                     )
                     .map_err(|_| PaintError::MissingOutline)?;
                 if let Some(path) = pen.0.finish() {
-                    let transform = tiny_skia::Transform::from_row(
-                        1.0,
-                        0.0,
-                        0.0,
-                        -1.0,
-                        10.0 + glyph.inline_position,
-                        10.0 + line.block_offset() + run.baseline() + glyph.block_offset,
-                    );
+                    let transform = if line.writing_mode() == WritingMode::HorizontalTb {
+                        // Preserve the established horizontal sample coordinates.
+                        tiny_skia::Transform::from_row(
+                            1.0,
+                            0.0,
+                            0.0,
+                            -1.0,
+                            10.0 + glyph.inline_position,
+                            10.0 + line.block_offset() + run.baseline() + glyph.block_offset,
+                        )
+                    } else {
+                        let converter = converter(line, width, height);
+                        let (inline, block) =
+                            run.glyph_origin(index).ok_or(PaintError::MissingOutline)?;
+                        let (x, y) = converter.point(inline, line.block_offset() + block);
+                        let matrix = run.glyph_transform();
+                        let (xx, xy) = converter.vector(matrix.inline_x, matrix.block_x);
+                        let (yx, yy) = converter.vector(matrix.inline_y, matrix.block_y);
+                        // skrifa outlines use y-up; the public matrix uses y-down.
+                        tiny_skia::Transform::from_row(xx, xy, -yx, -yy, 10.0 + x, 10.0 + y)
+                    };
                     if canvas.is_some() {
                         let bounds = path
                             .clone()
@@ -153,12 +211,26 @@ fn paint(
     let mut paint = tiny_skia::Paint::default();
     paint.set_color_rgba8(0, 0, 255, 255);
     for rect in annotations {
-        let rect = tiny_skia::Rect::from_xywh(
-            10.0 + rect.inline_start,
-            13.0 + rect.block_start + rect.block_size,
-            rect.inline_size,
-            2.0,
-        )
+        let rect = if let Some(line) = lines.first() {
+            physical_rect(
+                line,
+                LogicalRect {
+                    inline_start: rect.inline_start,
+                    inline_size: rect.inline_size,
+                    block_start: rect.block_start + rect.block_size + 3.0,
+                    block_size: 2.0,
+                },
+                width,
+                height,
+            )
+        } else {
+            tiny_skia::Rect::from_xywh(
+                10.0 + rect.inline_start,
+                13.0 + rect.block_start + rect.block_size,
+                rect.inline_size,
+                2.0,
+            )
+        }
         .ok_or(PaintError::InvalidAnnotation)?;
         if canvas.is_some() {
             check_bounds(rect, &image)?;

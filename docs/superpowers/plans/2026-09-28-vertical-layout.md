@@ -131,17 +131,19 @@ Create `tests/vertical.rs`;必要な固定font table fixtureを既存fixture生�
 - Consumes: 公開Task 2 transform/point/vector、Task 3 TCY metadataのみ。
 - Produces: new vertical snapshots、再生成可能SFNT、実行済みgate記録、PR。
 
-- [ ] **Step 1: Write renderer failure regression** horizontalと縦glyphの非対称outlineで90°/-90°/直立/圧縮を検証する。
+- [x] **Step 1: Write renderer failure regression** horizontalと縦glyphの非対称outlineで90°/-90°/直立/圧縮を検証する。
   Expected: 現rendererは縦origin/向きを処理せずpixel位置が異なる。
-- [ ] **Step 2: Implement renderer and new cases** vertical-rl/lr、sideways-rl/lr、mixed、upright、TCY画像とgeometryを追加する。
+- [x] **Step 2: Implement renderer and new cases** vertical-rl/lr、sideways-rl/lr、mixed、upright、TCY画像とgeometryを追加する。
   Expected: 実glyphが意図した向きであり、既存26画像とgeometryは変更なし。
   実PNGをview_imageで確認し、その結果を記録する。
-- [ ] **Step 3: Run final gates** fmt、workspace、Clippy、doc、MSRV1.89 workspace、wasm32 check、no-default/features、
+- [x] **Step 3: Run final gates** fmt、workspace、Clippy、doc、MSRV1.89 workspace、wasm32 check、no-default/features、
   allocator、snapshot matrix/Python、SFNT再生成、benchmark。
   commandは各既存harnessのhelp/CI定義に合わせ、exact commandとexitをfinal-gates.jsonへ記録する。
   Expected: 全gate成功。MSRVは専用target dir、snapshot出力は新規所有directoryを使用する。
 - [ ] **Step 4: Commit and task-done** `feat: render and verify vertical layouts` をcommit。
   task-doneは `cargo +stable test --workspace --offline`、Expected: 全workspace成功。
+## Final branch review and integration（Task 4 の実装完了後）
+
 - [ ] **Step 5: Whole branch review and integration** 独立reviewは一度だけ。重大指摘の一回fix passは各RED→GREENと全workspace成功を伴う。
   exact HEADをpushしてPR作成、全CIがsuccessとなったexact HEADをmerge。
   Expected: PR MERGED、origin/mainにmergeを含む、issue CLOSED、所有worktree/local branch削除済み。
