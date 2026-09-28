@@ -40,6 +40,15 @@ pub enum NavigationOrder {
     Visual,
 }
 
+/// Crate-private shared source geometry; paint must not duplicate GDEF logic.
+pub(crate) fn paint_segments(line: &Line) -> Vec<(std::ops::Range<u32>, LogicalRect)> {
+    index::LineIndex::new(0, line)
+        .segments
+        .into_iter()
+        .map(|s| (s.text, s.rect))
+        .collect()
+}
+
 /// Borrows finalized lines and builds their caret index once. No paragraph or
 /// font bytes are copied, and queries do not reshape or rebuild glyph data.
 pub struct LineLayout<'a> {

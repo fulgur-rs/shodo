@@ -1,6 +1,9 @@
 //! Line layout output.
 
 use std::fmt;
+mod paint;
+pub use paint::{DecorationRect, PaintSpan};
+
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -683,6 +686,13 @@ pub(crate) struct OverlayCluster {
 }
 
 impl<'a> GlyphRunView<'a> {
+    /// Retained paint of the first source scalar owning this run's glyphs.
+    /// Shared clusters are drawn once with this color; source decorations use
+    /// separate source geometry. The accepted first-line style is retained.
+    pub fn paint_style(&self) -> &'a crate::style::PaintStyle {
+        &self.data().styles[self.style_index() as usize].paint
+    }
+
     pub fn style_index(&self) -> u32 {
         self.data().items[self.item as usize].style
     }
@@ -702,8 +712,8 @@ impl<'a> GlyphRunView<'a> {
     /// by [`crate::node::TextSource`], rather than its enclosing inline box.
     /// A cluster shared across nodes belongs to the item supplying its first
     /// scalar. Iterate the returned glyphs once; do not repaint them for every
-    /// source node overlapping [`Self::text_range`]. Resolve paint style in the
-    /// caller. Use the line's offset mapping and [`crate::hit::LineLayout`] for
+    /// source node overlapping [`Self::text_range`]. [`Self::paint_style`]
+    /// supplies resolved solid paint; other effects remain caller-owned. Use the line's offset mapping and [`crate::hit::LineLayout`] for
     /// each source node's selection, link, decoration and caret regions.
     pub fn node(&self) -> Option<NodeId> {
         self.data().items[self.item as usize].node

@@ -33,7 +33,7 @@ pub fn try_paint(
     color: impl FnMut(NodeId) -> [u8; 4],
     annotations: &[LogicalRect],
 ) -> Result<(tiny_skia::Pixmap, usize), PaintError> {
-    paint(lines, color, annotations, None)
+    paint(lines, color, annotations, None, false)
 }
 
 /// Draw directly onto a declared canvas, rejecting any clipped outline or rect.
@@ -45,7 +45,36 @@ pub fn try_paint_on_canvas(
     width: u32,
     height: u32,
 ) -> Result<(tiny_skia::Pixmap, usize), PaintError> {
-    paint(lines, color, annotations, Some((width, height)))
+    paint(lines, color, annotations, Some((width, height)), false)
+}
+
+/// Paint retained solid colors and source decorations using public logical
+/// transforms, including horizontal RTL. Fixed-font example only; CSS
+/// propagation, skip-ink and color-font rasterization remain caller-owned.
+#[allow(dead_code)] // Other fixed snapshot callers retain their legacy colors.
+pub fn try_paint_styled_on_canvas(
+    lines: &[Line],
+    width: u32,
+    height: u32,
+) -> Result<(tiny_skia::Pixmap, usize), PaintError> {
+    paint(lines, |_| [0, 0, 0, 255], &[], Some((width, height)), true)
+}
+
+fn draw_decoration(
+    image: &mut tiny_skia::Pixmap,
+    line: &Line,
+    decoration: shodo::DecorationRect,
+) -> Result<(), PaintError> {
+    // Source decoration rects already include line.block_offset().
+    let rect = converter(line, image.width(), image.height()).rect(decoration.rect);
+    let rect = tiny_skia::Rect::from_xywh(10.0 + rect.x, 10.0 + rect.y, rect.width, rect.height)
+        .ok_or(PaintError::InvalidAnnotation)?;
+    check_bounds(rect, image)?;
+    let [r, g, b, a] = decoration.color;
+    let mut paint = tiny_skia::Paint::default();
+    paint.set_color_rgba8(r, g, b, a);
+    image.fill_rect(rect, &paint, tiny_skia::Transform::identity(), None);
+    Ok(())
 }
 
 fn check_bounds(rect: tiny_skia::Rect, image: &tiny_skia::Pixmap) -> Result<(), PaintError> {
@@ -95,6 +124,7 @@ fn paint(
     mut color: impl FnMut(NodeId) -> [u8; 4],
     annotations: &[LogicalRect],
     canvas: Option<(u32, u32)>,
+    retained: bool,
 ) -> Result<(tiny_skia::Pixmap, usize), PaintError> {
     let (width, height) = canvas.unwrap_or_else(|| {
         if lines
@@ -130,6 +160,16 @@ fn paint(
     image.fill(tiny_skia::Color::WHITE);
     let mut count = 0;
     for line in lines {
+        let spans = if retained {
+            line.paint_spans()
+        } else {
+            Vec::new()
+        };
+        for span in &spans {
+            if let Some(decoration) = span.underline() {
+                draw_decoration(&mut image, line, decoration)?;
+            }
+        }
         for fragment in line.fragments() {
             if let Fragment::Atomic(atomic) = fragment {
                 let mut rect = atomic.border_rect;
@@ -154,7 +194,11 @@ fn paint(
             let data = run.font_data().ok_or(PaintError::MissingFont)?;
             let font = FontRef::from_index(data.data.as_ref(), data.index)
                 .map_err(|_| PaintError::InvalidFont)?;
-            let [r, g, b, a] = color(run.node().ok_or(PaintError::MissingOwner)?);
+            let [r, g, b, a] = if retained {
+                run.paint_style().color
+            } else {
+                color(run.node().ok_or(PaintError::MissingOwner)?)
+            };
             let mut paint = tiny_skia::Paint::default();
             paint.set_color_rgba8(r, g, b, a);
             for (index, glyph) in run.glyphs().enumerate() {
@@ -173,7 +217,8 @@ fn paint(
                     )
                     .map_err(|_| PaintError::MissingOutline)?;
                 if let Some(path) = pen.0.finish() {
-                    let transform = if line.writing_mode() == WritingMode::HorizontalTb {
+                    let transform = if !retained && line.writing_mode() == WritingMode::HorizontalTb
+                    {
                         // Preserve the established horizontal sample coordinates.
                         tiny_skia::Transform::from_row(
                             1.0,
@@ -205,6 +250,11 @@ fn paint(
                     image.fill_path(&path, &paint, tiny_skia::FillRule::Winding, transform, None);
                 }
                 count += 1;
+            }
+        }
+        for span in &spans {
+            if let Some(decoration) = span.strikethrough() {
+                draw_decoration(&mut image, line, decoration)?;
             }
         }
     }

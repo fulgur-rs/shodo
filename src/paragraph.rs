@@ -788,6 +788,12 @@ fn first_line_style(
         ($($field:ident),* $(,)?) => { $(if original.$field == root.$field { result.$field = first.$field.clone(); })* };
     }
     first_line_properties!(inherit);
+    macro_rules! inherit_paint {
+        ($($field:ident),*) => { $(if original.paint.$field == root.paint.$field {
+            result.paint.$field = first.paint.$field;
+        })* };
+    }
+    inherit_paint!(color, underline, strikethrough);
     result
 }
 
@@ -797,6 +803,7 @@ fn resolved_first_line_style(original: &InlineStyle, resolved: &InlineStyle) -> 
         ($($field:ident),* $(,)?) => { $(result.$field = resolved.$field.clone();)* };
     }
     first_line_properties!(copy);
+    result.paint = resolved.paint;
     result
 }
 
