@@ -137,6 +137,31 @@ pub(crate) fn style(s: &mut InlineStyle, warnings: &mut WarningSink) {
         LineHeight::Px(v) => LineHeight::Px(non_negative(v, "line-height", warnings)),
         LineHeight::Number(n) => LineHeight::Number(non_negative(n, "line-height", warnings)),
     };
+    for decoration in [&mut s.paint.underline, &mut s.paint.strikethrough]
+        .into_iter()
+        .flatten()
+    {
+        for (value, non_negative) in [
+            (&mut decoration.offset, false),
+            (&mut decoration.thickness, true),
+        ] {
+            *value = value.and_then(|v| {
+                if !v.is_finite() {
+                    warnings.push(
+                        WarningKind::NonFiniteInput,
+                        "non-finite decoration length replaced with font metric",
+                    );
+                    None
+                } else {
+                    Some(if non_negative {
+                        non_negative_length(v, "decoration thickness", warnings)
+                    } else {
+                        length(v, "decoration offset", warnings)
+                    })
+                }
+            });
+        }
+    }
     s.letter_spacing = length(s.letter_spacing, "letter-spacing", warnings);
     s.word_spacing = length(s.word_spacing, "word-spacing", warnings);
     s.tab_size = match s.tab_size {

@@ -401,9 +401,40 @@ pub enum BoxDecorationBreak {
     Clone,
 }
 
-/// Per-element style that affects shaping and line breaking.
+/// One resolved solid decoration. Unspecified values use the source color and
+/// actual font instance's underline/strike-through metrics. Offsets are signed
+/// px toward line-under from the alphabetic (upright: central) baseline.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct TextDecoration {
+    pub color: Option<[u8; 4]>,
+    pub offset: Option<f32>,
+    /// Nonnegative px. Zero suppresses painting.
+    pub thickness: Option<f32>,
+}
+
+/// Resolved source paint, independent of shaping. Colors are non-premultiplied
+/// sRGB RGBA8. CSS inheritance/decoration propagation is resolved by the caller.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PaintStyle {
+    pub color: [u8; 4],
+    pub underline: Option<TextDecoration>,
+    pub strikethrough: Option<TextDecoration>,
+}
+
+impl Default for PaintStyle {
+    fn default() -> Self {
+        Self {
+            color: [0, 0, 0, 255],
+            underline: None,
+            strikethrough: None,
+        }
+    }
+}
+
+/// Per-element resolved shaping, line-breaking and paint style.
 #[derive(Clone, Debug, PartialEq)]
 pub struct InlineStyle {
+    pub paint: PaintStyle,
     pub font_families: Vec<FontFamily>,
     pub font_size: f32,
     pub font_weight: f32,
@@ -451,6 +482,7 @@ pub struct InlineStyle {
 impl Default for InlineStyle {
     fn default() -> Self {
         Self {
+            paint: PaintStyle::default(),
             font_families: vec![FontFamily::Generic(GenericFamily::SansSerif)],
             font_size: 16.0,
             font_weight: 400.0,
@@ -506,7 +538,7 @@ pub struct ParagraphStyle {
     pub root: InlineStyle,
     /// Resolved root style for `::first-line`, if any. Clone `root` and
     /// change its first-line properties to express a partial override.
-    /// Font, language, line height, spacing, transform and emphasis values
+    /// Paint, font, language, line height, spacing, transform and emphasis values
     /// inherit into descendants whose normal value equals the root value;
     /// differing descendant values are preserved. Other properties retain
     /// their normal values.

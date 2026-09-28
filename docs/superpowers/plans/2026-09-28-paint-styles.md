@@ -30,13 +30,13 @@
 **Files:** src/style.rs, src/sanitize.rs, src/paragraph.rs, src/output.rs; create dev/fixtures/tests/paint_styles.rs; update docs/first-line-style-contract.md and related public comments.
 **Interfaces:** Produces style::PaintStyle { color:[u8;4], underline:Option<TextDecoration>, strikethrough:Option<TextDecoration> }, TextDecoration { color:Option<[u8;4]>, offset:Option<f32>, thickness:Option<f32> }; InlineStyle.paint; GlyphRunView::paint_style(&self)->&PaintStyle. Task2 consumes all.
 
-- [ ] Step1 Write tests `default_and_explicit_paint_survive_both_builders`, `paint_boundaries_preserve_ffi_owner_and_arabic_joining`, `first_line_retains_resolved_and_legacy_paint`, `invalid_decoration_lengths_warn_and_normalize`. Assertions: default [0,0,0,255]/none; explicit [200,10,20,128], underline [0,0,255,255]/offset3/thickness2, strike offset-4/thickness1; ffi split f/f/i produces one glyph, owner0 and red even with blue successors; Arabic split glyph tuples equal one-span output; first accepted line green and later red at width60 with child-resolved blue on first line; NaN offset/inf thickness ->None and negative thickness ->0 with warnings; 2e7 ->1e7.
-- [ ] Step2 Run `cargo +stable test -p shodo-fixtures --test paint_styles --offline`.
+- [x] Step1 Write tests `default_and_explicit_paint_survive_both_builders`, `paint_boundaries_preserve_ffi_owner_and_arabic_joining`, `first_line_retains_resolved_and_legacy_paint`, `invalid_decoration_lengths_warn_and_normalize`. Assertions: default [0,0,0,255]/none; explicit [200,10,20,128], underline [0,0,255,255]/offset3/thickness2, strike offset-4/thickness1; ffi split f/f/i produces one glyph, owner0 and red even with blue successors; Arabic split glyph tuples equal one-span output; first accepted line green and later red at width60 with child-resolved blue on first line; NaN offset/inf thickness ->None and negative thickness ->0 with warnings; 2e7 ->1e7.
+- [x] Step2 Run `cargo +stable test -p shodo-fixtures --test paint_styles --offline`.
   Expected: FAIL missing public PaintStyle/TextDecoration/paint_style API; record log.
-- [ ] Step3 Implement exact interfaces and normalization, extend first_line_properties with paint, keep shaping_compatible untouched; update accepted first-line docs.
-- [ ] Step4 Run the same focused command, then `cargo +stable test --workspace --offline`.
+- [x] Step3 Implement exact interfaces and normalization, extend first_line_properties with paint, keep shaping_compatible untouched; update accepted first-line docs.
+- [x] Step4 Run the same focused command, then `cargo +stable test --workspace --offline`.
   Expected: all pass, no snapshot changes.
-- [ ] Step5 Run `cargo +stable fmt --all --check`, commit `feat: retain source paint styles through glyph output`; task-done command is the workspace test.
+- [x] Step5 Run `cargo +stable fmt --all --check`, commit `feat: retain source paint styles through glyph output`; task-done command is the workspace test.
   Expected: terminal0 and task ledger complete.
 
 ### Task 2: Source spans and resolved decoration geometry

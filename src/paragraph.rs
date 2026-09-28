@@ -751,6 +751,7 @@ fn normal_cursor(
 macro_rules! first_line_properties {
     ($copy:ident) => {
         $copy!(
+            paint,
             font_families,
             font_size,
             font_weight,

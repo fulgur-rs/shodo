@@ -42,15 +42,16 @@ its normal style. For direct root text, set the root alternative through
 variants. Atomic styles retain their existing input contract; parent inline
 style pairs also carry parent metrics for their subtree.
 
-The supported alternate property set is unchanged: font families, size,
+The supported alternate property set is: font families, size,
 weight, width, style, variations, features, kerning, variants, optical sizing,
 synthesis and size adjustment; language; line height; letter/word spacing;
-text transform and emphasis. The remaining `InlineStyle` formatting properties
+text transform, emphasis and resolved `paint` (color, underline and strike-through). The remaining `InlineStyle` formatting properties
 retain the normal values. These inputs do not add support for other CSS
 first-line properties or perform cascade. Line options remain caller-owned.
-Color, backgrounds and decorations are not `InlineStyle` fields: the painter
-uses the appropriate caller-resolved style table for the accepted first line
-and normal lines, together with each glyph run's original owner.
+`InlineStyle::paint` retains solid color, underline and strike-through in the
+accepted first-line or normal style table. `GlyphRunView::paint_style()` uses
+the glyph's original source owner, including shared clusters. Backgrounds and
+other painter effects still use the caller's corresponding style table.
 
 Normal/alternative pairs are interned together: equal normal styles with
 unequal alternatives remain distinct, while equal pairs share an index.
