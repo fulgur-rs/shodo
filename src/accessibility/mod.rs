@@ -6,6 +6,9 @@
 //! to the caller. See `docs/accessibility.md` for the integration contract.
 mod output;
 
+#[cfg(feature = "accesskit")]
+pub mod accesskit;
+
 use crate::font::FontId;
 use crate::geometry::{Direction, LogicalRect, WritingMode};
 use crate::hit::{LineLayout, TextPosition};
