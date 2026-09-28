@@ -127,3 +127,8 @@ CSS inheritance and excluded properties are specified by
 [CSS Pseudo-Elements4 §2.1.3](https://www.w3.org/TR/css-pseudo-4/#first-line-inheritance).
 The test's two ordinary author cascades establish the handoff boundary; they
 are not evidence of full CSS first-line conformance or WPT PASS.
+
+Legacy equal-value inheritance compares paint color, underline and strike-through
+independently: a child color does not block an unrelated first-line decoration.
+For exact CSS provenance, supply the caller-resolved normal/first-line pair;
+shodo still does not infer declarations or decorating-box propagation.

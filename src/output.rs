@@ -1,6 +1,9 @@
 //! Line layout output.
 
 use std::fmt;
+mod paint;
+pub use paint::{DecorationRect, PaintSpan};
+
 use std::ops::Range;
 use std::sync::Arc;
 
