@@ -1,0 +1,124 @@
+[
+  {
+    "id": "emoji-single",
+    "text": "😀",
+    "font_ids": [
+      "emoji-color",
+      "emoji-mono"
+    ],
+    "lang": null,
+    "direction": "ltr",
+    "font_size": 24,
+    "width": 120
+  },
+  {
+    "id": "emoji-text-vs",
+    "text": "☺︎",
+    "font_ids": [
+      "emoji-color",
+      "emoji-mono"
+    ],
+    "lang": null,
+    "direction": "ltr",
+    "font_size": 24,
+    "width": 120
+  },
+  {
+    "id": "emoji-emoji-vs",
+    "text": "☺️",
+    "font_ids": [
+      "emoji-color",
+      "emoji-mono"
+    ],
+    "lang": null,
+    "direction": "ltr",
+    "font_size": 24,
+    "width": 120
+  },
+  {
+    "id": "emoji-skin",
+    "text": "👍🏽",
+    "font_ids": [
+      "emoji-color",
+      "emoji-mono"
+    ],
+    "lang": null,
+    "direction": "ltr",
+    "font_size": 24,
+    "width": 120
+  },
+  {
+    "id": "emoji-zwj",
+    "text": "👩‍💻",
+    "font_ids": [
+      "emoji-color",
+      "emoji-mono"
+    ],
+    "lang": null,
+    "direction": "ltr",
+    "font_size": 24,
+    "width": 120
+  },
+  {
+    "id": "emoji-family",
+    "text": "👨‍👩‍👧‍👦",
+    "font_ids": [
+      "emoji-color",
+      "emoji-mono"
+    ],
+    "lang": null,
+    "direction": "ltr",
+    "font_size": 24,
+    "width": 120
+  },
+  {
+    "id": "emoji-flag",
+    "text": "🇯🇵",
+    "font_ids": [
+      "emoji-color",
+      "emoji-mono"
+    ],
+    "lang": null,
+    "direction": "ltr",
+    "font_size": 24,
+    "width": 120
+  },
+  {
+    "id": "emoji-keycap",
+    "text": "1️⃣",
+    "font_ids": [
+      "emoji-color",
+      "emoji-mono"
+    ],
+    "lang": null,
+    "direction": "ltr",
+    "font_size": 24,
+    "width": 120
+  },
+  {
+    "id": "emoji-tag",
+    "text": "🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+    "font_ids": [
+      "emoji-color",
+      "emoji-mono"
+    ],
+    "lang": null,
+    "direction": "ltr",
+    "font_size": 24,
+    "width": 120
+  },
+  {
+    "id": "emoji-mixed",
+    "text": "日本語 A 😀 ☺︎ ☺️ 👍🏽 👩‍💻 👨‍👩‍👧‍👦 🇯🇵 1️⃣ 🏴󠁧󠁢󠁳󠁣󠁴󠁿 B",
+    "font_ids": [
+      "emoji-color",
+      "emoji-mono",
+      "latin",
+      "cjk"
+    ],
+    "lang": "ja",
+    "direction": "ltr",
+    "font_size": 24,
+    "width": 480
+  }
+]

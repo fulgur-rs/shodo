@@ -122,8 +122,12 @@ impl FontCollection {
     }
 
     /// Matches the entire caller-supplied grapheme, never a partial face.
-    /// Nominal cmap checks ignore joiners and variation selectors; S2 shapes
-    /// the chosen face to resolve sequence substitutions. None means missing.
+    /// Nominal cmap checks ignore joiners and variation selectors; shaping
+    /// resolves sequence substitutions in the selected face. Cmap coverage does
+    /// not guarantee a composed emoji: unsupported sequences can retain visible
+    /// component glyphs from that face. Matching does not rescan candidates based
+    /// on glyph count (valid representations may have multiple glyphs).
+    /// `None` means no eligible face covers the entire nominal grapheme.
     pub fn match_cluster(&self, query: &FontQuery, cluster: &str) -> Option<FontMatch> {
         if cluster.is_empty() {
             return None;

@@ -42,3 +42,7 @@ test = true
 name = "accessibility"
 required-features = ["accesskit"]
 test = true
+
+[[example]]
+name = "emoji_png"
+test = true
