@@ -30,7 +30,7 @@ shodo is in early development. Paragraph construction, CSS text analysis, real-f
 
 ### Limitations and planned features
 
-Ruby layout is planned. APIs described in the design documents are not necessarily implemented.
+Ruby pairing, coordinated wrapping, alignment, placement, safe overhang and vertical output are implemented. See the [ruby contract and PNG example](docs/ruby.md). APIs described in other design documents are not necessarily implemented.
 
 `word-break: auto-phrase` warns and uses normal breaking. Automatic dictionary hyphenation warns and uses manual soft-hyphen opportunities. Invalid locale tags warn and use the root locale; valid but unknown shaping languages warn and use OpenType's default language system. If no registered or fallback face covers a grapheme, layout warns and emits deterministic glyph 0 with a 1em base advance and zero advance for combining marks/default ignorables. This fallback is not a drawable substitute for font data.
 

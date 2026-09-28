@@ -157,3 +157,16 @@ corpus, not coverage of every Unicode emoji or host fallback policy.
 See [emoji layout and caller color drawing](../../docs/emoji.md) for sequence
 limitations, missing-font behavior and `cargo run -p shodo-fixtures --example
 emoji_png -- OUTPUT.png`. The renderer draws accepted CBDT PNG glyphs and outlines.
+
+## Retained ruby output
+
+Run `cargo run -p shodo-fixtures --example ruby_png -- target/ruby-png`. The
+example writes horizontal, VerticalRl and VerticalLr PNG/JSON pairs, using only
+the registered CJK fixture. JSON keeps base and annotation source ranges separate
+and records retained glyph IDs, font checksums, sizes, advances, origins, transforms
+and overflow. The shared painter traverses visible lanes and composes their
+transforms before physical conversion; it reuses outline/bitmap and source
+decoration paths. `ruby_paint` pins source colors, asymmetric vertical outlines,
+nested translations, hidden/ collapsed lanes and strict clipping. See
+[the caller contract](../../docs/ruby.md). The existing browser recorder does not
+measure ruby and its fixture exclusions remain applicable.

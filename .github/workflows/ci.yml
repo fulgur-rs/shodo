@@ -26,6 +26,7 @@ jobs:
       - run: cargo test --workspace --features shodo-fixtures/accesskit
       - run: cargo run -p shodo-fixtures --features accesskit,shodo/complex-scripts --example accessibility
       - run: cargo run -p shodo-fixtures --example emoji_png -- target/emoji.png
+      - run: cargo run -p shodo-fixtures --example ruby_png -- target/ruby-png
       - name: Check fixed glyph snapshots
         if: always()
         run: cargo run -p shodo-fixtures --example snapshots -- --output target/snapshot-report
@@ -69,6 +70,7 @@ jobs:
       - run: cargo test --workspace --features shodo-fixtures/accesskit
       - run: cargo run -p shodo-fixtures --features accesskit,shodo/complex-scripts --example accessibility
       - run: cargo run -p shodo-fixtures --example emoji_png -- target/emoji.png
+      - run: cargo run -p shodo-fixtures --example ruby_png -- target/ruby-png
       - name: Check fixed glyph snapshots
         if: always()
         run: cargo run -p shodo-fixtures --example snapshots -- --output target/snapshot-report

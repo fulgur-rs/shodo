@@ -46,3 +46,7 @@ test = true
 [[example]]
 name = "emoji_png"
 test = true
+
+[[example]]
+name = "ruby_png"
+test = true

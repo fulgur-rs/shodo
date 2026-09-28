@@ -33,5 +33,6 @@ Line coordinates are logical. Glyph/fragment block coordinates and nominal
 overflow bounds are line-local; hit, caret and selection block coordinates
 include `Line::block_offset`. The caller converts logical axes for painting.
 Nominal overflow does not include renderer-added strokes, antialiasing or
-decoration effects. Japanese punctuation hanging, ruby/emphasis placement and
-vertical typography belong to the existing later milestones.
+decoration effects. The contracts in this document cover the original horizontal
+fixtures. Japanese punctuation, emphasis and vertical output have their own
+contracts; [ruby](ruby.md) adds coordinated annotation lanes and ink overflow.
