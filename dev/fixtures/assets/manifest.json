@@ -85,6 +85,48 @@
           1791
         ]
       ]
+    },
+    {
+      "id": "emoji-color",
+      "family": "Shodo Fixture Emoji",
+      "path": "assets/fonts/emoji-color.ttf",
+      "face_index": 0,
+      "source_url": "https://raw.githubusercontent.com/googlefonts/noto-emoji/aac7ccaa4d1dea4543453b96f7d6fc47066a57ff/fonts/NotoColorEmoji.ttf",
+      "source_commit": "aac7ccaa4d1dea4543453b96f7d6fc47066a57ff",
+      "source_file": "emoji-color.ttf",
+      "source_sha256": "2b106b88034043001f28b3ee8e58f62e867f0f0666ea072a4acf6cbd956ca160",
+      "sha256": "6047984e1da3b32e9629740378f2a143daa2c630f140edcf69b68696e3766362",
+      "size": 160272,
+      "license": "assets/licenses/noto-color-emoji-OFL.txt",
+      "license_url": "https://raw.githubusercontent.com/googlefonts/noto-emoji/aac7ccaa4d1dea4543453b96f7d6fc47066a57ff/fonts/LICENSE",
+      "extra_unicode_ranges": [
+        [
+          32,
+          32
+        ]
+      ],
+      "corpus": "assets/emoji-cases.json"
+    },
+    {
+      "id": "emoji-mono",
+      "family": "Shodo Fixture Emoji",
+      "path": "assets/fonts/emoji-mono.ttf",
+      "face_index": 0,
+      "source_url": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf",
+      "source_commit": "23e54b51ddffbc7713c583748e3bd86f62b1fa4a",
+      "source_file": "emoji-mono.ttf",
+      "source_sha256": "de6c18832938afc99caf132b39d6a30a19bac7f2e812e28db2535b4608d27551",
+      "sha256": "76c91d377b0d3acb5e0feb696924d1fec7ea9cd4c7860dff52aa0cdd998f76f3",
+      "size": 26736,
+      "license": "assets/licenses/noto-emoji-OFL.txt",
+      "license_url": "https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/notoemoji/OFL.txt",
+      "extra_unicode_ranges": [
+        [
+          32,
+          32
+        ]
+      ],
+      "corpus": "assets/emoji-cases.json"
     }
   ]
 }

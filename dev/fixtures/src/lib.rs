@@ -47,9 +47,28 @@ pub const FONTS: &[FontFixture] = &[
     },
 ];
 
+/// Optional real color and monochrome emoji faces, in stable registration order.
+/// Both faces share a family so presentation selection can choose either.
+pub const EMOJI_FONTS: &[FontFixture] = &[
+    FontFixture {
+        id: "emoji-color",
+        family: "Shodo Fixture Emoji",
+        bytes: include_bytes!("../assets/fonts/emoji-color.ttf"),
+        face_index: 0,
+        sha256: "6047984e1da3b32e9629740378f2a143daa2c630f140edcf69b68696e3766362",
+    },
+    FontFixture {
+        id: "emoji-mono",
+        family: "Shodo Fixture Emoji",
+        bytes: include_bytes!("../assets/fonts/emoji-mono.ttf"),
+        face_index: 0,
+        sha256: "76c91d377b0d3acb5e0feb696924d1fec7ea9cd4c7860dff52aa0cdd998f76f3",
+    },
+];
+
 /// Look up a font by stable ID, never by an installed family name.
 pub fn font(id: &str) -> Option<&'static FontFixture> {
-    FONTS.iter().find(|font| font.id == id)
+    FONTS.iter().chain(EMOJI_FONTS).find(|font| font.id == id)
 }
 
 /// A case shared with the subset generator and development tools.
@@ -81,6 +100,15 @@ pub fn cases() -> &'static [FixtureCase] {
     CASES.get_or_init(|| {
         serde_json::from_str(include_str!("../assets/cases.json"))
             .expect("checked-in fixture corpus is valid")
+    })
+}
+
+/// Original emoji corpus, also used to reproduce only the optional emoji subsets.
+pub fn emoji_cases() -> &'static [FixtureCase] {
+    static CASES: OnceLock<Vec<FixtureCase>> = OnceLock::new();
+    CASES.get_or_init(|| {
+        serde_json::from_str(include_str!("../assets/emoji-cases.json"))
+            .expect("checked-in emoji corpus is valid")
     })
 }
 
@@ -131,6 +159,53 @@ pub fn load_fonts(limits: &Limits) -> Result<FixtureFonts, FontError> {
     Ok(FixtureFonts {
         collection,
         ids: ids.try_into().expect("exactly three fixture fonts"),
+    })
+}
+
+/// Opt-in emoji collection; the original faces keep their registration IDs.
+#[derive(Debug)]
+pub struct EmojiFixtureFonts {
+    pub base: FixtureFonts,
+    /// Matches EMOJI_FONTS (color, then mono).
+    pub emoji_ids: [FontId; 2],
+}
+
+/// Load the original three faces plus real emoji, with no system discovery.
+pub fn load_emoji_fonts(limits: &Limits) -> Result<EmojiFixtureFonts, FontError> {
+    let base = load_fonts(limits)?;
+    let mut ids = Vec::with_capacity(2);
+    for font in EMOJI_FONTS {
+        ids.push(base.collection.register_face(
+            font.bytes.to_vec(),
+            font.face_index,
+            FontFaceDescriptor {
+                family: font.family.into(),
+                ..Default::default()
+            },
+        )?);
+    }
+    let family = EMOJI_FONTS[0].family;
+    base.collection.set_generic_families(
+        GenericFamily::SansSerif,
+        FONTS
+            .iter()
+            .map(|font| font.family.to_owned())
+            .chain(std::iter::once(family.to_owned()))
+            .collect(),
+    );
+    for (script, primary) in [
+        (*b"Latn", FONTS[0].family),
+        (*b"Hani", FONTS[1].family),
+        (*b"Arab", FONTS[2].family),
+    ] {
+        base.collection
+            .set_fallback_families(script, None, vec![primary.into(), family.into()]);
+    }
+    base.collection
+        .set_fallback_families(*b"Zyyy", None, vec![family.into()]);
+    Ok(EmojiFixtureFonts {
+        base,
+        emoji_ids: ids.try_into().expect("exactly two emoji fonts"),
     })
 }
 

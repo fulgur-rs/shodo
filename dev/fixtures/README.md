@@ -91,7 +91,7 @@ python3 -m venv /tmp/shodo-fonttools
 reproduces the subsets with all layout features and renamed metadata, then requires
 the generated checksums to match. It never replaces checked-in fonts or the manifest.
 To avoid downloads, pass `--sources-dir /path/to/originals` with `latin.ttf`, `cjk.otf`
-and `arabic.ttf` downloaded from the manifest URLs. Inputs must still match the
+`arabic.ttf`, `emoji-color.ttf` and `emoji-mono.ttf` downloaded from the manifest URLs. Inputs must still match the
 recorded hashes. Subset ordering is canonical and original timestamps are preserved.
 
 For an intentional corpus/coverage/font update:
@@ -99,7 +99,7 @@ For an intentional corpus/coverage/font update:
 1. Edit the corpus and/or subset ranges; when changing upstream, update immutable
    URLs, original checksum and license/copyright notices from the new release.
 2. Run the same command with **`--update`**. All inputs and outputs are staged and
-   validated before checked-in assets are replaced; the 512KiB font budget applies.
+   validated before checked-in assets are replaced; the 768KiB total font budget applies to both offline checking and rebuild/update.
 3. Copy updated family/face/hash values from the manifest into `FONTS` in src/lib.rs;
    update this size table if needed. Tests catch any disagreement.
 4. Run `--check`, `--rebuild`, Python tests, `cargo test --workspace`, and both
@@ -122,3 +122,34 @@ The [Chrome comparison](../../docs/browser-comparison.md) shares seeded fixed in
 through `shodo_fixtures::browser`, checks saved source positions/boundary widths
 offline, and reports every raw difference. Recollection is an explicit Python
 standard-library/headless Chromium command using a disposable profile.
+
+## Optional real emoji fixtures
+
+`load_emoji_fonts(&limits)` loads the original three faces, then `EMOJI_FONTS`
+(color, mono) into `EmojiFixtureFonts::base.collection`. `emoji_ids` identifies
+those two faces. The original `load_fonts`, `FONTS`, `cases()` and their registration
+order remain unchanged. Both emoji faces use the derived family **Shodo Fixture
+Emoji**, enabling VS15/VS16 and explicit presentation selection within that family.
+`font(id)` also resolves these optional assets. `emoji_cases()` is a separate
+original corpus containing the representative sequences and mixed Japanese/Latin.
+
+| ID | Format / index | Bytes | Original source |
+| --- | --- | ---: | --- |
+| emoji-color | CBDT/CBLC PNG, 109ppem / 0 | 160,272 | Noto Color Emoji Unicode13.1 |
+| emoji-mono | Variable TrueType, wght300..700 / 0 | 26,736 | Noto Emoji |
+
+All five subsets total **591,472 bytes**, within the768KiB budget. The original
+three remain byte-identical. These two are separately licensed under OFL1.1;
+complete pinned notices and original copyright/license records are in
+[assets/licenses](assets/licenses). Sources and SHA256 values are recorded in
+[assets/manifest.json](assets/manifest.json):
+[color source](https://github.com/googlefonts/noto-emoji/tree/aac7ccaa4d1dea4543453b96f7d6fc47066a57ff/fonts)
+and [mono source](https://github.com/google/fonts/tree/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/notoemoji).
+The fixture tests use these actual font bytes; a color-table marker is insufficient.
+
+Only the two emoji manifest entries set `corpus` to `assets/emoji-cases.json`.
+Other entries default to `assets/cases.json`, so adding the optional corpus does
+not extend the old subsets. Reproduction keeps all layout features and substitution
+closure. It verifies every source before updating assets; source mismatch or total
+budget overflow leaves checked-in outputs untouched. Subsets are a fixed test
+corpus, not coverage of every Unicode emoji or host fallback policy.

@@ -10,6 +10,7 @@ import tempfile
 from urllib.request import urlopen
 
 FONTTOOLS_VERSION = '4.61.1'
+FONT_BUDGET = 768 * 1024
 
 
 def digest(data):
@@ -30,8 +31,10 @@ def read_manifest(root):
 
 def check_assets(root):
     manifest = read_manifest(root)
+    total = 0
     for entry in manifest['fonts']:
         data = (root / entry['path']).read_bytes()
+        total += len(data)
         if digest(data) != entry['sha256']:
             raise ValueError(f"{entry['id']}: asset checksum mismatch")
         if len(data) != entry['size'] or entry['face_index'] != 0:
@@ -40,6 +43,8 @@ def check_assets(root):
             raise ValueError(f"{entry['id']}: not a standalone sfnt")
         if 'OFL' not in (root / entry['license']).read_text(encoding="utf-8"):
             raise ValueError(f"{entry['id']}: license notice missing")
+    if total > FONT_BUDGET:
+        raise ValueError('fixture font budget exceeds 768KiB')
     print('Pinned fixture checksums, sizes, indices, and licenses verified.')
 
 
@@ -86,7 +91,6 @@ def subset_font(data, entry, cases):
 
 def rebuild(root, sources_dir=None, update=False):
     manifest = read_manifest(root)
-    cases = json.loads((root / 'assets/cases.json').read_text(encoding="utf-8"))
     outputs = []
     # Stage every source and result before touching any checked-in file.
     for entry in manifest['fonts']:
@@ -95,12 +99,13 @@ def rebuild(root, sources_dir=None, update=False):
         else:
             data = (sources_dir / entry['source_file']).read_bytes()
         validate_source(data, entry['source_sha256'])
+        cases = json.loads((root / entry.get('corpus', 'assets/cases.json')).read_text(encoding='utf-8'))
         result = subset_font(data, entry, cases)
         if not update and digest(result) != entry['sha256']:
             raise ValueError(f"{entry['id']}: rebuilt checksum mismatch")
         outputs.append((entry, result))
-    if sum(len(data) for _, data in outputs) > 512 * 1024:
-        raise ValueError('fixture font budget exceeds 512KiB')
+    if sum(len(data) for _, data in outputs) > FONT_BUDGET:
+        raise ValueError('fixture font budget exceeds 768KiB')
     if update:
         for entry, data in outputs:
             destination = root / entry['path']
