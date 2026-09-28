@@ -27,6 +27,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Clear restored snapshot reports
+        run: rm -rf target/snapshot-report target/snapshot-checks
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets
       - run: cargo clippy --workspace --all-targets --features shodo-fixtures/accesskit
@@ -74,6 +76,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig1-dev
       - uses: dtolnay/rust-toolchain@1.89.0
       - uses: Swatinem/rust-cache@v2
+      - name: Clear restored snapshot reports
+        run: rm -rf target/snapshot-report target/snapshot-checks
       - run: cargo test --workspace
       - run: cargo test --workspace --features shodo-fixtures/accesskit
       - run: cargo run -p shodo-fixtures --features accesskit,shodo/complex-scripts --example accessibility
