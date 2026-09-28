@@ -91,6 +91,9 @@ pub(super) fn context(text: &str) -> Vec<u16> {
         }
     }
     let category = CodePointMapData::<props::GeneralCategory>::new();
+    #[cfg(feature = "complex-scripts")]
+    let segmenter = WordSegmenter::new_auto(Default::default());
+    #[cfg(not(feature = "complex-scripts"))]
     let segmenter = WordSegmenter::new_for_non_complex_scripts(Default::default());
     let mut begin = 0;
     for end in segmenter.segment_str(text) {
@@ -118,4 +121,27 @@ pub(super) fn context(text: &str) -> Vec<u16> {
         begin = end;
     }
     flags
+}
+
+#[cfg(all(test, feature = "complex-scripts"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn context_word_heads_use_complex_models() {
+        // These flags are consumed by CSS capitalization. Checking literal
+        // word heads also catches missing models when ICU logging is disabled.
+        for (text, expected) in [
+            ("こんにちは世界", &[0, 15][..]),
+            ("ภาษาไทย", &[0, 12][..]),
+            ("ភាសាខ្មែរជាភាសាជាតិ", &[0, 12, 27, 33][..]),
+        ] {
+            let flags = context(text);
+            let heads: Vec<_> = text
+                .char_indices()
+                .filter_map(|(at, _)| (flags[at] & HEAD != 0).then_some(at))
+                .collect();
+            assert_eq!(heads, expected, "{text:?}");
+        }
+    }
 }

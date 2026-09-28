@@ -466,3 +466,49 @@ fn long_transparent_word_keeps_capitalization_context() {
         format!("A{}", "a".repeat(4095))
     );
 }
+
+#[test]
+#[cfg(all(
+    feature = "complex-scripts",
+    debug_assertions,
+    not(target_arch = "wasm32")
+))]
+fn transformed_paragraphs_load_complex_models() {
+    const CHILD: &str = "SHODO_COMPLEX_TRANSFORM_PROBE";
+    if std::env::var_os(CHILD).is_some() {
+        for (lang, text) in [
+            ("ja", "こんにちは世界"),
+            ("km", "ភាសាខ្មែរជាភាសាជាតិ"),
+            ("th", "ภาษาไทย"),
+        ] {
+            for transform in [
+                TextTransform::None,
+                TextTransform::Uppercase,
+                TextTransform::Capitalize,
+            ] {
+                assert_eq!(build(text, transform, Some(lang)).text(), text);
+            }
+        }
+        println!("complex transform probe completed");
+        return;
+    }
+    // --nocapture lets ICU's debug eprintln fallback reach child stderr;
+    // the parent isolates it from the surrounding harness's capture.
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "transformed_paragraphs_load_complex_models",
+            "--nocapture",
+        ])
+        .env(CHILD, "1")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    assert!(
+        stdout.contains("complex transform probe completed"),
+        "{stdout}"
+    );
+    assert!(!stderr.contains("No segmentation model"), "{stderr}");
+}
