@@ -50,3 +50,7 @@ test = true
 [[example]]
 name = "ruby_png"
 test = true
+
+[[example]]
+name = "ch_units"
+test = true
