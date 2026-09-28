@@ -69,5 +69,5 @@
 
 ## Final phase
 
-- [ ] Fresh whole-branch most-capable reviewer once, one verified Critical/Important fix pass, defer minor findings with costs, archive evidence before own scratch removal.
+- [x] Fresh whole-branch most-capable reviewer once, one verified Critical/Important fix pass, defer minor findings with costs, archive evidence before own scratch removal.
 - [ ] Push ordinary branch, create PR and require exact-head CI success before authorized merge. Read back merged state/tree, close shodo-ods, remove owned worktree/local branch after remote auto-delete, then select next ready implementable issue excluding shodo-p2m.6.

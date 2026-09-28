@@ -590,6 +590,89 @@ fn vertical_sideways_and_combined_decorations() {
 }
 
 #[test]
+fn tab_decorations_follow_adjacent_text_baselines() {
+    use shodo::geometry::WritingMode;
+    use shodo::style::{TextOrientation, VerticalAlign, WhiteSpaceCollapse};
+    // Catch missing central-to-alphabetic conversion (or its LR sign) for
+    // unshaped tabs: one style must draw a continuous underline/strike across
+    // a, tab, b. Adjacent accepted glyph geometry is the independent oracle.
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+        WritingMode::SidewaysRl,
+        WritingMode::SidewaysLr,
+    ] {
+        for orientation in [
+            TextOrientation::Mixed,
+            TextOrientation::Upright,
+            TextOrientation::Sideways,
+        ] {
+            for explicit in [false, true] {
+                let mut s = style(0, RED);
+                s.text_orientation = orientation;
+                s.white_space_collapse = WhiteSpaceCollapse::Preserve;
+                s.vertical_align = VerticalAlign::Length(4.0);
+                s.paint.underline = Some(if explicit {
+                    TextDecoration {
+                        offset: Some(3.0),
+                        thickness: Some(2.0),
+                        ..Default::default()
+                    }
+                } else {
+                    TextDecoration::default()
+                });
+                s.paint.strikethrough = Some(if explicit {
+                    TextDecoration {
+                        offset: Some(-4.0),
+                        thickness: Some(1.0),
+                        ..Default::default()
+                    }
+                } else {
+                    TextDecoration::default()
+                });
+                let root = ParagraphStyle {
+                    writing_mode: mode,
+                    root: s.clone(),
+                    ..Default::default()
+                };
+                let p = RichText::new(&root)
+                    .push("a\tb", &s)
+                    .build(&mut LayoutContext::new(), &fonts.collection)
+                    .unwrap();
+                let ls = lines(&p, 300.0);
+                let spans = ls[0].paint_spans();
+                assert_eq!(spans.len(), 3);
+                assert_eq!(spans[1].text_range, 1..2);
+                for decoration in [
+                    spans
+                        .iter()
+                        .map(|s| s.underline().unwrap())
+                        .collect::<Vec<_>>(),
+                    spans.iter().map(|s| s.strikethrough().unwrap()).collect(),
+                ] {
+                    for neighbor in [0, 2] {
+                        assert!(
+                            (decoration[1].rect.block_start
+                                - decoration[neighbor].rect.block_start)
+                                .abs()
+                                < 1.0 / 32.0,
+                            "{mode:?}/{orientation:?}/explicit={explicit}: {decoration:?}"
+                        );
+                        close(
+                            decoration[1].rect.block_size,
+                            decoration[neighbor].rect.block_size,
+                        );
+                        assert_eq!(decoration[1].color, decoration[neighbor].color);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn legacy_first_line_inherits_paint_components_independently() {
     let fonts = load_fonts(&Limits::default()).unwrap();
     let normal = style(0, RED);

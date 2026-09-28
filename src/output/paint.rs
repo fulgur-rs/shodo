@@ -205,61 +205,81 @@ impl Line {
                     .copied()
                     .filter(|r| r.text_range().start <= from as usize);
                 let primary = self.data.style_metrics[item.style as usize];
-                let (font, font_size, metrics, baseline, under_sign, combined) =
-                    if let Some(run) = run {
-                        let (base, sign, combined) = run_axis(self, run, from);
+                let (font, font_size, metrics, baseline, under_sign, combined) = if let Some(run) =
+                    run
+                {
+                    let (base, sign, combined) = run_axis(self, run, from);
+                    (
+                        run.font(),
+                        run.font_size(),
+                        run.metrics(),
+                        base,
+                        sign,
+                        combined,
+                    )
+                } else {
+                    // A tab can have no shaped glyph/run. Retain its containing
+                    // inline's accepted baseline rather than the root baseline.
+                    let parent = tab_parents.get(&from).copied().flatten();
+                    let shift = parent
+                        .and_then(|b| box_shifts.get(&b))
+                        .copied()
+                        .unwrap_or(0.0);
+                    let combined = self.combination_at(from);
+                    if let Some(square) = combined {
+                        let index = self
+                            .data
+                            .combine_spans
+                            .partition_point(|s| s.text.end <= from);
+                        let base = self.data.combine_geometry.baselines[index];
+                        let ltr = self.used_direction() == Direction::Ltr;
                         (
-                            run.font(),
-                            run.font_size(),
-                            run.metrics(),
-                            base,
-                            sign,
-                            combined,
+                            primary.font,
+                            primary.size,
+                            primary.metrics,
+                            square.square.inline_start
+                                + if ltr {
+                                    base
+                                } else {
+                                    square.square.inline_size - base
+                                },
+                            if ltr { 1.0 } else { -1.0 },
+                            true,
                         )
                     } else {
-                        // A tab can have no shaped glyph/run. Retain its containing
-                        // inline's accepted baseline rather than the root baseline.
-                        let parent = tab_parents.get(&from).copied().flatten();
-                        let shift = parent
-                            .and_then(|b| box_shifts.get(&b))
-                            .copied()
-                            .unwrap_or(0.0);
-                        let combined = self.combination_at(from);
-                        if let Some(square) = combined {
-                            let index = self
-                                .data
-                                .combine_spans
-                                .partition_point(|s| s.text.end <= from);
-                            let base = self.data.combine_geometry.baselines[index];
-                            let ltr = self.used_direction() == Direction::Ltr;
-                            (
-                                primary.font,
-                                primary.size,
-                                primary.metrics,
-                                square.square.inline_start
-                                    + if ltr {
-                                        base
-                                    } else {
-                                        square.square.inline_size - base
-                                    },
-                                if ltr { 1.0 } else { -1.0 },
-                                true,
-                            )
+                        let under_sign = if self.writing_mode() == WritingMode::VerticalLr {
+                            -1.0
                         } else {
-                            (
-                                primary.font,
-                                primary.size,
-                                primary.metrics,
-                                self.block_offset() + self.baseline.to_f32() + shift,
-                                if self.writing_mode() == WritingMode::VerticalLr {
-                                    -1.0
-                                } else {
-                                    1.0
-                                },
-                                false,
+                            1.0
+                        };
+                        let orientation = crate::shape::orientation::resolve(
+                            self.writing_mode(),
+                            style.text_orientation,
+                            '\t',
+                        );
+                        // Mixed tabs use the same alphabetic origin as
+                        // sideways glyphs within a central-baseline inline.
+                        let center_shift = if orientation == GlyphOrientation::SidewaysClockwise
+                            && matches!(
+                                self.writing_mode(),
+                                WritingMode::VerticalRl | WritingMode::VerticalLr
                             )
-                        }
-                    };
+                            && style.text_orientation != crate::style::TextOrientation::Sideways
+                        {
+                            under_sign * (primary.metrics.ascent - primary.metrics.descent) / 2.0
+                        } else {
+                            0.0
+                        };
+                        (
+                            primary.font,
+                            primary.size,
+                            primary.metrics,
+                            self.block_offset() + self.baseline.to_f32() + shift + center_shift,
+                            under_sign,
+                            false,
+                        )
+                    }
+                };
                 result.push(PaintSpan {
                     node: item.node,
                     text_range: from as usize..to as usize,

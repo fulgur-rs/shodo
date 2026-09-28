@@ -53,7 +53,8 @@ glyph paint commands. Atomic inlines are excluded.
 `PaintSpan::underline()` and `strikethrough()` resolve a `DecorationRect` with
 solid color and geometry. Positions include `Line::block_offset()` and final
 bidi, line wrapping and justification. Retained tabs use their source style's
-primary font metrics and accepted containing-inline baseline. Removed whitespace
+primary font metrics and accepted containing-inline baseline, converting to the
+alphabetic origin for sideways tabs in mixed vertical text. Removed whitespace
 bytes are absent; positive surviving hanging advances remain selectable and
 appear in the regions, including collapsed trailing spaces. Zero-width collapsed
 regions are omitted. A caller can cache the spans: each call builds a caret index.
