@@ -300,7 +300,7 @@ pub(crate) fn build(
     leading: Option<&[LayoutUnit]>,
 ) -> Built {
     let base = data.base_level;
-    let (mut records, tabs) = if data.units[units.clone()].iter().all(|u| u.level == base) {
+    let (mut records, mut tabs) = if data.units[units.clone()].iter().all(|u| u.level == base) {
         build_logical(data, units.clone(), widths, origin, atomics, visible_hyphen)
     } else {
         build_bidi(
@@ -313,6 +313,9 @@ pub(crate) fn build(
             visible_hyphen,
         )
     };
+    if data.combine_spans.is_empty() {
+        return (records, tabs);
+    }
     // Selectable source slices paint from a single composition origin.
     // Before-spacing belongs ahead of that square; after-spacing belongs
     // after its last unit, regardless of source fragmentation or bidi order.
@@ -333,11 +336,22 @@ pub(crate) fn build(
             *start = (*start).min(record.inline_start);
         }
     }
+    for tab in &tabs {
+        if let Some(span) = data.combine_at_text(data.units[tab.unit as usize].text.start) {
+            let start = starts.entry(span.text.start).or_insert(tab.start);
+            *start = (*start).min(tab.start);
+        }
+    }
     for record in &mut records {
         if let RecordKind::Glyphs { text, .. } = &record.kind
             && let Some(span) = data.combine_at_text(text.start)
         {
             record.inline_start = starts[&span.text.start] + before[&span.text.start];
+        }
+    }
+    for tab in &mut tabs {
+        if let Some(span) = data.combine_at_text(data.units[tab.unit as usize].text.start) {
+            tab.start = starts[&span.text.start] + before[&span.text.start];
         }
     }
     (records, tabs)
@@ -510,7 +524,7 @@ fn build_bidi(
         // before L1, so it is applied here, per line and per unit.
         let level = match &unit.kind {
             UnitKind::Cluster { .. } if i >= bidi_start => base,
-            UnitKind::Tab => base,
+            UnitKind::Tab if data.combine_at_text(unit.text.start).is_none() => base,
             // A box end after the hanging spaces stays with the box's
             // content: it takes the level of the box's last piece before
             // them rather than the pre-L1 level of the spaces.

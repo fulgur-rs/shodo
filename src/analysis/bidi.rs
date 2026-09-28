@@ -69,20 +69,21 @@ pub(crate) fn upright_analysis_text(
             bytes[start + offset..start + offset + ltr.len()].copy_from_slice(ltr);
         }
     }
-    // Internal direction belongs to the horizontal isolate. Neutral scalars
-    // of the same UTF-8 width keep external byte levels/source offsets stable.
+    // The composition is upright (strong LTR) in its containing paragraph.
+    // Internal direction still belongs to the independent horizontal isolate.
+    // Same-width scalars preserve external byte levels and source offsets.
     for span in combined {
         let start = span.text.start as usize;
         let end = span.text.end as usize;
         for (offset, c) in input.text[start..end].char_indices() {
-            let neutral: &[u8] = match c.len_utf8() {
-                1 => b"!",
-                2 => "¡".as_bytes(),
-                3 => "☃".as_bytes(),
-                4 => "😃".as_bytes(),
+            let ltr: &[u8] = match c.len_utf8() {
+                1 => b"A",
+                2 => "À".as_bytes(),
+                3 => "अ".as_bytes(),
+                4 => "𐐀".as_bytes(),
                 _ => unreachable!("UTF-8 scalar length"),
             };
-            bytes[start + offset..start + offset + neutral.len()].copy_from_slice(neutral);
+            bytes[start + offset..start + offset + ltr.len()].copy_from_slice(ltr);
         }
     }
     Some(String::from_utf8(bytes).expect("same-width Unicode scalar replacement"))

@@ -1,5 +1,7 @@
 //! Units: the sequence line breaking walks. There is one unit per cluster
 //! (a base character with its combining marks) and one per non-text item.
+//! Combined text keeps selectable source parts here, owned by one external
+//! composition unit (`CombineSpan::units`) with a single layout advance.
 
 use std::ops::Range;
 use std::sync::Arc;
@@ -61,8 +63,12 @@ pub(crate) struct SharedCluster {
 
 #[derive(Clone, Debug)]
 pub(crate) struct Unit {
+    /// Index of the external composition unit owning this source part.
+    pub(crate) combine: Option<u32>,
     /// Selectable source slices share one unbroken shaping-cluster owner.
     pub(crate) shared_cluster: Option<Arc<SharedCluster>>,
+    /// A shared cluster's shaping contribution, or the external composition
+    /// cost assigned once to its last selectable source part.
     pub(crate) slice_advance: crate::geometry::LayoutUnit,
     pub(crate) unsafe_to_break: bool,
     pub(crate) unsafe_to_concat: bool,
@@ -138,6 +144,7 @@ pub(crate) fn build_units(
         let node = item.node.unwrap_or(NodeId(0));
         let mut push = |kind: UnitKind, break_after: BreakClass, parent_box: Option<u32>| {
             units.push(Unit {
+                combine: None,
                 shared_cluster: None,
                 slice_advance: crate::geometry::LayoutUnit::ZERO,
                 unsafe_to_break: false,
@@ -188,6 +195,7 @@ pub(crate) fn build_units(
                         }
                         let space = c == ' ';
                         units.push(Unit {
+                            combine: None,
                             shared_cluster: None,
                             slice_advance: crate::geometry::LayoutUnit::ZERO,
                             unsafe_to_break: false,
@@ -234,6 +242,7 @@ pub(crate) fn build_units(
             }
             ItemKind::Atomic { .. } => {
                 units.push(Unit {
+                    combine: None,
                     shared_cluster: None,
                     slice_advance: crate::geometry::LayoutUnit::ZERO,
                     unsafe_to_break: false,

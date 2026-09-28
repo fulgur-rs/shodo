@@ -76,6 +76,9 @@ composition開始/終了の空白は独立水平inline blockと同じwhite-space
 composition内部はbidi-isolateとして水平shapeし、letter-spacingを無視する。
 外部のline breakingには内容のfirst/last文字classを保持し、内部breakは許可しない。
 compositionは1em squareを一つのUnitとして行組みに渡す。
+その外部Unitは `CombineSpan.units` で選択可能なsource partsを所有し、
+各partの `Unit.combine` がその所有者を指す。source partsのflat storageと
+glyph ownershipを保持し、外部advanceは最後のpartへ一度だけ割り当てる。
 2/3/4 typographic unitsでfontの全対象文字にhwid/twid/qwid代替がある場合は利用する。
 部分coverageしかない場合に一部だけを置換して成功扱いにしない。
 不足する圧縮は水平scale=min(1, em/自然幅)、短い内容は水平中央へ配置する。
@@ -87,6 +90,9 @@ run内のpaint penを外側のline penと混同しない。
 glyph ownershipは元のTextSourceのまま。node selection/caretはcomposition内部の水平位置を
 public transformで対応づけ、source byte境界とgrapheme境界を破壊しない。
 spacing/emphasisは一つのcompositionとして扱う。
+`Line::text_combinations()` は各compositionのprocessed rangeと1em squareを
+一度だけ公開する。内部clusterは個別のemphasis対象から除き、このsquareで圏点を置く。
+preserved tabも内部の水平tab stopとsource cutを保持し、glyphが無いcompositionも同じAPIで扱う。
 
 ## 公開出力の契約
 

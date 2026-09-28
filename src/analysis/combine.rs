@@ -12,6 +12,9 @@ pub(crate) struct CombineSpan {
     /// The first source item; later items in the span retain their ownership.
     pub(crate) item: u32,
     pub(crate) em: f32,
+    /// One external composition unit owns these selectable source parts.
+    /// Assigned after shaping; line breaking cannot split this range.
+    pub(crate) units: Range<usize>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -28,10 +31,22 @@ pub(crate) struct Geometry {
     pub(crate) scales: Vec<f32>,
     pub(crate) baselines: Vec<f32>,
     pub(crate) glyphs: Vec<Option<Paint>>,
+    pub(crate) tabs: Vec<(Range<u32>, Paint)>,
+}
+
+struct HorizontalCluster {
+    glyphs: Range<usize>,
+    text_start: u32,
+    font_width: f32,
+    word: crate::geometry::LayoutUnit,
+    tab_style: Option<usize>,
+    width: f32,
+    x: f32,
 }
 
 /// Keep the shaper's advances intact and build a separate horizontal paint
 /// pen for the bidi-isolated composition. Layout consumes only the 1em square.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn geometry(
     text: &str,
     items: &[Item],
@@ -40,6 +55,8 @@ pub(crate) fn geometry(
     glyphs: &crate::shape::GlyphStore,
     runs: &[crate::shape::ShapedRun],
     fonts: &crate::font::FontCollection,
+    metrics: &[crate::line::font_metrics::StyleMetrics],
+    sat: &mut crate::geometry::Saturation,
 ) -> Geometry {
     if spans.is_empty() {
         return Geometry::default();
@@ -48,6 +65,7 @@ pub(crate) fn geometry(
         scales: Vec::with_capacity(spans.len()),
         baselines: Vec::with_capacity(spans.len()),
         glyphs: vec![None; glyphs.len()],
+        tabs: Vec::new(),
     };
     for (span_index, span) in spans.iter().enumerate() {
         let (mut ascent, mut descent) = (0.0f32, 0.0f32);
@@ -77,7 +95,6 @@ pub(crate) fn geometry(
         let begin = glyphs.cluster.partition_point(|c| *c < span.text.start);
         let end = glyphs.cluster.partition_point(|c| *c < span.text.end);
         let mut clusters = Vec::new();
-        let mut levels = Vec::new();
         let mut g = begin;
         while g < end {
             let start = g;
@@ -92,36 +109,119 @@ pub(crate) fn geometry(
                 span.text.end
             };
             let mut extra = crate::geometry::LayoutUnit::ZERO;
-            let mut sat = crate::geometry::Saturation::default();
             for (at, ch) in text[cluster as usize..text_end as usize].char_indices() {
                 if crate::line::spacing::word_separator(ch) {
                     let item = items.partition_point(|item| item.text.end <= cluster + at as u32);
                     extra = extra.add(
                         crate::geometry::LayoutUnit::from_f32_round(
                             styles[items[item].style as usize].word_spacing,
-                            &mut sat,
+                            sat,
                         ),
-                        &mut sat,
+                        sat,
                     );
                 }
             }
-            clusters.push((start..g, width, extra));
-            levels.push(bidi.levels[(cluster - span.text.start) as usize]);
+            clusters.push(HorizontalCluster {
+                glyphs: start..g,
+                text_start: cluster,
+                font_width: width,
+                word: extra,
+                tab_style: None,
+                width: width + extra.to_f32(),
+                x: 0.0,
+            });
         }
-        let natural: f32 = clusters
+        let first_item = items.partition_point(|item| item.text.end <= span.text.start);
+        for item in items[first_item..]
             .iter()
-            .map(|(_, width, extra)| width + extra.to_f32())
-            .sum();
+            .take_while(|item| item.text.start < span.text.end)
+        {
+            if matches!(item.kind, ItemKind::Tab) {
+                clusters.push(HorizontalCluster {
+                    glyphs: 0..0,
+                    text_start: item.text.start,
+                    font_width: 0.0,
+                    word: crate::geometry::LayoutUnit::ZERO,
+                    tab_style: Some(item.style as usize),
+                    width: 0.0,
+                    x: 0.0,
+                });
+            }
+        }
+        clusters.sort_by_key(|cluster| cluster.text_start);
+        let levels: Vec<_> = clusters
+            .iter()
+            .map(|cluster| {
+                if cluster.tab_style.is_some() {
+                    level
+                } else {
+                    bidi.levels[(cluster.text_start - span.text.start) as usize]
+                }
+            })
+            .collect();
+        let rtl = direction == crate::geometry::Direction::Rtl;
+        let mut order = unicode_bidi::BidiInfo::reorder_visual(&levels);
+        if rtl {
+            order.reverse();
+        }
+        let mut natural = 0.0;
+        for &i in &order {
+            let cluster = &mut clusters[i];
+            cluster.x = natural;
+            if let Some(style_index) = cluster.tab_style {
+                let style = &styles[style_index];
+                let font = metrics[style_index];
+                let interval = match style.tab_size {
+                    crate::style::TabSize::Spaces(n) => n * (font.space + style.word_spacing),
+                    crate::style::TabSize::Px(value) => value,
+                };
+                cluster.width = crate::line::tab_advance(
+                    crate::geometry::LayoutUnit::from_f32_round(natural, sat),
+                    crate::geometry::LayoutUnit::from_f32_round(interval, sat),
+                    crate::geometry::LayoutUnit::from_f32_round(font.ch * 0.5, sat),
+                )
+                .to_f32();
+            }
+            natural += cluster.width;
+        }
         result.scales.push(if natural > 0.0 {
             (span.em / natural).min(1.0)
         } else {
             1.0
         });
-        let mut x = 0.0;
-        for i in unicode_bidi::BidiInfo::reorder_visual(&levels) {
-            let (range, width, extra) = &clusters[i];
-            let layout_width = width + extra.to_f32();
-            let leading = extra.div_i32(2).to_f32();
+        let tab_begin = result.tabs.len();
+        for i in order {
+            let cluster = &clusters[i];
+            let range = &cluster.glyphs;
+            let width = cluster.font_width;
+            let layout_width = cluster.width;
+            let x = if rtl {
+                natural - cluster.x - layout_width
+            } else {
+                cluster.x
+            };
+            if cluster.tab_style.is_some() {
+                result.tabs.push((
+                    cluster.text_start..cluster.text_start + 1,
+                    Paint {
+                        span: span_index,
+                        x,
+                        from: x + if levels[i].is_rtl() {
+                            layout_width
+                        } else {
+                            0.0
+                        },
+                        to: x + if levels[i].is_rtl() {
+                            0.0
+                        } else {
+                            layout_width
+                        },
+                        extra: 0.0,
+                    },
+                ));
+                continue;
+            }
+            let leading = cluster.word.div_i32(2).to_f32();
             let owner = range
                 .clone()
                 .rfind(|&g| glyphs.advance[g] != crate::geometry::LayoutUnit::ZERO)
@@ -148,11 +248,14 @@ pub(crate) fn geometry(
                     } else {
                         layout_width
                     },
-                    extra: if g == owner { extra.to_f32() } else { 0.0 },
+                    extra: if g == owner {
+                        cluster.word.to_f32()
+                    } else {
+                        0.0
+                    },
                 });
                 relative += advance;
             }
-            x += layout_width;
         }
         // The centering offset is part of paint, never part of shaping.
         let center = (span.em - natural * result.scales[span_index]) / 2.0;
@@ -161,7 +264,13 @@ pub(crate) fn geometry(
             paint.from = center + paint.from * result.scales[span_index];
             paint.to = center + paint.to * result.scales[span_index];
         }
+        for (_, paint) in &mut result.tabs[tab_begin..] {
+            paint.x = center + paint.x * result.scales[span_index];
+            paint.from = center + paint.from * result.scales[span_index];
+            paint.to = center + paint.to * result.scales[span_index];
+        }
     }
+    result.tabs.sort_by_key(|(text, _)| text.start);
     result
 }
 
@@ -200,7 +309,7 @@ pub(crate) fn prepare(
     let mut next_scope = 1u32;
     for (index, item) in items.iter().enumerate() {
         match item.kind {
-            ItemKind::Text | ItemKind::ForcedBreak
+            ItemKind::Text | ItemKind::ForcedBreak | ItemKind::Tab
                 if !item.text.is_empty()
                     && (matches!(item.kind, ItemKind::Text)
                         || styles[item.style as usize].text_combine_upright
@@ -221,6 +330,7 @@ pub(crate) fn prepare(
                         text: item.text.clone(),
                         item: index as u32,
                         em: style.font_size,
+                        units: 0..0,
                     },
                     style: item.style,
                     all: style.text_combine_upright == TextCombineUpright::All,
@@ -371,7 +481,8 @@ mod tests {
                 vec![CombineSpan {
                     text: 0..4,
                     item: 0,
-                    em: 16.0
+                    em: 16.0,
+                    units: 0..0,
                 }]
             );
         }

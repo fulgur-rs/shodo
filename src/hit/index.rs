@@ -208,6 +208,41 @@ impl LineIndex {
         }
         for tab in &line.tabs {
             let unit = &line.data.units[tab.unit as usize];
+            let tabs = &line.data.combine_geometry.tabs;
+            let index = tabs.partition_point(|(text, _)| text.end <= unit.text.start);
+            if let Some((text, paint)) = tabs
+                .get(index)
+                .filter(|(text, _)| text.start == unit.text.start)
+            {
+                let span = &line.data.combine_spans[paint.span];
+                let sign =
+                    if line.data.style.writing_mode == crate::geometry::WritingMode::VerticalRl {
+                        -1.0
+                    } else {
+                        1.0
+                    };
+                let square = line
+                    .combination_at(unit.text.start)
+                    .expect("accepted tab composition")
+                    .square;
+                let baseline = square.block_start + square.block_size / 2.0;
+                let origin = line.block_offset() + baseline - sign * span.em / 2.0;
+                raw.push(RawCluster {
+                    text: text.clone(),
+                    from: origin + sign * paint.from,
+                    to: origin + sign * paint.to,
+                    rect: LogicalRect {
+                        inline_start: tab.start.to_f32(),
+                        inline_size: span.em,
+                        block_start: 0.0,
+                        block_size: 0.0,
+                    },
+                    natural: (paint.to - paint.from).abs(),
+                    carets: None,
+                    block_axis: true,
+                });
+                continue;
+            }
             let rect = LogicalRect {
                 inline_start: tab.start.to_f32(),
                 inline_size: tab.width.to_f32(),

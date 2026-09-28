@@ -45,23 +45,22 @@ pub(crate) fn build(
                 gaps: (gaps.len(), gaps.len()),
                 ..Default::default()
             };
+            if let Some(combine) = unit.combine {
+                let span = &data.combine_spans[combine as usize];
+                if index == span.units.start {
+                    value.summary = Summary::leaf(Edge {
+                        tracking,
+                        kind: Kind::Atomic,
+                        unit: index as u32,
+                        box_node: data.spacing_tree.item_nodes[unit.item as usize],
+                        ..Default::default()
+                    });
+                }
+                previous_text = Some(unit.text.clone());
+                return value;
+            }
             match unit.kind {
                 UnitKind::Cluster { .. } => {
-                    if let Some(span) = data.combine_at_text(unit.text.start) {
-                        if unit.text.start == span.text.start
-                            && previous_text.as_ref() != Some(&unit.text)
-                        {
-                            value.summary = Summary::leaf(Edge {
-                                tracking,
-                                kind: Kind::Atomic,
-                                unit: index as u32,
-                                box_node: data.spacing_tree.item_nodes[unit.item as usize],
-                                ..Default::default()
-                            });
-                        }
-                        previous_text = Some(unit.text.clone());
-                        return value;
-                    }
                     if previous_text.as_ref() == Some(&unit.text) {
                         return value;
                     }
@@ -213,18 +212,9 @@ pub(crate) fn build(
             owner = Some(i);
         }
     }
-    let mut combined_owner = None;
-    for (i, unit) in data.units.iter().enumerate() {
-        if let Some(span) = data.combine_at_text(unit.text.start) {
-            let first = if let Some((first, start)) = combined_owner
-                && start == span.text.start
-            {
-                first
-            } else {
-                combined_owner = Some((i, span.text.start));
-                i
-            };
-            result[first].tail = i;
+    for span in &data.combine_spans {
+        if !span.units.is_empty() {
+            result[span.units.start].tail = span.units.end - 1;
         }
     }
     (result, gaps)
@@ -261,11 +251,12 @@ pub(crate) fn last_content(data: &ParagraphData) -> Option<usize> {
 
 pub(super) fn push(data: &ParagraphData, cursor: &mut Cursor, index: usize) {
     let unit = &data.units[index];
-    let level = if matches!(unit.kind, UnitKind::Tab) {
-        data.base_level
-    } else {
-        unit.level
-    };
+    let level =
+        if matches!(unit.kind, UnitKind::Tab) && data.combine_at_text(unit.text.start).is_none() {
+            data.base_level
+        } else {
+            unit.level
+        };
     cursor.push(level, data.unit_spacing[index].summary, Some(data));
 }
 
@@ -438,7 +429,10 @@ pub(super) fn apply(
     let mut barrier = false;
     let bidi_start = super::whitespace::bidi_trailing(data, start, scan.end);
     let level = |i: usize| {
-        if i >= bidi_start || matches!(data.units[i].kind, UnitKind::Tab) {
+        if i >= bidi_start
+            || matches!(data.units[i].kind, UnitKind::Tab)
+                && data.combine_at_text(data.units[i].text.start).is_none()
+        {
             data.base_level
         } else {
             data.units[i].level

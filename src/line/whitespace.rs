@@ -127,7 +127,12 @@ pub(super) fn bidi_trailing(data: &ParagraphData, start: usize, end: usize) -> u
                     break;
                 }
             }
-            UnitKind::Tab => begin = i,
+            UnitKind::Tab => {
+                if data.combine_at_text(data.units[i].text.start).is_some() {
+                    break;
+                }
+                begin = i;
+            }
             UnitKind::Close { .. }
             | UnitKind::BidiControl
             | UnitKind::Float { .. }

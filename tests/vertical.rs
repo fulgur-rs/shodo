@@ -1724,6 +1724,18 @@ fn combine_all_isolates_internal_arabic_joining_from_vertical_neighbors() {
                             Fragment::GlyphRun(run)
                                 if run.orientation() == shodo::GlyphOrientation::Combined =>
                             {
+                                // Writing Modes 4 §9.1.2 treats the outer square
+                                // as upright (strong LTR), even between Arabic
+                                // neighbors. Internal shaping keeps computed RTL.
+                                let expected_level = u8::from(
+                                    direction == Direction::Rtl
+                                        && orientation != TextOrientation::Upright,
+                                ) * 2;
+                                assert_eq!(
+                                    run.bidi_level(),
+                                    expected_level,
+                                    "{mode:?}/{direction:?}/{orientation:?}/{surrounded}"
+                                );
                                 Some(
                                     run.glyphs()
                                         .map(|g| {
@@ -1753,6 +1765,127 @@ fn combine_all_isolates_internal_arabic_joining_from_vertical_neighbors() {
                         (actual.1 - expected.1).abs() < 0.001
                             && (actual.2 - expected.2).abs() < 0.001
                     );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn combine_all_centers_its_square_on_parent_text_edges_before_alignment() {
+    let mut bytes = include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec();
+    let count = u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize;
+    let vhea = (0..count)
+        .find_map(|index| {
+            let record = 12 + index * 16;
+            (&bytes[record..record + 4] == b"vhea").then(|| {
+                u32::from_be_bytes(bytes[record + 8..record + 12].try_into().unwrap()) as usize
+            })
+        })
+        .unwrap();
+    // At 16px the parent text-over/under extents are 9.6/6.4px.
+    // The composition's square still occupies 0..16, centered at 8px.
+    bytes[vhea + 4..vhea + 6].copy_from_slice(&600i16.to_be_bytes());
+    bytes[vhea + 6..vhea + 8].copy_from_slice(&(-400i16).to_be_bytes());
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            bytes,
+            0,
+            FontFaceDescriptor {
+                family: "Asymmetric CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        for text in ["12", "\t\t"] {
+            for alignment in [0.0, 2.0] {
+                let mut root = style(mode, TextOrientation::Upright);
+                root.root.font_families = vec![FontFamily::Named("Asymmetric CJK".into())];
+                root.root.white_space_collapse = shodo::style::WhiteSpaceCollapse::Preserve;
+                let mut child = root.root.clone();
+                child.text_combine_upright = TextCombineUpright::All;
+                child.vertical_align = VerticalAlign::Length(alignment);
+                let mut builder = ParagraphBuilder::new(&root, &limits);
+                builder.open_inline(NodeId(1), &child, InlineEdges::default());
+                builder.push_text(TextSource::Generated { node: NodeId(2) }, text);
+                builder.close_inline();
+                let p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+                let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+                assert!(
+                    (line.block_size() - (16.0 + alignment)).abs() < 1.0 / 64.0,
+                    "{mode:?}/{text:?}/{alignment}: {}",
+                    line.block_size()
+                );
+                let square = line.text_combinations().next().unwrap().square;
+                let start = if mode == WritingMode::VerticalLr {
+                    alignment
+                } else {
+                    0.0
+                };
+                assert!(
+                    (square.block_start - start).abs() < 1.0 / 64.0,
+                    "{mode:?}/{text:?}/{alignment}: {square:?}"
+                );
+                assert_eq!(square.block_size, 16.0);
+                for fragment in line.fragments() {
+                    if let Fragment::GlyphRun(run) = fragment {
+                        assert!((run.baseline() - (start + 8.0)).abs() < 1.0 / 64.0);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn combine_all_square_is_measured_with_one_em_internal_line_height() {
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        for text in ["12", "\t\t"] {
+            for boxed in [false, true] {
+                for alignment in [
+                    VerticalAlign::Baseline,
+                    VerticalAlign::Top,
+                    VerticalAlign::Bottom,
+                ] {
+                    let mut root = style(mode, TextOrientation::Mixed);
+                    root.root.line_height = shodo::style::LineHeight::Px(0.0);
+                    root.root.white_space_collapse = shodo::style::WhiteSpaceCollapse::Preserve;
+                    let mut child = root.root.clone();
+                    child.text_combine_upright = TextCombineUpright::All;
+                    child.vertical_align = alignment;
+                    if !boxed {
+                        root.root = child.clone();
+                    }
+                    let p = build_paragraph(&root, &Limits::default(), |builder| {
+                        if boxed {
+                            builder.open_inline(NodeId(1), &child, InlineEdges::default());
+                        }
+                        builder.push_text(TextSource::Generated { node: NodeId(2) }, text);
+                        if boxed {
+                            builder.close_inline();
+                        }
+                    });
+                    let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+                    assert_eq!(
+                        line.block_size(),
+                        16.0,
+                        "{mode:?}/{text:?}/{boxed}/{alignment:?}"
+                    );
+                    let square = line.text_combinations().next().unwrap().square;
+                    assert_eq!(
+                        square.block_start, 0.0,
+                        "{mode:?}/{text:?}/{boxed}/{alignment:?}"
+                    );
+                    assert_eq!(square.block_size, 16.0);
                 }
             }
         }
@@ -2216,6 +2349,472 @@ fn combine_all_float_and_height_retry_keep_square_origin_and_font_ownership() {
 }
 
 #[test]
+fn combine_all_compression_does_not_bypass_the_real_glyph_budget() {
+    let mut input = style(WritingMode::VerticalRl, TextOrientation::Mixed);
+    input.root.text_combine_upright = TextCombineUpright::All;
+    let mut limits = Limits::default();
+    limits.max_shaped_glyphs = Some(1);
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut b = ParagraphBuilder::new(&input, &limits);
+    b.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        "12",
+    );
+    let error = b.build(&mut LayoutContext::new(), &fonts).unwrap_err();
+    assert_eq!(error.kind, shodo::limits::LimitKind::ShapedGlyphs);
+    assert_eq!(error.limit, 1);
+}
+
+#[test]
+fn combine_all_reports_saturation_of_internal_spacing_and_tabs() {
+    use shodo::style::{TabSize, WhiteSpaceCollapse};
+    for (text, tab, word) in [
+        ("1 2", TabSize::Px(20.0), f32::MAX),
+        ("1\t2", TabSize::Px(f32::MAX), 0.0),
+    ] {
+        let mut input = style(WritingMode::VerticalRl, TextOrientation::Mixed);
+        input.root.text_combine_upright = TextCombineUpright::All;
+        input.root.text_autospace = shodo::style::TextAutospace::NoAutospace;
+        input.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
+        input.root.word_spacing = word;
+        input.root.tab_size = tab;
+        let p = paragraph(&input, text);
+        assert!(
+            p.warnings()
+                .iter()
+                .any(|w| w.kind == shodo::limits::WarningKind::Saturated),
+            "internal geometry must retain lossy-conversion warnings for {text:?}"
+        );
+        let line = first_line(&p, 16.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(line.inline_size(), 16.0);
+        assert!(
+            glyphs(&line)
+                .iter()
+                .all(|g| g.block_offset.is_finite() && g.inline_position.is_finite())
+        );
+    }
+}
+
+#[test]
+fn combine_all_adjusted_fonts_and_space_tabs_keep_original_shaping_metrics() {
+    use shodo::style::{FontMetricKind, FontSizeAdjust, TabSize, WhiteSpaceCollapse};
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Adjusted".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut horizontal = ParagraphStyle::default();
+    horizontal.root.font_families = vec![FontFamily::Named("Adjusted".into())];
+    horizontal.root.font_size = 16.0;
+    horizontal.root.font_size_adjust = Some(FontSizeAdjust {
+        metric: FontMetricKind::ExHeight,
+        value: 1.0,
+    });
+    horizontal.root.text_autospace = shodo::style::TextAutospace::NoAutospace;
+    horizontal.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
+    horizontal.root.tab_size = TabSize::Spaces(4.0);
+    horizontal.root.word_spacing = 2.0;
+    let make = |input: &ParagraphStyle, text| {
+        let mut b = ParagraphBuilder::new(input, &limits);
+        b.push_text(
+            TextSource::Dom {
+                node: NodeId(1),
+                offset: 0,
+            },
+            text,
+        );
+        b.build(&mut LayoutContext::new(), &fonts).unwrap()
+    };
+    for text in ["12345", "1\t2"] {
+        let plain = first_line(
+            &make(&horizontal, text),
+            1000.0,
+            &LineOptions::default(),
+            &AtomicSizes::EMPTY,
+        );
+        let expected = glyphs(&plain);
+        let expected_size = match plain.fragment(0).unwrap() {
+            Fragment::GlyphRun(run) => run.font_size(),
+            _ => panic!("font"),
+        };
+        assert!(
+            expected_size > 16.0,
+            "fixture must actually adjust font size"
+        );
+        for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+            let mut combined = horizontal.clone();
+            combined.writing_mode = mode;
+            combined.root.text_combine_upright = TextCombineUpright::All;
+            combined.root.letter_spacing = 10.0;
+            let line = first_line(
+                &make(&combined, text),
+                1.0,
+                &LineOptions::default(),
+                &AtomicSizes::EMPTY,
+            );
+            assert_eq!(
+                line.inline_size(),
+                16.0,
+                "the CSS em is unchanged by adjusted shaping size"
+            );
+            assert_eq!(
+                line.text_combinations().next().unwrap().square.block_size,
+                16.0
+            );
+            let scale = 16.0 / plain.inline_size();
+            let sign = if mode == WritingMode::VerticalRl {
+                -1.0
+            } else {
+                1.0
+            };
+            let actual = glyphs(&line);
+            assert_eq!(actual.len(), expected.len());
+            for (actual, expected) in actual.iter().zip(&expected) {
+                assert_eq!((actual.id, actual.advance), (expected.id, expected.advance));
+                assert!(
+                    (actual.block_offset - sign * (expected.inline_position * scale - 8.0)).abs()
+                        < 0.02
+                );
+            }
+            for run in line.fragments().filter_map(|f| match f {
+                Fragment::GlyphRun(run) => Some(run),
+                _ => None,
+            }) {
+                assert_eq!(run.font_size(), expected_size);
+                assert!((run.glyph_transform().block_x.abs() - scale).abs() < 0.001);
+            }
+        }
+    }
+}
+
+#[test]
+fn combine_all_mixed_bidi_reorders_only_its_internal_horizontal_sources() {
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    for (family, bytes) in [
+        (
+            "Shodo Fixture Latin",
+            include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").as_slice(),
+        ),
+        (
+            "Shodo Fixture Arabic",
+            include_bytes!("../dev/fixtures/assets/fonts/arabic.ttf").as_slice(),
+        ),
+    ] {
+        fonts
+            .register_face(
+                bytes.to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: family.into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        for direction in [Direction::Ltr, Direction::Rtl] {
+            for orientation in [
+                TextOrientation::Mixed,
+                TextOrientation::Upright,
+                TextOrientation::Sideways,
+            ] {
+                let mut input = style(mode, orientation);
+                input.direction = direction;
+                input.root.direction = direction;
+                input.root.font_families = vec![
+                    FontFamily::Named("Shodo Fixture Latin".into()),
+                    FontFamily::Named("Shodo Fixture Arabic".into()),
+                ];
+                input.root.text_combine_upright = TextCombineUpright::All;
+                input.root.text_autospace = shodo::style::TextAutospace::NoAutospace;
+                let mut builder = ParagraphBuilder::new(&input, &limits);
+                for (node, text) in [(1, "a"), (2, "بب"), (3, "12"), (4, "z")] {
+                    builder.push_text(
+                        TextSource::Dom {
+                            node: NodeId(node),
+                            offset: 0,
+                        },
+                        text,
+                    );
+                }
+                let p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+                let line = first_line(&p, 1.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+                assert_eq!(line.inline_size(), 16.0);
+                assert_eq!(line.text_combinations().count(), 1);
+                assert_eq!(line.text_range(), 0..8);
+                let sign = if mode == WritingMode::VerticalRl {
+                    -1.0
+                } else {
+                    1.0
+                };
+                let mut internal: Vec<_> = glyphs(&line)
+                    .iter()
+                    .map(|g| (sign * g.block_offset, g.cluster))
+                    .collect();
+                internal.sort_by(|a, b| a.0.total_cmp(&b.0));
+                // UAX#9 visual LTR order of a + two Arabic letters +12 +z.
+                // Byte positions preserve both 2-byte Arabic scalars. Under
+                // RTL, I2 gives both AN digits and L z level2, so12z keeps
+                // its order inside the reversed level1 paragraph (L2).
+                let expected = if direction == Direction::Ltr {
+                    vec![0, 5, 6, 3, 1, 7]
+                } else {
+                    vec![5, 6, 7, 3, 1, 0]
+                };
+                assert_eq!(
+                    internal.iter().map(|v| v.1).collect::<Vec<_>>(),
+                    expected,
+                    "{mode:?}/{direction:?}/{orientation:?}"
+                );
+                let layout = LineLayout::new(std::slice::from_ref(&line));
+                for offset in [0, 1, 3, 5, 6, 7, 8] {
+                    let caret = layout
+                        .caret(TextPosition {
+                            line: 0,
+                            offset,
+                            affinity: if offset == 8 {
+                                Affinity::Upstream
+                            } else {
+                                Affinity::Downstream
+                            },
+                        })
+                        .unwrap();
+                    assert_eq!((caret.rect.inline_size, caret.rect.block_size), (16.0, 0.0));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn combine_all_exposes_one_emphasis_square_without_changing_paint_owners() {
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        for direction in [Direction::Ltr, Direction::Rtl] {
+            let mut input = style(mode, TextOrientation::Mixed);
+            input.direction = direction;
+            input.root.direction = direction;
+            input.root.text_autospace = shodo::style::TextAutospace::NoAutospace;
+            let mut child = input.root.clone();
+            child.text_combine_upright = TextCombineUpright::All;
+            let p = build_paragraph(&input, &Limits::default(), |builder| {
+                builder.push_text(
+                    TextSource::Dom {
+                        node: NodeId(1),
+                        offset: 0,
+                    },
+                    "水",
+                );
+                builder.open_inline(NodeId(2), &child, InlineEdges::default());
+                builder.push_text(
+                    TextSource::Dom {
+                        node: NodeId(3),
+                        offset: 0,
+                    },
+                    "12",
+                );
+                builder.push_text(
+                    TextSource::Dom {
+                        node: NodeId(4),
+                        offset: 0,
+                    },
+                    "34",
+                );
+                builder.close_inline();
+                builder.push_text(
+                    TextSource::Dom {
+                        node: NodeId(5),
+                        offset: 0,
+                    },
+                    "水",
+                );
+            });
+            let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+            let combinations: Vec<_> = line.text_combinations().collect();
+            assert_eq!(
+                combinations.len(),
+                1,
+                "one emphasis target despite two paint owners"
+            );
+            assert_eq!(combinations[0].text_range, 3..7);
+            assert_eq!(
+                combinations[0].square,
+                shodo::geometry::LogicalRect {
+                    inline_start: 16.0,
+                    inline_size: 16.0,
+                    block_start: 0.0,
+                    block_size: 16.0
+                }
+            );
+            let mut owners = Vec::new();
+            let mut eligible = 0;
+            for fragment in line.fragments() {
+                if let Fragment::GlyphRun(run) = fragment {
+                    eligible += run
+                        .clusters()
+                        .filter(|c| !c.flags.emphasis_excluded)
+                        .count();
+                    if run.orientation() == shodo::GlyphOrientation::Combined {
+                        owners.push(run.node().unwrap());
+                        assert!(
+                            run.clusters().all(|c| c.flags.emphasis_excluded),
+                            "internal glyph clusters must not add independent emphasis marks"
+                        );
+                    }
+                }
+            }
+            owners.sort_by_key(|n| n.0);
+            assert_eq!(owners, vec![NodeId(3), NodeId(4)]);
+            assert_eq!(
+                eligible + combinations.len(),
+                3,
+                "water, combined text, water"
+            );
+        }
+    }
+}
+
+#[test]
+fn combine_all_preserved_tabs_keep_horizontal_stops_inside_one_square() {
+    use shodo::style::{TabSize, WhiteSpaceCollapse};
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        for direction in [Direction::Ltr, Direction::Rtl] {
+            for text in ["1\t2", "\t1\t", "\t\t"] {
+                let mut combined = style(mode, TextOrientation::Mixed);
+                combined.direction = direction;
+                combined.root.direction = direction;
+                combined.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
+                combined.root.text_combine_upright = TextCombineUpright::All;
+                combined.root.text_autospace = shodo::style::TextAutospace::NoAutospace;
+                combined.root.tab_size = TabSize::Px(20.0);
+                combined.root.letter_spacing = 10.0;
+                combined.root.font_features = [*b"hwid", *b"twid", *b"qwid"]
+                    .into_iter()
+                    .map(|tag| FontFeature { tag, value: 0 })
+                    .collect();
+                let p = paragraph(&combined, text);
+                let intrinsic = p.intrinsic_sizes(
+                    &mut LayoutContext::new(),
+                    &Default::default(),
+                    &shodo::AtomicIntrinsics::EMPTY,
+                );
+                assert_eq!(
+                    (intrinsic.min_content, intrinsic.max_content),
+                    (16.0, 16.0),
+                    "tabs cannot split the external square: {text:?}"
+                );
+                let lines = p.break_all(
+                    &mut LayoutContext::new(),
+                    &LineOptions::default(),
+                    1.0,
+                    &AtomicSizes::EMPTY,
+                );
+                assert_eq!(lines.len(), 1);
+                assert_eq!(lines[0].inline_size(), 16.0);
+                assert_eq!(lines[0].text_range(), 0..text.len());
+                assert_eq!(lines[0].hang_end(), 0.0);
+                let combinations: Vec<_> = lines[0].text_combinations().collect();
+                assert_eq!(combinations.len(), 1);
+                assert_eq!(combinations[0].text_range, 0..text.len());
+                assert_eq!(combinations[0].square.inline_size, 16.0);
+                assert_eq!(combinations[0].square.block_size, 16.0);
+                let layout = LineLayout::new(&lines);
+                for offset in 0..=text.len() {
+                    let affinity = if offset == text.len() {
+                        Affinity::Upstream
+                    } else {
+                        Affinity::Downstream
+                    };
+                    let caret = layout
+                        .caret(TextPosition {
+                            line: 0,
+                            offset: offset as u32,
+                            affinity,
+                        })
+                        .unwrap();
+                    assert_eq!(
+                        (caret.rect.inline_size, caret.rect.block_size),
+                        (16.0, 0.0),
+                        "all tab/source cuts follow the horizontal axis inside TCY"
+                    );
+                }
+                // No tracking internally. A tab advances to20px, a second
+                // to40px, and the fixture's normal digit advance is8.875px.
+                let natural = if text == "1\t2" { 28.875 } else { 40.0 };
+                let scale = 16.0 / natural;
+                let sign = if mode == WritingMode::VerticalRl {
+                    -1.0
+                } else {
+                    1.0
+                };
+                let mut pens: Vec<_> = glyphs(&lines[0])
+                    .iter()
+                    .map(|g| sign * g.block_offset + 8.0)
+                    .collect();
+                pens.sort_by(f32::total_cmp);
+                let expected: Vec<_> = match (text, direction) {
+                    ("1\t2", Direction::Ltr) => vec![0.0, 20.0 * scale],
+                    ("1\t2", Direction::Rtl) => vec![0.0, 20.0 * scale],
+                    ("\t1\t", _) => vec![
+                        (if direction == Direction::Ltr {
+                            20.0
+                        } else {
+                            11.125
+                        }) * scale,
+                    ],
+                    _ => vec![],
+                };
+                assert_eq!(pens.len(), expected.len());
+                for (actual, expected) in pens.iter().zip(expected) {
+                    assert!(
+                        (*actual - expected).abs() < 0.02,
+                        "internal tab stop: {mode:?}/{direction:?}/{text:?}: {pens:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn combine_all_keeps_external_spacing_outside_split_sources() {
     use shodo::style::{TextAlign, TextJustify};
     for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
@@ -2474,6 +3073,33 @@ fn combine_all_preserves_source_ownership_and_internal_caret_selection() {
                 offset: 0
             })
         );
+    }
+}
+
+#[test]
+fn upright_font_size_adjust_scales_actual_vmtx_and_vhea_together() {
+    use shodo::style::{FontMetricKind, FontSizeAdjust};
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let mut input = style(mode, TextOrientation::Upright);
+        input.root.text_autospace = shodo::style::TextAutospace::NoAutospace;
+        input.root.font_size_adjust = Some(FontSizeAdjust {
+            metric: FontMetricKind::IcHeight,
+            value: 1.5,
+        });
+        let p = paragraph(&input, "水");
+        let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        let run = match line.fragment(0).unwrap() {
+            Fragment::GlyphRun(run) => run,
+            _ => panic!("upright run"),
+        };
+        // The fixture's 水 has vmtx height1000 at UPEM1000. Adjusting
+        // ic-height to1.5 scales the actual instance from16 to24px.
+        assert_eq!(run.font_size(), 24.0);
+        assert_eq!(glyphs(&line)[0].advance, 24.0);
+        assert_eq!(line.block_size(), 24.0);
+        assert_eq!(run.baseline(), 12.0);
+        let metrics = run.vertical_metrics().unwrap();
+        assert_eq!((metrics.ascent, metrics.descent), (12.0, 12.0));
     }
 }
 

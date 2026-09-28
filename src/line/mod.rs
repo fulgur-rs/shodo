@@ -19,6 +19,8 @@ mod spacing_summary;
 mod whitespace;
 mod windows;
 
+pub(crate) use scan::tab_advance;
+
 use crate::analysis::units::UnitKind;
 use crate::context::LayoutContext;
 use crate::geometry::{LayoutUnit, Saturation};

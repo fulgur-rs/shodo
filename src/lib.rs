@@ -27,7 +27,7 @@ pub use builder::{ParagraphBuilder, RichText};
 pub use context::LayoutContext;
 pub use output::{
     AnchorFragment, AtomicFragment, BreakReason, Cluster, ClusterFlags, Fragment, Glyph,
-    GlyphRunView, GlyphTransform, Glyphs, InlineBoxFragment, Line, LineMetrics,
+    GlyphRunView, GlyphTransform, Glyphs, InlineBoxFragment, Line, LineMetrics, TextCombination,
 };
 pub use paragraph::{
     AtomicIntrinsic, AtomicIntrinsics, AtomicSize, AtomicSizes, BreakPlan, BreakToken, FloatClear,

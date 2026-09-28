@@ -53,6 +53,7 @@ pub struct Line {
     pub(crate) block_shifts: Vec<LayoutUnit>,
     pub(crate) empty: bool,
     pub(crate) tabs: Vec<fragments::TabSlot>,
+    combinations: Vec<TextCombination>,
     pub(crate) positions: Option<(u32, Vec<LayoutUnit>)>,
     pub(crate) glyph_spacing: Option<(u32, Vec<crate::line::spacing::GlyphSpacing>)>,
     pub(crate) overlay: Option<Box<GlyphStore>>,
@@ -85,7 +86,33 @@ pub struct LineMetrics {
     pub text_under: f32,
 }
 
+/// One external typographic character composed from horizontal text.
+/// Glyphs retain their original source owners and internal shaping clusters.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextCombination {
+    /// Processed-text range in this accepted line's text dataset.
+    pub text_range: Range<usize>,
+    /// The 1em square, in logical coordinates relative to the line's top.
+    /// Add the line's block offset before converting to physical coordinates.
+    pub square: LogicalRect,
+}
+
 impl Line {
+    /// One square per combined typographic character, including preserved
+    /// tabs with no glyphs. Place emphasis once per square; the internal
+    /// glyph clusters are excluded from independent emphasis placement.
+    pub fn text_combinations(&self) -> impl ExactSizeIterator<Item = &TextCombination> {
+        self.combinations.iter()
+    }
+
+    pub(crate) fn combination_at(&self, offset: u32) -> Option<&TextCombination> {
+        let index = self
+            .combinations
+            .partition_point(|c| c.text_range.end <= offset as usize);
+        self.combinations
+            .get(index)
+            .filter(|c| c.text_range.start <= offset as usize)
+    }
     /// Effective inline direction for paint coordinate conversion. Vertical
     /// `text-orientation: upright` uses LTR without changing inherited style.
     pub fn used_direction(&self) -> crate::geometry::Direction {
@@ -334,6 +361,7 @@ impl Line {
             overlay_runs: Box::default(),
             pending_overlays: scan.overlays,
             tabs,
+            combinations: Vec::new(),
         }
     }
 
@@ -349,6 +377,64 @@ impl Line {
         self.baseline = metrics.baseline;
         self.block_shifts = metrics.shifts;
         self.empty = metrics.empty;
+        self.measure_combinations(&metrics.combination_shifts);
+    }
+
+    fn measure_combinations(&mut self, shifts: &std::collections::HashMap<usize, LayoutUnit>) {
+        self.combinations.clear();
+        if self.data.combine_spans.is_empty() {
+            return;
+        }
+        let mut origins = std::collections::HashMap::new();
+        for record in &self.fragments {
+            match &record.kind {
+                RecordKind::Glyphs { text, .. } => {
+                    let index = self
+                        .data
+                        .combine_spans
+                        .partition_point(|span| span.text.end <= text.start);
+                    if self
+                        .data
+                        .combine_spans
+                        .get(index)
+                        .is_some_and(|span| span.text.start <= text.start)
+                    {
+                        origins.entry(index).or_insert(record.inline_start.to_f32());
+                    }
+                }
+                _ => {}
+            }
+        }
+        for tab in &self.tabs {
+            let unit = &self.data.units[tab.unit as usize];
+            let index = self
+                .data
+                .combine_spans
+                .partition_point(|span| span.text.end <= unit.text.start);
+            if self
+                .data
+                .combine_spans
+                .get(index)
+                .is_some_and(|span| span.text.start <= unit.text.start)
+            {
+                origins.entry(index).or_insert(tab.start.to_f32());
+            }
+        }
+        for (index, inline_start) in origins {
+            let span = &self.data.combine_spans[index];
+            let baseline = (self.baseline + shifts[&index]).to_f32();
+            self.combinations.push(TextCombination {
+                text_range: span.text.start as usize..span.text.end as usize,
+                square: LogicalRect {
+                    inline_start,
+                    inline_size: span.em,
+                    block_start: baseline - span.em / 2.0,
+                    block_size: span.em,
+                },
+            });
+        }
+        self.combinations
+            .sort_by_key(|combination| combination.text_range.start);
     }
 
     pub fn break_token(&self) -> BreakToken {
@@ -521,6 +607,8 @@ pub struct Cluster {
 /// scalar. A multi-character shaping cluster is emphasis-excluded only when
 /// every constituent character is excluded. Renderers still place emphasis
 /// once per typographic character, rather than once per shaping cluster.
+/// Combined text's internal clusters are excluded here; use
+/// [`Line::text_combinations`] for its single external emphasis target.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ClusterFlags {
     pub whitespace: bool,
@@ -838,12 +926,14 @@ impl<'a> GlyphRunView<'a> {
                 .text
                 .get(text.start as usize..text.end as usize)
                 .unwrap_or_default();
+            let mut flags =
+                ClusterFlags::from_source(source, self.line.visible_hyphen == Some(text.start));
+            if self.orientation() == crate::GlyphOrientation::Combined {
+                flags.emphasis_excluded = true;
+            }
             Cluster {
                 source_char: source.chars().next(),
-                flags: ClusterFlags::from_source(
-                    source,
-                    self.line.visible_hyphen == Some(text.start),
-                ),
+                flags,
                 text_range: text.start as usize..text.end as usize,
                 advance: glyphs.clone().map(|g| self.glyph(g).advance).sum(),
                 shaping_advance: glyphs.map(|g| store.advance[g as usize].to_f32()).sum(),

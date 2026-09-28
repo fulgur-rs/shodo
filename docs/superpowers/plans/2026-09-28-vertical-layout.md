@@ -106,20 +106,20 @@ Create `tests/vertical.rs`;必要な固定font table fixtureを既存fixture生�
   external Unitは1em、内部glyphは水平advanceのまま。transformに圧縮scaleを含める。
   composition idはsource-preserving spansであり、glyph ownershipを一つのnodeへ偽装しない。
 
-- [ ] **Step 1: Write TCY failing public tests** 1/2/3/4/長い数字、1em width、短い内容の中央配置、全width feature/部分coverage、
+- [x] **Step 1: Write TCY failing public tests** 1/2/3/4/長い数字、1em width、短い内容の中央配置、全width feature/部分coverage、
   fullwidth逆変換、mark、fallback、LTR/RTL内部bidiを検証する。
   `cargo +stable test --test vertical combine --offline -- --nocapture`。
   Expected: 外側advanceとglyph transformが期待値と異なる。
-- [ ] **Step 2: Implement preprocessing and horizontal composition** boxのlookaroundとwhitespace/hardbreak処理を先に準備する。
+- [x] **Step 2: Implement preprocessing and horizontal composition** boxのlookaroundとwhitespace/hardbreak処理を先に準備する。
   applicable font feature coverageを確認し、1emへ圧縮、letter-spacing無視、外側内部break禁止。
   Expected: 単純TCY matrix成功、horizontal/sideways modeでは無効。
-- [ ] **Step 3: Write boundary and ownership failures** `12<span>34</span>`、空box、別All祖先、複数TextSource、
+- [x] **Step 3: Write boundary and ownership failures** `12<span>34</span>`、空box、別All祖先、複数TextSource、
   composition先頭末尾空白、forcedbreak、複数style/font、line-edgebreakclass、内部caret/selectionを検証する。
   Expected: source byte/grapheme範囲、glyph描画一回、lookaroundが一致しない。
-- [ ] **Step 4: Connect Unit costs and mapping** 外側spacing/emphasisはU+FFFC単位、breakclassは内容のedge。
+- [x] **Step 4: Connect Unit costs and mapping** 外側spacing/emphasisはU+FFFC単位、breakclassは内容のedge。
   intrinsic/planned/cache/float/first-lineと所有overlayへ同じcompositionを渡す。
   Expected: fresh/cached/planned結果一致、内部caretのsource offsetが復元できる。
-- [ ] **Step 5: Verify and commit** `cargo +stable test --workspace --offline`。
+- [x] **Step 5: Verify and commit** `cargo +stable test --workspace --offline`。
   Expected: 全workspace成功。`feat: compose text-combine-upright runs` をcommit、同commandでtask-done。
 
 ### Task 4: 公開API描画と全gate

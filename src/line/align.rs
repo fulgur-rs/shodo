@@ -146,15 +146,16 @@ pub(super) fn apply(
         .iter()
         .find_map(|w| w.hyphen.as_ref().map(|text| text.start));
     for i in start..scan.hang_start {
-        let UnitKind::Cluster { glyphs, space, .. } = &data.units[i].kind else {
-            continue;
-        };
-        if let Some(span) = data.combine_at_text(data.units[i].text.start) {
-            if data.units[i].text.end == span.text.end {
+        if let Some(index) = data.units[i].combine {
+            let span = &data.combine_spans[index as usize];
+            if i + 1 == span.units.end {
                 clusters.push((i, false, None, span.text.clone()));
             }
             continue;
         }
+        let UnitKind::Cluster { glyphs, space, .. } = &data.units[i].kind else {
+            continue;
+        };
         if data
             .text
             .get(data.units[i].text.start as usize..data.units[i].text.end as usize)

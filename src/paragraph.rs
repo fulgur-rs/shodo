@@ -121,6 +121,24 @@ pub(crate) struct ParagraphData {
 }
 
 impl ParagraphData {
+    /// Center a composition on its containing inline's text-over/under edges,
+    /// before the inline's vertical-align displacement is applied.
+    pub(crate) fn combine_center_shift(&self, style: u32) -> f32 {
+        let metrics = self.style_metrics[style as usize];
+        let (over, under) = if self.styles[style as usize].text_orientation
+            == crate::style::TextOrientation::Sideways
+        {
+            (metrics.metrics.ascent, metrics.metrics.descent)
+        } else {
+            metrics
+                .vertical_metrics
+                .map_or((metrics.size / 2.0, metrics.size / 2.0), |v| {
+                    (v.ascent, v.descent)
+                })
+        };
+        -(over - under) / 2.0
+    }
+
     pub(crate) fn combine_at_text(
         &self,
         offset: u32,
@@ -442,7 +460,7 @@ fn build_data(
 ) -> Result<ParagraphData, LimitExceeded> {
     let mut shape_limits = limits.clone();
     shape_limits.max_shaped_glyphs = glyph_budget;
-    let combine_spans = crate::analysis::combine::prepare(
+    let mut combine_spans = crate::analysis::combine::prepare(
         &processed.text,
         &processed.items,
         &styles,
@@ -499,6 +517,10 @@ fn build_data(
         sat,
     )?;
     let base_level = u8::from(used_direction == Direction::Rtl);
+    let style_metrics: Vec<_> = styles
+        .iter()
+        .map(|s| crate::line::font_metrics::resolve(fonts, s, warnings))
+        .collect();
     let combine_geometry = crate::analysis::combine::geometry(
         &processed.text,
         &processed.items,
@@ -507,6 +529,8 @@ fn build_data(
         &glyphs,
         &runs,
         fonts,
+        &style_metrics,
+        sat,
     );
     let UnitList {
         mut units,
@@ -521,14 +545,38 @@ fn build_data(
         base_level,
         &breaks,
     );
-    for unit in &mut units {
+    for (i, unit) in units.iter_mut().enumerate() {
         let index = combine_spans.partition_point(|span| span.text.end <= unit.text.start);
-        if let Some(span) = combine_spans.get(index)
+        if let Some(span) = combine_spans.get_mut(index)
             && span.text.start <= unit.text.start
-            && unit.text.end < span.text.end
         {
-            unit.break_after = crate::analysis::units::BreakClass::Prohibited;
-            unit.emergency_min_content = false;
+            if matches!(
+                unit.kind,
+                crate::analysis::units::UnitKind::Cluster { .. }
+                    | crate::analysis::units::UnitKind::Tab
+            ) {
+                unit.combine = Some(index as u32);
+                if span.units.is_empty() {
+                    span.units.start = i;
+                }
+                span.units.end = i + 1;
+                unit.level = bidi.levels[span.text.start as usize];
+            }
+            if unit.text.end < span.text.end {
+                unit.break_after = crate::analysis::units::BreakClass::Prohibited;
+                unit.emergency_min_content = false;
+            }
+        }
+    }
+    for span in &combine_spans {
+        for unit in &mut units[span.units.clone()] {
+            if unit.combine.is_some() {
+                unit.slice_advance = crate::geometry::LayoutUnit::ZERO;
+            }
+        }
+        if !span.units.is_empty() {
+            units[span.units.end - 1].slice_advance =
+                crate::geometry::LayoutUnit::from_f32_round(span.em, sat);
         }
     }
     let mut baselines = HashMap::new();
@@ -541,10 +589,6 @@ fn build_data(
             });
         }
     }
-    let style_metrics = styles
-        .iter()
-        .map(|s| crate::line::font_metrics::resolve(fonts, s, warnings))
-        .collect();
     let data = ParagraphData {
         #[cfg(test)]
         spacing_setup_visits: Default::default(),
