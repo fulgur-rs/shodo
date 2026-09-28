@@ -34,8 +34,8 @@ region; the example's annotation is not a complete CSS underline implementation.
 See the [shared glyph contract](shared-glyph-contract.md) for boundary affinity,
 link containment and source-to-owner distinctions.
 
-`dev/fixtures/examples/support/glyph_paint.rs` is shared with the .14 connection
-and PNG tests, and is available to the forthcoming snapshot harness. It takes
+`dev/fixtures/examples/support/glyph_paint.rs` is shared by the shared-glyph and
+PNG regression tests, rendering examples, and snapshot harness. It takes
 accepted lines and caller paint colors/annotations, without reshaping strings.
 Tiny-Skia fills the actual Skrifa outlines with y-axis reversal at each returned
 baseline. Glyph positions already include inline placement; the painter does

@@ -22,17 +22,17 @@ It shares the fixed outline/synthesis restrictions of the
 
 ## Responsibilities and state
 
-S0-B owns the pure core float-reporting and displaced-anchor contract. This issue
-owns caller placement, provisional trials, rollback and reusable checkpoints.
-S4 retains actual DOM/CSS measurement, production callbacks, browser/WPT coverage,
-timing/memory and migration decisions. This harness does not merge the raikiri
-spike or replace its outstanding integration work.
+shodo reports float anchors and displaced floats without placing them. This
+harness demonstrates caller placement, provisional trials, rollback and reusable
+checkpoints. Production callers must supply DOM/CSS measurements and callbacks;
+the harness does not provide a complete raikiri integration or establish browser
+equivalence, WPT conformance, or whole-page performance.
 
 `Checkpoint` owns paragraph identity and placement epoch, break token, float
 cursor, Taffy context, placement requests/rectangles, pending reports,
 withdrawn-this-line records, block position, width and fragment index. An epoch
 separates successive paragraphs, including repeated use of the same immutable
-Paragraph: their opaque float cursors start over without identifying old BFC
+Paragraph: their opaque float cursors start over without identifying old
 placements as current-line withdrawals. Inputs (Paragraph, options, atomic sizes,
 float measurements) remain caller-owned and must be preserved while replaying a
 checkpoint. `LayoutContext` is only a cache and need not be checkpointed.
@@ -177,10 +177,11 @@ Reference: [Parley float test](https://github.com/linebender/parley/blob/main/pa
 read via the GitHub contents API on 2026-09-27; downloaded source SHA256
 `55970304f80e244c3182a8f9ba2f6d8a0abad636c0cbc06c1d5fd5e73ecef78f`.
 It contains unfinished nonfitting-line rewind and height-exceeded handling. No
-source was copied. Foundation design §§3.2/6.5 defines this harness's contract.
+source was copied.
 
 No Blink run or browser baseline is included. The tab case is a shodo/CSS-contract
 regression, not a Chrome equality assertion. If a later browser recorder finds a
 one-line difference, retain both numeric/PNG results and distinguish an allowed
-CSS placement difference from a violated float ordering rule. General browser
-snapshot recording remains shodo-p2m.7.
+CSS placement difference from a violated float ordering rule. See the separate
+[snapshot tests](snapshot-tests.md) and [browser comparison](browser-comparison.md)
+for the supported rendering and browser checks.

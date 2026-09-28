@@ -92,25 +92,26 @@ SHODO_SHARED_GLYPH_PNG=/tmp/shared-glyph.png \
   cargo +stable test --offline -p shodo-fixtures --test shared_glyph
 ```
 
-The fixed-font glyph painter is shared in `examples/support/glyph_paint.rs` for
-later sample/snapshot work (.11/.7). It only handles unsynthesized outline
-fixtures and a simple source annotation; production synthesis, color fonts,
-full decorations and general page painting remain caller responsibilities.
+The fixed-font [glyph painter](../dev/fixtures/examples/support/glyph_paint.rs)
+is shared by rendering examples and snapshot tests. These contract tests use
+unsynthesized outline fixtures and a simple source annotation. Production
+synthesis, color fonts, full decorations and general page painting remain caller
+responsibilities.
 
-## S4 adoption and switch assessment
+## Renderer integration requirements
 
-The connection tests establish that the existing public glyph, mapping,
+The integration tests establish that the existing public glyph, mapping,
 selection/caret and hit-test APIs supply the required data. **No new public
-API is required for this contract.** S4 should adopt one draw per glyph run,
+API is required for this contract.** Renderers should use one draw per glyph run,
 source-text-to-style resolution and separate source-region annotations. Link
 and source decoration integration are required at the production handoff;
 whole-owner-run link areas or painting each source's entire shared cluster
 would lose or duplicate information.
 
-The native raikiri implementation and the unmerged S4 spike are not changed
-by this ordinary contract PR. Full CSS decoration/renderer integration and
-browser comparisons remain S4/.7/.9/.11 work, not inferred from this small
-outline example. The core contract itself does not introduce an unresolved
-API blocker for shodo-p2m.6; remaining caller migration work is recorded in
-S4 rather than declaring all related test harness issues mandatory. The
-user-directed S4 no-merge exception remains in force.
+These tests establish the shared-glyph handoff, not a complete raikiri renderer
+integration. Production callers still need to resolve source styles and link
+metadata, apply CSS decoration policy, and paint the rest of the page. The
+outline example alone does not establish full browser rendering equivalence;
+see the separate [paint contract](paint-styles.md),
+[snapshot tests](snapshot-tests.md), and [browser comparison](browser-comparison.md)
+for their supported behavior and validation scope.

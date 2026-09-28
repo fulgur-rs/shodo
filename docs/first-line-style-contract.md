@@ -87,7 +87,8 @@ nested inheritance from the explicit parent's alternative.
 at commit `ab7e619a8f321f03de8b8c8b9342954868e044c8`. It parses one actual DOM,
 retains its normal cascade, appends a root rule with `Origin::Author` to the
 original rule tree and obtains a second real cascade over that same DOM.
-Both tables supply each inline's values to the new API. An author-origin
+Both tables supply each inline's resolved normal/first-line styles to
+`open_inline_with_first_line`. An author-origin
 root override is a controlled producer probe, not a CSS pseudo-element
 implementation or a substitute for an actual first-line cascade provider.
 
@@ -118,10 +119,10 @@ The pinned raikiri parser/cascade does **not** expose `::first-line`: adding
 `#root::first-line{font-size:32px}` leaves the root16px and the pseudo map empty.
 A separate regression test records that producer limitation. Production CSS
 first-line integration therefore still needs a producer that resolves per
-inline alternatives; this change removes shodo's ambiguous input contract,
-without implementing that missing producer. The preservation/switch necessity
-assessment remains in the unmerged S4 investigation (`shodo-p2m.5`), and this
-normal API change does not merge or enable that spike.
+inline alternatives. The explicit normal/first-line style APIs remove ambiguity
+from shodo's input contract without implementing that missing producer. The
+fixture demonstrates the resolved-style handoff; it does not provide a production
+raikiri first-line cascade or replace raikiri's text layout implementation.
 
 CSS inheritance and excluded properties are specified by
 [CSS Pseudo-Elements4 §2.1.3](https://www.w3.org/TR/css-pseudo-4/#first-line-inheritance).

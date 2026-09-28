@@ -1,6 +1,6 @@
 # Fixed-font Chrome line breaking comparison
 
-`shodo-p2m.9` records real browser measurements and checks public `next_line`
+This harness records real browser measurements and checks public `next_line`
 against the saved widths. Ordinary Rust tests need no browser and never replace
 expectations. This detects numeric changes; green tests do **not** mean every
 Chrome break matches shodo or that WPT has passed.
@@ -94,7 +94,7 @@ observations, their category/evidence/issue linkage, input hash and SHA-256 of t
 actual capture file. Also review the 50 transition records and 9 atomic geometry
 pairs stored there. There is intentionally no command that automatically accepts
 current shodo mismatches or adds blanket tolerance. Run offline tests, Python
-tests, full workspace/MSRV and normal gates before committing the intentional
+tests, full workspace/MSRV and [development checks](../CONTRIBUTING.md#checking-a-change) before committing the intentional
 capture/ledger diff. Human review of a new capture remains meaningful even if a
 new browser version is expected to differ.
 
@@ -136,8 +136,8 @@ separate source nodes even when glyphs are shared.
 | Category | Observations | Evidence and follow-up |
 | --- | ---: | --- |
 | Boundary drift | 47 | Same target endpoints; shodo transition minus Chrome is -1 to +4 integer subpixels. Every difference lies strictly between the two measured transitions; probes a pixel away agree. Exact observations are retained, with no global slack. Japanese07/13 now differ by only -1/+1 subpixel. |
-| Conditional line-end trim policy | 3 | Japanese12: captured Chrome target24 threshold8089, shodo7578 subpixels. Shodo follows CSS Text4 normal end trim for Japanese fullwidth stops; the prior shodo8090 threshold decreases by512 subpixels (8px). Independent Chromium152 fixed-font `日本。` at40px gives end3 with both normal and space-all; shodo normal fits all9 UTF-8 bytes. Tracked by `shodo-unc.1`. |
-| Resolved hanging trailing tab | 0 semantic / 2 numeric | `shodo-p2m.15` fixes pre-wrap-tab: both consume source end9 at90px. The shodo threshold improves6390→4338 versus Chrome4336, so only the two adjacent probes remain as exact boundary drift. The original diagnostic `white-space: break-spaces` gives end5 at90px and target end9 threshold6389 with initial120px. |
+| Conditional line-end trim policy | 3 | Japanese12: captured Chrome target24 threshold8089, shodo7578 subpixels. Shodo follows CSS Text4 normal end trim for Japanese fullwidth stops; the prior shodo8090 threshold decreases by512 subpixels (8px). Independent Chromium152 fixed-font `日本。` at40px gives end3 with both normal and space-all; shodo normal fits all9 UTF-8 bytes. |
+| Resolved hanging trailing tab | 0 semantic / 2 numeric | The preserved-whitespace hanging policy fixes pre-wrap-tab: both consume source end9 at90px. The shodo threshold improves6390→4338 versus Chrome4336, so only the two adjacent probes remain as exact boundary drift. The original diagnostic `white-space: break-spaces` gives end5 at90px and target end9 threshold6389 with initial120px. |
 
 The normal-CSS capture is preserved; diagnostic CSS probes did not replace it.
 Punctuation implementation changes matches404→408 and mismatches54→50: eight
@@ -182,8 +182,10 @@ classify every baseline discrepancy as harmless.
 
 This is fixed-input first-line/numeric regression evidence. It does not invoke
 wptrunner, certify arbitrary browser/DOM equivalence, compare color rasterization,
-or model page-spanning float transitions. Those remain snapshots, .12 and S4.
-The raikiri integration spike remains unmerged.
+or model page-spanning float transitions. Rendering and caller float state have
+separate [snapshot tests](snapshot-tests.md) and a
+[float integration harness](float-integration-harness.md). These checks do not
+establish complete production raikiri integration.
 
 - [Parley browser recorder](https://github.com/linebender/parley/blob/main/parley_tests/linebreaking_browser_recorder/src/main.rs) and [comparison](https://github.com/linebender/parley/blob/main/parley_tests/tests/linebreaking_matches_chrome.rs): inspected as references, not vendored.
 - [Official Chrome Headless documentation](https://developer.chrome.com/docs/automation-and-testing/headless): dump-dom and virtual-time budget.
