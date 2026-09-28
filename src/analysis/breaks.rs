@@ -186,24 +186,23 @@ pub(crate) fn analyze_breaks(
 ) -> BreakAnalysis {
     let projection = Projection::new(input);
     let segmenter = GraphemeClusterSegmenter::new();
-    let graphemes: Vec<u32> = segmenter
-        .segment_str(&projection.text)
-        .map(|at| projection.upstream(at))
-        .collect();
-    let typographic_starts: Vec<u32> = segmenter
-        .segment_str(&projection.text)
+    let boundaries = segmenter.segment_str(&projection.text);
+    #[cfg(test)]
+    let boundaries = tests::observe_graphemes(boundaries);
+    let (graphemes, typographic_starts): (Vec<u32>, Vec<u32>) = boundaries
         .map(|at| {
             let index = projection
                 .spans
                 .partition_point(|s| s.projected.end <= at as u32);
-            projection
+            let start = projection
                 .spans
                 .get(index)
                 .map_or(input.text.len() as u32, |s| {
                     s.original.start + at as u32 - s.projected.start
-                })
+                });
+            (projection.upstream(at), start)
         })
-        .collect();
+        .unzip();
     let mut caret_cuts: Vec<_> = graphemes
         .iter()
         .chain(&typographic_starts)
@@ -441,6 +440,16 @@ mod tests {
         WhiteSpaceCollapse, WordBreak,
     };
 
+    std::thread_local! {
+        static GRAPHEME_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    pub(super) fn observe_graphemes(
+        boundaries: impl Iterator<Item = usize>,
+    ) -> impl Iterator<Item = usize> {
+        boundaries.inspect(|_| GRAPHEME_VISITS.with(|visits| visits.set(visits.get() + 1)))
+    }
+
     fn analyze(text: &str, style: InlineStyle, mapping: bool) -> BreakAnalysis {
         let limits = Limits::default();
         let mut b = ParagraphBuilder::new(
@@ -468,6 +477,55 @@ mod tests {
         )
         .unwrap();
         analyze_breaks(&processed, &b.styles, &mut warnings)
+    }
+
+    #[test]
+    fn grapheme_boundaries_are_segmented_once_for_both_coordinate_tables() {
+        let cases: &[(&str, &[u32])] = &[
+            ("", &[0]),
+            ("ab", &[0, 1, 2]),
+            ("e\u{301}👩\u{200D}💻 x", &[0, 3, 14, 15, 16]),
+            ("🇯🇵x", &[0, 8, 9]),
+        ];
+        for &(text, expected) in cases {
+            GRAPHEME_VISITS.with(|visits| visits.set(0));
+            let result = analyze(text, InlineStyle::default(), true);
+            assert_eq!(result.graphemes.as_slice(), expected, "{text:?}");
+            assert_eq!(result.typographic_starts.as_slice(), expected, "{text:?}");
+            assert_eq!(
+                GRAPHEME_VISITS.with(std::cell::Cell::get),
+                expected.len(),
+                "each actual ICU boundary should be visited once for {text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn projected_graphemes_keep_both_sides_of_transparent_source_gaps() {
+        let bidi = analyze("\u{200E}a\u{200F}b\u{200E}", InlineStyle::default(), true);
+        assert_eq!(bidi.graphemes, vec![3, 4, 8]);
+        assert_eq!(bidi.typographic_starts, vec![3, 7, 11]);
+        assert_eq!(bidi.caret_cuts, vec![3, 4, 7, 8, 11]);
+
+        let limits = Limits::default();
+        let mut builder = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+        builder
+            .push_text(TextSource::Generated { node: NodeId(1) }, "a")
+            .push_out_of_flow(NodeId(2), crate::node::OutOfFlowKind::Float)
+            .push_text(TextSource::Generated { node: NodeId(3) }, "b");
+        let processed = process(
+            &builder.text,
+            &builder.items,
+            &builder.styles,
+            true,
+            &limits,
+        )
+        .unwrap();
+        assert_eq!(processed.text, "a\u{FFFC}b");
+        let result = analyze_breaks(&processed, &builder.styles, &mut WarningSink::default());
+        assert_eq!(result.graphemes, vec![0, 1, 5]);
+        assert_eq!(result.typographic_starts, vec![0, 4, 5]);
+        assert_eq!(result.caret_cuts, vec![0, 1, 4, 5]);
     }
 
     #[test]
@@ -885,8 +943,10 @@ mod tests {
                 .close_inline();
         }
         let p = process(&b.text, &b.items, &b.styles, false, &limits).unwrap();
+        GRAPHEME_VISITS.with(|visits| visits.set(0));
         let p = analyze_breaks(&p, &b.styles, &mut WarningSink::default());
         assert_eq!(p.graphemes.len(), 4097);
+        assert_eq!(GRAPHEME_VISITS.with(std::cell::Cell::get), 4097);
         assert!(
             p.opportunities
                 .iter()
