@@ -33,6 +33,8 @@ jobs:
       - run: cargo clippy --workspace --all-targets
       - run: cargo clippy --workspace --all-targets --features shodo-fixtures/accesskit
       - run: cargo test --workspace
+      - name: Check line cache with debug assertions disabled
+        run: cargo test --release -p shodo --lib line::cache::tests
       - run: cargo test --workspace --features shodo-fixtures/accesskit
       - run: cargo run -p shodo-fixtures --features accesskit,shodo/complex-scripts --example accessibility
       - run: cargo run -p shodo-fixtures --example emoji_png -- target/emoji.png

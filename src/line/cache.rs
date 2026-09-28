@@ -52,7 +52,8 @@ impl Candidates {
             {
                 self.visits += 1;
             }
-            debug_assert_eq!(self.frontier.pop(), Some(self.active));
+            let removed = self.frontier.pop();
+            debug_assert_eq!(removed, Some(self.active));
             for i in self.popped[self.undo[self.active].clone()].iter().rev() {
                 self.frontier.push(*i);
                 #[cfg(test)]
@@ -503,6 +504,33 @@ pub(super) fn resolve(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn shrinking_frontier_discards_candidates_beyond_current_end() {
+        use super::Candidates;
+        use crate::geometry::LayoutUnit;
+
+        let mut candidates = Candidates::default();
+        for (end, cost) in [(1, 7), (2, 4), (3, 2)] {
+            candidates.push(end, LayoutUnit::from_raw(cost));
+        }
+        // Later, cheaper candidates dominate earlier ones. Shrinking must
+        // remove them even when none of the restored candidates fits.
+        for (through, limit, expected) in [
+            (3, 3, Some(3)),
+            (2, 3, None),
+            (2, 4, Some(2)),
+            (1, 6, None),
+            (1, 7, Some(1)),
+            (0, 7, None),
+        ] {
+            assert_eq!(
+                candidates.select(through, LayoutUnit::from_raw(limit)),
+                expected,
+                "through={through}, limit={limit}"
+            );
+        }
+    }
+
     #[test]
     fn varying_hyphen_costs_choose_latest_fitting_break_with_linear_shrink_work() {
         use super::Candidates;
