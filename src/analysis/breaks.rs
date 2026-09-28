@@ -25,6 +25,8 @@ pub(crate) struct BreakAnalysis {
     /// Actual character starts after transparent bidi controls. Break cuts
     /// intentionally stay before those controls for source consumption.
     pub(crate) typographic_starts: Vec<u32>,
+    /// Authored controls omitted from projection but retained in shaping text.
+    pub(crate) authored_bidi_controls: Vec<u32>,
     pub(crate) caret_cuts: Vec<u32>,
     pub(crate) opportunities: Vec<BreakOpportunity>,
 }
@@ -52,12 +54,14 @@ struct ProjectionSpan {
 struct Projection {
     text: String,
     spans: Vec<ProjectionSpan>,
+    authored_bidi_controls: Vec<u32>,
 }
 impl Projection {
     fn new(input: &Processed) -> Self {
         let mut p = Self {
             text: String::new(),
             spans: Vec::new(),
+            authored_bidi_controls: Vec::new(),
         };
         let bidi_control = CodePointSetData::new::<props::BidiControl>();
         for item in &input.items {
@@ -71,6 +75,9 @@ impl Projection {
                 input.text[item.text.start as usize..item.text.end as usize].char_indices()
             {
                 if bidi_control.contains(c) {
+                    if matches!(item.kind, ItemKind::Text) {
+                        p.authored_bidi_controls.push(item.text.start + i as u32);
+                    }
                     continue;
                 }
                 let original = item.text.start + i as u32;
@@ -423,6 +430,7 @@ pub(crate) fn analyze_breaks(
     BreakAnalysis {
         graphemes,
         typographic_starts,
+        authored_bidi_controls: projection.authored_bidi_controls,
         caret_cuts,
         opportunities,
     }

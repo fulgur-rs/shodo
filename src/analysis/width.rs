@@ -178,3 +178,29 @@ const FORMS: &[(char, [char; 2], usize)] = &[
     ('\u{ffe5}', ['\u{a5}', '\0'], 1),
     ('\u{ffe6}', ['\u{20a9}', '\0'], 1),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::{FORMS, narrow};
+    use icu_properties::{CodePointMapData, CodePointSetData, props};
+
+    #[test]
+    fn narrowing_preserves_grapheme_properties() {
+        // Reusing source grapheme boundaries requires more than equal scalar
+        // counts: context-sensitive emoji/Indic properties must survive too.
+        let gcb = CodePointMapData::<props::GraphemeClusterBreak>::new();
+        let incb = CodePointMapData::<props::IndicConjunctBreak>::new();
+        let ep = CodePointSetData::new::<props::ExtendedPictographic>();
+        let properties = |c| (gcb.get(c), incb.get(c), ep.contains(c));
+        for c in ('\u{ff01}'..='\u{ff5e}').chain(FORMS.iter().map(|(c, _, _)| *c)) {
+            let (forms, count) = narrow(c);
+            assert_eq!(properties(c), properties(forms[0]), "U+{:04X}", c as u32);
+            if count == 2 {
+                assert_eq!(gcb.get(forms[0]), props::GraphemeClusterBreak::Other);
+                assert_eq!(incb.get(forms[0]), props::IndicConjunctBreak::None);
+                assert!(!ep.contains(forms[0]));
+                assert_eq!(gcb.get(forms[1]), props::GraphemeClusterBreak::Extend);
+            }
+        }
+    }
+}

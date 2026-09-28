@@ -3,8 +3,9 @@ use super::bidi::BidiAnalysis;
 use super::{ItemKind, whitespace::Processed};
 use crate::font::{FontCollection, FontMatch, FontQuery};
 use crate::style::{FontFamily, FontStyle, InlineStyle};
-use icu_segmenter::GraphemeClusterSegmenter;
 use std::collections::HashMap;
+
+mod graphemes;
 
 #[cfg(test)]
 std::thread_local! {
@@ -194,11 +195,13 @@ pub(crate) fn itemize(
         let segment_start = result.len();
         let scalar_scripts = super::scripts::resolve(scalars.iter().map(|s| s.c));
         let offsets: Vec<_> = text.char_indices().map(|(i, _)| i).collect();
-        let boundaries: Vec<_> = GraphemeClusterSegmenter::new().segment_str(text).collect();
-        let mut scalar_start = 0;
+        let boundaries = graphemes::boundaries(scalars, breaks);
         for window in boundaries.windows(2) {
+            let scalar_start = window[0];
+            let scalar_end = window[1];
+            let cluster = &text
+                [offsets[scalar_start]..offsets.get(scalar_end).copied().unwrap_or(text.len())];
             let mut matched = HashMap::new();
-            let scalar_end = offsets.partition_point(|i| *i < window[1]);
             scalars[scalar_start].grapheme_start = breaks
                 .graphemes
                 .binary_search(&scalars[scalar_start].offset)
@@ -247,7 +250,9 @@ pub(crate) fn itemize(
                     query.script = script;
                     #[cfg(test)]
                     MATCH_CALLS.with(|calls| calls.set(calls.get() + 1));
-                    fonts.match_cluster(&query, &text[window[0]..window[1]])
+                    #[cfg(test)]
+                    tests::record_cluster(cluster);
+                    fonts.match_cluster(&query, cluster)
                 };
                 let font = if part_start == scalar_start && part_end == scalar_end {
                     // Ordinary one-style graphemes need no local cache allocation.
@@ -308,7 +313,6 @@ pub(crate) fn itemize(
                 }
                 part_start = part_end;
             }
-            scalar_start = scalar_end;
         }
         text.clear();
         scalars.clear();
@@ -437,6 +441,48 @@ mod tests {
     use crate::style::{ParagraphStyle, TextOrientation};
     use crate::{LayoutContext, Paragraph, ParagraphBuilder};
 
+    std::thread_local! {
+        static CLUSTERS: std::cell::RefCell<Option<Vec<String>>> = const {
+            std::cell::RefCell::new(None)
+        };
+        static LOCAL_BOUNDARY_VISITS: std::cell::Cell<usize> = const {
+            std::cell::Cell::new(0)
+        };
+        static SHARED_CUT_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        static REPAIRED_SCALARS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    pub(super) fn record_shared_cut() {
+        SHARED_CUT_VISITS.with(|visits| visits.set(visits.get() + 1));
+    }
+
+    pub(super) fn record_repaired_scalar() {
+        REPAIRED_SCALARS.with(|visits| visits.set(visits.get() + 1));
+    }
+
+    pub(super) fn observe_local_boundaries(
+        boundaries: impl Iterator<Item = usize>,
+    ) -> impl Iterator<Item = usize> {
+        boundaries.inspect(|_| {
+            LOCAL_BOUNDARY_VISITS.with(|visits| visits.set(visits.get() + 1));
+        })
+    }
+
+    pub(super) fn record_cluster(cluster: &str) {
+        CLUSTERS.with_borrow_mut(|clusters| {
+            if let Some(clusters) = clusters {
+                clusters.push(cluster.to_owned());
+            }
+        });
+    }
+
+    fn observe_clusters(build: impl FnOnce() -> Paragraph) -> (Paragraph, Vec<String>) {
+        CLUSTERS.with_borrow_mut(|clusters| *clusters = Some(Vec::new()));
+        let paragraph = build();
+        let clusters = CLUSTERS.with_borrow_mut(|clusters| clusters.take().unwrap());
+        (paragraph, clusters)
+    }
+
     fn paragraph(mode: WritingMode, text: &str) -> Paragraph {
         let style = ParagraphStyle {
             writing_mode: mode,
@@ -459,6 +505,193 @@ mod tests {
         let mut builder = ParagraphBuilder::new(style, &limits);
         add(&mut builder);
         builder.build(&mut LayoutContext::new(), &fonts).unwrap()
+    }
+
+    #[test]
+    fn padding_boundary_restarts_regional_indicator_pairing() {
+        let style = ParagraphStyle::default();
+        let mut edges = InlineEdges::default();
+        edges.padding.inline_start = 1.0;
+        let (paragraph, clusters) = observe_clusters(|| {
+            build(&style, |builder| {
+                builder.push_text(TextSource::Generated { node: NodeId(1) }, "🇦");
+                builder.open_inline(NodeId(2), &style.root, edges);
+                builder.push_text(TextSource::Generated { node: NodeId(3) }, "🇧🇨🇩");
+                builder.close_inline();
+            })
+        });
+        assert_eq!(paragraph.text(), "🇦🇧🇨🇩");
+        assert_eq!(clusters, ["🇦", "🇧🇨", "🇩"]);
+    }
+
+    #[test]
+    fn padding_boundary_restarts_emoji_zwj_context() {
+        let style = ParagraphStyle {
+            writing_mode: WritingMode::VerticalRl,
+            ..Default::default()
+        };
+        let mut edges = InlineEdges::default();
+        edges.padding.inline_start = 1.0;
+        let (paragraph, clusters) = observe_clusters(|| {
+            build(&style, |builder| {
+                builder.push_text(TextSource::Generated { node: NodeId(1) }, "👩");
+                builder.open_inline(NodeId(2), &style.root, edges);
+                builder.push_text(TextSource::Generated { node: NodeId(3) }, "\u{200d}💻");
+                builder.close_inline();
+            })
+        });
+        assert_eq!(clusters, ["👩", "\u{200d}", "💻"]);
+        let orientations: Vec<_> = paragraph
+            .data
+            .shape_items
+            .iter()
+            .map(|item| (item.scalars[0].offset..item.end, item.orientation))
+            .collect();
+        assert_eq!(
+            orientations,
+            [
+                (0..4, RunOrientation::Upright),
+                (4..7, RunOrientation::SidewaysClockwise),
+                (7..11, RunOrientation::Upright),
+            ]
+        );
+    }
+
+    #[test]
+    fn combined_width_reversion_preserves_font_clusters_and_source_ranges() {
+        let mut style = ParagraphStyle {
+            writing_mode: WritingMode::VerticalRl,
+            ..Default::default()
+        };
+        style.root.text_combine_upright = crate::style::TextCombineUpright::All;
+        let (paragraph, clusters) = observe_clusters(|| {
+            build(&style, |builder| {
+                builder.push_text(TextSource::Generated { node: NodeId(1) }, "ガ12");
+            })
+        });
+        assert_eq!(paragraph.text(), "ガ12");
+        assert_eq!(clusters, ["ｶﾞ", "1", "2"]);
+        let ranges: Vec<_> = paragraph
+            .data
+            .shape_items
+            .iter()
+            .flat_map(|item| item.scalars.iter().map(|s| (s.offset, s.end)))
+            .collect();
+        assert_eq!(ranges, [(0, 3), (0, 3), (3, 4), (4, 5)]);
+    }
+
+    #[test]
+    fn padding_boundary_restarts_indic_linker_context() {
+        let style = ParagraphStyle::default();
+        let mut edges = InlineEdges::default();
+        edges.padding.inline_start = 1.0;
+        let (_, clusters) = observe_clusters(|| {
+            build(&style, |builder| {
+                builder.push_text(TextSource::Generated { node: NodeId(1) }, "क");
+                builder.open_inline(NodeId(2), &style.root, edges);
+                builder.push_text(TextSource::Generated { node: NodeId(3) }, "्क");
+                builder.close_inline();
+            })
+        });
+        assert_eq!(clusters, ["क", "्", "क"]);
+    }
+
+    #[test]
+    fn authored_bidi_control_restarts_regional_indicator_pairing() {
+        let (_, clusters) =
+            observe_clusters(|| paragraph(WritingMode::HorizontalTb, "🇦\u{200e}🇧🇨🇩"));
+        assert_eq!(clusters, ["🇦", "\u{200e}", "🇧🇨", "🇩"]);
+    }
+
+    #[test]
+    fn source_gap_preserves_the_full_cluster_query() {
+        let style = ParagraphStyle::default();
+        let (paragraph, clusters) = observe_clusters(|| {
+            build(&style, |builder| {
+                builder.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+                builder.push_out_of_flow(NodeId(2), crate::node::OutOfFlowKind::Absolute);
+                builder.push_text(TextSource::Generated { node: NodeId(3) }, "\u{301}b");
+            })
+        });
+        assert_eq!(clusters, ["a\u{301}", "b"]);
+        let scalars: Vec<_> = paragraph
+            .data
+            .shape_items
+            .iter()
+            .flat_map(|item| {
+                item.scalars
+                    .iter()
+                    .map(|s| (s.offset, s.end, s.grapheme_start))
+            })
+            .collect();
+        assert_eq!(scalars, [(0, 1, true), (4, 6, false), (6, 7, true)]);
+    }
+
+    #[test]
+    fn cluster_style_parts_use_the_same_full_font_query() {
+        let style = ParagraphStyle::default();
+        let mut mark_style = style.root.clone();
+        mark_style.font_weight = 700.0;
+        let (paragraph, clusters) = observe_clusters(|| {
+            build(&style, |builder| {
+                builder.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+                builder.open_inline(NodeId(2), &mark_style, InlineEdges::default());
+                builder.push_text(TextSource::Generated { node: NodeId(3) }, "\u{301}");
+                builder.close_inline();
+            })
+        });
+        assert_eq!(clusters, ["a\u{301}", "a\u{301}"]);
+        let scalars: Vec<_> = paragraph
+            .data
+            .shape_items
+            .iter()
+            .flat_map(|item| {
+                item.scalars
+                    .iter()
+                    .map(|s| (s.offset, s.end, s.grapheme_start))
+            })
+            .collect();
+        assert_eq!(scalars, [(0, 1, true), (1, 3, false)]);
+    }
+
+    #[test]
+    fn shared_cuts_remove_local_segmentation() {
+        let mut visits = Vec::new();
+        for decorated in [false, true] {
+            LOCAL_BOUNDARY_VISITS.with(|visits| visits.set(0));
+            SHARED_CUT_VISITS.with(|visits| visits.set(0));
+            REPAIRED_SCALARS.with(|visits| visits.set(0));
+            let style = ParagraphStyle::default();
+            let mut edges = InlineEdges::default();
+            edges.padding.inline_start = 1.0;
+            edges.padding.inline_end = 1.0;
+            let p = build(&style, |builder| {
+                for i in 0..32 {
+                    if decorated {
+                        builder.open_inline(NodeId(i * 2 + 1), &style.root, edges);
+                    }
+                    builder.push_text(
+                        TextSource::Generated {
+                            node: NodeId(i * 2 + 2),
+                        },
+                        "a§",
+                    );
+                    if decorated {
+                        builder.close_inline();
+                    }
+                }
+            });
+            assert_eq!(p.text(), "a§".repeat(32));
+            assert!(!p.data.shape_items.is_empty());
+            visits.push(LOCAL_BOUNDARY_VISITS.with(|visits| visits.get()));
+            assert!(SHARED_CUT_VISITS.with(|visits| visits.get()) > 0);
+            assert_eq!(REPAIRED_SCALARS.with(|visits| visits.get()), 0);
+        }
+        assert_eq!(
+            visits,
+            [0, 0],
+            "plain and decorated runs must reuse paragraph cuts"
+        );
     }
 
     #[test]
