@@ -137,6 +137,15 @@ fn shape(
 ) -> Option<(crate::shape::GlyphStore, Vec<crate::shape::ShapedRun>)> {
     let mut unit = data.units[range.start].clone();
     unit.text = unit.text.start..data.units[range.end - 1].text.end;
+    #[cfg(test)]
+    {
+        data.edge_shape_calls
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        data.edge_shape_bytes.fetch_add(
+            (unit.text.end - unit.text.start) as usize,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
     let mut warnings = WarningSink::new(data.limits.max_warnings);
     let result =
         crate::shape::shape_window_edit(data, &unit, budget, replacement, cx, &mut warnings, sat);
