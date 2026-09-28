@@ -29,3 +29,7 @@ test = true
 [[example]]
 name = "snapshots"
 test = true
+
+[[example]]
+name = "paint_styles"
+test = true

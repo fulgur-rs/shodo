@@ -293,3 +293,8 @@ and an atomic rectangle: `cargo run -p shodo-fixtures --example render_png -- /t
 
 The [Chrome numeric comparison](docs/browser-comparison.md) records fixed-font
 first-line breaks and boundary widths; ordinary tests use saved data offline.
+
+Resolved solid text colors, underlines and strike-through are retained in
+`InlineStyle::paint`. Use `GlyphRunView::paint_style()` for once-only glyph paint
+and `Line::paint_spans()` for source decoration regions. See the
+[paint contract and PNG example](docs/paint-styles.md).

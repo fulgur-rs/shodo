@@ -55,16 +55,16 @@
 
 ### Task 3: Public painter example and complete gates
 
-**Files:** create dev/fixtures/examples/paint_styles.rs and docs/paint-styles.md, register example test in dev/fixtures/Cargo.toml; README links. Existing snapshot painter unchanged.
+**Files:** create dev/fixtures/examples/paint_styles.rs and docs/paint-styles.md, register example test in dev/fixtures/Cargo.toml; extend dev/fixtures/examples/support/glyph_paint.rs with retained mode; README links. Legacy snapshot painter behavior stays unchanged.
 **Interfaces:** Consumes Task1 glyph paint and Task2 rectangles; example uses accepted Line/PhysicalConverter and actual retained glyph font data only, RichText input.
 
-- [ ] Step1 Write example test `retained_paint_draws_colors_and_both_decorations`: glyph counts equal accepted once-only output; after fonts/context/paragraph drop PNG has opaque red/blue glyph pixels and exact independently selected underline/strike pixels with explicit green/yellow lengths; transparent text honors alpha. Tests also verify source style differs on a shared glyph without a second paint. Add multiple-line/RTL or vertical representative pixel evidence and output clipping checks.
-- [ ] Step2 Run `cargo +stable test -p shodo-fixtures --example paint_styles --offline`.
+- [x] Step1 Write example test `retained_paint_draws_colors_and_both_decorations`: glyph counts equal accepted once-only output; after fonts/context/paragraph drop PNG has opaque red/blue glyph pixels and exact independently selected underline/strike pixels with explicit green/yellow lengths; transparent text honors alpha. Tests also verify source style differs on a shared glyph without a second paint. Add multiple-line/RTL or vertical representative pixel evidence and output clipping checks.
+- [x] Step2 Run `cargo +stable test -p shodo-fixtures --example paint_styles --offline`.
   Expected: FAIL missing renderer implementation.
-- [ ] Step3 Implement example with public output, write docs for all input/output/default/source/first-line/whitespace/orientation/fallback/lifetime contracts and caller CSS/skip-ink/overflow responsibilities. Add README link, run example and inspect PNG.
-- [ ] Step4 Run workspace tests, root no-default/all-feature tests, stable/MSRV1.89 tests/check, fmt, clippy workspace all-targets, rustdoc -Dwarnings, wasm no-default check and existing Python/fixture validators exactly matching repository CI.
+- [x] Step3 Implement example with public output, write docs for all input/output/default/source/first-line/whitespace/orientation/fallback/lifetime contracts and caller CSS/skip-ink/overflow responsibilities. Add README link, run example and inspect PNG.
+- [x] Step4 Run workspace tests, root no-default/all-feature tests, stable/MSRV1.89 tests/check, fmt, clippy workspace all-targets, rustdoc -Dwarnings, wasm no-default check and existing Python/fixture validators exactly matching repository CI.
   Expected: terminal0 on every gate, existing snapshots unchanged. Preserve source/fixture hashes and logs.
-- [ ] Step5 Commit `feat: demonstrate retained text colors and solid decorations`; task-done workspace tests.
+- [x] Step5 Commit `feat: demonstrate retained text colors and solid decorations`; task-done workspace tests.
   Expected: terminal0 and task ledger complete.
 
 ## Final phase
