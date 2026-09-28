@@ -117,14 +117,10 @@ impl<'a, F: FnMut() -> types::NodeId> NodeBuilder<'a, F> {
                     self.nodes.push((id, node));
                     chunks.push(id);
                     on_line.push(id);
-                    let hard_break = range
-                        .clone()
-                        .find(|&i| line.characters[i].kind == AccessibleCharacterKind::HardBreak);
                     self.spans.push(Span {
                         node: id,
                         line: line.index,
                         characters: range,
-                        hard_break,
                     });
                     if end == run.character_range.end {
                         break;

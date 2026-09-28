@@ -173,6 +173,121 @@ fn consumer_preserves_hard_breaks_and_first_line_datasets() {
 }
 
 #[test]
+fn consumer_select_all_round_trips_trailing_hard_break() {
+    for text in ["a\n", "\n"] {
+        let mut s = style();
+        s.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
+        let ls = lines(text, s, 1000.0);
+        let layout = AccessibleLayout::new(&ls);
+        let mut adapter = AccessKitAdapter::new(ak::NodeId(1));
+        let mut counter = 10;
+        let tree =
+            accesskit_consumer::Tree::new(export(&mut adapter, &layout, None, &mut counter), true);
+        let state = tree.state();
+        let document = state.root();
+        assert_eq!(document.document_range().text(), text);
+        let action = ak::ActionRequest {
+            action: ak::Action::SetTextSelection,
+            target_tree: ak::TreeId::ROOT,
+            target_node: ak::NodeId(1),
+            data: Some(ak::ActionData::SetTextSelection(ak::TextSelection {
+                anchor: document.document_start().to_raw(),
+                focus: document.document_end().to_raw(),
+            })),
+        };
+        let Some(ak::ActionData::SetTextSelection(raw)) = action.data else {
+            unreachable!()
+        };
+        let selection = AccessibleSelection {
+            anchor: adapter
+                .from_position(raw.anchor, Affinity::Downstream)
+                .unwrap(),
+            focus: adapter
+                .from_position(raw.focus, Affinity::Upstream)
+                .unwrap(),
+        };
+        assert_eq!(
+            layout.to_text_position(selection.focus).unwrap().offset,
+            text.len() as u32
+        );
+        for selection in [
+            selection,
+            AccessibleSelection {
+                anchor: selection.focus,
+                focus: selection.anchor,
+            },
+        ] {
+            let tree = accesskit_consumer::Tree::new(
+                export(&mut adapter, &layout, Some(selection), &mut counter),
+                true,
+            );
+            assert_eq!(tree.state().root().text_selection().unwrap().text(), text);
+        }
+    }
+}
+
+#[test]
+fn consumer_selects_hard_break_alone_and_normalizes_collapsed_caret() {
+    for text in ["a\n", "\n", "a\nb"] {
+        let mut s = style();
+        s.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
+        let ls = lines(text, s, 1000.0);
+        let layout = AccessibleLayout::new(&ls);
+        let mut adapter = AccessKitAdapter::new(ak::NodeId(1));
+        let mut counter = 10;
+        let update = export(&mut adapter, &layout, None, &mut counter);
+        let newline = update
+            .nodes
+            .iter()
+            .find(|(_, n)| n.role() == ak::Role::TextRun && n.value() == Some("\n"))
+            .unwrap()
+            .0;
+        let begin = ak::TextPosition {
+            node: newline,
+            character_index: 0,
+        };
+        let end = ak::TextPosition {
+            node: newline,
+            character_index: 1,
+        };
+        let selection = AccessibleSelection {
+            anchor: adapter.from_position(begin, Affinity::Downstream).unwrap(),
+            focus: adapter.from_position(end, Affinity::Upstream).unwrap(),
+        };
+        for selection in [
+            selection,
+            AccessibleSelection {
+                anchor: selection.focus,
+                focus: selection.anchor,
+            },
+        ] {
+            let tree = accesskit_consumer::Tree::new(
+                export(&mut adapter, &layout, Some(selection), &mut counter),
+                true,
+            );
+            assert_eq!(tree.state().root().text_selection().unwrap().text(), "\n");
+        }
+        let caret = AccessibleSelection {
+            anchor: adapter.from_position(end, Affinity::Downstream).unwrap(),
+            focus: adapter.from_position(end, Affinity::Upstream).unwrap(),
+        };
+        let update = export(&mut adapter, &layout, Some(caret), &mut counter);
+        let selection = update
+            .nodes
+            .iter()
+            .find(|(id, _)| *id == ak::NodeId(1))
+            .unwrap()
+            .1
+            .text_selection()
+            .unwrap();
+        assert_eq!(selection.anchor, begin);
+        assert_eq!(selection.focus, begin);
+        let tree = accesskit_consumer::Tree::new(update, true);
+        assert_eq!(tree.state().root().text_selection().unwrap().text(), "");
+    }
+}
+
+#[test]
 fn atomic_alternatives_and_caller_roles_are_exposed() {
     let limits = Default::default();
     let fonts = load_fonts(&limits).unwrap();

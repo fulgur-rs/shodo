@@ -159,6 +159,106 @@ fn source_positions_normalize_collapsed_and_expanded_text() {
 }
 
 #[test]
+fn source_inverse_preserves_affinity_across_generated_content() {
+    let limits = Default::default();
+    let fonts = load_fonts(&limits).unwrap();
+    let s = style();
+    let mut builder = ParagraphBuilder::new(&s, &limits);
+    builder.with_offset_mapping(true);
+    builder.push_text(
+        TextSource::Dom {
+            node: NodeId(7),
+            offset: 0,
+        },
+        "a",
+    );
+    builder.push_text(TextSource::Generated { node: NodeId(8) }, "X");
+    builder.push_text(
+        TextSource::Dom {
+            node: NodeId(7),
+            offset: 1,
+        },
+        "b",
+    );
+    let ls = builder
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap()
+        .break_all(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            1000.0,
+            &AtomicSizes::EMPTY,
+        );
+    let layout = AccessibleLayout::new(&ls);
+    assert_eq!(layout.logical_text(), "aXb");
+    for (affinity, offset) in [(Affinity::Upstream, 1), (Affinity::Downstream, 2)] {
+        let source = SourcePosition {
+            origin: TextOrigin::Dom {
+                node: NodeId(7),
+                offset: 1,
+            },
+            affinity,
+        };
+        let positions = layout.from_source(source);
+        assert_eq!(positions.len(), 1);
+        assert_eq!(
+            layout.to_text_position(positions[0]),
+            Some(text_position(0, offset, affinity))
+        );
+        assert_eq!(layout.to_source(positions[0]), Some(source));
+    }
+}
+
+#[test]
+fn source_inverse_returns_every_repeated_dom_occurrence() {
+    let limits = Default::default();
+    let fonts = load_fonts(&limits).unwrap();
+    let s = style();
+    let mut builder = ParagraphBuilder::new(&s, &limits);
+    builder.with_offset_mapping(true);
+    for _ in 0..2 {
+        builder.push_text(
+            TextSource::Dom {
+                node: NodeId(7),
+                offset: 0,
+            },
+            "ab",
+        );
+    }
+    let ls = builder
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap()
+        .break_all(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            1000.0,
+            &AtomicSizes::EMPTY,
+        );
+    let layout = AccessibleLayout::new(&ls);
+    assert_eq!(layout.logical_text(), "abab");
+    for affinity in [Affinity::Upstream, Affinity::Downstream] {
+        let source = SourcePosition {
+            origin: TextOrigin::Dom {
+                node: NodeId(7),
+                offset: 1,
+            },
+            affinity,
+        };
+        let positions = layout.from_source(source);
+        assert_eq!(
+            positions
+                .iter()
+                .map(|&p| layout.to_text_position(p).unwrap().offset)
+                .collect::<Vec<_>>(),
+            [1, 3]
+        );
+        for position in positions {
+            assert_eq!(layout.to_source(position), Some(source));
+        }
+    }
+}
+
+#[test]
 fn first_line_uses_its_own_utf8_dataset() {
     let mut s = style();
     s.root.white_space_collapse = WhiteSpaceCollapse::Preserve;

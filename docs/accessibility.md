@@ -64,6 +64,10 @@ Unicode scalar indices. Collapse and expansion are not bijections: an offset
 inside a removed/expanded span normalizes, and soft-wrap boundaries may appear
 on both neighbouring lines. Generated content has an identity without a DOM
 byte offset; inverse results can contain several matching boundaries.
+Repeated DOM ranges retain every occurrence. At a shared DOM offset, affinity
+chooses the source range ending there (Upstream) or beginning there (Downstream),
+even when generated content separates those ranges. A one-sided source edge
+normalizes to its available side.
 
 Before reflow, preserve `SourcePosition` anchors. Build a new AccessibleLayout,
 resolve those anchors using `from_source`, and let the caller choose among
@@ -110,9 +114,14 @@ TextRun children follow logical reading order, with per-unit UTF-8 byte lengths,
 physical bounds/directional positions/widths, font size/weight/style, language,
 solid color/decorations and word starts. Runs split at line/attribute/direction/
 atomic boundaries and at255 selectable units, with same-line links across
-splits. Hard breaks export LF and a caret at a hard line's end maps to the
-break's beginning; selecting across the break reaches the next line. Core byte
-positions retain their original representation. Soft wraps add no LF.
+splits. Hard breaks export LF. `to_position` converts a caret and maps a hard
+line's end to the break's beginning. `from_position` preserves an explicit
+after-break range endpoint, including the consumer's document end after a
+trailing LF. `update` retains exact endpoints for nonempty selections, so a
+whole-document or LF-only selection includes the break in either direction.
+For a collapsed selection it exports one canonical focus caret; equivalent
+boundaries on neighbouring lines also count as collapsed. Core byte positions
+retain their original representation. Soft wraps add no LF.
 
 `to_position(core_position)` and `from_position(accesskit_position, affinity)`
 use the latest successful export. AccessKit positions do not encode affinity;

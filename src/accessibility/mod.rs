@@ -12,7 +12,7 @@ pub mod accesskit;
 use crate::font::FontId;
 use crate::geometry::{Direction, LogicalRect, WritingMode};
 use crate::hit::{LineLayout, TextPosition};
-use crate::mapping::{Affinity, TextOrigin};
+use crate::mapping::{Affinity, MappingKind, TextOrigin};
 use crate::node::NodeId;
 use crate::style::InlineStyle;
 use crate::{BreakReason, GlyphOrientation, Line};
@@ -186,15 +186,49 @@ impl<'a> AccessibleLayout<'a> {
             };
             match source.origin {
                 TextOrigin::Dom { node, offset } => {
-                    if let Some((offset, _)) = mapping.dom_to_text(node, offset)
-                        && let Some(p) = self.from_text_position(TextPosition {
-                            line,
-                            offset,
-                            affinity: source.affinity,
-                        })
-                    {
-                        result.push(p);
+                    let candidates = mapping.units().iter().filter_map(|u| {
+                        if u.node != node || offset < u.dom.start || offset > u.dom.end {
+                            return None;
+                        }
+                        let interior = u.dom.start < offset && offset < u.dom.end;
+                        let (text, affinity) = if offset == u.dom.end {
+                            (u.text.end, Affinity::Upstream)
+                        } else {
+                            match u.kind {
+                                MappingKind::Identity => (
+                                    u.text.start.saturating_add(offset - u.dom.start),
+                                    if interior {
+                                        source.affinity
+                                    } else {
+                                        Affinity::Downstream
+                                    },
+                                ),
+                                MappingKind::Collapsed => (u.text.end, Affinity::Downstream),
+                                MappingKind::Expanded => (u.text.start, Affinity::Downstream),
+                            }
+                        };
+                        Some((text, affinity, interior))
+                    });
+                    // At a shared source boundary, prefer the requested side.
+                    // Interior offsets and every repeated occurrence survive;
+                    // a one-sided source edge normalizes to its available side.
+                    let preferred = candidates
+                        .clone()
+                        .any(|(_, affinity, interior)| interior || affinity == source.affinity);
+                    let begin = result.len();
+                    for (offset, affinity, interior) in candidates {
+                        if (interior || affinity == source.affinity || !preferred)
+                            && let Some(p) = self.from_text_position(TextPosition {
+                                line,
+                                offset,
+                                affinity,
+                            })
+                        {
+                            result.push(p);
+                        }
                     }
+                    result[begin..]
+                        .sort_by_key(|p| (p.character, p.affinity == Affinity::Downstream));
                 }
                 TextOrigin::Generated { .. } => {
                     for character in 0..=self.lines[line].characters.len() {
@@ -208,6 +242,7 @@ impl<'a> AccessibleLayout<'a> {
                 }
             }
         }
+        result.dedup();
         result
     }
     pub fn selection_rects(&self, selection: AccessibleSelection) -> Vec<LogicalRect> {

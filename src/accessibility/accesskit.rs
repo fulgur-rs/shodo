@@ -83,14 +83,11 @@ impl AccessKitAdapter {
         builder.build(layout, frame, semantics)?;
         let positions = PositionState::new(layout, builder.spans);
         if let Some(s) = selection {
-            root_node.set_text_selection(types::TextSelection {
-                anchor: positions
-                    .to_position(s.anchor)
+            root_node.set_text_selection(
+                positions
+                    .to_selection(s)
                     .ok_or(AccessKitError::InvalidSelection)?,
-                focus: positions
-                    .to_position(s.focus)
-                    .ok_or(AccessKitError::InvalidSelection)?,
-            });
+            );
         } else {
             root_node.clear_text_selection();
         }
@@ -113,9 +110,12 @@ impl AccessKitAdapter {
             focus: self.root,
         })
     }
+    /// Convert a caret, normalizing a hard line's end to the break's beginning.
+    /// `update` preserves after-break endpoints in nonempty selections instead.
     pub fn to_position(&self, position: AccessiblePosition) -> Option<types::TextPosition> {
         self.positions.to_position(position)
     }
+    /// Resolve an exact SDK endpoint, including the end after a hard break.
     pub fn from_position(
         &self,
         position: types::TextPosition,
