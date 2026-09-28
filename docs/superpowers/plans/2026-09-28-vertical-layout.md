@@ -140,7 +140,7 @@ Create `tests/vertical.rs`;必要な固定font table fixtureを既存fixture生�
   allocator、snapshot matrix/Python、SFNT再生成、benchmark。
   commandは各既存harnessのhelp/CI定義に合わせ、exact commandとexitをfinal-gates.jsonへ記録する。
   Expected: 全gate成功。MSRVは専用target dir、snapshot出力は新規所有directoryを使用する。
-- [ ] **Step 4: Commit and task-done** `feat: render and verify vertical layouts` をcommit。
+- [x] **Step 4: Commit and task-done** `feat: render and verify vertical layouts` をcommit。
   task-doneは `cargo +stable test --workspace --offline`、Expected: 全workspace成功。
 ## Final branch review and integration（Task 4 の実装完了後）
 
