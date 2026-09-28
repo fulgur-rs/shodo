@@ -61,6 +61,24 @@ pub(crate) fn process(
     };
     for item in raw {
         match item {
+            RawItem::RubyBoundary {
+                ruby,
+                boundary,
+                node,
+                style,
+            } => {
+                p.check_item()?;
+                let at = p.pos();
+                p.items.push(Item {
+                    kind: ItemKind::RubyBoundary {
+                        ruby: *ruby,
+                        boundary: *boundary,
+                    },
+                    text: at..at,
+                    style: *style,
+                    node: *node,
+                });
+            }
             RawItem::Text {
                 source,
                 range,

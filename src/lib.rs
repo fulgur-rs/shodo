@@ -13,7 +13,12 @@ pub mod hit;
 pub mod limits;
 pub mod mapping;
 pub mod node;
+pub mod ruby;
 pub mod style;
+pub use ruby::{
+    Ruby, RubyAlign, RubyAnnotation, RubyBase, RubyContent, RubyError, RubyLevel, RubyMerge,
+    RubyOverhang, RubyPosition, RubySpan, RubyStyle, RubyVisibility,
+};
 
 mod analysis;
 mod builder;

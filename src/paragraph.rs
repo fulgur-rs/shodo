@@ -69,6 +69,7 @@ impl FirstLineData {
 }
 
 pub(crate) struct ParagraphData {
+    pub(crate) ruby_inputs: Vec<crate::ruby::builder::RubyInput>,
     #[cfg(test)]
     pub(crate) spacing_setup_visits: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
@@ -236,6 +237,7 @@ impl Paragraph {
             mut first_line_styles,
             mut warnings,
             offset_mapping,
+            rubies,
             ..
         } = b;
         for s in &mut styles {
@@ -297,6 +299,7 @@ impl Paragraph {
             &mut warnings,
             &mut sat,
         )?;
+        data.ruby_inputs = rubies.clone();
         if let Some(mut alternate_styles) = alternate_styles {
             for s in &mut alternate_styles {
                 s.font_size = sanitize_font_size(s.font_size, &mut warnings);
@@ -366,6 +369,7 @@ impl Paragraph {
                 }
                 e
             })?;
+            alternate.ruby_inputs = rubies;
             finalize_data(&mut data, cx, &mut warnings, &mut sat);
             finalize_data(&mut alternate, cx, &mut warnings, &mut sat);
             let mut normal_search = 0;
@@ -590,6 +594,7 @@ fn build_data(
         }
     }
     let data = ParagraphData {
+        ruby_inputs: Vec::new(),
         #[cfg(test)]
         spacing_setup_visits: Default::default(),
         #[cfg(test)]
@@ -778,7 +783,7 @@ macro_rules! first_line_properties {
     };
 }
 
-fn first_line_style(
+pub(crate) fn first_line_style(
     original: &InlineStyle,
     root: &InlineStyle,
     first: &InlineStyle,

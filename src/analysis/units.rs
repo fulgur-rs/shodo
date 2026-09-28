@@ -159,6 +159,9 @@ pub(crate) fn build_units(
             });
         };
         match &item.kind {
+            // Pairing markers retain processed offsets for ruby preparation;
+            // their inline/bidi wrappers already supply all layout units.
+            ItemKind::RubyBoundary { .. } => {}
             ItemKind::Text => {
                 while run_index < runs.len() && runs[run_index].item == index {
                     let run = &runs[run_index];
