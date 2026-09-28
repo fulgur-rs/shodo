@@ -27,13 +27,35 @@ pub fn digest(run: &Run, fonts: &FixtureFonts) -> Result<Digest, BenchError> {
         hash.update(n.to_bits().to_le_bytes());
         Ok(())
     };
-    for line in &run.lines {
+    let mut pending: Vec<_> = run.lines.iter().rev().collect();
+    while let Some(line) = pending.pop() {
         integer(&mut hash, line.text_range().start);
         integer(&mut hash, line.text_range().end);
         scalar(&mut hash, line.inline_size())?;
         scalar(&mut hash, line.block_size())?;
         for f in line.fragments() {
             match f {
+                Fragment::RubyAnnotation(a) => {
+                    hash.update(b"ruby");
+                    integer(&mut hash, a.container().0 as usize);
+                    integer(&mut hash, a.node().map_or(0, |n| n.0 as usize));
+                    integer(&mut hash, a.level());
+                    integer(&mut hash, a.visibility() as usize);
+                    integer(&mut hash, a.base_text_range().start);
+                    integer(&mut hash, a.base_text_range().end);
+                    let t = a.transform();
+                    for value in [
+                        t.inline_inline,
+                        t.inline_block,
+                        t.block_inline,
+                        t.block_block,
+                        t.inline_offset,
+                        t.block_offset,
+                    ] {
+                        scalar(&mut hash, value)?;
+                    }
+                    pending.push(a.line());
+                }
                 Fragment::GlyphRun(r) => {
                     runs += 1;
                     let face = fonts

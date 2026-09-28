@@ -21,18 +21,17 @@ pub(crate) struct RubyData {
 // Measurement/placement consume these records in Tasks 3/4.
 pub(crate) struct PreparedRuby {
     pub(crate) node: NodeId,
+    pub(crate) box_index: Option<u32>,
     pub(crate) units: Range<usize>,
     pub(crate) columns: Vec<PreparedBase>,
-    #[allow(dead_code)] // measurement/placement policy in Tasks 3/4
     pub(crate) levels: Vec<RubyStyle>,
     pub(crate) lanes: Vec<PreparedLane>,
     pub(crate) cuts: Vec<PairedCut>,
 }
 
 pub(crate) struct PreparedBase {
-    #[allow(dead_code)] // public fragment ownership in Task 3
     pub(crate) node: Option<NodeId>,
-    #[allow(dead_code)] // alignment in Task 4
+    pub(crate) box_index: Option<u32>,
     pub(crate) align: RubyAlign,
     pub(crate) units: Range<usize>,
     pub(crate) text: Range<u32>,
@@ -40,12 +39,9 @@ pub(crate) struct PreparedBase {
 
 #[derive(Clone)]
 pub(crate) struct PreparedLane {
-    #[allow(dead_code)] // public fragment ownership in Task 3
     pub(crate) node: Option<NodeId>,
-    #[allow(dead_code)] // measurement grouping in Task 3
     pub(crate) level: usize,
     pub(crate) columns: Range<usize>,
-    #[allow(dead_code)] // accepted fragment paint visibility in Task 3
     pub(crate) visibility: RubyVisibility,
     pub(crate) paragraph: Paragraph,
 }
@@ -112,6 +108,7 @@ fn containers(data: &ParagraphData, inputs: &[RubyInput]) -> Vec<PreparedRuby> {
         .iter()
         .map(|input| PreparedRuby {
             node: input.node,
+            box_index: None,
             units: 0..0,
             columns: input
                 .normalized
@@ -119,6 +116,7 @@ fn containers(data: &ParagraphData, inputs: &[RubyInput]) -> Vec<PreparedRuby> {
                 .iter()
                 .map(|base| PreparedBase {
                     node: base.node,
+                    box_index: None,
                     align: base.align,
                     units: 0..0,
                     text: 0..0,
@@ -189,6 +187,18 @@ fn containers(data: &ParagraphData, inputs: &[RubyInput]) -> Vec<PreparedRuby> {
                     container.columns[column].text.end = item.text.end;
                 }
             }
+        }
+    }
+    for ruby in &mut result {
+        let first_box = |mut range: Range<usize>| {
+            range.find_map(|i| match data.units[i].kind {
+                crate::analysis::units::UnitKind::Open { box_index } => Some(box_index),
+                _ => None,
+            })
+        };
+        ruby.box_index = first_box(ruby.units.clone());
+        for column in &mut ruby.columns {
+            column.box_index = first_box(column.units.clone());
         }
     }
     result

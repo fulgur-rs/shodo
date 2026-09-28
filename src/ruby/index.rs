@@ -26,12 +26,14 @@ pub(super) fn take_visits() -> usize {
 struct Index {
     ordinals: Vec<usize>,
     classes: Vec<BreakClass>,
+    emergency_min_content: Vec<bool>,
 }
 
 impl Index {
     fn new(data: &ParagraphData) -> Self {
         let mut ordinals = Vec::with_capacity(data.units.len() + 1);
         let mut classes = vec![BreakClass::Prohibited; data.units.len() + 1];
+        let mut emergency_min_content = vec![false];
         ordinals.push(0);
         let mut character = 0;
         let mut caret = 0;
@@ -83,8 +85,19 @@ impl Index {
                 classes[cursor] = BreakClass::Mandatory;
             }
             ordinals.push(ordinal);
+            emergency_min_content.push(
+                if matches!(unit.kind, UnitKind::Close { .. } | UnitKind::BidiControl) {
+                    emergency_min_content[i]
+                } else {
+                    unit.emergency_min_content
+                },
+            );
         }
-        let mut result = Self { ordinals, classes };
+        let mut result = Self {
+            ordinals,
+            classes,
+            emergency_min_content,
+        };
         for ruby in data.ruby.containers.iter().rev() {
             result.restrict(ruby);
         }
@@ -222,7 +235,7 @@ impl Index {
 }
 
 pub(super) fn prepare_cuts(
-    data: &ParagraphData,
+    data: &mut ParagraphData,
     containers: &mut [PreparedRuby],
     budget: &mut RubyBudget,
 ) -> Result<(), LimitExceeded> {
@@ -271,6 +284,40 @@ pub(super) fn prepare_cuts(
             cuts::build_spanned(&base, &lanes, &spans)
         };
         index.restrict(ruby);
+    }
+    // Install the coordinated opportunities in the ordinary unit stream so
+    // every existing greedy/intrinsic/plan consumer sees the same legal cuts.
+    // Preserve normal CSS at container endpoints; an endpoint is always a
+    // correspondence cursor, but is not necessarily an external soft break.
+    let externals: Vec<_> = containers
+        .iter()
+        .map(|ruby| {
+            data.units[ruby.units.clone()]
+                .iter()
+                .rev()
+                .find(|u| {
+                    !matches!(
+                        u.kind,
+                        UnitKind::Open { .. } | UnitKind::Close { .. } | UnitKind::BidiControl
+                    )
+                })
+                .map_or(BreakClass::Prohibited, |u| u.break_after)
+        })
+        .collect();
+    for (ruby, external) in containers.iter().zip(externals).rev() {
+        for (i, unit) in data.units[ruby.units.clone()].iter_mut().enumerate() {
+            unit.break_after = index.classes[ruby.units.start + i + 1];
+            unit.emergency_min_content = index.emergency_min_content[ruby.units.start + i + 1];
+        }
+        if let Some(last) = data.units.get_mut(ruby.units.end - 1) {
+            last.break_after = if ruby.units.end == index.classes.len() - 1 {
+                BreakClass::Prohibited
+            } else if index.classes[ruby.units.end] == BreakClass::Prohibited {
+                BreakClass::Prohibited
+            } else {
+                external
+            };
+        }
     }
     Ok(())
 }

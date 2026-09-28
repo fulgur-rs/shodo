@@ -43,6 +43,22 @@ fn geometry(line: &shodo::Line, seed: u64) {
     };
     for f in line.fragments() {
         match f {
+            Fragment::RubyAnnotation(a) => {
+                let t = a.transform();
+                assert!(
+                    [
+                        t.inline_inline,
+                        t.inline_block,
+                        t.block_inline,
+                        t.block_block,
+                        t.inline_offset,
+                        t.block_offset
+                    ]
+                    .iter()
+                    .all(|v| v.is_finite())
+                );
+                geometry(a.line(), seed);
+            }
             Fragment::GlyphRun(r) => {
                 assert!(r.baseline().is_finite());
                 for g in r.glyphs() {

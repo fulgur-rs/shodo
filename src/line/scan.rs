@@ -64,12 +64,15 @@ pub(super) fn scan(
         let hangs = super::whitespace::fits_hanging(data, i);
         let suffix = super::decoration::width(data, i + 1, false, sat);
         let (edge_delta, viable) = super::windows::candidate(data, start, i + 1, cx, sat);
+        let ruby_delta =
+            crate::ruby::measure::candidate(data, start, i + 1, atomics, cx, sat).adjustment;
         let transparent =
             super::whitespace::transparent(data, i) && !matches!(unit.kind, UnitKind::ForcedBreak);
         let extent = pos
             .add(w, sat)
             .add(tracking, sat)
             .add(edge_delta, sat)
+            .add(ruby_delta, sat)
             .add(suffix, sat)
             .sub(
                 if transparent {
@@ -128,6 +131,7 @@ pub(super) fn scan(
         let required = pos
             .add(kept_spacing, sat)
             .add(edge_delta, sat)
+            .add(ruby_delta, sat)
             .sub(hanging, sat)
             .add(suffix, sat);
         let adjustment = super::punctuation::edges(
@@ -160,6 +164,7 @@ pub(super) fn scan(
                         .sub(hanging, sat)
                         .add(suffix, sat)
                         .add(super::windows::cost(&windows, i, sat), sat);
+                    let required = required.add(ruby_delta, sat);
                     let adjustment = super::punctuation::edges(
                         data,
                         summary,
@@ -198,7 +203,7 @@ pub(super) fn scan(
     // precede a box's end. Out-of-flow anchors are not pulled.
     if matches!(reason, BreakReason::Regular | BreakReason::Emergency) {
         while let Some(unit) = units.get(i)
-            && matches!(unit.kind, UnitKind::Close { .. } | UnitKind::BidiControl)
+            && super::pulls_after_break(data, i)
         {
             widths.push(unit_width(data, unit, LayoutUnit::ZERO, atomics, cx, sat));
             i += 1;
@@ -209,6 +214,7 @@ pub(super) fn scan(
         .fold(LayoutUnit::ZERO, |acc, w| acc.add(*w, sat));
     let (hang_start, trailing) = super::whitespace::trailing(data, start, i, &widths, sat);
     let mut result = Scan {
+        ruby: None,
         prepared: false,
         overlays: Vec::new(),
         end: i,
@@ -343,7 +349,7 @@ pub(super) fn unit_width(
 
 /// Tab-size numbers use the nearest block's actual space and spacing.
 /// A stop closer than half a ch is skipped (CSS Text 3 §4.1.2/4.2).
-fn tab_width(
+pub(super) fn tab_width(
     data: &ParagraphData,
     unit: &Unit,
     content_pos: LayoutUnit,

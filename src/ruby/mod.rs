@@ -1,10 +1,14 @@
 //! Source-preserving CSS ruby input and formatting.
+pub(crate) mod align;
 pub(crate) mod budget;
 pub(crate) mod builder;
 pub(crate) mod cuts;
+pub(crate) mod geometry;
 mod index;
 pub(crate) mod input;
+pub(crate) mod measure;
 pub(crate) mod pairing;
+pub(crate) mod place;
 pub(crate) mod prepare;
 pub use input::*;
 
@@ -23,3 +27,7 @@ mod limit_tests;
 #[cfg(test)]
 #[path = "tests/prepared_cuts.rs"]
 mod prepared_cut_tests;
+
+#[cfg(test)]
+#[path = "tests/measure.rs"]
+mod measure_tests;

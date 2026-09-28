@@ -218,10 +218,269 @@ impl Cursor {
     }
 }
 
+/// A balanced range index inside each UAX #9 embedding group. Internal nodes
+/// retain the exact same associative visual boundary costs as Cursor. Clipping
+/// a range preserves embedding groups and never scans its complete prefix.
+#[derive(Debug, Default)]
+pub(super) struct RangeIndex {
+    nodes: Vec<RangeNode>,
+    root: Option<usize>,
+    #[cfg(test)]
+    visits: std::cell::Cell<usize>,
+}
+
+#[derive(Debug)]
+struct RangeNode {
+    range: std::ops::Range<usize>,
+    summary: Summary,
+    children: Option<(usize, usize)>,
+    reversed: bool,
+}
+
+impl RangeIndex {
+    pub(super) fn new(
+        values: impl Iterator<Item = (u8, Summary)>,
+        data: Option<&ParagraphData>,
+    ) -> Self {
+        struct Group {
+            level: u8,
+            children: Vec<usize>,
+        }
+        let mut result = Self::default();
+        let mut groups = vec![Group {
+            level: 0,
+            children: Vec::new(),
+        }];
+        for (i, (level, summary)) in values.enumerate() {
+            let mut carry = None;
+            while groups.last().unwrap().level > level {
+                let mut group = groups.pop().unwrap();
+                if let Some(node) = carry {
+                    group.children.push(node);
+                }
+                carry = result.balance(&group.children, group.level % 2 == 1, data);
+            }
+            if groups.last().unwrap().level < level {
+                groups.push(Group {
+                    level,
+                    children: Vec::new(),
+                });
+            }
+            let group = groups.last_mut().unwrap();
+            if let Some(node) = carry {
+                group.children.push(node);
+            }
+            let node = result.nodes.len();
+            result.nodes.push(RangeNode {
+                range: i..i + 1,
+                summary: if level % 2 == 1 {
+                    summary.reverse()
+                } else {
+                    summary
+                },
+                children: None,
+                reversed: level % 2 == 1,
+            });
+            group.children.push(node);
+        }
+        let mut carry = None;
+        while let Some(mut group) = groups.pop() {
+            if let Some(node) = carry {
+                group.children.push(node);
+            }
+            carry = result.balance(&group.children, group.level % 2 == 1, data);
+        }
+        result.root = carry;
+        result
+    }
+
+    fn balance(
+        &mut self,
+        children: &[usize],
+        reversed: bool,
+        data: Option<&ParagraphData>,
+    ) -> Option<usize> {
+        if children.is_empty() {
+            return None;
+        }
+        if children.len() == 1 {
+            return Some(children[0]);
+        }
+        let half = children.len() / 2;
+        let left = self.balance(&children[..half], reversed, data).unwrap();
+        let right = self.balance(&children[half..], reversed, data).unwrap();
+        let summary = if reversed {
+            self.nodes[right]
+                .summary
+                .join(self.nodes[left].summary, data)
+        } else {
+            self.nodes[left]
+                .summary
+                .join(self.nodes[right].summary, data)
+        };
+        let range = self.nodes[left].range.start..self.nodes[right].range.end;
+        let node = self.nodes.len();
+        self.nodes.push(RangeNode {
+            range,
+            summary,
+            children: Some((left, right)),
+            reversed,
+        });
+        Some(node)
+    }
+
+    pub(super) fn query(
+        &self,
+        range: std::ops::Range<usize>,
+        data: Option<&ParagraphData>,
+    ) -> Summary {
+        self.root.map_or(Summary::default(), |root| {
+            self.query_node(root, &range, None, data)
+        })
+    }
+
+    /// Replace one source leaf for an accepted discretionary glyph. Only the
+    /// leaf's path and the selected range edges are visited; other nodes reuse
+    /// their exact visual summaries.
+    pub(super) fn query_replace(
+        &self,
+        range: std::ops::Range<usize>,
+        replacement: Option<(usize, Summary)>,
+        data: Option<&ParagraphData>,
+    ) -> Summary {
+        self.root.map_or(Summary::default(), |root| {
+            self.query_node(root, &range, replacement, data)
+        })
+    }
+
+    #[cfg(test)]
+    pub(super) fn take_visits(&self) -> usize {
+        self.visits.replace(0)
+    }
+
+    fn query_node(
+        &self,
+        i: usize,
+        range: &std::ops::Range<usize>,
+        replacement: Option<(usize, Summary)>,
+        data: Option<&ParagraphData>,
+    ) -> Summary {
+        #[cfg(test)]
+        {
+            self.visits.set(self.visits.get() + 1);
+        }
+        let node = &self.nodes[i];
+        if range.start >= node.range.end || range.end <= node.range.start {
+            return Summary::default();
+        }
+        if range.start <= node.range.start
+            && node.range.end <= range.end
+            && replacement.is_none_or(|(at, _)| !node.range.contains(&at))
+        {
+            return node.summary;
+        }
+        let Some((a, b)) = node.children else {
+            return replacement
+                .filter(|(at, _)| node.range.contains(at))
+                .map_or(node.summary, |(_, summary)| {
+                    if node.reversed {
+                        summary.reverse()
+                    } else {
+                        summary
+                    }
+                });
+        };
+        let left = self.query_node(a, range, replacement, data);
+        let right = self.query_node(b, range, replacement, data);
+        if node.reversed {
+            right.join(left, data)
+        } else {
+            left.join(right, data)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use unicode_bidi::{BidiInfo, Level};
+
+    #[test]
+    fn indexed_ranges_match_online_bidi_spacing_for_every_small_interval() {
+        for profile in 0..4096usize {
+            let values: Vec<_> = (0..6)
+                .map(|i| {
+                    (
+                        ((profile >> (2 * i)) & 3) as u8,
+                        Summary::leaf(Edge {
+                            tracking: (i as i32 - 2) * 64,
+                            kind: [Kind::Text, Kind::Cursive, Kind::Atomic, Kind::Barrier]
+                                [(i + profile) % 4],
+                            ..Default::default()
+                        }),
+                    )
+                })
+                .collect();
+            let index = RangeIndex::new(values.iter().copied(), None);
+            for start in 0..6 {
+                for end in start + 1..=6 {
+                    let mut cursor = Cursor::default();
+                    for (level, value) in &values[start..end] {
+                        cursor.push(*level, *value, None);
+                    }
+                    let actual = index.query(start..end, None);
+                    let expected = cursor.summary(None);
+                    assert_eq!(actual.cost, expected.cost, "{profile}: {start}..{end}");
+                    assert_eq!(
+                        actual.first.map(|e| e.tracking),
+                        expected.first.map(|e| e.tracking)
+                    );
+                    assert_eq!(
+                        actual.last.map(|e| e.tracking),
+                        expected.last.map(|e| e.tracking)
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn indexed_prefix_queries_do_not_rescan_all_preceding_characters() {
+        for count in [512, 1024, 4096] {
+            let index = RangeIndex::new(
+                (0..count).map(|i| {
+                    (
+                        ((i * 37) % 127) as u8,
+                        Summary::leaf(Edge {
+                            tracking: 64,
+                            kind: Kind::Text,
+                            ..Default::default()
+                        }),
+                    )
+                }),
+                None,
+            );
+            let mut cursor = Cursor::default();
+            for end in 1..=count {
+                cursor.push(
+                    (((end - 1) * 37) % 127) as u8,
+                    Summary::leaf(Edge {
+                        tracking: 64,
+                        kind: Kind::Text,
+                        ..Default::default()
+                    }),
+                    None,
+                );
+                assert_eq!(index.query(0..end, None).cost, cursor.summary(None).cost);
+            }
+            assert!(
+                index.visits.get() < count * 127,
+                "{} visits for{count}",
+                index.visits.get()
+            );
+            assert!(index.nodes.len() < count * 2);
+        }
+    }
 
     #[test]
     fn bidi_spacing_candidates_match_independent_reorder() {

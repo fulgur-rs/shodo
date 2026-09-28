@@ -28,24 +28,47 @@ pub(super) fn matches(
         })
 }
 
-fn hyphen_end(data: &ParagraphData, end: usize) -> Option<usize> {
+pub(super) fn hyphen_end(data: &ParagraphData, end: usize) -> Option<usize> {
     if end >= data.units.len() || matches!(data.units[end].kind, UnitKind::BlockInInline { .. }) {
         return None;
     }
     (0..end)
         .rev()
         .find(|i| {
-            !matches!(
-                data.units[*i].kind,
-                UnitKind::Close { .. } | UnitKind::BidiControl
-            )
+            data.units[*i].break_after != BreakClass::Prohibited
+                || !matches!(
+                    data.units[*i].kind,
+                    UnitKind::Close { .. } | UnitKind::BidiControl
+                )
         })
         .filter(|i| data.units[*i].break_after == BreakClass::Hyphen)
-        .map(|i| i + 1)
+        .and_then(|_| super::hyphen::source_unit(data, 0, end).map(|i| i + 1))
 }
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn selected(
+    data: &ParagraphData,
+    start: usize,
+    end: usize,
+    offset: LayoutUnit,
+    indent: LayoutUnit,
+    flags: u8,
+    options: &LineOptions,
+    available: LayoutUnit,
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> Scan {
+    let mut scan = selected_raw(
+        data, start, end, offset, indent, flags, options, available, atomics, cx, sat,
+    );
+    crate::ruby::measure::apply(data, start, &mut scan, atomics, cx, sat);
+    scan
+}
+
+/// Ordinary unit costs without recursively applying this range's ruby groups.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn selected_raw(
     data: &ParagraphData,
     start: usize,
     end: usize,
@@ -92,6 +115,7 @@ pub(super) fn selected(
         super::soft_break_reason(data, start, end)
     };
     let mut scan = Scan {
+        ruby: None,
         prepared: false,
         overlays: Vec::new(),
         end,
@@ -249,10 +273,7 @@ impl Paragraph {
                             {
                                 let mut alt = j + 1;
                                 while alt < actual_end
-                                    && matches!(
-                                        candidate_data.units[alt].kind,
-                                        UnitKind::Close { .. } | UnitKind::BidiControl
-                                    )
+                                    && super::pulls_after_break(candidate_data, alt)
                                 {
                                     alt += 1;
                                 }

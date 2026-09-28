@@ -777,3 +777,50 @@ fn annotation_wrapper_counts_against_its_own_nesting_limit() {
         (crate::limits::LimitKind::NestingDepth, 1, 2)
     );
 }
+
+#[test]
+fn prepared_parallel_cuts_replace_ordinary_base_break_classes() {
+    let p = build(pair(
+        content(10, "日本語", &style("Shodo Fixture CJK")),
+        content(20, "👩‍💻", &style("Shodo Fixture Emoji")),
+    ));
+    let ruby = &p.data.ruby.containers[0];
+    assert_eq!(ruby.cuts.len(), 2);
+    assert!(
+        p.data.units[ruby.units.clone()]
+            .iter()
+            .all(|u| u.break_after == BreakClass::Prohibited),
+        "the ordinary scanner must not split a base while its actual reading is indivisible"
+    );
+}
+
+#[test]
+fn nested_ruby_preserves_the_normal_break_after_its_outer_container() {
+    let s = style("Shodo Fixture CJK");
+    let mut base = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+    base.push_ruby(
+        NodeId(18),
+        &s,
+        pair(content(11, "日", &s), content(21, "に", &s)),
+    );
+    let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+    b.push_ruby(
+        NodeId(8),
+        &s,
+        pair(RubyContent::from_builder(base), content(20, "にほん", &s)),
+    )
+    .push_text(
+        TextSource::Dom {
+            node: NodeId(30),
+            offset: 0,
+        },
+        "本",
+    );
+    let p = b.build(&mut LayoutContext::new(), &fonts()).unwrap();
+    let end = p.data.ruby.containers[0].units.end;
+    assert_eq!(
+        p.data.units[end - 1].break_after,
+        BreakClass::Allowed,
+        "restricting the nested base must not erase the outer normal-CSS boundary"
+    );
+}

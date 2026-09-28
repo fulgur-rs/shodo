@@ -34,7 +34,7 @@ pub use context::LayoutContext;
 pub use output::{
     AnchorFragment, AtomicFragment, BreakReason, Cluster, ClusterFlags, DecorationRect, Fragment,
     Glyph, GlyphRunView, GlyphTransform, Glyphs, InlineBoxFragment, Line, LineMetrics, PaintSpan,
-    TextCombination,
+    RubyAnnotationView, RubyTransform, TextCombination,
 };
 pub use paragraph::{
     AtomicIntrinsic, AtomicIntrinsics, AtomicSize, AtomicSizes, BreakPlan, BreakToken, FloatClear,

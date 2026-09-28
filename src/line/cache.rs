@@ -182,12 +182,7 @@ impl PartialLine {
             .binary_search_by_key(&end, |c| c.0)
             .ok()
             .map(|_| end);
-        while end < self.scan.end
-            && matches!(
-                self.data.units[end].kind,
-                UnitKind::Close { .. } | UnitKind::BidiControl
-            )
-        {
+        while end < self.scan.end && super::pulls_after_break(&self.data, end) {
             end += 1;
         }
         (end, hyphen)
@@ -209,7 +204,7 @@ pub(super) fn resolve(
 ) -> Result<Scan, (NodeId, u32, LayoutUnit)> {
     let start = token.unit as usize;
     let valid = cx.partial.as_ref().is_some_and(|p| {
-        p.data.id == para.id()
+        Arc::ptr_eq(&p.data, &para.data)
             && p.token == token
             && p.revision == atomics.revision
             && p.options == *options
@@ -287,6 +282,11 @@ pub(super) fn resolve(
             let next = prefix[k].add(*w, sat);
             prefix.push(next);
             let (delta, viable) = super::windows::candidate(data, start, start + k + 1, cx, sat);
+            let delta = delta.add(
+                crate::ruby::measure::candidate(data, start, start + k + 1, atomics, cx, sat)
+                    .adjustment,
+                sat,
+            );
             let suffix = decoration::width(data, start + k + 1, false, sat);
             let transparent = super::whitespace::transparent(data, start + k)
                 && !matches!(u.kind, UnitKind::ForcedBreak);
@@ -356,6 +356,18 @@ pub(super) fn resolve(
                         .sub(hanging, sat)
                         .add(suffix, sat)
                         .add(super::windows::cost(&windows, start + k + 1, sat), sat);
+                    let required = required.add(
+                        crate::ruby::measure::candidate(
+                            data,
+                            start,
+                            start + k + 1,
+                            atomics,
+                            cx,
+                            sat,
+                        )
+                        .adjustment,
+                        sat,
+                    );
                     let adjustment = super::punctuation::edges(
                         data,
                         summary,
@@ -427,13 +439,16 @@ pub(super) fn resolve(
         let delta = windows.iter().fold(LayoutUnit::ZERO, |sum, window| {
             sum.add(window.delta(i, sat), sat)
         });
-        return Err((node, ordinal, position.add(delta, sat)));
+        let ruby_delta =
+            crate::ruby::measure::candidate(&data, start, i, atomics, cx, sat).adjustment;
+        return Err((node, ordinal, position.add(delta, sat).add(ruby_delta, sat)));
     }
     let (hang_start, trailing) =
         super::whitespace::trailing(&p.data, start, end, &p.scan.widths, sat);
     // Release the mutable cache borrow before accessing the context shaper.
     let data = Arc::clone(&p.data);
     let mut result = Scan {
+        ruby: None,
         prepared: false,
         overlays: Vec::new(),
         end,

@@ -67,6 +67,17 @@ pub(super) fn line(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> Option<Vec<super::windows::Window>> {
-    let replacement = replacement(data, &data.units[end - 1], cx)?;
+    let index = source_unit(data, start, end)?;
+    let replacement = replacement(data, &data.units[index], cx)?;
     super::windows::hyphen(data, start, end, &replacement, cx, sat)
+}
+
+/// A coordinated ruby cut can follow the source hyphen's box/isolate closers.
+pub(super) fn source_unit(data: &ParagraphData, start: usize, end: usize) -> Option<usize> {
+    (start..end).rev().find(|i| {
+        !matches!(
+            data.units[*i].kind,
+            UnitKind::Close { .. } | UnitKind::BidiControl
+        )
+    })
 }

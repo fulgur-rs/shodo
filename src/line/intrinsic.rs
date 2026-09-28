@@ -45,6 +45,39 @@ impl Paragraph {
         let mut data: &ParagraphData = first.map_or(&self.data, |f| &f.data);
         cx.warnings.set_max(self.data.limits.max_warnings);
         let mut sat = Saturation::default();
+        let mut ruby_min_atomics = AtomicSizes::new();
+        let mut ruby_max_atomics = AtomicSizes::new();
+        if !data.ruby.containers.is_empty() {
+            for (node, value) in &inputs.atomics {
+                let lo = crate::sanitize::layout_length(
+                    value.min_content,
+                    true,
+                    &mut cx.warnings,
+                    &mut sat,
+                );
+                let hi = crate::sanitize::layout_length(
+                    value.max_content,
+                    true,
+                    &mut cx.warnings,
+                    &mut sat,
+                )
+                .max(lo);
+                ruby_min_atomics.insert(
+                    *node,
+                    crate::AtomicSize {
+                        inline_size: lo,
+                        ..Default::default()
+                    },
+                );
+                ruby_max_atomics.insert(
+                    *node,
+                    crate::AtomicSize {
+                        inline_size: hi,
+                        ..Default::default()
+                    },
+                );
+            }
+        }
         let mut options = *options;
         options.text_indent.length = crate::sanitize::layout_length(
             options.text_indent.length,
@@ -62,6 +95,7 @@ impl Paragraph {
         let mut word_unit = 0;
         let mut word_start = data.units.first().map_or(0, |u| u.text.start);
         let mut total = indent;
+        let mut total_unit = 0;
         let mut trailing = LayoutUnit::ZERO;
         let mut word_trailing = LayoutUnit::ZERO;
         let mut left = LayoutUnit::ZERO;
@@ -78,6 +112,18 @@ impl Paragraph {
             ) {
                 let suffix = super::decoration::width(data, i, false, &mut sat);
                 let natural_min = word
+                    .add(
+                        crate::ruby::measure::candidate(
+                            data,
+                            word_unit,
+                            i,
+                            &ruby_min_atomics,
+                            cx,
+                            &mut sat,
+                        )
+                        .adjustment,
+                        &mut sat,
+                    )
                     .add(kept_word_spacing, &mut sat)
                     .sub(word_trailing, &mut sat)
                     .add(suffix, &mut sat);
@@ -92,6 +138,18 @@ impl Paragraph {
                     &mut sat,
                 ));
                 let natural_max = total
+                    .add(
+                        crate::ruby::measure::candidate(
+                            data,
+                            total_unit,
+                            i,
+                            &ruby_max_atomics,
+                            cx,
+                            &mut sat,
+                        )
+                        .adjustment,
+                        &mut sat,
+                    )
                     .add(kept_total_spacing, &mut sat)
                     .sub(trailing, &mut sat)
                     .add(left, &mut sat)
@@ -142,6 +200,7 @@ impl Paragraph {
                     .get(i)
                     .map_or(data.text.len() as u32, |u| u.text.start);
                 total = word;
+                total_unit = i;
                 trailing = LayoutUnit::ZERO;
                 word_trailing = LayoutUnit::ZERO;
                 left = LayoutUnit::ZERO;
@@ -182,6 +241,18 @@ impl Paragraph {
                 if clear_left || clear_right {
                     max = max.max(
                         total
+                            .add(
+                                crate::ruby::measure::candidate(
+                                    data,
+                                    total_unit,
+                                    i,
+                                    &ruby_max_atomics,
+                                    cx,
+                                    &mut sat,
+                                )
+                                .adjustment,
+                                &mut sat,
+                            )
                             .add(kept_total_spacing, &mut sat)
                             .sub(trailing, &mut sat)
                             .add(left, &mut sat)
@@ -294,6 +365,18 @@ impl Paragraph {
                     kept_word_spacing
                 };
                 let measured_word = word.add(tracking, &mut sat).add(delta, &mut sat);
+                let measured_word = measured_word.add(
+                    crate::ruby::measure::candidate(
+                        data,
+                        word_unit,
+                        i + 1,
+                        &ruby_min_atomics,
+                        cx,
+                        &mut sat,
+                    )
+                    .adjustment,
+                    &mut sat,
+                );
                 let natural_min = measured_word.sub(word_trailing, &mut sat).add(
                     super::decoration::width(data, i + 1, false, &mut sat),
                     &mut sat,
@@ -318,6 +401,7 @@ impl Paragraph {
                     alternate = false;
                     data = &self.data;
                     i = normal as usize;
+                    total_unit = i;
                     word_unit = i;
                     word_start = data
                         .units
@@ -345,6 +429,18 @@ impl Paragraph {
         }
         let final_delta = super::windows::delta(data, word_unit, data.units.len(), cx, &mut sat);
         let natural_min = word
+            .add(
+                crate::ruby::measure::candidate(
+                    data,
+                    word_unit,
+                    data.units.len(),
+                    &ruby_min_atomics,
+                    cx,
+                    &mut sat,
+                )
+                .adjustment,
+                &mut sat,
+            )
             .add(kept_word_spacing, &mut sat)
             .add(final_delta, &mut sat)
             .sub(word_trailing, &mut sat);
@@ -361,6 +457,18 @@ impl Paragraph {
             ))
             .max(LayoutUnit::ZERO);
         let natural_max = total
+            .add(
+                crate::ruby::measure::candidate(
+                    data,
+                    total_unit,
+                    data.units.len(),
+                    &ruby_max_atomics,
+                    cx,
+                    &mut sat,
+                )
+                .adjustment,
+                &mut sat,
+            )
             .add(kept_total_spacing, &mut sat)
             .sub(trailing, &mut sat)
             .add(left, &mut sat)

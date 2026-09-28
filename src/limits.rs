@@ -204,6 +204,10 @@ impl WarningSink {
         self.max = max;
     }
 
+    pub(crate) fn is_suppressed(&self) -> bool {
+        self.suppressed
+    }
+
     pub(crate) fn push(&mut self, kind: WarningKind, message: impl Into<String>) {
         if self.suppressed {
             return;

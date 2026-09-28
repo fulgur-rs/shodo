@@ -1,10 +1,11 @@
 //! Ruby layout must shape real annotation text under the parent's budget.
 use shodo::limits::{LimitKind, Limits};
 use shodo::node::{NodeId, TextSource};
-use shodo::style::{FontFamily, InlineStyle, ParagraphStyle};
+use shodo::style::{FontFamily, InlineStyle, LineOptions, ParagraphStyle, TextWrapStyle};
 use shodo::{
-    LayoutContext, ParagraphBuilder, Ruby, RubyAlign, RubyAnnotation, RubyBase, RubyContent,
-    RubyLevel, RubySpan, RubyStyle, RubyVisibility,
+    AtomicIntrinsics, AtomicSizes, LayoutContext, LineConstraint, LineResult, Paragraph,
+    ParagraphBuilder, Ruby, RubyAlign, RubyAnnotation, RubyBase, RubyContent, RubyLevel,
+    RubyOverhang, RubySpan, RubyStyle, RubyVisibility,
 };
 use shodo_fixtures::load_fonts;
 
@@ -46,7 +47,10 @@ fn ruby(visibility: RubyVisibility) -> Ruby {
                 span: RubySpan::Auto,
                 visibility,
             }],
-            style: RubyStyle::default(),
+            style: RubyStyle {
+                overhang: RubyOverhang::None,
+                ..Default::default()
+            },
         }],
     )
     .unwrap()
@@ -112,3 +116,75 @@ fn shared_ruby_input_is_charged_for_each_prepared_container() {
         }
     }
 }
+
+fn short_pair() -> Paragraph {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+    b.push_ruby(NodeId(8), &style(24.0), ruby(RubyVisibility::Visible));
+    b.build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap()
+}
+
+#[test]
+fn short_pair_overflows_whole() {
+    let p = short_pair();
+    // FontTools independently confirms1000-unit advances at1000 UPEM for
+    // 日/に/ほ/ん: base24px, complete annotation3×12px=36px. A one-character
+    // base has no interior parallel cut, including at a12px available width.
+    for width in [1000.0, 12.0] {
+        let mut cx = LayoutContext::new();
+        let lines = p.break_all(&mut cx, &LineOptions::default(), width, &AtomicSizes::EMPTY);
+        assert_eq!(lines.len(), 1, "one indivisible base/reading pair");
+        assert!(
+            (lines[0].inline_size() - 36.0).abs() < 0.001,
+            "the actual reading reserves36px, width={width}, got{}",
+            lines[0].inline_size()
+        );
+    }
+}
+
+#[test]
+fn intrinsic_and_plans_measure_ruby() {
+    let p = short_pair();
+    let intrinsic = p.intrinsic_sizes(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        &AtomicIntrinsics::EMPTY,
+    );
+    assert_eq!(
+        intrinsic.min_content, 36.0,
+        "the pair cannot break internally"
+    );
+    assert_eq!(
+        intrinsic.max_content, 36.0,
+        "No overhang reserves the whole reading"
+    );
+    for wrap in [TextWrapStyle::Balance, TextWrapStyle::Pretty] {
+        let options = LineOptions {
+            text_wrap_style: wrap,
+            ..Default::default()
+        };
+        let plan = p.plan_breaks(
+            &mut LayoutContext::new(),
+            &options,
+            12.0,
+            &AtomicSizes::EMPTY,
+        );
+        let mut constraint = LineConstraint::new(12.0);
+        constraint.break_plan = Some(&plan);
+        let LineResult::Line(line) = p.next_line(
+            &mut LayoutContext::new(),
+            p.start_token(),
+            &options,
+            &constraint,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("an indivisible pair still makes progress under {wrap:?}");
+        };
+        assert_eq!(line.inline_size(), 36.0);
+        assert!(line.is_last());
+    }
+}
+
+#[path = "ruby/continuation.rs"]
+mod continuation;
