@@ -151,6 +151,7 @@ struct Layer {
 
 struct LayerState {
     faces: Vec<FontData>,
+    face_infos: Vec<Option<fontique::FontInfo>>,
     blob_bytes: u64,
     descriptors: Vec<Option<FontFaceDescriptor>>,
     native: fontique::Collection,
@@ -222,6 +223,7 @@ impl FontCollection {
                 generation: AtomicU64::new(0),
                 state: Mutex::new(LayerState {
                     descriptors: vec![None; faces.len()],
+                    face_infos: faces.iter().map(matching::face_info).collect(),
                     native: fontique::Collection::new(fontique::CollectionOptions {
                         shared: false,
                         system_fonts: false,
@@ -268,10 +270,22 @@ impl FontCollection {
         state.blob_bytes = bytes;
         let first = state.faces.len() as u32;
         let blob = Blob::from(data);
-        state.native.register_fonts(blob.clone(), None);
-        for index in 0..faces {
+        let registered = state.native.register_fonts(blob.clone(), None);
+        let mut infos = vec![None; faces as usize];
+        for (_, family) in registered {
+            for info in family {
+                if let Some(slot) = infos.get_mut(info.index() as usize) {
+                    *slot = Some(info);
+                }
+            }
+        }
+        for (index, info) in infos.into_iter().enumerate() {
+            let data = FontData::new(blob.clone(), index as u32);
+            // Fonts without intrinsic family names can still be last resorts.
+            let info = info.or_else(|| matching::face_info(&data));
+            state.face_infos.push(info);
             state.descriptors.push(None);
-            state.faces.push(FontData::new(blob.clone(), index));
+            state.faces.push(data);
         }
         self.layer.generation.fetch_add(1, Ordering::SeqCst);
         Ok(FontId {
@@ -319,11 +333,8 @@ impl FontCollection {
             return Err(FontError::Malformed("face index out of bounds"));
         }
         // Unlike the S0 stub, a CSS face must have a usable cmap.
-        let info_source = fontique::SourceInfo::new(
-            fontique::SourceId::new(),
-            fontique::SourceKind::Memory(blob.clone()),
-        );
-        fontique::FontInfo::from_source(info_source, index)
+        let data = FontData::new(blob.clone(), index);
+        let info = matching::face_info(&data)
             .ok_or(FontError::Malformed("face has no usable character map"))?;
         Limits::check(
             limits.max_faces_per_layer,
@@ -348,7 +359,8 @@ impl FontCollection {
         if let Some(source) = source {
             state.retained_sources.insert(source, blob.clone());
         }
-        state.faces.push(FontData::new(blob, index));
+        state.face_infos.push(Some(info));
+        state.faces.push(data);
         state.descriptors.push(Some(descriptor));
         state.blob_bytes = bytes;
         self.layer.generation.fetch_add(1, Ordering::SeqCst);

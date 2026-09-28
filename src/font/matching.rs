@@ -80,6 +80,16 @@ struct Candidate {
     data: FontData,
     descriptor: FontFaceDescriptor,
     info: FontInfo,
+    color: bool,
+}
+
+pub(super) fn face_info(data: &FontData) -> Option<FontInfo> {
+    #[cfg(test)]
+    matching_tests::record_info_read();
+    FontInfo::from_source(
+        SourceInfo::new(SourceId::new(), SourceKind::Memory(data.data.clone())),
+        data.index,
+    )
 }
 
 impl FontCollection {
@@ -290,10 +300,7 @@ impl FontCollection {
             .iter()
             .enumerate()
             .filter_map(|(index, data)| {
-                let info = FontInfo::from_source(
-                    SourceInfo::new(SourceId::new(), SourceKind::Memory(data.data.clone())),
-                    data.index,
-                )?;
+                let info = state.face_infos[index].as_ref()?.clone();
                 let descriptor = match &state.descriptors[index] {
                     Some(desc)
                         if name.is_none_or(|name| desc.family.eq_ignore_ascii_case(name)) =>
@@ -312,6 +319,7 @@ impl FontCollection {
                     data: data.clone(),
                     descriptor,
                     info,
+                    color: false,
                 })
             })
             .collect()
@@ -358,6 +366,7 @@ impl FontCollection {
                 descriptor: intrinsic_descriptor(info, name.into()),
                 data,
                 info: info.clone(),
+                color: false,
             });
         }
         let age = state.options.source_cache_max_age;
@@ -389,11 +398,23 @@ impl FontCollection {
             candidates.retain(|c| property_rank(c) == best);
         }
         let color = prefer_color(query.presentation, cluster);
-        candidates.retain(|candidate| covers(candidate, cluster));
+        candidates.retain_mut(|candidate| {
+            #[cfg(test)]
+            matching_tests::record_font_read();
+            let Ok(font) = FontRef::from_index(candidate.data.data.as_ref(), candidate.data.index)
+            else {
+                return false;
+            };
+            if !covers(candidate, &font, cluster) {
+                return false;
+            }
+            candidate.color = is_color(&font);
+            true
+        });
         candidates.sort_by(|a, b| {
             let rank = |c: &Candidate| {
                 (
-                    u8::from(is_color(&c.data) != color),
+                    u8::from(c.color != color),
                     range_rank(query.width, c.descriptor.width, 100.),
                     style_rank(query.style, c.descriptor.style),
                     weight_rank(query.weight, c.descriptor.weight),
@@ -441,6 +462,9 @@ impl FontCollection {
                 )
                 .ok()?;
                 let index = state.faces.len();
+                // Match future queries against the retained blob, even if a
+                // platform source changed after its family metadata was read.
+                state.face_infos.push(face_info(&selected.data));
                 state.faces.push(selected.data.clone());
                 state.descriptors.push(None);
                 state.blob_bytes = bytes;
@@ -574,10 +598,7 @@ fn intrinsic_descriptor(info: &FontInfo, family: String) -> FontFaceDescriptor {
 fn ignored(ch: char) -> bool {
     matches!(ch,'\u{200c}'|'\u{200d}'|'\u{fe00}'..='\u{fe0f}'|'\u{e0100}'..='\u{e01ef}')
 }
-fn covers(candidate: &Candidate, cluster: &str) -> bool {
-    let Ok(font) = FontRef::from_index(candidate.data.data.as_ref(), candidate.data.index) else {
-        return false;
-    };
+fn covers(candidate: &Candidate, font: &FontRef<'_>, cluster: &str) -> bool {
     let map = font.charmap();
     cluster.chars().filter(|&ch| !ignored(ch)).all(|ch| {
         let ranges = &candidate.descriptor.unicode_ranges;
@@ -588,10 +609,7 @@ fn covers(candidate: &Candidate, cluster: &str) -> bool {
             && map.map(ch).is_some_and(|id| id.to_u32() != 0)
     })
 }
-fn is_color(data: &FontData) -> bool {
-    let Ok(font) = FontRef::from_index(data.data.as_ref(), data.index) else {
-        return false;
-    };
+fn is_color(font: &FontRef<'_>) -> bool {
     [*b"COLR", *b"CBDT", *b"sbix", *b"SVG "]
         .iter()
         .any(|tag| font.table_data(skrifa::raw::types::Tag::new(tag)).is_some())
@@ -682,6 +700,128 @@ fn style_rank(requested: FontStyle, available: FontStyle) -> (u8, f32) {
 }
 
 #[cfg(test)]
+mod matching_tests {
+    use super::*;
+    use crate::font::FontOptions;
+    use std::cell::Cell;
+
+    std::thread_local! {
+        static INFO_READS: Cell<usize> = const { Cell::new(0) };
+        static FONT_READS: Cell<usize> = const { Cell::new(0) };
+    }
+
+    pub(super) fn record_info_read() {
+        INFO_READS.with(|reads| reads.set(reads.get() + 1));
+    }
+
+    pub(super) fn record_font_read() {
+        FONT_READS.with(|reads| reads.set(reads.get() + 1));
+    }
+
+    #[test]
+    fn registered_matching_reuses_metadata_for_uncached_clusters() {
+        check_uncached_reads(1, 1);
+    }
+
+    #[test]
+    fn registered_matching_does_not_reparse_color_while_sorting() {
+        check_uncached_reads(3, 3);
+    }
+
+    #[test]
+    fn bulk_registered_named_and_nameless_faces_keep_cached_metadata() {
+        for named in [true, false] {
+            let mut bytes = super::super::browser_tests::test_font("Internal", &['a', 'b'], 600);
+            if !named {
+                let font = FontRef::new(&bytes).unwrap();
+                let tables: Vec<_> = font
+                    .table_directory()
+                    .table_records()
+                    .iter()
+                    .filter(|record| record.tag() != skrifa::raw::types::Tag::new(b"name"))
+                    .map(|record| {
+                        (
+                            record.tag().to_be_bytes(),
+                            font.table_data(record.tag()).unwrap().as_bytes().to_vec(),
+                        )
+                    })
+                    .collect();
+                bytes = super::super::sfnt::build_sfnt(&tables);
+            }
+            let fonts = FontCollection::with_options(
+                &Limits::default(),
+                FontOptions {
+                    system_fonts: false,
+                    match_cache_entries: 0,
+                    ..Default::default()
+                },
+            );
+            let id = fonts.register(bytes).unwrap();
+            // Use the registered last-resort path, including nameless fonts
+            // that fontique cannot expose as a named family.
+            fonts.set_fallback_families(*b"Latn", None, Vec::new());
+            let query = FontQuery {
+                families: Vec::new(),
+                ..Default::default()
+            };
+            for cluster in ["a", "b"] {
+                INFO_READS.with(|reads| reads.set(0));
+                FONT_READS.with(|reads| reads.set(0));
+                assert_eq!(fonts.match_cluster(&query, cluster).unwrap().id, id);
+                assert_eq!(
+                    (INFO_READS.with(Cell::get), FONT_READS.with(Cell::get)),
+                    (0, 1),
+                    "named={named}, cluster={cluster}"
+                );
+            }
+        }
+    }
+
+    fn check_uncached_reads(face_count: usize, expected_reads: usize) {
+        // Reintroducing candidate metadata parsing or color parsing in the
+        // sort comparator must exceed one font read per registered candidate.
+        let fonts = FontCollection::with_options(
+            &Limits::default(),
+            FontOptions {
+                system_fonts: false,
+                match_cache_entries: 0,
+                ..Default::default()
+            },
+        );
+        let mut expected = None;
+        for _ in 0..face_count {
+            expected = Some(
+                fonts
+                    .register_face(
+                        super::super::browser_tests::test_font("Internal", &['a', 'b', 'c'], 600),
+                        0,
+                        FontFaceDescriptor {
+                            family: "Web".into(),
+                            ..Default::default()
+                        },
+                    )
+                    .unwrap(),
+            );
+        }
+        let query = FontQuery {
+            families: vec![FontFamily::Named("Web".into())],
+            ..Default::default()
+        };
+        for cluster in ["a", "b", "c"] {
+            INFO_READS.with(|reads| reads.set(0));
+            FONT_READS.with(|reads| reads.set(0));
+            let found = fonts.match_cluster(&query, cluster).unwrap();
+            assert_eq!(Some(found.id), expected, "latest equal-ranked face wins");
+            assert_eq!(
+                (INFO_READS.with(Cell::get), FONT_READS.with(Cell::get)),
+                (0, expected_reads),
+                "metadata is reused and coverage/color share one real font read for {face_count} faces/{cluster}"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
 mod retention_tests {
     use super::*;
     fn reloaded(source: SourceId) -> Candidate {
@@ -701,6 +841,7 @@ mod retention_tests {
             data: FontData::new(blob, 0),
             descriptor: intrinsic_descriptor(&info, "Native".into()),
             info,
+            color: false,
         }
     }
     #[test]
