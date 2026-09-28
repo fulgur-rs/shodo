@@ -12,14 +12,25 @@ pub(crate) struct LineMetrics {
     pub(crate) baseline: LayoutUnit,
     pub(crate) block_size: LayoutUnit,
     pub(crate) shifts: Vec<LayoutUnit>,
+    pub(crate) combination_shifts: HashMap<usize, LayoutUnit>,
     pub(crate) empty: bool,
 }
 
-fn extents(s: &InlineStyle, m: FontMetrics) -> (f32, f32) {
-    let a = m.ascent;
-    let d = m.descent;
+fn extents(
+    s: &InlineStyle,
+    m: FontMetrics,
+    vertical: Option<crate::font::VerticalFontMetrics>,
+    upright: bool,
+) -> (f32, f32) {
+    let (a, d, gap) = if upright {
+        vertical.map_or((s.font_size / 2.0, s.font_size / 2.0, 0.0), |v| {
+            (v.ascent, v.descent, v.line_gap)
+        })
+    } else {
+        (m.ascent, m.descent, m.line_gap)
+    };
     let h = match s.line_height {
-        LineHeight::Normal => a + d + m.line_gap,
+        LineHeight::Normal => a + d + gap,
         LineHeight::Px(v) => v,
         LineHeight::Number(n) => n * s.font_size,
     };
@@ -27,13 +38,22 @@ fn extents(s: &InlineStyle, m: FontMetrics) -> (f32, f32) {
     (a + lead, d + lead)
 }
 
-fn shift(s: &InlineStyle, parent: StyleMetrics, a: f32, d: f32) -> f32 {
+fn shift(s: &InlineStyle, parent: StyleMetrics, parent_upright: bool, a: f32, d: f32) -> f32 {
+    let (parent_over, parent_under) = if parent_upright {
+        parent
+            .vertical_metrics
+            .map_or((parent.size / 2.0, parent.size / 2.0), |v| {
+                (v.ascent, v.descent)
+            })
+    } else {
+        (parent.metrics.ascent, parent.metrics.descent)
+    };
     match s.vertical_align {
         VerticalAlign::Length(v) => -v,
         VerticalAlign::Sub => parent.metrics.subscript_offset,
         VerticalAlign::Super => -parent.metrics.superscript_offset,
-        VerticalAlign::TextTop => a - parent.metrics.ascent,
-        VerticalAlign::TextBottom => parent.metrics.descent - d,
+        VerticalAlign::TextTop => a - parent_over,
+        VerticalAlign::TextBottom => parent_under - d,
         VerticalAlign::Middle => (a - d) / 2.0 - parent.metrics.x_height / 2.0,
         _ => 0.0,
     }
@@ -60,12 +80,44 @@ fn box_shift(
         let b = &data.boxes[index as usize];
         let s = &data.styles[b.style as usize];
         let parent_style = b.parent.map_or(0, |p| data.boxes[p as usize].style) as usize;
-        let (a, d) = extents(s, data.style_metrics[b.style as usize].metrics);
+        let parent_upright = matches!(
+            data.style.writing_mode,
+            crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
+        ) && data.styles[parent_style].text_orientation
+            != crate::style::TextOrientation::Sideways;
+        let style_metrics = data.style_metrics[b.style as usize];
+        let upright = matches!(
+            data.style.writing_mode,
+            crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
+        ) && s.text_orientation != crate::style::TextOrientation::Sideways;
+        let (a, d) = extents(
+            s,
+            style_metrics.metrics,
+            style_metrics.vertical_metrics,
+            upright,
+        );
+        // A central inline and an alphabetic inline share the selected
+        // baseline, rather than placing their different origins at zero.
+        let horizontal_center =
+            (style_metrics.metrics.ascent - style_metrics.metrics.descent) / 2.0;
+        let dominant_shift = match (parent_upright, upright) {
+            (true, false) => horizontal_center,
+            (false, true) => -horizontal_center,
+            _ => 0.0,
+        };
         let group = value.1.or_else(|| {
             matches!(s.vertical_align, VerticalAlign::Top | VerticalAlign::Bottom).then_some(index)
         });
         value = (
-            value.0 + shift(s, data.style_metrics[parent_style], a, d),
+            value.0
+                + dominant_shift
+                + shift(
+                    s,
+                    data.style_metrics[parent_style],
+                    parent_upright,
+                    a - dominant_shift,
+                    d + dominant_shift,
+                ),
             group,
         );
         cache.insert(index, value);
@@ -81,20 +133,54 @@ pub(crate) fn measure(
     sat: &mut Saturation,
 ) -> LineMetrics {
     let root = &data.styles[0];
-    let (mut above, mut below) = extents(root, data.style_metrics[0].metrics);
+    let root_metrics = data.style_metrics[0];
+    let root_upright = matches!(
+        data.style.writing_mode,
+        crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
+    ) && root.text_orientation != crate::style::TextOrientation::Sideways;
+    let (mut above, mut below) = extents(
+        root,
+        root_metrics.metrics,
+        root_metrics.vertical_metrics,
+        root_upright,
+    );
     let mut cache = HashMap::new();
     let mut parents = HashMap::new();
     let mut atomic_styles = HashMap::new();
     let mut empty = true;
-    for u in &data.units[units] {
+    let mut groups: HashMap<u32, (f32, f32)> = HashMap::new();
+    let mut combination_bases = Vec::new();
+    for (offset, u) in data.units[units.clone()].iter().enumerate() {
         empty &= !matches!(u.kind, UnitKind::Tab | UnitKind::ForcedBreak);
         parents.insert(u.item, u.parent_box);
         if let UnitKind::Atomic { node } = u.kind {
             atomic_styles.insert(node, (u.item, u.parent_box));
         }
+        if let Some(index) = u.combine
+            && data.combine_spans[index as usize].units.start == units.start + offset
+        {
+            // Measure the parent square once, including tab-only compositions.
+            // Its internal line-height is 1em regardless of the inline strut.
+            empty = false;
+            let span = &data.combine_spans[index as usize];
+            let (base, group) = u
+                .parent_box
+                .map_or((0.0, None), |b| box_shift(data, b, &mut cache));
+            let base = base + data.combine_center_shift(data.items[u.item as usize].style);
+            let top = base - span.em / 2.0;
+            let bottom = base + span.em / 2.0;
+            if let Some(group) = group {
+                let bounds = groups.entry(group).or_insert((top, bottom));
+                bounds.0 = bounds.0.min(top);
+                bounds.1 = bounds.1.max(bottom);
+            } else {
+                above = above.max(-top);
+                below = below.max(bottom);
+            }
+            combination_bases.push((index as usize, base, group));
+        }
     }
     let mut shifts = Vec::with_capacity(records.len());
-    let mut groups: HashMap<u32, (f32, f32)> = HashMap::new();
     let mut own_groups: HashMap<usize, (f32, f32, bool)> = HashMap::new();
     let mut memberships = Vec::with_capacity(records.len());
     for (i, r) in records.iter().enumerate() {
@@ -114,13 +200,43 @@ pub(crate) fn measure(
                     .instance
                     .metrics
                     .unwrap_or_else(|| data.fonts.metrics(shaped.font, shaped.font_size));
-                let (a, d) = extents(s, metrics);
+                let (a, d) = if shaped.orientation
+                    == crate::shape::orientation::RunOrientation::Combined
+                {
+                    (s.font_size / 2.0, s.font_size / 2.0)
+                } else {
+                    extents(
+                        s,
+                        metrics,
+                        shaped.instance.vertical_metrics,
+                        shaped.orientation == crate::shape::orientation::RunOrientation::Upright,
+                    )
+                };
                 let (base, group) = parents
                     .get(item)
                     .copied()
                     .flatten()
                     .map_or((0.0, None), |b| box_shift(data, b, &mut cache));
-                (a, d, base, group, None)
+                let center_shift =
+                    if shaped.orientation == crate::shape::orientation::RunOrientation::Combined {
+                        data.combine_center_shift(data.items[*item as usize].style)
+                    } else if shaped.orientation
+                        == crate::shape::orientation::RunOrientation::SidewaysClockwise
+                        && matches!(
+                            data.style.writing_mode,
+                            crate::geometry::WritingMode::VerticalRl
+                                | crate::geometry::WritingMode::VerticalLr
+                        )
+                        && s.text_orientation != crate::style::TextOrientation::Sideways
+                    {
+                        // Mixed selects a central baseline even for its
+                        // horizontally shaped, clockwise glyphs. Convert the
+                        // actual fallback instance's alphabetic origin once.
+                        (metrics.ascent - metrics.descent) / 2.0
+                    } else {
+                        0.0
+                    };
+                (a, d, base + center_shift, group, None)
             }
             RecordKind::InlineBox {
                 box_index,
@@ -137,7 +253,18 @@ pub(crate) fn measure(
                     || e.border.block_end != 0.0
                     || e.padding.block_start != 0.0
                     || e.padding.block_end != 0.0);
-                let (a, d) = extents(s, data.style_metrics[b.style as usize].metrics);
+                let style_metrics = data.style_metrics[b.style as usize];
+                let upright = matches!(
+                    data.style.writing_mode,
+                    crate::geometry::WritingMode::VerticalRl
+                        | crate::geometry::WritingMode::VerticalLr
+                ) && s.text_orientation != crate::style::TextOrientation::Sideways;
+                let (a, d) = extents(
+                    s,
+                    style_metrics.metrics,
+                    style_metrics.vertical_metrics,
+                    upright,
+                );
                 let (base, group) = box_shift(data, *box_index, &mut cache);
                 (a, d, base, group, None)
             }
@@ -147,6 +274,12 @@ pub(crate) fn measure(
                 let s = &data.styles[data.items[item as usize].style as usize];
                 let parent_style = parent_box.map_or(0, |p| data.boxes[p as usize].style) as usize;
                 let parent = data.style_metrics[parent_style];
+                let parent_upright = matches!(
+                    data.style.writing_mode,
+                    crate::geometry::WritingMode::VerticalRl
+                        | crate::geometry::WritingMode::VerticalLr
+                ) && data.styles[parent_style].text_orientation
+                    != crate::style::TextOrientation::Sideways;
                 let (base, group) =
                     parent_box.map_or((0.0, None), |b| box_shift(data, b, &mut cache));
                 let height = size.block_size + size.margins.block_start + size.margins.block_end;
@@ -155,7 +288,12 @@ pub(crate) fn measure(
                     .baseline
                     .unwrap_or(if central { height / 2.0 } else { height });
                 let dominant_shift = if central {
-                    -(parent.metrics.ascent - parent.metrics.descent) / 2.0
+                    let (over, under) = parent
+                        .vertical_metrics
+                        .map_or((parent.size / 2.0, parent.size / 2.0), |v| {
+                            (v.ascent, v.descent)
+                        });
+                    -(over - under) / 2.0
                 } else {
                     0.0
                 };
@@ -175,6 +313,7 @@ pub(crate) fn measure(
                         + shift(
                             s,
                             parent,
+                            parent_upright,
                             baseline - dominant_shift,
                             height - baseline + dominant_shift,
                         ),
@@ -250,13 +389,40 @@ pub(crate) fn measure(
             };
         }
     }
+    let block_size = LayoutUnit::from_f32_ceil(if empty { 0.0 } else { height }, sat);
+    let over_baseline = LayoutUnit::from_f32_round(above, sat);
+    // The over side is the physical right in vertical-lr, opposite block-start.
+    // Reflect the line-relative solution into logical block coordinates once.
+    let reverse_over = data.style.writing_mode == crate::geometry::WritingMode::VerticalLr;
+    let combination_shifts = combination_bases
+        .into_iter()
+        .map(|(index, base, group)| {
+            let displacement = base + group.map_or(0.0, |g| deltas[&g]);
+            (
+                index,
+                LayoutUnit::from_f32_round(
+                    if reverse_over {
+                        -displacement
+                    } else {
+                        displacement
+                    },
+                    sat,
+                ),
+            )
+        })
+        .collect();
     LineMetrics {
-        baseline: LayoutUnit::from_f32_round(above, sat),
-        block_size: LayoutUnit::from_f32_ceil(if empty { 0.0 } else { height }, sat),
+        baseline: if reverse_over {
+            block_size.sub(over_baseline, sat)
+        } else {
+            over_baseline
+        },
+        block_size,
         shifts: shifts
             .into_iter()
-            .map(|v| LayoutUnit::from_f32_round(v, sat))
+            .map(|v| LayoutUnit::from_f32_round(if reverse_over { -v } else { v }, sat))
             .collect(),
+        combination_shifts,
         empty,
     }
 }

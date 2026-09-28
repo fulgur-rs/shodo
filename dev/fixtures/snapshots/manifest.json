@@ -355,6 +355,206 @@
       "text": "ffi",
       "white_space": "Collapse",
       "width": 200.0
+    },
+    "sideways-lr-ltr": {
+      "combine": false,
+      "direction": "Ltr",
+      "font_size": 20.0,
+      "id": "sideways-lr-ltr",
+      "text": "「水AF §ب」水 AF",
+      "text_orientation": "Mixed",
+      "width": 96.0,
+      "writing_mode": "SidewaysLr"
+    },
+    "sideways-lr-rtl": {
+      "combine": false,
+      "direction": "Rtl",
+      "font_size": 20.0,
+      "id": "sideways-lr-rtl",
+      "text": "「水AF §ب」水 AF",
+      "text_orientation": "Mixed",
+      "width": 96.0,
+      "writing_mode": "SidewaysLr"
+    },
+    "sideways-rl-ltr": {
+      "combine": false,
+      "direction": "Ltr",
+      "font_size": 20.0,
+      "id": "sideways-rl-ltr",
+      "text": "「水AF §ب」水 AF",
+      "text_orientation": "Mixed",
+      "width": 96.0,
+      "writing_mode": "SidewaysRl"
+    },
+    "sideways-rl-rtl": {
+      "combine": false,
+      "direction": "Rtl",
+      "font_size": 20.0,
+      "id": "sideways-rl-rtl",
+      "text": "「水AF §ب」水 AF",
+      "text_orientation": "Mixed",
+      "width": 96.0,
+      "writing_mode": "SidewaysRl"
+    },
+    "vertical-lr-mixed-ltr": {
+      "combine": false,
+      "direction": "Ltr",
+      "font_size": 20.0,
+      "id": "vertical-lr-mixed-ltr",
+      "text": "「水AF §ب」水 AF",
+      "text_orientation": "Mixed",
+      "width": 96.0,
+      "writing_mode": "VerticalLr"
+    },
+    "vertical-lr-mixed-rtl": {
+      "combine": false,
+      "direction": "Rtl",
+      "font_size": 20.0,
+      "id": "vertical-lr-mixed-rtl",
+      "text": "「水AF §ب」水 AF",
+      "text_orientation": "Mixed",
+      "width": 96.0,
+      "writing_mode": "VerticalLr"
+    },
+    "vertical-lr-sideways-ltr": {
+      "combine": false,
+      "direction": "Ltr",
+      "font_size": 20.0,
+      "id": "vertical-lr-sideways-ltr",
+      "text": "「水AF §ب」水 AF",
+      "text_orientation": "Sideways",
+      "width": 96.0,
+      "writing_mode": "VerticalLr"
+    },
+    "vertical-lr-sideways-rtl": {
+      "combine": false,
+      "direction": "Rtl",
+      "font_size": 20.0,
+      "id": "vertical-lr-sideways-rtl",
+      "text": "「水AF §ب」水 AF",
+      "text_orientation": "Sideways",
+      "width": 96.0,
+      "writing_mode": "VerticalLr"
+    },
+    "vertical-lr-tcy-ltr": {
+      "combine": true,
+      "direction": "Ltr",
+      "font_size": 20.0,
+      "id": "vertical-lr-tcy-ltr",
+      "text": "「水1234水 AF」",
+      "text_orientation": "Mixed",
+      "width": 96.0,
+      "writing_mode": "VerticalLr"
+    },
+    "vertical-lr-tcy-rtl": {
+      "combine": true,
+      "direction": "Rtl",
+      "font_size": 20.0,
+      "id": "vertical-lr-tcy-rtl",
+      "text": "「水1234水 AF」",
+      "text_orientation": "Mixed",
+      "width": 96.0,
+      "writing_mode": "VerticalLr"
+    },
+    "vertical-lr-upright-ltr": {
+      "combine": false,
+      "direction": "Ltr",
+      "font_size": 20.0,
+      "id": "vertical-lr-upright-ltr",
+      "text": "「水AF §ب」水 AF",
+      "text_orientation": "Upright",
+      "width": 96.0,
+      "writing_mode": "VerticalLr"
+    },
+    "vertical-lr-upright-rtl": {
+      "combine": false,
+      "direction": "Rtl",
+      "font_size": 20.0,
+      "id": "vertical-lr-upright-rtl",
+      "text": "「水AF §ب」水 AF",
+      "text_orientation": "Upright",
+      "width": 96.0,
+      "writing_mode": "VerticalLr"
+    },
+    "vertical-rl-mixed-ltr": {
+      "combine": false,
+      "direction": "Ltr",
+      "font_size": 20.0,
+      "id": "vertical-rl-mixed-ltr",
+      "text": "「水AF §ب」水 AF",
+      "text_orientation": "Mixed",
+      "width": 96.0,
+      "writing_mode": "VerticalRl"
+    },
+    "vertical-rl-mixed-rtl": {
+      "combine": false,
+      "direction": "Rtl",
+      "font_size": 20.0,
+      "id": "vertical-rl-mixed-rtl",
+      "text": "「水AF §ب」水 AF",
+      "text_orientation": "Mixed",
+      "width": 96.0,
+      "writing_mode": "VerticalRl"
+    },
+    "vertical-rl-sideways-ltr": {
+      "combine": false,
+      "direction": "Ltr",
+      "font_size": 20.0,
+      "id": "vertical-rl-sideways-ltr",
+      "text": "「水AF §ب」水 AF",
+      "text_orientation": "Sideways",
+      "width": 96.0,
+      "writing_mode": "VerticalRl"
+    },
+    "vertical-rl-sideways-rtl": {
+      "combine": false,
+      "direction": "Rtl",
+      "font_size": 20.0,
+      "id": "vertical-rl-sideways-rtl",
+      "text": "「水AF §ب」水 AF",
+      "text_orientation": "Sideways",
+      "width": 96.0,
+      "writing_mode": "VerticalRl"
+    },
+    "vertical-rl-tcy-ltr": {
+      "combine": true,
+      "direction": "Ltr",
+      "font_size": 20.0,
+      "id": "vertical-rl-tcy-ltr",
+      "text": "「水1234水 AF」",
+      "text_orientation": "Mixed",
+      "width": 96.0,
+      "writing_mode": "VerticalRl"
+    },
+    "vertical-rl-tcy-rtl": {
+      "combine": true,
+      "direction": "Rtl",
+      "font_size": 20.0,
+      "id": "vertical-rl-tcy-rtl",
+      "text": "「水1234水 AF」",
+      "text_orientation": "Mixed",
+      "width": 96.0,
+      "writing_mode": "VerticalRl"
+    },
+    "vertical-rl-upright-ltr": {
+      "combine": false,
+      "direction": "Ltr",
+      "font_size": 20.0,
+      "id": "vertical-rl-upright-ltr",
+      "text": "「水AF §ب」水 AF",
+      "text_orientation": "Upright",
+      "width": 96.0,
+      "writing_mode": "VerticalRl"
+    },
+    "vertical-rl-upright-rtl": {
+      "combine": false,
+      "direction": "Rtl",
+      "font_size": 20.0,
+      "id": "vertical-rl-upright-rtl",
+      "text": "「水AF §ب」水 AF",
+      "text_orientation": "Upright",
+      "width": 96.0,
+      "writing_mode": "VerticalRl"
     }
   },
   "conditions": {

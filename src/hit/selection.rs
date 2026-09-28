@@ -50,8 +50,27 @@ impl LineLayout<'_> {
                     merged.push(rect);
                 }
             }
-            merged.sort_by(|a, b| a.inline_start.total_cmp(&b.inline_start));
-            result.extend(merged);
+            merged.sort_by(|a, b| {
+                a.inline_start
+                    .total_cmp(&b.inline_start)
+                    .then(a.inline_size.total_cmp(&b.inline_size))
+                    .then(a.block_start.total_cmp(&b.block_start))
+            });
+            let mut final_rects: Vec<LogicalRect> = Vec::new();
+            for rect in merged {
+                if let Some(previous) = final_rects.last_mut()
+                    && previous.inline_start == rect.inline_start
+                    && previous.inline_size == rect.inline_size
+                    && rect.block_start <= previous.block_start + previous.block_size
+                {
+                    previous.block_size = (rect.block_start + rect.block_size)
+                        .max(previous.block_start + previous.block_size)
+                        - previous.block_start;
+                } else {
+                    final_rects.push(rect);
+                }
+            }
+            result.extend(final_rects);
         }
         result
     }

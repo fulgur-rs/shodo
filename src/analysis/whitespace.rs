@@ -24,6 +24,7 @@ pub(crate) struct Processed {
     pub(crate) indivisible: Vec<std::ops::Range<u32>>,
     /// Correspondence with the common pre-transform text, independent of DOM mapping.
     pub(crate) source_spans: Vec<crate::mapping::TransformSpan>,
+    pub(crate) width_origins: Vec<super::transform::WidthOrigin>,
 }
 
 pub(crate) fn process(
@@ -125,6 +126,7 @@ pub(crate) fn process(
         }
     }
     Ok(Processed {
+        width_origins: Vec::new(),
         source_spans: vec![crate::mapping::TransformSpan {
             old: 0..p.out.len() as u32,
             new: 0..p.out.len() as u32,

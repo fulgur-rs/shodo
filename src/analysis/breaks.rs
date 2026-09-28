@@ -459,7 +459,14 @@ mod tests {
         );
         let processed = process(&b.text, &b.items, &b.styles, mapping, &limits).unwrap();
         let mut warnings = WarningSink::default();
-        let processed = transform(processed, &b.styles, &limits, &mut warnings).unwrap();
+        let processed = transform(
+            processed,
+            &b.styles,
+            &limits,
+            &mut warnings,
+            b.style.writing_mode,
+        )
+        .unwrap();
         analyze_breaks(&processed, &b.styles, &mut warnings)
     }
 
@@ -617,7 +624,14 @@ mod tests {
                 .close_inline();
             let processed = process(&b.text, &b.items, &b.styles, true, &limits).unwrap();
             let mut warnings = WarningSink::default();
-            let processed = transform(processed, &b.styles, &limits, &mut warnings).unwrap();
+            let processed = transform(
+                processed,
+                &b.styles,
+                &limits,
+                &mut warnings,
+                b.style.writing_mode,
+            )
+            .unwrap();
             let breaks = analyze_breaks(&processed, &b.styles, &mut warnings);
             assert_eq!(
                 breaks.at(3).class,

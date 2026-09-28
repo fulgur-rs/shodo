@@ -17,6 +17,11 @@ changed pixel counts. Geometry links retain line source ranges, glyph ownership,
 positions, atomics, inline boxes, annotations and page/float placements.
 Output must be a new directory; choose another name for subsequent runs.
 
+The full matrix has 46 cases: 26 horizontal cases and 20 vertical/sideways cases
+with both directions, mixed/upright/sideways orientation and combined text.
+Vertical geometry retains physical origins, public glyph matrices and the
+source ranges/squares of combined text. See [vertical output](vertical-layout.md).
+
 For a quick partial check, append `--case shared-ffi-color`. The report labels
 this as partial. `--expected /path/to/copied-expectations` checks a separate
 baseline. The default expectation path belongs to the fixture package and does
@@ -40,7 +45,7 @@ cargo run -p shodo-fixtures --example snapshots -- --output target/snapshot-upda
 Inspect the HTML, PNGs, manifest and geometry changes in
 `dev/fixtures/snapshots`, run an ordinary check with a new output directory,
 and include the expectations in the same reviewed PR as the change.
-`--update` cannot be combined with `--case`. All 26 cases must render before
+`--update` cannot be combined with `--case`. All 46 cases must render before
 replacement. The command stages new files, backs up old expectations and
 restores them on publication failure; a recovery failure names the backup.
 Unknown files in an expectation directory cause update refusal, preserving

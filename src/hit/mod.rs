@@ -85,7 +85,7 @@ impl<'a> LineLayout<'a> {
         }
         let line = self.block_tree.nearest_y(block)?;
         let index = &self.index[line];
-        let stop = index.hit(inline)?;
+        let stop = index.hit(inline, block)?;
         Some(HitResult {
             position: stop.position,
             origin: self.lines[line]

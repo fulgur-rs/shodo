@@ -12,6 +12,7 @@ pub(crate) struct StyleMetrics {
     pub(crate) font: FontId,
     pub(crate) size: f32,
     pub(crate) metrics: FontMetrics,
+    pub(crate) vertical_metrics: Option<crate::font::VerticalFontMetrics>,
     pub(crate) space: f32,
     pub(crate) ch: f32,
     pub(crate) ic: f32,
@@ -54,6 +55,7 @@ pub(crate) fn resolve(
             metrics: fonts
                 .metrics_with_coords(found.id, size, &instance.coords)
                 .expect("retained primary face"),
+            vertical_metrics: fonts.vertical_metrics(found.id, size, &instance.coords),
         };
     }
     let font = fonts.primary_font();
@@ -64,6 +66,7 @@ pub(crate) fn resolve(
         ch,
         ic,
         metrics: fonts.metrics(font, style.font_size),
+        vertical_metrics: None,
     }
 }
 

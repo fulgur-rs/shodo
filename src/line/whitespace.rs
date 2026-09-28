@@ -7,6 +7,9 @@ use crate::paragraph::ParagraphData;
 use crate::style::{TextWrapMode, WhiteSpaceCollapse};
 
 pub(super) fn hangable(data: &ParagraphData, i: usize) -> bool {
+    if data.combine_at_text(data.units[i].text.start).is_some() {
+        return false;
+    }
     if !matches!(
         data.units[i].kind,
         UnitKind::Cluster { space: true, .. } | UnitKind::Tab
@@ -107,6 +110,9 @@ pub(super) fn bidi_trailing(data: &ParagraphData, start: usize, end: usize) -> u
     for i in (start..end).rev() {
         match data.units[i].kind {
             UnitKind::Cluster { .. } => {
+                if data.combine_at_text(data.units[i].text.start).is_some() {
+                    break;
+                }
                 use unicode_bidi::BidiClass::*;
                 let text =
                     &data.text[data.units[i].text.start as usize..data.units[i].text.end as usize];
@@ -121,7 +127,12 @@ pub(super) fn bidi_trailing(data: &ParagraphData, start: usize, end: usize) -> u
                     break;
                 }
             }
-            UnitKind::Tab => begin = i,
+            UnitKind::Tab => {
+                if data.combine_at_text(data.units[i].text.start).is_some() {
+                    break;
+                }
+                begin = i;
+            }
             UnitKind::Close { .. }
             | UnitKind::BidiControl
             | UnitKind::Float { .. }

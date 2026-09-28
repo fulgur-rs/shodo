@@ -53,6 +53,7 @@ pub struct Line {
     pub(crate) block_shifts: Vec<LayoutUnit>,
     pub(crate) empty: bool,
     pub(crate) tabs: Vec<fragments::TabSlot>,
+    combinations: Vec<TextCombination>,
     pub(crate) positions: Option<(u32, Vec<LayoutUnit>)>,
     pub(crate) glyph_spacing: Option<(u32, Vec<crate::line::spacing::GlyphSpacing>)>,
     pub(crate) overlay: Option<Box<GlyphStore>>,
@@ -71,27 +72,88 @@ impl fmt::Debug for Line {
     }
 }
 
-/// Final line-box extents and root font edges, in line-local block coordinates.
+/// Final line-box extents and root font edges, in line-local logical block coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LineMetrics {
-    /// Distances from the alphabetic baseline to the line-box top/bottom.
+    /// Distances from the dominant baseline to logical block-start/end.
     pub ascent: f32,
     pub descent: f32,
+    /// Dominant baseline position from logical block-start.
     pub baseline: f32,
+    /// Root font edge on the line-over side (block-end in `vertical-lr`).
     pub text_over: f32,
+    /// Root font edge on the line-under side (block-start in `vertical-lr`).
     pub text_under: f32,
 }
 
+/// One external typographic character composed from horizontal text.
+/// Glyphs retain their original source owners and internal shaping clusters.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextCombination {
+    /// Processed-text range in this accepted line's text dataset.
+    pub text_range: Range<usize>,
+    /// The 1em square, in logical coordinates relative to the line's top.
+    /// Add the line's block offset before converting to physical coordinates.
+    pub square: LogicalRect,
+}
+
 impl Line {
+    /// Writing mode used by this line's logical coordinates and glyph transforms.
+    pub fn writing_mode(&self) -> crate::geometry::WritingMode {
+        self.data.style.writing_mode
+    }
+
+    /// One square per combined typographic character, including preserved
+    /// tabs with no glyphs. Place emphasis once per square; the internal
+    /// glyph clusters are excluded from independent emphasis placement.
+    pub fn text_combinations(&self) -> impl ExactSizeIterator<Item = &TextCombination> {
+        self.combinations.iter()
+    }
+
+    pub(crate) fn combination_at(&self, offset: u32) -> Option<&TextCombination> {
+        let index = self
+            .combinations
+            .partition_point(|c| c.text_range.end <= offset as usize);
+        self.combinations
+            .get(index)
+            .filter(|c| c.text_range.start <= offset as usize)
+    }
+    /// Effective inline direction for paint coordinate conversion. Vertical
+    /// `text-orientation: upright` uses LTR without changing inherited style.
+    pub fn used_direction(&self) -> crate::geometry::Direction {
+        crate::analysis::bidi::used_root_direction(&self.data.style, &self.data.styles[0])
+    }
     pub fn metrics(&self) -> LineMetrics {
         let baseline = self.baseline.to_f32();
-        let root = self.data.style_metrics[0].metrics;
+        let root_style = &self.data.styles[0];
+        let root = self.data.style_metrics[0];
+        let upright = matches!(
+            self.data.style.writing_mode,
+            crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
+        ) && root_style.text_orientation != crate::style::TextOrientation::Sideways;
+        let (a, d) = if upright {
+            root.vertical_metrics
+                .map_or((root.size / 2.0, root.size / 2.0), |v| {
+                    (v.ascent, v.descent)
+                })
+        } else {
+            (root.metrics.ascent, root.metrics.descent)
+        };
         LineMetrics {
             ascent: baseline,
             descent: self.block_size.to_f32() - baseline,
             baseline,
-            text_over: baseline - root.ascent,
-            text_under: baseline + root.descent,
+            text_over: if self.data.style.writing_mode == crate::geometry::WritingMode::VerticalLr {
+                baseline + a
+            } else {
+                baseline - a
+            },
+            text_under: if self.data.style.writing_mode == crate::geometry::WritingMode::VerticalLr
+            {
+                baseline - d
+            } else {
+                baseline + d
+            },
         }
     }
     /// Leading hanging amount; punctuation hanging is reserved for Japanese
@@ -210,6 +272,7 @@ impl Line {
             origin,
             atomics,
             visible_hyphen,
+            scan.leading.as_deref(),
         );
         crate::line::autospace::exclude_from_boxes(data, &mut records, &scan.autospace_gaps, sat);
         if let Some(leading) = &scan.leading {
@@ -261,8 +324,36 @@ impl Line {
             visible_hyphen,
             block_size: LayoutUnit::ZERO,
             baseline: LayoutUnit::ZERO,
-            ascent: LayoutUnit::from_f32_round(m.ascent, sat),
-            descent: LayoutUnit::from_f32_round(m.descent, sat),
+            ascent: LayoutUnit::from_f32_round(
+                if matches!(
+                    data.style.writing_mode,
+                    crate::geometry::WritingMode::VerticalRl
+                        | crate::geometry::WritingMode::VerticalLr
+                ) && data.styles[0].text_orientation != crate::style::TextOrientation::Sideways
+                {
+                    data.style_metrics[0]
+                        .vertical_metrics
+                        .map_or(data.style_metrics[0].size / 2.0, |v| v.ascent)
+                } else {
+                    m.ascent
+                },
+                sat,
+            ),
+            descent: LayoutUnit::from_f32_round(
+                if matches!(
+                    data.style.writing_mode,
+                    crate::geometry::WritingMode::VerticalRl
+                        | crate::geometry::WritingMode::VerticalLr
+                ) && data.styles[0].text_orientation != crate::style::TextOrientation::Sideways
+                {
+                    data.style_metrics[0]
+                        .vertical_metrics
+                        .map_or(data.style_metrics[0].size / 2.0, |v| v.descent)
+                } else {
+                    m.descent
+                },
+                sat,
+            ),
             block_offset,
             displaced: Vec::new(),
             block_shifts: vec![LayoutUnit::ZERO; records.len()],
@@ -275,6 +366,7 @@ impl Line {
             overlay_runs: Box::default(),
             pending_overlays: scan.overlays,
             tabs,
+            combinations: Vec::new(),
         }
     }
 
@@ -290,6 +382,61 @@ impl Line {
         self.baseline = metrics.baseline;
         self.block_shifts = metrics.shifts;
         self.empty = metrics.empty;
+        self.measure_combinations(&metrics.combination_shifts);
+    }
+
+    fn measure_combinations(&mut self, shifts: &std::collections::HashMap<usize, LayoutUnit>) {
+        self.combinations.clear();
+        if self.data.combine_spans.is_empty() {
+            return;
+        }
+        let mut origins = std::collections::HashMap::new();
+        for record in &self.fragments {
+            if let RecordKind::Glyphs { text, .. } = &record.kind {
+                let index = self
+                    .data
+                    .combine_spans
+                    .partition_point(|span| span.text.end <= text.start);
+                if self
+                    .data
+                    .combine_spans
+                    .get(index)
+                    .is_some_and(|span| span.text.start <= text.start)
+                {
+                    origins.entry(index).or_insert(record.inline_start.to_f32());
+                }
+            }
+        }
+        for tab in &self.tabs {
+            let unit = &self.data.units[tab.unit as usize];
+            let index = self
+                .data
+                .combine_spans
+                .partition_point(|span| span.text.end <= unit.text.start);
+            if self
+                .data
+                .combine_spans
+                .get(index)
+                .is_some_and(|span| span.text.start <= unit.text.start)
+            {
+                origins.entry(index).or_insert(tab.start.to_f32());
+            }
+        }
+        for (index, inline_start) in origins {
+            let span = &self.data.combine_spans[index];
+            let baseline = (self.baseline + shifts[&index]).to_f32();
+            self.combinations.push(TextCombination {
+                text_range: span.text.start as usize..span.text.end as usize,
+                square: LogicalRect {
+                    inline_start,
+                    inline_size: span.em,
+                    block_start: baseline - span.em / 2.0,
+                    block_size: span.em,
+                },
+            });
+        }
+        self.combinations
+            .sort_by_key(|combination| combination.text_range.start);
     }
 
     pub fn break_token(&self) -> BreakToken {
@@ -324,17 +471,23 @@ impl Line {
         self.block_offset
     }
 
-    /// Position of a baseline, from the top of the line box. Only the
-    /// alphabetic baseline comes from font data; the others are derived from
-    /// the strut's ascent and descent.
+    /// Position of a baseline in logical block coordinates from block-start.
+    /// The dominant baseline uses font data; the others derive from the
+    /// strut's line-over and line-under metrics.
     pub fn baseline(&self, kind: BaselineKind) -> f32 {
         let alphabetic = self.baseline.to_f32();
         let (ascent, descent) = (self.ascent.to_f32(), self.descent.to_f32());
+        let over_sign = if self.data.style.writing_mode == crate::geometry::WritingMode::VerticalLr
+        {
+            1.0
+        } else {
+            -1.0
+        };
         match kind {
             BaselineKind::Alphabetic => alphabetic,
-            BaselineKind::Central => alphabetic - (ascent - descent) / 2.0,
-            BaselineKind::Ideographic => alphabetic + descent,
-            BaselineKind::Hanging => alphabetic - 0.8 * ascent,
+            BaselineKind::Central => alphabetic + over_sign * (ascent - descent) / 2.0,
+            BaselineKind::Ideographic => alphabetic - over_sign * descent,
+            BaselineKind::Hanging => alphabetic + over_sign * 0.8 * ascent,
         }
     }
 
@@ -418,6 +571,16 @@ pub struct GlyphRunView<'a> {
     text: (u32, u32),
 }
 
+/// Local outline coordinates (x right, y down) to logical inline/block
+/// displacement. The outline has already been scaled to the run's font size.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GlyphTransform {
+    pub inline_x: f32,
+    pub inline_y: f32,
+    pub block_x: f32,
+    pub block_y: f32,
+}
+
 /// One positioned glyph. `inline_position` is the glyph origin from the
 /// container's content edge; `block_offset` is relative to the baseline.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -446,6 +609,8 @@ pub struct Cluster {
 /// scalar. A multi-character shaping cluster is emphasis-excluded only when
 /// every constituent character is excluded. Renderers still place emphasis
 /// once per typographic character, rather than once per shaping cluster.
+/// Combined text's internal clusters are excluded here; use
+/// [`Line::text_combinations`] for its single external emphasis target.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ClusterFlags {
     pub whitespace: bool,
@@ -555,12 +720,110 @@ impl<'a> GlyphRunView<'a> {
         self.run_data().font
     }
 
+    pub fn orientation(&self) -> crate::GlyphOrientation {
+        self.run_data().orientation
+    }
+
+    /// Maps an outline's local x/y axes into logical axes. Apply the
+    /// [`crate::geometry::PhysicalConverter`] to this displacement after
+    /// positioning the glyph origin, so RTL never mirrors the outline.
+    pub fn glyph_transform(&self) -> GlyphTransform {
+        use crate::GlyphOrientation as O;
+        use crate::geometry::{Direction, WritingMode};
+        let mode = self.data().style.writing_mode;
+        let ltr = self.line.used_direction() == Direction::Ltr;
+        let inline_sign = if mode == WritingMode::SidewaysLr {
+            if ltr { -1.0 } else { 1.0 }
+        } else if ltr {
+            1.0
+        } else {
+            -1.0
+        };
+        let block_sign = if matches!(mode, WritingMode::VerticalRl | WritingMode::SidewaysRl) {
+            -1.0
+        } else {
+            1.0
+        };
+        match self.orientation() {
+            O::Horizontal => GlyphTransform {
+                inline_x: inline_sign,
+                inline_y: 0.0,
+                block_x: 0.0,
+                block_y: 1.0,
+            },
+            O::Upright => GlyphTransform {
+                inline_x: 0.0,
+                inline_y: inline_sign,
+                block_x: block_sign,
+                block_y: 0.0,
+            },
+            O::Combined => {
+                let index = self
+                    .data()
+                    .combine_spans
+                    .partition_point(|span| span.text.end <= self.text.0);
+                GlyphTransform {
+                    inline_x: 0.0,
+                    inline_y: inline_sign,
+                    block_x: block_sign * self.data().combine_geometry.scales[index],
+                    block_y: 0.0,
+                }
+            }
+            O::SidewaysClockwise => GlyphTransform {
+                inline_x: inline_sign,
+                inline_y: 0.0,
+                block_x: 0.0,
+                block_y: -block_sign,
+            },
+            O::SidewaysCounterClockwise => GlyphTransform {
+                inline_x: -inline_sign,
+                inline_y: 0.0,
+                block_x: 0.0,
+                block_y: block_sign,
+            },
+        }
+    }
+
+    /// Font outline origin in line-local logical coordinates. RTL flow uses
+    /// the advance cell's inline end, including the original shaping advance
+    /// and excluding layout spacing. Rotation is applied by `glyph_transform`.
+    pub fn glyph_origin(&self, index: usize) -> Option<(f32, f32)> {
+        let gi = (self.glyphs.0 as usize).checked_add(index)?;
+        if gi >= self.glyphs.1 as usize {
+            return None;
+        }
+        let glyph = self.glyphs().get(index)?;
+        let store = match self.source {
+            GlyphSource::Shared => &self.data().glyphs,
+            GlyphSource::Overlay { .. } => self.line.overlay.as_deref()?,
+        };
+        let ltr = self.line.used_direction() == crate::geometry::Direction::Ltr;
+        let negative_inline = if self.orientation() == crate::GlyphOrientation::Combined {
+            false
+        } else {
+            !ltr
+        };
+        let inline = glyph.inline_position
+            + if negative_inline {
+                store.advance[gi].to_f32()
+            } else {
+                0.0
+            };
+        Some((inline, self.baseline() + glyph.block_offset))
+    }
+
     /// Metrics at this run's actual size and normalized variation location.
     pub fn metrics(&self) -> crate::font::FontMetrics {
         self.run_data()
             .instance
             .metrics
             .unwrap_or_else(|| self.data().fonts.metrics(self.font(), self.font_size()))
+    }
+
+    /// Resolved vhea/MVAR metrics for this run's font instance, when present.
+    /// Glyph-specific vertical advances and origins are reflected in `glyphs`.
+    pub fn vertical_metrics(&self) -> Option<crate::font::VerticalFontMetrics> {
+        self.run_data().instance.vertical_metrics
     }
 
     pub fn font_size(&self) -> f32 {
@@ -611,7 +874,7 @@ impl<'a> GlyphRunView<'a> {
         self.record.inline_size.to_f32()
     }
 
-    /// Alphabetic baseline from the top of the line box.
+    /// Dominant baseline in logical block coordinates from block-start.
     pub fn baseline(&self) -> f32 {
         (self.line.baseline + self.block_shift).to_f32()
     }
@@ -662,12 +925,14 @@ impl<'a> GlyphRunView<'a> {
                 .text
                 .get(text.start as usize..text.end as usize)
                 .unwrap_or_default();
+            let mut flags =
+                ClusterFlags::from_source(source, self.line.visible_hyphen == Some(text.start));
+            if self.orientation() == crate::GlyphOrientation::Combined {
+                flags.emphasis_excluded = true;
+            }
             Cluster {
                 source_char: source.chars().next(),
-                flags: ClusterFlags::from_source(
-                    source,
-                    self.line.visible_hyphen == Some(text.start),
-                ),
+                flags,
                 text_range: text.start as usize..text.end as usize,
                 advance: glyphs.clone().map(|g| self.glyph(g).advance).sum(),
                 shaping_advance: glyphs.map(|g| store.advance[g as usize].to_f32()).sum(),
@@ -681,6 +946,37 @@ impl<'a> GlyphRunView<'a> {
             GlyphSource::Overlay { .. } => self.line.overlay.as_deref().expect("overlay store"),
         };
         let gi = g as usize;
+        if matches!(self.source, GlyphSource::Shared)
+            && let Some(paint) = self
+                .data()
+                .combine_geometry
+                .glyphs
+                .get(gi)
+                .copied()
+                .flatten()
+        {
+            let span = &self.data().combine_spans[paint.span];
+            let sign = if self.data().style.writing_mode == crate::geometry::WritingMode::VerticalRl
+            {
+                -1.0
+            } else {
+                1.0
+            };
+            let baseline = self.data().combine_geometry.baselines[paint.span]
+                + store.offset_block[gi].to_f32();
+            return Glyph {
+                id: store.id[gi],
+                inline_position: self.record.inline_start.to_f32()
+                    + if self.line.used_direction() == crate::geometry::Direction::Ltr {
+                        baseline
+                    } else {
+                        span.em - baseline
+                    },
+                block_offset: sign * (paint.x - span.em / 2.0),
+                advance: store.advance[gi].to_f32() + paint.extra,
+                cluster: store.cluster[gi],
+            };
+        }
         let first = self.glyphs.0 as usize;
         let (rel, advance) = if matches!(self.source, GlyphSource::Shared)
             && let Some((start, positions)) = &self.line.positions

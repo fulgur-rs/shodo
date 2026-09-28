@@ -12,6 +12,7 @@ use std::sync::Arc;
 #[derive(Clone, Debug, Default)]
 pub(crate) struct RunInstance {
     pub(crate) metrics: Option<crate::font::FontMetrics>,
+    pub(crate) vertical_metrics: Option<crate::font::VerticalFontMetrics>,
     pub(crate) coords: Vec<NormalizedCoord>,
     pub(crate) variations: Vec<FontVariation>,
     pub(crate) embolden: bool,
@@ -133,6 +134,7 @@ pub(crate) fn resolve(
     }
     let result = Arc::new(RunInstance {
         metrics: None,
+        vertical_metrics: None,
         coords: instance.coords().to_vec(),
         variations,
         embolden: found.embolden,
@@ -243,5 +245,50 @@ mod tests {
             100.0
         );
         assert!((size - 16.0 * 0.6 * upem / (nominal + 100.0)).abs() < 0.01);
+
+        // The same VVAR delta must reach the public paragraph's TTB glyph
+        // advance, rather than affecting only font-size-adjust's ic-height.
+        let limits = crate::limits::Limits::default();
+        let fonts = crate::font::FontCollection::with_options(
+            &limits,
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register_face(
+                bytes,
+                0,
+                crate::font::FontFaceDescriptor {
+                    family: "Vertical Variable".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let paragraph_style = crate::style::ParagraphStyle {
+            writing_mode: crate::geometry::WritingMode::VerticalRl,
+            root: InlineStyle {
+                font_size: 16.0,
+                font_families: vec![crate::style::FontFamily::Named("Vertical Variable".into())],
+                font_variations: vec![FontVariation {
+                    tag: *b"wght",
+                    value: 900.0,
+                }],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&paragraph_style, &limits);
+        builder.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            "水",
+        );
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        assert_eq!(paragraph.data.glyphs.advance[0].to_f32(), 17.59375);
     }
 }

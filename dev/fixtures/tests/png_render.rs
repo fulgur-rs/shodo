@@ -6,6 +6,177 @@ use shodo::{AtomicSize, AtomicSizes, Fragment, LayoutContext, ParagraphBuilder};
 use shodo_fixtures::{FONTS, load_fonts};
 
 #[test]
+fn vertical_outlines_match_literal_physical_rotation_and_compression() {
+    use shodo::geometry::{Direction, PhysicalConverter, PhysicalSize, WritingMode};
+    use shodo::style::{TextCombineUpright, TextOrientation};
+    use skrifa::{
+        FontRef, GlyphId, MetadataProvider,
+        instance::{LocationRef, Size},
+        outline::{DrawSettings, OutlinePen},
+    };
+    struct Pen(tiny_skia::PathBuilder);
+    impl OutlinePen for Pen {
+        fn move_to(&mut self, x: f32, y: f32) {
+            self.0.move_to(x, y);
+        }
+        fn line_to(&mut self, x: f32, y: f32) {
+            self.0.line_to(x, y);
+        }
+        fn quad_to(&mut self, x: f32, y: f32, z: f32, w: f32) {
+            self.0.quad_to(x, y, z, w);
+        }
+        fn curve_to(&mut self, a: f32, b: f32, c: f32, d: f32, e: f32, f: f32) {
+            self.0.cubic_to(a, b, c, d, e, f);
+        }
+        fn close(&mut self) {
+            self.0.close();
+        }
+    }
+    let limits = Default::default();
+    let fonts = load_fonts(&limits).unwrap();
+    for mode in [
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+        WritingMode::SidewaysRl,
+        WritingMode::SidewaysLr,
+    ] {
+        for orientation in [
+            TextOrientation::Mixed,
+            TextOrientation::Upright,
+            TextOrientation::Sideways,
+        ] {
+            for direction in [Direction::Ltr, Direction::Rtl] {
+                for combine in [false, true] {
+                    let style = ParagraphStyle {
+                        writing_mode: mode,
+                        direction,
+                        root: InlineStyle {
+                            font_families: vec![FontFamily::Named(FONTS[0].family.into())],
+                            font_size: 32.0,
+                            direction,
+                            text_orientation: orientation,
+                            text_combine_upright: if combine {
+                                TextCombineUpright::All
+                            } else {
+                                TextCombineUpright::None
+                            },
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    };
+                    // F's asymmetric outline makes a mirrored/sideways glyph visible.
+                    let mut builder = ParagraphBuilder::new(&style, &limits);
+                    builder.push_text(
+                        TextSource::Generated { node: NodeId(1) },
+                        if combine { "FFF" } else { "F" },
+                    );
+                    let p = builder
+                        .build(&mut LayoutContext::new(), &fonts.collection)
+                        .unwrap_or_else(|e| {
+                            panic!("{mode:?}/{orientation:?}/{direction:?}/{combine}: {e}")
+                        });
+                    let lines = p.break_all(
+                        &mut LayoutContext::new(),
+                        &Default::default(),
+                        200.0,
+                        &AtomicSizes::EMPTY,
+                    );
+                    assert_eq!(lines.len(), 1);
+                    assert_eq!(lines[0].writing_mode(), mode);
+                    let (actual, count) =
+                        glyph_paint::try_paint_on_canvas(&lines, |_| [0, 0, 0, 255], &[], 256, 256)
+                            .unwrap_or_else(|e| {
+                                panic!("{mode:?}/{orientation:?}/{direction:?}/{combine}: {e}")
+                            });
+                    let mut expected = tiny_skia::Pixmap::new(256, 256).unwrap();
+                    expected.fill(tiny_skia::Color::WHITE);
+                    let converter = PhysicalConverter::new(
+                        mode,
+                        lines[0].used_direction(),
+                        PhysicalSize {
+                            width: 236.0,
+                            height: 236.0,
+                        },
+                    );
+                    let mut expected_count = 0;
+                    for fragment in lines[0].fragments() {
+                        let Fragment::GlyphRun(run) = fragment else {
+                            continue;
+                        };
+                        let data = run.font_data().unwrap();
+                        let font = FontRef::from_index(data.data.as_ref(), data.index).unwrap();
+                        let natural: f32 = run.glyphs().map(|g| g.advance).sum();
+                        let scale = (32.0 / natural).min(1.0);
+                        let mut paint = tiny_skia::Paint::default();
+                        paint.set_color_rgba8(0, 0, 0, 255);
+                        // Literal physical x/y-up columns: upright, CW, CCW.
+                        // Do not use glyph_transform to derive the expectation.
+                        let columns = if matches!(mode, WritingMode::SidewaysLr) {
+                            (0.0, -1.0, -1.0, 0.0)
+                        } else if matches!(mode, WritingMode::SidewaysRl) {
+                            (0.0, 1.0, 1.0, 0.0)
+                        } else if combine {
+                            (scale, 0.0, 0.0, -1.0)
+                        } else if orientation == TextOrientation::Upright {
+                            (1.0, 0.0, 0.0, -1.0)
+                        } else {
+                            (0.0, 1.0, 1.0, 0.0)
+                        };
+                        for (index, glyph) in run.glyphs().enumerate() {
+                            let outline =
+                                font.outline_glyphs().get(GlyphId::new(glyph.id)).unwrap();
+                            let mut pen = Pen(tiny_skia::PathBuilder::new());
+                            outline
+                                .draw(
+                                    DrawSettings::unhinted(
+                                        Size::new(run.font_size()),
+                                        LocationRef::new(run.normalized_coords()),
+                                    ),
+                                    &mut pen,
+                                )
+                                .unwrap();
+                            let (inline, block) = run.glyph_origin(index).unwrap();
+                            let (x, y) = converter.point(inline, block + lines[0].block_offset());
+                            if let Some(path) = pen.0.finish() {
+                                let transform = tiny_skia::Transform::from_row(
+                                    columns.0,
+                                    columns.1,
+                                    columns.2,
+                                    columns.3,
+                                    10.0 + x,
+                                    10.0 + y,
+                                );
+                                expected.fill_path(
+                                    &path,
+                                    &paint,
+                                    tiny_skia::FillRule::Winding,
+                                    transform,
+                                    None,
+                                );
+                            }
+                            expected_count += 1;
+                        }
+                    }
+                    assert_eq!(count, expected_count);
+                    assert!(
+                        expected
+                            .data()
+                            .as_chunks::<4>()
+                            .0
+                            .iter()
+                            .any(|p| p[0] < 128)
+                    );
+                    assert!(
+                        actual.data() == expected.data(),
+                        "pixel mismatch: {mode:?}/{orientation:?}/{direction:?}/{combine}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn atomic_border_rectangle_is_painted_with_accepted_line_block_offset() {
     let limits = Default::default();
     let fonts = load_fonts(&limits).unwrap();

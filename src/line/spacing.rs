@@ -18,6 +18,13 @@ pub(crate) struct UnitSpacing {
     pub(crate) gaps: (usize, usize),
 }
 
+pub(crate) fn word_separator(ch: char) -> bool {
+    matches!(
+        ch,
+        ' ' | '\u{a0}' | '\u{1361}' | '\u{10100}' | '\u{10101}' | '\u{1039f}' | '\u{1091f}'
+    )
+}
+
 pub(crate) fn build(
     data: &ParagraphData,
     sat: &mut Saturation,
@@ -38,6 +45,20 @@ pub(crate) fn build(
                 gaps: (gaps.len(), gaps.len()),
                 ..Default::default()
             };
+            if let Some(combine) = unit.combine {
+                let span = &data.combine_spans[combine as usize];
+                if index == span.units.start {
+                    value.summary = Summary::leaf(Edge {
+                        tracking,
+                        kind: Kind::Atomic,
+                        unit: index as u32,
+                        box_node: data.spacing_tree.item_nodes[unit.item as usize],
+                        ..Default::default()
+                    });
+                }
+                previous_text = Some(unit.text.clone());
+                return value;
+            }
             match unit.kind {
                 UnitKind::Cluster { .. } => {
                     if previous_text.as_ref() == Some(&unit.text) {
@@ -106,15 +127,7 @@ pub(crate) fn build(
                             }
                         }
                         value.summary = value.summary.join(Summary::leaf(edge), Some(data));
-                        if matches!(
-                            ch,
-                            ' ' | '\u{a0}'
-                                | '\u{1361}'
-                                | '\u{10100}'
-                                | '\u{10101}'
-                                | '\u{1039f}'
-                                | '\u{1091f}'
-                        ) {
+                        if word_separator(ch) {
                             value.word = value
                                 .word
                                 .add(LayoutUnit::from_f32_round(style.word_spacing, sat), sat);
@@ -199,6 +212,11 @@ pub(crate) fn build(
             owner = Some(i);
         }
     }
+    for span in &data.combine_spans {
+        if !span.units.is_empty() {
+            result[span.units.start].tail = span.units.end - 1;
+        }
+    }
     (result, gaps)
 }
 
@@ -233,11 +251,12 @@ pub(crate) fn last_content(data: &ParagraphData) -> Option<usize> {
 
 pub(super) fn push(data: &ParagraphData, cursor: &mut Cursor, index: usize) {
     let unit = &data.units[index];
-    let level = if matches!(unit.kind, UnitKind::Tab) {
-        data.base_level
-    } else {
-        unit.level
-    };
+    let level =
+        if matches!(unit.kind, UnitKind::Tab) && data.combine_at_text(unit.text.start).is_none() {
+            data.base_level
+        } else {
+            unit.level
+        };
     cursor.push(level, data.unit_spacing[index].summary, Some(data));
 }
 
@@ -253,6 +272,13 @@ pub(super) fn justification_metadata(
 ) -> (usize, Option<JustificationEdge>, Option<JustificationEdge>) {
     if text.start >= text.end {
         return (0, None, None);
+    }
+    if let Some(span) = data.combine_at_text(text.start) {
+        return (
+            0,
+            Some((Kind::Atomic, span.text.start)),
+            Some((Kind::Atomic, span.text.end - 1)),
+        );
     }
     let category = CodePointMapData::<GeneralCategory>::new();
     let script = CodePointMapData::<Script>::new();
@@ -403,7 +429,10 @@ pub(super) fn apply(
     let mut barrier = false;
     let bidi_start = super::whitespace::bidi_trailing(data, start, scan.end);
     let level = |i: usize| {
-        if i >= bidi_start || matches!(data.units[i].kind, UnitKind::Tab) {
+        if i >= bidi_start
+            || matches!(data.units[i].kind, UnitKind::Tab)
+                && data.combine_at_text(data.units[i].text.start).is_none()
+        {
             data.base_level
         } else {
             data.units[i].level

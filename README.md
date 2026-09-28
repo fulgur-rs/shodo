@@ -25,10 +25,11 @@ shodo is in early development. Paragraph construction, CSS text analysis, real-f
 - Resource limits for input, glyph counts, and font data through `Limits`, plus diagnostic warnings.
 - Shared and document-local font collections with CSS weight/width ranges, unicode-range, ordered local/web sources, locale fallback, and whole-cluster matching.
 - Real horizontal/vertical font metrics, CSS ch/ic queries, and shared bounded harfrust shaping data.
+- Vertical and sideways writing, upright/mixed glyph orientation, and source-preserving `text-combine-upright: all`. See the [vertical output contract](docs/vertical-layout.md).
 
 ### Limitations and planned features
 
-Hit testing, vertical shaping/orientation, and ruby layout are planned. APIs described in the design documents are not necessarily implemented.
+Ruby layout is planned. APIs described in the design documents are not necessarily implemented.
 
 `word-break: auto-phrase` warns and uses normal breaking. Automatic dictionary hyphenation warns and uses manual soft-hyphen opportunities. Invalid locale tags warn and use the root locale; valid but unknown shaping languages warn and use OpenType's default language system. If no registered or fallback face covers a grapheme, layout warns and emits deterministic glyph 0 with a 1em base advance and zero advance for combining marks/default ignorables. This fallback is not a drawable substitute for font data.
 

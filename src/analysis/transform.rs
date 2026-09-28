@@ -9,15 +9,23 @@ use icu_casemap::CaseMapper;
 use icu_locale_core::{LanguageIdentifier, Locale};
 use icu_normalizer::ComposingNormalizer;
 
+pub(crate) struct WidthOrigin {
+    pub(crate) text: std::ops::Range<u32>,
+    pub(crate) before_width: String,
+}
+
 pub(crate) fn transform(
     mut input: Processed,
     styles: &[InlineStyle],
     limits: &Limits,
     warnings: &mut WarningSink,
+    mode: crate::geometry::WritingMode,
 ) -> Result<Processed, LimitExceeded> {
+    let omissions = super::combine::omissions(&input, styles, mode);
     if styles
         .iter()
         .all(|s| s.text_transform == TextTransform::None)
+        && omissions.is_empty()
     {
         Limits::check(
             limits.max_text_bytes,
@@ -64,6 +72,7 @@ pub(crate) fn transform(
     let mut spans: Vec<TransformSpan> = Vec::new();
     let mut consumed_mark = None;
     let mut dutch_title_head = false;
+    let mut width_origins = Vec::new();
     for (index, item) in input.items.iter().enumerate() {
         for (offset, c) in
             input.text[item.text.start as usize..item.text.end as usize].char_indices()
@@ -73,13 +82,16 @@ pub(crate) fn transform(
             let style = &styles[item.style as usize];
             let (case, width, kana) = style.text_transform.components();
             let locale = &locales[item.style as usize];
+            let omit = omissions
+                .get(omissions.partition_point(|range| range.end <= at as u32))
+                .is_some_and(|range| range.start <= at as u32);
             if flags[at] & HEAD != 0 {
                 dutch_title_head = matches!(item.kind, ItemKind::Text)
                     && matches!(case, CaseTransform::Capitalize)
                     && locale.language.as_str() == "nl"
                     && matches!(c, 'i' | 'I');
             }
-            let mut mapped = if consumed_mark == Some(at) {
+            let mut mapped = if omit || consumed_mark == Some(at) {
                 String::new()
             } else if matches!(item.kind, ItemKind::Text) {
                 let mut buf = [0; 4];
@@ -169,11 +181,15 @@ pub(crate) fn transform(
                         .collect();
                 }
             }
+            let mut before_width = None;
             if matches!(item.kind, ItemKind::Text) {
                 if kana {
                     mapped = mapped.chars().map(full_size_kana).collect();
                 }
                 if width {
+                    if style.text_combine_upright == crate::style::TextCombineUpright::All {
+                        before_width = Some(mapped.clone());
+                    }
                     mapped = mapped.chars().map(full_width).collect();
                 }
             }
@@ -187,6 +203,9 @@ pub(crate) fn transform(
                 let sequence = format!("{mapped}{}", full_width(mark));
                 let composed = ComposingNormalizer::new_nfc().normalize(&sequence);
                 if composed.chars().count() == 1 {
+                    if let Some(original) = &mut before_width {
+                        original.push(mark);
+                    }
                     mapped = composed.into_owned();
                     consumed_mark = Some(mark_at);
                 }
@@ -196,6 +215,15 @@ pub(crate) fn transform(
             Limits::check(limits.max_text_bytes, LimitKind::TextBytes, next_len)?;
             let start_new = output.len() as u32;
             output.push_str(&mapped);
+            if let Some(before_width) = before_width
+                && before_width != mapped
+                && !mapped.is_empty()
+            {
+                width_origins.push(WidthOrigin {
+                    text: start_new..output.len() as u32,
+                    before_width,
+                });
+            }
             let kind = if mapped.is_empty() {
                 MappingKind::Collapsed
             } else if mapped.len() == c.len_utf8() && mapped.chars().count() == 1 {
@@ -224,6 +252,9 @@ pub(crate) fn transform(
     for item in &mut input.items {
         item.text = TransformSpan::map_position(&spans, item.text.start)
             ..TransformSpan::map_position(&spans, item.text.end);
+        if matches!(item.kind, ItemKind::ForcedBreak) && item.text.is_empty() {
+            item.kind = ItemKind::BidiControl;
+        }
     }
     if let Some(mapping) = &mut input.mapping {
         mapping.remap_text(&spans);
@@ -235,6 +266,7 @@ pub(crate) fn transform(
         .collect();
     input.text = output;
     input.source_spans = spans;
+    input.width_origins = width_origins;
     Ok(input)
 }
 

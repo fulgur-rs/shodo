@@ -298,6 +298,9 @@ pub(super) fn unit_width(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> LayoutUnit {
+    if unit.combine.is_some() {
+        return unit.slice_advance;
+    }
     match &unit.kind {
         UnitKind::Cluster { .. } if unit.shared_cluster.is_some() => unit.slice_advance,
         UnitKind::Cluster { glyphs, .. } => glyphs.clone().fold(LayoutUnit::ZERO, |acc, g| {
@@ -353,13 +356,25 @@ fn tab_width(
         TabSize::Spaces(n) => n * (metrics.space + block.letter_spacing + block.word_spacing),
         TabSize::Px(v) => v,
     };
-    let interval = i64::from(LayoutUnit::from_f32_round(interval, sat).raw());
+    tab_advance(
+        content_pos,
+        LayoutUnit::from_f32_round(interval, sat),
+        LayoutUnit::from_f32_round(metrics.ch * 0.5, sat),
+    )
+}
+
+pub(crate) fn tab_advance(
+    content_pos: LayoutUnit,
+    interval: LayoutUnit,
+    min_gap: LayoutUnit,
+) -> LayoutUnit {
+    let interval = i64::from(interval.raw());
     if interval <= 0 {
         return LayoutUnit::ZERO;
     }
     let x = i64::from(content_pos.raw());
     let mut next = (x.div_euclid(interval) + 1) * interval;
-    let min_gap = i64::from(LayoutUnit::from_f32_round(metrics.ch * 0.5, sat).raw());
+    let min_gap = i64::from(min_gap.raw());
     if next - x < min_gap {
         next += interval;
     }

@@ -13,12 +13,23 @@ impl Temp {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let path = std::env::temp_dir().join(format!(
-            "shodo-snapshot-report-{}-{stamp}",
-            std::process::id()
-        ));
-        std::fs::create_dir(&path).unwrap();
-        Self(path)
+        Self::with_stamp(stamp)
+    }
+    fn with_stamp(stamp: u128) -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        loop {
+            let nonce = NEXT.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir().join(format!(
+                "shodo-snapshot-report-{}-{stamp}-{nonce}",
+                std::process::id()
+            ));
+            match std::fs::create_dir(&path) {
+                Ok(()) => return Self(path),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!("cannot create test directory {}: {error}", path.display()),
+            }
+        }
     }
     fn options(&self, output: &str, update: bool) -> Options {
         Options {
@@ -28,6 +39,21 @@ impl Temp {
             update,
         }
     }
+}
+
+#[test]
+fn equal_clock_stamps_allocate_independent_owned_directories() {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let first = Temp::with_stamp(stamp);
+    std::fs::write(first.0.join("keep"), b"first").unwrap();
+    let second = Temp::with_stamp(stamp);
+    assert_ne!(first.0, second.0);
+    assert!(!second.0.join("keep").exists());
+    drop(second);
+    assert_eq!(std::fs::read(first.0.join("keep")).unwrap(), b"first");
 }
 impl Drop for Temp {
     fn drop(&mut self) {
@@ -113,7 +139,8 @@ fn explicit_update_creates_the_full_matrix_and_check_preserves_all_bytes() {
     update(&temp);
     let expected = temp.0.join("expected");
     let before = contents(&expected);
-    assert_eq!(before.len(), 53);
+    // 46 cases, each with one PNG and geometry file, plus the manifest.
+    assert_eq!(before.len(), 93);
     assert!(before.contains_key(Path::new("manifest.json")));
     let report = run(&temp.options("check", false)).unwrap();
     assert!(

@@ -7,6 +7,7 @@
 pub(crate) mod cache;
 mod features;
 mod instance;
+pub(crate) mod orientation;
 use instance::RunInstance;
 pub(crate) use instance::resolve as resolve_instance;
 use std::sync::Arc;
@@ -14,8 +15,53 @@ use std::sync::Arc;
 use std::ops::Range;
 
 use crate::font::FontId;
-use crate::geometry::{LayoutUnit, Saturation};
+use crate::geometry::{LayoutUnit, Saturation, WritingMode};
 use crate::limits::{LimitExceeded, LimitKind, Limits};
+use skrifa::{MetadataProvider, raw::TableProvider};
+
+// Harfrust's vertical-origin fallback only reads glyf bounds. For a CFF face
+// without VORG, OpenType instead requires the CFF outline top plus vmtx TSB.
+fn cff_vertical_origin_delta(
+    font: &skrifa::FontRef<'_>,
+    glyph_id: u32,
+    coords: &[skrifa::instance::NormalizedCoord],
+) -> Option<f32> {
+    let glyph = skrifa::GlyphId::new(glyph_id);
+    let bounds = font
+        .glyph_metrics(
+            skrifa::instance::Size::unscaled(),
+            skrifa::instance::LocationRef::new(coords),
+        )
+        .bounds(glyph)?;
+    let tsb = f32::from(font.vmtx().ok()?.side_bearing(glyph)?);
+    let vvar = font.vvar().ok();
+    let origin = bounds.y_max
+        + tsb
+        + vvar
+            .as_ref()
+            .and_then(|v| v.tsb_delta(glyph, coords).ok())
+            .map_or(0.0, |delta| delta.to_f32())
+        + vvar
+            .as_ref()
+            .and_then(|v| v.v_org_delta(glyph, coords).ok())
+            .map_or(0.0, |delta| delta.to_f32());
+    let ascent = font
+        .os2()
+        .ok()
+        .map(|os2| f32::from(os2.s_typo_ascender()))
+        .or_else(|| {
+            font.hhea()
+                .ok()
+                .map(|hhea| f32::from(hhea.ascender().to_i16()))
+        })
+        .unwrap_or(0.0);
+    let ascent_delta = font
+        .mvar()
+        .ok()
+        .and_then(|mvar| mvar.metric_delta(skrifa::Tag::new(b"hasc"), coords).ok())
+        .map_or(0.0, |delta| delta.to_f32());
+    Some(origin - ascent - ascent_delta)
+}
 
 /// A run is closed before its pen position would exceed this value, so
 /// differences between pen positions within a run never saturate.
@@ -51,9 +97,108 @@ pub(crate) struct ShapedRun {
     pub(crate) glyphs: Range<u32>,
     pub(crate) text: Range<u32>,
     pub(crate) item: u32,
+    pub(crate) orientation: orientation::RunOrientation,
     pub(crate) font: FontId,
     pub(crate) font_size: f32,
     pub(crate) instance: Arc<RunInstance>,
+}
+
+/// Prove applicable width-feature coverage through the selected font/script/
+/// language/variation instance. A feature must change every visible source
+/// character; otherwise keep the complete composition on its ordinary glyphs.
+pub(crate) fn select_combined_widths(
+    cx: &mut crate::LayoutContext,
+    items: &mut [crate::analysis::itemize::ShapeItem],
+    styles: &[crate::style::InlineStyle],
+    fonts: &crate::font::FontCollection,
+    mode: WritingMode,
+    limits: &Limits,
+) {
+    let mut begin = 0;
+    while begin < items.len() {
+        let Some(combine) = items[begin].combine else {
+            begin += 1;
+            continue;
+        };
+        let mut end = begin + 1;
+        while end < items.len() && items[end].combine == Some(combine) {
+            end += 1;
+        }
+        let group = &items[begin..end];
+        let mut starts: Vec<_> = group
+            .iter()
+            .flat_map(|item| item.scalars.iter())
+            .filter(|scalar| scalar.grapheme_start)
+            .map(|scalar| scalar.offset)
+            .collect();
+        starts.sort_unstable();
+        starts.dedup();
+        let tag = match starts.len() {
+            2 => *b"hwid",
+            3 => *b"twid",
+            4 => *b"qwid",
+            _ => {
+                begin = end;
+                continue;
+            }
+        };
+        if group.iter().any(|item| item.font.is_none()) {
+            begin = end;
+            continue;
+        }
+        let mut warnings = crate::limits::WarningSink::new(limits.max_warnings);
+        let mut sat = Saturation::default();
+        let Ok((plain, _)) = shape_items(
+            cx,
+            group,
+            styles,
+            fonts,
+            mode,
+            limits,
+            &mut warnings,
+            &mut sat,
+        ) else {
+            begin = end;
+            continue;
+        };
+        let mut candidate = group.to_vec();
+        for item in &mut candidate {
+            item.width_feature = Some(tag);
+        }
+        let Ok((narrow, _)) = shape_items(
+            cx,
+            &candidate,
+            styles,
+            fonts,
+            mode,
+            limits,
+            &mut warnings,
+            &mut sat,
+        ) else {
+            begin = end;
+            continue;
+        };
+        starts.push(group.last().unwrap().end);
+        let covered = starts.windows(2).all(|range| {
+            let a = plain.cluster.partition_point(|offset| *offset < range[0])
+                ..plain.cluster.partition_point(|offset| *offset < range[1]);
+            let b = narrow.cluster.partition_point(|offset| *offset < range[0])
+                ..narrow.cluster.partition_point(|offset| *offset < range[1]);
+            if a.is_empty() || b.is_empty() {
+                return false;
+            }
+            let visible = plain.advance[a.clone()]
+                .iter()
+                .any(|advance| advance.raw() != 0);
+            !visible || plain.id[a] != narrow.id[b]
+        });
+        if covered {
+            for item in &mut items[begin..end] {
+                item.width_feature = Some(tag);
+            }
+        }
+        begin = end;
+    }
 }
 
 /// Shapes one compatible style/font/script segment, then assigns each cluster
@@ -64,6 +209,7 @@ pub(crate) fn shape_items(
     items: &[crate::analysis::itemize::ShapeItem],
     styles: &[crate::style::InlineStyle],
     fonts: &crate::font::FontCollection,
+    mode: WritingMode,
     limits: &Limits,
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
@@ -92,14 +238,20 @@ pub(crate) fn shape_items(
                     warnings,
                 );
                 let metrics = fonts.metrics_with_coords(found.id, size, &instance.coords);
+                let vertical_metrics = fonts.vertical_metrics(found.id, size, &instance.coords);
                 Arc::get_mut(&mut instance).expect("new instance").metrics = metrics;
+                Arc::get_mut(&mut instance)
+                    .expect("new instance")
+                    .vertical_metrics = vertical_metrics;
+                Arc::get_mut(&mut instance).expect("new instance").features =
+                    features::for_item(style, original);
                 (shaper, instance, size)
             });
         let missing_instance = if resolved.is_none() {
             Some(Arc::new(RunInstance {
                 script: original.script,
                 language: style.lang.clone(),
-                features: features::features(style),
+                features: features::for_item(style, original),
                 metrics: Some(fonts.metrics(fonts.primary_font(), style.font_size)),
                 ..Default::default()
             }))
@@ -139,11 +291,14 @@ pub(crate) fn shape_items(
             let item = crate::analysis::itemize::ShapeItem {
                 segment: original.segment,
                 scalars: original.scalars[start..cursor].to_vec(),
-                end: last.offset + last.c.len_utf8() as u32,
+                end: last.end,
                 style: original.style,
                 level: original.level,
                 script: original.script,
                 font: original.font.clone(),
+                orientation: original.orientation,
+                combine: original.combine,
+                width_feature: original.width_feature,
                 before: original.before.clone(),
                 after: original.after.clone(),
             };
@@ -168,7 +323,9 @@ pub(crate) fn shape_items(
                     )?;
                     *store.id.last_mut().unwrap() = 0;
                     let mut current = runs.pop().unwrap();
+                    current.text.end = scalar.end;
                     current.instance = Arc::clone(run_instance);
+                    current.orientation = item.orientation;
                     if runs.len() > window_run_start
                         && let Some(previous) = runs.last_mut()
                         && previous.item == current.item
@@ -201,6 +358,18 @@ pub(crate) fn shape_items(
             let (instance, run_instance, font_size) = resolved.as_ref().expect("matched instance");
             let font_size = *font_size;
             let shaper = shared.shaper(&font).instance(Some(instance)).build();
+            let cff_without_vorg = if item.orientation == orientation::RunOrientation::Upright {
+                skrifa::FontRef::from_index(data.data.as_ref(), data.index)
+                    .ok()
+                    .filter(|font| {
+                        font.vorg().is_err()
+                            && (font.cff().is_ok() || font.cff2().is_ok())
+                            && font.vmtx().is_ok()
+                    })
+            } else {
+                None
+            };
+            let mut cff_origin_deltas = std::collections::HashMap::new();
             let mut buffer = cx.scratch.take().unwrap_or_default();
             buffer.clear();
             for scalar in &item.scalars {
@@ -220,7 +389,10 @@ pub(crate) fn shape_items(
             } else {
                 &post
             });
-            buffer.set_direction(if item.level % 2 == 1 {
+            let upright = item.orientation == orientation::RunOrientation::Upright;
+            buffer.set_direction(if upright {
+                harfrust::Direction::TopToBottom
+            } else if item.level % 2 == 1 {
                 harfrust::Direction::RightToLeft
             } else {
                 harfrust::Direction::LeftToRight
@@ -279,13 +451,19 @@ pub(crate) fn shape_items(
                 // while a gap between clusters ends at the last actual scalar.
                 let scalar_end = item.scalars.partition_point(|s| s.offset < next_cluster);
                 let last_scalar = &item.scalars[scalar_end.saturating_sub(1)];
-                let cluster_end = last_scalar.offset + last_scalar.c.len_utf8() as u32;
+                let cluster_end = last_scalar.end;
                 let mut parts = Vec::new();
                 let mut part_start = begin;
                 let mut part_advance = 0i64;
                 for (at, index) in order.iter().enumerate().take(end).skip(begin) {
+                    let position = &shaped.glyph_positions()[*index];
                     let advance = LayoutUnit::from_f32_round(
-                        shaped.glyph_positions()[*index].x_advance as f32 * scale,
+                        if upright {
+                            -position.y_advance
+                        } else {
+                            position.x_advance
+                        } as f32
+                            * scale,
                         sat,
                     )
                     .raw() as i64;
@@ -314,7 +492,15 @@ pub(crate) fn shape_items(
                     for index in &order[part.clone()] {
                         let info = &shaped.glyph_infos()[*index];
                         let pos = &shaped.glyph_positions()[*index];
-                        let advance = LayoutUnit::from_f32_round(pos.x_advance as f32 * scale, sat);
+                        let advance = LayoutUnit::from_f32_round(
+                            if upright {
+                                -pos.y_advance
+                            } else {
+                                pos.x_advance
+                            } as f32
+                                * scale,
+                            sat,
+                        );
                         store.flags.push(
                             u8::from(info.unsafe_to_break())
                                 | (u8::from(info.unsafe_to_concat()) << 1),
@@ -323,7 +509,29 @@ pub(crate) fn shape_items(
                         store.cluster.push(cluster);
                         store.advance.push(advance);
                         store.pen.push(pen);
-                        let offset = LayoutUnit::from_f32_round(pos.x_offset as f32 * scale, sat);
+                        let offset = LayoutUnit::from_f32_round(
+                            (if upright { -pos.y_offset } else { pos.x_offset } as f32
+                                + if upright {
+                                    cff_without_vorg
+                                        .as_ref()
+                                        .and_then(|font| {
+                                            *cff_origin_deltas.entry(info.glyph_id).or_insert_with(
+                                                || {
+                                                    cff_vertical_origin_delta(
+                                                        font,
+                                                        info.glyph_id,
+                                                        instance.coords(),
+                                                    )
+                                                },
+                                            )
+                                        })
+                                        .unwrap_or(0.0)
+                                } else {
+                                    0.0
+                                })
+                                * scale,
+                            sat,
+                        );
                         let offset = if item.level % 2 == 1 {
                             LayoutUnit::from_raw(
                                 part_advance.clamp(i32::MIN as i64, i32::MAX as i64) as i32,
@@ -337,7 +545,15 @@ pub(crate) fn shape_items(
                         };
                         store.offset_inline.push(offset);
                         store.offset_block.push(LayoutUnit::from_f32_round(
-                            -pos.y_offset as f32 * scale,
+                            if upright {
+                                match mode {
+                                    WritingMode::VerticalLr => pos.x_offset,
+                                    _ => -pos.x_offset,
+                                }
+                            } else {
+                                -pos.y_offset
+                            } as f32
+                                * scale,
                             sat,
                         ));
                         pen = pen.add(advance, sat);
@@ -370,6 +586,7 @@ pub(crate) fn shape_items(
                             glyphs: run_start..store.len() as u32,
                             text: cluster..cluster_end,
                             item: owner,
+                            orientation: item.orientation,
                             font: found.id,
                             font_size,
                             instance: Arc::clone(run_instance),
@@ -444,6 +661,7 @@ pub(crate) fn shape_item(
                 glyphs: run_glyphs..store.len() as u32,
                 text: run_text..cluster,
                 item,
+                orientation: orientation::RunOrientation::Horizontal,
                 font,
                 font_size,
                 instance: Arc::new(RunInstance::default()),
@@ -471,6 +689,7 @@ pub(crate) fn shape_item(
             glyphs: run_glyphs..store.len() as u32,
             text: run_text..end,
             item,
+            orientation: orientation::RunOrientation::Horizontal,
             font,
             font_size,
             instance: Arc::new(RunInstance::default()),
@@ -593,18 +812,19 @@ pub(crate) fn shape_window_edit(
             let mut scalars = original.scalars[at..finish].to_vec();
             if let Some(r) = edited {
                 scalars[0].c = r.c;
+                scalars[0].end = r.text.end;
             }
             let part = crate::analysis::itemize::ShapeItem {
                 segment: original.segment,
-                end: edited.map_or_else(
-                    || scalars.last().unwrap().offset + scalars.last().unwrap().c.len_utf8() as u32,
-                    |r| r.text.end,
-                ),
+                end: edited.map_or_else(|| scalars.last().unwrap().end, |r| r.text.end),
                 scalars,
                 style: original.style,
                 level: original.level,
                 script: original.script,
                 font,
+                orientation: original.orientation,
+                combine: original.combine,
+                width_feature: original.width_feature,
                 before: before.into_iter().collect(),
                 after: original.scalars[finish..]
                     .iter()
@@ -619,6 +839,9 @@ pub(crate) fn shape_window_edit(
                 && previous.level == part.level
                 && previous.script == part.script
                 && previous.font == part.font
+                && previous.orientation == part.orientation
+                && previous.combine == part.combine
+                && previous.width_feature == part.width_feature
             {
                 previous.scalars.extend(part.scalars);
                 previous.end = part.end;
@@ -636,6 +859,7 @@ pub(crate) fn shape_window_edit(
         &items,
         &data.styles,
         &data.fonts,
+        data.style.writing_mode,
         &limits,
         warnings,
         sat,
@@ -666,6 +890,93 @@ mod tests {
     use crate::font::FontCollection;
     use crate::geometry::LayoutUnit;
     use crate::limits::{LimitExceeded, LimitKind, Limits};
+    use skrifa::MetadataProvider;
+    use skrifa::raw::TableProvider;
+
+    #[test]
+    fn missing_vorg_uses_vmtx_top_bearing_for_vertical_origin() {
+        // CJK 水 has yMax=838 in this pinned outline and vmtx TSB=42.
+        // Remove VORG and change only its TSB to 142: origin becomes 980.
+        let original = include_bytes!("../dev/fixtures/assets/fonts/cjk.otf");
+        let face = skrifa::FontRef::from_index(original, 0).unwrap();
+        let gid = face.charmap().map('水').unwrap().to_u32() as usize;
+        let mut tables = Vec::new();
+        let count = u16::from_be_bytes(original[4..6].try_into().unwrap()) as usize;
+        for n in 0..count {
+            let at = 12 + n * 16;
+            let tag: [u8; 4] = original[at..at + 4].try_into().unwrap();
+            if &tag == b"VORG" {
+                continue;
+            }
+            let start = u32::from_be_bytes(original[at + 8..at + 12].try_into().unwrap()) as usize;
+            let len = u32::from_be_bytes(original[at + 12..at + 16].try_into().unwrap()) as usize;
+            let mut data = original[start..start + len].to_vec();
+            if &tag == b"vmtx" {
+                data[gid * 4 + 2..gid * 4 + 4].copy_from_slice(&142i16.to_be_bytes());
+            }
+            tables.push((tag, data));
+        }
+        let bytes = crate::font::sfnt::build_sfnt(&tables);
+        let derived = skrifa::FontRef::from_index(&bytes, 0).unwrap();
+        assert!(derived.vorg().is_err());
+        assert_eq!(
+            derived
+                .vmtx()
+                .unwrap()
+                .side_bearing(skrifa::GlyphId::new(gid as u32)),
+            Some(142)
+        );
+        let bounds = derived
+            .glyph_metrics(
+                skrifa::instance::Size::unscaled(),
+                skrifa::instance::LocationRef::default(),
+            )
+            .bounds(skrifa::GlyphId::new(gid as u32))
+            .unwrap();
+        assert_eq!(bounds.y_max, 838.0);
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        let registered = fonts
+            .register_face(
+                bytes,
+                0,
+                crate::font::FontFaceDescriptor {
+                    family: "No VORG".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let style = crate::style::ParagraphStyle {
+            writing_mode: crate::geometry::WritingMode::VerticalRl,
+            root: crate::style::InlineStyle {
+                font_size: 16.0,
+                font_families: vec![crate::style::FontFamily::Named("No VORG".into())],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        builder.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            "水",
+        );
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        assert_eq!(paragraph.data.runs[0].font, registered);
+        assert_eq!(paragraph.data.glyphs.id[0], gid as u32);
+        assert_eq!(paragraph.data.glyphs.advance[0].to_f32(), 16.0);
+        assert_eq!(paragraph.data.glyphs.offset_inline[0].to_f32(), 15.6875);
+        assert_eq!(paragraph.data.glyphs.offset_block[0].to_f32(), 8.0);
+    }
 
     fn shape(
         text: &str,

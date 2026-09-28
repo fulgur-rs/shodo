@@ -92,6 +92,9 @@ fn clipped_group(data: &ParagraphData, at: usize, line: &Range<usize>) -> Range<
     start..end
 }
 fn compatible(data: &ParagraphData, a: usize, b: usize) -> bool {
+    if data.units[a].combine.is_some() || data.units[b].combine.is_some() {
+        return false;
+    }
     let (UnitKind::Cluster { run: a_run, .. }, UnitKind::Cluster { run: b_run, .. }) =
         (&data.units[a].kind, &data.units[b].kind)
     else {
@@ -344,12 +347,15 @@ fn measure_edit(
         last_range.start = clipped_group(data, previous, &line).start;
     }
     let before = last(data, 0, start);
-    let needs_first = partial(data, &first_range)
-        || start > 0
-            && (data.units[first_at].unsafe_to_concat
-                || before.is_some_and(|i| data.units[i].unsafe_to_break));
-    let needs_last =
-        replacement.is_some() || partial(data, &last_range) || data.units[last_at].unsafe_to_break;
+    let needs_first = data.units[first_at].combine.is_none()
+        && (partial(data, &first_range)
+            || start > 0
+                && (data.units[first_at].unsafe_to_concat
+                    || before.is_some_and(|i| data.units[i].unsafe_to_break)));
+    let needs_last = data.units[last_at].combine.is_none()
+        && (replacement.is_some()
+            || partial(data, &last_range)
+            || data.units[last_at].unsafe_to_break);
     let mut ranges = Vec::new();
     if needs_first {
         ranges.push(first_range);
@@ -1159,6 +1165,143 @@ mod tests {
                     .sum::<usize>(),
                 1
             );
+        }
+    }
+
+    #[test]
+    fn combined_square_survives_an_adjacent_owned_ligature_window() {
+        use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+        use crate::geometry::WritingMode;
+        use crate::node::{InlineEdges, NodeId, TextSource};
+        use crate::style::{
+            FontFamily, ParagraphStyle, TextAutospace, TextCombineUpright, WordBreak,
+        };
+        use crate::{
+            AtomicSizes, Fragment, GlyphOrientation, LayoutContext, LineConstraint, LineResult,
+            ParagraphBuilder,
+        };
+        let limits = Default::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        for (family, bytes) in [
+            (
+                "Latin",
+                include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").as_slice(),
+            ),
+            (
+                "Arabic",
+                include_bytes!("../../dev/fixtures/assets/fonts/arabic.ttf").as_slice(),
+            ),
+        ] {
+            fonts
+                .register_face(
+                    bytes.to_vec(),
+                    0,
+                    FontFaceDescriptor {
+                        family: family.into(),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+        }
+        for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+            for (family, combined_text) in [("Arabic", "بب"), ("Latin", "ab")] {
+                let mut root = ParagraphStyle {
+                    writing_mode: mode,
+                    ..Default::default()
+                };
+                root.root.font_families = vec![FontFamily::Named("Latin".into())];
+                root.root.font_size = 16.0;
+                root.root.text_autospace = TextAutospace::NoAutospace;
+                root.root.word_break = WordBreak::BreakAll;
+                let mut combined = root.root.clone();
+                combined.font_families = vec![FontFamily::Named(family.into())];
+                combined.text_combine_upright = TextCombineUpright::All;
+                let make = |suffix| {
+                    let mut b = ParagraphBuilder::new(&root, &limits);
+                    b.open_inline(NodeId(1), &combined, InlineEdges::default());
+                    b.push_text(
+                        TextSource::Dom {
+                            node: NodeId(2),
+                            offset: 0,
+                        },
+                        combined_text,
+                    );
+                    b.close_inline();
+                    if suffix {
+                        b.push_text(
+                            TextSource::Dom {
+                                node: NodeId(3),
+                                offset: 0,
+                            },
+                            "ffi",
+                        );
+                    }
+                    b.build(&mut LayoutContext::new(), &fonts).unwrap()
+                };
+                let shape = |line: &crate::Line| {
+                    line.fragments()
+                        .filter_map(|f| match f {
+                            Fragment::GlyphRun(run)
+                                if run.orientation() == GlyphOrientation::Combined =>
+                            {
+                                Some((
+                                    run.glyph_transform(),
+                                    run.glyphs()
+                                        .map(|g| {
+                                            (
+                                                g.id,
+                                                g.advance,
+                                                g.inline_position - run.inline_start(),
+                                                g.block_offset,
+                                            )
+                                        })
+                                        .collect::<Vec<_>>(),
+                                ))
+                            }
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                };
+                let alone = make(false).break_all(
+                    &mut LayoutContext::new(),
+                    &Default::default(),
+                    100.0,
+                    &AtomicSizes::EMPTY,
+                );
+                assert_eq!(
+                    alone[0].inline_size(),
+                    16.0,
+                    "an internal shaping edge cannot replace the square cost"
+                );
+                let p = make(true);
+                let LineResult::Line(line) = p.next_line(
+                    &mut LayoutContext::new(),
+                    p.start_token(),
+                    &Default::default(),
+                    &LineConstraint::new(24.0),
+                    &AtomicSizes::EMPTY,
+                ) else {
+                    panic!("line")
+                };
+                assert!(
+                    line.overlay.is_some(),
+                    "real ffi source cut must exercise an owned window"
+                );
+                assert!(
+                    line.text_range().end > combined_text.len()
+                        && line.text_range().end < combined_text.len() + 3,
+                    "must cut inside neighboring ffi: {:?}",
+                    line.text_range()
+                );
+                assert_eq!(line.text_combinations().count(), 1);
+                assert_eq!(shape(&line), shape(&alone[0]));
+            }
         }
     }
 

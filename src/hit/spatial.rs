@@ -98,6 +98,20 @@ impl Tree {
     pub(super) fn contains(&self, x: f32, y: f32) -> bool {
         self.root.is_some_and(|r| self.contains_node(r, x, y))
     }
+    pub(super) fn containing(&self, x: f32, y: f32) -> Option<usize> {
+        self.root.and_then(|root| self.containing_node(root, x, y))
+    }
+    fn containing_node(&self, index: usize, x: f32, y: f32) -> Option<usize> {
+        self.visit();
+        let node = &self.nodes[index];
+        if !node.bounds.contains(x, y) {
+            return None;
+        }
+        node.children.map_or(Some(node.value), |(a, b)| {
+            self.containing_node(a, x, y)
+                .or_else(|| self.containing_node(b, x, y))
+        })
+    }
     fn contains_node(&self, i: usize, x: f32, y: f32) -> bool {
         self.visit();
         let n = &self.nodes[i];

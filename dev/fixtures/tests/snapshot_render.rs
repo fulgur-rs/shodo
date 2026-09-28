@@ -13,10 +13,10 @@ fn array<'a>(value: &'a Value, key: &str) -> &'a [Value] {
 #[test]
 fn fixed_matrix_paints_real_glyphs_on_the_declared_canvas() {
     let ids = snapshot_cases::case_ids();
-    assert_eq!(ids.len(), 26);
+    assert_eq!(ids.len(), 46);
     assert_eq!(
         ids.iter().collect::<std::collections::BTreeSet<_>>().len(),
-        26
+        46
     );
     for id in &ids {
         let rendered = snapshot_cases::render(id).unwrap_or_else(|e| panic!("{id}: {e}"));
@@ -58,6 +58,44 @@ fn fixed_matrix_paints_real_glyphs_on_the_declared_canvas() {
         snapshot_cases::conditions()["canvas"],
         serde_json::json!([512, 1024])
     );
+}
+
+#[test]
+fn vertical_snapshot_matrix_exposes_physical_origins_and_source_squares() {
+    let ids: Vec<_> = snapshot_cases::case_ids()
+        .into_iter()
+        .filter(|id| id.starts_with("vertical-") || id.starts_with("sideways-"))
+        .collect();
+    assert_eq!(ids.len(), 20);
+    for id in ids {
+        let r = snapshot_cases::render(&id).unwrap();
+        assert!(r.settings["writing_mode"].is_string());
+        for glyph in array(&r.geometry, "glyphs") {
+            assert!(glyph["orientation"].is_string());
+            assert_eq!(glyph["physical_origin"].as_array().unwrap().len(), 2);
+            assert_eq!(glyph["transform"].as_array().unwrap().len(), 4);
+        }
+        let combinations = array(&r.geometry, "combinations");
+        if id.contains("-tcy-") {
+            assert_eq!(combinations.len(), 1);
+            assert_eq!(combinations[0]["start"], 6);
+            assert_eq!(combinations[0]["end"], 10);
+            assert_eq!(combinations[0]["inline_size"], 20.0);
+            assert_eq!(combinations[0]["block_size"], 20.0);
+            assert!(
+                array(&r.geometry, "glyphs")
+                    .iter()
+                    .any(|g| g["owner"] == 3 && g["orientation"] == "Combined")
+            );
+            assert!(
+                array(&r.geometry, "glyphs")
+                    .iter()
+                    .any(|g| g["owner"] == 4 && g["orientation"] == "Combined")
+            );
+        } else {
+            assert!(combinations.is_empty());
+        }
+    }
 }
 
 #[test]

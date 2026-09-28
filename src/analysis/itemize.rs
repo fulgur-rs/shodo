@@ -15,6 +15,7 @@ std::thread_local! {
 pub(crate) struct Scalar {
     pub(crate) c: char,
     pub(crate) offset: u32,
+    pub(crate) end: u32,
     pub(crate) item: u32,
     pub(crate) grapheme_start: bool,
 }
@@ -28,6 +29,9 @@ pub(crate) struct ShapeItem {
     pub(crate) level: u8,
     pub(crate) script: [u8; 4],
     pub(crate) font: Option<FontMatch>,
+    pub(crate) orientation: crate::shape::orientation::RunOrientation,
+    pub(crate) combine: Option<u32>,
+    pub(crate) width_feature: Option<[u8; 4]>,
     pub(crate) before: String,
     pub(crate) after: String,
 }
@@ -121,7 +125,36 @@ pub(crate) fn itemize(
     bidi: &BidiAnalysis,
     breaks: &super::breaks::BreakAnalysis,
     fonts: &FontCollection,
+    mode: crate::geometry::WritingMode,
+    combined: &[super::combine::CombineSpan],
 ) -> Vec<ShapeItem> {
+    let revert_width: Vec<_> = combined
+        .iter()
+        .map(|span| {
+            let start = breaks
+                .typographic_starts
+                .partition_point(|offset| *offset < span.text.start);
+            let end = breaks
+                .typographic_starts
+                .partition_point(|offset| *offset < span.text.end);
+            end - start > 1
+        })
+        .collect();
+    let combined_levels: Vec<_> = combined
+        .iter()
+        .map(|span| {
+            let style = &styles[input.items[span.item as usize].style as usize];
+            let level = unicode_bidi::Level::new(u8::from(
+                style.direction == crate::geometry::Direction::Rtl,
+            ))
+            .unwrap();
+            unicode_bidi::BidiInfo::new(
+                &input.text[span.text.start as usize..span.text.end as usize],
+                Some(level),
+            )
+            .levels
+        })
+        .collect();
     // Canonical query identities are built once per style, without searching a
     // growing list of styles or cloning family/language strings per scalar.
     let mut query_ids = HashMap::new();
@@ -178,6 +211,21 @@ pub(crate) fn itemize(
                     part_end += 1;
                 }
                 let source = &scalars[part_start];
+                let combine_index = combined.partition_point(|span| span.text.end <= source.offset);
+                let combine = combined.get(combine_index).and_then(|span| {
+                    (span.text.start <= source.offset && source.offset < span.text.end)
+                        .then_some(combine_index as u32)
+                });
+                let orientation = combine.map_or_else(
+                    || {
+                        crate::shape::orientation::resolve(
+                            mode,
+                            styles[style as usize].text_orientation,
+                            scalars[scalar_start].c,
+                        )
+                    },
+                    |_| crate::shape::orientation::RunOrientation::Combined,
+                );
                 let locale_script: icu_locale_core::subtags::Script =
                     scalar_scripts[part_start].into();
                 let script: [u8; 4] = locale_script
@@ -185,7 +233,14 @@ pub(crate) fn itemize(
                     .as_bytes()
                     .try_into()
                     .expect("script tag");
-                let level = bidi.levels[source.offset as usize];
+                let level = combine.map_or_else(
+                    || bidi.levels[source.offset as usize],
+                    |index| {
+                        combined_levels[index as usize]
+                            [(source.offset - combined[index as usize].text.start) as usize]
+                            .number()
+                    },
+                );
                 let query_id = style_queries[style as usize];
                 let select = || {
                     let mut query = queries[query_id].clone();
@@ -203,7 +258,7 @@ pub(crate) fn itemize(
                         .or_insert_with(select)
                         .clone()
                 };
-                let end = scalars[part_end - 1].offset + scalars[part_end - 1].c.len_utf8() as u32;
+                let end = scalars[part_end - 1].end;
                 if result.len() > segment_start
                     && let Some(previous) = result.last_mut()
                     && (previous.style == style
@@ -218,6 +273,8 @@ pub(crate) fn itemize(
                     && previous.level == level
                     && previous.script == script
                     && previous.font == font
+                    && previous.orientation == orientation
+                    && previous.combine == combine
                 {
                     previous
                         .scalars
@@ -236,6 +293,9 @@ pub(crate) fn itemize(
                         level,
                         script,
                         font,
+                        orientation,
+                        combine,
+                        width_feature: None,
                         before: scalars[part_start.saturating_sub(5)..part_start]
                             .iter()
                             .map(|s| s.c)
@@ -255,20 +315,93 @@ pub(crate) fn itemize(
         style_indices.clear();
     };
     let mut close_boundaries = Vec::new();
+    let mut active_combine = None;
     for (index, item) in input.items.iter().enumerate() {
         match item.kind {
             ItemKind::Text => {
-                for (at, c) in
-                    input.text[item.text.start as usize..item.text.end as usize].char_indices()
-                {
-                    text.push(c);
-                    scalars.push(Scalar {
-                        c,
-                        offset: item.text.start + at as u32,
-                        item: index as u32,
-                        grapheme_start: false,
+                let mut chars = input.text[item.text.start as usize..item.text.end as usize]
+                    .char_indices()
+                    .peekable();
+                while let Some((at, c)) = chars.next() {
+                    let offset = item.text.start + at as u32;
+                    let ci = combined.partition_point(|span| span.text.end <= offset);
+                    let combine = combined
+                        .get(ci)
+                        .and_then(|span| (span.text.start <= offset).then_some(ci));
+                    if combine != active_combine {
+                        // The horizontal composition is a shaping isolate on
+                        // both edges. Context must not join neighboring Arabic.
+                        flush(&mut text, &mut scalars, &mut style_indices, &mut result);
+                        active_combine = combine;
+                    }
+                    let origin_index = input
+                        .width_origins
+                        .partition_point(|origin| origin.text.end <= offset);
+                    let origin = input.width_origins.get(origin_index).filter(|origin| {
+                        origin.text.start == offset
+                            && combined
+                                .get(ci)
+                                .is_some_and(|span| span.text.start <= offset && revert_width[ci])
                     });
-                    style_indices.push(item.style);
+                    if let Some(origin) = origin {
+                        let mapped: Vec<_> = input.text
+                            [origin.text.start as usize..origin.text.end as usize]
+                            .char_indices()
+                            .collect();
+                        let source: Vec<_> = origin.before_width.chars().collect();
+                        for (part, c) in source.iter().copied().enumerate() {
+                            let (offset, end) = if mapped.len() == source.len() {
+                                let (at, mapped_c) = mapped[part];
+                                let offset = origin.text.start + at as u32;
+                                (offset, offset + mapped_c.len_utf8() as u32)
+                            } else {
+                                (origin.text.start, origin.text.end)
+                            };
+                            let (forms, count) = super::width::narrow(c);
+                            for c in forms.into_iter().take(count) {
+                                text.push(c);
+                                scalars.push(Scalar {
+                                    c,
+                                    offset,
+                                    end,
+                                    item: index as u32,
+                                    grapheme_start: false,
+                                });
+                                style_indices.push(item.style);
+                            }
+                        }
+                        while chars
+                            .peek()
+                            .is_some_and(|(at, _)| item.text.start + (*at as u32) < origin.text.end)
+                        {
+                            chars.next();
+                        }
+                    } else {
+                        let end = offset + c.len_utf8() as u32;
+                        let revert = combine.is_some_and(|i| revert_width[i]);
+                        // A decomposed voiced mark follows a narrowed Katakana
+                        // base. Leave marks on unrelated scripts unchanged.
+                        let narrow_mark = !matches!(c, '\u{3099}' | '\u{309a}')
+                            || scalars
+                                .last()
+                                .is_some_and(|s| matches!(s.c, '\u{ff66}'..='\u{ff9d}'));
+                        let (forms, count) = if revert && narrow_mark {
+                            super::width::narrow(c)
+                        } else {
+                            ([c, '\0'], 1)
+                        };
+                        for c in forms.into_iter().take(count) {
+                            text.push(c);
+                            scalars.push(Scalar {
+                                c,
+                                offset,
+                                end,
+                                item: index as u32,
+                                grapheme_start: false,
+                            });
+                            style_indices.push(item.style);
+                        }
+                    }
                 }
             }
             ItemKind::OpenInline { edges } => {
@@ -292,4 +425,256 @@ pub(crate) fn itemize(
     }
     flush(&mut text, &mut scalars, &mut style_indices, &mut result);
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::font::{FontCollection, FontOptions};
+    use crate::geometry::WritingMode;
+    use crate::limits::Limits;
+    use crate::node::{InlineEdges, NodeId, TextSource};
+    use crate::shape::orientation::RunOrientation;
+    use crate::style::{ParagraphStyle, TextOrientation};
+    use crate::{LayoutContext, Paragraph, ParagraphBuilder};
+
+    fn paragraph(mode: WritingMode, text: &str) -> Paragraph {
+        let style = ParagraphStyle {
+            writing_mode: mode,
+            ..Default::default()
+        };
+        build(&style, |builder| {
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
+        })
+    }
+
+    fn build(style: &ParagraphStyle, add: impl FnOnce(&mut ParagraphBuilder)) -> Paragraph {
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        let mut builder = ParagraphBuilder::new(style, &limits);
+        add(&mut builder);
+        builder.build(&mut LayoutContext::new(), &fonts).unwrap()
+    }
+
+    #[test]
+    fn authored_combined_width_forms_keep_original_scalar_ranges() {
+        use crate::style::TextCombineUpright;
+        for (text, expected) in [
+            ("ＡＢ", "AB"),
+            ("Ａ\u{3000}Ｂ", "A B"),
+            ("ガ12", "ｶﾞ12"),
+            ("カ\u{3099}12", "ｶﾞ12"),
+            ("パ12", "ﾊﾟ12"),
+            ("￦￡", "₩£"),
+            ("ㄱㄴ", "ﾡﾤ"),
+        ] {
+            let mut style = ParagraphStyle {
+                writing_mode: WritingMode::VerticalRl,
+                ..Default::default()
+            };
+            style.root.text_combine_upright = TextCombineUpright::All;
+            let p = build(&style, |b| {
+                b.push_text(TextSource::Generated { node: NodeId(1) }, text);
+            });
+            let actual: String = p
+                .data
+                .shape_items
+                .iter()
+                .flat_map(|item| item.scalars.iter().map(|s| s.c))
+                .collect();
+            assert_eq!(actual, expected, "{text}");
+            assert_eq!(p.text(), text);
+            let scalars: Vec<_> = p
+                .data
+                .shape_items
+                .iter()
+                .flat_map(|item| &item.scalars)
+                .collect();
+            assert!(
+                scalars
+                    .iter()
+                    .all(|s| text.is_char_boundary(s.offset as usize)
+                        && text.is_char_boundary(s.end as usize))
+            );
+            assert_eq!(scalars.first().unwrap().offset, 0);
+            assert_eq!(scalars.last().unwrap().end as usize, text.len());
+            if text == "ガ12" {
+                assert_eq!(
+                    scalars
+                        .iter()
+                        .map(|s| (s.offset, s.end))
+                        .collect::<Vec<_>>(),
+                    vec![(0, 3), (0, 3), (3, 4), (4, 5)]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn mixed_vertical_orientation_cuts_shaping_items() {
+        // UAX50: section sign is upright, both Latin letters are rotated.
+        // Their script and missing-font identity are equal, so only the
+        // orientation boundary should prevent joining their shaping items.
+        let horizontal = paragraph(WritingMode::HorizontalTb, "a§b");
+        assert_eq!(horizontal.data.shape_items.len(), 1);
+        let vertical = paragraph(WritingMode::VerticalRl, "a§b");
+        assert_eq!(vertical.data.shape_items.len(), 3);
+        let ranges: Vec<_> = vertical
+            .data
+            .shape_items
+            .iter()
+            .map(|item| item.scalars[0].offset..item.end)
+            .collect();
+        assert_eq!(ranges, vec![0..1, 1..3, 3..4]);
+    }
+
+    #[test]
+    fn writing_mode_and_text_orientation_item_matrix() {
+        use RunOrientation::{
+            Horizontal as H, SidewaysClockwise as C, SidewaysCounterClockwise as A, Upright as U,
+        };
+        use TextOrientation::{Mixed, Sideways, Upright};
+        use WritingMode::{HorizontalTb, SidewaysLr, SidewaysRl, VerticalLr, VerticalRl};
+        for (mode, orientation, expected) in [
+            (HorizontalTb, Mixed, vec![H]),
+            (HorizontalTb, Upright, vec![H]),
+            (HorizontalTb, Sideways, vec![H]),
+            (VerticalRl, Mixed, vec![C, U, C]),
+            (VerticalRl, Upright, vec![U]),
+            (VerticalRl, Sideways, vec![C]),
+            (VerticalLr, Mixed, vec![C, U, C]),
+            (VerticalLr, Upright, vec![U]),
+            (VerticalLr, Sideways, vec![C]),
+            (SidewaysRl, Mixed, vec![C]),
+            (SidewaysRl, Upright, vec![C]),
+            (SidewaysRl, Sideways, vec![C]),
+            (SidewaysLr, Mixed, vec![A]),
+            (SidewaysLr, Upright, vec![A]),
+            (SidewaysLr, Sideways, vec![A]),
+        ] {
+            let mut style = ParagraphStyle {
+                writing_mode: mode,
+                ..Default::default()
+            };
+            style.root.text_orientation = orientation;
+            let paragraph = build(&style, |builder| {
+                builder.push_text(TextSource::Generated { node: NodeId(1) }, "a§b");
+            });
+            let actual: Vec<_> = paragraph
+                .data
+                .shape_items
+                .iter()
+                .map(|item| item.orientation)
+                .collect();
+            assert_eq!(actual, expected, "{mode:?}/{orientation:?}");
+        }
+    }
+
+    #[test]
+    fn mixed_orientation_keeps_marks_and_selectors_with_their_grapheme() {
+        use RunOrientation::{SidewaysClockwise as C, Upright as U};
+        // U+2329 is Tr and U+3001 is Tu; both use upright vertical shaping.
+        let paragraph = paragraph(WritingMode::VerticalRl, "a\u{301}§\u{fe0f}〈、");
+        let actual: Vec<_> = paragraph
+            .data
+            .shape_items
+            .iter()
+            .flat_map(|item| {
+                item.scalars
+                    .iter()
+                    .map(move |scalar| (scalar.c, item.orientation))
+            })
+            .collect();
+        assert_eq!(
+            actual,
+            vec![
+                ('a', C),
+                ('\u{301}', C),
+                ('§', U),
+                ('\u{fe0f}', U),
+                ('〈', U),
+                ('、', U)
+            ]
+        );
+    }
+
+    #[test]
+    fn mixed_grapheme_orientation_survives_source_and_style_boundaries() {
+        let style = ParagraphStyle {
+            writing_mode: WritingMode::VerticalRl,
+            ..Default::default()
+        };
+        let mut mark_style = style.root.clone();
+        mark_style.font_size += 1.0;
+        let paragraph = build(&style, |builder| {
+            builder.push_text(
+                TextSource::Dom {
+                    node: NodeId(1),
+                    offset: 0,
+                },
+                "§",
+            );
+            builder.open_inline(NodeId(2), &mark_style, InlineEdges::default());
+            builder.push_text(
+                TextSource::Dom {
+                    node: NodeId(3),
+                    offset: 0,
+                },
+                "\u{301}",
+            );
+            builder.close_inline();
+            builder.push_text(
+                TextSource::Dom {
+                    node: NodeId(4),
+                    offset: 0,
+                },
+                "ab",
+            );
+        });
+        let actual: Vec<_> = paragraph
+            .data
+            .shape_items
+            .iter()
+            .map(|item| (item.scalars[0].offset..item.end, item.orientation))
+            .collect();
+        assert_eq!(
+            actual,
+            vec![
+                (0..2, RunOrientation::Upright),
+                (2..4, RunOrientation::Upright),
+                (4..6, RunOrientation::SidewaysClockwise),
+            ]
+        );
+    }
+
+    #[test]
+    fn different_text_orientation_styles_prevent_horizontal_script_joining() {
+        let style = ParagraphStyle {
+            writing_mode: WritingMode::VerticalRl,
+            ..Default::default()
+        };
+        let mut upright = style.root.clone();
+        upright.text_orientation = TextOrientation::Upright;
+        let paragraph = build(&style, |builder| {
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+            builder.open_inline(NodeId(2), &upright, InlineEdges::default());
+            builder.push_text(TextSource::Generated { node: NodeId(3) }, "b");
+            builder.close_inline();
+        });
+        let actual: Vec<_> = paragraph
+            .data
+            .shape_items
+            .iter()
+            .map(|item| item.orientation)
+            .collect();
+        assert_eq!(
+            actual,
+            vec![RunOrientation::SidewaysClockwise, RunOrientation::Upright]
+        );
+    }
 }

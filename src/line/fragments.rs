@@ -288,6 +288,7 @@ fn build_logical(
 /// Builds the records of one line in visual order (UAX #9 L2). Units from
 /// `hang_start` on are the line's hanging trailing spaces and what follows
 /// them (see `Scan::hang_start`).
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build(
     data: &ParagraphData,
     units: Range<usize>,
@@ -296,20 +297,64 @@ pub(crate) fn build(
     origin: LayoutUnit,
     atomics: &AtomicSizes,
     visible_hyphen: Option<u32>,
+    leading: Option<&[LayoutUnit]>,
 ) -> Built {
     let base = data.base_level;
-    if data.units[units.clone()].iter().all(|u| u.level == base) {
-        return build_logical(data, units, widths, origin, atomics, visible_hyphen);
+    let (mut records, mut tabs) = if data.units[units.clone()].iter().all(|u| u.level == base) {
+        build_logical(data, units.clone(), widths, origin, atomics, visible_hyphen)
+    } else {
+        build_bidi(
+            data,
+            units.clone(),
+            hang_start,
+            widths,
+            origin,
+            atomics,
+            visible_hyphen,
+        )
+    };
+    if data.combine_spans.is_empty() {
+        return (records, tabs);
     }
-    build_bidi(
-        data,
-        units,
-        hang_start,
-        widths,
-        origin,
-        atomics,
-        visible_hyphen,
-    )
+    // Selectable source slices paint from a single composition origin.
+    // Before-spacing belongs ahead of that square; after-spacing belongs
+    // after its last unit, regardless of source fragmentation or bidi order.
+    let mut starts = std::collections::HashMap::new();
+    let mut before = std::collections::HashMap::new();
+    for (k, i) in units.enumerate() {
+        if let Some(span) = data.combine_at_text(data.units[i].text.start) {
+            let amount = leading.map_or(LayoutUnit::ZERO, |values| values[k]);
+            let value = before.entry(span.text.start).or_insert(LayoutUnit::ZERO);
+            *value = *value + amount;
+        }
+    }
+    for record in &records {
+        if let RecordKind::Glyphs { text, .. } = &record.kind
+            && let Some(span) = data.combine_at_text(text.start)
+        {
+            let start = starts.entry(span.text.start).or_insert(record.inline_start);
+            *start = (*start).min(record.inline_start);
+        }
+    }
+    for tab in &tabs {
+        if let Some(span) = data.combine_at_text(data.units[tab.unit as usize].text.start) {
+            let start = starts.entry(span.text.start).or_insert(tab.start);
+            *start = (*start).min(tab.start);
+        }
+    }
+    for record in &mut records {
+        if let RecordKind::Glyphs { text, .. } = &record.kind
+            && let Some(span) = data.combine_at_text(text.start)
+        {
+            record.inline_start = starts[&span.text.start] + before[&span.text.start];
+        }
+    }
+    for tab in &mut tabs {
+        if let Some(span) = data.combine_at_text(data.units[tab.unit as usize].text.start) {
+            tab.start = starts[&span.text.start] + before[&span.text.start];
+        }
+    }
+    (records, tabs)
 }
 
 /// A reorderable piece of a line: a glyph run segment, an atomic, an
@@ -479,7 +524,7 @@ fn build_bidi(
         // before L1, so it is applied here, per line and per unit.
         let level = match &unit.kind {
             UnitKind::Cluster { .. } if i >= bidi_start => base,
-            UnitKind::Tab => base,
+            UnitKind::Tab if data.combine_at_text(unit.text.start).is_none() => base,
             // A box end after the hanging spaces stays with the box's
             // content: it takes the level of the box's last piece before
             // them rather than the pre-L1 level of the spaces.
@@ -644,7 +689,6 @@ fn build_bidi(
     for (owner, continuation) in continuations {
         glyph_starts[owner] = glyph_starts[owner].min(starts[continuation]);
     }
-
     // Inline boxes: one fragment per visually contiguous group of members,
     // found in a single pass over the visual order. `open` holds the groups
     // of the boxes enclosing the previous piece, outermost first; a piece
