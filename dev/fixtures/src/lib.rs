@@ -180,6 +180,12 @@ pub fn load_emoji_fonts(limits: &Limits) -> Result<EmojiFixtureFonts, FontError>
             font.face_index,
             FontFaceDescriptor {
                 family: font.family.into(),
+                // Match the pinned mono fvar range instead of fixing wght400.
+                weight: if font.id == "emoji-mono" {
+                    (300.0, 700.0)
+                } else {
+                    (400.0, 400.0)
+                },
                 ..Default::default()
             },
         )?);

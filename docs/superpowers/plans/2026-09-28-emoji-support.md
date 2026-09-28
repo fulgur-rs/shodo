@@ -34,12 +34,12 @@
 
 **Interfaces:** Consumes existing load_fonts(&Limits)->Result<FixtureFonts,FontError> and FixtureCase. Produces EMOJI_FONTS, EmojiFixtureFonts { base:FixtureFonts, emoji_ids:[FontId;2] }, load_emoji_fonts(&Limits)->Result<EmojiFixtureFonts,FontError>, emoji_cases()->&'static[FixtureCase]. font(id) includes new fixtures. Optional manifest corpus defaults to assets/cases.json.
 
-- [ ] Step1: Add Python behavioral tests: separate emoji corpus is actually used in rebuild; over-budget offline check and update rejected without mutation; original IDs remain first and licensed metadata validates. Add real loader consumer test `opt_in_fonts_shape_real_color_and_text_faces` asserting emoji and VS15/16 selected-font bytes, color tables/mono outlines and no missing-font warnings. Base loader still has original three faces.
-- [ ] Step2: Run `python3 -m unittest discover -s dev/fixtures/tools -v` and `cargo +stable test --offline -p shodo-fixtures --test emoji_fixtures`; expect new asset/loader/corpus/budget failures before implementation. Distinguish unavailable APIs from actual runtime failures; the real color paint runtime RED belongs to Task3.
-- [ ] Step3: Implement per-font corpus reading and 768KiB checks in regenerate.py; add pinned corpus/assets/licenses/manifest. Rebuild all five from original sources using FontTools4.61.1, preserving all GSUB features and original three byte hashes. Implement opt-in loader/interface in src/lib.rs. Update README provenance/budget and inspect variable names.
-- [ ] Step4: Run Python suite with FontTools; asset check; all-five rebuild without mutation; stable workspace suite. Expected all pass; exact original three hashes unchanged and total <=786432 bytes.
-- [ ] Step5: Commit `feat(fixtures): add pinned real emoji fonts and opt-in loading`.
-- [ ] Step6: Task-done command runs Python suite, asset check and stable workspace suite; every named test present and pass.
+- [x] Step1: Add Python behavioral tests: separate emoji corpus is actually used in rebuild; over-budget offline check and update rejected without mutation; original IDs remain first and licensed metadata validates. Add real loader consumer test `opt_in_fonts_shape_real_color_and_text_faces` asserting emoji and VS15/16 selected-font bytes, color tables/mono outlines and no missing-font warnings. Base loader still has original three faces.
+- [x] Step2: Run `python3 -m unittest discover -s dev/fixtures/tools -v` and `cargo +stable test --offline -p shodo-fixtures --test emoji_fixtures`; expect new asset/loader/corpus/budget failures before implementation. Distinguish unavailable APIs from actual runtime failures; the real color paint runtime RED belongs to Task3.
+- [x] Step3: Implement per-font corpus reading and 768KiB checks in regenerate.py; add pinned corpus/assets/licenses/manifest. Rebuild all five from original sources using FontTools4.61.1, preserving all GSUB features and original three byte hashes. Implement opt-in loader/interface in src/lib.rs. Update README provenance/budget and inspect variable names.
+- [x] Step4: Run Python suite with FontTools; asset check; all-five rebuild without mutation; stable workspace suite. Expected all pass; exact original three hashes unchanged and total <=786432 bytes.
+- [x] Step5: Commit `feat(fixtures): add pinned real emoji fonts and opt-in loading`.
+- [x] Step6: Task-done command runs Python suite, asset check and stable workspace suite; every named test present and pass.
 
 ### Task 2: Real sequence, source, editing and fallback contracts
 
