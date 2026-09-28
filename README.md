@@ -18,6 +18,7 @@ shodo is in early development. Paragraph construction, CSS text analysis, real-f
 - Alignment and justification without copying shared glyphs, plus cluster views with adjusted advances.
 - Actual-font struts and run metrics, signed letter/word spacing, root-font tab stops, and visual CJK autospace with inline ownership.
 - Carets, coordinate hit testing, discontiguous selections, and logical/visual navigation over the accepted lines.
+- Retained accessibility text, selectable units, attributes, source anchors and selection geometry, with an optional AccessKit adapter. See the [accessibility contract and executable example](docs/accessibility.md).
 - Incremental float reporting and withdrawal, with a single bounded partial-line cache.
 - Fixed-width `break_all`, callback-driven `lines`, intrinsic widths with atomic/float inputs, and `balance` / `pretty` break plans.
 - Read access to glyph runs, inline boxes, atomic inlines, and anchors for out-of-flow elements.

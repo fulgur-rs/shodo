@@ -37,3 +37,8 @@ test = true
 [[example]]
 name = "paint_styles"
 test = true
+
+[[example]]
+name = "accessibility"
+required-features = ["accesskit"]
+test = true
