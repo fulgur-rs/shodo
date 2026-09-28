@@ -153,3 +153,7 @@ not extend the old subsets. Reproduction keeps all layout features and substitut
 closure. It verifies every source before updating assets; source mismatch or total
 budget overflow leaves checked-in outputs untouched. Subsets are a fixed test
 corpus, not coverage of every Unicode emoji or host fallback policy.
+
+See [emoji layout and caller color drawing](../../docs/emoji.md) for sequence
+limitations, missing-font behavior and `cargo run -p shodo-fixtures --example
+emoji_png -- OUTPUT.png`. The renderer draws accepted CBDT PNG glyphs and outlines.

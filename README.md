@@ -299,3 +299,6 @@ Resolved solid text colors, underlines and strike-through are retained in
 `InlineStyle::paint`. Use `GlyphRunView::paint_style()` for once-only glyph paint
 and `Line::paint_spans()` for source decoration regions. See the
 [paint contract and PNG example](docs/paint-styles.md).
+
+[Emoji layout and caller color drawing](docs/emoji.md) documents real sequence
+fixtures, font fallback, retained glyph/font output and the runnable CBDT PNG example.

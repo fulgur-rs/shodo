@@ -1,6 +1,9 @@
 //! Fixed-font caller example, shared by contract tests. It draws accepted
 //! glyph IDs once; annotations use separate source rectangles. It is not a
-//! general CSS painter (no skip-ink, decoration propagation or color fonts).
+//! general CSS painter (no skip-ink or decoration propagation).
+//! Color-font support is CBDT/CBLC PNG only; other color formats need a backend.
+#[path = "bitmap_paint.rs"]
+pub(crate) mod bitmap_paint;
 use shodo::geometry::{LogicalRect, PhysicalConverter, PhysicalSize, WritingMode};
 use shodo::node::NodeId;
 use shodo::{Fragment, Line};
@@ -50,7 +53,7 @@ pub fn try_paint_on_canvas(
 
 /// Paint retained solid colors and source decorations using public logical
 /// transforms, including horizontal RTL. Fixed-font example only; CSS
-/// propagation, skip-ink and color-font rasterization remain caller-owned.
+/// propagation and skip-ink remain caller-owned; this sample adds CBDT PNG drawing.
 #[allow(dead_code)] // Other fixed snapshot callers retain their legacy colors.
 pub fn try_paint_styled_on_canvas(
     lines: &[Line],
@@ -202,6 +205,34 @@ fn paint(
             let mut paint = tiny_skia::Paint::default();
             paint.set_color_rgba8(r, g, b, a);
             for (index, glyph) in run.glyphs().enumerate() {
+                let bitmap_transform =
+                    if !retained && line.writing_mode() == WritingMode::HorizontalTb {
+                        tiny_skia::Transform::from_translate(
+                            10.0 + glyph.inline_position,
+                            10.0 + line.block_offset() + run.baseline() + glyph.block_offset,
+                        )
+                    } else {
+                        let converter = converter(line, width, height);
+                        let (inline, block) =
+                            run.glyph_origin(index).ok_or(PaintError::InvalidBitmap)?;
+                        let (x, y) = converter.point(inline, line.block_offset() + block);
+                        let matrix = run.glyph_transform();
+                        let (xx, xy) = converter.vector(matrix.inline_x, matrix.block_x);
+                        let (yx, yy) = converter.vector(matrix.inline_y, matrix.block_y);
+                        // Bitmap coordinates already use y-down, unlike outlines.
+                        tiny_skia::Transform::from_row(xx, xy, yx, yy, 10.0 + x, 10.0 + y)
+                    };
+                if bitmap_paint::paint_bitmap(
+                    &font,
+                    GlyphId::new(glyph.id),
+                    run.font_size(),
+                    bitmap_transform,
+                    &mut image,
+                    canvas.is_some(),
+                )? {
+                    count += 1;
+                    continue;
+                }
                 let outline = font
                     .outline_glyphs()
                     .get(GlyphId::new(glyph.id))
@@ -300,6 +331,8 @@ pub enum PaintError {
     InvalidFont,
     MissingOutline,
     UnsupportedSynthesis,
+    InvalidBitmap,
+    UnsupportedBitmap,
 }
 impl std::fmt::Display for PaintError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -311,6 +344,8 @@ impl std::fmt::Display for PaintError {
             Self::MissingFont => "accepted glyph font bytes are unavailable",
             Self::InvalidFont => "accepted font data cannot be read",
             Self::MissingOutline => "glyph has no supported outline",
+            Self::InvalidBitmap => "bitmap data, dimensions or placement are invalid",
+            Self::UnsupportedBitmap => "example only supports CBDT/CBLC PNG with top-left bearings",
             Self::UnsupportedSynthesis => "example does not support synthetic weight or skew",
         })
     }
