@@ -11,6 +11,7 @@ mod spatial;
 use crate::Line;
 use crate::geometry::LogicalRect;
 use crate::mapping::{Affinity, TextOrigin};
+pub use crate::ruby::hit::RubyHit;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TextPosition {
@@ -55,6 +56,7 @@ pub struct LineLayout<'a> {
     lines: &'a [Line],
     index: Vec<index::LineIndex>,
     block_tree: spatial::Tree,
+    ruby: Vec<crate::ruby::hit::AnnotationIndex<'a>>,
 }
 impl<'a> LineLayout<'a> {
     /// Accessibility shares this finalized index rather than reinterpreting
@@ -69,7 +71,36 @@ impl<'a> LineLayout<'a> {
         self.index[line].segments.iter().map(|s| (&s.text, s.rect))
     }
     pub fn new(lines: &'a [Line]) -> Self {
+        let index: Vec<_> = lines
+            .iter()
+            .enumerate()
+            .map(|(i, line)| index::LineIndex::new(i, line))
+            .collect();
+        let ruby = lines
+            .iter()
+            .enumerate()
+            .flat_map(|(parent, line)| {
+                let index = &index[parent];
+                line.ruby_annotations().filter_map(move |a| {
+                    let range = a.base_text_range();
+                    let begin = index
+                        .stops
+                        .partition_point(|c| (c.position.offset as usize) < range.start);
+                    let end = index
+                        .stops
+                        .partition_point(|c| (c.position.offset as usize) <= range.end);
+                    crate::ruby::hit::AnnotationIndex::new(
+                        parent,
+                        line.block_offset(),
+                        a,
+                        index.stops[begin..end].to_vec(),
+                    )
+                })
+            })
+            .collect();
         Self {
+            index,
+            ruby,
             lines,
             block_tree: spatial::Tree::new(
                 lines.iter().enumerate().map(|(i, l)| {
@@ -85,11 +116,6 @@ impl<'a> LineLayout<'a> {
                 }),
                 true,
             ),
-            index: lines
-                .iter()
-                .enumerate()
-                .map(|(i, l)| index::LineIndex::new(i, l))
-                .collect(),
         }
     }
     /// Snap an interior byte/grapheme/indivisible transform according to
@@ -97,11 +123,37 @@ impl<'a> LineLayout<'a> {
     pub fn caret(&self, position: TextPosition) -> Option<Caret> {
         self.index.get(position.line)?.caret(position)
     }
+    /// Hit a visible retained lane, descending through nested annotations.
+    /// The result's offsets are local to its annotation, never the main text.
+    pub fn hit_test_ruby(&self, inline: f32, block: f32) -> Option<RubyHit<'a>> {
+        if !inline.is_finite() || !block.is_finite() {
+            return None;
+        }
+        self.ruby
+            .iter()
+            .rev()
+            .find_map(|entry| entry.hit(inline, block))
+    }
+
     /// Outside the layout, clamp to a nearest stop with `inside=false`.
     /// Empty layouts and NaN inputs return `None`; infinities clamp to edges.
     pub fn hit_test(&self, inline: f32, block: f32) -> Option<HitResult> {
         if inline.is_nan() || block.is_nan() {
             return None;
+        }
+        for entry in self.ruby.iter().rev() {
+            if entry.hit(inline, block).is_some() {
+                let stop = entry.base_caret(inline, block)?;
+                return Some(HitResult {
+                    position: stop.position,
+                    origin: self.lines[entry.parent_line]
+                        .offset_mapping()
+                        .and_then(|mapping| {
+                            mapping.text_to_dom(stop.position.offset, stop.position.affinity)
+                        }),
+                    inside: true,
+                });
+            }
         }
         let line = self.block_tree.nearest_y(block)?;
         let index = &self.index[line];

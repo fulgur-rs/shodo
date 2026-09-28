@@ -85,6 +85,13 @@ pub struct SourcePosition {
     pub affinity: Affinity,
 }
 
+/// Explicit reading relationship; annotation offsets remain in its retained Line.
+#[derive(Clone, Copy, Debug)]
+pub struct AccessibleRuby<'a> {
+    pub parent_line: usize,
+    pub annotation: crate::RubyAnnotationView<'a>,
+}
+
 pub struct AccessibleLayout<'a> {
     snapshot: u64,
     accepted: &'a [Line],
@@ -102,6 +109,18 @@ impl<'a> AccessibleLayout<'a> {
             hit,
             lines: output,
         }
+    }
+    pub fn ruby_annotations(&self) -> impl Iterator<Item = AccessibleRuby<'a>> + '_ {
+        self.accepted
+            .iter()
+            .enumerate()
+            .flat_map(|(parent_line, line)| {
+                line.ruby_annotations()
+                    .map(move |annotation| AccessibleRuby {
+                        parent_line,
+                        annotation,
+                    })
+            })
     }
     pub fn snapshot_id(&self) -> u64 {
         self.snapshot

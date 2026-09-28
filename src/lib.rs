@@ -16,8 +16,8 @@ pub mod node;
 pub mod ruby;
 pub mod style;
 pub use ruby::{
-    Ruby, RubyAlign, RubyAnnotation, RubyBase, RubyContent, RubyError, RubyLevel, RubyMerge,
-    RubyOverhang, RubyPosition, RubySpan, RubyStyle, RubyVisibility,
+    Ruby, RubyAlign, RubyAnnotation, RubyBase, RubyContent, RubyError, RubyHit, RubyLevel,
+    RubyMerge, RubyOverhang, RubyPosition, RubySpan, RubyStyle, RubyVisibility,
 };
 
 mod analysis;

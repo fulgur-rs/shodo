@@ -4,6 +4,8 @@ pub(crate) mod budget;
 pub(crate) mod builder;
 pub(crate) mod cuts;
 pub(crate) mod geometry;
+pub(crate) mod hit;
+pub use hit::RubyHit;
 mod index;
 pub(crate) mod input;
 pub(crate) mod measure;

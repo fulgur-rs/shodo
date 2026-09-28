@@ -16,9 +16,19 @@ enum Anchor {
     Anonymous(u64, u32),
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum Kind {
+    Text,
+    Wrapper,
+    Ruby {
+        container: NodeId,
+        node: Option<NodeId>,
+        level: usize,
+    },
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) struct Key {
     anchor: Anchor,
-    wrapper: bool,
+    kind: Kind,
     occurrence: usize,
 }
 
@@ -27,7 +37,7 @@ pub(super) struct NodeBuilder<'a, F> {
     old: &'a HashMap<Key, types::NodeId>,
     occupied: HashSet<types::NodeId>,
     issued: HashSet<types::NodeId>,
-    occurrences: HashMap<(Anchor, bool), usize>,
+    occurrences: HashMap<(Anchor, Kind), usize>,
     allocate: F,
     pub registry: HashMap<Key, types::NodeId>,
     pub nodes: Vec<(types::NodeId, types::Node)>,
@@ -49,11 +59,11 @@ impl<'a, F: FnMut() -> types::NodeId> NodeBuilder<'a, F> {
             spans: Vec::new(),
         }
     }
-    fn id(&mut self, anchor: Anchor, wrapper: bool) -> Result<types::NodeId, AccessKitError> {
-        let occurrence = self.occurrences.entry((anchor, wrapper)).or_default();
+    fn id(&mut self, anchor: Anchor, kind: Kind) -> Result<types::NodeId, AccessKitError> {
+        let occurrence = self.occurrences.entry((anchor, kind)).or_default();
         let key = Key {
             anchor,
-            wrapper,
+            kind,
             occurrence: *occurrence,
         };
         *occurrence += 1;
@@ -105,7 +115,7 @@ impl<'a, F: FnMut() -> types::NodeId> NodeBuilder<'a, F> {
                     let end = (start + 255).min(run.character_range.end);
                     let range = start..end;
                     let anchor = anchor(layout, line, run, start);
-                    let id = self.id(anchor, false)?;
+                    let id = self.id(anchor, Kind::Text)?;
                     let node = text_node(
                         line,
                         run,
@@ -128,7 +138,10 @@ impl<'a, F: FnMut() -> types::NodeId> NodeBuilder<'a, F> {
                     start = end;
                 }
                 if wrapper {
-                    let id = self.id(anchor(layout, line, run, run.character_range.start), true)?;
+                    let id = self.id(
+                        anchor(layout, line, run, run.character_range.start),
+                        Kind::Wrapper,
+                    )?;
                     let mut node = types::Node::new(semantic.role);
                     if let Some(label) = semantic.label {
                         node.set_label(label);
@@ -170,7 +183,156 @@ impl<'a, F: FnMut() -> types::NodeId> NodeBuilder<'a, F> {
                 }
             }
         }
+        // Readings are explicit metadata, not TextRuns in the document's text
+        // or position table. The details relation stays on the paired runs.
+        if layout.ruby_annotations().next().is_none() {
+            return Ok(());
+        }
+        let node_indices: HashMap<_, _> = self
+            .nodes
+            .iter()
+            .enumerate()
+            .map(|(i, (id, _))| (*id, i))
+            .collect();
+        for relationship in layout.ruby_annotations() {
+            let line = &layout.lines()[relationship.parent_line];
+            let a = relationship.annotation;
+            let range = a.base_text_range();
+            let mut paired = Vec::new();
+            let begin = line
+                .characters
+                .partition_point(|c| (c.text_range.end as usize) <= range.start);
+            let end = line
+                .characters
+                .partition_point(|c| (c.text_range.start as usize) < range.end);
+            let first = self.spans.partition_point(|s| {
+                s.line < relationship.parent_line
+                    || (s.line == relationship.parent_line && s.characters.end <= begin)
+            });
+            for span in self.spans[first..]
+                .iter()
+                .take_while(|s| s.line == relationship.parent_line && s.characters.start < end)
+            {
+                paired.push(node_indices[&span.node]);
+            }
+            let transform = crate::RubyTransform {
+                inline_inline: 1.0,
+                inline_block: 0.0,
+                block_inline: 0.0,
+                block_block: 1.0,
+                inline_offset: 0.0,
+                block_offset: layout.accepted[relationship.parent_line].block_offset(),
+            };
+            let converter = PhysicalConverter::new(
+                line.writing_mode,
+                line.direction,
+                PhysicalSize {
+                    width: frame.width,
+                    height: frame.height,
+                },
+            );
+            let id = self.reading(a, transform, converter, frame, false)?;
+            for index in paired {
+                self.nodes[index].1.push_detail(id);
+            }
+            self.children.push(id);
+        }
         Ok(())
+    }
+
+    fn reading(
+        &mut self,
+        a: crate::RubyAnnotationView<'_>,
+        parent: crate::RubyTransform,
+        converter: PhysicalConverter,
+        frame: PhysicalRect,
+        parent_hidden: bool,
+    ) -> Result<types::NodeId, AccessKitError> {
+        let start = a
+            .line()
+            .fragments()
+            .find_map(|f| match f {
+                crate::Fragment::GlyphRun(r) => Some(r.text_range().start as u32),
+                _ => None,
+            })
+            .unwrap_or(a.text_range().start as u32);
+        let anchor = match a
+            .line()
+            .offset_mapping()
+            .and_then(|m| m.text_to_dom(start, Affinity::Downstream))
+        {
+            Some(TextOrigin::Dom { node, offset }) => Anchor::Dom(node, offset),
+            Some(TextOrigin::Generated { node }) => Anchor::Generated(node, start),
+            None => Anchor::Anonymous(a.line().data.id, start),
+        };
+        let id = self.id(
+            anchor,
+            Kind::Ruby {
+                container: a.container(),
+                node: a.node(),
+                level: a.level(),
+            },
+        )?;
+        let transform = compose(parent, a.transform());
+        let hidden = parent_hidden || a.visibility() != crate::RubyVisibility::Visible;
+        let mut node = types::Node::new(types::Role::RubyAnnotation);
+        let range = a.line().text_range();
+        node.set_value(&a.line().text()[range]);
+        node.set_bounds(bounds(
+            converter,
+            frame,
+            transformed(transform, a.line().overflow_rect()),
+        ));
+        if hidden {
+            node.set_hidden();
+        }
+        let mut children = Vec::new();
+        for child in a.line().ruby_annotations() {
+            children.push(self.reading(child, transform, converter, frame, hidden)?);
+        }
+        node.set_children(children);
+        self.nodes.push((id, node));
+        Ok(id)
+    }
+}
+
+fn compose(p: crate::RubyTransform, c: crate::RubyTransform) -> crate::RubyTransform {
+    crate::RubyTransform {
+        inline_inline: p.inline_inline * c.inline_inline + p.inline_block * c.block_inline,
+        inline_block: p.inline_inline * c.inline_block + p.inline_block * c.block_block,
+        block_inline: p.block_inline * c.inline_inline + p.block_block * c.block_inline,
+        block_block: p.block_inline * c.inline_block + p.block_block * c.block_block,
+        inline_offset: p.inline_inline * c.inline_offset
+            + p.inline_block * c.block_offset
+            + p.inline_offset,
+        block_offset: p.block_inline * c.inline_offset
+            + p.block_block * c.block_offset
+            + p.block_offset,
+    }
+}
+
+fn transformed(t: crate::RubyTransform, r: LogicalRect) -> LogicalRect {
+    let points = [
+        (r.inline_start, r.block_start),
+        (r.inline_start + r.inline_size, r.block_start),
+        (r.inline_start, r.block_start + r.block_size),
+        (r.inline_start + r.inline_size, r.block_start + r.block_size),
+    ]
+    .map(|(x, y)| {
+        (
+            t.inline_inline * x + t.inline_block * y + t.inline_offset,
+            t.block_inline * x + t.block_block * y + t.block_offset,
+        )
+    });
+    let x0 = points.iter().map(|p| p.0).fold(f32::INFINITY, f32::min);
+    let x1 = points.iter().map(|p| p.0).fold(f32::NEG_INFINITY, f32::max);
+    let y0 = points.iter().map(|p| p.1).fold(f32::INFINITY, f32::min);
+    let y1 = points.iter().map(|p| p.1).fold(f32::NEG_INFINITY, f32::max);
+    LogicalRect {
+        inline_start: x0,
+        block_start: y0,
+        inline_size: x1 - x0,
+        block_size: y1 - y0,
     }
 }
 

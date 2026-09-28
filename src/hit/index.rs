@@ -304,6 +304,7 @@ impl LineIndex {
                 cluster.block_axis,
             );
         }
+        let mut fallback_positions = Vec::new();
         // Empty lines and nonpainting source at their ends still have stops.
         for (offset, affinity) in [
             (result.range.start, Affinity::Downstream),
@@ -326,14 +327,13 @@ impl LineIndex {
                     },
                     |s| s.rect,
                 );
-                result.stops.push(Caret {
-                    position: TextPosition {
-                        line: number,
-                        offset,
-                        affinity,
-                    },
-                    rect,
-                });
+                let position = TextPosition {
+                    line: number,
+                    offset,
+                    affinity,
+                };
+                fallback_positions.push(position);
+                result.stops.push(Caret { position, rect });
             }
         }
         result.stops.sort_by(|a, b| {
@@ -354,6 +354,14 @@ impl LineIndex {
                 .0
                 .total_cmp(&b_key.0)
                 .then(a_key.1.total_cmp(&b_key.1))
+                // Synthetic source-end stops remain available to logical
+                // navigation, but a coordinate hit belongs to painted source
+                // when an actual stop shares the same visual coordinate.
+                .then_with(|| {
+                    fallback_positions
+                        .contains(&result.stops[*a].position)
+                        .cmp(&fallback_positions.contains(&result.stops[*b].position))
+                })
                 .then(
                     affinity_key(result.stops[*a].position.affinity)
                         .cmp(&affinity_key(result.stops[*b].position.affinity)),
