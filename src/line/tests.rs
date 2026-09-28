@@ -237,3 +237,61 @@ fn final_review_zero_window_bounds_unsafe_chain_expansion() {
         }
     }
 }
+
+/// Cursive-joining scripts (Arabic) mark nearly every letter
+/// `unsafe_to_break`/`unsafe_to_concat`, and that flag also sits on spaces
+/// between words, so the safe (`unsafe_to_break == false`) boundaries a
+/// backward scan can stop at are rare (sentence punctuation only). `scan()`
+/// used to re-measure a hypothetical "line ended here" edge window (a real,
+/// uncached harfrust shaping call) at *every* unit as it advances, including
+/// the ~90% that fall at a `Prohibited` break position where the line
+/// cannot end there anyway. Real break opportunities are a small fraction
+/// of the characters in continuous-script text, so a correctly bounded scan
+/// needs far fewer real shape calls than there are characters.
+#[test]
+fn final_review_prohibited_positions_do_not_reshape_unsafe_edge_windows() {
+    let fonts = final_review_fonts();
+    fonts
+        .register_face(
+            include_bytes!("../../dev/fixtures/assets/fonts/arabic.ttf").to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Shodo Fixture Arabic".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let sentence = "\u{0645}\u{0631}\u{062d}\u{0628}\u{0627} \u{0628}\u{0627}\u{0644}\u{0639}\u{0627}\u{0644}\u{0645}. \u{0627}\u{0644}\u{0643}\u{062a}\u{0627}\u{0628}\u{0629} \u{0627}\u{0644}\u{0639}\u{0631}\u{0628}\u{064a}\u{0629} \u{062c}\u{0645}\u{064a}\u{0644}\u{0629}\u{060c} \u{0648}\u{062a}\u{062a}\u{0635}\u{0644} \u{0627}\u{0644}\u{062d}\u{0631}\u{0648}\u{0641} \u{0641}\u{064a} \u{0627}\u{0644}\u{0643}\u{0644}\u{0645}\u{0627}\u{062a}.";
+    let mut style = ParagraphStyle::default();
+    style.root.font_families = vec![crate::style::FontFamily::Named(
+        "Shodo Fixture Arabic".into(),
+    )];
+    style.root.font_size = 16.0;
+    for reps in [4usize, 8, 16, 32] {
+        let text: String = vec![sentence; reps].join(" ");
+        let mut b = ParagraphBuilder::new(&style, &Limits::default());
+        b.push_text(TextSource::Generated { node: NodeId(1) }, &text);
+        let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+        p.data
+            .edge_shape_calls
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+        let lines = p.break_all(
+            &mut LayoutContext::new(),
+            &LineOptions::default(),
+            320.0,
+            &AtomicSizes::EMPTY,
+        );
+        assert!(!lines.is_empty());
+        let shape_calls = p
+            .data
+            .edge_shape_calls
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let chars = text.chars().count();
+        assert!(
+            shape_calls < chars,
+            "{shape_calls} edge-window shape calls for {chars} characters at reps={reps}; \
+             a bounded scan needs far fewer real shape calls than characters, since most \
+             positions are Prohibited break positions where the line cannot end"
+        );
+    }
+}

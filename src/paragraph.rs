@@ -81,6 +81,10 @@ pub(crate) struct ParagraphData {
     pub(crate) cursor_queries: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
     pub(crate) window_queries: std::sync::atomic::AtomicUsize,
+    #[cfg(test)]
+    pub(crate) edge_shape_calls: std::sync::atomic::AtomicUsize,
+    #[cfg(test)]
+    pub(crate) edge_shape_bytes: std::sync::atomic::AtomicUsize,
     pub(crate) first_line: Option<FirstLineData>,
     pub(crate) source_spans: Vec<crate::mapping::TransformSpan>,
     pub(crate) id: u64,
@@ -713,6 +717,10 @@ fn build_data(
         cursor_queries: Default::default(),
         #[cfg(test)]
         window_queries: Default::default(),
+        #[cfg(test)]
+        edge_shape_calls: Default::default(),
+        #[cfg(test)]
+        edge_shape_bytes: Default::default(),
         first_line: None,
         source_spans: processed.source_spans,
         id,

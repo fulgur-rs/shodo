@@ -63,15 +63,13 @@ pub(super) fn scan(
         // Fit excludes eligible trailing space/tab advances (CSS Text 3 §4.1.2).
         let hangs = super::whitespace::fits_hanging(data, i);
         let suffix = super::decoration::width(data, i + 1, false, sat);
-        let (edge_delta, viable) = super::windows::candidate(data, start, i + 1, cx, sat);
         let ruby_delta =
             crate::ruby::measure::candidate(data, start, i + 1, atomics, cx, sat).adjustment;
         let transparent =
             super::whitespace::transparent(data, i) && !matches!(unit.kind, UnitKind::ForcedBreak);
-        let extent = pos
+        let shared_extent = pos
             .add(w, sat)
             .add(tracking, sat)
-            .add(edge_delta, sat)
             .add(ruby_delta, sat)
             .add(suffix, sat)
             .sub(
@@ -82,6 +80,26 @@ pub(super) fn scan(
                 },
                 sat,
             );
+        // The line cannot end at a `Prohibited` position, so the only
+        // reason to pay for a real edge-window reshape there is to confirm
+        // genuine overflow of the current unbreakable run. Skip it while
+        // shared (un-rejoined) advances already fit: cursive scripts mark
+        // most units (and the spaces between words) unsafe to break/concat,
+        // so probing every one of them would reshape the growing unsafe
+        // window from scratch at each unit instead of once at the eventual
+        // break opportunity. A `shared_cluster` unit's shared advance can
+        // under-count a window that turns out unshapeable within budget
+        // (the edge falls back to wider un-sliced glyphs), so those always
+        // get the real measurement.
+        let need_edge = unit.break_after != BreakClass::Prohibited
+            || unit.shared_cluster.is_some()
+            || (!hangs && !overflowing && shared_extent > available);
+        let (edge_delta, viable) = if need_edge {
+            super::windows::candidate(data, start, i + 1, cx, sat)
+        } else {
+            (LayoutUnit::ZERO, false)
+        };
+        let extent = shared_extent.add(edge_delta, sat);
         let adjustment = super::punctuation::edges(
             data,
             spacing.summary(Some(data)),
