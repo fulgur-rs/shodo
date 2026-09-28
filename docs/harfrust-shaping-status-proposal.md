@@ -2,7 +2,7 @@
 
 This is an unsent design note, not an upstream issue or a claim that a particular
 font triggered a shaping failure. It records the integration limitation observed
-in the locally inspected harfrust 0.12.0 source used by shodo S2.
+in the locally inspected harfrust 0.12.0 source used by shodo.
 
 ## Problem
 
@@ -46,5 +46,4 @@ Useful upstream tests would force an internal work-limit interruption, distingui
 it from legitimate empty output, verify ordinary GSUB/GPOS completion, cover both
 plan paths, and verify status reset when reusing cleared scratch. shodo could then
 report an actual completion failure and apply a documented fallback without
-mistaking valid font behavior for failure. Sending this proposal requires a
-separate user instruction.
+mistaking valid font behavior for failure.
