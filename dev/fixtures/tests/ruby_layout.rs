@@ -57,6 +57,93 @@ fn ruby(visibility: RubyVisibility) -> Ruby {
 }
 
 #[test]
+fn completely_empty_ruby_keeps_zero_advance_and_fits_zero_block_space() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+    b.push_ruby(NodeId(8), &style(24.0), Ruby::new(vec![], vec![]).unwrap());
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let mut constraint = LineConstraint::new(100.0);
+    constraint.max_block_size = Some(0.0);
+    let result = p.next_line(
+        &mut LayoutContext::new(),
+        p.start_token(),
+        &LineOptions::default(),
+        &constraint,
+        &AtomicSizes::EMPTY,
+    );
+    match result {
+        LineResult::Done => {}
+        LineResult::Line(line) => {
+            assert!(line.is_empty());
+            assert_eq!((line.inline_size(), line.block_size()), (0.0, 0.0));
+        }
+        other => panic!("empty ruby must fit zero block space: {other:?}"),
+    }
+}
+
+#[test]
+fn anonymous_base_visible_reading_is_not_an_empty_line() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    for visibility in [
+        RubyVisibility::Visible,
+        RubyVisibility::Hidden,
+        RubyVisibility::Collapse,
+    ] {
+        let reading = RubyAnnotation {
+            node: NodeId(20),
+            content: RubyContent::text(
+                TextSource::Dom {
+                    node: NodeId(20),
+                    offset: 70,
+                },
+                "に",
+                &style(12.0),
+                &Limits::default(),
+            ),
+            span: RubySpan::Auto,
+            visibility,
+        };
+        let ruby = Ruby::new(
+            vec![],
+            vec![RubyLevel {
+                annotations: vec![reading],
+                style: RubyStyle::default(),
+            }],
+        )
+        .unwrap();
+        let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+        b.push_ruby(NodeId(8), &style(24.0), ruby);
+        let p = b
+            .build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap();
+        let lines = p.break_all(
+            &mut LayoutContext::new(),
+            &LineOptions::default(),
+            100.0,
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(lines.len(), 1);
+        let line = &lines[0];
+        if visibility == RubyVisibility::Collapse {
+            assert_eq!(line.ruby_annotations().count(), 0);
+            assert!(line.is_empty());
+            assert_eq!((line.inline_size(), line.block_size()), (0.0, 0.0));
+            continue;
+        }
+        assert!(line.block_size() > 0.0);
+        assert_eq!(line.ruby_annotations().count(), 1);
+        assert!(line.ruby_annotations().any(|a| !a.line().is_empty()));
+        assert_eq!(
+            line.is_empty(),
+            visibility == RubyVisibility::Hidden,
+            "only visible retained reading makes its parent nonempty"
+        );
+    }
+}
+
+#[test]
 fn annotation_glyphs_share_parent_limit() {
     let fonts = load_fonts(&Limits::default()).unwrap();
     // Literal corpus: one base glyph plus three annotation glyphs. Hidden

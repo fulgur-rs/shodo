@@ -92,6 +92,128 @@ fn reading_glyphs(line: &Line, level: usize) -> Vec<u32> {
         .collect()
 }
 
+#[test]
+fn first_line_ligature_change_consumes_every_annotation_source_once() {
+    use shodo::mapping::{Affinity, TextOrigin};
+
+    // Independent first-line/normal lane cuts used to repeat f or omit i.
+    for reverse in [false, true] {
+        let mut normal = InlineStyle {
+            font_families: vec![FontFamily::Named("Shodo Fixture Latin".into())],
+            line_break: LineBreak::Anywhere,
+            ..style(12.0)
+        };
+        let mut first = normal.clone();
+        first.font_variant_ligatures.none = !reverse;
+        normal.font_variant_ligatures.none = reverse;
+        let mut reading = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: normal,
+                first_line: Some(first),
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        reading.push_text(
+            TextSource::Dom {
+                node: NodeId(20),
+                offset: 70,
+            },
+            "office",
+        );
+        let base_style = InlineStyle {
+            line_break: LineBreak::Anywhere,
+            ..style(24.0)
+        };
+        let ruby = Ruby::new(
+            vec![RubyBase {
+                node: NodeId(10),
+                content: RubyContent::text(
+                    TextSource::Dom {
+                        node: NodeId(10),
+                        offset: 40,
+                    },
+                    "日本語日本語",
+                    &base_style,
+                    &Limits::default(),
+                ),
+                align: RubyAlign::default(),
+            }],
+            vec![RubyLevel {
+                annotations: vec![RubyAnnotation {
+                    node: NodeId(20),
+                    content: RubyContent::from_builder(reading),
+                    span: RubySpan::All,
+                    visibility: RubyVisibility::Visible,
+                }],
+                style: RubyStyle {
+                    overhang: RubyOverhang::None,
+                    ..Default::default()
+                },
+            }],
+        )
+        .unwrap();
+        let p = build(ruby);
+        for wrap in [
+            TextWrapStyle::Auto,
+            TextWrapStyle::Balance,
+            TextWrapStyle::Pretty,
+        ] {
+            for width in [48.0, 72.0, 24.0, 96.0] {
+                let options = LineOptions {
+                    text_wrap_style: wrap,
+                    ..Default::default()
+                };
+                let lines = p.break_all(
+                    &mut LayoutContext::new(),
+                    &options,
+                    width,
+                    &AtomicSizes::EMPTY,
+                );
+                assert_eq!(
+                    lines.iter().map(line_text).collect::<String>(),
+                    "日本語日本語"
+                );
+                let joined = lines.iter().map(|l| reading_text(l, 0)).collect::<String>();
+                assert_eq!(joined, "office", "width={width}, wrap={wrap:?}");
+                let mut consumed = [0usize; 6];
+                for line in &lines {
+                    for annotation in line.ruby_annotations() {
+                        for fragment in annotation.line().fragments() {
+                            if let Fragment::GlyphRun(run) = fragment {
+                                assert!(run.glyphs().all(|g| g.id != 0));
+                                let mapping = annotation.line().offset_mapping().unwrap();
+                                let range = run.text_range();
+                                let Some(TextOrigin::Dom {
+                                    node: start_node,
+                                    offset: start,
+                                }) = mapping.text_to_dom(range.start as u32, Affinity::Downstream)
+                                else {
+                                    panic!("reading glyph keeps its original DOM source")
+                                };
+                                let Some(TextOrigin::Dom {
+                                    node: end_node,
+                                    offset: end,
+                                }) = mapping.text_to_dom(range.end as u32, Affinity::Upstream)
+                                else {
+                                    panic!("reading glyph keeps its original DOM source")
+                                };
+                                assert_eq!((start_node, end_node), (NodeId(20), NodeId(20)));
+                                for count in
+                                    &mut consumed[(start - 70) as usize..(end - 70) as usize]
+                                {
+                                    *count += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                assert_eq!(consumed, [1; 6], "width={width}, wrap={wrap:?}");
+            }
+        }
+    }
+}
+
 type LineSignature = (
     shodo::BreakToken,
     String,

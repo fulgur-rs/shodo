@@ -9,6 +9,8 @@ pub(crate) struct NormalizedBase {
     pub(crate) node: Option<NodeId>,
     /// Cleared after importing into the parent; the base is retained only once.
     pub(crate) content: Option<RubyContent>,
+    pub(crate) limits: Option<Limits>,
+    pub(crate) retained_styles: u64,
     pub(crate) align: RubyAlign,
 }
 
@@ -60,11 +62,15 @@ pub(crate) fn normalize(ruby: &Ruby, limits: &Limits) -> Result<NormalizedRuby, 
             Some(base) => NormalizedBase {
                 node: Some(base.node),
                 content: Some(base.content.clone()),
+                limits: Some(base.content.0.limits.clone()),
+                retained_styles: 0,
                 align: base.align,
             },
             None => NormalizedBase {
                 node: None,
                 content: None,
+                limits: None,
+                retained_styles: 0,
                 align: RubyAlign::default(),
             },
         });

@@ -33,13 +33,19 @@ pub(crate) fn count(data: &ParagraphData, range: Range<usize>) -> usize {
 
 fn groups(data: &ParagraphData, range: Range<usize>) -> Vec<Group> {
     let mut result = Vec::new();
-    let nested: std::collections::HashMap<_, _> = data
-        .ruby
-        .containers
-        .iter()
-        .filter(|r| range.start <= r.units.start && r.units.end <= range.end)
-        .map(|r| (r.units.start, r.units.end))
-        .collect();
+    let mut nested = std::collections::HashMap::new();
+    let mut through = range.end;
+    data.ruby.intervals.intersecting(
+        &data.ruby.containers,
+        range.start,
+        &mut through,
+        |index, _| {
+            let r = &data.ruby.containers[index];
+            if range.start <= r.units.start && r.units.end <= range.end {
+                nested.insert(r.units.start, r.units.end);
+            }
+        },
+    );
     let mut i = range.start;
     while i < range.end {
         let unit = &data.units[i];

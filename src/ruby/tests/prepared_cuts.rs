@@ -292,10 +292,10 @@ fn aggregate_nested_limits_include_annotations_in_base_snapshots() {
     base.push_ruby(NodeId(18), &s, inner);
     let ruby = pair(RubyContent::from_builder(base), content(20, "にほん", &s));
     // Nested base stream:27 bytes/25 items/4 styles. Readings:9+15 bytes,
-    // 5+5 items and2+2 styles. Two pairings and cut tables add16 items.
+    // 5+5 items and2+2 styles. Two pairings and cut tables add16 items; the two-container interval index adds4 cells.
     for (kind, total) in [
         (crate::limits::LimitKind::TextBytes, 51),
-        (crate::limits::LimitKind::Items, 51),
+        (crate::limits::LimitKind::Items, 55),
         (crate::limits::LimitKind::Styles, 8),
         (crate::limits::LimitKind::ShapedGlyphs, 5),
     ] {
@@ -331,12 +331,12 @@ fn aggregate_limits_include_text_styles_metadata_and_cut_cells() {
     let s = style("Shodo Fixture CJK");
     let ruby = pair(content(10, "日", &s), content(20, "にほん", &s));
     // Parent: 3 source bytes + 4 isolate controls =15, annotation 9+6=15.
-    // Items: 13 parent + 5 annotation + 4 pairing metadata + 4 cut cells=26.
+    // Items: 13 parent + 5 annotation + 4 pairing metadata + 4 cut cells + 2 interval-index cells=28.
     // Styles: parent root, base text and isolated box; annotation root and
     // isolated box=5. Glyphs: 1+3=4.
     for (kind, total) in [
         (crate::limits::LimitKind::TextBytes, 30),
-        (crate::limits::LimitKind::Items, 26),
+        (crate::limits::LimitKind::Items, 28),
         (crate::limits::LimitKind::Styles, 5),
         (crate::limits::LimitKind::ShapedGlyphs, 4),
     ] {

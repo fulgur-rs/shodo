@@ -76,7 +76,9 @@ pub(crate) fn block_size(
         bottom: metrics.block_size.sub(metrics.baseline, sat),
     };
     for fragment in &ruby.fragments {
-        bounds = bounds.union(fragment.contribution);
+        if fragment.has_content {
+            bounds = bounds.union(fragment.contribution);
+        }
     }
     let height = bounds.height(sat);
     cx.ruby_ranges.blocks.insert(key, height);

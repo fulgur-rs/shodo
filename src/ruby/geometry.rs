@@ -344,6 +344,7 @@ pub(crate) fn tracks(
     contents: &[Bounds],
     right_columns: &std::collections::HashMap<(usize, usize), usize>,
     heights: &[LayoutUnit],
+    has_content: bool,
     sat: &mut Saturation,
 ) -> Tracks {
     let mut selected: Vec<_> = lanes
@@ -353,6 +354,18 @@ pub(crate) fn tracks(
             inline_size: None,
         })
         .collect();
+    if !has_content {
+        let empty = Bounds {
+            top: LayoutUnit::ZERO,
+            bottom: LayoutUnit::ZERO,
+        };
+        return Tracks {
+            lanes: selected,
+            base: empty,
+            whole: empty,
+            contribution: empty,
+        };
+    }
     let before = level_sides(data, ruby);
     let mut levels = vec![LayoutUnit::ZERO; ruby.levels.len()];
     for (i, (lane, height)) in lanes.iter().zip(heights).enumerate() {
@@ -486,10 +499,13 @@ pub(crate) fn layout(
             &contents,
             &fragment.right_columns,
             heights,
+            fragment.has_content,
             sat,
         );
-        whole.push((fragment.units.clone(), result.whole));
-        contribution = contribution.union(result.contribution);
+        if fragment.has_content {
+            whole.push((fragment.units.clone(), result.whole));
+            contribution = contribution.union(result.contribution);
+        }
         lanes.push(result.lanes);
     }
     BlockLayout {

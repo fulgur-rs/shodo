@@ -168,10 +168,10 @@ fn annotation_only_first_line_change_prepares_both_sets() {
     .unwrap();
     // Two independently retained parent sets and two reading sets. Each parent
     // has15 bytes/13 items/3 styles; each reading15/5/2. Pairing metadata and
-    // two two-cell cuts add8 items per parent set. Glyphs are2+6=8.
+    // two two-cell cuts add8 items plus2 interval-index cells per parent set. Glyphs are2+6=8.
     for (kind, total) in [
         (crate::limits::LimitKind::TextBytes, 60),
-        (crate::limits::LimitKind::Items, 52),
+        (crate::limits::LimitKind::Items, 56),
         (crate::limits::LimitKind::Styles, 10),
         (crate::limits::LimitKind::ShapedGlyphs, 8),
     ] {

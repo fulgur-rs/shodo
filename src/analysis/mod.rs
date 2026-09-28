@@ -15,7 +15,10 @@ use std::ops::Range;
 
 use crate::node::{InlineEdges, NodeId, OutOfFlowKind};
 
+#[cfg(test)]
 pub(crate) use transform::transform;
+pub(crate) use transform::transform_with_base_scopes;
+#[cfg(test)]
 pub(crate) use whitespace::process;
 
 /// An item of the processed paragraph. `text` indexes the processed text.

@@ -293,6 +293,47 @@ fn ruby_empty_container_terminates_incremental_layout() {
 }
 
 #[test]
+fn base_snapshot_shaping_cap_survives_import_and_first_line() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    for (alternate, cap, wanted_glyphs) in
+        [(false, 0, 1), (false, 1, 1), (true, 1, 2), (true, 2, 2)]
+    {
+        let own = Limits {
+            max_shaped_glyphs: Some(cap),
+            ..Default::default()
+        };
+        let root = ParagraphStyle {
+            root: style(24.0),
+            first_line: alternate.then(|| style(36.0)),
+            ..Default::default()
+        };
+        let mut content = ParagraphBuilder::new(&root, &own);
+        content.push_text(source(10, 40), "日");
+        let ruby = Ruby::new(
+            vec![RubyBase {
+                node: NodeId(10),
+                content: RubyContent::from_builder(content),
+                align: RubyAlign::default(),
+            }],
+            vec![],
+        )
+        .unwrap();
+        let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+        parent.push_ruby(NodeId(8), &style(24.0), ruby);
+        let result = parent.build(&mut LayoutContext::new(), &fonts.collection);
+        if cap < wanted_glyphs {
+            let error = result.expect_err("base own cap survives its import into a larger parent");
+            assert_eq!(
+                (error.kind, error.limit, error.actual),
+                (LimitKind::ShapedGlyphs, cap, wanted_glyphs)
+            );
+        } else {
+            assert_eq!(logical_text(result.unwrap().text()), "日");
+        }
+    }
+}
+
+#[test]
 fn ruby_shared_annotation_input_is_charged_for_every_lane() {
     let shared = content(20, "に", 12.0);
     let ruby = Ruby::new(
@@ -456,4 +497,453 @@ fn pairing_allocation_error_reports_original_parent_limit() {
     let error = b.error().unwrap();
     assert_eq!(error.kind, LimitKind::Items);
     assert_eq!((error.limit, error.actual), (8, 9));
+}
+
+#[test]
+fn imported_base_own_cap_covers_nested_readings_and_both_style_sets() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    for (alternate, cap, wanted) in [(false, 1, 2), (false, 2, 2), (true, 3, 4), (true, 4, 4)] {
+        let own = Limits {
+            max_shaped_glyphs: Some(cap),
+            ..Default::default()
+        };
+        let mut reading = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: style(12.0),
+                first_line: alternate.then(|| style(18.0)),
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        reading.push_text(source(20, 70), "に");
+        let nested = Ruby::new(
+            vec![base(10, "日")],
+            vec![RubyLevel {
+                annotations: vec![RubyAnnotation {
+                    node: NodeId(20),
+                    content: RubyContent::from_builder(reading),
+                    span: RubySpan::Auto,
+                    visibility: RubyVisibility::Visible,
+                }],
+                style: RubyStyle::default(),
+            }],
+        )
+        .unwrap();
+        let mut content = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: style(24.0),
+                first_line: alternate.then(|| style(36.0)),
+                ..Default::default()
+            },
+            &own,
+        );
+        content.push_ruby(NodeId(18), &style(24.0), nested);
+        let outer = Ruby::new(
+            vec![RubyBase {
+                node: NodeId(9),
+                content: RubyContent::from_builder(content),
+                align: RubyAlign::default(),
+            }],
+            vec![],
+        )
+        .unwrap();
+        let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+        parent.push_ruby(NodeId(8), &style(24.0), outer);
+        let result = parent.build(&mut LayoutContext::new(), &fonts.collection);
+        if cap < wanted {
+            let error = result.expect_err(
+                "nested retained readings belong to their imported base's own resource scope",
+            );
+            assert_eq!(
+                (error.kind, error.limit, error.actual),
+                (LimitKind::ShapedGlyphs, cap, wanted)
+            );
+        } else {
+            let p = result.unwrap();
+            assert_eq!(logical_text(p.text()), "日");
+            let lines = p.break_all(
+                &mut LayoutContext::new(),
+                &Default::default(),
+                100.0,
+                &shodo::AtomicSizes::EMPTY,
+            );
+            assert!(
+                lines
+                    .iter()
+                    .flat_map(|line| line.ruby_annotations())
+                    .any(|a| !a.line().is_empty())
+            );
+        }
+    }
+}
+
+#[test]
+fn imported_base_retained_text_items_and_styles_obey_own_exact_caps() {
+    use shodo::style::TextTransform;
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    for (alternate, kind, total) in [
+        (false, LimitKind::TextBytes, 7),
+        (true, LimitKind::TextBytes, 16),
+        (false, LimitKind::Items, 5),
+        (true, LimitKind::Items, 10),
+        (false, LimitKind::Styles, 2),
+        (true, LimitKind::Styles, 4),
+    ] {
+        for cap in [total - 1, total] {
+            let mut own = Limits::default();
+            match kind {
+                LimitKind::TextBytes => own.max_text_bytes = Some(cap),
+                LimitKind::Items => own.max_items = Some(cap),
+                LimitKind::Styles => own.max_styles = Some(cap),
+                _ => unreachable!(),
+            }
+            let mut first = style(36.0);
+            first.text_transform = TextTransform::FullWidth;
+            let mut input = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    root: style(24.0),
+                    first_line: alternate.then_some(first),
+                    ..Default::default()
+                },
+                &own,
+            );
+            input.push_text(source(10, 40), "A");
+            let r = Ruby::new(
+                vec![RubyBase {
+                    node: NodeId(10),
+                    content: RubyContent::from_builder(input),
+                    align: RubyAlign::default(),
+                }],
+                vec![],
+            )
+            .unwrap();
+            let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+            parent.push_ruby(NodeId(8), &style(24.0), r);
+            let result = parent.build(&mut LayoutContext::new(), &fonts.collection);
+            if cap < total {
+                let error =
+                    result.expect_err("both retained sets obey each base occurrence's own cap");
+                assert_eq!((error.kind, error.limit), (kind, cap));
+                assert!(error.actual > cap);
+            } else {
+                let p = result.unwrap();
+                assert_eq!(logical_text(p.text()), "A");
+                let lines = p.break_all(
+                    &mut LayoutContext::new(),
+                    &Default::default(),
+                    100.0,
+                    &AtomicSizes::EMPTY,
+                );
+                assert_eq!(
+                    lines
+                        .iter()
+                        .map(|l| logical_text(l.text()))
+                        .collect::<String>(),
+                    if alternate { "Ａ" } else { "A" }
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn reused_base_snapshot_has_independent_own_scopes_and_shared_parent_cap() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let shared = RubyContent::text(
+        source(10, 40),
+        "日",
+        &style(24.0),
+        &Limits {
+            max_shaped_glyphs: Some(1),
+            ..Default::default()
+        },
+    );
+    let r = Ruby::new(
+        (0..2)
+            .map(|i| RubyBase {
+                node: NodeId(10 + i),
+                content: shared.clone(),
+                align: RubyAlign::default(),
+            })
+            .collect(),
+        vec![],
+    )
+    .unwrap();
+    for parent_cap in [1, 2] {
+        let mut parent = ParagraphBuilder::new(
+            &ParagraphStyle::default(),
+            &Limits {
+                max_shaped_glyphs: Some(parent_cap),
+                ..Default::default()
+            },
+        );
+        parent.push_ruby(NodeId(8), &style(24.0), r.clone());
+        let result = parent.build(&mut LayoutContext::new(), &fonts.collection);
+        if parent_cap == 1 {
+            let error = result.unwrap_err();
+            assert_eq!(
+                (error.kind, error.limit, error.actual),
+                (LimitKind::ShapedGlyphs, 1, 2)
+            );
+        } else {
+            assert_eq!(logical_text(result.unwrap().text()), "日日");
+        }
+    }
+}
+
+#[test]
+fn imported_base_wrapper_checks_own_limits_before_builder_growth() {
+    for (kind, own) in [
+        (
+            LimitKind::Styles,
+            Limits {
+                max_styles: Some(1),
+                ..Default::default()
+            },
+        ),
+        (
+            LimitKind::Items,
+            Limits {
+                max_items: Some(2),
+                ..Default::default()
+            },
+        ),
+        (
+            LimitKind::NestingDepth,
+            Limits {
+                max_nesting_depth: Some(0),
+                ..Default::default()
+            },
+        ),
+    ] {
+        let r = Ruby::new(
+            vec![RubyBase {
+                node: NodeId(10),
+                content: RubyContent::text(source(10, 40), "日", &style(24.0), &own),
+                align: RubyAlign::default(),
+            }],
+            vec![],
+        )
+        .unwrap();
+        let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+        parent.push_ruby(NodeId(8), &style(24.0), r);
+        assert_eq!(
+            parent
+                .error()
+                .expect("wrapper resources must be checked before import grows the parent")
+                .kind,
+            kind
+        );
+    }
+}
+
+#[test]
+fn imported_base_scope_does_not_charge_neighboring_plain_text() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let own = Limits {
+        max_shaped_glyphs: Some(1),
+        ..Default::default()
+    };
+    let r = Ruby::new(
+        vec![RubyBase {
+            node: NodeId(10),
+            content: RubyContent::text(source(10, 40), "日", &style(24.0), &own),
+            align: RubyAlign::default(),
+        }],
+        vec![],
+    )
+    .unwrap();
+    let mut parent = ParagraphBuilder::new(
+        &ParagraphStyle {
+            root: style(24.0),
+            ..Default::default()
+        },
+        &Limits::default(),
+    );
+    parent.push_text(source(1, 0), "本");
+    parent.push_ruby(NodeId(8), &style(24.0), r);
+    parent.push_text(source(2, 0), "語");
+    let p = parent
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    assert_eq!(logical_text(p.text()), "本日語");
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &Default::default(),
+        100.0,
+        &AtomicSizes::EMPTY,
+    );
+    let glyphs: Vec<_> = lines
+        .iter()
+        .flat_map(|line| line.fragments())
+        .filter_map(|fragment| {
+            if let shodo::Fragment::GlyphRun(run) = fragment {
+                Some(run.glyphs().collect::<Vec<_>>())
+            } else {
+                None
+            }
+        })
+        .flatten()
+        .collect();
+    assert_eq!(glyphs.len(), 3);
+    assert!(glyphs.iter().all(|g| g.id != 0));
+}
+
+#[test]
+fn imported_base_scope_counts_nested_metadata_cuts_and_owned_index_cells() {
+    // Main: three isolate wrappers + 日 =21 bytes/17 items/2 styles.
+    // Reading: one wrapper + に =9 bytes/5 items/2 styles. Nested pairing
+    // and cuts add4+4 items; its exclusively owned interval leaf adds1.
+    // The outer container and shared index cells stay in the parent cap.
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    for (alternate, kind, total) in [
+        (false, LimitKind::TextBytes, 30),
+        (true, LimitKind::TextBytes, 60),
+        (false, LimitKind::Items, 31),
+        (true, LimitKind::Items, 62),
+        (false, LimitKind::Styles, 4),
+        (true, LimitKind::Styles, 8),
+    ] {
+        for cap in [total - 1, total] {
+            let mut own = Limits::default();
+            match kind {
+                LimitKind::TextBytes => own.max_text_bytes = Some(cap),
+                LimitKind::Items => own.max_items = Some(cap),
+                LimitKind::Styles => own.max_styles = Some(cap),
+                _ => unreachable!(),
+            }
+            let mut reading = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    root: style(12.0),
+                    first_line: alternate.then(|| style(18.0)),
+                    ..Default::default()
+                },
+                &Limits::default(),
+            );
+            reading.push_text(source(20, 70), "に");
+            let nested = Ruby::new(
+                vec![base(10, "日")],
+                vec![RubyLevel {
+                    annotations: vec![RubyAnnotation {
+                        node: NodeId(20),
+                        content: RubyContent::from_builder(reading),
+                        span: RubySpan::Auto,
+                        visibility: RubyVisibility::Visible,
+                    }],
+                    style: RubyStyle::default(),
+                }],
+            )
+            .unwrap();
+            let mut input = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    root: style(24.0),
+                    first_line: alternate.then(|| style(36.0)),
+                    ..Default::default()
+                },
+                &own,
+            );
+            input.push_ruby(NodeId(18), &style(24.0), nested);
+            let r = Ruby::new(
+                vec![RubyBase {
+                    node: NodeId(9),
+                    content: RubyContent::from_builder(input),
+                    align: RubyAlign::default(),
+                }],
+                vec![],
+            )
+            .unwrap();
+            let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+            parent.push_ruby(NodeId(8), &style(24.0), r);
+            let result = parent.build(&mut LayoutContext::new(), &fonts.collection);
+            if cap < total {
+                let error = result.expect_err(
+                    "nested metadata and reading datasets belong to the imported base scope",
+                );
+                assert_eq!((error.kind, error.limit), (kind, cap));
+                assert!(error.actual > cap);
+            } else {
+                let p = result.unwrap();
+                assert_eq!(logical_text(p.text()), "日");
+                let lines = p.break_all(
+                    &mut LayoutContext::new(),
+                    &Default::default(),
+                    100.0,
+                    &AtomicSizes::EMPTY,
+                );
+                assert!(
+                    lines
+                        .iter()
+                        .flat_map(|line| line.ruby_annotations())
+                        .any(|a| !a.line().is_empty())
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn imported_base_uses_its_own_shaping_run_budget_without_splitting_neighbors() {
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let latin = InlineStyle {
+        font_families: vec![FontFamily::Named("Shodo Fixture Latin".into())],
+        ..style(24.0)
+    };
+    for own_glyph_cap in [1, 3] {
+        let own = Limits {
+            max_shaping_run_bytes: Some(1),
+            max_shaped_glyphs: Some(own_glyph_cap),
+            ..Default::default()
+        };
+        let r = Ruby::new(
+            vec![RubyBase {
+                node: NodeId(10),
+                content: RubyContent::text(source(10, 40), "ffi", &latin, &own),
+                align: RubyAlign::default(),
+            }],
+            vec![],
+        )
+        .unwrap();
+        let mut parent = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: latin.clone(),
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        parent.push_ruby(NodeId(8), &latin, r);
+        parent.push_text(source(20, 70), "ffi");
+        let result = parent.build(&mut LayoutContext::new(), &fonts.collection);
+        if own_glyph_cap == 1 {
+            let error =
+                result.expect_err("base's tiny run budget produces separate real f/f/i glyphs");
+            assert_eq!(
+                (error.kind, error.limit, error.actual),
+                (LimitKind::ShapedGlyphs, 1, 2)
+            );
+        } else {
+            let p = result.unwrap();
+            assert_eq!(logical_text(p.text()), "ffiffi");
+            let lines = p.break_all(
+                &mut LayoutContext::new(),
+                &Default::default(),
+                1000.0,
+                &AtomicSizes::EMPTY,
+            );
+            let mut base_glyphs = 0;
+            let mut neighbor_glyphs = 0;
+            for line in &lines {
+                for fragment in line.fragments() {
+                    if let shodo::Fragment::GlyphRun(run) = fragment {
+                        assert!(run.glyphs().all(|g| g.id != 0));
+                        match run.node() {
+                            Some(NodeId(10)) => base_glyphs += run.glyphs().len(),
+                            Some(NodeId(20)) => neighbor_glyphs += run.glyphs().len(),
+                            _ => panic!("real text glyphs preserve their original owner"),
+                        }
+                    }
+                }
+            }
+            assert_eq!((base_glyphs, neighbor_glyphs), (3, 1));
+        }
+    }
 }

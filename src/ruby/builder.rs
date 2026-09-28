@@ -202,8 +202,52 @@ fn append_checked(
     for (column, base) in normalized.bases.iter_mut().enumerate() {
         marker(b, index, Boundary::BaseOpen(column), base.node);
         if let (Some(base_node), Some(content)) = (base.node, base.content.take()) {
+            Limits::check(
+                content.0.limits.max_nesting_depth,
+                LimitKind::NestingDepth,
+                InputCost::content(&content.0).depth.saturating_add(1),
+            )?;
             let root = isolated(&content.0.style.root);
             let first = content.0.style.first_line.as_ref().map(isolated);
+            let cost = InputCost::content(&content.0);
+            Limits::check(
+                content.0.limits.max_items,
+                LimitKind::Items,
+                cost.items.saturating_add(2),
+            )?;
+            // Import resolves legacy alternatives without changing normal styles.
+            // Predict the wrapper style before interning or copying any input.
+            let has_first =
+                content.0.style.first_line.is_some() || !content.0.first_line_styles.is_empty();
+            let wrapper_exists = content.0.styles.iter().enumerate().any(|(i, normal)| {
+                if *normal != root {
+                    return false;
+                }
+                let inherited = has_first.then(|| {
+                    crate::paragraph::first_line_style(
+                        normal,
+                        &content.0.style.root,
+                        content
+                            .0
+                            .style
+                            .first_line
+                            .as_ref()
+                            .unwrap_or(&content.0.style.root),
+                    )
+                });
+                content
+                    .0
+                    .first_line_styles
+                    .get(&(i as u32))
+                    .or(inherited.as_ref())
+                    == first.as_ref()
+            });
+            Limits::check(
+                content.0.limits.max_styles,
+                LimitKind::Styles,
+                cost.styles.saturating_add(u64::from(!wrapper_exists)),
+            )?;
+
             match first.as_ref() {
                 Some(first) => {
                     b.open_inline_with_first_line(base_node, &root, first, InlineEdges::default());
@@ -212,7 +256,12 @@ fn append_checked(
                     b.open_inline(base_node, &root, InlineEdges::default());
                 }
             }
-            import(b, &content.0);
+            let wrapper = b.current_style();
+            let mut imported = import(b, &content.0);
+            imported.push(wrapper);
+            imported.sort_unstable();
+            imported.dedup();
+            base.retained_styles = imported.len() as u64;
             b.close_inline();
         }
         marker(b, index, Boundary::BaseClose(column), base.node);
@@ -247,9 +296,9 @@ fn marker(b: &mut ParagraphBuilder, ruby: u32, boundary: Boundary, node: Option<
     }
 }
 
-fn import(b: &mut ParagraphBuilder, input: &ContentInput) {
+fn import(b: &mut ParagraphBuilder, input: &ContentInput) -> Vec<u32> {
     if b.error.is_some() {
-        return;
+        return Vec::new();
     }
     for warning in &input.warnings {
         b.warnings.push(warning.kind, warning.message.clone());
@@ -271,7 +320,7 @@ fn import(b: &mut ParagraphBuilder, input: &ContentInput) {
             .get(&(i as u32))
             .or(inherited.as_ref());
         let Some(index) = b.intern_styles(style, first) else {
-            return;
+            return Vec::new();
         };
         styles.push(index);
     }
@@ -284,7 +333,7 @@ fn import(b: &mut ParagraphBuilder, input: &ContentInput) {
             total.saturating_add(b.ruby_cost.text),
         )
     {
-        return;
+        return Vec::new();
     }
     b.text.push_str(&input.text);
     let nested = b.rubies.len() as u32;
@@ -295,7 +344,7 @@ fn import(b: &mut ParagraphBuilder, input: &ContentInput) {
     }
     for item in &input.items {
         if !b.reserve_item() {
-            return;
+            return Vec::new();
         }
         let mut item = item.clone();
         match &mut item {
@@ -324,4 +373,5 @@ fn import(b: &mut ParagraphBuilder, input: &ContentInput) {
         }
         b.items.push(item);
     }
+    styles
 }

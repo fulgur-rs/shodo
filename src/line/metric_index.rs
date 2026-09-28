@@ -659,6 +659,7 @@ impl MetricIndex {
                     over
                 },
                 block_size,
+                empty: !summary.active,
             },
             height,
             above,
@@ -673,9 +674,10 @@ impl MetricIndex {
 pub(crate) struct ScalarMetrics {
     pub(crate) baseline: LayoutUnit,
     pub(crate) block_size: LayoutUnit,
+    pub(crate) empty: bool,
 }
 
-pub(super) fn measure(
+pub(crate) fn measure(
     data: &ParagraphData,
     range: Range<usize>,
     atomics: &AtomicSizes,
@@ -686,6 +688,7 @@ pub(super) fn measure(
         return ScalarMetrics {
             baseline: LayoutUnit::ZERO,
             block_size: LayoutUnit::ZERO,
+            empty: true,
         };
     }
     let key = (data.id, data as *const ParagraphData as usize);

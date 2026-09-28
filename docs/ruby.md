@@ -170,6 +170,13 @@ export a reading's child AccessibleLayout separately with its own adapter/root.
 
 All retained text, items, styles, shaped glyphs and first-line alternatives count
 against the parent's aggregate Limits, including nested or reused snapshots.
+Each imported base also keeps its snapshot limits for retained text, items,
+styles and shaped glyphs: its isolation wrapper,
+normal and first-line resources, and nested readings share that occurrence's
+cap. Its shaping-run byte cap also bounds each construction run.
+Reused snapshots keep separate occurrence scopes. Cells shared with
+unrelated containers remain in the parent budget; index cells exclusively
+owned by a base count against its own items cap.
 Nesting and projected anonymous-box allocation are checked before excess work.
 Snapshot terminal errors survive import. Original font assets and non-ruby
 snapshot expectations are unchanged.

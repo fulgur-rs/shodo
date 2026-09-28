@@ -16,6 +16,7 @@ use std::ops::Range;
 #[derive(Default)]
 pub(crate) struct RubyData {
     pub(crate) containers: Vec<PreparedRuby>,
+    pub(crate) intervals: super::index::ContainerIndex,
 }
 
 // Measurement/placement consume these records in Tasks 3/4.
@@ -210,15 +211,17 @@ pub(crate) fn prepare(
     cx: &mut crate::LayoutContext,
     fonts: &FontCollection,
     budget: &mut RubyBudget,
+    bases: &mut super::base_budget::BaseScopes,
 ) -> Result<(), LimitExceeded> {
     if inputs.is_empty() {
         return Ok(());
     }
-    for input in inputs {
+    for (index, input) in inputs.iter().enumerate() {
+        bases.container(index, input.normalized.metadata_items)?;
         budget.charge(LimitKind::Items, input.normalized.metadata_items)?;
     }
     let mut result = containers(data, inputs);
-    for (container, input) in result.iter_mut().zip(inputs) {
+    for (index, (container, input)) in result.iter_mut().zip(inputs).enumerate() {
         for (level, normalized) in input.normalized.levels.iter().enumerate() {
             for annotation in &normalized.annotations {
                 if annotation.auto_hidden || annotation.visibility == RubyVisibility::Collapse {
@@ -255,8 +258,11 @@ pub(crate) fn prepare(
                 } else {
                     builder.style.writing_mode = data.style.writing_mode;
                 }
+                let scopes = bases.enter_container(index, budget);
                 let paragraph =
-                    Paragraph::from_builder_with_ruby_budget(builder, cx, fonts, budget)?;
+                    Paragraph::from_builder_with_ruby_budget(builder, cx, fonts, budget);
+                bases.leave_container(scopes, budget);
+                let paragraph = paragraph?;
                 container.lanes.push(PreparedLane {
                     node: annotation.node,
                     level,
@@ -267,7 +273,8 @@ pub(crate) fn prepare(
             }
         }
     }
-    super::index::prepare_cuts(data, &mut result, budget)?;
+    super::index::prepare_cuts(data, &mut result, budget, None, bases)?;
+    data.ruby.intervals = super::index::ContainerIndex::new(&result, budget, bases)?;
     data.ruby.containers = result;
     Ok(())
 }
@@ -278,11 +285,14 @@ pub(crate) fn prepare_alternate(
     inputs: &[RubyInput],
     normal: &RubyData,
     budget: &mut RubyBudget,
+    parent_cursors: &[Option<u32>],
+    bases: &mut super::base_budget::BaseScopes,
 ) -> Result<(), LimitExceeded> {
     if inputs.is_empty() {
         return Ok(());
     }
-    for input in inputs {
+    for (index, input) in inputs.iter().enumerate() {
+        bases.container(index, input.normalized.metadata_items)?;
         budget.charge(LimitKind::Items, input.normalized.metadata_items)?;
     }
     let mut result = containers(data, inputs);
@@ -297,7 +307,14 @@ pub(crate) fn prepare_alternate(
             alternate.lanes.push(lane);
         }
     }
-    super::index::prepare_cuts(data, &mut result, budget)?;
+    super::index::prepare_cuts(
+        data,
+        &mut result,
+        budget,
+        Some((normal, parent_cursors)),
+        bases,
+    )?;
+    data.ruby.intervals = super::index::ContainerIndex::new(&result, budget, bases)?;
     data.ruby.containers = result;
     Ok(())
 }

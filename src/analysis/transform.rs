@@ -15,11 +15,37 @@ pub(crate) struct WidthOrigin {
 }
 
 pub(crate) fn transform(
+    input: Processed,
+    styles: &[InlineStyle],
+    limits: &Limits,
+    warnings: &mut WarningSink,
+    mode: crate::geometry::WritingMode,
+) -> Result<Processed, LimitExceeded> {
+    transform_inner(input, styles, limits, warnings, mode, None)
+}
+
+pub(crate) fn transform_with_base_scopes(
+    input: Processed,
+    styles: &[InlineStyle],
+    limits: &Limits,
+    warnings: &mut WarningSink,
+    mode: crate::geometry::WritingMode,
+    bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
+) -> Result<Processed, LimitExceeded> {
+    if bases.is_some() {
+        transform_inner(input, styles, limits, warnings, mode, bases)
+    } else {
+        transform(input, styles, limits, warnings, mode)
+    }
+}
+
+fn transform_inner(
     mut input: Processed,
     styles: &[InlineStyle],
     limits: &Limits,
     warnings: &mut WarningSink,
     mode: crate::geometry::WritingMode,
+    mut bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
 ) -> Result<Processed, LimitExceeded> {
     let omissions = super::combine::omissions(&input, styles, mode);
     if styles
@@ -32,6 +58,15 @@ pub(crate) fn transform(
             LimitKind::TextBytes,
             input.text.len() as u64,
         )?;
+        if let Some(bases) = &mut bases {
+            for (i, item) in input.items.iter().enumerate() {
+                bases.item(
+                    i,
+                    LimitKind::TextBytes,
+                    u64::from(item.text.end - item.text.start),
+                )?;
+            }
+        }
         return Ok(input);
     }
     let locales: Vec<LanguageIdentifier> = styles
@@ -213,6 +248,9 @@ pub(crate) fn transform(
             let next_len = output.len() as u64 + mapped.len() as u64;
             Limits::check(Some(u64::from(u32::MAX)), LimitKind::TextBytes, next_len)?;
             Limits::check(limits.max_text_bytes, LimitKind::TextBytes, next_len)?;
+            if let Some(bases) = &mut bases {
+                bases.item(index, LimitKind::TextBytes, mapped.len() as u64)?;
+            }
             let start_new = output.len() as u32;
             output.push_str(&mapped);
             if let Some(before_width) = before_width

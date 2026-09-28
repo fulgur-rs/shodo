@@ -59,6 +59,7 @@ pub(crate) struct RubyFragmentMeasure {
     pub(crate) adjustment: LayoutUnit,
     pub(crate) whole_area: super::geometry::Bounds,
     pub(crate) contribution: super::geometry::Bounds,
+    pub(crate) has_content: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -114,16 +115,22 @@ pub(crate) fn candidate_inner(
         return RubyMeasure::default();
     }
     let mut through = end;
-    for ruby in &data.ruby.containers {
-        #[cfg(test)]
-        {
-            cx.ruby_measure_visits += 1;
-        }
-        if start < ruby.units.end && ruby.units.start < through {
-            let clipped = through.min(ruby.units.end);
-            through = through.max(ruby.cuts[cut_at_or_after(ruby, clipped)].unit);
-        }
-    }
+    let mut containers = Vec::new();
+    data.ruby.intervals.intersecting(
+        &data.ruby.containers,
+        start,
+        &mut through,
+        |container, through| {
+            let ruby = &data.ruby.containers[container];
+            #[cfg(test)]
+            {
+                cx.ruby_measure_visits += 1;
+            }
+            let clipped = (*through).min(ruby.units.end);
+            *through = (*through).max(ruby.cuts[cut_at_or_after(ruby, clipped)].unit);
+            containers.push(container);
+        },
+    );
     let selected = start..through;
     let mut measure = RubyMeasure::default();
     // Reverse structural traversal resolves children before parents. Index those
@@ -131,7 +138,8 @@ pub(crate) fn candidate_inner(
     // potential descendants of every subsequent column/container. Container
     // identity preserves ancestors that share a clipped continuation start.
     let mut completed = std::collections::BTreeMap::<(usize, usize), usize>::new();
-    for (container, ruby) in data.ruby.containers.iter().enumerate().rev() {
+    for container in containers.into_iter().rev() {
+        let ruby = &data.ruby.containers[container];
         #[cfg(test)]
         {
             cx.ruby_measure_visits += 1;
@@ -245,6 +253,15 @@ pub(crate) fn candidate_inner(
             }
         }
         let heights: Vec<_> = lanes.iter().map(|l| l.block_size).collect();
+        let has_content =
+            !crate::line::metric_index::measure(data, units.clone(), atomics, cx, sat).empty
+                || heights.iter().any(|h| *h != LayoutUnit::ZERO)
+                || completed
+                    .range((units.start, 0)..(units.end, 0))
+                    .any(|(_, &i)| {
+                        let child = &measure.fragments[i];
+                        child.units.end <= units.end && child.has_content
+                    });
         let tracks = super::geometry::tracks(
             data,
             ruby,
@@ -254,6 +271,7 @@ pub(crate) fn candidate_inner(
             &geometry.contents,
             &right_columns,
             &heights,
+            has_content,
             sat,
         );
         let sides = super::geometry::level_sides(data, ruby);
@@ -370,6 +388,7 @@ pub(crate) fn candidate_inner(
             adjustment,
             whole_area: tracks.whole,
             contribution: tracks.contribution,
+            has_content,
         });
     }
     if through > end {

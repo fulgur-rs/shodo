@@ -3,7 +3,7 @@ use crate::limits::{LimitExceeded, LimitKind, Limits};
 use crate::paragraph::ParagraphData;
 
 #[derive(Clone, Copy, Default)]
-struct Cost {
+pub(super) struct Cost {
     text: u64,
     items: u64,
     styles: u64,
@@ -11,7 +11,7 @@ struct Cost {
 }
 
 impl Cost {
-    fn get(self, kind: LimitKind) -> u64 {
+    pub(super) fn get(self, kind: LimitKind) -> u64 {
         match kind {
             LimitKind::TextBytes => self.text,
             LimitKind::Items => self.items,
@@ -20,7 +20,7 @@ impl Cost {
             _ => 0,
         }
     }
-    fn add(&mut self, kind: LimitKind, amount: u64) {
+    pub(super) fn add(&mut self, kind: LimitKind, amount: u64) {
         let value = match kind {
             LimitKind::TextBytes => &mut self.text,
             LimitKind::Items => &mut self.items,
@@ -35,6 +35,16 @@ impl Cost {
 struct Scope {
     limits: Limits,
     start: Cost,
+    initial: Cost,
+}
+
+impl Scope {
+    fn used(&self, spent: Cost, kind: LimitKind) -> u64 {
+        spent
+            .get(kind)
+            .saturating_sub(self.start.get(kind))
+            .saturating_add(self.initial.get(kind))
+    }
 }
 
 /// Each nested input keeps its own limits while sharing every ancestor's cap.
@@ -44,7 +54,7 @@ pub(crate) struct RubyBudget {
     scopes: Vec<Scope>,
 }
 
-fn limit(limits: &Limits, kind: LimitKind) -> Option<u64> {
+pub(super) fn limit(limits: &Limits, kind: LimitKind) -> Option<u64> {
     match kind {
         LimitKind::TextBytes => limits.max_text_bytes,
         LimitKind::Items => limits.max_items,
@@ -70,6 +80,7 @@ impl RubyBudget {
             self.scopes.push(Scope {
                 limits: limits.clone(),
                 start: self.spent,
+                initial: Cost::default(),
             });
         }
     }
@@ -77,6 +88,28 @@ impl RubyBudget {
         if self.enabled {
             self.scopes.pop();
         }
+    }
+
+    pub(super) fn resume(&mut self, limits: &Limits, initial: Cost) {
+        debug_assert!(self.enabled);
+        self.scopes.push(Scope {
+            limits: limits.clone(),
+            start: self.spent,
+            initial,
+        });
+    }
+    pub(super) fn finish_scope(&mut self) -> Cost {
+        let scope = self.scopes.pop().expect("resumed base scope");
+        let mut used = Cost::default();
+        for kind in [
+            LimitKind::TextBytes,
+            LimitKind::Items,
+            LimitKind::Styles,
+            LimitKind::ShapedGlyphs,
+        ] {
+            used.add(kind, scope.used(self.spent, kind));
+        }
+        used
     }
 
     pub(crate) fn remaining(&self, original: &Limits) -> Limits {
@@ -89,8 +122,7 @@ impl RubyBudget {
         ] {
             for scope in &self.scopes {
                 if let Some(cap) = limit(&scope.limits, kind) {
-                    let available = cap
-                        .saturating_sub(self.spent.get(kind).saturating_sub(scope.start.get(kind)));
+                    let available = cap.saturating_sub(scope.used(self.spent, kind));
                     *value = Some(value.map_or(available, |current| current.min(available)));
                 }
             }
@@ -101,10 +133,7 @@ impl RubyBudget {
     pub(crate) fn translate(&self, mut error: LimitExceeded) -> LimitExceeded {
         for scope in self.scopes.iter().rev() {
             if let Some(cap) = limit(&scope.limits, error.kind) {
-                let used = self
-                    .spent
-                    .get(error.kind)
-                    .saturating_sub(scope.start.get(error.kind));
+                let used = scope.used(self.spent, error.kind);
                 if cap.saturating_sub(used) == error.limit {
                     error.limit = cap;
                     error.actual = error.actual.saturating_add(used);
@@ -117,7 +146,7 @@ impl RubyBudget {
 
     pub(crate) fn check(&self, kind: LimitKind, amount: u64) -> Result<(), LimitExceeded> {
         for scope in self.scopes.iter().rev() {
-            let used = self.spent.get(kind).saturating_sub(scope.start.get(kind));
+            let used = scope.used(self.spent, kind);
             Limits::check(
                 limit(&scope.limits, kind),
                 kind,

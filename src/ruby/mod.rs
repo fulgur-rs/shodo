@@ -1,5 +1,6 @@
 //! Source-preserving CSS ruby input and formatting.
 pub(crate) mod align;
+pub(crate) mod base_budget;
 pub(crate) mod budget;
 pub(crate) mod builder;
 pub(crate) mod cuts;

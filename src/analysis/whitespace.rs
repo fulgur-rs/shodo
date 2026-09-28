@@ -34,7 +34,7 @@ pub(crate) fn process(
     with_mapping: bool,
     limits: &Limits,
 ) -> Result<Processed, LimitExceeded> {
-    process_in_context(raw_text, raw, styles, with_mapping, limits, false)
+    process_in_context(raw_text, raw, styles, with_mapping, limits, false, None)
 }
 
 pub(crate) fn process_annotation(
@@ -44,7 +44,33 @@ pub(crate) fn process_annotation(
     with_mapping: bool,
     limits: &Limits,
 ) -> Result<Processed, LimitExceeded> {
-    process_in_context(raw_text, raw, styles, with_mapping, limits, true)
+    process_in_context(raw_text, raw, styles, with_mapping, limits, true, None)
+}
+
+pub(crate) fn process_with_base_scopes(
+    raw_text: &str,
+    raw: &[RawItem],
+    styles: &[InlineStyle],
+    with_mapping: bool,
+    limits: &Limits,
+    annotation: bool,
+    bases: &mut crate::ruby::base_budget::BaseScopes,
+) -> Result<Processed, LimitExceeded> {
+    if bases.enabled() {
+        process_in_context(
+            raw_text,
+            raw,
+            styles,
+            with_mapping,
+            limits,
+            annotation,
+            Some(bases),
+        )
+    } else if annotation {
+        process_annotation(raw_text, raw, styles, with_mapping, limits)
+    } else {
+        process(raw_text, raw, styles, with_mapping, limits)
+    }
 }
 
 fn process_in_context(
@@ -54,6 +80,7 @@ fn process_in_context(
     with_mapping: bool,
     limits: &Limits,
     annotation: bool,
+    bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
 ) -> Result<Processed, LimitExceeded> {
     let flags = if annotation {
         super::whitespace_context::flags_in_context(raw_text, raw, styles, true)
@@ -84,8 +111,12 @@ fn process_in_context(
         limits,
         styles,
         annotation,
+        bases,
     };
     for item in raw {
+        if let Some(bases) = &mut p.bases {
+            bases.before_raw(item);
+        }
         match item {
             RawItem::RubyBoundary {
                 ruby,
@@ -95,7 +126,7 @@ fn process_in_context(
             } => {
                 p.check_item()?;
                 let at = p.pos();
-                p.items.push(Item {
+                p.push_item(Item {
                     kind: ItemKind::RubyBoundary {
                         ruby: *ruby,
                         boundary: *boundary,
@@ -103,7 +134,7 @@ fn process_in_context(
                     text: at..at,
                     style: *style,
                     node: *node,
-                });
+                })?;
             }
             RawItem::Text {
                 source,
@@ -168,6 +199,9 @@ fn process_in_context(
                 p.after_space = true;
             }
         }
+        if let Some(bases) = &mut p.bases {
+            bases.after_raw(item);
+        }
     }
     Ok(Processed {
         width_origins: Vec::new(),
@@ -184,6 +218,7 @@ fn process_in_context(
 }
 
 struct Processor<'a> {
+    bases: Option<&'a mut crate::ruby::base_budget::BaseScopes>,
     annotation: bool,
     out: String,
     items: Vec<Item>,
@@ -215,7 +250,7 @@ impl Processor<'_> {
         Ok(())
     }
 
-    fn check_item(&self) -> Result<(), LimitExceeded> {
+    fn check_item(&mut self) -> Result<(), LimitExceeded> {
         Limits::check(
             Some(u64::from(u32::MAX)),
             LimitKind::Items,
@@ -225,12 +260,26 @@ impl Processor<'_> {
             self.limits.max_items,
             LimitKind::Items,
             self.items.len() as u64 + 1,
-        )
+        )?;
+        if let Some(bases) = &mut self.bases {
+            bases.check_current_item()?;
+        }
+        Ok(())
+    }
+    fn push_item(&mut self, item: Item) -> Result<(), LimitExceeded> {
+        if let Some(bases) = &mut self.bases {
+            bases.record_item()?;
+        }
+        self.items.push(item);
+        Ok(())
     }
     fn append(&mut self, c: char) -> Result<(), LimitExceeded> {
         let len = (self.out.len() as u64).saturating_add(c.len_utf8() as u64);
         Limits::check(Some(u64::from(u32::MAX)), LimitKind::TextBytes, len)?;
         Limits::check(self.limits.max_text_bytes, LimitKind::TextBytes, len)?;
+        if let Some(bases) = &mut self.bases {
+            bases.transient_text(c.len_utf8() as u64)?;
+        }
         self.out.push(c);
         Ok(())
     }
@@ -241,12 +290,12 @@ impl Processor<'_> {
     fn marker(&mut self, kind: ItemKind, style: u32, node: NodeId) -> Result<(), LimitExceeded> {
         self.check_item()?;
         let at = self.pos();
-        self.items.push(Item {
+        self.push_item(Item {
             kind,
             text: at..at,
             style,
             node: Some(node),
-        });
+        })?;
         Ok(())
     }
 
@@ -264,12 +313,12 @@ impl Processor<'_> {
         if let Some(m) = &mut self.mapping {
             m.push_generated(text.clone(), node);
         }
-        self.items.push(Item {
+        self.push_item(Item {
             kind,
             text,
             style,
             node: Some(node),
-        });
+        })?;
         Ok(())
     }
 
@@ -350,12 +399,12 @@ impl Processor<'_> {
                 let start = self.pos();
                 self.append(c)?;
                 self.map(MappingKind::Identity, node, dom, len, start..self.pos());
-                self.items.push(Item {
+                self.push_item(Item {
                     kind: kind.clone(),
                     text: start..self.pos(),
                     style: style_index,
                     node: Some(node),
-                });
+                })?;
                 self.after_space = matches!(kind, ItemKind::ForcedBreak);
                 if matches!(kind, ItemKind::ForcedBreak) {
                     self.open_bidi_scopes()?;
@@ -403,12 +452,12 @@ impl Processor<'_> {
             let end = self.pos();
             if end > start {
                 self.check_item()?;
-                self.items.push(Item {
+                self.push_item(Item {
                     kind: ItemKind::Text,
                     text: start..end,
                     style,
                     node: Some(node),
-                });
+                })?;
             }
         }
         Ok(())

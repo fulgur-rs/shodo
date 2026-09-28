@@ -273,5 +273,11 @@ pub(crate) fn format(
     }
     line.baseline = line.baseline.add(layout.shift, sat);
     line.block_size = layout.advance;
+    if annotations
+        .iter()
+        .any(|a| a.visibility == super::RubyVisibility::Visible && !a.line.is_empty())
+    {
+        line.empty = false;
+    }
     line.ruby = annotations;
 }

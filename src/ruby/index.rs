@@ -1,7 +1,7 @@
 //! Source-safe unit opportunities, indexed once before monotone lane matching.
 use super::budget::RubyBudget;
 use super::cuts::{self, LaneSpan, SafeCut};
-use super::prepare::{PreparedBase, PreparedLane, PreparedRuby};
+use super::prepare::{PreparedBase, PreparedLane, PreparedRuby, RubyData};
 use crate::analysis::units::{BreakClass, UnitKind};
 use crate::limits::{LimitExceeded, LimitKind};
 use crate::paragraph::ParagraphData;
@@ -238,9 +238,11 @@ pub(super) fn prepare_cuts(
     data: &mut ParagraphData,
     containers: &mut [PreparedRuby],
     budget: &mut RubyBudget,
+    normal: Option<(&RubyData, &[Option<u32>])>,
+    bases: &mut super::base_budget::BaseScopes,
 ) -> Result<(), LimitExceeded> {
     let mut index = Index::new(data);
-    for ruby in containers.iter_mut().rev() {
+    for (container, ruby) in containers.iter_mut().enumerate().rev() {
         let origin = index.ordinals[ruby.units.start];
         let spans: Vec<_> = ruby
             .lanes
@@ -270,12 +272,44 @@ pub(super) fn prepare_cuts(
             })
             .collect();
         // Count the exact retained table before allocating its lane-cell product.
-        let count = cuts::count_spanned(&base, &lanes, &spans);
+        let count = if let Some((normal, cursors)) = normal {
+            let mut count = 0;
+            source_matched_cuts(
+                &base,
+                &lanes,
+                &normal.containers[container],
+                cursors,
+                |_, _, _| count += 1,
+            );
+            count
+        } else {
+            cuts::count_spanned(&base, &lanes, &spans)
+        };
+        bases.container(
+            container,
+            (count as u64).saturating_mul(1 + lanes.len() as u64),
+        )?;
         budget.charge(
             LimitKind::Items,
             (count as u64).saturating_mul(1 + lanes.len() as u64),
         )?;
-        ruby.cuts = if spans
+        ruby.cuts = if let Some((normal, cursors)) = normal {
+            let mut paired = Vec::with_capacity(count);
+            source_matched_cuts(
+                &base,
+                &lanes,
+                &normal.containers[container],
+                cursors,
+                |unit, lanes, class| {
+                    paired.push(cuts::PairedCut {
+                        unit,
+                        lanes: lanes.to_vec(),
+                        class,
+                    });
+                },
+            );
+            paired
+        } else if spans
             .iter()
             .all(|s| s.units == ruby.units && s.ordinals.start == 0)
         {
@@ -320,4 +354,155 @@ pub(super) fn prepare_cuts(
         }
     }
     Ok(())
+}
+
+/// The parent token cannot retain independent progress for every reading.
+/// Therefore an alternate cut must consume exactly the sources identified by
+/// the corresponding normal cut, with safe boundaries in both shaped sets.
+fn source_matched_cuts(
+    bases: &[SafeCut],
+    alternate_lanes: &[Vec<SafeCut>],
+    normal: &PreparedRuby,
+    parent_cursors: &[Option<u32>],
+    mut emit: impl FnMut(usize, &[usize], BreakClass),
+) {
+    let mut selected = Vec::with_capacity(alternate_lanes.len());
+    let mut previous = None;
+    for base in bases {
+        visit();
+        let Some(normal_unit) = parent_cursors.get(base.unit).copied().flatten() else {
+            continue;
+        };
+        let index = normal
+            .cuts
+            .partition_point(|cut| cut.unit < normal_unit as usize);
+        let Some(cut) = normal
+            .cuts
+            .get(index)
+            .filter(|cut| cut.unit == normal_unit as usize)
+        else {
+            continue;
+        };
+        if previous == Some(index) {
+            continue;
+        }
+        selected.clear();
+        let mut class = base.class;
+        for (lane, opportunities) in alternate_lanes.iter().enumerate() {
+            visit();
+            let child = &normal.lanes[lane].paragraph.data;
+            let unit = if let Some(first) = &child.first_line {
+                let Some(unit) = first.alternate_cursor(cut.lanes[lane] as u32) else {
+                    break;
+                };
+                unit
+            } else {
+                cut.lanes[lane]
+            };
+            let index = opportunities.partition_point(|cut| cut.unit < unit);
+            let Some(safe) = opportunities.get(index).filter(|cut| cut.unit == unit) else {
+                break;
+            };
+            selected.push(unit);
+            class = cuts::combined(class, safe.class);
+        }
+        if selected.len() == alternate_lanes.len() {
+            emit(base.unit, &selected, class);
+            previous = Some(index);
+        }
+    }
+}
+
+/// Preorder source intervals, augmented with each subtree's furthest end.
+/// Unlike a flat start search this keeps ancestors crossing a continuation,
+/// and unlike a paragraph scan it skips unrelated siblings in logarithmic work.
+#[derive(Default)]
+pub(crate) struct ContainerIndex {
+    ends: Vec<usize>,
+    leaves: usize,
+}
+
+impl ContainerIndex {
+    pub(crate) fn new(
+        containers: &[PreparedRuby],
+        budget: &mut RubyBudget,
+        bases: &mut super::base_budget::BaseScopes,
+    ) -> Result<Self, LimitExceeded> {
+        if containers.is_empty() {
+            return Ok(Self::default());
+        }
+        debug_assert!(
+            containers
+                .windows(2)
+                .all(|pair| pair[0].units.start <= pair[1].units.start)
+        );
+        let leaves = containers.len().next_power_of_two();
+        budget.charge(LimitKind::Items, (leaves as u64).saturating_mul(2))?;
+        bases.index(containers.len(), leaves)?;
+        let mut ends = vec![0; leaves * 2];
+        for (i, ruby) in containers.iter().enumerate() {
+            visit();
+            ends[leaves + i] = ruby.units.end;
+        }
+        for i in (1..leaves).rev() {
+            visit();
+            ends[i] = ends[i * 2].max(ends[i * 2 + 1]);
+        }
+        Ok(Self { ends, leaves })
+    }
+
+    /// Visit intersecting containers in structural order. The callback may
+    /// extend `through` to the next legal paired endpoint; later siblings use
+    /// that new bound, preserving the candidate look-ahead contract.
+    pub(crate) fn intersecting(
+        &self,
+        containers: &[PreparedRuby],
+        start: usize,
+        through: &mut usize,
+        mut emit: impl FnMut(usize, &mut usize),
+    ) {
+        if self.leaves == 0 || start >= *through {
+            return;
+        }
+        self.walk(containers, 1, 0..self.leaves, start, through, &mut emit);
+    }
+
+    fn walk(
+        &self,
+        containers: &[PreparedRuby],
+        node: usize,
+        range: Range<usize>,
+        start: usize,
+        through: &mut usize,
+        emit: &mut impl FnMut(usize, &mut usize),
+    ) {
+        visit();
+        if self.ends[node] <= start
+            || range.start >= containers.len()
+            || containers[range.start].units.start >= *through
+        {
+            return;
+        }
+        if range.len() == 1 {
+            emit(range.start, through);
+        } else {
+            let middle = range.start + range.len() / 2;
+            self.walk(
+                containers,
+                node * 2,
+                range.start..middle,
+                start,
+                through,
+                emit,
+            );
+            self.walk(
+                containers,
+                node * 2 + 1,
+                middle..range.end,
+                start,
+                through,
+                emit,
+            );
+        }
+    }
 }

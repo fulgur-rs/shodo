@@ -2064,6 +2064,61 @@ fn many_structural_columns_and_containers_measure_actual_output_with_bounded_wor
 }
 
 #[test]
+fn sequential_lines_do_not_rescan_every_independent_ruby_container() {
+    // Whole-paragraph measurement cannot detect a full scan on every short line.
+    let mut visits = Vec::new();
+    for count in [512, 1024] {
+        let mut b = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: style(24.0),
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        for i in 0..count {
+            b.push_ruby(
+                NodeId(1000 + i as u64),
+                &style(24.0),
+                ruby(base("日"), "にほん"),
+            );
+        }
+        crate::ruby::index::take_visits();
+        let p = b.build(&mut LayoutContext::new(), &fonts()).unwrap();
+        let mut cx = LayoutContext::new();
+        let lines = p.break_all(&mut cx, &Default::default(), 360.0, &AtomicSizes::EMPTY);
+        let mut base_glyphs = 0;
+        let mut reading_glyphs = 0;
+        for line in &lines {
+            for fragment in line.fragments() {
+                if let crate::Fragment::GlyphRun(run) = fragment {
+                    base_glyphs += run.glyphs().len();
+                    assert!(run.glyphs().all(|g| g.id != 0));
+                }
+            }
+            for annotation in line.ruby_annotations() {
+                for fragment in annotation.line().fragments() {
+                    if let crate::Fragment::GlyphRun(run) = fragment {
+                        reading_glyphs += run.glyphs().len();
+                        assert!(run.glyphs().all(|g| g.id != 0));
+                    }
+                }
+            }
+        }
+        assert_eq!((base_glyphs, reading_glyphs), (count, count * 3));
+        assert!(
+            lines.len() >= count / 12,
+            "fixed width produces real continuations"
+        );
+        assert!(cx.take_warnings().is_empty());
+        visits.push(cx.ruby_measure_visits + crate::ruby::index::take_visits());
+    }
+    assert!(
+        visits[1] <= visits[0] * 3,
+        "twice the independent ruby input must not cause quadratic sequential candidate work: {visits:?}"
+    );
+}
+
+#[test]
 fn clipped_nested_bases_keep_every_completed_fragment_at_the_same_source_start() {
     let mut inner = ParagraphBuilder::new(
         &ParagraphStyle {

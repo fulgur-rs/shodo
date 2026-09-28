@@ -56,7 +56,7 @@ fn next_mandatory(lane: &[SafeCut], after: usize) -> usize {
     index
 }
 
-fn combined(a: BreakClass, b: BreakClass) -> BreakClass {
+pub(super) fn combined(a: BreakClass, b: BreakClass) -> BreakClass {
     if a == BreakClass::Mandatory || b == BreakClass::Mandatory {
         BreakClass::Mandatory
     } else if a == BreakClass::Emergency || b == BreakClass::Emergency {
