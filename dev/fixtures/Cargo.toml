@@ -54,3 +54,7 @@ test = true
 [[example]]
 name = "ch_units"
 test = true
+
+[[example]]
+name = "raikiri_contracts"
+test = true
