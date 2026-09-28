@@ -9,6 +9,7 @@ mod transform_context;
 pub(crate) mod units;
 pub(crate) mod whitespace;
 mod whitespace_context;
+mod width;
 
 use std::ops::Range;
 

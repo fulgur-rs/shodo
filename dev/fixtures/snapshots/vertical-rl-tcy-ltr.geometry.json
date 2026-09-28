@@ -4,7 +4,7 @@
   "combinations": [
     {
       "block_size": 20.0,
-      "block_start": 12.71875,
+      "block_start": 4.0,
       "end": 10,
       "inline_size": 20.0,
       "inline_start": 40.0,
@@ -15,7 +15,7 @@
   "glyphs": [
     {
       "advance": 20.0,
-      "baseline": 22.71875,
+      "baseline": 14.0,
       "block_offset": 10.0,
       "cluster": 0,
       "coords": [],
@@ -27,7 +27,7 @@
       "orientation": "Upright",
       "owner": 1,
       "physical_origin": [
-        469.28125,
+        478.0,
         27.59375
       ],
       "size": 20.0,
@@ -41,7 +41,7 @@
     },
     {
       "advance": 20.0,
-      "baseline": 22.71875,
+      "baseline": 14.0,
       "block_offset": 10.0,
       "cluster": 3,
       "coords": [],
@@ -53,7 +53,7 @@
       "orientation": "Upright",
       "owner": 1,
       "physical_origin": [
-        469.28125,
+        478.0,
         47.59375
       ],
       "size": 20.0,
@@ -67,7 +67,7 @@
     },
     {
       "advance": 11.09375,
-      "baseline": 22.71875,
+      "baseline": 14.0,
       "block_offset": 10.0,
       "cluster": 6,
       "coords": [],
@@ -79,7 +79,7 @@
       "orientation": "Combined",
       "owner": 3,
       "physical_origin": [
-        469.28125,
+        478.0,
         68.72000122070312
       ],
       "size": 20.0,
@@ -93,7 +93,7 @@
     },
     {
       "advance": 11.09375,
-      "baseline": 22.71875,
+      "baseline": 14.0,
       "block_offset": 5.0,
       "cluster": 7,
       "coords": [],
@@ -105,7 +105,7 @@
       "orientation": "Combined",
       "owner": 3,
       "physical_origin": [
-        474.28125,
+        483.0,
         68.72000122070312
       ],
       "size": 20.0,
@@ -119,7 +119,7 @@
     },
     {
       "advance": 11.09375,
-      "baseline": 22.71875,
+      "baseline": 14.0,
       "block_offset": -0.0,
       "cluster": 8,
       "coords": [],
@@ -131,7 +131,7 @@
       "orientation": "Combined",
       "owner": 4,
       "physical_origin": [
-        479.28125,
+        488.0,
         68.72000122070312
       ],
       "size": 20.0,
@@ -145,7 +145,7 @@
     },
     {
       "advance": 11.09375,
-      "baseline": 22.71875,
+      "baseline": 14.0,
       "block_offset": -5.0,
       "cluster": 9,
       "coords": [],
@@ -157,7 +157,7 @@
       "orientation": "Combined",
       "owner": 4,
       "physical_origin": [
-        484.28125,
+        493.0,
         68.72000122070312
       ],
       "size": 20.0,
@@ -171,7 +171,7 @@
     },
     {
       "advance": 20.0,
-      "baseline": 22.71875,
+      "baseline": 14.0,
       "block_offset": 10.0,
       "cluster": 10,
       "coords": [],
@@ -183,7 +183,7 @@
       "orientation": "Upright",
       "owner": 5,
       "physical_origin": [
-        469.28125,
+        478.0,
         87.59375
       ],
       "size": 20.0,
@@ -235,7 +235,7 @@
       "orientation": "SidewaysClockwise",
       "owner": 5,
       "physical_origin": [
-        442.546875,
+        451.28125,
         10.0
       ],
       "size": 20.0,
@@ -261,7 +261,7 @@
       "orientation": "SidewaysClockwise",
       "owner": 5,
       "physical_origin": [
-        442.546875,
+        451.28125,
         22.15625
       ],
       "size": 20.0,
@@ -275,7 +275,7 @@
     },
     {
       "advance": 20.0,
-      "baseline": 22.71875,
+      "baseline": 14.0,
       "block_offset": 10.0,
       "cluster": 16,
       "coords": [],
@@ -287,7 +287,7 @@
       "orientation": "Upright",
       "owner": 5,
       "physical_origin": [
-        432.546875,
+        450.0,
         50.796875
       ],
       "size": 20.0,
@@ -303,7 +303,7 @@
   "height_rejections": 0,
   "inline_boxes": [
     {
-      "block_start": -0.4812488555908203,
+      "block_start": -9.19999885559082,
       "end_edge": true,
       "height": 28.959999084472656,
       "inline_start": 40.0,
@@ -316,18 +316,18 @@
   ],
   "lines": [
     {
-      "baseline": 22.71875,
+      "baseline": 14.0,
       "block_offset": 0.0,
-      "block_size": 36.734375,
+      "block_size": 28.0,
       "end": 14,
       "inline_size": 80.0,
       "page": 0,
       "start": 0
     },
     {
-      "baseline": 22.71875,
-      "block_offset": 36.734375,
-      "block_size": 36.734375,
+      "baseline": 14.0,
+      "block_offset": 28.0,
+      "block_size": 28.0,
       "end": 19,
       "inline_size": 43.203125,
       "page": 0,

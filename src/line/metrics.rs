@@ -96,11 +96,28 @@ fn box_shift(
             style_metrics.vertical_metrics,
             upright,
         );
+        // A central inline and an alphabetic inline share the selected
+        // baseline, rather than placing their different origins at zero.
+        let horizontal_center =
+            (style_metrics.metrics.ascent - style_metrics.metrics.descent) / 2.0;
+        let dominant_shift = match (parent_upright, upright) {
+            (true, false) => horizontal_center,
+            (false, true) => -horizontal_center,
+            _ => 0.0,
+        };
         let group = value.1.or_else(|| {
             matches!(s.vertical_align, VerticalAlign::Top | VerticalAlign::Bottom).then_some(index)
         });
         value = (
-            value.0 + shift(s, data.style_metrics[parent_style], parent_upright, a, d),
+            value.0
+                + dominant_shift
+                + shift(
+                    s,
+                    data.style_metrics[parent_style],
+                    parent_upright,
+                    a - dominant_shift,
+                    d + dominant_shift,
+                ),
             group,
         );
         cache.insert(index, value);
@@ -203,6 +220,19 @@ pub(crate) fn measure(
                 let center_shift =
                     if shaped.orientation == crate::shape::orientation::RunOrientation::Combined {
                         data.combine_center_shift(data.items[*item as usize].style)
+                    } else if shaped.orientation
+                        == crate::shape::orientation::RunOrientation::SidewaysClockwise
+                        && matches!(
+                            data.style.writing_mode,
+                            crate::geometry::WritingMode::VerticalRl
+                                | crate::geometry::WritingMode::VerticalLr
+                        )
+                        && s.text_orientation != crate::style::TextOrientation::Sideways
+                    {
+                        // Mixed selects a central baseline even for its
+                        // horizontally shaped, clockwise glyphs. Convert the
+                        // actual fallback instance's alphabetic origin once.
+                        (metrics.ascent - metrics.descent) / 2.0
                     } else {
                         0.0
                     };

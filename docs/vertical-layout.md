@@ -40,6 +40,12 @@ both vertical modes, so vertical-lr baseline displacements have the opposite
 logical block sign. `Line::metrics` exposes text-over/under positions, and
 `Line::baseline(BaselineKind::Central)` exposes the central baseline.
 
+Mixed text aligns clockwise Latin runs by converting their actual horizontal
+font metrics from an alphabetic origin to the central baseline. Inline changes
+between mixed and sideways also convert the selected baseline once; text-edge
+alignment uses the converted extents. Horizontal and sideways writing modes
+retain their alphabetic baseline behavior.
+
 ## Combined text
 
 `TextCombineUpright::All` creates a horizontal composition in vertical-rl/lr.
@@ -49,6 +55,11 @@ compression and positioning within the square. Internal tracking and forced
 breaks are ignored, while word spacing and preserved tab stops participate in
 the horizontal composition. The composition is indivisible for line breaking;
 source ownership, caret cuts and selection remain available inside it.
+
+For multiple typographic units, fullwidth forms are narrowed before compression,
+including directly authored fullwidth text and voiced Katakana. A single unit
+keeps its fullwidth form. Shaping uses Unicode 16.0 inverse width mappings while
+`Line::text()` and the processed/source byte ranges retain the original text.
 
 `Line::text_combinations()` returns each processed source range and its logical
 square once, including compositions consisting only of preserved tabs. Add

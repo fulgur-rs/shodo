@@ -58,6 +58,8 @@ run出力には元のhorizontal FontMetricsと必要なvertical metricsを区別
 直立・縦中横のline boxはcentralを支配baselineとする。
 fontにbaseline情報がない場合はemの左右中心を合成する。
 sidewaysは水平ascent/descentを回転して利用する。
+Mixedのsideways runは実instanceの水平central/alphabetic差をoriginと測定へ適用する。
+inlineのMixed/Sideways境界でも支配baselineを一度だけ変換し、text-edge揃えは変換後extentsを使う。
 親子のbaseline合わせ、異なるfont/size、line-height、inline padding/border、
 top/bottom/text-top/text-bottom/middle/sub/super/lengthを論理block軸で一貫して処理する。
 VerticalLrではline-overとblock-startが逆になるため、shiftとextentsの対応を明示的に切り替える。
@@ -82,7 +84,8 @@ glyph ownershipを保持し、外部advanceは最後のpartへ一度だけ割り
 2/3/4 typographic unitsでfontの全対象文字にhwid/twid/qwid代替がある場合は利用する。
 部分coverageしかない場合に一部だけを置換して成功扱いにしない。
 不足する圧縮は水平scale=min(1, em/自然幅)、短い内容は水平中央へ配置する。
-複数文字のfullwidth変換は圧縮前に逆変換し、source offset mapは維持する。
+複数typographic unitのfullwidth形式は作者入力と変換履歴にかかわらず圧縮前に逆変換する。
+UnicodeData16.0のwide/narrow mappingと濁点kanaのcanonical分解を使い、processed textとsource offset mapは維持する。
 central squareの中に水平glyphを配置し、markの相対位置も同じscaleで変換する。
 
 共有GlyphStoreは元のshaping advanceを保つ。compositionのlayout advanceは1emであり、

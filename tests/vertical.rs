@@ -632,7 +632,161 @@ fn mixed_vertical_line_keeps_distinct_font_instances_and_metrics() {
         glyphs(&line).iter().map(|g| g.advance).collect::<Vec<_>>(),
         vec![16.0, 12.78125]
     );
-    assert!(line.block_size() >= 29.375);
+    // Latin hhea/OS2 extents 1069/293 units at UPEM1000 and size20.
+    // Centering gives 27.24px, rounded outward to 27.25px.
+    assert_eq!(line.block_size(), 27.25);
+    assert_eq!(runs[1].baseline() - runs[0].baseline(), 7.765625);
+}
+
+#[test]
+fn mixed_sideways_baseline_and_selection_share_the_central_axis() {
+    for (mode, sign, selection_start) in [
+        (WritingMode::VerticalRl, 1.0, -0.013125),
+        (WritingMode::VerticalLr, -1.0, 0.017),
+    ] {
+        let mut s = style(mode, TextOrientation::Mixed);
+        s.root.text_autospace = shodo::style::TextAutospace::NoAutospace;
+        let p = paragraph(&s, "水A");
+        let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        let runs = line
+            .fragments()
+            .filter_map(|f| match f {
+                Fragment::GlyphRun(r) => Some(r),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        // CJK hhea ascent/descent are1160/288 units; (18.56-4.608)/2
+        // is6.976px, quantized to6.96875. vhea is symmetric8/8.
+        assert_eq!(
+            runs[1].baseline() - runs[0].baseline(),
+            sign * 6.96875,
+            "{mode:?}"
+        );
+        assert_eq!(line.block_size(), 23.171875);
+        assert_eq!(runs[0].baseline(), line.baseline(BaselineKind::Central));
+        let lines = [line];
+        let rects = LineLayout::new(&lines).selection_rects(
+            TextPosition {
+                line: 0,
+                offset: 3,
+                affinity: Affinity::Downstream,
+            },
+            TextPosition {
+                line: 0,
+                offset: 4,
+                affinity: Affinity::Upstream,
+            },
+        );
+        assert_eq!(rects.len(), 1);
+        // Baseline and shift round independently; line width rounds outward.
+        // RL:11.578125+6.96875-18.56. LR:11.59375-6.96875-4.608.
+        assert!(
+            (rects[0].block_start - selection_start).abs() < 1e-5,
+            "{mode:?} {rects:?}"
+        );
+        assert!(
+            (rects[0].block_size - 23.168).abs() < 1.0 / 64.0,
+            "{mode:?} {rects:?}"
+        );
+    }
+}
+
+#[test]
+fn mixed_and_sideways_inline_boundaries_convert_the_dominant_baseline_once() {
+    for (mode, sign) in [
+        (WritingMode::VerticalRl, 1.0),
+        (WritingMode::VerticalLr, -1.0),
+    ] {
+        for root_orientation in [TextOrientation::Mixed, TextOrientation::Sideways] {
+            let root = style(mode, root_orientation);
+            let mut child = root.root.clone();
+            child.text_orientation = if root_orientation == TextOrientation::Mixed {
+                TextOrientation::Sideways
+            } else {
+                TextOrientation::Mixed
+            };
+            let p = build_paragraph(&root, &Limits::default(), |b| {
+                b.push_text(
+                    TextSource::Generated { node: NodeId(1) },
+                    if root_orientation == TextOrientation::Mixed {
+                        "水"
+                    } else {
+                        "A"
+                    },
+                );
+                b.open_inline(NodeId(2), &child, InlineEdges::default());
+                b.push_text(
+                    TextSource::Generated { node: NodeId(3) },
+                    if root_orientation == TextOrientation::Mixed {
+                        "A"
+                    } else {
+                        "水A"
+                    },
+                );
+                b.close_inline();
+            });
+            let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+            let runs = line
+                .fragments()
+                .filter_map(|f| match f {
+                    Fragment::GlyphRun(r) => Some(r),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            if root_orientation == TextOrientation::Mixed {
+                assert_eq!(
+                    runs[1].baseline() - runs[0].baseline(),
+                    sign * 6.96875,
+                    "{mode:?}"
+                );
+            } else {
+                assert_eq!(
+                    runs[1].baseline() - runs[0].baseline(),
+                    -sign * 6.96875,
+                    "{mode:?}"
+                );
+                assert_eq!(runs[2].baseline(), runs[0].baseline());
+            }
+        }
+    }
+}
+
+#[test]
+fn mixed_sideways_text_edge_alignment_uses_converted_extents() {
+    for (mode, sign) in [
+        (WritingMode::VerticalRl, 1.0),
+        (WritingMode::VerticalLr, -1.0),
+    ] {
+        for (alignment, displacement) in [
+            (VerticalAlign::TextTop, 10.5625),
+            (VerticalAlign::TextBottom, 3.390625),
+        ] {
+            let root = style(mode, TextOrientation::Mixed);
+            let mut child = root.root.clone();
+            child.text_orientation = TextOrientation::Sideways;
+            child.vertical_align = alignment;
+            let p = build_paragraph(&root, &Limits::default(), |b| {
+                b.push_text(TextSource::Generated { node: NodeId(1) }, "水")
+                    .open_inline(NodeId(2), &child, InlineEdges::default())
+                    .push_text(TextSource::Generated { node: NodeId(3) }, "A")
+                    .close_inline();
+            });
+            let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+            let runs = line
+                .fragments()
+                .filter_map(|f| match f {
+                    Fragment::GlyphRun(r) => Some(r),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            // TextTop uses18.56-8=10.56, TextBottom8-4.608=3.392.
+            assert_eq!(
+                runs[1].baseline() - runs[0].baseline(),
+                sign * displacement,
+                "{mode:?}/{alignment:?}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -1360,7 +1514,7 @@ fn combine_all_ignores_internal_letter_spacing() {
 }
 
 #[test]
-fn combine_all_reverts_only_applied_fullwidth_for_multiple_characters() {
+fn combine_all_reverts_fullwidth_for_multiple_characters() {
     use shodo::style::TextTransform;
     for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
         let mut combined = style(mode, TextOrientation::Mixed);
@@ -1405,8 +1559,8 @@ fn combine_all_reverts_only_applied_fullwidth_for_multiple_characters() {
                 );
             }
         }
-        // Authored fullwidth characters retain their form; only the transform
-        // is reverted. One transformed character also retains its full width.
+        // Author input and transformed input use the same narrow forms.
+        // A single typographic unit keeps its fullwidth form.
         let authored = first_line(
             &paragraph(&combined, "１２"),
             100.0,
@@ -1419,7 +1573,7 @@ fn combine_all_reverts_only_applied_fullwidth_for_multiple_characters() {
             &LineOptions::default(),
             &AtomicSizes::EMPTY,
         );
-        assert_ne!(glyphs(&authored)[0].id, glyphs(&plain)[0].id);
+        assert_eq!(glyphs(&authored)[0].id, glyphs(&plain)[0].id);
         combined.root.text_transform = TextTransform::FullWidth;
         let single = first_line(
             &paragraph(&combined, "1"),
@@ -1427,7 +1581,68 @@ fn combine_all_reverts_only_applied_fullwidth_for_multiple_characters() {
             &LineOptions::default(),
             &AtomicSizes::EMPTY,
         );
-        assert_eq!(glyphs(&single)[0].id, glyphs(&authored)[0].id);
+        assert_eq!(glyphs(&single)[0].id, 694);
+    }
+}
+
+#[test]
+fn combine_all_authored_fullwidth_preserves_source_owners_and_byte_cuts() {
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let mut combined = style(mode, TextOrientation::Mixed);
+        combined.root.lang = None;
+        combined.root.text_combine_upright = TextCombineUpright::All;
+        combined.root.font_features = vec![FontFeature {
+            tag: *b"hwid",
+            value: 0,
+        }];
+        combined.root.text_autospace = shodo::style::TextAutospace::NoAutospace;
+        let p = build_paragraph(&combined, &Limits::default(), |b| {
+            b.push_text(
+                TextSource::Dom {
+                    node: NodeId(8),
+                    offset: 7,
+                },
+                "１",
+            )
+            .push_text(
+                TextSource::Dom {
+                    node: NodeId(9),
+                    offset: 9,
+                },
+                "２",
+            );
+        });
+        let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(line.text(), "１２");
+        assert_eq!(line.text_range(), 0..6);
+        assert_eq!(
+            glyphs(&line)
+                .iter()
+                .map(|g| (g.id, g.cluster))
+                .collect::<Vec<_>>(),
+            vec![(827, 0), (828, 3)]
+        );
+        let runs = line
+            .fragments()
+            .filter_map(|f| match f {
+                Fragment::GlyphRun(r) => Some(r),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            runs.iter().map(|r| r.node()).collect::<Vec<_>>(),
+            vec![Some(NodeId(8)), Some(NodeId(9))]
+        );
+        for run in &runs {
+            assert!((run.glyph_transform().block_x.abs() - 0.90140843).abs() < 1e-6);
+        }
+        let mapping = line.offset_mapping().unwrap();
+        for (text, node, offset) in [(0, NodeId(8), 7), (3, NodeId(9), 9)] {
+            assert_eq!(
+                mapping.text_to_dom(text, Affinity::Downstream),
+                Some(shodo::mapping::TextOrigin::Dom { node, offset })
+            );
+        }
     }
 }
 

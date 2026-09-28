@@ -357,6 +357,40 @@ pub(crate) fn itemize(
                             } else {
                                 (origin.text.start, origin.text.end)
                             };
+                            let (forms, count) = super::width::narrow(c);
+                            for c in forms.into_iter().take(count) {
+                                text.push(c);
+                                scalars.push(Scalar {
+                                    c,
+                                    offset,
+                                    end,
+                                    item: index as u32,
+                                    grapheme_start: false,
+                                });
+                                style_indices.push(item.style);
+                            }
+                        }
+                        while chars
+                            .peek()
+                            .is_some_and(|(at, _)| item.text.start + (*at as u32) < origin.text.end)
+                        {
+                            chars.next();
+                        }
+                    } else {
+                        let end = offset + c.len_utf8() as u32;
+                        let revert = combine.is_some_and(|i| revert_width[i]);
+                        // A decomposed voiced mark follows a narrowed Katakana
+                        // base. Leave marks on unrelated scripts unchanged.
+                        let narrow_mark = !matches!(c, '\u{3099}' | '\u{309a}')
+                            || scalars
+                                .last()
+                                .is_some_and(|s| matches!(s.c, '\u{ff66}'..='\u{ff9d}'));
+                        let (forms, count) = if revert && narrow_mark {
+                            super::width::narrow(c)
+                        } else {
+                            ([c, '\0'], 1)
+                        };
+                        for c in forms.into_iter().take(count) {
                             text.push(c);
                             scalars.push(Scalar {
                                 c,
@@ -367,22 +401,6 @@ pub(crate) fn itemize(
                             });
                             style_indices.push(item.style);
                         }
-                        while chars
-                            .peek()
-                            .is_some_and(|(at, _)| item.text.start + (*at as u32) < origin.text.end)
-                        {
-                            chars.next();
-                        }
-                    } else {
-                        text.push(c);
-                        scalars.push(Scalar {
-                            c,
-                            offset,
-                            end: offset + c.len_utf8() as u32,
-                            item: index as u32,
-                            grapheme_start: false,
-                        });
-                        style_indices.push(item.style);
                     }
                 }
             }
@@ -441,6 +459,60 @@ mod tests {
         let mut builder = ParagraphBuilder::new(style, &limits);
         add(&mut builder);
         builder.build(&mut LayoutContext::new(), &fonts).unwrap()
+    }
+
+    #[test]
+    fn authored_combined_width_forms_keep_original_scalar_ranges() {
+        use crate::style::TextCombineUpright;
+        for (text, expected) in [
+            ("ＡＢ", "AB"),
+            ("Ａ\u{3000}Ｂ", "A B"),
+            ("ガ12", "ｶﾞ12"),
+            ("カ\u{3099}12", "ｶﾞ12"),
+            ("パ12", "ﾊﾟ12"),
+            ("￦￡", "₩£"),
+            ("ㄱㄴ", "ﾡﾤ"),
+        ] {
+            let mut style = ParagraphStyle {
+                writing_mode: WritingMode::VerticalRl,
+                ..Default::default()
+            };
+            style.root.text_combine_upright = TextCombineUpright::All;
+            let p = build(&style, |b| {
+                b.push_text(TextSource::Generated { node: NodeId(1) }, text);
+            });
+            let actual: String = p
+                .data
+                .shape_items
+                .iter()
+                .flat_map(|item| item.scalars.iter().map(|s| s.c))
+                .collect();
+            assert_eq!(actual, expected, "{text}");
+            assert_eq!(p.text(), text);
+            let scalars: Vec<_> = p
+                .data
+                .shape_items
+                .iter()
+                .flat_map(|item| &item.scalars)
+                .collect();
+            assert!(
+                scalars
+                    .iter()
+                    .all(|s| text.is_char_boundary(s.offset as usize)
+                        && text.is_char_boundary(s.end as usize))
+            );
+            assert_eq!(scalars.first().unwrap().offset, 0);
+            assert_eq!(scalars.last().unwrap().end as usize, text.len());
+            if text == "ガ12" {
+                assert_eq!(
+                    scalars
+                        .iter()
+                        .map(|s| (s.offset, s.end))
+                        .collect::<Vec<_>>(),
+                    vec![(0, 3), (0, 3), (3, 4), (4, 5)]
+                );
+            }
+        }
     }
 
     #[test]

@@ -5,7 +5,7 @@
   "glyphs": [
     {
       "advance": 20.0,
-      "baseline": 22.71875,
+      "baseline": 14.0,
       "block_offset": 10.0,
       "cluster": 0,
       "coords": [],
@@ -17,7 +17,7 @@
       "orientation": "Upright",
       "owner": 1,
       "physical_origin": [
-        469.28125,
+        478.0,
         27.59375
       ],
       "size": 20.0,
@@ -31,7 +31,7 @@
     },
     {
       "advance": 22.5,
-      "baseline": 22.71875,
+      "baseline": 14.0,
       "block_offset": 10.0,
       "cluster": 3,
       "coords": [],
@@ -43,7 +43,7 @@
       "orientation": "Upright",
       "owner": 1,
       "physical_origin": [
-        469.28125,
+        478.0,
         47.59375
       ],
       "size": 20.0,
@@ -135,7 +135,7 @@
     },
     {
       "advance": 27.234375,
-      "baseline": 22.71875,
+      "baseline": 14.0,
       "block_offset": 5.125,
       "cluster": 9,
       "coords": [],
@@ -147,7 +147,7 @@
       "orientation": "Upright",
       "owner": 1,
       "physical_origin": [
-        437.421875,
+        454.875,
         31.21875
       ],
       "size": 20.0,
@@ -161,7 +161,7 @@
     },
     {
       "advance": 19.859375,
-      "baseline": 22.71875,
+      "baseline": 20.359375,
       "block_offset": 0.0,
       "cluster": 11,
       "coords": [],
@@ -173,7 +173,7 @@
       "orientation": "SidewaysClockwise",
       "owner": 1,
       "physical_origin": [
-        442.546875,
+        453.640625,
         37.234375
       ],
       "size": 20.0,
@@ -187,7 +187,7 @@
     },
     {
       "advance": 20.0,
-      "baseline": 22.71875,
+      "baseline": 14.0,
       "block_offset": 10.0,
       "cluster": 13,
       "coords": [],
@@ -199,7 +199,7 @@
       "orientation": "Upright",
       "owner": 1,
       "physical_origin": [
-        432.546875,
+        450.0,
         74.6875
       ],
       "size": 20.0,
@@ -213,7 +213,7 @@
     },
     {
       "advance": 20.0,
-      "baseline": 22.71875,
+      "baseline": 14.0,
       "block_offset": 10.0,
       "cluster": 16,
       "coords": [],
@@ -225,7 +225,7 @@
       "orientation": "Upright",
       "owner": 1,
       "physical_origin": [
-        432.546875,
+        450.0,
         94.6875
       ],
       "size": 20.0,
@@ -251,7 +251,7 @@
       "orientation": "SidewaysClockwise",
       "owner": 1,
       "physical_origin": [
-        442.546875,
+        451.28125,
         97.09375
       ],
       "size": 20.0,
@@ -277,7 +277,7 @@
       "orientation": "SidewaysClockwise",
       "owner": 1,
       "physical_origin": [
-        405.8125,
+        423.28125,
         10.0
       ],
       "size": 20.0,
@@ -303,7 +303,7 @@
       "orientation": "SidewaysClockwise",
       "owner": 1,
       "physical_origin": [
-        405.8125,
+        423.28125,
         22.15625
       ],
       "size": 20.0,
@@ -320,27 +320,27 @@
   "inline_boxes": [],
   "lines": [
     {
-      "baseline": 22.71875,
+      "baseline": 14.0,
       "block_offset": 0.0,
-      "block_size": 36.734375,
+      "block_size": 28.0,
       "end": 9,
       "inline_size": 65.703125,
       "page": 0,
       "start": 0
     },
     {
-      "baseline": 22.71875,
-      "block_offset": 36.734375,
-      "block_size": 36.734375,
+      "baseline": 14.0,
+      "block_offset": 28.0,
+      "block_size": 28.0,
       "end": 20,
       "inline_size": 87.09375,
       "page": 0,
       "start": 9
     },
     {
-      "baseline": 22.71875,
-      "block_offset": 73.46875,
-      "block_size": 36.734375,
+      "baseline": 14.0,
+      "block_offset": 56.0,
+      "block_size": 28.0,
       "end": 22,
       "inline_size": 23.203125,
       "page": 0,
