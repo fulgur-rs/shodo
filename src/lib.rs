@@ -6,6 +6,7 @@
 //! converted to physical coordinates with [`geometry::PhysicalConverter`].
 #![forbid(unsafe_code)]
 
+pub mod accessibility;
 pub mod font;
 pub mod geometry;
 pub mod hit;
