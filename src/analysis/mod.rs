@@ -30,9 +30,7 @@ pub(crate) struct Item {
 #[derive(Clone, Debug)]
 pub(crate) enum ItemKind {
     RubyBoundary {
-        #[allow(dead_code)] // interpreted after shaping in Task 2
         ruby: u32,
-        #[allow(dead_code)]
         boundary: crate::ruby::builder::Boundary,
     },
     Text,

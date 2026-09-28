@@ -34,7 +34,32 @@ pub(crate) fn process(
     with_mapping: bool,
     limits: &Limits,
 ) -> Result<Processed, LimitExceeded> {
-    let flags = whitespace_flags(raw_text, raw, styles);
+    process_in_context(raw_text, raw, styles, with_mapping, limits, false)
+}
+
+pub(crate) fn process_annotation(
+    raw_text: &str,
+    raw: &[RawItem],
+    styles: &[InlineStyle],
+    with_mapping: bool,
+    limits: &Limits,
+) -> Result<Processed, LimitExceeded> {
+    process_in_context(raw_text, raw, styles, with_mapping, limits, true)
+}
+
+fn process_in_context(
+    raw_text: &str,
+    raw: &[RawItem],
+    styles: &[InlineStyle],
+    with_mapping: bool,
+    limits: &Limits,
+    annotation: bool,
+) -> Result<Processed, LimitExceeded> {
+    let flags = if annotation {
+        super::whitespace_context::flags_in_context(raw_text, raw, styles, true)
+    } else {
+        whitespace_flags(raw_text, raw, styles)
+    };
     let mut p = Processor {
         out: String::with_capacity(
             raw_text.len().min(
@@ -58,6 +83,7 @@ pub(crate) fn process(
         open: Vec::new(),
         limits,
         styles,
+        annotation,
     };
     for item in raw {
         match item {
@@ -158,6 +184,7 @@ pub(crate) fn process(
 }
 
 struct Processor<'a> {
+    annotation: bool,
     out: String,
     items: Vec<Item>,
     mapping: Option<OffsetMapping>,
@@ -280,7 +307,7 @@ impl Processor<'_> {
         use WhiteSpaceCollapse::*;
         let style = &self.styles[style_index as usize];
         let collapse_spaces = matches!(style.white_space_collapse, Collapse | PreserveBreaks);
-        let preserve_breaks = !matches!(style.white_space_collapse, Collapse);
+        let preserve_breaks = !self.annotation && !matches!(style.white_space_collapse, Collapse);
         // `preserve-spaces` keeps every space uncollapsed but, unlike
         // `preserve`, tabs and segment breaks lose their special meaning and
         // become an ordinary space character (CSS Text 4, `white-space-collapse`).
@@ -304,8 +331,12 @@ impl Processor<'_> {
             } else {
                 raw_c
             };
+            let annotation_break =
+                self.annotation && matches!(raw_c, '\n' | '\u{2028}' | '\u{2029}' | '\u{0085}');
             let control = match c {
-                '\u{2028}' | '\u{2029}' | '\u{0085}' => Some(ItemKind::ForcedBreak),
+                '\u{2028}' | '\u{2029}' | '\u{0085}' if !self.annotation => {
+                    Some(ItemKind::ForcedBreak)
+                }
                 '\n' if preserve_breaks => Some(ItemKind::ForcedBreak),
                 '\t' if !collapse_spaces => Some(ItemKind::Tab),
                 _ => None,
@@ -331,7 +362,7 @@ impl Processor<'_> {
                 }
                 continue;
             }
-            let collapsible = collapse_spaces && matches!(c, ' ' | '\t' | '\n');
+            let collapsible = annotation_break || collapse_spaces && matches!(c, ' ' | '\t' | '\n');
             if collapsible && self.after_space {
                 let at = self.pos();
                 self.map(MappingKind::Collapsed, node, dom, len, at..at);
@@ -344,7 +375,17 @@ impl Processor<'_> {
             let start = self.pos();
             // A collapsible tab or segment break is kept as one space (same length).
             self.append(if collapsible { ' ' } else { c })?;
-            self.map(MappingKind::Identity, node, dom, len, start..self.pos());
+            self.map(
+                if self.pos() - start == len {
+                    MappingKind::Identity
+                } else {
+                    MappingKind::Expanded
+                },
+                node,
+                dom,
+                len,
+                start..self.pos(),
+            );
             if !ignorable(c) {
                 self.after_space = collapsible;
             }

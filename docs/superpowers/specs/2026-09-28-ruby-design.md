@@ -104,7 +104,11 @@ Auto-hide an annotation with the same original textContent as its base before
 whitespace collapse or transforms when merge is Separate (Auto chooses the
 Separate policy). Collapse removes annotation ink and sizing but preserves
 pairing; Hidden reserves sizing but emits no paint. Merge disables auto-hide
-and treats the level as a spanning annotation. Structural whitespace remains
+and groups the annotations on each accepted line into one anonymous spanning
+annotation, preserving the original pairings across line breaks. Individual
+annotation paragraphs retain their own source, styles, limits and bidi
+isolation; grouping occurs during measurement and placement, not by changing
+their spans or concatenating raw snapshots. Structural whitespace remains
 explicit content in supplied snapshots; parent base whitespace follows its
 normal neighboring base-text context, never annotation text.
 
@@ -120,7 +124,11 @@ active lane. Equal-distance choices select the earlier opportunity. Preserve
 the end cut in every lane. Never cut UTF-8, graphemes, indivisible transforms,
 shared shaping clusters or text-combine-upright compositions.
 
-Mandatory breaks coordinate all lanes at safe positions; no-wrap and emergency
+Mandatory base breaks coordinate all lanes at safe positions. Annotation
+forced breaks are suppressed using collapsible segment-break processing,
+regardless of white-space mode, while ordinary preserved spaces and source
+anchors survive (CSS Ruby §2.2 step 7). There are no annotation-only mandatory
+continuations. No-wrap and emergency
 opportunities retain their existing CSS precedence. A pair without a legal
 parallel cut overflows as one unit. Accepted fragments consume all base and
 annotation content exactly once across continuation; a zero-width line still
@@ -132,7 +140,9 @@ Measure a candidate fragment from the actual selected base/annotation windows,
 including line-edge re-shaping. For Separate, each column's width is the
 maximum participating lane width. Distribute additional spanning-annotation
 width equally across its columns, processing narrower spans first. For Merge,
-measure the merged lane against all spanned bases. Auto uses Separate until a
+measure the concatenated accepted annotation fragments against their combined
+associated bases on that line, retaining each fragment's pairing for subsequent
+lines (CSS Ruby §4.2). Auto uses Separate until a
 different policy is explicitly implemented and documented.
 
 Widths belong to candidate/accepted fragments, not permanently stretched

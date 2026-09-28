@@ -76,6 +76,7 @@ pub struct ParagraphBuilder {
     pub(crate) offset_mapping: bool,
     pub(crate) rubies: Vec<crate::ruby::builder::RubyInput>,
     pub(crate) ruby_cost: crate::ruby::builder::InputCost,
+    pub(crate) ruby_annotation: bool,
 }
 
 impl ParagraphBuilder {
@@ -95,6 +96,7 @@ impl ParagraphBuilder {
             offset_mapping: true,
             rubies: Vec::new(),
             ruby_cost: Default::default(),
+            ruby_annotation: false,
         };
         builder.styles.push(style.root.clone());
         builder
@@ -341,6 +343,9 @@ impl ParagraphBuilder {
 
     pub(crate) fn into_ruby_content(mut self) -> crate::ruby::input::ContentInput {
         self.close_unbalanced();
+        let has_first_line = self.style.first_line.is_some()
+            || !self.first_line_styles.is_empty()
+            || self.has_ruby_first_line();
         crate::ruby::input::ContentInput {
             style: self.style,
             limits: self.limits,
@@ -353,7 +358,71 @@ impl ParagraphBuilder {
             offset_mapping: self.offset_mapping,
             rubies: self.rubies,
             ruby_cost: self.ruby_cost,
+            has_first_line,
         }
+    }
+
+    pub(crate) fn has_ruby_first_line(&self) -> bool {
+        crate::ruby::prepare::has_first_line(&self.rubies)
+    }
+
+    pub(crate) fn from_ruby_content(
+        input: &crate::ruby::input::ContentInput,
+        node: NodeId,
+    ) -> Result<Self, LimitExceeded> {
+        if let Some(error) = input.error {
+            return Err(error);
+        }
+        // Restored items are balanced, so they are absent from builder.stack.
+        // Validate the generated isolation wrapper around their real depth
+        // before cloning the snapshot, including any nested ruby descendants.
+        Limits::check(
+            input.limits.max_nesting_depth,
+            LimitKind::NestingDepth,
+            crate::ruby::builder::InputCost::content(input)
+                .depth
+                .saturating_add(1),
+        )?;
+        let mut builder = Self::new(&input.style, &input.limits);
+        builder.text = input.text.clone();
+        builder.items = input.items.clone();
+        builder.styles = input.styles.clone();
+        builder.first_line_styles = input.first_line_styles.clone();
+        builder.offset_mapping = input.offset_mapping;
+        builder.rubies = input.rubies.clone();
+        builder.ruby_cost = input.ruby_cost;
+        builder.ruby_annotation = true;
+        for warning in &input.warnings {
+            builder.warnings.push(warning.kind, warning.message.clone());
+        }
+        crate::ruby::prepare::annotation_breaks(&mut builder)?;
+        let normal = crate::ruby::builder::isolated(&builder.style.root);
+        let first = builder
+            .style
+            .first_line
+            .as_ref()
+            .map(crate::ruby::builder::isolated);
+        match first.as_ref() {
+            Some(first) => {
+                builder.open_inline_with_first_line(node, &normal, first, InlineEdges::default());
+            }
+            None => {
+                builder.open_inline(node, &normal, InlineEdges::default());
+            }
+        }
+        if let Some(error) = builder.error {
+            return Err(error);
+        }
+        let open = builder
+            .items
+            .pop()
+            .expect("successful open_inline records a marker");
+        builder.items.insert(0, open);
+        builder.close_inline();
+        if let Some(error) = builder.error {
+            return Err(error);
+        }
+        Ok(builder)
     }
 
     fn close_unbalanced(&mut self) {

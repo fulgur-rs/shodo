@@ -9,26 +9,20 @@ pub(crate) struct NormalizedBase {
     pub(crate) node: Option<NodeId>,
     /// Cleared after importing into the parent; the base is retained only once.
     pub(crate) content: Option<RubyContent>,
-    // Used by placement in Task 4; retain the caller's choice now.
-    #[allow(dead_code)]
     pub(crate) align: RubyAlign,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct NormalizedAnnotation {
-    #[allow(dead_code)] // annotation preparation/output in Tasks 2/3
     pub(crate) node: Option<NodeId>,
     pub(crate) content: Option<RubyContent>,
     pub(crate) columns: Range<usize>,
-    #[allow(dead_code)] // sizing/paint separation in Task 2
     pub(crate) visibility: RubyVisibility,
-    #[allow(dead_code)]
     pub(crate) auto_hidden: bool,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct NormalizedLevel {
-    #[allow(dead_code)] // lane preparation and placement in Tasks 2/4
     pub(crate) style: RubyStyle,
     pub(crate) annotations: Vec<NormalizedAnnotation>,
 }

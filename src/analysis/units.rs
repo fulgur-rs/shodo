@@ -159,9 +159,11 @@ pub(crate) fn build_units(
             });
         };
         match &item.kind {
-            // Pairing markers retain processed offsets for ruby preparation;
-            // their inline/bidi wrappers already supply all layout units.
-            ItemKind::RubyBoundary { .. } => {}
+            // A zero-width transparent unit gives anonymous/empty bases their
+            // own retry-safe cursor without inventing source nodes or glyphs.
+            ItemKind::RubyBoundary { .. } => {
+                push(UnitKind::BidiControl, BreakClass::Prohibited, parent_box)
+            }
             ItemKind::Text => {
                 while run_index < runs.len() && runs[run_index].item == index {
                     let run = &runs[run_index];

@@ -199,8 +199,6 @@ pub(crate) fn span(span: &RubySpan, ordinal: usize, columns: usize) -> Range<usi
 #[derive(Clone, Debug)]
 pub(crate) struct ContentInput {
     pub(crate) style: ParagraphStyle,
-    // Consumed by annotation preparation in Task 2.
-    #[allow(dead_code)]
     pub(crate) limits: Limits,
     pub(crate) text: String,
     pub(crate) items: Vec<RawItem>,
@@ -208,8 +206,8 @@ pub(crate) struct ContentInput {
     pub(crate) first_line_styles: HashMap<u32, InlineStyle>,
     pub(crate) error: Option<LimitExceeded>,
     pub(crate) warnings: Vec<Warning>,
-    #[allow(dead_code)]
     pub(crate) offset_mapping: bool,
+    pub(crate) has_first_line: bool,
     pub(crate) rubies: Vec<super::builder::RubyInput>,
     pub(crate) ruby_cost: super::builder::InputCost,
 }

@@ -57,8 +57,6 @@ impl InputCost {
 
 #[derive(Clone, Debug)]
 pub(crate) struct RubyInput {
-    // Used by prepared/output containers in Tasks 2/3.
-    #[allow(dead_code)]
     pub(crate) node: NodeId,
     pub(crate) style: u32,
     pub(crate) normalized: NormalizedRuby,
