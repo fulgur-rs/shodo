@@ -215,6 +215,7 @@ pub(super) fn scan(
     let (hang_start, trailing) = super::whitespace::trailing(data, start, i, &widths, sat);
     let mut result = Scan {
         ruby: None,
+        ruby_caret_gaps: Vec::new(),
         prepared: false,
         overlays: Vec::new(),
         end: i,

@@ -116,6 +116,7 @@ pub(super) fn selected_raw(
     };
     let mut scan = Scan {
         ruby: None,
+        ruby_caret_gaps: Vec::new(),
         prepared: false,
         overlays: Vec::new(),
         end,

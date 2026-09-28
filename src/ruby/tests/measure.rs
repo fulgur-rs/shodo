@@ -1585,3 +1585,599 @@ fn pretty_alternate_cuts_keep_the_next_ruby_base_open_on_its_line() {
         );
     }
 }
+
+#[test]
+fn repeated_auto_overhang_probes_share_actual_neighbor_geometry() {
+    let mut visits = Vec::new();
+    for count in [64, 128] {
+        let fonts = fonts();
+        let mut builder = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: style(24.0),
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, "日");
+        let mut input = ruby(base(&"日".repeat(count)), &"にほん".repeat(count));
+        input.levels[0].style.overhang = RubyOverhang::Auto;
+        builder.push_ruby(NodeId(8), &style(24.0), input);
+        builder.push_text(TextSource::Generated { node: NodeId(2) }, "日");
+        let p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        let mut cx = LayoutContext::new();
+        for cut in &p.data.ruby.containers[0].cuts[1..] {
+            let measure = crate::ruby::measure::candidate(
+                &p.data,
+                0,
+                cut.unit,
+                &AtomicSizes::EMPTY,
+                &mut cx,
+                &mut Saturation::default(),
+            );
+            assert!(
+                measure
+                    .fragments
+                    .iter()
+                    .any(|f| f.lanes.iter().any(|l| l.overhang.0 > LayoutUnit::ZERO))
+            );
+        }
+        visits.push(cx.ruby_measure_visits);
+    }
+    assert!(
+        visits[1] <= visits[0] * 3,
+        "repeated actual Auto allowances rescanned prefixes: {visits:?}"
+    );
+}
+
+#[test]
+fn overhang_index_does_not_saturate_from_an_unselected_future_atomic() {
+    let mut builder = ParagraphBuilder::new(
+        &ParagraphStyle {
+            root: style(24.0),
+            ..Default::default()
+        },
+        &Limits::default(),
+    );
+    builder.push_text(TextSource::Generated { node: NodeId(1) }, "日");
+    let mut input = ruby(base("日"), "にほん");
+    input.levels[0].style.overhang = RubyOverhang::Auto;
+    builder.push_ruby(NodeId(8), &style(24.0), input);
+    builder.push_atomic(NodeId(99), &style(24.0), Default::default());
+    let p = builder.build(&mut LayoutContext::new(), &fonts()).unwrap();
+    let mut atomics = AtomicSizes::new();
+    atomics.insert(
+        NodeId(99),
+        crate::AtomicSize {
+            inline_size: 1.0e9,
+            block_size: 1.0e9,
+            baseline: Some(-1.0e9),
+            margins: crate::node::Sides {
+                block_start: 1.0e9,
+                block_end: 1.0e9,
+                ..Default::default()
+            },
+        },
+    );
+    let mut sat = Saturation::default();
+    let measure = crate::ruby::measure::candidate(
+        &p.data,
+        0,
+        p.data.ruby.containers[0].units.end,
+        &atomics,
+        &mut LayoutContext::new(),
+        &mut sat,
+    );
+    assert_eq!(measure.fragments[0].lanes[0].overhang.0.to_f32(), 6.0);
+    assert_eq!(measure.adjustment.to_f32(), 6.0);
+    assert!(
+        sat.is_clean(),
+        "unselected atomic contaminated the selected fragment: {sat:?}"
+    );
+}
+
+#[test]
+fn actual_annotation_block_profiles_do_not_rescan_long_prefixes() {
+    let mut visits = Vec::new();
+    for count in [64, 128] {
+        let p = build(ruby(base(&"日".repeat(count)), &"にほん".repeat(count)));
+        let container = &p.data.ruby.containers[0];
+        let child = &container.lanes[0].paragraph.data;
+        let mut cx = LayoutContext::new();
+        cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+        for cut in &container.cuts[1..] {
+            let height = crate::line::range::block_size(
+                child,
+                0..cut.lanes[0],
+                &Default::default(),
+                &AtomicSizes::EMPTY,
+                &mut cx,
+                &mut Saturation::default(),
+            );
+            assert_eq!(height.to_f32(), 17.390625);
+        }
+        visits.push(cx.ruby_measure_visits);
+    }
+    assert!(
+        visits[1] <= visits[0] * 3,
+        "actual child block profiles rescanned prefixes: {visits:?}"
+    );
+}
+
+#[test]
+fn indexed_annotation_heights_match_retained_lines_for_clipped_alignment_groups() {
+    use crate::style::{LineHeight, VerticalAlign};
+    for mode in [
+        crate::geometry::WritingMode::HorizontalTb,
+        crate::geometry::WritingMode::VerticalRl,
+        crate::geometry::WritingMode::VerticalLr,
+    ] {
+        let mut b = ParagraphBuilder::new(
+            &ParagraphStyle {
+                writing_mode: mode,
+                root: style(24.0),
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "日");
+        for (i, alignment) in [VerticalAlign::Top, VerticalAlign::Bottom]
+            .into_iter()
+            .enumerate()
+        {
+            b.open_inline(
+                NodeId(100 + i as u64),
+                &InlineStyle {
+                    vertical_align: alignment,
+                    ..style(48.0)
+                },
+                Default::default(),
+            );
+            b.open_inline(
+                NodeId(200 + i as u64),
+                &InlineStyle {
+                    vertical_align: VerticalAlign::Length(-3.0),
+                    ..style(8.0)
+                },
+                Default::default(),
+            );
+            b.push_text(
+                TextSource::Generated {
+                    node: NodeId(2 + i as u64),
+                },
+                "日本",
+            );
+            b.close_inline();
+            b.close_inline();
+        }
+        b.push_atomic(
+            NodeId(99),
+            &InlineStyle {
+                vertical_align: VerticalAlign::Length(5.0),
+                ..style(24.0)
+            },
+            Default::default(),
+        );
+        b.open_inline(
+            NodeId(300),
+            &InlineStyle {
+                line_height: LineHeight::Px(80.0),
+                vertical_align: VerticalAlign::Length(-3.0),
+                ..style(24.0)
+            },
+            Default::default(),
+        );
+        b.push_text(TextSource::Generated { node: NodeId(5) }, "語");
+        b.close_inline();
+        let p = b.build(&mut LayoutContext::new(), &fonts()).unwrap();
+        let mut atomics = AtomicSizes::new();
+        atomics.insert(
+            NodeId(99),
+            crate::AtomicSize {
+                inline_size: 34.0,
+                block_size: 27.0,
+                baseline: Some(9.0),
+                ..Default::default()
+            },
+        );
+        let owners: Vec<_> = p
+            .data
+            .units
+            .iter()
+            .enumerate()
+            .filter(|(_, u)| {
+                matches!(
+                    u.kind,
+                    crate::analysis::units::UnitKind::Cluster { .. }
+                        | crate::analysis::units::UnitKind::Atomic { .. }
+                )
+            })
+            .map(|(i, _)| i)
+            .collect();
+        let mut cx = LayoutContext::new();
+        cx.ruby_ranges.begin(&p.data, &atomics);
+        for (at, start) in owners.iter().enumerate() {
+            for end in owners[at..].iter().map(|i| i + 1) {
+                let range = *start..end;
+                let indexed = crate::line::range::block_size(
+                    &p.data,
+                    range.clone(),
+                    &Default::default(),
+                    &atomics,
+                    &mut cx,
+                    &mut Saturation::default(),
+                );
+                let actual = p.ruby_line(
+                    &mut LayoutContext::new(),
+                    range.clone(),
+                    1000.0,
+                    &atomics,
+                    crate::ruby::align::AnnotationAlign::Policy(RubyAlign::Start),
+                );
+                assert_eq!(indexed.to_f32(), actual.block_size(), "{mode:?}/{range:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn nested_annotation_profiles_keep_actual_metrics_and_bounded_probes() {
+    let mut visits = Vec::new();
+    for count in [1024, 2048] {
+        let mut reading = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: style(24.0),
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        reading.push_ruby(
+            NodeId(81),
+            &style(24.0),
+            ruby(base(&"日".repeat(count)), &"にほん".repeat(count)),
+        );
+        let outer = Ruby::new(
+            vec![RubyBase {
+                node: NodeId(10),
+                content: base(&"日本語".repeat(count)),
+                align: RubyAlign::default(),
+            }],
+            vec![RubyLevel {
+                annotations: vec![RubyAnnotation {
+                    node: NodeId(20),
+                    content: RubyContent::from_builder(reading),
+                    span: RubySpan::All,
+                    visibility: RubyVisibility::Visible,
+                }],
+                style: RubyStyle {
+                    overhang: RubyOverhang::None,
+                    ..Default::default()
+                },
+            }],
+        )
+        .unwrap();
+        let p = build(outer);
+        let container = &p.data.ruby.containers[0];
+        assert!(
+            container.cuts.len() >= count / 2,
+            "nested fixture needs many actual cuts: {}",
+            container.cuts.len()
+        );
+        let reading = &container.lanes[0].paragraph;
+        let full = reading.ruby_line(
+            &mut LayoutContext::new(),
+            0..reading.data.units.len(),
+            100000.0,
+            &AtomicSizes::EMPTY,
+            crate::ruby::align::AnnotationAlign::Policy(RubyAlign::Start),
+        );
+        assert_eq!(full.block_size(), 52.140625);
+        let mut cx = LayoutContext::new();
+        for cut in &container.cuts[1..] {
+            let measure = crate::ruby::measure::candidate(
+                &p.data,
+                0,
+                cut.unit,
+                &AtomicSizes::EMPTY,
+                &mut cx,
+                &mut Saturation::default(),
+            );
+            assert_eq!(measure.fragments[0].lanes[0].block_size.to_f32(), 52.140625);
+        }
+        visits.push(cx.ruby_measure_visits);
+    }
+    assert!(
+        visits[1] <= visits[0] * 3,
+        "nested actual row profiles rescanned prefixes: {visits:?}"
+    );
+}
+
+#[test]
+fn top_bottom_nested_annotation_probes_do_not_rescan_prefixes() {
+    use crate::style::VerticalAlign;
+    for alignment in [VerticalAlign::Top, VerticalAlign::Bottom] {
+        let mut visits = Vec::new();
+        for count in [1024, 2048] {
+            let mut reading = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    root: style(24.0),
+                    ..Default::default()
+                },
+                &Limits::default(),
+            );
+            reading.open_inline(
+                NodeId(80),
+                &InlineStyle {
+                    vertical_align: alignment,
+                    ..style(24.0)
+                },
+                Default::default(),
+            );
+            reading.push_ruby(
+                NodeId(81),
+                &style(24.0),
+                ruby(base(&"日".repeat(count)), &"にほん".repeat(count)),
+            );
+            reading.close_inline();
+            let outer = Ruby::new(
+                vec![RubyBase {
+                    node: NodeId(10),
+                    content: base(&"日本語".repeat(count)),
+                    align: RubyAlign::default(),
+                }],
+                vec![RubyLevel {
+                    annotations: vec![RubyAnnotation {
+                        node: NodeId(20),
+                        content: RubyContent::from_builder(reading),
+                        span: RubySpan::All,
+                        visibility: RubyVisibility::Visible,
+                    }],
+                    style: RubyStyle {
+                        overhang: RubyOverhang::None,
+                        ..Default::default()
+                    },
+                }],
+            )
+            .unwrap();
+            let p = build(outer);
+            let container = &p.data.ruby.containers[0];
+            assert!(container.cuts.len() >= count / 2);
+            let reading = &container.lanes[0].paragraph;
+            let full = reading.ruby_line(
+                &mut LayoutContext::new(),
+                0..reading.data.units.len(),
+                100000.0,
+                &AtomicSizes::EMPTY,
+                crate::ruby::align::AnnotationAlign::Policy(RubyAlign::Start),
+            );
+            assert_eq!(full.block_size(), 52.140625);
+            let mut cx = LayoutContext::new();
+            for cut in &container.cuts[1..] {
+                let measure = crate::ruby::measure::candidate(
+                    &p.data,
+                    0,
+                    cut.unit,
+                    &AtomicSizes::EMPTY,
+                    &mut cx,
+                    &mut Saturation::default(),
+                );
+                assert_eq!(
+                    measure.fragments[0].lanes[0].block_size.to_f32(),
+                    52.140625,
+                    "{alignment:?}"
+                );
+            }
+            visits.push(cx.ruby_measure_visits);
+        }
+        assert!(
+            visits[1] <= visits[0] * 3,
+            "{alignment:?} nested prefix rescans: {visits:?}"
+        );
+    }
+}
+
+#[test]
+fn many_structural_columns_and_containers_measure_actual_output_with_bounded_work() {
+    for grouped in [true, false] {
+        let mut visits = Vec::new();
+        for count in if grouped { [256, 512] } else { [512, 1024] } {
+            let mut b = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    root: style(24.0),
+                    ..Default::default()
+                },
+                &Limits::default(),
+            );
+            if grouped {
+                let bases = (0..count)
+                    .map(|i| RubyBase {
+                        node: NodeId(1000 + i as u64),
+                        content: base("日"),
+                        align: RubyAlign::Start,
+                    })
+                    .collect();
+                let annotations = (0..count)
+                    .map(|i| RubyAnnotation {
+                        node: NodeId(3000 + i as u64),
+                        content: RubyContent::text(
+                            TextSource::Generated {
+                                node: NodeId(3000 + i as u64),
+                            },
+                            "にほん",
+                            &style(12.0),
+                            &Limits::default(),
+                        ),
+                        span: RubySpan::Auto,
+                        visibility: RubyVisibility::Visible,
+                    })
+                    .collect();
+                b.push_ruby(
+                    NodeId(8),
+                    &style(24.0),
+                    Ruby::new(
+                        bases,
+                        vec![RubyLevel {
+                            annotations,
+                            style: RubyStyle {
+                                overhang: RubyOverhang::None,
+                                ..Default::default()
+                            },
+                        }],
+                    )
+                    .unwrap(),
+                );
+            } else {
+                for i in 0..count {
+                    b.push_ruby(
+                        NodeId(1000 + i as u64),
+                        &style(24.0),
+                        ruby(base("日"), "にほん"),
+                    );
+                }
+            }
+            let p = b.build(&mut LayoutContext::new(), &fonts()).unwrap();
+            let mut cx = LayoutContext::new();
+            let measured = crate::ruby::measure::candidate(
+                &p.data,
+                0,
+                p.data.units.len(),
+                &AtomicSizes::EMPTY,
+                &mut cx,
+                &mut Saturation::default(),
+            );
+            assert_eq!(measured.adjustment.to_f32(), count as f32 * 12.0);
+            assert_eq!(measured.fragments.len(), if grouped { 1 } else { count });
+            assert_eq!(
+                measured
+                    .fragments
+                    .iter()
+                    .map(|f| f.bases.len())
+                    .sum::<usize>(),
+                count
+            );
+            visits.push(cx.ruby_measure_visits);
+        }
+        assert!(
+            visits[1] <= visits[0] * 3,
+            "grouped={grouped}: materializing twice the real structural output did superlinear work {visits:?}"
+        );
+    }
+}
+
+#[test]
+fn clipped_nested_bases_keep_every_completed_fragment_at_the_same_source_start() {
+    let mut inner = ParagraphBuilder::new(
+        &ParagraphStyle {
+            root: style(24.0),
+            ..Default::default()
+        },
+        &Limits::default(),
+    );
+    inner.push_ruby(
+        NodeId(81),
+        &style(24.0),
+        ruby(base("日日日日日日"), &"に".repeat(18)),
+    );
+    let mut middle = ParagraphBuilder::new(
+        &ParagraphStyle {
+            root: style(24.0),
+            ..Default::default()
+        },
+        &Limits::default(),
+    );
+    middle.push_ruby(
+        NodeId(82),
+        &style(24.0),
+        ruby(RubyContent::from_builder(inner), &"ほ".repeat(30)),
+    );
+    let p = build(ruby(RubyContent::from_builder(middle), &"ん".repeat(36)));
+    let outer = &p.data.ruby.containers[0];
+    let cut = outer
+        .cuts
+        .iter()
+        .find(|cut| {
+            p.data.units[cut.unit..outer.units.end]
+                .iter()
+                .filter(|u| matches!(u.kind, crate::analysis::units::UnitKind::Cluster { .. }))
+                .count()
+                == 3
+        })
+        .expect("real halfway coordinated cut");
+    let mut cx = LayoutContext::new();
+    let m = crate::ruby::measure::candidate(
+        &p.data,
+        cut.unit,
+        outer.units.end,
+        &AtomicSizes::EMPTY,
+        &mut cx,
+        &mut Saturation::default(),
+    );
+    assert_eq!(m.fragments.len(), 3);
+    assert!(
+        m.fragments.iter().all(|f| f.units.start == cut.unit),
+        "all three selected ancestors share the clipped cursor"
+    );
+    // Remaining base3*24=72; inner9*12=108; middle15*12=180;
+    // outer18*12=216. Each ancestor adds only its own additional width.
+    assert_eq!(m.adjustment.to_f32(), 144.0);
+}
+
+#[test]
+fn accepted_ruby_continuations_reuse_root_and_child_indexes_without_prefix_rescans() {
+    for nested in [false, true] {
+        let mut visits = Vec::new();
+        for count in [64, 128] {
+            let pair = if nested {
+                let mut child = ParagraphBuilder::new(
+                    &ParagraphStyle {
+                        root: style(24.0),
+                        ..Default::default()
+                    },
+                    &Limits::default(),
+                );
+                child.push_ruby(
+                    NodeId(80),
+                    &style(24.0),
+                    ruby(base(&"本".repeat(count)), &"にほん".repeat(count)),
+                );
+                let mut pair = ruby(base(&"日".repeat(count)), "");
+                pair.levels[0].annotations[0].content = RubyContent::from_builder(child);
+                pair
+            } else {
+                ruby(base(&"日".repeat(count)), &"にほん".repeat(count))
+            };
+            let p = build(pair);
+            let mut cx = LayoutContext::new();
+            let lines = p.break_all(&mut cx, &Default::default(), 36.0, &AtomicSizes::EMPTY);
+            assert_eq!(
+                lines.len(),
+                count,
+                "nested={nested}: one real paired unit per accepted line"
+            );
+            assert!(lines.iter().all(|line| line.inline_size() == 36.0));
+            let mut glyphs = 0;
+            for a in lines.iter().flat_map(|line| line.ruby_annotations()) {
+                let child = if nested {
+                    a.line().ruby_annotations().next().unwrap().line()
+                } else {
+                    a.line()
+                };
+                glyphs += child
+                    .fragments()
+                    .filter_map(|f| {
+                        if let crate::Fragment::GlyphRun(r) = f {
+                            Some(r.glyphs().len())
+                        } else {
+                            None
+                        }
+                    })
+                    .sum::<usize>();
+            }
+            assert_eq!(glyphs, count * 3);
+            visits.push(cx.ruby_measure_visits);
+        }
+        assert!(
+            visits[1] <= visits[0] * 3,
+            "nested={nested}: actual accepted parent/child continuation rebuilt complete indexes {visits:?}"
+        );
+    }
+}

@@ -310,9 +310,9 @@ pub(super) fn prepare_cuts(
             unit.emergency_min_content = index.emergency_min_content[ruby.units.start + i + 1];
         }
         if let Some(last) = data.units.get_mut(ruby.units.end - 1) {
-            last.break_after = if ruby.units.end == index.classes.len() - 1 {
-                BreakClass::Prohibited
-            } else if index.classes[ruby.units.end] == BreakClass::Prohibited {
+            last.break_after = if ruby.units.end == index.classes.len() - 1
+                || index.classes[ruby.units.end] == BreakClass::Prohibited
+            {
                 BreakClass::Prohibited
             } else {
                 external

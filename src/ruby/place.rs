@@ -27,7 +27,6 @@ fn selected_columns(
 }
 
 fn span_width(
-    data: &ParagraphData,
     fragment: &super::measure::RubyFragmentMeasure,
     columns: &Range<usize>,
     sat: &mut Saturation,
@@ -37,14 +36,21 @@ fn span_width(
     });
     base.add(
         super::measure::internal_cross(
-            data,
-            &data.ruby.containers[fragment.container],
+            &fragment.right_columns,
             &fragment.cross_columns,
             columns,
             sat,
         ),
         sat,
     )
+}
+
+fn span_origin(origins: &[f32], columns: &Range<usize>) -> f32 {
+    columns
+        .clone()
+        .map(|i| origins[i])
+        .min_by(f32::total_cmp)
+        .unwrap_or(0.0)
 }
 
 pub(crate) fn format(
@@ -113,12 +119,20 @@ pub(crate) fn format(
             if !super::measure::merging(data, *style) {
                 continue;
             }
-            let lanes = &level_lanes[level];
+            let lanes = &mut level_lanes[level];
+            lanes.sort_by(|a, b| {
+                let a = selected_columns(fragment, ruby.lanes[a.lane].columns.clone());
+                let b = selected_columns(fragment, ruby.lanes[b.lane].columns.clone());
+                span_origin(&origins, &a).total_cmp(&span_origin(&origins, &b))
+            });
             let natural = lanes
                 .iter()
                 .fold(LayoutUnit::ZERO, |w, l| w.add(l.width, sat));
             let columns = selected_columns(fragment, 0..fragment.bases.len());
-            let width = span_width(data, fragment, &columns, sat);
+            let overhang = fragment.level_overhang[level];
+            let width = span_width(fragment, &columns, sat)
+                .add(overhang.0, sat)
+                .add(overhang.1, sat);
             let counts: Vec<_> = lanes
                 .iter()
                 .map(|l| super::align::count(&ruby.lanes[l.lane].paragraph.data, l.units.clone()))
@@ -128,7 +142,7 @@ pub(crate) fn format(
                 counts.iter().sum(),
                 width.sub(natural, sat).max(LayoutUnit::ZERO),
             );
-            let mut pen = origins[columns.start];
+            let mut pen = span_origin(&origins, &columns) - overhang.0.to_f32();
             let mut cursor = 0;
             for (lane, count) in lanes.iter().zip(counts) {
                 let slice = gaps[cursor..cursor + count].to_vec();
@@ -148,7 +162,7 @@ pub(crate) fn format(
             let style = ruby.levels[lane.level];
             let columns = selected_columns(fragment, lane.columns.clone());
             let cross = super::measure::inter_character(data, style);
-            let right = super::measure::rightmost(data, ruby, &columns);
+            let right = super::measure::rightmost(&fragment.right_columns, &columns);
             let (origin, width, alignment) = if cross {
                 let base = frame.column_content(fragment, right, sat);
                 (
@@ -157,11 +171,14 @@ pub(crate) fn format(
                     AnnotationAlign::Policy(style.align),
                 )
             } else {
-                let width = span_width(data, fragment, &columns, sat).to_f32();
+                let width = span_width(fragment, &columns, sat)
+                    .add(measured.overhang.0, sat)
+                    .add(measured.overhang.1, sat)
+                    .to_f32();
                 merged.remove(&measured.lane).map_or_else(
                     || {
                         (
-                            origins[columns.start],
+                            span_origin(&origins, &columns) - measured.overhang.0.to_f32(),
                             width,
                             AnnotationAlign::Policy(style.align),
                         )
@@ -214,12 +231,13 @@ pub(crate) fn format(
                     block_offset: 0.0,
                 }
             } else {
+                let reversed = child.used_direction() != line.used_direction();
                 RubyTransform {
-                    inline_inline: 1.0,
+                    inline_inline: if reversed { -1.0 } else { 1.0 },
                     inline_block: 0.0,
                     block_inline: 0.0,
                     block_block: 1.0,
-                    inline_offset: inline,
+                    inline_offset: inline + if reversed { child.inline_size() } else { 0.0 },
                     block_offset: 0.0,
                 }
             };

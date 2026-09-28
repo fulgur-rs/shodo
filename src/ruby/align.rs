@@ -6,6 +6,15 @@ use crate::line::Scan;
 use crate::paragraph::ParagraphData;
 use std::ops::Range;
 
+/// Source-local padding introduced solely by ruby alignment. Ordinary tracking
+/// and justification retain their existing caret allocation rules.
+#[derive(Clone, Debug)]
+pub(crate) struct CaretGap {
+    pub(crate) text: Range<u32>,
+    pub(crate) before: LayoutUnit,
+    pub(crate) after: LayoutUnit,
+}
+
 struct Group {
     head: usize,
     tail: usize,
@@ -148,6 +157,12 @@ fn distribute(
             leading[group.tail - start] = leading[group.tail - start].add(tail, sat);
             continue;
         }
+        let forward = group.level % 2 == data.base_level % 2;
+        scan.ruby_caret_gaps.push(CaretGap {
+            text: data.units[group.head].text.start..data.units[group.tail].text.end,
+            before: if forward { before } else { after },
+            after: if forward { after } else { before },
+        });
         scan.widths[group.tail - start] =
             scan.widths[group.tail - start].add(before.add(after, sat), sat);
         let amount = if group.level % 2 == data.base_level % 2 {

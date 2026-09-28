@@ -52,9 +52,13 @@ pub(crate) struct RubyFragmentMeasure {
     pub(crate) base_widths: Vec<LayoutUnit>,
     pub(crate) base_columns: Vec<LayoutUnit>,
     pub(crate) cross_columns: Vec<LayoutUnit>,
+    pub(crate) right_columns: std::collections::HashMap<(usize, usize), usize>,
     pub(crate) columns: Vec<LayoutUnit>,
     pub(crate) lanes: Vec<LaneMeasure>,
+    pub(crate) level_overhang: Vec<(LayoutUnit, LayoutUnit)>,
     pub(crate) adjustment: LayoutUnit,
+    pub(crate) whole_area: super::geometry::Bounds,
+    pub(crate) contribution: super::geometry::Bounds,
 }
 
 #[derive(Clone, Debug)]
@@ -62,7 +66,9 @@ pub(crate) struct LaneMeasure {
     pub(crate) lane: usize,
     pub(crate) units: Range<usize>,
     pub(crate) width: LayoutUnit,
+    pub(crate) block_size: LayoutUnit,
     pub(crate) cross_width: Option<LayoutUnit>,
+    pub(crate) overhang: (LayoutUnit, LayoutUnit),
 }
 
 fn intersect(a: &Range<usize>, b: &Range<usize>) -> Range<usize> {
@@ -109,6 +115,10 @@ pub(crate) fn candidate_inner(
     }
     let mut through = end;
     for ruby in &data.ruby.containers {
+        #[cfg(test)]
+        {
+            cx.ruby_measure_visits += 1;
+        }
         if start < ruby.units.end && ruby.units.start < through {
             let clipped = through.min(ruby.units.end);
             through = through.max(ruby.cuts[cut_at_or_after(ruby, clipped)].unit);
@@ -116,7 +126,16 @@ pub(crate) fn candidate_inner(
     }
     let selected = start..through;
     let mut measure = RubyMeasure::default();
+    // Reverse structural traversal resolves children before parents. Index those
+    // completed fragments by source start so siblings are never compared as
+    // potential descendants of every subsequent column/container. Container
+    // identity preserves ancestors that share a clipped continuation start.
+    let mut completed = std::collections::BTreeMap::<(usize, usize), usize>::new();
     for (container, ruby) in data.ruby.containers.iter().enumerate().rev() {
+        #[cfg(test)]
+        {
+            cx.ruby_measure_visits += 1;
+        }
         let units = intersect(&selected, &ruby.units);
         if units.is_empty() {
             continue;
@@ -138,8 +157,13 @@ pub(crate) fn candidate_inner(
                 cx,
                 sat,
             );
-            for nested in &measure.fragments {
-                if base.start <= nested.units.start && nested.units.end <= base.end {
+            for (_, &index) in completed.range((base.start, 0)..(base.end, 0)) {
+                let nested = &measure.fragments[index];
+                #[cfg(test)]
+                {
+                    cx.ruby_measure_visits += 1;
+                }
+                if nested.units.end <= base.end {
                     width = width.add(nested.adjustment, sat);
                 }
             }
@@ -155,14 +179,16 @@ pub(crate) fn candidate_inner(
             let raw = crate::line::ruby_range_width(child, range.clone(), atomics, cx, sat);
             let nested = candidate_inner(child, range.start, range.end, atomics, cx, sat);
             let width = raw.add(nested.adjustment, sat);
-            let cross_width = inter_character(data, ruby.levels[lane.level]).then(|| {
-                crate::line::range::block_size(child, range.clone(), &nested, atomics, cx, sat)
-            });
+            let block_size =
+                crate::line::range::block_size(child, range.clone(), &nested, atomics, cx, sat);
+            let cross_width = inter_character(data, ruby.levels[lane.level]).then_some(block_size);
             lanes.push(LaneMeasure {
                 lane: index,
                 units: range,
                 width,
+                block_size,
                 cross_width,
+                overhang: (LayoutUnit::ZERO, LayoutUnit::ZERO),
             });
         }
         // Merge keeps the source-paired pieces; same-line width is one level
@@ -174,18 +200,65 @@ pub(crate) fn candidate_inner(
             .rposition(|r| !r.is_empty())
             .map_or(first, |i| i + 1);
         let selected_columns = first..last;
+        let mut right_columns = std::collections::HashMap::new();
+        if ruby
+            .levels
+            .iter()
+            .any(|style| inter_character(data, *style))
+        {
+            for columns in ruby
+                .lanes
+                .iter()
+                .map(|lane| intersect(&lane.columns, &selected_columns))
+                .chain(std::iter::once(selected_columns.clone()))
+            {
+                if !columns.is_empty() {
+                    right_columns
+                        .entry((columns.start, columns.end))
+                        .or_insert_with(|| {
+                            super::overhang::rightmost_column(data, &bases, &columns, cx)
+                        });
+                }
+            }
+        }
         let mut merged = vec![None; ruby.levels.len()];
         let mut cross_columns = vec![LayoutUnit::ZERO; bases.len()];
         for lane in &lanes {
             if let Some(width) = lane.cross_width {
                 let columns = intersect(&ruby.lanes[lane.lane].columns, &selected_columns);
                 if !columns.is_empty() {
-                    let column = rightmost(data, ruby, &columns);
+                    let column = rightmost(&right_columns, &columns);
                     cross_columns[column] = cross_columns[column].add(width, sat);
                 }
             }
         }
-        for l in &lanes {
+        let geometry = super::overhang::columns(data, ruby, &selected, &bases, atomics, cx, sat);
+        let mut area = geometry.area;
+        for (_, &index) in completed.range((units.start, 0)..(units.end, 0)) {
+            let nested = &measure.fragments[index];
+            #[cfg(test)]
+            {
+                cx.ruby_measure_visits += 1;
+            }
+            if nested.units.end <= units.end {
+                area = area.union(nested.whole_area);
+            }
+        }
+        let heights: Vec<_> = lanes.iter().map(|l| l.block_size).collect();
+        let tracks = super::geometry::tracks(
+            data,
+            ruby,
+            &bases,
+            &lanes,
+            area,
+            &geometry.contents,
+            &right_columns,
+            &heights,
+            sat,
+        );
+        let sides = super::geometry::level_sides(data, ruby);
+        let mut level_overhang = vec![(LayoutUnit::ZERO, LayoutUnit::ZERO); ruby.levels.len()];
+        for l in &mut lanes {
             let source = &ruby.lanes[l.lane];
             if l.cross_width.is_some() {
                 continue;
@@ -195,11 +268,31 @@ pub(crate) fn candidate_inner(
             } else {
                 let columns = intersect(&source.columns, &selected_columns);
                 if !columns.is_empty() {
+                    l.overhang = lane_overhang(
+                        data,
+                        ruby,
+                        &selected,
+                        &bases,
+                        &base_widths,
+                        &cross_columns,
+                        &right_columns,
+                        &columns,
+                        l.width,
+                        ruby.levels[source.level],
+                        sides[source.level],
+                        tracks.base,
+                        &source.paragraph.data,
+                        atomics,
+                        cx,
+                        sat,
+                    );
                     separate.push(SpanWidth {
                         width: l
                             .width
+                            .sub(l.overhang.0, sat)
+                            .sub(l.overhang.1, sat)
                             .sub(
-                                internal_cross(data, ruby, &cross_columns, &columns, sat),
+                                internal_cross(&right_columns, &cross_columns, &columns, sat),
                                 sat,
                             )
                             .max(LayoutUnit::ZERO),
@@ -208,12 +301,43 @@ pub(crate) fn candidate_inner(
                 }
             }
         }
-        for width in merged.into_iter().flatten() {
+        for (level, width) in merged
+            .into_iter()
+            .enumerate()
+            .filter_map(|(level, width)| width.map(|w| (level, w)))
+        {
+            let child = ruby
+                .lanes
+                .iter()
+                .find(|l| l.level == level)
+                .map(|l| &*l.paragraph.data)
+                .unwrap();
+            let allowance = lane_overhang(
+                data,
+                ruby,
+                &selected,
+                &bases,
+                &base_widths,
+                &cross_columns,
+                &right_columns,
+                &selected_columns,
+                width,
+                ruby.levels[level],
+                sides[level],
+                tracks.base,
+                child,
+                atomics,
+                cx,
+                sat,
+            );
+            level_overhang[level] = allowance;
             separate.push(SpanWidth {
                 columns: selected_columns.clone(),
                 width: width
+                    .sub(allowance.0, sat)
+                    .sub(allowance.1, sat)
                     .sub(
-                        internal_cross(data, ruby, &cross_columns, &selected_columns, sat),
+                        internal_cross(&right_columns, &cross_columns, &selected_columns, sat),
                         sat,
                     )
                     .max(LayoutUnit::ZERO),
@@ -231,6 +355,7 @@ pub(crate) fn candidate_inner(
         let width = columns.iter().fold(LayoutUnit::ZERO, |w, b| w.add(*b, sat));
         let adjustment = width.sub(raw_base, sat);
         measure.adjustment = measure.adjustment.add(adjustment, sat);
+        completed.insert((units.start, container), measure.fragments.len());
         measure.fragments.push(RubyFragmentMeasure {
             container,
             units,
@@ -238,9 +363,13 @@ pub(crate) fn candidate_inner(
             base_widths,
             base_columns,
             cross_columns,
+            right_columns,
             columns,
             lanes,
+            level_overhang,
             adjustment,
+            whole_area: tracks.whole,
+            contribution: tracks.contribution,
         });
     }
     if through > end {
@@ -249,6 +378,62 @@ pub(crate) fn candidate_inner(
         measure.adjustment = measure.adjustment.add(full.sub(consumed, sat), sat);
     }
     measure
+}
+
+#[allow(clippy::too_many_arguments)]
+fn lane_overhang(
+    data: &ParagraphData,
+    ruby: &super::prepare::PreparedRuby,
+    selected: &Range<usize>,
+    bases: &[Range<usize>],
+    base: &[LayoutUnit],
+    cross: &[LayoutUnit],
+    right_columns: &std::collections::HashMap<(usize, usize), usize>,
+    columns: &Range<usize>,
+    width: LayoutUnit,
+    style: super::RubyStyle,
+    before_track: bool,
+    area: super::geometry::Bounds,
+    child: &ParagraphData,
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> (LayoutUnit, LayoutUnit) {
+    if style.overhang != super::RubyOverhang::Auto {
+        return (LayoutUnit::ZERO, LayoutUnit::ZERO);
+    }
+    let natural = columns
+        .clone()
+        .fold(LayoutUnit::ZERO, |w, i| w.add(base[i], sat))
+        .add(internal_cross(right_columns, cross, columns, sat), sat);
+    let excess = width.sub(natural, sat).max(LayoutUnit::ZERO);
+    if excess == LayoutUnit::ZERO {
+        return (LayoutUnit::ZERO, LayoutUnit::ZERO);
+    }
+    let cap = LayoutUnit::from_f32_round(child.style_metrics[0].ic / 2.0, sat);
+    let (before, after) = super::overhang::allowances(
+        data,
+        ruby,
+        selected,
+        bases,
+        columns,
+        before_track,
+        area,
+        cap,
+        atomics,
+        cx,
+        sat,
+    );
+    let total = excess.min(before.add(after, sat));
+    let leading = before.min(total.div_i32(2));
+    let trailing = after.min(total.sub(leading, sat));
+    let leading = leading.add(
+        before
+            .sub(leading, sat)
+            .min(total.sub(leading, sat).sub(trailing, sat)),
+        sat,
+    );
+    (leading, trailing)
 }
 
 pub(crate) fn merging(data: &ParagraphData, style: super::RubyStyle) -> bool {
@@ -261,23 +446,17 @@ pub(crate) fn inter_character(data: &ParagraphData, style: super::RubyStyle) -> 
 }
 
 pub(crate) fn rightmost(
-    data: &ParagraphData,
-    ruby: &super::prepare::PreparedRuby,
+    right_columns: &std::collections::HashMap<(usize, usize), usize>,
     columns: &Range<usize>,
 ) -> usize {
-    let direction = ruby.box_index.map_or(data.style.direction, |b| {
-        data.styles[data.boxes[b as usize].style as usize].direction
-    });
-    if direction == crate::geometry::Direction::Ltr {
-        columns.end - 1
-    } else {
-        columns.start
-    }
+    right_columns
+        .get(&(columns.start, columns.end))
+        .copied()
+        .unwrap_or(columns.end - 1)
 }
 
 pub(crate) fn internal_cross(
-    data: &ParagraphData,
-    ruby: &super::prepare::PreparedRuby,
+    right_columns: &std::collections::HashMap<(usize, usize), usize>,
     cross: &[LayoutUnit],
     columns: &Range<usize>,
     sat: &mut Saturation,
@@ -285,7 +464,7 @@ pub(crate) fn internal_cross(
     if columns.is_empty() {
         return LayoutUnit::ZERO;
     }
-    let right = rightmost(data, ruby, columns);
+    let right = rightmost(right_columns, columns);
     columns
         .clone()
         .filter(|i| *i != right)

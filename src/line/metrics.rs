@@ -16,7 +16,7 @@ pub(crate) struct LineMetrics {
     pub(crate) empty: bool,
 }
 
-fn extents(
+pub(crate) fn extents(
     s: &InlineStyle,
     m: FontMetrics,
     vertical: Option<crate::font::VerticalFontMetrics>,
@@ -125,70 +125,66 @@ fn box_shift(
     value
 }
 
-pub(crate) fn measure(
-    data: &ParagraphData,
-    units: Range<usize>,
-    records: &[FragmentRecord],
-    overlay_runs: &[crate::shape::ShapedRun],
-    sat: &mut Saturation,
-) -> LineMetrics {
-    let root = &data.styles[0];
-    let root_metrics = data.style_metrics[0];
-    let root_upright = matches!(
-        data.style.writing_mode,
-        crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
-    ) && root.text_orientation != crate::style::TextOrientation::Sideways;
-    let (mut above, mut below) = extents(
-        root,
-        root_metrics.metrics,
-        root_metrics.vertical_metrics,
-        root_upright,
-    );
-    let mut cache = HashMap::new();
-    let mut parents = HashMap::new();
-    let mut atomic_styles = HashMap::new();
-    let mut empty = true;
-    let mut groups: HashMap<u32, (f32, f32)> = HashMap::new();
-    let mut combination_bases = Vec::new();
-    for (offset, u) in data.units[units.clone()].iter().enumerate() {
-        empty &= !matches!(u.kind, UnitKind::Tab | UnitKind::ForcedBreak);
-        parents.insert(u.item, u.parent_box);
-        if let UnitKind::Atomic { node } = u.kind {
-            atomic_styles.insert(node, (u.item, u.parent_box));
-        }
-        if let Some(index) = u.combine
-            && data.combine_spans[index as usize].units.start == units.start + offset
-        {
-            // Measure the parent square once, including tab-only compositions.
-            // Its internal line-height is 1em regardless of the inline strut.
-            empty = false;
-            let span = &data.combine_spans[index as usize];
-            let (base, group) = u
-                .parent_box
-                .map_or((0.0, None), |b| box_shift(data, b, &mut cache));
-            let base = base + data.combine_center_shift(data.items[u.item as usize].style);
-            let top = base - span.em / 2.0;
-            let bottom = base + span.em / 2.0;
-            if let Some(group) = group {
-                let bounds = groups.entry(group).or_insert((top, bottom));
-                bounds.0 = bounds.0.min(top);
-                bounds.1 = bounds.1.max(bottom);
-            } else {
-                above = above.max(-top);
-                below = below.max(bottom);
+/// Resolve real record extents independently of the selected line's solver.
+/// Both accepted lines and indexed ruby probes use these exact font instances.
+#[derive(Debug, Default)]
+pub(crate) struct ProfileResolver {
+    boxes: HashMap<u32, (f32, Option<u32>)>,
+    parents: HashMap<u32, Option<u32>>,
+    atomic_styles: HashMap<crate::node::NodeId, (u32, Option<u32>)>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct RecordProfile {
+    pub(crate) top: f32,
+    pub(crate) bottom: f32,
+    pub(crate) shift: f32,
+    pub(crate) group: Option<u32>,
+    pub(crate) own_group: Option<bool>,
+}
+
+impl ProfileResolver {
+    pub(crate) fn new(data: &ParagraphData, units: Range<usize>) -> Self {
+        let mut result = Self::default();
+        for u in &data.units[units] {
+            result.parents.insert(u.item, u.parent_box);
+            if let UnitKind::Atomic { node } = u.kind {
+                result.atomic_styles.insert(node, (u.item, u.parent_box));
             }
-            combination_bases.push((index as usize, base, group));
         }
+        result
     }
-    let mut shifts = Vec::with_capacity(records.len());
-    let mut own_groups: HashMap<usize, (f32, f32, bool)> = HashMap::new();
-    let mut memberships = Vec::with_capacity(records.len());
-    for (i, r) in records.iter().enumerate() {
+
+    pub(crate) fn combination(
+        &mut self,
+        data: &ParagraphData,
+        unit: &crate::analysis::units::Unit,
+    ) -> Option<RecordProfile> {
+        let index = unit.combine?;
+        let span = &data.combine_spans[index as usize];
+        let (base, group) = unit
+            .parent_box
+            .map_or((0.0, None), |b| box_shift(data, b, &mut self.boxes));
+        let base = base + data.combine_center_shift(data.items[unit.item as usize].style);
+        Some(RecordProfile {
+            top: base - span.em / 2.0,
+            bottom: base + span.em / 2.0,
+            shift: base,
+            group,
+            own_group: None,
+        })
+    }
+
+    pub(crate) fn record(
+        &mut self,
+        data: &ParagraphData,
+        r: &FragmentRecord,
+        overlay_runs: &[crate::shape::ShapedRun],
+    ) -> Option<RecordProfile> {
         let (a, d, base, group, own_group) = match &r.kind {
             RecordKind::Glyphs {
                 item, run, source, ..
             } => {
-                empty = false;
                 let s = &data.styles[data.items[*item as usize].style as usize];
                 let shaped = match source {
                     super::fragments::GlyphSource::Overlay { run: Some(run), .. } => {
@@ -212,11 +208,12 @@ pub(crate) fn measure(
                         shaped.orientation == crate::shape::orientation::RunOrientation::Upright,
                     )
                 };
-                let (base, group) = parents
+                let (base, group) = self
+                    .parents
                     .get(item)
                     .copied()
                     .flatten()
-                    .map_or((0.0, None), |b| box_shift(data, b, &mut cache));
+                    .map_or((0.0, None), |b| box_shift(data, b, &mut self.boxes));
                 let center_shift =
                     if shaped.orientation == crate::shape::orientation::RunOrientation::Combined {
                         data.combine_center_shift(data.items[*item as usize].style)
@@ -238,21 +235,9 @@ pub(crate) fn measure(
                     };
                 (a, d, base + center_shift, group, None)
             }
-            RecordKind::InlineBox {
-                box_index,
-                start_edge,
-                end_edge,
-                ..
-            } => {
+            RecordKind::InlineBox { box_index, .. } => {
                 let b = &data.boxes[*box_index as usize];
                 let s = &data.styles[b.style as usize];
-                let e = b.edges;
-                empty &= !((*start_edge && (e.inline_start_total() != 0.0))
-                    || (*end_edge && (e.inline_end_total() != 0.0))
-                    || e.border.block_start != 0.0
-                    || e.border.block_end != 0.0
-                    || e.padding.block_start != 0.0
-                    || e.padding.block_end != 0.0);
                 let style_metrics = data.style_metrics[b.style as usize];
                 let upright = matches!(
                     data.style.writing_mode,
@@ -265,12 +250,11 @@ pub(crate) fn measure(
                     style_metrics.vertical_metrics,
                     upright,
                 );
-                let (base, group) = box_shift(data, *box_index, &mut cache);
+                let (base, group) = box_shift(data, *box_index, &mut self.boxes);
                 (a, d, base, group, None)
             }
             RecordKind::Atomic { node, size, .. } => {
-                empty = false;
-                let (item, parent_box) = atomic_styles[node];
+                let (item, parent_box) = self.atomic_styles[node];
                 let s = &data.styles[data.items[item as usize].style as usize];
                 let parent_style = parent_box.map_or(0, |p| data.boxes[p as usize].style) as usize;
                 let parent = data.style_metrics[parent_style];
@@ -281,7 +265,7 @@ pub(crate) fn measure(
                 ) && data.styles[parent_style].text_orientation
                     != crate::style::TextOrientation::Sideways;
                 let (base, group) =
-                    parent_box.map_or((0.0, None), |b| box_shift(data, b, &mut cache));
+                    parent_box.map_or((0.0, None), |b| box_shift(data, b, &mut self.boxes));
                 let height = size.block_size + size.margins.block_start + size.margins.block_end;
                 let central = data.baseline_kind(*node) == Some(BaselineKind::Central);
                 let baseline = size
@@ -322,13 +306,104 @@ pub(crate) fn measure(
                 )
             }
             RecordKind::Anchor { .. } => {
-                shifts.push(0.0);
-                memberships.push((None, None));
-                continue;
+                return None;
             }
         };
         let top = base - a;
         let bottom = base + d;
+        Some(RecordProfile {
+            top,
+            bottom,
+            shift: base,
+            group,
+            own_group,
+        })
+    }
+}
+
+pub(crate) fn measure(
+    data: &ParagraphData,
+    units: Range<usize>,
+    records: &[FragmentRecord],
+    overlay_runs: &[crate::shape::ShapedRun],
+    sat: &mut Saturation,
+) -> LineMetrics {
+    let root = &data.styles[0];
+    let root_metrics = data.style_metrics[0];
+    let root_upright = matches!(
+        data.style.writing_mode,
+        crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
+    ) && root.text_orientation != crate::style::TextOrientation::Sideways;
+    let (mut above, mut below) = extents(
+        root,
+        root_metrics.metrics,
+        root_metrics.vertical_metrics,
+        root_upright,
+    );
+    let mut resolver = ProfileResolver::new(data, units.clone());
+    let mut empty = true;
+    let mut groups: HashMap<u32, (f32, f32)> = HashMap::new();
+    let mut combination_bases = Vec::new();
+    for (offset, u) in data.units[units.clone()].iter().enumerate() {
+        empty &= !matches!(u.kind, UnitKind::Tab | UnitKind::ForcedBreak);
+        if let Some(index) = u.combine
+            && data.combine_spans[index as usize].units.start == units.start + offset
+        {
+            // Measure the parent square once, including tab-only compositions.
+            // Its internal line-height is 1em regardless of the inline strut.
+            empty = false;
+            let span = &data.combine_spans[index as usize];
+            let (base, group) = u
+                .parent_box
+                .map_or((0.0, None), |b| box_shift(data, b, &mut resolver.boxes));
+            let base = base + data.combine_center_shift(data.items[u.item as usize].style);
+            let top = base - span.em / 2.0;
+            let bottom = base + span.em / 2.0;
+            if let Some(group) = group {
+                let bounds = groups.entry(group).or_insert((top, bottom));
+                bounds.0 = bounds.0.min(top);
+                bounds.1 = bounds.1.max(bottom);
+            } else {
+                above = above.max(-top);
+                below = below.max(bottom);
+            }
+            combination_bases.push((index as usize, base, group));
+        }
+    }
+    let mut shifts = Vec::with_capacity(records.len());
+    let mut own_groups: HashMap<usize, (f32, f32, bool)> = HashMap::new();
+    let mut memberships = Vec::with_capacity(records.len());
+    for (i, r) in records.iter().enumerate() {
+        match &r.kind {
+            RecordKind::Glyphs { .. } | RecordKind::Atomic { .. } => empty = false,
+            RecordKind::InlineBox {
+                box_index,
+                start_edge,
+                end_edge,
+                ..
+            } => {
+                let e = data.boxes[*box_index as usize].edges;
+                empty &= !((*start_edge && (e.inline_start_total() != 0.0))
+                    || (*end_edge && (e.inline_end_total() != 0.0))
+                    || e.border.block_start != 0.0
+                    || e.border.block_end != 0.0
+                    || e.padding.block_start != 0.0
+                    || e.padding.block_end != 0.0);
+            }
+            RecordKind::Anchor { .. } => {}
+        }
+        let Some(profile) = resolver.record(data, r, overlay_runs) else {
+            shifts.push(0.0);
+            memberships.push((None, None));
+            continue;
+        };
+        let RecordProfile {
+            top,
+            bottom,
+            shift: base,
+            group,
+            own_group,
+        } = profile;
         if let Some(g) = group {
             let v = groups.entry(g).or_insert((top, bottom));
             v.0 = v.0.min(top);

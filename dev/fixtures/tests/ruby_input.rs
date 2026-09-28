@@ -154,7 +154,11 @@ fn ruby_auto_all_and_explicit_spans_preserve_base_order() {
 
 #[test]
 fn ruby_rejects_invalid_explicit_spans_without_shaping() {
-    for spans in [vec![1..1], vec![0..4], vec![0..2, 1..3]] {
+    for spans in [
+        std::iter::once(1..1).collect(),
+        std::iter::once(0..4).collect(),
+        vec![0..2, 1..3],
+    ] {
         let annotations = spans
             .into_iter()
             .enumerate()

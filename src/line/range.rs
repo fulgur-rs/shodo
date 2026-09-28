@@ -16,7 +16,9 @@ use std::ops::Range;
 pub(crate) struct RangeCache {
     root: Option<(u64, usize, u64)>,
     sets: HashMap<(u64, usize), Costs>,
+    pub(super) metrics: HashMap<(u64, usize), super::metric_index::MetricIndex>,
     blocks: HashMap<(u64, usize, usize, usize), LayoutUnit>,
+    pub(crate) neighbors: HashMap<(u64, usize), crate::ruby::overhang::NeighborIndex>,
 }
 
 impl RangeCache {
@@ -26,9 +28,23 @@ impl RangeCache {
             data as *const ParagraphData as usize,
             atomics.revision,
         );
+        // Retained nested annotation layout revisits datasets already indexed
+        // as children of this root. Keep their scalar tables together, without
+        // treating child materialization as a new independent paragraph. A new
+        // dataset or changed atomic revision still replaces the whole cache.
+        let key = (root.0, root.1);
+        if self.root.is_some_and(|owner| owner.2 == root.2)
+            && (self.sets.contains_key(&key)
+                || self.metrics.contains_key(&key)
+                || self.neighbors.contains_key(&key))
+        {
+            return;
+        }
         if self.root != Some(root) {
             self.sets.clear();
             self.blocks.clear();
+            self.metrics.clear();
+            self.neighbors.clear();
             self.root = Some(root);
         }
     }
@@ -54,129 +70,15 @@ pub(crate) fn block_size(
     if let Some(height) = cx.ruby_ranges.blocks.get(&key) {
         return *height;
     }
-    let scan = super::plan::selected_raw(
-        data,
-        range.start,
-        range.end,
-        LayoutUnit::ZERO,
-        LayoutUnit::ZERO,
-        0,
-        &Default::default(),
-        LayoutUnit::MAX,
-        atomics,
-        cx,
-        sat,
-    );
-    let visible_hyphen = scan
-        .overlays
-        .iter()
-        .find_map(|w| w.hyphen.as_ref().map(|t| t.start));
-    let (raw, _) = super::fragments::build(
-        data,
-        range.clone(),
-        scan.hang_start,
-        &scan.widths,
-        LayoutUnit::ZERO,
-        atomics,
-        visible_hyphen,
-        None,
-    );
-    let mut records = Vec::with_capacity(raw.len());
-    // A partially replaced source run still contributes its real instance on
-    // uncovered text; completely replaced runs contribute only owned metrics.
-    for record in raw {
-        if let super::fragments::RecordKind::Glyphs { text, .. } = &record.kind {
-            let mut uncovered = vec![text.clone()];
-            for window in &scan.overlays {
-                uncovered = uncovered
-                    .into_iter()
-                    .flat_map(|part| {
-                        if window.text.end <= part.start || part.end <= window.text.start {
-                            return vec![part];
-                        }
-                        let mut rest = Vec::new();
-                        if part.start < window.text.start {
-                            rest.push(part.start..window.text.start);
-                        }
-                        if window.text.end < part.end {
-                            rest.push(window.text.end..part.end);
-                        }
-                        rest
-                    })
-                    .collect();
-            }
-            if uncovered.is_empty() {
-                continue;
-            }
-        }
-        records.push(record);
-    }
-    let mut runs = Vec::new();
-    for window in scan.overlays {
-        for run in window.runs {
-            if run.glyphs.is_empty() {
-                continue;
-            }
-            let index = runs.len() as u32;
-            records.push(super::fragments::FragmentRecord {
-                inline_start: LayoutUnit::ZERO,
-                inline_size: LayoutUnit::ZERO,
-                level: data.base_level,
-                kind: super::fragments::RecordKind::Glyphs {
-                    source: super::fragments::GlyphSource::Overlay {
-                        glyphs: (run.glyphs.start, run.glyphs.end),
-                        clusters: (0, 0),
-                        run: Some(index),
-                    },
-                    run: 0,
-                    glyphs: run.glyphs.clone(),
-                    item: run.item,
-                    text: run.text.clone(),
-                },
-            });
-            runs.push(run);
-        }
-    }
-    #[cfg(test)]
-    {
-        cx.ruby_measure_visits += range.len() + records.len();
-    }
-    let metrics = super::metrics::measure(data, range.clone(), &records, &runs, sat);
-    let frame = crate::ruby::geometry::Frame::new(
-        data,
-        range,
-        &records,
-        &runs,
-        metrics.baseline,
-        &metrics.shifts,
-        metrics.block_size,
-    );
-    let mut heights = Vec::with_capacity(ruby.fragments.len());
+    let metrics = super::metric_index::measure(data, range, atomics, cx, sat);
+    let mut bounds = crate::ruby::geometry::Bounds {
+        top: LayoutUnit::ZERO.sub(metrics.baseline, sat),
+        bottom: metrics.block_size.sub(metrics.baseline, sat),
+    };
     for fragment in &ruby.fragments {
-        let container = &data.ruby.containers[fragment.container];
-        let mut children = Vec::with_capacity(fragment.lanes.len());
-        for lane in &fragment.lanes {
-            let child = &container.lanes[lane.lane].paragraph.data;
-            let nested = crate::ruby::measure::candidate_inner(
-                child,
-                lane.units.start,
-                lane.units.end,
-                atomics,
-                cx,
-                sat,
-            );
-            children.push(block_size(
-                child,
-                lane.units.clone(),
-                &nested,
-                atomics,
-                cx,
-                sat,
-            ));
-        }
-        heights.push(children);
+        bounds = bounds.union(fragment.contribution);
     }
-    let height = crate::ruby::geometry::layout(&frame, ruby, &heights, sat).advance;
+    let height = bounds.height(sat);
     cx.ruby_ranges.blocks.insert(key, height);
     height
 }
@@ -349,7 +251,7 @@ pub(super) fn width(
         hyphen_end.and_then(|end| super::hyphen::line(data, range.start, end, cx, sat));
     let hyphen_leaf = hyphen_windows
         .as_ref()
-        .and_then(|_| hyphen_end)
+        .and(hyphen_end)
         .map(|end| (end - 1, super::spacing::hyphen_leaf(data, end - 1, sat)));
     if cx
         .ruby_ranges

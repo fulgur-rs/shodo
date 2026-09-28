@@ -449,6 +449,7 @@ pub(super) fn resolve(
     let data = Arc::clone(&p.data);
     let mut result = Scan {
         ruby: None,
+        ruby_caret_gaps: Vec::new(),
         prepared: false,
         overlays: Vec::new(),
         end,

@@ -10,7 +10,7 @@ use crate::{RubyAlign, RubyPosition};
 use std::collections::HashMap;
 use std::ops::Range;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Bounds {
     pub(crate) top: LayoutUnit,
     pub(crate) bottom: LayoutUnit,
@@ -19,7 +19,7 @@ impl Bounds {
     pub(crate) fn height(self, sat: &mut Saturation) -> LayoutUnit {
         self.bottom.sub(self.top, sat).max(LayoutUnit::ZERO)
     }
-    fn union(self, other: Self) -> Self {
+    pub(crate) fn union(self, other: Self) -> Self {
         Self {
             top: self.top.min(other.top),
             bottom: self.bottom.max(other.bottom),
@@ -72,32 +72,14 @@ impl<'a> Frame<'a> {
     }
 
     fn font_bounds(&self, style: u32, center: LayoutUnit, sat: &mut Saturation) -> Bounds {
-        let s = &self.data.styles[style as usize];
-        let m = self.data.style_metrics[style as usize];
-        let upright = self.data.style.writing_mode != WritingMode::HorizontalTb
-            && s.text_orientation != TextOrientation::Sideways;
-        let (a, d) = if upright {
-            m.vertical_metrics
-                .map_or((s.font_size / 2.0, s.font_size / 2.0), |m| {
-                    (m.ascent, m.descent)
-                })
-        } else {
-            (m.metrics.ascent, m.metrics.descent)
-        };
-        self.bounds(center, a, d, sat)
-    }
-
-    fn bounds(&self, center: LayoutUnit, mut a: f32, mut d: f32, sat: &mut Saturation) -> Bounds {
-        if self.data.style.writing_mode == WritingMode::VerticalLr {
-            std::mem::swap(&mut a, &mut d);
-        }
+        let (a, d) = font_extents(self.data, style, sat);
         Bounds {
-            top: center.sub(LayoutUnit::from_f32_round(a, sat), sat),
-            bottom: center.add(LayoutUnit::from_f32_round(d, sat), sat),
+            top: center.sub(a, sat),
+            bottom: center.add(d, sat),
         }
     }
 
-    fn box_content(&self, box_index: Option<u32>, sat: &mut Saturation) -> Bounds {
+    pub(crate) fn box_content(&self, box_index: Option<u32>, sat: &mut Saturation) -> Bounds {
         let style = box_index.map_or(0, |b| self.data.boxes[b as usize].style);
         let shift = box_index
             .and_then(|b| self.boxes.get(&b))
@@ -150,70 +132,13 @@ impl<'a> Frame<'a> {
         }
     }
 
-    fn record_bounds(&self, index: usize, sat: &mut Saturation) -> Option<Bounds> {
+    pub(crate) fn record_bounds(&self, index: usize, sat: &mut Saturation) -> Option<Bounds> {
         let center = self.baseline.add(self.shifts[index], sat);
-        match &self.records[index].kind {
-            RecordKind::Glyphs {
-                run, source, item, ..
-            } => {
-                let run = match source {
-                    GlyphSource::Overlay { run: Some(i), .. } => &self.runs[*i as usize],
-                    _ => &self.data.runs[*run as usize],
-                };
-                let m = run
-                    .instance
-                    .metrics
-                    .unwrap_or_else(|| self.data.fonts.metrics(run.font, run.font_size));
-                let (a, d) = match run.orientation {
-                    crate::shape::orientation::RunOrientation::Upright => run
-                        .instance
-                        .vertical_metrics
-                        .map_or((run.font_size / 2.0, run.font_size / 2.0), |v| {
-                            (v.ascent, v.descent)
-                        }),
-                    crate::shape::orientation::RunOrientation::Combined => {
-                        let size = self.data.styles[self.data.items[*item as usize].style as usize]
-                            .font_size;
-                        (size / 2.0, size / 2.0)
-                    }
-                    _ => (m.ascent, m.descent),
-                };
-                Some(self.bounds(center, a, d, sat))
-            }
-            RecordKind::InlineBox { box_index, .. } => {
-                let b = &self.data.boxes[*box_index as usize];
-                let mut bounds = self.font_bounds(b.style, center, sat);
-                bounds.top = bounds.top.sub(
-                    LayoutUnit::from_f32_round(
-                        b.edges.padding.block_start + b.edges.border.block_start,
-                        sat,
-                    ),
-                    sat,
-                );
-                bounds.bottom = bounds.bottom.add(
-                    LayoutUnit::from_f32_round(
-                        b.edges.padding.block_end + b.edges.border.block_end,
-                        sat,
-                    ),
-                    sat,
-                );
-                Some(bounds)
-            }
-            RecordKind::Atomic { size, node, .. } => {
-                let height = size.block_size + size.margins.block_start + size.margins.block_end;
-                let baseline = size.baseline.unwrap_or(
-                    if self.data.baseline_kind(*node)
-                        == Some(crate::geometry::BaselineKind::Central)
-                    {
-                        height / 2.0
-                    } else {
-                        height
-                    },
-                );
-                Some(self.bounds(center, baseline, height - baseline, sat))
-            }
-            RecordKind::Anchor { .. } => None,
-        }
+        let (above, below) = record_extents(self.data, &self.records[index], self.runs, sat)?;
+        Some(Bounds {
+            top: center.sub(above, sat),
+            bottom: center.add(below, sat),
+        })
     }
 
     fn column_area(
@@ -236,30 +161,110 @@ impl<'a> Frame<'a> {
         }
         bounds
     }
+}
 
-    fn line_height(&self, fragment: &RubyFragmentMeasure, sat: &mut Saturation) -> LayoutUnit {
-        let ruby = &self.data.ruby.containers[fragment.container];
-        let style = ruby
-            .box_index
-            .map_or(0, |b| self.data.boxes[b as usize].style) as usize;
-        let s = &self.data.styles[style];
-        let m = self.data.style_metrics[style];
-        let height = match s.line_height {
-            LineHeight::Px(v) => v,
-            LineHeight::Number(n) => n * s.font_size,
-            LineHeight::Normal => {
-                if self.data.style.writing_mode != WritingMode::HorizontalTb
-                    && s.text_orientation != TextOrientation::Sideways
-                {
-                    m.vertical_metrics
-                        .map_or(s.font_size, |v| v.ascent + v.descent + v.line_gap)
-                } else {
-                    m.metrics.ascent + m.metrics.descent + m.metrics.line_gap
-                }
-            }
-        };
-        LayoutUnit::from_f32_ceil(height, sat)
+/// Actual font-content extents in logical block coordinates, before displacement.
+pub(crate) fn font_extents(
+    data: &ParagraphData,
+    style: u32,
+    sat: &mut Saturation,
+) -> (LayoutUnit, LayoutUnit) {
+    let s = &data.styles[style as usize];
+    let m = data.style_metrics[style as usize];
+    let upright = matches!(
+        data.style.writing_mode,
+        WritingMode::VerticalRl | WritingMode::VerticalLr
+    ) && s.text_orientation != TextOrientation::Sideways;
+    let (a, d) = if upright {
+        m.vertical_metrics
+            .map_or((s.font_size / 2.0, s.font_size / 2.0), |m| {
+                (m.ascent, m.descent)
+            })
+    } else {
+        (m.metrics.ascent, m.metrics.descent)
+    };
+    fixed_extents(data, a, d, sat)
+}
+fn fixed_extents(
+    data: &ParagraphData,
+    mut a: f32,
+    mut d: f32,
+    sat: &mut Saturation,
+) -> (LayoutUnit, LayoutUnit) {
+    if data.style.writing_mode == WritingMode::VerticalLr {
+        std::mem::swap(&mut a, &mut d);
     }
+    (
+        LayoutUnit::from_f32_round(a, sat),
+        LayoutUnit::from_f32_round(d, sat),
+    )
+}
+pub(crate) fn record_extents(
+    data: &ParagraphData,
+    record: &FragmentRecord,
+    runs: &[ShapedRun],
+    sat: &mut Saturation,
+) -> Option<(LayoutUnit, LayoutUnit)> {
+    Some(match &record.kind {
+        RecordKind::Glyphs {
+            run, source, item, ..
+        } => {
+            let run = match source {
+                GlyphSource::Overlay { run: Some(i), .. } => &runs[*i as usize],
+                _ => &data.runs[*run as usize],
+            };
+            let m = run
+                .instance
+                .metrics
+                .unwrap_or_else(|| data.fonts.metrics(run.font, run.font_size));
+            let (a, d) = match run.orientation {
+                crate::shape::orientation::RunOrientation::Upright => run
+                    .instance
+                    .vertical_metrics
+                    .map_or((run.font_size / 2.0, run.font_size / 2.0), |v| {
+                        (v.ascent, v.descent)
+                    }),
+                crate::shape::orientation::RunOrientation::Combined => {
+                    let size = data.styles[data.items[*item as usize].style as usize].font_size;
+                    (size / 2.0, size / 2.0)
+                }
+                _ => (m.ascent, m.descent),
+            };
+            fixed_extents(data, a, d, sat)
+        }
+        RecordKind::InlineBox { box_index, .. } => {
+            let b = &data.boxes[*box_index as usize];
+            let (a, d) = font_extents(data, b.style, sat);
+            (
+                a.add(
+                    LayoutUnit::from_f32_round(
+                        b.edges.padding.block_start + b.edges.border.block_start,
+                        sat,
+                    ),
+                    sat,
+                ),
+                d.add(
+                    LayoutUnit::from_f32_round(
+                        b.edges.padding.block_end + b.edges.border.block_end,
+                        sat,
+                    ),
+                    sat,
+                ),
+            )
+        }
+        RecordKind::Atomic { size, node, .. } => {
+            let height = size.block_size + size.margins.block_start + size.margins.block_end;
+            let baseline = size.baseline.unwrap_or(
+                if data.baseline_kind(*node) == Some(crate::geometry::BaselineKind::Central) {
+                    height / 2.0
+                } else {
+                    height
+                },
+            );
+            fixed_extents(data, baseline, height - baseline, sat)
+        }
+        RecordKind::Anchor { .. } => return None,
+    })
 }
 
 pub(crate) struct LaneBlock {
@@ -270,6 +275,173 @@ pub(crate) struct BlockLayout {
     pub(crate) lanes: Vec<Vec<LaneBlock>>,
     pub(crate) shift: LayoutUnit,
     pub(crate) advance: LayoutUnit,
+}
+
+/// Resolve line-relative sides once for both width allowances and placement.
+/// Horizontal InterCharacter levels do not consume an alternating side.
+pub(crate) fn level_sides(data: &ParagraphData, ruby: &super::prepare::PreparedRuby) -> Vec<bool> {
+    let mut before = vec![true; ruby.levels.len()];
+    let mut previous = None;
+    for (i, style) in ruby.levels.iter().enumerate() {
+        if super::measure::inter_character(data, *style) {
+            continue;
+        }
+        let over = match style.position {
+            RubyPosition::Under => false,
+            RubyPosition::Alternate | RubyPosition::AlternateUnder => {
+                previous.map_or(style.position == RubyPosition::Alternate, |p: bool| !p)
+            }
+            _ => true,
+        };
+        previous = Some(over);
+        before[i] = over != (data.style.writing_mode == WritingMode::VerticalLr);
+    }
+    before
+}
+
+fn line_height(
+    data: &ParagraphData,
+    ruby: &super::prepare::PreparedRuby,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    let style = ruby.box_index.map_or(0, |b| data.boxes[b as usize].style) as usize;
+    let s = &data.styles[style];
+    let m = data.style_metrics[style];
+    let height = match s.line_height {
+        LineHeight::Px(v) => v,
+        LineHeight::Number(n) => n * s.font_size,
+        LineHeight::Normal => {
+            if matches!(
+                data.style.writing_mode,
+                WritingMode::VerticalRl | WritingMode::VerticalLr
+            ) && s.text_orientation != TextOrientation::Sideways
+            {
+                m.vertical_metrics
+                    .map_or(s.font_size, |v| v.ascent + v.descent + v.line_gap)
+            } else {
+                m.metrics.ascent + m.metrics.descent + m.metrics.line_gap
+            }
+        }
+    };
+    LayoutUnit::from_f32_ceil(height, sat)
+}
+
+pub(crate) struct Tracks {
+    pub(crate) lanes: Vec<LaneBlock>,
+    pub(crate) base: Bounds,
+    pub(crate) whole: Bounds,
+    pub(crate) contribution: Bounds,
+}
+
+/// The same track stack serves indexed clearance and retained child output.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn tracks(
+    data: &ParagraphData,
+    ruby: &super::prepare::PreparedRuby,
+    bases: &[Range<usize>],
+    lanes: &[super::measure::LaneMeasure],
+    mut base: Bounds,
+    contents: &[Bounds],
+    right_columns: &std::collections::HashMap<(usize, usize), usize>,
+    heights: &[LayoutUnit],
+    sat: &mut Saturation,
+) -> Tracks {
+    let mut selected: Vec<_> = lanes
+        .iter()
+        .map(|_| LaneBlock {
+            block: LayoutUnit::ZERO,
+            inline_size: None,
+        })
+        .collect();
+    let before = level_sides(data, ruby);
+    let mut levels = vec![LayoutUnit::ZERO; ruby.levels.len()];
+    for (i, (lane, height)) in lanes.iter().zip(heights).enumerate() {
+        let source = &ruby.lanes[lane.lane];
+        let style = ruby.levels[source.level];
+        if super::measure::inter_character(data, style) {
+            let first = source.columns.start.max(
+                bases
+                    .iter()
+                    .position(|r| !r.is_empty())
+                    .unwrap_or(source.columns.start),
+            );
+            let last = source.columns.end.min(
+                bases
+                    .iter()
+                    .rposition(|r| !r.is_empty())
+                    .map_or(source.columns.end, |i| i + 1),
+            );
+            let right = super::measure::rightmost(right_columns, &(first..last));
+            let content = contents[right];
+            let height = lane.width.max(content.height(sat));
+            let centered = if style.align == RubyAlign::Start {
+                LayoutUnit::ZERO
+            } else {
+                LayoutUnit::from_raw(content.height(sat).sub(height, sat).raw() / 2)
+            };
+            let top = content.top.add(centered, sat);
+            selected[i] = LaneBlock {
+                block: top,
+                inline_size: Some(height),
+            };
+            base = base.union(Bounds {
+                top,
+                bottom: top.add(height, sat),
+            });
+        } else {
+            levels[source.level] = levels[source.level].max(*height);
+        }
+    }
+    let mut over = LayoutUnit::ZERO;
+    let mut under = LayoutUnit::ZERO;
+    for (level, height) in levels.iter().enumerate() {
+        for (i, (lane, child_height)) in lanes.iter().zip(heights).enumerate() {
+            if ruby.lanes[lane.lane].level != level || selected[i].inline_size.is_some() {
+                continue;
+            }
+            selected[i].block = if before[level] {
+                base.top.sub(over, sat).sub(*child_height, sat)
+            } else {
+                base.bottom.add(under, sat)
+            };
+        }
+        if before[level] {
+            over = over.add(*height, sat);
+        } else {
+            under = under.add(*height, sat);
+        }
+    }
+    let whole = Bounds {
+        top: base.top.sub(over, sat),
+        bottom: base.bottom.add(under, sat),
+    };
+    let leading = line_height(data, ruby, sat)
+        .sub(base.height(sat), sat)
+        .max(LayoutUnit::ZERO);
+    let half = LayoutUnit::from_raw(leading.raw() / 2);
+    let remainder = leading.sub(half, sat);
+    let total = over.add(under, sat);
+    let extra = total.sub(leading, sat).max(LayoutUnit::ZERO);
+    let extra_over = if total == LayoutUnit::ZERO {
+        LayoutUnit::ZERO
+    } else {
+        LayoutUnit::from_raw(
+            ((i64::from(extra.raw()) * i64::from(over.raw())) / i64::from(total.raw())) as i32,
+        )
+    };
+    let own = Bounds {
+        top: base.top.sub(half, sat).sub(extra_over, sat),
+        bottom: base
+            .bottom
+            .add(remainder, sat)
+            .add(extra.sub(extra_over, sat), sat),
+    };
+    Tracks {
+        lanes: selected,
+        base,
+        whole,
+        contribution: own,
+    }
 }
 
 /// `heights` are actual scalar child measurements or retained child advances.
@@ -302,120 +474,23 @@ pub(crate) fn layout(
                 base = base.union(*area);
             }
         }
-        let mut selected: Vec<_> = fragment
-            .lanes
-            .iter()
-            .map(|_| LaneBlock {
-                block: LayoutUnit::ZERO,
-                inline_size: None,
-            })
+        let contents: Vec<_> = (0..fragment.bases.len())
+            .map(|i| frame.column_content(fragment, i, sat))
             .collect();
-        let mut before = vec![true; ruby.levels.len()];
-        let mut previous = None;
-        for (i, style) in ruby.levels.iter().enumerate() {
-            if super::measure::inter_character(data, *style) {
-                continue;
-            }
-            let over = match style.position {
-                RubyPosition::Under => false,
-                RubyPosition::Alternate | RubyPosition::AlternateUnder => {
-                    previous.map_or(style.position == RubyPosition::Alternate, |p: bool| !p)
-                }
-                _ => true,
-            };
-            previous = Some(over);
-            before[i] = over != (data.style.writing_mode == WritingMode::VerticalLr);
-        }
-        let mut levels = vec![LayoutUnit::ZERO; ruby.levels.len()];
-        for (i, (lane, height)) in fragment.lanes.iter().zip(heights).enumerate() {
-            let source = &ruby.lanes[lane.lane];
-            let style = ruby.levels[source.level];
-            if super::measure::inter_character(data, style) {
-                let first = source.columns.start.max(
-                    fragment
-                        .bases
-                        .iter()
-                        .position(|r| !r.is_empty())
-                        .unwrap_or(source.columns.start),
-                );
-                let last = source.columns.end.min(
-                    fragment
-                        .bases
-                        .iter()
-                        .rposition(|r| !r.is_empty())
-                        .map_or(source.columns.end, |i| i + 1),
-                );
-                let right = super::measure::rightmost(data, ruby, &(first..last));
-                let content = frame.column_content(fragment, right, sat);
-                let height = lane.width.max(content.height(sat));
-                let centered = if style.align == RubyAlign::Start {
-                    LayoutUnit::ZERO
-                } else {
-                    LayoutUnit::from_raw(content.height(sat).sub(height, sat).raw() / 2)
-                };
-                let top = content.top.add(centered, sat);
-                selected[i] = LaneBlock {
-                    block: top,
-                    inline_size: Some(height),
-                };
-                base = base.union(Bounds {
-                    top,
-                    bottom: top.add(height, sat),
-                });
-            } else {
-                levels[source.level] = levels[source.level].max(*height);
-            }
-        }
-        let mut over = LayoutUnit::ZERO;
-        let mut under = LayoutUnit::ZERO;
-        for (level, height) in levels.iter().enumerate() {
-            for (i, (lane, child_height)) in fragment.lanes.iter().zip(heights).enumerate() {
-                if ruby.lanes[lane.lane].level != level || selected[i].inline_size.is_some() {
-                    continue;
-                }
-                selected[i].block = if before[level] {
-                    base.top.sub(over, sat).sub(*child_height, sat)
-                } else {
-                    base.bottom.add(under, sat)
-                };
-            }
-            if before[level] {
-                over = over.add(*height, sat);
-            } else {
-                under = under.add(*height, sat);
-            }
-        }
-        whole.push((
-            fragment.units.clone(),
-            Bounds {
-                top: base.top.sub(over, sat),
-                bottom: base.bottom.add(under, sat),
-            },
-        ));
-        let leading = frame
-            .line_height(fragment, sat)
-            .sub(base.height(sat), sat)
-            .max(LayoutUnit::ZERO);
-        let half = LayoutUnit::from_raw(leading.raw() / 2);
-        let remainder = leading.sub(half, sat);
-        let total = over.add(under, sat);
-        let extra = total.sub(leading, sat).max(LayoutUnit::ZERO);
-        let extra_over = if total == LayoutUnit::ZERO {
-            LayoutUnit::ZERO
-        } else {
-            LayoutUnit::from_raw(
-                ((i64::from(extra.raw()) * i64::from(over.raw())) / i64::from(total.raw())) as i32,
-            )
-        };
-        let own = Bounds {
-            top: base.top.sub(half, sat).sub(extra_over, sat),
-            bottom: base
-                .bottom
-                .add(remainder, sat)
-                .add(extra.sub(extra_over, sat), sat),
-        };
-        contribution = contribution.union(own);
-        lanes.push(selected);
+        let result = tracks(
+            data,
+            ruby,
+            &fragment.bases,
+            &fragment.lanes,
+            base,
+            &contents,
+            &fragment.right_columns,
+            heights,
+            sat,
+        );
+        whole.push((fragment.units.clone(), result.whole));
+        contribution = contribution.union(result.contribution);
+        lanes.push(result.lanes);
     }
     BlockLayout {
         lanes,

@@ -40,6 +40,7 @@ pub enum BreakReason {
 #[derive(Clone)]
 pub struct Line {
     pub(crate) ruby: Vec<ruby::RubyAnnotationRecord>,
+    pub(crate) ruby_caret_gaps: Vec<crate::ruby::align::CaretGap>,
     pub(crate) data: Arc<ParagraphData>,
     pub(crate) break_token: BreakToken,
     pub(crate) reason: BreakReason,
@@ -124,6 +125,26 @@ impl Line {
             .get(index)
             .filter(|c| c.text_range.start <= offset as usize)
     }
+    pub(crate) fn ruby_caret_padding(&self, text: &Range<u32>) -> (f32, f32) {
+        let begin = self
+            .ruby_caret_gaps
+            .partition_point(|gap| gap.text.end <= text.start);
+        let mut before = LayoutUnit::ZERO;
+        let mut after = LayoutUnit::ZERO;
+        for gap in self.ruby_caret_gaps[begin..]
+            .iter()
+            .take_while(|gap| gap.text.start < text.end)
+        {
+            if text.start <= gap.text.start {
+                before = before + gap.before;
+            }
+            if gap.text.end <= text.end {
+                after = after + gap.after;
+            }
+        }
+        (before.to_f32(), after.to_f32())
+    }
+
     /// Effective inline direction for paint coordinate conversion. Vertical
     /// `text-orientation: upright` uses LTR without changing inherited style.
     pub fn used_direction(&self) -> crate::geometry::Direction {
@@ -341,8 +362,11 @@ impl Line {
             .unwrap_or(0..0);
         let hanging_end = scan.hanging_end;
         let hanging_start = scan.punctuation_edges.hang_start;
+        let mut ruby_caret_gaps = scan.ruby_caret_gaps;
+        ruby_caret_gaps.sort_by_key(|gap| gap.text.start);
         Line {
             ruby: Vec::new(),
+            ruby_caret_gaps,
             data: Arc::clone(&para.data),
             break_token: BreakToken {
                 para: data.id,

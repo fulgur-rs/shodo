@@ -7,6 +7,7 @@ pub(crate) mod geometry;
 mod index;
 pub(crate) mod input;
 pub(crate) mod measure;
+pub(crate) mod overhang;
 pub(crate) mod pairing;
 pub(crate) mod place;
 pub(crate) mod prepare;
@@ -31,3 +32,7 @@ mod prepared_cut_tests;
 #[cfg(test)]
 #[path = "tests/measure.rs"]
 mod measure_tests;
+
+#[cfg(test)]
+#[path = "tests/metrics.rs"]
+mod metric_tests;

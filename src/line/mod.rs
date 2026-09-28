@@ -9,6 +9,7 @@ pub(crate) mod fragments;
 mod hyphen;
 mod intrinsic;
 mod iter;
+pub(crate) mod metric_index;
 pub(crate) mod metrics;
 mod plan;
 pub(crate) mod punctuation;
@@ -16,7 +17,7 @@ pub(crate) mod range;
 pub(crate) mod reshape;
 mod scan;
 pub(crate) mod spacing;
-mod spacing_summary;
+pub(crate) mod spacing_summary;
 mod whitespace;
 mod windows;
 
@@ -109,6 +110,7 @@ use crate::style::LineOptions;
 #[derive(Clone, Debug)]
 pub(crate) struct Scan {
     pub(crate) ruby: Option<crate::ruby::measure::RubyMeasure>,
+    pub(crate) ruby_caret_gaps: Vec<crate::ruby::align::CaretGap>,
     pub(crate) prepared: bool,
     pub(crate) end: usize,
     pub(crate) reason: BreakReason,

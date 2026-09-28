@@ -92,14 +92,14 @@ fn reading_glyphs(line: &Line, level: usize) -> Vec<u32> {
         .collect()
 }
 
-fn signature(
-    line: &Line,
-) -> (
+type LineSignature = (
     shodo::BreakToken,
     String,
     Vec<(usize, String, Vec<u32>)>,
     f32,
-) {
+);
+
+fn signature(line: &Line) -> LineSignature {
     let mut readings = Vec::new();
     for a in line.ruby_annotations() {
         let ids = a

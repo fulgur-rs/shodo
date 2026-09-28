@@ -158,6 +158,10 @@ impl LineIndex {
                                 pen
                             };
                         let text = cluster.text_range.start as u32..cluster.text_range.end as u32;
+                        let (before, after) = line.ruby_caret_padding(&text);
+                        let sign = if reversed { -1.0 } else { 1.0 };
+                        let from = from + sign * before;
+                        let to = to - sign * after;
                         let cuts = result.cuts(line, &text);
                         let gs = &glyphs[glyphs.partition_point(|g| g.cluster < text.start)
                             ..glyphs.partition_point(|g| g.cluster < text.end)];
