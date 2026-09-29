@@ -450,9 +450,27 @@ pub(super) fn resolve(
     offset: LayoutUnit,
     indent: LayoutUnit,
     atomics: &AtomicSizes,
+    normal_cursors: Option<&[Option<u32>]>,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> Result<Scan, (NodeId, u32, LayoutUnit)> {
+    if let Some(limit) = constraint.max_graphemes {
+        cx.partial = None;
+        return Ok(scan(
+            &para.data,
+            token.unit as usize,
+            available,
+            offset,
+            indent,
+            token.flags,
+            options,
+            atomics,
+            Some(limit),
+            normal_cursors,
+            cx,
+            sat,
+        ));
+    }
     let start = token.unit as usize;
     let valid = sat.is_clean()
         && cx.partial.as_ref().is_some_and(|p| {
@@ -479,6 +497,8 @@ pub(super) fn resolve(
             token.flags,
             options,
             atomics,
+            None,
+            None,
             cx,
             sat,
         );
@@ -558,7 +578,17 @@ pub(super) fn resolve(
             *sat = saturation_before;
             if valid {
                 return resolve(
-                    para, token, options, constraint, available, offset, indent, atomics, cx, sat,
+                    para,
+                    token,
+                    options,
+                    constraint,
+                    available,
+                    offset,
+                    indent,
+                    atomics,
+                    normal_cursors,
+                    cx,
+                    sat,
                 );
             }
             return Ok(cached.scan);

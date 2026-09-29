@@ -17,6 +17,7 @@ pub(super) fn matches(
     atomics: &AtomicSizes,
 ) -> bool {
     p.para == para.id()
+        && c.max_graphemes.is_none()
         && p.width == c.available_inline_size
         && p.options == *options
         && p.atomics_generation == atomics.generation()

@@ -11,6 +11,39 @@ impl Paragraph {
         width: f32,
         atomics: &AtomicSizes,
     ) -> Vec<Line> {
+        self.break_all_with_optional_grapheme_limit(cx, options, width, None, atomics)
+    }
+
+    /// Greedy layout with both an inline-size limit and a per-line processed
+    /// Unicode grapheme limit. A zero limit accepts one indivisible unit to
+    /// guarantee progress. Floats are treated as zero-width anchors, as in
+    /// [`Self::break_all`]. For caller-managed floats and height constraints,
+    /// set [`LineConstraint::max_graphemes`] and use [`Self::next_line`].
+    pub fn break_all_with_grapheme_limit(
+        &self,
+        cx: &mut LayoutContext,
+        options: &LineOptions,
+        width: f32,
+        max_graphemes: usize,
+        atomics: &AtomicSizes,
+    ) -> Vec<Line> {
+        self.break_all_with_optional_grapheme_limit(
+            cx,
+            options,
+            width,
+            Some(max_graphemes),
+            atomics,
+        )
+    }
+
+    fn break_all_with_optional_grapheme_limit(
+        &self,
+        cx: &mut LayoutContext,
+        options: &LineOptions,
+        width: f32,
+        max_graphemes: Option<usize>,
+        atomics: &AtomicSizes,
+    ) -> Vec<Line> {
         let mut cursor = None;
         self.lines(
             cx,
@@ -23,6 +56,7 @@ impl Paragraph {
                 let mut c = LineConstraint::new(width);
                 c.block_offset = offset;
                 c.floats_placed_through = cursor;
+                c.max_graphemes = max_graphemes;
                 c
             },
             atomics,

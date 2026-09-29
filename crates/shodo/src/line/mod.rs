@@ -188,6 +188,7 @@ impl Paragraph {
                 atomics,
                 planned_end,
                 None,
+                Some(&first.normal_cursors),
             );
             match &mut result {
                 LineResult::Line(line) => {
@@ -208,7 +209,7 @@ impl Paragraph {
             }
             return result;
         }
-        self.next_line_in_set(cx, token, options, constraint, atomics, None, None)
+        self.next_line_in_set(cx, token, options, constraint, atomics, None, None, None)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -221,6 +222,7 @@ impl Paragraph {
         atomics: &AtomicSizes,
         planned_end_override: Option<usize>,
         annotation_align: Option<crate::ruby::align::AnnotationAlign>,
+        normal_cursors: Option<&[Option<u32>]>,
     ) -> LineResult {
         let data = &*self.data;
         let start = token.unit as usize;
@@ -304,6 +306,7 @@ impl Paragraph {
                 offset,
                 indent,
                 atomics,
+                normal_cursors,
                 cx,
                 &mut sat,
             ) {
@@ -432,6 +435,7 @@ impl Paragraph {
             atomics,
             Some(units.end),
             Some(align),
+            None,
         ) {
             LineResult::Line(line) => line,
             _ => unreachable!("prepared annotation ranges contain no block boundaries"),
