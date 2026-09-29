@@ -25,10 +25,19 @@ pub(crate) fn initialize_slices(
     let original = std::mem::take(&mut data.units);
     let mut units = Vec::with_capacity(original.len());
     let mut markers = Vec::new();
+    // Neighbor text is only needed to detect storage splits; record it so the
+    // main pass can consume `original` without cloning every cluster.
+    let mut storage_split = Vec::with_capacity(original.len());
     for (i, unit) in original.iter().enumerate() {
         if !matches!(unit.kind, UnitKind::Cluster { .. }) {
             markers.push((i, unit.clone()));
         }
+        storage_split.push(
+            i > 0 && original[i - 1].text == unit.text
+                || original
+                    .get(i + 1)
+                    .is_some_and(|next| next.text == unit.text),
+        );
     }
     let mut offsets: Vec<_> = markers.iter().map(|(_, u)| u.text.start).collect();
     if data.style.first_line.is_some() {
@@ -39,7 +48,7 @@ pub(crate) fn initialize_slices(
         offsets.sort_unstable();
     }
     offsets.dedup();
-    for (i, unit) in original.iter().enumerate() {
+    for (i, unit) in original.into_iter().enumerate() {
         let UnitKind::Cluster { glyphs, .. } = &unit.kind else {
             continue;
         };
@@ -51,24 +60,30 @@ pub(crate) fn initialize_slices(
             .breaks
             .opportunities
             .partition_point(|o| o.offset < unit.text.end);
+        let marker_start = offsets.partition_point(|o| *o <= unit.text.start);
+        let marker_end = offsets.partition_point(|o| *o < unit.text.end);
+        // Nearly every cluster has no interior boundary; keep it as is
+        // without allocating a boundary list.
+        if marker_start == marker_end
+            && data.breaks.opportunities[begin..end]
+                .iter()
+                .all(|o| o.class == BreakClass::Prohibited)
+        {
+            units.push((i, unit));
+            continue;
+        }
         let mut boundaries: Vec<_> = data.breaks.opportunities[begin..end]
             .iter()
             .filter(|o| o.class != BreakClass::Prohibited)
             .copied()
             .collect();
-        let marker_start = offsets.partition_point(|o| *o <= unit.text.start);
-        let marker_end = offsets.partition_point(|o| *o < unit.text.end);
         for offset in &offsets[marker_start..marker_end] {
             boundaries.push(data.breaks.at(*offset));
         }
         boundaries.sort_unstable_by_key(|b| b.offset);
         boundaries.dedup_by_key(|b| b.offset);
-        let storage_split = i > 0 && original[i - 1].text == unit.text
-            || original
-                .get(i + 1)
-                .is_some_and(|next| next.text == unit.text);
-        if boundaries.is_empty() || storage_split {
-            units.push((i, unit.clone()));
+        if boundaries.is_empty() || storage_split[i] {
+            units.push((i, unit));
             continue;
         }
         if data
@@ -80,7 +95,7 @@ pub(crate) fn initialize_slices(
                 crate::limits::WarningKind::Unsupported,
                 "intra-cluster reshape window exceeded; retaining whole cluster",
             );
-            units.push((i, unit.clone()));
+            units.push((i, unit));
             continue;
         }
         let mut measured = Vec::with_capacity(boundaries.len());
@@ -107,7 +122,7 @@ pub(crate) fn initialize_slices(
             measured.push(width);
         }
         if measured.len() != boundaries.len() {
-            units.push((i, unit.clone()));
+            units.push((i, unit));
             continue;
         }
         let shared = std::sync::Arc::new(SharedCluster {
@@ -134,7 +149,7 @@ pub(crate) fn initialize_slices(
         let total = glyphs.clone().fold(LayoutUnit::ZERO, |p, g| {
             p.add(data.glyphs.advance[g as usize], sat)
         });
-        let mut last = unit.clone();
+        let mut last = unit;
         last.shared_cluster = Some(shared);
         last.slice_advance = total.sub(previous, sat);
         last.text.start = start;
