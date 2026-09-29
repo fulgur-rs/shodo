@@ -1141,11 +1141,18 @@ impl Iterator for Glyphs<'_> {
 impl ExactSizeIterator for Glyphs<'_> {}
 
 impl Line {
-    /// Fragments in visual order.
+    /// Non-ruby fragments in visual order, followed by retained ruby annotations.
+    ///
+    /// Annotation order matches [`Self::ruby_annotations`]. The complete sequence
+    /// does not guarantee a global physical visual order. Use
+    /// [`RubyAnnotationView::transform`] for annotation placement, including bidi
+    /// and vertical layouts. Nested annotations remain on the view's child [`Line`].
+    /// Without ruby annotations, the existing visual order is unchanged.
     pub fn fragments(&self) -> impl ExactSizeIterator<Item = Fragment<'_>> + '_ {
         (0..self.fragments.len() + self.ruby.len()).map(move |i| self.view(i))
     }
 
+    /// Fragment at `index` in the same sequence as [`Self::fragments`].
     pub fn fragment(&self, index: usize) -> Option<Fragment<'_>> {
         (index < self.fragments.len() + self.ruby.len()).then(|| self.view(index))
     }
