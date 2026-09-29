@@ -206,8 +206,17 @@ impl Cursor {
     }
 
     pub(super) fn summary(&self, data: Option<&ParagraphData>) -> Summary {
-        let mut carry = Summary::default();
-        for frame in self.frames.iter().rev() {
+        // Folding the innermost frame into an empty carry returns that
+        // frame's summary unchanged (for either direction), so start from it.
+        // The common single-level paragraph then needs no joins at all.
+        let mut frames = self.frames.iter().rev();
+        let Some(innermost) = frames.next() else {
+            return Summary::default();
+        };
+        #[cfg(test)]
+        self.visits.set(self.visits.get() + 1);
+        let mut carry = innermost.summary;
+        for frame in frames {
             #[cfg(test)]
             self.visits.set(self.visits.get() + 1);
             let mut frame = *frame;
@@ -559,6 +568,53 @@ impl VisualNeighbors {
 mod tests {
     use super::*;
     use unicode_bidi::{BidiInfo, Level};
+
+    fn edge(tracking: i32, unit: u32) -> Edge {
+        Edge {
+            tracking,
+            unit,
+            ..Default::default()
+        }
+    }
+
+    /// The original definition: fold every frame, innermost first, starting
+    /// from an empty carry.
+    fn reference_summary(cursor: &Cursor) -> Summary {
+        let mut carry = Summary::default();
+        for frame in cursor.frames.iter().rev() {
+            let mut frame = *frame;
+            Cursor::append(&mut frame, carry, None);
+            carry = frame.summary;
+        }
+        carry
+    }
+
+    #[test]
+    fn summary_matches_the_full_fold_for_every_embedding_shape() {
+        // Deterministic pseudo-random level sequences, including empty
+        // summaries and barriers, at several depths.
+        let mut seed = 0x2545_f491_4f6c_dd1du64;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        for _ in 0..500 {
+            let mut cursor = Cursor::default();
+            for unit in 0..(next() % 12) as u32 {
+                let level = (next() % 5) as u8;
+                let summary = match next() % 4 {
+                    0 => Summary::default(),
+                    1 => Summary::barrier(),
+                    _ => Summary::leaf(edge((next() % 9) as i32 - 4, unit)),
+                };
+                cursor.push(level, summary, None);
+                let (got, want) = (cursor.summary(None), reference_summary(&cursor));
+                assert_eq!(format!("{got:?}"), format!("{want:?}"));
+            }
+        }
+    }
 
     #[test]
     fn indexed_visual_neighbors_match_clipped_uax9_event_order() {
