@@ -10,10 +10,15 @@ decision).
   Latin 20px) key: 22.88px / 34.32px. Own `margin`/`padding` `ch` use the
   child CJK 40px key: 88.8px / 111.0px per side.
 - Font fallback and an empty collection (0.5em of the declaring size).
-- RTL: a physical `margin-left:4ch` becomes the inline-end edge (first run
-  does not move; line grows by 88.8px). Vertical and sideways writing modes
-  and unknown directions are rejected.
-- A `ch` factor without its declaring key is an error.
+- RTL (box and paragraph both RTL): a physical `margin-left:4ch` becomes the
+  box's inline-end edge and trails the content (first run does not move, the
+  line grows by 88.8px); inherited `text-indent:3ch` offsets the first run by
+  34.32px. Vertical and sideways writing modes, unknown directions, and a box
+  direction that differs from its paragraph's are rejected (shodo swaps such
+  a box's edges when drawing; that placement was not verified against CSS).
+- A `ch` factor without its declaring key is an error. (A value with no
+  factor at all passes through as the cascade px; `calc()` provenance loss
+  is shodo-e7n.)
 - Mutation: replacing measurement with `factor * 0.5 * size` fails 4 tests.
 
 ## Variation / orientation assessment
@@ -22,10 +27,11 @@ decision).
 
 | Input | Reaches U+0030 advance? | Adapter behavior |
 |---|---|---|
-| `font-weight` | Yes: shodo's `resolve_ch` applies the weight variation of the matched face | Carried by the key |
-| `font-variation-settings` | Yes (any axis) | Not in key: rejected via `require_keyed_font_inputs` |
-| `font-optical-sizing:auto` (`opsz` axis) | Possibly | Unassessed; needs a fixture with `opsz` |
-| `font-stretch` | Possibly (`wdth`/face selection) | Unassessed |
+| `font-weight` | Yes: by code reading, `resolve_ch` applies the matched face's weight variation; no variable-font fixture test exists yet | Carried by the key |
+| `font-variation-settings` | Yes (any axis) | Rejected by `require_keyed_font_inputs`, but only for the `ComputedValues` passed in (the fixture checks parent and child). A declaring ancestor that is not checked can still under-reject; a real caller must check the declaring element |
+| `font-optical-sizing:auto` (`opsz` axis) | Possibly | **Fails open**: `resolve_unit` never applies `opsz`; needs a fixture |
+| `font-stretch` | Possibly | Not exposed by the pinned cascade and `FontQuery.width` stays 100: **fails open** |
+| language / script | Fallback selection may differ | `ChFontKey` has no `lang`; queries use default script Latn, no language |
 | vertical orientation | Yes | Rejected by `to_logical` |
 
 Follow-ups worth filing if the production caller needs them: `opsz` and

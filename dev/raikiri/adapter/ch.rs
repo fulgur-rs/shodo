@@ -94,6 +94,16 @@ pub struct Physical {
     pub left: f32,
 }
 
+/// The shodo direction for a raikiri one. shodo compares each box's direction
+/// with the paragraph's to place its inline edges, so callers must pass both.
+pub fn direction(dir: Direction) -> Result<shodo::geometry::Direction, String> {
+    match dir {
+        Direction::Ltr => Ok(shodo::geometry::Direction::Ltr),
+        Direction::Rtl => Ok(shodo::geometry::Direction::Rtl),
+        _ => Err("direction unsupported".into()),
+    }
+}
+
 /// Physical → logical mapping for horizontal writing modes only.
 pub fn to_logical(dir: Direction, wm: WritingMode, p: Physical) -> Result<Sides, String> {
     if wm != WritingMode::HorizontalTb {

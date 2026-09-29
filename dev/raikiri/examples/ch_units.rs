@@ -7,7 +7,7 @@ use raikiri_traits::{Dom, NodeId as DomId};
 #[path = "../adapter/ch.rs"]
 mod ch_adapter;
 use ch_adapter::{
-    Physical, family, font_style, resolve_edge as edge, resolve_px as ch, to_logical,
+    Physical, direction, family, font_style, resolve_edge as edge, resolve_px as ch, to_logical,
 };
 use shodo::font::FontCollection;
 use shodo::limits::Limits;
@@ -47,6 +47,11 @@ fn layout(html: &str, fonts: &FontCollection) -> Result<Line, String> {
     let child = find("child")?;
     let cv = &doc.cascade().computed[child];
     let root = &doc.cascade().computed[parent];
+    if root.direction != cv.direction {
+        // shodo swaps a box's inline edges when its direction opposes the
+        // paragraph's; that placement is not verified against CSS here.
+        return Err("mixed box/paragraph direction unsupported".into());
+    }
     for values in [root, cv] {
         ch_adapter::require_keyed_font_inputs(values)?;
         if values.cssom_writing_mode != raikiri_style::property::WritingMode::HorizontalTb {
@@ -62,6 +67,7 @@ fn layout(html: &str, fonts: &FontCollection) -> Result<Line, String> {
         font_size: cv.font_size.0,
         font_weight: cv.font_weight,
         font_style: font_style(cv.font_style)?,
+        direction: direction(cv.direction)?,
         letter_spacing: ch(
             fonts,
             cv.letter_spacing_ch_factor,
@@ -136,7 +142,11 @@ fn layout(html: &str, fonts: &FontCollection) -> Result<Line, String> {
         ..Default::default()
     };
     let paragraph_style = ParagraphStyle {
-        root: style.clone(),
+        root: InlineStyle {
+            direction: direction(root.direction)?,
+            ..style.clone()
+        },
+        direction: direction(root.direction)?,
         ..Default::default()
     };
     let limits = Limits::default();
@@ -262,6 +272,15 @@ mod tests {
         close(first(&full) - first(&no_padding), 111.0);
     }
 
+    fn first_run(line: &shodo::Line) -> f32 {
+        line.fragments()
+            .find_map(|f| match f {
+                Fragment::GlyphRun(r) => Some(r.inline_start()),
+                _ => None,
+            })
+            .unwrap()
+    }
+
     #[test]
     fn rtl_maps_physical_ch_margins_to_inline_edges() {
         let fonts = load_fonts(&Default::default()).unwrap();
@@ -272,32 +291,40 @@ mod tests {
                 "padding-left:5ch;padding-right:5ch",
                 "padding-left:0px;padding-right:0px",
             );
-        let rtl = base.replace("#child{", "#child{direction:rtl;");
-        let first = |line: &shodo::Line| {
-            line.fragments()
-                .find_map(|f| match f {
-                    Fragment::GlyphRun(r) => Some(r.inline_start()),
-                    _ => None,
-                })
-                .unwrap()
+        let none = base.replace("margin-left:4ch", "margin-left:0px");
+        let ltr = |html: &str| layout(html, &fonts.collection).unwrap();
+        let rtl = |html: &str| {
+            let html = html
+                .replace("#parent{", "#parent{direction:rtl;")
+                .replace("#child{", "#child{direction:rtl;");
+            layout(&html, &fonts.collection).unwrap()
         };
-        let ltr_line = layout(&base, &fonts.collection).unwrap();
-        let rtl_line = layout(&rtl, &fonts.collection).unwrap();
-        let ltr_none = layout(
-            &base.replace("margin-left:4ch", "margin-left:0px"),
-            &fonts.collection,
-        )
-        .unwrap();
-        let rtl_none = layout(
-            &rtl.replace("margin-left:4ch", "margin-left:0px"),
-            &fonts.collection,
-        )
-        .unwrap();
         // LTR: the left margin is inline-start and shifts the first run.
-        close(first(&ltr_line) - first(&ltr_none), 88.8);
-        // RTL: it is inline-end; the first run does not move, the line grows.
-        close(first(&rtl_line) - first(&rtl_none), 0.0);
-        close(rtl_line.inline_size() - rtl_none.inline_size(), 88.8);
+        close(first_run(&ltr(&base)) - first_run(&ltr(&none)), 88.8);
+        // RTL: it is the box's inline-end, so it trails the content.
+        close(first_run(&rtl(&base)) - first_run(&rtl(&none)), 0.0);
+        close(rtl(&base).inline_size() - rtl(&none).inline_size(), 88.8);
+    }
+
+    #[test]
+    fn rtl_paragraph_keeps_inherited_ch_indent() {
+        let fonts = load_fonts(&Default::default()).unwrap();
+        let rtl = |html: &str| {
+            let html = html
+                .replace("#parent{", "#parent{direction:rtl;")
+                .replace("#child{", "#child{direction:rtl;");
+            layout(&html, &fonts.collection).unwrap()
+        };
+        let full = rtl(HTML);
+        let zero = rtl(&HTML.replace("text-indent:3ch", "text-indent:0px"));
+        close(first_run(&full) - first_run(&zero), 34.32);
+    }
+
+    #[test]
+    fn mixed_box_and_paragraph_direction_is_rejected() {
+        let fonts = load_fonts(&Default::default()).unwrap();
+        let html = HTML.replace("#child{", "#child{direction:rtl;");
+        assert!(layout(&html, &fonts.collection).is_err());
     }
 
     #[test]

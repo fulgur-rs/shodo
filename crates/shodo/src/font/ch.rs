@@ -13,15 +13,16 @@ pub struct ChLength {
 impl ChLength {
     /// Returns `factor` times the '0' advance of the face selected by `query`
     /// (CSS fallback 0.5em when no face has the glyph). `None` if `size` or
-    /// `factor` is not finite or `size` is negative.
+    /// `factor` is not finite, `size` is negative, or the product overflows.
     pub fn resolve(&self, fonts: &FontCollection) -> Option<FontUnit> {
         if !(self.size.is_finite() && self.size >= 0. && self.factor.is_finite()) {
             return None;
         }
         let unit = fonts.resolve_ch(&self.query, self.size);
-        Some(FontUnit {
+        let advance = self.factor * unit.advance;
+        advance.is_finite().then_some(FontUnit {
             id: unit.id,
-            advance: self.factor * unit.advance,
+            advance,
         })
     }
 }
@@ -52,6 +53,16 @@ mod tests {
         let unit = ch.resolve(&empty()).unwrap();
         assert_eq!(unit.id, None);
         assert_eq!(unit.advance, 30.);
+    }
+
+    #[test]
+    fn overflowing_product_is_rejected() {
+        let ch = ChLength {
+            query: FontQuery::default(),
+            size: 1e6,
+            factor: f32::MAX,
+        };
+        assert!(ch.resolve(&empty()).is_none());
     }
 
     #[test]

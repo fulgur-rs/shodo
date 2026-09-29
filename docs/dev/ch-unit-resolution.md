@@ -20,9 +20,9 @@ Latin/CJK font fixtures. System font discovery is disabled. It parses a
 fixed parent block with one inline child, registers the fixture faces,
 measures the preserved declaring-font keys, and builds an actual shodo
 paragraph. Its JSON reports accepted text, line width, glyph font and
-position. It is a fixed horizontal LTR reproduction, not a general CSS
-adapter. RTL and non-horizontal CSSOM writing modes are rejected rather
-than interpreted using the example's physical-to-logical edge mapping.
+position. It is a fixed horizontal reproduction, not a general CSS adapter.
+Non-horizontal CSSOM writing modes and a box direction that differs from
+its paragraph's are rejected; same-direction LTR and RTL are supported.
 
 ## Measurement and inheritance
 
@@ -107,14 +107,17 @@ the production caller unchanged:
 
 - `shodo::font::ChLength { query, size, factor }` is raikiri-independent.
   `resolve` returns `factor` times the U+0030 advance of the selected face
-  (0.5em fallback when absent) and `None` for non-finite or negative input.
+  (0.5em fallback when absent) and `None` for non-finite or negative input
+  or an overflowing product.
 - `dev/raikiri/adapter/ch.rs` converts `ChFontKey`/`ChLengthProvenance` to
-  `ChLength`. A `ch` factor without its declaring key is an error, never a
-  cascade approximation. `to_logical` maps physical margin/padding to
+  `ChLength`. A `ch` factor without its declaring key is an error rather
+  than a cascade approximation (a value with no factor passes through as
+  the cascade px). `to_logical` maps physical margin/padding to
   inline/block sides for horizontal LTR and RTL; every vertical or sideways
   writing mode, and any unknown direction, is rejected.
 - `dev/raikiri/examples/ch_units.rs` uses that adapter and covers RTL
-  physical-to-logical margins in accepted lines.
+  physical-to-logical margins in accepted lines. It passes each box's and
+  the paragraph's direction to shodo.
 
 Neither S4 spike was modified. The production connection itself and any WPT
 comparison still depend on S4's adoption decision.
