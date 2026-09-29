@@ -2019,6 +2019,69 @@ fn combine_all_distinguishes_inherited_box_boundaries_from_separate_all_ancestor
 }
 
 #[test]
+fn combine_all_reports_candidates_rejected_across_an_inherited_box_boundary() {
+    use shodo::limits::WarningKind;
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let mut root = style(mode, TextOrientation::Mixed);
+        root.root.text_combine_upright = TextCombineUpright::All;
+        let rejected = build_paragraph(&root, &Limits::default(), |builder| {
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, "12");
+            builder.open_inline(NodeId(2), &root.root, InlineEdges::default());
+            builder.push_text(TextSource::Generated { node: NodeId(3) }, "34");
+            builder.close_inline();
+        });
+        let messages: Vec<_> = rejected
+            .warnings()
+            .iter()
+            .filter(|warning| warning.message.contains("text-combine-upright"))
+            .collect();
+        // One diagnostic per rejected candidate, each naming its source bytes.
+        assert_eq!(messages.len(), 2, "{mode:?}: {:?}", rejected.warnings());
+        assert!(
+            messages
+                .iter()
+                .all(|warning| warning.kind == WarningKind::Unsupported)
+        );
+        assert!(
+            messages[0].message.contains("0..2"),
+            "{}",
+            messages[0].message
+        );
+        assert!(
+            messages[1].message.contains("2..4"),
+            "{}",
+            messages[1].message
+        );
+
+        // Separate `all` ancestors compose normally and stay silent.
+        let combined = root.root.clone();
+        root.root.text_combine_upright = TextCombineUpright::None;
+        let composed = build_paragraph(&root, &Limits::default(), |builder| {
+            for (node, text) in [(NodeId(1), "12"), (NodeId(2), "34")] {
+                builder.open_inline(node, &combined, InlineEdges::default());
+                builder.push_text(TextSource::Generated { node }, text);
+                builder.close_inline();
+            }
+        });
+        assert!(
+            composed
+                .warnings()
+                .iter()
+                .all(|warning| !warning.message.contains("text-combine-upright")),
+            "{:?}",
+            composed.warnings()
+        );
+
+        // Horizontal text never composes, so nothing was rejected.
+        let horizontal = style(WritingMode::HorizontalTb, TextOrientation::Mixed);
+        let mut horizontal = horizontal;
+        horizontal.root.text_combine_upright = TextCombineUpright::All;
+        let plain = paragraph(&horizontal, "12");
+        assert!(plain.warnings().is_empty());
+    }
+}
+
+#[test]
 fn combine_all_isolates_internal_arabic_joining_from_vertical_neighbors() {
     let limits = Limits::default();
     let fonts = FontCollection::with_options(

@@ -297,8 +297,21 @@ pub(crate) fn prepare(
     styles: &[InlineStyle],
     mode: WritingMode,
 ) -> Vec<CombineSpan> {
+    prepare_with_rejections(text, items, styles, mode).0
+}
+
+/// [`prepare`] plus the source ranges of `text-combine-upright: all` boxes
+/// that were not composed because a box boundary separated them from an
+/// adjacent candidate in the same combine scope. Callers report these as
+/// diagnostics instead of letting them fall back to normal text silently.
+pub(crate) fn prepare_with_rejections(
+    text: &str,
+    items: &[Item],
+    styles: &[InlineStyle],
+    mode: WritingMode,
+) -> (Vec<CombineSpan>, Vec<Range<u32>>) {
     if !matches!(mode, WritingMode::VerticalRl | WritingMode::VerticalLr) {
-        return Vec::new();
+        return (Vec::new(), Vec::new());
     }
     let mut candidates: Vec<Candidate> = Vec::new();
     let mut before = Separation::None;
@@ -375,11 +388,19 @@ pub(crate) fn prepare(
             rejected[i] = true;
         }
     }
-    candidates
-        .into_iter()
-        .zip(rejected)
-        .filter_map(|(candidate, rejected)| (candidate.all && !rejected).then_some(candidate.span))
-        .collect()
+    let mut spans = Vec::new();
+    let mut skipped = Vec::new();
+    for (candidate, rejected) in candidates.into_iter().zip(rejected) {
+        if !candidate.all {
+            continue;
+        }
+        if rejected {
+            skipped.push(candidate.span.text);
+        } else {
+            spans.push(candidate.span);
+        }
+    }
+    (spans, skipped)
 }
 
 /// Independent horizontal inline-block whitespace processing for each
