@@ -29,7 +29,7 @@ PAIRS = 16
 MAX_PINNED_CPU_BUSY = 0.25
 LOADED_ABOVE = 6.0
 NOTES = [
-    "isolated not measured: the pinned pipeline-release time binary (SHA256 7caf472b...) does not implement the isolated operation ('unknown operation'); the failure records are kept as evidence, not skipped. A separate isolated-release binary exists but is not part of this summary.",
+    "isolated not measured: the pinned pipeline-release time binary (SHA256 7caf472b...) reports 'unknown operation' for the isolated operation; the first (native) attempt for each document failed and the runner stopped there, so only those two failure records exist and they are kept as evidence, not skipped. A separate isolated-release binary exists but is out of scope.",
     "Load label uses the 1-minute load average sampled before and after the run only; load during the run is not observed.",
 ]
 
@@ -134,6 +134,9 @@ PERF_SCOPE = (
     "Whole-process samples include setup outside the measured windows, so interpret only engine-to-engine differences per bucket; "
     "buckets are an approximation by the first shodo:: path or known crate in a symbol, not call-graph attribution. Counts are divided by the 200 runs."
 )
+# The observation notes below (PERF_NOTES, MEMORY_NOTE_PEAK) describe the committed 2026-09-30 recording: load 8.44/4.59,
+# the listed noise deltas, and identical peak_extra_bytes. They must be edited or dropped when the runner is re-run, because
+# they would contradict a fresh recording's own environment and deltas.
 PERF_NOTES = [
     "Each engine/document comes from a SINGLE recording (200 process runs, one perf record): no repeat and no variance estimate.",
     "The recording was labelled loaded (1-minute load average 8.44 before, 4.59 after; the label in environment repeats this).",
@@ -184,7 +187,7 @@ def memory(scratch, output):
     summary["runs"] = MEMORY_RUNS
     summary["notes"] = [
         "Requested-heap accounting per window (allocator counters), not RSS. Values are the median over warm samples per run, then the median over runs.",
-        "isolated not run: the pinned probe binaries do not implement it.",
+        "isolated was not attempted with the memory binary (its SHA256 is recorded, not enforced); a separate isolated-release binary exists but is out of scope.",
         MEMORY_NOTE_PEAK,
     ]
     output.write_text(json.dumps(summary, indent=2) + "\n")

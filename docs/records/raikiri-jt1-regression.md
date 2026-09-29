@@ -51,14 +51,20 @@ Warm-process median times (native / candidate): `pipeline` 925 us / 1263 us
 118 us / 397 us.
 
 The saved pipeline increase reproduced: 1.370 and 1.363 against the saved 1.361
-and 1.342. The one low pair (0.953) for out-of-flow `pipeline` does not move the
-median.
+and 1.342. The saved values come from the saved manifest
+`target/8ei-artifacts/pipeline-regression-repro/manifest.json` (local, not in
+CI), whose saved spreads were 1.329..1.382 (out-of-flow) and 1.333..1.372
+(auto). The spread of this reproduction is wider despite the `quiet` label
+(out-of-flow `pipeline` 0.953..1.660, auto 1.311..1.536, `layout` auto up to
+5.174), while the medians reproduce. The one low pair (0.953) for out-of-flow
+`pipeline` does not move the median.
 
-`isolated` was not measured. The pinned time binary (and the pinned memory
-binary) report `unknown operation` for `isolated`, so all four native/candidate
-attempts failed and the failure records are kept in the JSON as evidence. A
-separate isolated-release binary exists but is not the pinned input of this
-investigation, so no isolated ratio is presented here, fast or slow.
+`isolated` was not measured. The pinned time binary reports `unknown operation`
+for `isolated`; the first (native) attempt for each document failed and the
+runner stopped there, and those two failure records are kept in the JSON as
+evidence. `isolated` was not attempted with the memory binary. A separate
+isolated-release binary exists but is out of scope, so no isolated ratio is
+presented here, fast or slow.
 
 ## Where the time goes
 
@@ -70,7 +76,7 @@ Using the warm medians above, the candidate minus native difference is about
 therefore lies inside the layout window, and the remainder (parse, cascade,
 preflight and anything else outside layout) differs by only about 17 us and
 11 us. This is a derived observation from separately measured operations in
-separate processes, so it is approximate. It says the increase is a layout-window
+separate processes, so it is approximate. It is consistent with a layout-window
 effect, not a parse or cascade effect. The large `layout` ratios (about 3.0 and
 3.4) reflect that layout is a small share of the total `pipeline` time.
 
@@ -113,21 +119,37 @@ produced by `jt1_measure.py perf`. Limits that apply to every perf number here:
   codes: the committed recordings predate the exit-status check that was added
   afterwards.
 
-Candidate minus native, samples per run, largest positives that appear on both
-documents:
+Candidate minus native, samples per run, largest shodo positives (all
+positive on both documents):
 
 | Bucket | out-of-flow | auto |
 | --- | --- | --- |
 | `shodo::line` | +98.1 | +79.7 |
 | `shodo::analysis` | +55.8 | +50.8 |
 | `shodo::font` | +48.2 | +42.7 |
+| `shodo::shape` (next) | +26.0 | +13.6 |
 
-Only these large, consistent positives are interpreted: the extra candidate time
-sampled in the whole process is concentrated in the line, analysis and font
-modules of the candidate. The remaining buckets are treated as noise. In
-particular `other` (-95.7 versus +49.6 per run) and `runtime` (+1.0 versus
-+25.1) change sign or size between the documents, and `parley` and
-`raikiri_dom` are negative on both, which is not interpreted further. None of this locates the cost more finely than a module.
+Native has about zero samples in every `shodo::*` bucket (all `shodo::*`
+buckets together: 1.68 samples per run on out-of-flow and 0.88 on auto, against
+262.1 and 200.2 for the candidate). So these positives are the candidate's whole
+cost in modules that native never runs, not extra time inside shared code.
+Within `shodo::`, line, analysis and font are the largest buckets on both
+documents, with shape next and also positive on both.
+
+The other side of the comparison is the native text stack. The sum of the
+native layout-side crates (`parley`, `fontique`, `raikiri_dom`, `taffy`,
+`icu_segmenter`, `harfrust`, `skrifa`, `read_fonts`) drops from 158.1 to 71.8
+samples per run on out-of-flow and from 81.3 to 35.7 on auto. For the three
+text-crate buckets alone, the candidate-minus-native change is -105.0
+(`parley` -51.8, `raikiri_dom` -38.2, `fontique` -15.0) on out-of-flow and -52.3
+(`parley` -30.5, `raikiri_dom` -14.7, `fontique` -7.2) on auto. That is the work
+the candidate replaced. The perf data therefore compares two different
+implementations of the same layout work; it does not locate a hotspot inside
+shared code.
+
+The remaining buckets are treated as noise. In particular `other` (-95.7 versus
++49.6 per run) and `runtime` (+1.0 versus +25.1) change sign or size between
+the documents. None of this locates the cost more finely than a module.
 
 Comparability limits, from the Boundaries section of
 [raikiri measurements](raikiri-measurements.md):
@@ -182,6 +204,10 @@ python3 tools/raikiri/jt1_measure.py perf --scratch <scratch-dir> \
 `reproduce` prints an explicit `not measured` line for a failed operation.
 `memory` and `perf` write separate summaries; the committed
 `raikiri-jt1-attribution.json` was assembled from the two as `memory`, `perf`
-and `scope` (that combining step is not part of the runner). `perf` needs the `perf` tool and records at
-20 kHz. Re-running replaces the environment labels, so check that `reproduce`
-and `perf` report `quiet` before comparing with the numbers above.
+and `scope`. That combining step, and the perf "verified after the fact"
+per-process note in the JSON, were added outside the runner. `perf` needs the
+`perf` tool and records at 20 kHz. A re-run replaces the environment labels, so
+check that `reproduce` and `perf` report `quiet`. A quiet re-recording is a
+fresh recording, not a confirmation of the numbers above, and the observation
+notes in the runner describe the committed recording (see the comment above
+`PERF_NOTES`).

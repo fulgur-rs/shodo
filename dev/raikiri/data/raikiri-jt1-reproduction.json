@@ -173,7 +173,7 @@
   "pairs": 16,
   "scope": "saved candidate fe67a281 vs native raikiri ab7e619a, original parse/screen cascade/Ahem preflight/layout at 800x600, warm calls per independent process (first call is not cold startup); not current main, not WPT PASS, not a switching-necessity decision",
   "notes": [
-    "isolated not measured: the pinned pipeline-release time binary (SHA256 7caf472b...) does not implement the isolated operation ('unknown operation'); the failure records are kept as evidence, not skipped. A separate isolated-release binary exists but is not part of this summary.",
+    "isolated not measured: the pinned pipeline-release time binary (SHA256 7caf472b...) reports 'unknown operation' for the isolated operation; the first (native) attempt for each document failed and the runner stopped there, so only those two failure records exist and they are kept as evidence, not skipped. A separate isolated-release binary exists but is out of scope.",
     "Load label uses the 1-minute load average sampled before and after the run only; load during the run is not observed."
   ]
 }

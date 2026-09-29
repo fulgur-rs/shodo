@@ -291,7 +291,7 @@
     "runs": 3,
     "notes": [
       "Requested-heap accounting per window (allocator counters), not RSS. Values are the median over warm samples per run, then the median over runs.",
-      "isolated not run: the pinned probe binaries do not implement it.",
+      "isolated was not attempted with the memory binary (its SHA256 is recorded, not enforced); a separate isolated-release binary exists but is out of scope.",
       "Observation, not a conclusion: peak_extra_bytes is identical for both engines in the pipeline windows and probably reflects a shared setup allocation."
     ]
   },
@@ -1084,5 +1084,5 @@
       "Verified after the fact from the saved recordings (perf script -F pid,comm): candidate-hyphens-auto-001-ref: 200 probe processes, samples per process min/median/max 1744/1765.5/1950; candidate-hyphens-out-of-flow-001-ref: 200 probe processes, samples per process min/median/max 1877/1943.0/3165; native-hyphens-auto-001-ref: 200 probe processes, samples per process min/median/max 1499/1525.0/1736; native-hyphens-out-of-flow-001-ref: 200 probe processes, samples per process min/median/max 1597/2274.5/2342. Each recording also has 23-35 extra pids with a single sample (short-lived fork/exec artifacts of the shell loop), which are not probe runs; no probe process has a tiny sample count, so no probe exited early."
     ]
   },
-  "scope": "shodo-jt1 attribution of the saved S4 candidate (fe67a281) vs native raikiri (ab7e619a) increase on two hyphens reference documents, pipeline and layout operations only (isolated is not implemented by the pinned binaries). memory: requested-heap allocator counters per window, not RSS. perf: flat user-space sampling of whole processes including setup outside the measured windows; interpret only candidate-minus-native differences per bucket; environment label and loads are recorded in perf.environment. Not current main, not a switching decision."
+  "scope": "shodo-jt1 attribution of the saved S4 candidate (fe67a281) vs native raikiri (ab7e619a) increase on two hyphens reference documents, pipeline and layout operations only (isolated was not measured: the pinned time binary reports 'unknown operation' and it was not attempted with the memory binary). memory: requested-heap allocator counters per window, not RSS. perf: flat user-space sampling of whole processes including setup outside the measured windows; interpret only candidate-minus-native differences per bucket; environment label and loads are recorded in perf.environment. Not current main, not a switching decision."
 }

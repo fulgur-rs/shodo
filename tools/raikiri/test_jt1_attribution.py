@@ -78,8 +78,8 @@ class Attribution(unittest.TestCase):
                 self.m.warm_samples_ns({"samples": [first]}, operation)  # no warm samples
 
     def test_pairs_are_matched_by_repeat(self):
-        summary = self.m.paired_summary([100.0, 200.0, 300.0], [150.0, 200.0, 240.0])
-        self.assertEqual(summary["paired_ratios"], [1.5, 1.0, 0.8])
+        summary = self.m.paired_summary([100.0, 200.0, 300.0], [240.0, 200.0, 150.0])
+        self.assertEqual(summary["paired_ratios"], [2.4, 1.0, 0.5])
         self.assertEqual(summary["pairs"], 3)
         self.assertEqual(summary["paired_ratio_median"], 1.0)
         self.assertEqual(summary["pairs_candidate_slower"], 1)
