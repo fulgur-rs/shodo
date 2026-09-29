@@ -1,0 +1,175 @@
+{
+  "operations": {
+    "pipeline": {
+      "css/css-text/hyphens/reference/hyphens-out-of-flow-001-ref.html": {
+        "pairs": 16,
+        "warm_process_median_ns": {
+          "native": 925093.0,
+          "candidate": 1263211.0
+        },
+        "paired_ratio_median": 1.3700729626793016,
+        "paired_ratio_min": 0.9531850470769083,
+        "paired_ratio_max": 1.6595204433575277,
+        "pairs_candidate_slower": 15,
+        "paired_ratios": [
+          1.6595204433575277,
+          1.3979349921343585,
+          1.4478608714467314,
+          1.3498302671804447,
+          1.3486064559763369,
+          0.9531850470769083,
+          1.3542098035988113,
+          1.3510163283926389,
+          1.3621352620499811,
+          1.3867207752929385,
+          1.388071398621816,
+          1.3760688707069098,
+          1.3837767497529798,
+          1.3553789775876832,
+          1.3640770546516932,
+          1.3846561658703436
+        ]
+      },
+      "css/css-text/hyphens/reference/hyphens-auto-001-ref.html": {
+        "pairs": 16,
+        "warm_process_median_ns": {
+          "native": 813376.5,
+          "candidate": 1104035.0
+        },
+        "paired_ratio_median": 1.3630356110205017,
+        "paired_ratio_min": 1.310976822987098,
+        "paired_ratio_max": 1.5357814170055408,
+        "pairs_candidate_slower": 16,
+        "paired_ratios": [
+          1.3447174146866139,
+          1.3611391862110447,
+          1.3400317356640148,
+          1.3719964873885075,
+          1.350041979874282,
+          1.4630282157279997,
+          1.3548676767083603,
+          1.3748359962998518,
+          1.341132046760374,
+          1.3903823971931248,
+          1.3409803108578797,
+          1.3649320358299588,
+          1.4178467888555846,
+          1.310976822987098,
+          1.5357814170055408,
+          1.393383636347937
+        ]
+      }
+    },
+    "layout": {
+      "css/css-text/hyphens/reference/hyphens-out-of-flow-001-ref.html": {
+        "pairs": 16,
+        "warm_process_median_ns": {
+          "native": 161690.5,
+          "candidate": 482697.0
+        },
+        "paired_ratio_median": 3.001816879334375,
+        "paired_ratio_min": 1.7870802333711926,
+        "paired_ratio_max": 3.1206220080723384,
+        "pairs_candidate_slower": 16,
+        "paired_ratios": [
+          2.9437746561958487,
+          2.9635084958320013,
+          2.995204615557526,
+          3.0703416070889133,
+          3.0731715012273075,
+          3.035396624842063,
+          3.1206220080723384,
+          2.0485575231113895,
+          2.9692177841769483,
+          3.0356016790751243,
+          3.058551978748713,
+          1.7870802333711926,
+          3.0084291431112242,
+          2.335344478746573,
+          3.0457939584138396,
+          2.909892013348434
+        ]
+      },
+      "css/css-text/hyphens/reference/hyphens-auto-001-ref.html": {
+        "pairs": 16,
+        "warm_process_median_ns": {
+          "native": 117514.0,
+          "candidate": 396718.5
+        },
+        "paired_ratio_median": 3.4111832949364826,
+        "paired_ratio_min": 3.2714679600039864,
+        "paired_ratio_max": 5.1741338945375555,
+        "pairs_candidate_slower": 16,
+        "paired_ratios": [
+          3.468704698558881,
+          5.1741338945375555,
+          3.48699626234683,
+          4.501787547040712,
+          3.323486903826162,
+          3.3558739109020195,
+          3.487814448271352,
+          3.2862902887799152,
+          3.4927506195867117,
+          3.326641734975561,
+          3.2891750143343788,
+          3.2714679600039864,
+          3.495071763585711,
+          3.35881632934524,
+          3.4036179698216733,
+          3.4187486200512915
+        ]
+      }
+    },
+    "isolated": {
+      "css/css-text/hyphens/reference/hyphens-out-of-flow-001-ref.html": {
+        "failed": {
+          "repeat": 0,
+          "engine": "native",
+          "returncode": 1,
+          "stderr_tail": "Error: \"unknown operation\"\n"
+        }
+      },
+      "css/css-text/hyphens/reference/hyphens-auto-001-ref.html": {
+        "failed": {
+          "repeat": 0,
+          "engine": "native",
+          "returncode": 1,
+          "stderr_tail": "Error: \"unknown operation\"\n"
+        }
+      }
+    }
+  },
+  "environment": {
+    "affinity_cpu": 0,
+    "chosen_cpu_busy_before": 0.01980198019801982,
+    "loadavg_before": [
+      2.578125,
+      3.4091796875,
+      3.97607421875
+    ],
+    "allowed_cpus_before_pinning": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "chosen_cpu_busy_after": 0.02970297029702973,
+    "loadavg_after": [
+      2.9697265625,
+      3.46240234375,
+      3.9873046875
+    ],
+    "label": "quiet"
+  },
+  "binary_sha256": "7caf472b3d40d670c270e4a97291a05c8ecc76056fefa222e26b7be9d66d7d30",
+  "pairs": 16,
+  "scope": "saved candidate fe67a281 vs native raikiri ab7e619a, original parse/screen cascade/Ahem preflight/layout at 800x600, warm calls per independent process (first call is not cold startup); not current main, not WPT PASS, not a switching-necessity decision"
+}
