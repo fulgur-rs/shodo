@@ -209,6 +209,7 @@ documented rather than converted into a pure shaping ratio.
 Exploratory earlier samples reproduced a 34–36% increase for the saved candidate
 in two original hyphens reference documents, with 16 independent alternating
 process pairs on one CPU. That observation is tracked in `shodo-jt1`; it is not
-attributed to current main. Native segmentation-model configuration is tracked
+attributed to current main. Its reproduction and stage attribution are recorded
+in [raikiri jt1 regression](raikiri-jt1-regression.md). Native segmentation-model configuration is tracked
 in `shodo-bqz`. Both followups require S4 validation before a switching-necessity
 decision, and do not currently block the excluded production-switch issue.

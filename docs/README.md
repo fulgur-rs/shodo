@@ -55,6 +55,7 @@ recorded machine, toolchain, and scope at the time, not a live guarantee.
 | Frozen raikiri S4 residual fields, all109 document classification and caller gaps | [raikiri style diagnostics](records/raikiri-style-diagnostics.md) |
 | Representative caller wiring of hanging-punctuation none/first | [raikiri hanging-punctuation](records/raikiri-hanging-punctuation.md) |
 | Representative caller ownership split of flow/paint CSS | [raikiri style handoff](records/raikiri-style-handoff.md) |
+| Reproduction and stage attribution of the saved S4 candidate increase | [raikiri jt1 regression](records/raikiri-jt1-regression.md) |
 | An unsent proposal concerning upstream shaping status | [harfrust status proposal](records/harfrust-shaping-status-proposal.md) |
 
 ## Design history (`docs/superpowers/`)
