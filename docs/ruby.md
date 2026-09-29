@@ -131,6 +131,13 @@ and `Line::ruby_annotations()` expose `RubyAnnotationView`: container/base/
 annotation nodes, level, base and reading text ranges, visibility, retained
 `Line`, its `Paragraph`, origin and full `RubyTransform`.
 
+`Line::fragments()` yields non-ruby fragments in their visual order first, then
+retained annotations in the same order as `Line::ruby_annotations()`.
+`Line::fragment(index)` indexes this sequence, which does not guarantee a global
+physical visual order. Use `RubyTransform` for bidi and vertical placement.
+Nested annotations remain on the reading's child `Line`; traverse that line and
+compose their transforms.
+
 Annotation text never enters the parent's `Paragraph::text()` or primary
 `OffsetMapping`. Each processed dataset can contain nonpainting bidi controls;
 text ranges are UTF-8 offsets in their own accepted Line dataset. DOM offsets
