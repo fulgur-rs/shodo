@@ -146,9 +146,17 @@ layout units. Line-edge windows are bounded to 4096 UTF-8 bytes; cuts whose pref
 or continuation cannot be safely reshaped preserve the whole shared cluster and
 warn. The line's owned windows also share the glyph-output budget.
 
+Each line asks for at most 64 windows' worth of edge reshape bytes
+(`max_reshape_window_bytes` x 64, 256 KiB by default), charged per request rather
+than per cache miss so the result never depends on what an earlier layout left in
+the context; past it the line keeps shared glyphs and warns.
+
 Each `LayoutContext` is `Send` and deliberately not `Sync`: use one per thread.
-It reuses shaping scratch and at most 64 font-qualified shaping plans; no word
-cache is retained. `shrink_to(bytes)` drops all plans and caps the combined
+It reuses shaping scratch and at most 64 font-qualified shaping plans, and keeps
+the reshaped line-edge windows of the most recent paragraph (at most 256 entries
+and about 32K glyph-equivalents, roughly 0.9 MiB; a single window costing more
+than 1K glyph-equivalents is not retained); no word cache is retained.
+`shrink_to(bytes)` drops all plans and that window cache and caps the combined
 accounted scratch/partial-line buffers, preferring scratch when it fits. It does
 not measure separately shared paragraph/font allocations. Shaping also releases
 scratch exceeding the current run budget's conservative storage bound. See the

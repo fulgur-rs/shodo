@@ -344,3 +344,117 @@ fn edge_window_shapes_are_reused_across_candidates_and_relayouts() {
         "{first_calls} edge-window shape calls for {words} words"
     );
 }
+
+/// `shrink_to` is the documented way to release a context's retained memory;
+/// the reshaped-window cache must go with it.
+#[test]
+fn shrink_to_releases_the_edge_window_cache() {
+    let fonts = final_review_fonts();
+    fonts
+        .register_face(
+            include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Shodo Fixture Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut style = ParagraphStyle::default();
+    style.root.font_families = vec![crate::style::FontFamily::Named(
+        "Shodo Fixture Latin".into(),
+    )];
+    style.root.font_size = 16.0;
+    let text = vec!["Typography affects readability of wave forms"; 20].join(" ");
+    let mut b = ParagraphBuilder::new(&style, &Limits::default());
+    b.push_text(TextSource::Generated { node: NodeId(1) }, &text);
+    let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+    let mut cx = LayoutContext::new();
+    p.break_all(&mut cx, &LineOptions::default(), 200.0, &AtomicSizes::EMPTY);
+    assert!(
+        cx.edge_shapes.len() > 0,
+        "the layout should have cached windows"
+    );
+    cx.shrink_to(usize::MAX);
+    assert_eq!(cx.edge_shapes.len(), 0, "shrink_to must release the cache");
+}
+
+fn arabic_fonts() -> crate::font::FontCollection {
+    let fonts = final_review_fonts();
+    fonts
+        .register_face(
+            include_bytes!("../../dev/fixtures/assets/fonts/arabic.ttf").to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Shodo Fixture Arabic".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    fonts
+}
+
+fn break_all_arabic(
+    limits: Limits,
+    reps: usize,
+    width: f32,
+    cx: &mut LayoutContext,
+) -> (Vec<(std::ops::Range<usize>, u32)>, Vec<String>) {
+    let sentence = "\u{0645}\u{0631}\u{062d}\u{0628}\u{0627} \u{0628}\u{0627}\u{0644}\u{0639}\u{0627}\u{0644}\u{0645}. \u{0627}\u{0644}\u{0643}\u{062a}\u{0627}\u{0628}\u{0629} \u{0627}\u{0644}\u{0639}\u{0631}\u{0628}\u{064a}\u{0629} \u{062c}\u{0645}\u{064a}\u{0644}\u{0629}\u{060c}";
+    let mut style = ParagraphStyle::default();
+    style.root.font_families = vec![crate::style::FontFamily::Named(
+        "Shodo Fixture Arabic".into(),
+    )];
+    style.root.font_size = 16.0;
+    style.root.word_break = crate::style::WordBreak::BreakAll;
+    let text = vec![sentence; reps].join(" ");
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_text(TextSource::Generated { node: NodeId(1) }, &text);
+    let p = b.build(&mut LayoutContext::new(), &arabic_fonts()).unwrap();
+    let lines = p.break_all(cx, &LineOptions::default(), width, &AtomicSizes::EMPTY);
+    let summary = lines
+        .iter()
+        .map(|l| (l.text_range(), l.inline_size().to_bits()))
+        .collect();
+    (
+        summary,
+        cx.take_warnings().into_iter().map(|w| w.message).collect(),
+    )
+}
+
+/// Each edge window is bounded, but a long unsafe-joined line asks for one per
+/// break candidate. The total requested per line must fail closed (warn and
+/// keep shared glyphs) instead of growing with the candidate count, without
+/// depending on what the cache already holds.
+#[test]
+fn edge_reshape_work_per_line_is_budgeted_and_deterministic() {
+    // Default limits: a 5 KB unsafe-joined run stays under the 4 KiB window cap
+    // only while windows are small, so the scan keeps requesting large windows
+    // at every candidate; the per-line budget bounds the total.
+    let limits = Limits::default();
+    let mut cold = LayoutContext::new();
+    let (lines, warnings) = break_all_arabic(limits.clone(), 24, 200_000.0, &mut cold);
+    assert!(
+        warnings.iter().any(|m| m.contains("edge reshape budget")),
+        "a line needing more than the per-line reshape budget must warn; got {warnings:?}"
+    );
+    assert!(!lines.is_empty());
+    // The same layout with a warm cache is identical: the budget charges
+    // requests, not cache misses.
+    let mut warm = LayoutContext::new();
+    let first = break_all_arabic(limits.clone(), 24, 200_000.0, &mut warm);
+    let second = break_all_arabic(limits, 24, 200_000.0, &mut warm);
+    assert_eq!(first.0, second.0);
+    assert_eq!(first.0, lines);
+}
+
+#[test]
+fn ordinary_text_stays_under_the_edge_reshape_budget() {
+    let mut cx = LayoutContext::new();
+    let (lines, warnings) = break_all_arabic(Limits::default(), 24, 320.0, &mut cx);
+    assert!(lines.len() > 1);
+    assert!(
+        !warnings.iter().any(|m| m.contains("edge reshape budget")),
+        "default limits must not trip the budget on ordinary wrapping: {warnings:?}"
+    );
+}
