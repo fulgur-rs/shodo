@@ -98,6 +98,8 @@ pub(crate) struct PartialLine {
     options: LineOptions,
     cursor: Option<FloatCursor>,
     width: LayoutUnit,
+    offset: LayoutUnit,
+    indent: LayoutUnit,
     scan: Scan,
     prefix: Vec<LayoutUnit>,
     tracking: Vec<LayoutUnit>,
@@ -121,126 +123,56 @@ impl std::fmt::Debug for PartialLine {
 
 impl PartialLine {
     pub(crate) fn bytes(&self) -> usize {
+        let overlay_bytes: usize = self
+            .scan
+            .overlays
+            .iter()
+            .map(|overlay| {
+                let store = &overlay.store;
+                (store.id.capacity() + store.cluster.capacity()) * std::mem::size_of::<u32>()
+                    + (store.advance.capacity()
+                        + store.pen.capacity()
+                        + store.offset_inline.capacity()
+                        + store.offset_block.capacity()
+                        + store.spacing.as_ref().map_or(0, Vec::capacity)
+                        + store.leading.as_ref().map_or(0, Vec::capacity))
+                        * std::mem::size_of::<LayoutUnit>()
+                    + store.flags.capacity() * std::mem::size_of::<u8>()
+                    + overlay.runs.capacity() * std::mem::size_of::<crate::shape::ShapedRun>()
+            })
+            .sum();
         std::mem::size_of::<Self>()
             + self.scan.widths.capacity() * std::mem::size_of::<LayoutUnit>()
+            + self.scan.leading.as_ref().map_or(0, Vec::capacity)
+                * std::mem::size_of::<LayoutUnit>()
+            + self.scan.autospace_gaps.capacity() * std::mem::size_of::<super::autospace::Gap>()
+            + self.scan.ruby_caret_gaps.capacity()
+                * std::mem::size_of::<crate::ruby::align::CaretGap>()
             + self.scan.overlays.capacity() * std::mem::size_of::<super::reshape::EdgeOverlay>()
-            + self.prefix.capacity() * 4
-            + self.tracking.capacity() * 4
+            + overlay_bytes
+            + self.prefix.capacity() * std::mem::size_of::<LayoutUnit>()
+            + self.tracking.capacity() * std::mem::size_of::<LayoutUnit>()
             + self.thresholds.capacity() * std::mem::size_of::<(usize, LayoutUnit)>()
             + self.breaks.bytes()
             + self.emergencies.bytes()
             + self.hyphens.bytes()
             + self.floats.capacity() * std::mem::size_of::<(usize, NodeId, u32)>()
     }
-    fn end(
+    /// Prepare prefix/frontier searches only when a float or a narrower
+    /// retry needs them. On failure the original scan remains untouched.
+    fn index(
         &mut self,
-        available: LayoutUnit,
-        indent: LayoutUnit,
+        atomics: &AtomicSizes,
+        cx: &mut LayoutContext,
         sat: &mut Saturation,
-    ) -> (usize, Option<usize>) {
-        let limit = available.sub(indent, sat);
-        while self.threshold_cursor > 0 && self.thresholds[self.threshold_cursor - 1].1 > limit {
-            self.threshold_cursor -= 1;
-        }
-        while self.threshold_cursor < self.thresholds.len()
-            && self.thresholds[self.threshold_cursor].1 <= limit
-        {
-            self.threshold_cursor += 1;
-        }
-        let bad = self.threshold_cursor;
-        let Some(&(i, _)) = self.thresholds.get(bad) else {
-            let hyphen = (self.scan.reason == crate::output::BreakReason::Regular)
-                .then(|| self.hyphens.candidates.last().map(|c| c.0))
-                .flatten()
-                .filter(|end| {
-                    (*end..self.scan.end).all(|at| {
-                        matches!(
-                            self.data.units[at].kind,
-                            UnitKind::Close { .. } | UnitKind::BidiControl
-                        )
-                    })
-                });
-            return (self.scan.end, hyphen);
-        };
-        let normal = self.breaks.select(i, limit);
-        let emergency = self.emergencies.select(i, limit);
-        let fitting_hyphen = self.hyphens.select(i, limit);
-        let preferred = normal.into_iter().chain(fitting_hyphen).max();
-        let mut end = preferred.or(emergency).unwrap_or_else(|| {
-            self.breaks
-                .candidates
-                .first()
-                .map(|c| c.0)
-                .into_iter()
-                .chain(self.emergencies.candidates.first().map(|c| c.0))
-                .chain(self.hyphens.candidates.first().map(|c| c.0))
-                .min()
-                .unwrap_or(self.scan.end)
-        });
-        let hyphen = self
-            .hyphens
-            .candidates
-            .binary_search_by_key(&end, |c| c.0)
-            .ok()
-            .map(|_| end);
-        while end < self.scan.end && super::pulls_after_break(&self.data, end) {
-            end += 1;
-        }
-        (end, hyphen)
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(super) fn resolve(
-    para: &Paragraph,
-    token: BreakToken,
-    options: &LineOptions,
-    constraint: &LineConstraint<'_>,
-    available: LayoutUnit,
-    offset: LayoutUnit,
-    indent: LayoutUnit,
-    atomics: &AtomicSizes,
-    cx: &mut LayoutContext,
-    sat: &mut Saturation,
-) -> Result<Scan, (NodeId, u32, LayoutUnit)> {
-    let start = token.unit as usize;
-    let valid = cx.partial.as_ref().is_some_and(|p| {
-        Arc::ptr_eq(&p.data, &para.data)
-            && p.token == token
-            && p.revision == atomics.revision
-            && p.options == *options
-            && p.width >= available
-            && constraint.floats_placed_through >= p.cursor
-    });
-    if !valid {
-        cx.partial = None;
-        let mut scanned = scan(
-            &para.data,
-            start,
-            available,
-            offset,
-            indent,
-            token.flags,
-            options,
-            atomics,
-            cx,
-            sat,
-        );
-        #[cfg(test)]
-        {
-            cx.cache_visits += scanned.end - start;
-        }
-        let data = &para.data;
-        let units = &data.units[start..scanned.end];
-        let safe = indent >= LayoutUnit::ZERO
-            && scanned.widths.iter().all(|w| *w >= LayoutUnit::ZERO)
-            && !units.iter().any(|u| matches!(u.kind, UnitKind::Tab))
-            && units
-                .iter()
-                .any(|u| matches!(u.kind, UnitKind::Float { .. }));
-        if !safe {
-            return Ok(scanned);
-        }
+    ) -> bool {
+        let data = &self.data;
+        let token = self.token;
+        let start = token.unit as usize;
+        let units = &data.units[start..self.scan.end];
+        let options = &self.options;
+        let indent = self.indent;
+        let warning_checkpoint = cx.warnings.checkpoint();
         // A cached prefix always describes the unbroken text. The selected
         // discretionary glyph is materialized afresh after choosing an end.
         let natural_widths: Vec<_> = units
@@ -260,7 +192,7 @@ pub(super) fn resolve(
             })
             .collect();
         if natural_widths.iter().any(|w| *w < LayoutUnit::ZERO) {
-            return Ok(scanned);
+            return false;
         }
         let mut hyphens = Candidates::default();
         let mut prefix = vec![decoration::width(data, start, true, sat)];
@@ -274,6 +206,10 @@ pub(super) fn resolve(
         let mut tracking = vec![LayoutUnit::ZERO];
         let mut kept_spacing = LayoutUnit::ZERO;
         for (k, (u, w)) in units.iter().zip(&natural_widths).enumerate() {
+            #[cfg(test)]
+            {
+                cx.cache_prepare_visits += 1;
+            }
             super::spacing::push(data, &mut spacing, start + k);
             let spacing_width = spacing.summary(Some(data)).width(sat);
             tracking.push(spacing_width);
@@ -389,33 +325,197 @@ pub(super) fn resolve(
             }
         }
         if !sat.is_clean()
+            || warning_checkpoint.is_none()
+            || cx.warnings.checkpoint() != warning_checkpoint
             || prefix.last().unwrap().raw() as i64 + indent.raw() as i64 > i32::MAX as i64
         {
+            return false;
+        }
+        self.scan.widths = natural_widths;
+        self.scan.overlays.clear();
+        self.scan.prepared = false;
+        self.threshold_cursor = thresholds.len();
+        self.prefix = prefix;
+        self.tracking = tracking;
+        self.thresholds = thresholds;
+        self.breaks = breaks;
+        self.emergencies = emergencies;
+        self.hyphens = hyphens;
+        self.floats = floats;
+        true
+    }
+
+    fn end(
+        &mut self,
+        available: LayoutUnit,
+        indent: LayoutUnit,
+        sat: &mut Saturation,
+    ) -> (usize, Option<usize>) {
+        let limit = available.sub(indent, sat);
+        while self.threshold_cursor > 0 && self.thresholds[self.threshold_cursor - 1].1 > limit {
+            self.threshold_cursor -= 1;
+        }
+        while self.threshold_cursor < self.thresholds.len()
+            && self.thresholds[self.threshold_cursor].1 <= limit
+        {
+            self.threshold_cursor += 1;
+        }
+        let bad = self.threshold_cursor;
+        let Some(&(i, _)) = self.thresholds.get(bad) else {
+            let hyphen = (self.scan.reason == crate::output::BreakReason::Regular)
+                .then(|| self.hyphens.candidates.last().map(|c| c.0))
+                .flatten()
+                .filter(|end| {
+                    (*end..self.scan.end).all(|at| {
+                        matches!(
+                            self.data.units[at].kind,
+                            UnitKind::Close { .. } | UnitKind::BidiControl
+                        )
+                    })
+                });
+            return (self.scan.end, hyphen);
+        };
+        let normal = self.breaks.select(i, limit);
+        let emergency = self.emergencies.select(i, limit);
+        let fitting_hyphen = self.hyphens.select(i, limit);
+        let preferred = normal.into_iter().chain(fitting_hyphen).max();
+        let mut end = preferred.or(emergency).unwrap_or_else(|| {
+            self.breaks
+                .candidates
+                .first()
+                .map(|c| c.0)
+                .into_iter()
+                .chain(self.emergencies.candidates.first().map(|c| c.0))
+                .chain(self.hyphens.candidates.first().map(|c| c.0))
+                .min()
+                .unwrap_or(self.scan.end)
+        });
+        let hyphen = self
+            .hyphens
+            .candidates
+            .binary_search_by_key(&end, |c| c.0)
+            .ok()
+            .map(|_| end);
+        while end < self.scan.end && super::pulls_after_break(&self.data, end) {
+            end += 1;
+        }
+        (end, hyphen)
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn resolve(
+    para: &Paragraph,
+    token: BreakToken,
+    options: &LineOptions,
+    constraint: &LineConstraint<'_>,
+    available: LayoutUnit,
+    offset: LayoutUnit,
+    indent: LayoutUnit,
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> Result<Scan, (NodeId, u32, LayoutUnit)> {
+    let start = token.unit as usize;
+    let valid = sat.is_clean()
+        && cx.partial.as_ref().is_some_and(|p| {
+            Arc::ptr_eq(&p.data, &para.data)
+                && p.token == token
+                && p.revision == atomics.revision
+                && p.options == *options
+                && p.offset == offset
+                && p.indent == indent
+                && p.width >= available
+                && constraint.floats_placed_through >= p.cursor
+        });
+    let mut cached = if valid {
+        cx.partial.take().unwrap()
+    } else {
+        cx.partial = None;
+        let warning_checkpoint = cx.warnings.checkpoint();
+        let scanned = scan(
+            &para.data,
+            start,
+            available,
+            offset,
+            indent,
+            token.flags,
+            options,
+            atomics,
+            cx,
+            sat,
+        );
+        #[cfg(test)]
+        {
+            cx.cache_visits += scanned.end - start;
+        }
+        let units = &para.data.units[start..scanned.end];
+        let safe = indent >= LayoutUnit::ZERO
+            && scanned.widths.iter().all(|w| *w >= LayoutUnit::ZERO)
+            && !units.iter().any(|u| matches!(u.kind, UnitKind::Tab))
+            && sat.is_clean()
+            && warning_checkpoint.is_some()
+            && cx.warnings.checkpoint() == warning_checkpoint;
+        if !safe {
             return Ok(scanned);
         }
-        // Keep the cold result intact until all cache safety checks pass.
-        scanned.widths = natural_widths;
-        scanned.overlays.clear();
-        scanned.prepared = false;
-        cx.partial = Some(PartialLine {
-            threshold_cursor: thresholds.len(),
-            float_index: 0,
-            data: Arc::clone(data),
+        let has_float = units
+            .iter()
+            .any(|u| matches!(u.kind, UnitKind::Float { .. }));
+        let cached = PartialLine {
+            data: Arc::clone(&para.data),
             token,
             revision: atomics.revision,
             options: *options,
             cursor: constraint.floats_placed_through,
             width: available,
+            offset,
+            indent,
             scan: scanned,
-            prefix,
-            tracking,
-            thresholds,
-            breaks,
-            emergencies,
-            hyphens,
-            floats,
-        });
+            prefix: Vec::new(),
+            tracking: Vec::new(),
+            thresholds: Vec::new(),
+            breaks: Candidates::default(),
+            emergencies: Candidates::default(),
+            hyphens: Candidates::default(),
+            floats: Vec::new(),
+            threshold_cursor: 0,
+            float_index: 0,
+        };
+        if !has_float {
+            // Ordinary first calls retain one raw result. They do not repeat
+            // unit measurement or build candidate searches until a retry
+            // actually needs a smaller width.
+            let result = cached.scan.clone();
+            cx.partial = Some(cached);
+            return Ok(result);
+        }
+        cached
+    };
+    if cached.prefix.is_empty() {
+        if valid && cached.width == available {
+            cached.cursor = constraint.floats_placed_through;
+            let result = cached.scan.clone();
+            cx.partial = Some(cached);
+            return Ok(result);
+        }
+        let warnings_before = cx.warnings.clone();
+        let saturation_before = *sat;
+        if !cached.index(atomics, cx, sat) {
+            // Speculative index preparation must not add diagnostics to the
+            // requested line. A failed narrower retry needs a fresh scan at
+            // its own width, rather than the retained wider result.
+            cx.warnings = warnings_before;
+            *sat = saturation_before;
+            if valid {
+                return resolve(
+                    para, token, options, constraint, available, offset, indent, atomics, cx, sat,
+                );
+            }
+            return Ok(cached.scan);
+        }
     }
+    cx.partial = Some(cached);
     let p = cx.partial.as_mut().unwrap();
     p.cursor = constraint.floats_placed_through;
     p.width = available;
@@ -504,6 +604,543 @@ pub(super) fn resolve(
 
 #[cfg(test)]
 mod tests {
+    fn plain_paragraph(text: &str) -> crate::Paragraph {
+        plain_paragraph_with_style(text, &crate::style::ParagraphStyle::default())
+    }
+
+    fn plain_paragraph_with_style(
+        text: &str,
+        style: &crate::style::ParagraphStyle,
+    ) -> crate::Paragraph {
+        use crate::font::{FontCollection, FontOptions};
+        use crate::limits::Limits;
+        use crate::node::{NodeId, TextSource};
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register(include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec())
+            .unwrap();
+        let mut builder = crate::ParagraphBuilder::new(style, &limits);
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
+        builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap()
+    }
+
+    fn line_signature(line: &crate::Line) -> (String, Vec<crate::output::Glyph>) {
+        let glyphs = line
+            .fragments()
+            .flat_map(|fragment| match fragment {
+                crate::Fragment::GlyphRun(run) => run.glyphs().collect::<Vec<_>>(),
+                _ => Vec::new(),
+            })
+            .collect();
+        (
+            format!(
+                "{:?}/{:?}/{:?}/{:?}/{:?}",
+                line.text_range(),
+                line.break_reason(),
+                (
+                    line.block_offset(),
+                    line.inline_size(),
+                    line.block_size(),
+                    line.baseline(crate::geometry::BaselineKind::Alphabetic)
+                ),
+                (line.hang_start(), line.hang_end()),
+                line.fragments().collect::<Vec<_>>()
+            ),
+            glyphs,
+        )
+    }
+
+    #[test]
+    fn plain_height_rejection_retry_reuses_scan_without_a_float() {
+        use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult};
+        let text = "ab ".repeat(63) + "ab";
+        let p = plain_paragraph(&text);
+        let mut cx = LayoutContext::new();
+        let mut constraint = LineConstraint::new(10000.);
+        constraint.max_block_size = Some(0.);
+        assert!(
+            matches!(p.next_line(&mut cx, p.start_token(), &Default::default(),
+            &constraint, &AtomicSizes::EMPTY), LineResult::BlockSizeExceeded { needed_block_size } if needed_block_size > 0.)
+        );
+        assert!(cx.cache_visits > 100);
+        assert_eq!(
+            cx.cache_prepare_visits, 0,
+            "cold ordinary lines need no candidate preparation"
+        );
+        cx.cache_visits = 0;
+        constraint.max_block_size = None;
+        let LineResult::Line(actual) = p.next_line(
+            &mut cx,
+            p.start_token(),
+            &Default::default(),
+            &constraint,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("restored height")
+        };
+        assert_eq!(actual.text_range(), 0..text.len());
+        let LineResult::Line(fresh) = p.next_line(
+            &mut LayoutContext::new(),
+            p.start_token(),
+            &Default::default(),
+            &constraint,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("fresh")
+        };
+        assert_eq!(line_signature(&actual), line_signature(&fresh));
+        assert!(
+            !line_signature(&actual).1.is_empty(),
+            "real fixture glyph output"
+        );
+        assert_eq!(
+            cx.cache_prepare_visits, 0,
+            "same-width retry needs no candidate preparation"
+        );
+        assert_eq!(
+            cx.cache_visits, 0,
+            "the first restored-height retry must not scan again"
+        );
+    }
+
+    #[test]
+    fn plain_justified_width_retries_reuse_scan_and_match_fresh_lines() {
+        use crate::style::{LineOptions, TextAlign};
+        use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult};
+        let p = plain_paragraph(&("alpha beta gamma delta ".repeat(15) + "alpha"));
+        let options = LineOptions {
+            text_align: TextAlign::JustifyAll,
+            ..Default::default()
+        };
+        let mut cx = LayoutContext::new();
+        let first = LineConstraint::new(10000.);
+        assert!(matches!(
+            p.next_line(
+                &mut cx,
+                p.start_token(),
+                &options,
+                &first,
+                &AtomicSizes::EMPTY
+            ),
+            LineResult::Line(_)
+        ));
+        let mut ends = Vec::new();
+        assert_eq!(cx.cache_prepare_visits, 0);
+        let mut prepared = 0;
+        for width in [512., 320., 192., 96., 48.] {
+            cx.cache_visits = 0;
+            let constraint = LineConstraint::new(width);
+            let LineResult::Line(actual) = p.next_line(
+                &mut cx,
+                p.start_token(),
+                &options,
+                &constraint,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!("retry width {width}")
+            };
+            let LineResult::Line(fresh) = p.next_line(
+                &mut LayoutContext::new(),
+                p.start_token(),
+                &options,
+                &constraint,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!("fresh width {width}")
+            };
+            assert_eq!(
+                line_signature(&actual),
+                line_signature(&fresh),
+                "width {width}"
+            );
+            assert_eq!(
+                cx.cache_visits, 0,
+                "retry width {width} must reuse the original scan"
+            );
+            ends.push(actual.text_range().end);
+            if prepared == 0 {
+                prepared = cx.cache_prepare_visits;
+                assert!(prepared > 0 && prepared <= p.data.units.len());
+            } else {
+                assert_eq!(
+                    cx.cache_prepare_visits, prepared,
+                    "prepare candidate searches once"
+                );
+            }
+        }
+        assert!(
+            ends.windows(2).any(|pair| pair[0] != pair[1]),
+            "actual different line cuts"
+        );
+    }
+
+    #[test]
+    fn plain_atomic_size_revisions_change_geometry_before_cache_reuse() {
+        use crate::limits::Limits;
+        use crate::node::{InlineEdges, NodeId};
+        use crate::style::ParagraphStyle;
+        use crate::{
+            AtomicSize, AtomicSizes, LayoutContext, LineConstraint, LineResult, ParagraphBuilder,
+        };
+        let style = ParagraphStyle::default();
+        let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+        builder.push_atomic(NodeId(1), &style.root, InlineEdges::default());
+        let p = builder
+            .build(
+                &mut LayoutContext::new(),
+                &crate::font::FontCollection::new(&Limits::default()),
+            )
+            .unwrap();
+        let mut small = AtomicSizes::new();
+        small.insert(
+            NodeId(1),
+            AtomicSize {
+                inline_size: 10.,
+                ..Default::default()
+            },
+        );
+        let mut large = AtomicSizes::new();
+        large.insert(
+            NodeId(1),
+            AtomicSize {
+                inline_size: 50.,
+                ..Default::default()
+            },
+        );
+        assert_eq!(small.generation(), large.generation());
+        let mut cx = LayoutContext::new();
+        let constraint = LineConstraint::new(1000.);
+        for (sizes, want) in [(&small, 10.), (&large, 50.), (&small, 10.)] {
+            for attempt in 0..2 {
+                cx.cache_visits = 0;
+                let crate::LineResult::Line(actual) = p.next_line(
+                    &mut cx,
+                    p.start_token(),
+                    &Default::default(),
+                    &constraint,
+                    sizes,
+                ) else {
+                    panic!("atomic")
+                };
+                let LineResult::Line(fresh) = p.next_line(
+                    &mut LayoutContext::new(),
+                    p.start_token(),
+                    &Default::default(),
+                    &constraint,
+                    sizes,
+                ) else {
+                    panic!("fresh atomic")
+                };
+                assert_eq!(actual.inline_size(), want);
+                assert_eq!(line_signature(&actual), line_signature(&fresh));
+                if attempt == 1 {
+                    assert_eq!(cx.cache_visits, 0);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn plain_missing_atomic_warnings_are_repeated_on_each_call() {
+        use crate::limits::{Limits, WarningKind};
+        use crate::node::{InlineEdges, NodeId};
+        use crate::style::ParagraphStyle;
+        use crate::{AtomicSizes, LayoutContext, LineConstraint, ParagraphBuilder};
+        let style = ParagraphStyle::default();
+        let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+        builder.push_atomic(NodeId(1), &style.root, InlineEdges::default());
+        let p = builder
+            .build(
+                &mut LayoutContext::new(),
+                &crate::font::FontCollection::new(&Limits::default()),
+            )
+            .unwrap();
+        let mut cx = LayoutContext::new();
+        for _ in 0..3 {
+            cx.cache_visits = 0;
+            p.next_line(
+                &mut cx,
+                p.start_token(),
+                &Default::default(),
+                &LineConstraint::new(1000.),
+                &AtomicSizes::EMPTY,
+            );
+            assert!(
+                cx.take_warnings()
+                    .iter()
+                    .any(|warning| warning.kind == WarningKind::MissingAtomicSize)
+            );
+            assert!(
+                cx.cache_visits > 0,
+                "warning-producing scans must run again"
+            );
+        }
+    }
+
+    #[test]
+    fn lazy_index_fallback_rescans_current_width_and_preserves_suppression() {
+        use crate::limits::WarningKind;
+        use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult};
+        let p = plain_paragraph(&("alpha beta gamma delta ".repeat(15) + "alpha"));
+        let mut cx = LayoutContext::new();
+        p.next_line(
+            &mut cx,
+            p.start_token(),
+            &Default::default(),
+            &LineConstraint::new(10000.),
+            &AtomicSizes::EMPTY,
+        );
+        // A suppressed sink cannot prove speculative preparation warning-free.
+        // Force that real sink state while retaining the clean, wider scan.
+        cx.warnings.set_max(Some(0));
+        cx.warnings
+            .push(WarningKind::Unsupported, "existing diagnostic");
+        assert!(cx.warnings.is_suppressed());
+        cx.cache_visits = 0;
+        let constraint = LineConstraint::new(96.);
+        let LineResult::Line(actual) = p.next_line(
+            &mut cx,
+            p.start_token(),
+            &Default::default(),
+            &constraint,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("fallback")
+        };
+        let LineResult::Line(fresh) = p.next_line(
+            &mut LayoutContext::new(),
+            p.start_token(),
+            &Default::default(),
+            &constraint,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("fresh")
+        };
+        assert_eq!(line_signature(&actual), line_signature(&fresh));
+        assert!(
+            actual.text_range().end < p.text().len(),
+            "must not return the retained wide line"
+        );
+        assert!(cx.cache_visits > 0);
+        assert_eq!(
+            cx.take_warnings()
+                .iter()
+                .map(|warning| warning.kind)
+                .collect::<Vec<_>>(),
+            vec![WarningKind::Suppressed]
+        );
+    }
+
+    #[test]
+    fn plain_tabs_remain_position_dependent_and_uncached() {
+        use crate::style::{ParagraphStyle, WhiteSpaceCollapse};
+        use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult};
+        let mut style = ParagraphStyle::default();
+        style.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
+        let p = plain_paragraph_with_style("a\tb\tc", &style);
+        let mut cx = LayoutContext::new();
+        let mut signatures = Vec::new();
+        for offset in [0., 12., 4., 0.] {
+            cx.cache_visits = 0;
+            let mut constraint = LineConstraint::new(1000.);
+            constraint.inline_start_offset = offset;
+            let LineResult::Line(actual) = p.next_line(
+                &mut cx,
+                p.start_token(),
+                &Default::default(),
+                &constraint,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!("tab")
+            };
+            let LineResult::Line(fresh) = p.next_line(
+                &mut LayoutContext::new(),
+                p.start_token(),
+                &Default::default(),
+                &constraint,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!("fresh tab")
+            };
+            assert_eq!(line_signature(&actual), line_signature(&fresh));
+            assert!(cx.cache_visits > 0);
+            signatures.push(line_signature(&actual));
+        }
+        assert_ne!(signatures[0], signatures[1]);
+        assert_eq!(signatures[0], signatures[3]);
+    }
+
+    #[test]
+    fn plain_raw_cache_releases_its_paragraph_on_shrink() {
+        use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult};
+        let p = plain_paragraph("alpha beta gamma");
+        let weak = std::sync::Arc::downgrade(&p.data);
+        let mut cx = LayoutContext::new();
+        assert!(matches!(
+            p.next_line(
+                &mut cx,
+                p.start_token(),
+                &Default::default(),
+                &LineConstraint::new(1000.),
+                &AtomicSizes::EMPTY
+            ),
+            LineResult::Line(_)
+        ));
+        drop(p);
+        assert!(weak.upgrade().is_some());
+        cx.shrink_to(0);
+        assert!(weak.upgrade().is_none());
+    }
+
+    #[test]
+    fn plain_first_line_ligature_retries_keep_alternate_glyphs_and_source_cuts() {
+        use crate::style::ParagraphStyle;
+        use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult};
+        let mut style = ParagraphStyle::default();
+        let mut first = style.root.clone();
+        first.font_size = 32.;
+        style.first_line = Some(first);
+        let p = plain_paragraph_with_style("ffi office ffi office ffi office", &style);
+        let mut cx = LayoutContext::new();
+        let constraint = LineConstraint::new(1000.);
+        assert!(matches!(
+            p.next_line(
+                &mut cx,
+                p.start_token(),
+                &Default::default(),
+                &constraint,
+                &AtomicSizes::EMPTY
+            ),
+            LineResult::Line(_)
+        ));
+        for width in [1000., 320., 160., 96., 80.] {
+            cx.cache_visits = 0;
+            let constraint = LineConstraint::new(width);
+            let LineResult::Line(actual) = p.next_line(
+                &mut cx,
+                p.start_token(),
+                &Default::default(),
+                &constraint,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!("alternate retry")
+            };
+            let LineResult::Line(fresh) = p.next_line(
+                &mut LayoutContext::new(),
+                p.start_token(),
+                &Default::default(),
+                &constraint,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!("fresh alternate")
+            };
+            assert_eq!(line_signature(&actual), line_signature(&fresh));
+            assert_eq!(cx.cache_visits, 0);
+            assert_eq!(actual.break_token(), fresh.break_token());
+            let continuation = p.next_line(
+                &mut LayoutContext::new(),
+                actual.break_token(),
+                &Default::default(),
+                &constraint,
+                &AtomicSizes::EMPTY,
+            );
+            let fresh_continuation = p.next_line(
+                &mut LayoutContext::new(),
+                fresh.break_token(),
+                &Default::default(),
+                &constraint,
+                &AtomicSizes::EMPTY,
+            );
+            match (continuation, fresh_continuation) {
+                (LineResult::Line(actual), LineResult::Line(fresh)) => {
+                    assert_eq!(line_signature(&actual), line_signature(&fresh))
+                }
+                (LineResult::Done, LineResult::Done) => (),
+                pair => panic!("unexpected continuation: {pair:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn plain_discretionary_forced_and_bidi_retries_match_fresh_glyphs() {
+        use crate::style::{ParagraphStyle, WhiteSpaceCollapse};
+        use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult};
+        let mut style = ParagraphStyle::default();
+        style.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
+        for text in [
+            "ab\u{ad}cdef\u{ad}ghijkl\u{ad}mn",
+            "ab cd\n12 ef\ngh",
+            "ab \u{202b}12 cd\u{202c} ef 34",
+        ] {
+            let p = plain_paragraph_with_style(text, &style);
+            let mut saw_visible_hyphen = false;
+            for first_width in [1000., 96.] {
+                let mut cx = LayoutContext::new();
+                p.next_line(
+                    &mut cx,
+                    p.start_token(),
+                    &Default::default(),
+                    &LineConstraint::new(first_width),
+                    &AtomicSizes::EMPTY,
+                );
+                for width in [
+                    first_width,
+                    first_width * 0.75,
+                    first_width * 0.5,
+                    first_width * 0.5,
+                ] {
+                    cx.cache_visits = 0;
+                    let constraint = LineConstraint::new(width);
+                    let LineResult::Line(actual) = p.next_line(
+                        &mut cx,
+                        p.start_token(),
+                        &Default::default(),
+                        &constraint,
+                        &AtomicSizes::EMPTY,
+                    ) else {
+                        panic!("retry")
+                    };
+                    let LineResult::Line(fresh) = p.next_line(
+                        &mut LayoutContext::new(),
+                        p.start_token(),
+                        &Default::default(),
+                        &constraint,
+                        &AtomicSizes::EMPTY,
+                    ) else {
+                        panic!("fresh")
+                    };
+                    assert_eq!(
+                        line_signature(&actual),
+                        line_signature(&fresh),
+                        "{text:?} at {width}"
+                    );
+                    assert_eq!(cx.cache_visits, 0, "eligible retry {text:?} at {width}");
+                    saw_visible_hyphen |= actual.fragments().any(|fragment| match fragment {
+                        crate::Fragment::GlyphRun(run) => run.clusters().any(|cluster| {
+                            cluster.source_char == Some('\u{ad}') && cluster.advance > 0.
+                        }),
+                        _ => false,
+                    });
+                }
+            }
+            if text.contains('\u{ad}') {
+                assert!(
+                    saw_visible_hyphen,
+                    "exercise a selected discretionary glyph"
+                );
+            }
+        }
+    }
+
     #[test]
     fn shrinking_frontier_discards_candidates_beyond_current_end() {
         use super::Candidates;

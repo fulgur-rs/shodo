@@ -208,6 +208,12 @@ impl WarningSink {
         self.suppressed
     }
 
+    /// A suppressed sink cannot distinguish a clean operation from dropped
+    /// warnings, so its checkpoint must not qualify a result for caching.
+    pub(crate) fn checkpoint(&self) -> Option<usize> {
+        (!self.suppressed).then_some(self.warnings.len())
+    }
+
     pub(crate) fn push(&mut self, kind: WarningKind, message: impl Into<String>) {
         if self.suppressed {
             return;
