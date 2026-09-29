@@ -397,18 +397,20 @@ fn materialize(
         }
         let mut changes = Vec::new();
         let mut at = range.start;
+        // `selectable_clusters` is sorted and the groups below are visited in
+        // order, so one forward cursor replaces two binary searches per group.
+        let selectable = &data.selectable_clusters;
+        let mut cursor = selectable.partition_point(|u| (*u as usize) < range.start);
         while let Some(i) = first(data, at, range.end) {
             let end = group(data, i).end.min(range.end);
-            let begin = data
-                .selectable_clusters
-                .partition_point(|u| (*u as usize) < i);
-            let finish = data
-                .selectable_clusters
-                .partition_point(|u| (*u as usize) < end);
-            for index in data.selectable_clusters[begin..finish]
-                .iter()
-                .map(|i| *i as usize)
-            {
+            while selectable.get(cursor).is_some_and(|u| (*u as usize) < i) {
+                cursor += 1;
+            }
+            let begin = cursor;
+            while selectable.get(cursor).is_some_and(|u| (*u as usize) < end) {
+                cursor += 1;
+            }
+            for index in selectable[begin..cursor].iter().map(|i| *i as usize) {
                 let old = super::scan::unit_width_from(
                     data,
                     &data.units[index],

@@ -274,17 +274,10 @@ impl PartialLine {
                 .add(delta, sat)
                 .sub(hanging, sat)
                 .add(suffix, sat);
-            let adjustment = super::punctuation::edges(
-                data,
-                spacing.summary(Some(data)),
-                token.flags,
-                super::punctuation::last_edge(data, start + k + 1),
-                options,
-                LayoutUnit::ZERO,
-                required.add(indent, sat),
-                sat,
-            );
-            let required = required.sub(adjustment.removed(sat), sat);
+            // Only candidate breaks record `required`, so the edge adjustment
+            // is computed for those alone.
+            let last = super::punctuation::last_edge(data, start + k + 1);
+            let natural = required.add(indent, sat);
             if u.break_after == BreakClass::Hyphen {
                 if let Some(windows) = hyphen::line(data, start, start + k + 1, cx, sat) {
                     let summary = super::spacing::hyphen_summary(data, &spacing, start + k, sat);
@@ -319,9 +312,37 @@ impl PartialLine {
                     hyphens.push(start + k + 1, required);
                 }
             } else if viable && u.break_after == BreakClass::Allowed {
-                breaks.push(start + k + 1, required);
+                breaks.push(
+                    start + k + 1,
+                    required.sub(
+                        super::punctuation::removed(
+                            data,
+                            &mut spacing,
+                            token.flags,
+                            last,
+                            options,
+                            natural,
+                            sat,
+                        ),
+                        sat,
+                    ),
+                );
             } else if viable && u.break_after == BreakClass::Emergency {
-                emergencies.push(start + k + 1, required);
+                emergencies.push(
+                    start + k + 1,
+                    required.sub(
+                        super::punctuation::removed(
+                            data,
+                            &mut spacing,
+                            token.flags,
+                            last,
+                            options,
+                            natural,
+                            sat,
+                        ),
+                        sat,
+                    ),
+                );
             }
         }
         if !sat.is_clean()

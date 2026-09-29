@@ -368,6 +368,8 @@ pub(crate) struct EdgeAdjustment {
 }
 
 impl EdgeAdjustment {
+    /// Width taken off the line by the edges. Every component is clamped to
+    /// be non-negative when computed, so an adjustment never widens a line.
     pub(super) fn removed(self, sat: &mut Saturation) -> LayoutUnit {
         self.start_trim
             .add(self.end_trim, sat)
@@ -418,7 +420,7 @@ pub(super) fn edges(
                 ) || p.trim == TextSpacingTrim::SpaceFirst
                     && flags & (BreakToken::FIRST_LINE | BreakToken::AFTER_FORCED) == 0)
             {
-                value.start_trim = if ltr { p.left } else { p.right };
+                value.start_trim = (if ltr { p.left } else { p.right }).max(LayoutUnit::ZERO);
             }
             if flags & BreakToken::FIRST_LINE != 0 && options.hanging_punctuation.first && p.first {
                 value.hang_start = p
@@ -468,7 +470,9 @@ pub(super) fn edges(
                             | TextSpacingTrim::SpaceFirst
                     ) && need > LayoutUnit::ZERO)
             {
-                value.end_trim = (if ltr { p.right } else { p.left }).min(remaining);
+                value.end_trim = (if ltr { p.right } else { p.left })
+                    .max(LayoutUnit::ZERO)
+                    .min(remaining);
             }
             let advance = remaining.sub(value.end_trim, sat).max(LayoutUnit::ZERO);
             if options.hanging_punctuation.force_end && p.stop
@@ -484,6 +488,30 @@ pub(super) fn edges(
         }
     }
     value
+}
+
+/// Width that punctuation trimming and hanging take off the edges of the
+/// line summarized by `spacing`, whose natural width is `natural`.
+pub(super) fn removed<'a>(
+    data: &'a ParagraphData,
+    spacing: &mut super::spacing_summary::Cursor<'a>,
+    flags: u8,
+    last: bool,
+    options: &crate::style::LineOptions,
+    natural: LayoutUnit,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    edges(
+        data,
+        spacing.summary(Some(data)),
+        flags,
+        last,
+        options,
+        LayoutUnit::ZERO,
+        natural,
+        sat,
+    )
+    .removed(sat)
 }
 
 #[allow(clippy::too_many_arguments)]
