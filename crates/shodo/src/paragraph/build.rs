@@ -44,6 +44,7 @@ impl Paragraph {
             mut first_line_styles,
             mut warnings,
             offset_mapping,
+            line_break_override,
             rubies,
             ruby_annotation,
             ..
@@ -138,6 +139,7 @@ impl Paragraph {
             &mut sat,
             &mut bases,
             true,
+            line_break_override.as_deref(),
         )
         .map_err(|error| bases.translate(error, budget))?;
         budget.paragraph(&data)?;
@@ -226,6 +228,7 @@ impl Paragraph {
                 &mut sat,
                 &mut bases,
                 false,
+                line_break_override.as_deref(),
             )
             .map_err(|mut e| {
                 if budget.enabled() {
@@ -349,6 +352,7 @@ fn build_data(
     sat: &mut Saturation,
     bases: &mut crate::ruby::base_budget::BaseScopes,
     report_combine_rejections: bool,
+    line_break_override: Option<&crate::analysis::breaks::OverrideCallback>,
 ) -> Result<ParagraphData, LimitExceeded> {
     let mut shape_limits = limits.clone();
     shape_limits.max_shaped_glyphs = glyph_budget;
@@ -383,6 +387,9 @@ fn build_data(
             opportunity.class = crate::analysis::units::BreakClass::Prohibited;
             opportunity.min_content = false;
         }
+    }
+    if let Some(callback) = line_break_override {
+        breaks.apply_override(&processed, &styles, &combine_spans, callback);
     }
     let used_direction = crate::analysis::bidi::used_root_direction(&style, &styles[0]);
     let bidi_text = crate::analysis::bidi::upright_analysis_text(

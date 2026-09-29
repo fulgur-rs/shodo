@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::ops::Range;
+use std::sync::Arc;
 
 use crate::context::LayoutContext;
 use crate::font::FontCollection;
@@ -74,6 +75,7 @@ pub struct ParagraphBuilder {
     pub(crate) error: Option<LimitExceeded>,
     pub(crate) warnings: WarningSink,
     pub(crate) offset_mapping: bool,
+    pub(crate) line_break_override: Option<Arc<crate::analysis::breaks::OverrideCallback>>,
     pub(crate) rubies: Vec<crate::ruby::builder::RubyInput>,
     pub(crate) ruby_cost: crate::ruby::builder::InputCost,
     pub(crate) ruby_annotation: bool,
@@ -94,6 +96,7 @@ impl ParagraphBuilder {
             error: None,
             warnings: WarningSink::new(limits.max_warnings),
             offset_mapping: true,
+            line_break_override: None,
             rubies: Vec::new(),
             ruby_cost: Default::default(),
             ruby_annotation: false,
@@ -114,6 +117,22 @@ impl ParagraphBuilder {
     /// Disable it when offsets are never mapped back, for example for PDF.
     pub fn with_offset_mapping(&mut self, enabled: bool) -> &mut Self {
         self.offset_mapping = enabled;
+        self
+    }
+
+    /// Override eligible soft line-break opportunities while building this
+    /// paragraph. The callback receives the processed text and a UTF-8 byte
+    /// boundary in it; it should return the same decision for the same input.
+    /// Mandatory breaks, `nowrap`, and indivisible text are kept intact.
+    /// First-line alternate styles may cause another callback pass.
+    pub fn with_line_break_override<F>(&mut self, callback: F) -> &mut Self
+    where
+        F: for<'a> Fn(crate::LineBreakContext<'a>) -> crate::LineBreakOverride
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.line_break_override = Some(Arc::new(callback));
         self
     }
 
@@ -459,6 +478,19 @@ pub struct RichText {
 }
 
 impl RichText {
+    /// Apply the same soft line-break override as
+    /// [`ParagraphBuilder::with_line_break_override`].
+    pub fn with_line_break_override<F>(mut self, callback: F) -> Self
+    where
+        F: for<'a> Fn(crate::LineBreakContext<'a>) -> crate::LineBreakOverride
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.builder.with_line_break_override(callback);
+        self
+    }
+
     /// Append ruby, assigning its container through this builder's node counter.
     pub fn push_ruby(mut self, ruby: crate::Ruby, style: &InlineStyle) -> Self {
         let node = NodeId(self.next_node);

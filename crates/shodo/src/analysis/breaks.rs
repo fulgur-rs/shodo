@@ -13,6 +13,47 @@ use icu_segmenter::{GraphemeClusterSegmenter, LineSegmenter};
 use std::collections::BTreeSet;
 use std::ops::Range;
 
+/// A soft line-break opportunity after CSS and Unicode line-break analysis.
+/// Mandatory breaks are not passed to a caller override.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SoftBreakOpportunity {
+    /// No ordinary soft break is available.
+    Prohibited,
+    /// An ordinary soft break is available.
+    Allowed,
+    /// A break is available only when an unbreakable run overflows.
+    Emergency,
+    /// A break is available with a visible hyphen.
+    Hyphen,
+}
+
+/// Input to a caller's line-break override during paragraph construction.
+/// `offset` is a UTF-8 byte boundary in `text`, after whitespace processing
+/// and text transformation. The text can contain inserted bidi controls.
+#[derive(Clone, Copy, Debug)]
+pub struct LineBreakContext<'a> {
+    /// Processed paragraph text. Inserted bidi controls may be present.
+    pub text: &'a str,
+    /// UTF-8 byte boundary in `text` immediately after the preceding content.
+    pub offset: usize,
+    /// The standard opportunity at this boundary.
+    pub standard: SoftBreakOpportunity,
+}
+
+/// Caller decision for an eligible soft boundary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LineBreakOverride {
+    /// Preserve the standard Unicode/CSS opportunity, including hyphenation.
+    UseStandard,
+    /// Allow an ordinary soft break here, without an inserted hyphen.
+    Allow,
+    /// Forbid this soft break, including an emergency or hyphen opportunity.
+    Prohibit,
+}
+
+pub(crate) type OverrideCallback =
+    dyn for<'a> Fn(LineBreakContext<'a>) -> LineBreakOverride + Send + Sync;
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct BreakOpportunity {
     pub(crate) offset: u32,
@@ -44,6 +85,69 @@ impl BreakAnalysis {
                 },
                 |i| self.opportunities[i],
             )
+    }
+
+    /// Materialize the callback before building units, so all layout and
+    /// intrinsic-width paths observe the same opportunities.
+    pub(crate) fn apply_override(
+        &mut self,
+        input: &Processed,
+        styles: &[InlineStyle],
+        combine_spans: &[super::combine::CombineSpan],
+        callback: &OverrideCallback,
+    ) {
+        let end = self.graphemes.last().copied().unwrap_or(0);
+        for opportunity in &mut self.opportunities {
+            let offset = opportunity.offset;
+            if offset == 0 || offset == end || opportunity.class == BreakClass::Mandatory {
+                continue;
+            }
+            let Some(item) = item_before(&input.items, offset) else {
+                continue;
+            };
+            if styles[item.style as usize].text_wrap_mode == TextWrapMode::NoWrap {
+                continue;
+            }
+            let indivisible = input
+                .indivisible
+                .partition_point(|range| range.end <= offset);
+            if input
+                .indivisible
+                .get(indivisible)
+                .is_some_and(|range| range.start < offset)
+            {
+                continue;
+            }
+            let combined = combine_spans.partition_point(|span| span.text.end <= offset);
+            if combine_spans
+                .get(combined)
+                .is_some_and(|span| span.text.start < offset)
+            {
+                continue;
+            }
+            let standard = match opportunity.class {
+                BreakClass::Prohibited => SoftBreakOpportunity::Prohibited,
+                BreakClass::Allowed => SoftBreakOpportunity::Allowed,
+                BreakClass::Emergency => SoftBreakOpportunity::Emergency,
+                BreakClass::Hyphen => SoftBreakOpportunity::Hyphen,
+                BreakClass::Mandatory => unreachable!(),
+            };
+            match callback(LineBreakContext {
+                text: &input.text,
+                offset: offset as usize,
+                standard,
+            }) {
+                LineBreakOverride::UseStandard => {}
+                LineBreakOverride::Allow => {
+                    opportunity.class = BreakClass::Allowed;
+                    opportunity.min_content = true;
+                }
+                LineBreakOverride::Prohibit => {
+                    opportunity.class = BreakClass::Prohibited;
+                    opportunity.min_content = false;
+                }
+            }
+        }
     }
 }
 
