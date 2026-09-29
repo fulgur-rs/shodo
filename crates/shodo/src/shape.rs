@@ -460,16 +460,29 @@ pub(crate) fn shape_items_with_base_scopes(
             let mut order: Vec<_> = (0..shaped.len()).collect();
             order.sort_by_key(|i| shaped.glyph_infos()[*i].cluster);
             let mut begin = 0;
+            // `order` is cluster-ascending, so the cluster value examined each
+            // iteration only grows; `scalar_cursor` tracks the matching position
+            // in `item.scalars` (offset-ascending) instead of re-searching the
+            // whole slice with `partition_point` on every cluster.
+            let mut scalar_cursor = 0usize;
             while begin < order.len() {
                 let cluster = shaped.glyph_infos()[order[begin]].cluster;
                 let mut end = begin + 1;
                 while end < order.len() && shaped.glyph_infos()[order[end]].cluster == cluster {
                     end += 1;
                 }
-                let scalar_index = item
-                    .scalars
-                    .partition_point(|s| s.offset <= cluster)
-                    .saturating_sub(1);
+                while scalar_cursor < item.scalars.len()
+                    && item.scalars[scalar_cursor].offset <= cluster
+                {
+                    scalar_cursor += 1;
+                }
+                let scalar_index = scalar_cursor.saturating_sub(1);
+                debug_assert_eq!(
+                    scalar_cursor,
+                    item.scalars.partition_point(|s| s.offset <= cluster),
+                    "scalar_cursor must track partition_point(|s| s.offset <= cluster); \
+                     item.scalars is not offset-ascending"
+                );
                 let owner = item.scalars[scalar_index].item;
                 let next_cluster = if end < order.len() {
                     shaped.glyph_infos()[order[end]].cluster
@@ -479,7 +492,18 @@ pub(crate) fn shape_items_with_base_scopes(
                 // Transparent anchors do not belong to the preceding cluster.
                 // A cluster spanning an anchor still covers all its real scalars,
                 // while a gap between clusters ends at the last actual scalar.
-                let scalar_end = item.scalars.partition_point(|s| s.offset < next_cluster);
+                while scalar_cursor < item.scalars.len()
+                    && item.scalars[scalar_cursor].offset < next_cluster
+                {
+                    scalar_cursor += 1;
+                }
+                let scalar_end = scalar_cursor;
+                debug_assert_eq!(
+                    scalar_end,
+                    item.scalars.partition_point(|s| s.offset < next_cluster),
+                    "scalar_cursor must track partition_point(|s| s.offset < next_cluster); \
+                     item.scalars is not offset-ascending"
+                );
                 let last_scalar = &item.scalars[scalar_end.saturating_sub(1)];
                 let cluster_end = last_scalar.end;
                 let mut parts = Vec::new();
