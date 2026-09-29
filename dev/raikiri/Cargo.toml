@@ -46,3 +46,7 @@ test = true
 [[example]]
 name = "hanging_punctuation"
 test = true
+
+[[example]]
+name = "vertical_wiring"
+test = true
