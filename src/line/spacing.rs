@@ -221,12 +221,12 @@ pub(crate) fn build(
 }
 
 pub(crate) fn needed(data: &ParagraphData) -> bool {
-    !(data.styles.iter().all(|s| {
+    !data.styles.iter().all(|s| {
         #[cfg(test)]
         data.spacing_setup_visits
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         s.letter_spacing == 0.0 && s.word_spacing == 0.0
-    }) && !data.unit_spacing.iter().any(|s| {
+    }) || data.unit_spacing.iter().any(|s| {
         #[cfg(test)]
         data.spacing_setup_visits
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -240,7 +240,7 @@ pub(crate) fn needed(data: &ParagraphData) -> bool {
                             && (e.punctuation.left != LayoutUnit::ZERO
                                 || e.punctuation.right != LayoutUnit::ZERO)
                 })
-    }))
+    })
 }
 
 pub(crate) fn last_content(data: &ParagraphData) -> Option<usize> {
@@ -319,9 +319,9 @@ pub(super) fn justification_metadata(
     (count, first, last)
 }
 
-pub(super) fn hyphen_summary(
-    data: &ParagraphData,
-    cursor: &Cursor,
+pub(super) fn hyphen_summary<'a>(
+    data: &'a ParagraphData,
+    cursor: &Cursor<'a>,
     index: usize,
     sat: &mut Saturation,
 ) -> Summary {
