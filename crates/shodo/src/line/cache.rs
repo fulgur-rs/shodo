@@ -558,7 +558,17 @@ pub(super) fn resolve(
         // it cannot inflate the peak storage of the fresh path.
         drop(cached);
         return resolve(
-            para, token, options, constraint, available, offset, indent, atomics, cx, sat,
+            para,
+            token,
+            options,
+            constraint,
+            available,
+            offset,
+            indent,
+            atomics,
+            normal_cursors,
+            cx,
+            sat,
         );
     }
     if cached.prefix.is_empty() {
