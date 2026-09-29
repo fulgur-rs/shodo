@@ -72,10 +72,21 @@ pub(super) struct CacheEntry {
     used: u64,
 }
 impl CacheEntry {
-    fn matches_key(&self, query: &FontQuery, cluster: &str) -> bool {
+    /// Compares against `query` as if its script were `script`, so callers
+    /// that vary only the script per cluster need not clone the query.
+    fn matches_key(&self, query: &FontQuery, script: [u8; 4], cluster: &str) -> bool {
         #[cfg(test)]
         matching_tests::record_key_comparison();
-        *self.query == *query && *self.cluster == *cluster
+        let own = &*self.query;
+        *self.cluster == *cluster
+            && own.script == script
+            && own.families == query.families
+            && own.weight == query.weight
+            && own.width == query.width
+            && own.style == query.style
+            && own.language == query.language
+            && own.presentation == query.presentation
+            && own.synthesis == query.synthesis
     }
 }
 
@@ -117,7 +128,7 @@ impl std::hash::Hasher for PreHashed {
     }
 }
 
-fn key_hash(query: &FontQuery, cluster: &str) -> u64 {
+fn key_hash(query: &FontQuery, script: [u8; 4], cluster: &str) -> u64 {
     use std::hash::{Hash, Hasher};
     // f32 equality treats -0.0 == 0.0; hash them identically.
     let bits = |x: f32| if x == 0.0 { 0 } else { x.to_bits() };
@@ -137,7 +148,7 @@ fn key_hash(query: &FontQuery, cluster: &str) -> u64 {
         FontStyle::Italic => 1u8.hash(&mut h),
         FontStyle::Oblique(angle) => (2u8, bits(angle)).hash(&mut h),
     }
-    query.script.hash(&mut h);
+    script.hash(&mut h);
     query.language.hash(&mut h);
     (query.presentation as u8).hash(&mut h);
     let s = query.synthesis;
@@ -167,12 +178,13 @@ impl MatchCache {
         generations: (u64, Option<u64>),
         hash: u64,
         query: &FontQuery,
+        script: [u8; 4],
         cluster: &str,
     ) -> Option<Option<FontMatch>> {
         self.sync(generations);
         let slot = *self.index.get(&hash)? as usize;
         let entry = self.slots.get_mut(slot)?;
-        if !entry.matches_key(query, cluster) {
+        if !entry.matches_key(query, script, cluster) {
             return None;
         }
         self.clock += 1;
@@ -319,11 +331,43 @@ impl FontCollection {
 
     fn cached_match(&self, query: &FontQuery, cluster: &str) -> Option<FontMatch> {
         let query = query.clone().normalized();
+        self.cached_match_normalized(&query, query.script, cluster)
+    }
+
+    /// Like [`Self::match_cluster`] for a query that is already normalized
+    /// (see `FontQuery::normalized`), with only the script overridden. A
+    /// cache hit allocates nothing; the query is cloned only on a miss.
+    pub(crate) fn match_scripted(
+        &self,
+        base: &FontQuery,
+        script: [u8; 4],
+        cluster: &str,
+    ) -> Option<FontMatch> {
+        if cluster.is_empty() {
+            return None;
+        }
+        self.cached_match_normalized(base, script, cluster)
+    }
+
+    fn cached_match_normalized(
+        &self,
+        base: &FontQuery,
+        script: [u8; 4],
+        cluster: &str,
+    ) -> Option<FontMatch> {
         let generations = self.generations();
-        let hash = key_hash(&query, cluster);
-        if let Some(result) = self.state().matches.get(generations, hash, &query, cluster) {
+        let hash = key_hash(base, script, cluster);
+        if let Some(result) = self
+            .state()
+            .matches
+            .get(generations, hash, base, script, cluster)
+        {
             return result;
         }
+        let query = FontQuery {
+            script,
+            ..base.clone()
+        };
         let result = self.find_cluster(&query, cluster);
         let mut state = self.state();
         let cap = state.options.match_cache_entries;
@@ -902,6 +946,40 @@ mod matching_tests {
             "{compared} key comparisons for one cache hit"
         );
         assert_eq!(fonts.state().matches.len(), 64);
+    }
+
+    #[test]
+    fn scripted_match_equals_cloning_the_query_and_reuses_the_cache() {
+        let fonts = FontCollection::with_options(
+            &Limits::default(),
+            FontOptions {
+                system_fonts: false,
+                match_cache_entries: 8,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register(super::super::browser_tests::test_font("Web", &['a'], 600))
+            .unwrap();
+        let base = FontQuery {
+            families: vec![FontFamily::Named("Web".into())],
+            ..Default::default()
+        }
+        .normalized();
+        for script in [*b"Latn", *b"Hani", *b"Arab"] {
+            let mut cloned = base.clone();
+            cloned.script = script;
+            for cluster in ["a", "b"] {
+                assert_eq!(
+                    fonts.match_scripted(&base, script, cluster),
+                    fonts.match_cluster(&cloned, cluster),
+                    "{script:?} {cluster:?}"
+                );
+            }
+        }
+        // Six distinct (script, cluster) keys are cached once each, and the
+        // equivalent cloned-query lookups above hit the same entries.
+        assert_eq!(fonts.state().matches.len(), 6);
     }
 
     #[test]
