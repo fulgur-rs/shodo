@@ -164,6 +164,7 @@ struct LayerState {
     generics: std::collections::HashMap<crate::style::GenericFamily, Vec<String>>,
     fallbacks: Vec<matching::FallbackEntry>,
     matches: matching::MatchCache,
+    units: metrics::UnitCache,
     shapers: std::collections::VecDeque<(u32, Arc<harfrust::ShaperData>)>,
 }
 
@@ -239,6 +240,7 @@ impl FontCollection {
                     generics: Default::default(),
                     fallbacks: Vec::new(),
                     matches: Default::default(),
+                    units: Default::default(),
                     shapers: Default::default(),
                 }),
                 parent,

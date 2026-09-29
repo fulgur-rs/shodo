@@ -710,6 +710,8 @@ fn ch_advance_matches_shaped_zero_at_exact_fit_width() {
     let unit = fonts.resolve_ch(&query, 16.0);
     assert_eq!(unit.id, Some(id));
     assert_eq!(unit.advance, shaped);
+    assert_eq!(fonts.resolve_ch(&query, 16.0), unit);
+    assert_eq!(fonts.resolve_unit_uncached(&query, 16.0, '0', 0.5), unit);
     let ten_ch = ChLength {
         query,
         size: 16.0,
@@ -794,6 +796,77 @@ fn ch_advance_matches_shaping_at_intermediate_hvar_axis() {
     let unit = fonts.resolve_ch(&query, 16.);
     assert_eq!(unit.id, Some(id));
     assert_eq!(unit.advance, shaped);
+    assert_eq!(fonts.resolve_ch(&query, 16.), unit);
+    assert_eq!(fonts.resolve_unit_uncached(&query, 16., '0', 0.5), unit);
+    for weight in [400., 650., 900.] {
+        let varied = FontQuery {
+            weight,
+            ..query.clone()
+        };
+        assert_eq!(
+            fonts.resolve_ch(&varied, 16.),
+            fonts.resolve_unit_uncached(&varied, 16., '0', 0.5),
+            "weight {weight}"
+        );
+    }
+}
+
+#[test]
+fn unit_cache_tracks_script_language_fallback_and_generic_changes() {
+    let fonts = no_system();
+    let ja = fonts
+        .register_face(
+            test_font("Japanese", &['水'], 600),
+            0,
+            descriptor("Japanese"),
+        )
+        .unwrap();
+    let zh = fonts
+        .register_face(test_font("Chinese", &['水'], 800), 0, descriptor("Chinese"))
+        .unwrap();
+    fonts.set_fallback_families(*b"Hani", Some("ja".into()), vec!["Japanese".into()]);
+    fonts.set_fallback_families(*b"Hani", Some("zh".into()), vec!["Chinese".into()]);
+    let query = FontQuery {
+        families: vec![],
+        script: *b"Hani",
+        language: Some("ja".into()),
+        ..Default::default()
+    };
+    let ja_unit = fonts.resolve_ic(&query, 16.);
+    assert_eq!(ja_unit.id, Some(ja));
+    assert_eq!(fonts.resolve_ic(&query, 16.), ja_unit);
+    let zh_query = FontQuery {
+        language: Some("zh".into()),
+        ..query.clone()
+    };
+    let zh_unit = fonts.resolve_ic(&zh_query, 16.);
+    assert_eq!(zh_unit.id, Some(zh));
+    assert_ne!(ja_unit.advance, zh_unit.advance);
+    assert_eq!(fonts.resolve_ic(&zh_query, 16.), zh_unit);
+    let latin_query = FontQuery {
+        script: *b"Latn",
+        ..query.clone()
+    };
+    assert_eq!(
+        fonts.resolve_ic(&latin_query, 16.),
+        fonts.resolve_unit_uncached(&latin_query, 16., '水', 1.)
+    );
+    fonts.set_fallback_families(*b"Hani", Some("ja".into()), vec!["Chinese".into()]);
+    assert_eq!(fonts.resolve_ic(&query, 16.), zh_unit);
+    assert_eq!(fonts.resolve_unit_uncached(&query, 16., '水', 1.), zh_unit);
+
+    let generic = FontQuery::default();
+    let _before_generic = fonts.resolve_ic(&generic, 16.);
+    fonts.set_generic_families(
+        crate::style::GenericFamily::SansSerif,
+        vec!["Japanese".into()],
+    );
+    assert_eq!(fonts.resolve_ic(&generic, 16.).id, Some(ja));
+    fonts.set_generic_families(
+        crate::style::GenericFamily::SansSerif,
+        vec!["Chinese".into()],
+    );
+    assert_eq!(fonts.resolve_ic(&generic, 16.).id, Some(zh));
 }
 
 #[test]
