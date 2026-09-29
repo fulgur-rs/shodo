@@ -24,30 +24,58 @@ class Attribution(unittest.TestCase):
     def setUp(self):
         self.m = load_module()
 
+    @staticmethod
+    def synthetic(first, warm):
+        """first: dict of window -> duration; warm: list of such dicts."""
+        def sample(state, windows):
+            out = {"state": state}
+            for key, ns in windows.items():
+                out[key] = {"duration_ns": ns}
+            return out
+        return {"samples": [sample("first-call-in-process", first)] + [sample("warm-process", w) for w in warm]}
+
     def test_first_call_is_excluded(self):
         report = record("pipeline-native-time")
         warm = self.m.warm_samples_ns(report, "pipeline")
         self.assertEqual(len(warm), len(report["samples"]) - 1)
-        first = report["samples"][0]["parse_cascade_layout"]["duration_ns"]
         self.assertEqual(warm, [s["parse_cascade_layout"]["duration_ns"] for s in report["samples"][1:]])
-        self.assertNotIn("first-call-in-process", [s["state"] for s in report["samples"][1:]])
-        self.assertIsInstance(first, int)
+        rep = self.synthetic({"parse_cascade_layout": 987654321}, [{"parse_cascade_layout": 7}, {"parse_cascade_layout": 9}])
+        self.assertEqual(self.m.warm_samples_ns(rep, "pipeline"), [7, 9])
+        self.assertNotIn(987654321, self.m.warm_samples_ns(rep, "pipeline"))
 
     def test_process_median_is_the_median_of_warm_calls(self):
-        report = record("pipeline-candidate-time")
-        warm = sorted(self.m.warm_samples_ns(report, "pipeline"))
-        self.assertEqual(self.m.process_median_ns(report, "pipeline"), warm[len(warm) // 2] if len(warm) % 2 else (warm[len(warm) // 2 - 1] + warm[len(warm) // 2]) / 2)
+        odd = self.synthetic({"parse_cascade_layout": 10**9}, [{"parse_cascade_layout": v} for v in (5, 1, 3)])
+        self.assertEqual(self.m.process_median_ns(odd, "pipeline"), 3)
+        even = self.synthetic({"parse_cascade_layout": 10**9}, [{"parse_cascade_layout": v} for v in (2, 8, 4, 6)])
+        self.assertEqual(self.m.process_median_ns(even, "pipeline"), 5.0)
 
-    def test_layout_operation_uses_the_layout_window(self):
-        report = record("layout-native")
-        # memory-mode fixture: the window object exists for every sample
-        self.assertTrue(all("layout" in s for s in report["samples"]))
-        with self.assertRaises(ValueError):
-            self.m.warm_samples_ns({"samples": [{"state": "warm-process"}]}, "layout")
+    def test_windows_map_to_their_own_durations(self):
+        self.assertEqual(
+            self.m.WINDOWS,
+            {"pipeline": "parse_cascade_layout", "layout": "layout", "isolated": "initial_text_pipeline"},
+        )
+        rep = self.synthetic(
+            {"parse_cascade_layout": 1000, "layout": 2000, "initial_text_pipeline": 3000},
+            [
+                {"parse_cascade_layout": 11, "layout": 21, "initial_text_pipeline": 31},
+                {"parse_cascade_layout": 12, "layout": 22, "initial_text_pipeline": 32},
+            ],
+        )
+        self.assertEqual(self.m.warm_samples_ns(rep, "pipeline"), [11, 12])
+        self.assertEqual(self.m.warm_samples_ns(rep, "layout"), [21, 22])
+        self.assertEqual(self.m.warm_samples_ns(rep, "isolated"), [31, 32])
 
-    def test_wrong_state_layout_is_rejected(self):
-        with self.assertRaises(ValueError):
-            self.m.warm_samples_ns({"samples": [{"state": "warm-process", "layout": {"duration_ns": 1}}, {"state": "warm-process", "layout": {"duration_ns": 2}}]}, "layout")
+    def test_malformed_state_sequences_are_rejected(self):
+        window = {"pipeline": "parse_cascade_layout", "layout": "layout", "isolated": "initial_text_pipeline"}
+        for operation, key in window.items():
+            first = {"state": "first-call-in-process", key: {"duration_ns": 1}}
+            warm = {"state": "warm-process", key: {"duration_ns": 2}}
+            with self.assertRaises(ValueError):
+                self.m.warm_samples_ns({"samples": [warm, dict(warm)]}, operation)  # no first call
+            with self.assertRaises(ValueError):
+                self.m.warm_samples_ns({"samples": [first, warm, {"state": "cold-process", key: {"duration_ns": 3}}]}, operation)  # later bad state
+            with self.assertRaises(ValueError):
+                self.m.warm_samples_ns({"samples": [first]}, operation)  # no warm samples
 
     def test_pairs_are_matched_by_repeat(self):
         summary = self.m.paired_summary([100.0, 200.0, 300.0], [150.0, 200.0, 240.0])
@@ -75,6 +103,20 @@ class Attribution(unittest.TestCase):
         ])
         rows = self.m.perf_samples(text)
         self.assertEqual(rows, [(120, "<parley::bidi::BidiResolver>::resolve::<X>"), (30, "shodo::paragraph::build::run")])
+
+    def test_perf_rows_parse_real_perf_report_lines(self):
+        # Verbatim shape of `perf report --stdio --no-children -g none --fields sample,sym --sort sym`.
+        text = "\n".join([
+            "# Samples: 425  of event 'cpu/cycles/Pu'",
+            "# Overhead       Samples  Symbol",
+            "            10  [.] <<serde_json::value::Value as serde_core::de::Deserialize>::deserialize::ValueVisitor as serde_core::de::Visitor>::visit_map",
+            "            16  [.] cssparser::tokenizer::consume_comment",
+            "             1  [.] core::unicode::unicode_data::conversions::to_lower",
+        ])
+        rows = self.m.perf_samples(text)
+        self.assertEqual([c for c, _ in rows], [10, 16, 1])
+        self.assertEqual(rows[1][1], "cssparser::tokenizer::consume_comment")
+        self.assertEqual(self.m.bucket(rows[1][1]), "cssparser")
 
     def test_buckets(self):
         b = self.m.bucket
