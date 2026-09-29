@@ -3,8 +3,9 @@
 //! painting, positioning or BFC work happens here.
 use super::diagnostic;
 use raikiri_style::{
-    ComputedBackgroundSize, ComputedCssPosition, ComputedLengthPercentageOrAuto, ComputedOutline,
-    ComputedTextDecorationThickness, ComputedTextUnderlineOffset, ComputedValues, property as css,
+    ComputedBackgroundSize, ComputedCssPosition, ComputedLength, ComputedLengthPercentageOrAuto,
+    ComputedOutline, ComputedTextDecorationThickness, ComputedTextUnderlineOffset, ComputedValues,
+    property as css,
 };
 use shodo::style::TextDecoration;
 
@@ -87,6 +88,7 @@ pub struct BoxPaint {
     pub background_repeat: css::BackgroundRepeat,
     pub background_size: ComputedBackgroundSize,
     pub outline: ComputedOutline,
+    pub outline_offset: ComputedLength,
     pub overflow: css::OverflowXY,
 }
 
@@ -145,6 +147,7 @@ pub fn split(
             background_repeat: keep(&values.background_repeat),
             background_size: keep(&values.background_size),
             outline: keep(&values.outline),
+            outline_offset: keep(&values.outline_offset),
             overflow: keep(&values.overflow),
         },
         decoration: Decoration {

@@ -260,8 +260,47 @@ mod tests {
     }
 
     #[test]
+    fn outline_offset_is_retained_through_split() {
+        let h = split("outline:2px solid red;outline-offset:3px").unwrap();
+        assert!(
+            h.residual
+                .iter()
+                .any(|(f, o)| f == "outline_offset" && *o == Owner::BoxPaint)
+        );
+        assert_ne!(
+            h.box_paint.outline_offset,
+            ComputedValues::initial().outline_offset
+        );
+    }
+
+    #[test]
+    fn extra_decoration_fields_are_owned_through_split() {
+        let h = split(
+            "text-decoration:underline;text-decoration-style:dotted;text-decoration-color:lime;\
+             text-decoration-thickness:2px;text-underline-offset:1px",
+        )
+        .unwrap();
+        for field in [
+            "text_decoration_line",
+            "text_decoration_style",
+            "text_decoration_color",
+            "text_decoration_thickness",
+            "text_underline_offset",
+        ] {
+            assert!(
+                h.residual
+                    .iter()
+                    .any(|(f, o)| f == field && *o == Owner::Decoration),
+                "{field}: {:?}",
+                h.residual
+            );
+        }
+    }
+
+    #[test]
     fn flow_values_are_retained() {
         let h = split("float:left;clear:both").unwrap();
+        assert!(!h.residual.is_empty());
         assert_ne!(h.flow.float, ComputedValues::initial().float);
         assert_eq!(h.flow.clear, css::ClearValue::Both);
         assert!(h.residual.iter().all(|(_, o)| *o == Owner::Flow));

@@ -15,8 +15,9 @@ It does not adopt or change either S4 spike.
 ## Ownership table
 
 `split` reruns the frozen S4 difference check on the prepared input, then maps
-each reported field to an owner through `owner()`. The 14 base fields follow
-`field_rules` in `dev/raikiri/data/raikiri-style-diagnostics.json`.
+each reported field to an owner through `owner()`. 14 of the 17 `field_rules`
+entries in `dev/raikiri/data/raikiri-style-diagnostics.json` are base fields
+(the other 3 are the sibling-issue fields).
 `outline_offset` and the four extra decoration fields (`text_decoration_style`,
 `text_decoration_color`, `text_decoration_thickness`, `text_underline_offset`)
 are not in the frozen reset list, so they were added to the table here. With
@@ -37,18 +38,20 @@ Which values the handoff structs retain:
 - `Positioned` keeps `position`, `left`, `top` and `z_index`, plus an
   `out_of_flow` flag.
 - `BoxPaint` keeps `background_color`, `background_image`,
-  `background_position`, `background_repeat`, `background_size`, `outline` and
-  `overflow`. `outline_offset` is not retained in the struct.
-- `Decoration` keeps only `text_decoration_line`. The other resolved decoration
-  fields and `outline_offset` are accounted for in `residual` (so they have an
-  owner and do not fail closed) but their values are not retained in a handoff
-  struct. Only the solid-underline subset is converted, by `solid_underline`
-  (see the limits below).
+  `background_position`, `background_repeat`, `background_size`, `outline`,
+  `outline_offset` and `overflow`.
+- `Decoration` keeps only `text_decoration_line`. `solid_underline` reads the
+  decoration style, color, thickness and underline offset directly from
+  `ComputedValues` and either converts them to `PaintStyle.underline` input or
+  rejects explicitly, so none of them is lost silently. All five decoration
+  fields are still reported in `residual` with owner `Decoration`.
+- `right`, `bottom` and any other positioned or box field not in the ownership
+  table fail closed (`unmapped: <field>`) by design.
 
 ## Evidence and reproduce
 
 The WPT checkout and the original comparison are local inputs and are not in
-CI. CI runs only the example's tests (11 tests covering value retention, the
+CI. CI runs only the example's tests (13 tests covering value retention, the
 fail-closed path, the owner table, error-node parsing, the classification
 count comparison and `solid_underline`):
 
@@ -95,6 +98,9 @@ parser-resource-trace, cascade-length and ancestor-in-root checks that
 
 ## Semantics and limits
 
+- `out_of_flow` is a boolean; the original error text and reason for each
+  block are recoverable from the original comparison via the recorded
+  root/error_node and its SHA256, not stored per block.
 - `out_of_flow` is true for `absolute` and `fixed`. The values are kept; it is
   not a drop. A single paragraph may legitimately ignore such a box, but a
   whole page must still place it.
