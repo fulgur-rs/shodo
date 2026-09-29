@@ -122,6 +122,22 @@ impl std::fmt::Debug for PartialLine {
 }
 
 impl PartialLine {
+    /// A fresh narrow scan can stop near its first break, while indexing a
+    /// retained wide scan visits every unit. Use the already-measured raw
+    /// advances only to select the cheaper strategy; the fresh scan still
+    /// decides the actual break with all spacing and edge rules.
+    fn should_rescan_deep_shrink(&self, available: LayoutUnit) -> bool {
+        let prefix_len = self.scan.widths.len() / 16;
+        let mut raw_advance = 0i64;
+        for width in self.scan.widths.iter().take(prefix_len) {
+            raw_advance = raw_advance.saturating_add(i64::from(width.raw()));
+            if raw_advance > i64::from(available.raw()) {
+                return true;
+            }
+        }
+        false
+    }
+
     pub(crate) fn bytes(&self) -> usize {
         let overlay_bytes: usize = self
             .scan
@@ -513,6 +529,18 @@ pub(super) fn resolve(
         }
         cached
     };
+    if valid
+        && cached.prefix.is_empty()
+        && cached.width > available
+        && cached.should_rescan_deep_shrink(available)
+    {
+        // Discard the wide Raw Scan before measuring the narrower line, so
+        // it cannot inflate the peak storage of the fresh path.
+        drop(cached);
+        return resolve(
+            para, token, options, constraint, available, offset, indent, atomics, cx, sat,
+        );
+    }
     if cached.prefix.is_empty() {
         if valid && cached.width == available {
             cached.cursor = constraint.floats_placed_through;
@@ -802,6 +830,108 @@ mod tests {
             ends.windows(2).any(|pair| pair[0] != pair[1]),
             "actual different line cuts"
         );
+    }
+
+    #[test]
+    fn deep_shrink_of_a_long_plain_scan_rescans_without_indexing_the_wide_line() {
+        use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult};
+        let p = plain_paragraph(&"alpha beta gamma delta ".repeat(64));
+        let mut cx = LayoutContext::new();
+        let start = p.start_token();
+        assert!(matches!(
+            p.next_line(
+                &mut cx,
+                start,
+                &Default::default(),
+                &LineConstraint::new(10000.),
+                &AtomicSizes::EMPTY,
+            ),
+            LineResult::Line(_)
+        ));
+        assert_eq!(cx.cache_prepare_visits, 0);
+
+        let mut previous_end = usize::MAX;
+        for width in [512., 320., 192., 96.] {
+            let before_scans = cx.cache_visits;
+            let before_prepare = cx.cache_prepare_visits;
+            let constraint = LineConstraint::new(width);
+            let LineResult::Line(actual) = p.next_line(
+                &mut cx,
+                start,
+                &Default::default(),
+                &constraint,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!("retry at {width}")
+            };
+            let LineResult::Line(fresh) = p.next_line(
+                &mut LayoutContext::new(),
+                start,
+                &Default::default(),
+                &constraint,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!("fresh line at {width}")
+            };
+            assert_eq!(line_signature(&actual), line_signature(&fresh));
+            assert_eq!(actual.break_token(), fresh.break_token());
+            assert!(actual.text_range().end <= previous_end);
+            previous_end = actual.text_range().end;
+            if width == 512. {
+                assert!(cx.cache_visits > before_scans, "deep shrink must rescan");
+                assert_eq!(
+                    cx.cache_prepare_visits, before_prepare,
+                    "deep shrink must avoid indexing every unit in the wide line"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn deep_shrink_rescan_preserves_a_selected_soft_hyphen_overlay() {
+        use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult};
+        let p = plain_paragraph(&"ab\u{ad}cdef\u{ad}ghijkl\u{ad}mn".repeat(64));
+        let mut cx = LayoutContext::new();
+        let start = p.start_token();
+        assert!(matches!(
+            p.next_line(
+                &mut cx,
+                start,
+                &Default::default(),
+                &LineConstraint::new(10000.),
+                &AtomicSizes::EMPTY,
+            ),
+            LineResult::Line(_)
+        ));
+        let constraint = LineConstraint::new(48.);
+        let LineResult::Line(actual) = p.next_line(
+            &mut cx,
+            start,
+            &Default::default(),
+            &constraint,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("deep shrink")
+        };
+        let LineResult::Line(fresh) = p.next_line(
+            &mut LayoutContext::new(),
+            start,
+            &Default::default(),
+            &constraint,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("fresh line")
+        };
+        assert_eq!(line_signature(&actual), line_signature(&fresh));
+        assert!(actual.fragments().any(|fragment| {
+            match fragment {
+                crate::Fragment::GlyphRun(run) => run
+                    .clusters()
+                    .any(|cluster| cluster.source_char == Some('\u{ad}') && cluster.advance > 0.),
+                _ => false,
+            }
+        }));
+        assert_eq!(cx.cache_prepare_visits, 0);
     }
 
     #[test]

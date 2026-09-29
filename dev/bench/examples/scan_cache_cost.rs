@@ -192,6 +192,13 @@ fn run(
 
 fn main() {
     let mode = std::env::args().nth(1).expect("time or alloc");
+    let case_filter = std::env::var("SHODO_SCAN_CASE").ok();
+    let operation_filter = std::env::var("SHODO_SCAN_OPERATION").ok();
+    let repeats = std::env::var("SHODO_SCAN_REPEATS")
+        .ok()
+        .map(|value| value.parse::<usize>().expect("positive repeat count"))
+        .unwrap_or(REPEATS);
+    assert!(repeats > 0);
     let limits = Limits::default();
     let fonts = shodo_fixtures::load_fonts(&limits).unwrap();
     let mut style = ParagraphStyle::default();
@@ -215,7 +222,18 @@ fn main() {
             .push(case.text, &style.root)
             .build(&mut LayoutContext::new(), &fonts.collection)
             .unwrap();
+        // Build every paragraph to keep opaque BreakToken IDs stable in the
+        // captured signatures even when profiling just one case.
+        if case_filter.as_deref().is_some_and(|name| name != case.name) {
+            continue;
+        }
         for operation in operations {
+            if operation_filter
+                .as_deref()
+                .is_some_and(|name| name != operation)
+            {
+                continue;
+            }
             let key = format!("{}:{operation}", case.name);
             let (_, signatures) = run(&paragraph, case, operation, true);
             for _ in 0..WARMUP {
@@ -225,10 +243,10 @@ fn main() {
                 "time" => (0..SAMPLES)
                     .map(|_| {
                         let start = Instant::now();
-                        for _ in 0..REPEATS {
+                        for _ in 0..repeats {
                             black_box(run(&paragraph, case, operation, false));
                         }
-                        json!(start.elapsed().as_nanos() as f64 / REPEATS as f64)
+                        json!(start.elapsed().as_nanos() as f64 / repeats as f64)
                     })
                     .collect(),
                 #[cfg(feature = "allocation-counting")]
@@ -249,6 +267,6 @@ fn main() {
     }
     println!(
         "{}",
-        json!({"mode":mode,"warmup":WARMUP,"samples":SAMPLES,"repeats":REPEATS,"results":results})
+        json!({"mode":mode,"warmup":WARMUP,"samples":SAMPLES,"repeats":repeats,"results":results})
     );
 }
