@@ -19,9 +19,15 @@ maps the IFC root's resolved `ComputedValues.hanging_punctuation` into
 
 `last`, `force_end` and `allow_end` stay `false`. Only the root's value is
 used, because the property applies to the block container. Descendants'
-inherited copies are not residual style: `text_style` resets
-`hanging_punctuation` to its initial value on the text style so it is not
-reported as an unmapped residual.
+inherited copies are not residual style: `text_style` clears
+`hanging_punctuation` on the `remaining` clone used for the residual-style
+check, so it is not reported as an unmapped residual (the produced style is
+unchanged).
+
+The replay passes the 800px pinned screen viewport width as the line width,
+while the original div content box is narrower (about 784px because of the
+default body margin). This does not affect a two-glyph start-aligned line, and
+the evidence JSON field `viewport_width` records the value passed.
 
 ## Reproduce
 
@@ -89,13 +95,26 @@ Native limits and shodo extras:
 - Native `raikiri-paint` hangs only a leading U+3000 in an LTR text node
   (pinned source `crates/raikiri-paint/src/text.rs`, about lines 379-390 at
   the pinned raikiri).
+- Scope difference for later lines (from reading the pinned source, not
+  measured at runtime): native `draw_text_node` works one text node at a time.
+  It hangs when that node's `text_content()` starts with U+3000 and
+  `direction` is LTR, and applies the shift only where `line_index == 0` of
+  that node's own text layout (`text.rs` lines 384-387, 469, 479, 504-516).
+  So native's scope is the first line of each LTR text node that starts with
+  U+3000. shodo follows CSS and hangs only the first formatted line of the
+  block. The two can differ, for example for a text node that begins after a
+  forced break or after other inline content. The tests
+  `line_after_forced_break_does_not_hang` and `mid_line_u3000_is_not_hung`
+  pin shodo/CSS behavior, not native parity; caller-level native parity for
+  those cases is unverified.
 - shodo core additionally supports opening brackets and quotes and has its own
   RTL hanging tests (`crates/shodo/tests/japanese.rs`,
   `rtl_hanging_uses_the_inline_start_and_end_after_mirroring`).
 - At the caller level, `rtl_leading_u3000_is_shodo_only_behavior` only asserts
-  `hang_start > 0` for `direction: rtl`. The observed logical positions are
-  identical to LTR (`hang_start` 16.0, glyph 0 at -16.0, glyph 1 at 0.0). This
-  does not prove RTL mirroring at the caller level.
+  `hang_start > 0` for `direction: rtl`. The logical positions were
+  identical to LTR (`hang_start` 16.0, glyph 0 at -16.0, glyph 1 at 0.0),
+  observed once during characterization at commit d8728de (not asserted by the
+  committed test). This does not prove RTL mirroring at the caller level.
 - RTL, quote and bracket equivalence with native is not verified at the caller
   level, those behaviors are not native-parity claims, and no WPT verdict is
   made for them.

@@ -326,7 +326,10 @@ mod tests {
     }
 
     /// Characterization: raikiri-paint only hangs a leading U+3000 in LTR text.
-    /// shodo mirrors the edge for RTL, so this is not native parity.
+    /// shodo core mirrors the edge for RTL (see `crates/shodo/tests/japanese.rs`,
+    /// `rtl_hanging_uses_the_inline_start_and_end_after_mirroring`). This test
+    /// only pins that the caller hangs under `direction: rtl`; it does not
+    /// prove mirroring, and it is not native parity.
     #[test]
     fn rtl_leading_u3000_is_shodo_only_behavior() {
         let lines = lines(
