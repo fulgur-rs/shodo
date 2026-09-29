@@ -93,6 +93,77 @@ fn vertical_upright_color_and_clipping_use_public_transforms() {
         Some(glyph_paint::PaintError::ClippedOutput)
     );
 }
+
+#[test]
+fn vertical_bitmap_pixels_match_independent_upright_placement() {
+    use skrifa::{
+        FontRef, GlyphId,
+        bitmap::{BitmapData, BitmapFormat, BitmapStrikes},
+        instance::Size,
+    };
+
+    let font = FontRef::new(EMOJI_FONTS[0].bytes).unwrap();
+    let bitmap = BitmapStrikes::with_format(&font, BitmapFormat::Cbdt)
+        .unwrap()
+        .glyph_for_size(Size::new(24.), GlyphId::new(16))
+        .unwrap();
+    let BitmapData::Png(png) = bitmap.data else {
+        panic!("fixed grinning-face fixture must contain a PNG");
+    };
+    assert_eq!((bitmap.width, bitmap.height), (136, 128));
+    assert_eq!((bitmap.ppem_x, bitmap.ppem_y), (109., 109.));
+    assert_eq!((bitmap.inner_bearing_x, bitmap.inner_bearing_y), (0., 101.));
+    let decoded = tiny_skia::Pixmap::decode_png(png).unwrap();
+
+    // Fixed font: UPEM 2048, h advance 2550, v advance 2500,
+    // vhea ascender/descender +/-1275, hhea ascender 1900; no VORG/outline.
+    // At 24px the vertical origin is (14.9375, 22.265625), after 1/64px
+    // rounding. The empty-cluster primary face is the mono fixture, whose
+    // vhea ascender/descender are 1900/-500. Its strut contributes 22.265625px
+    // above; the color run contributes 14.94140625px below. Their union is
+    // ceil-to-1/64(37.20703125) = 37.21875px wide, with baselines
+    // 22.265625 (rl) and 37.21875-22.265625 = 14.953125 (lr).
+    // With a 10px inset and an 80px inner width, upright origins are
+    // x=10+80-22.265625-14.9375 (rl), x=10+14.953125-14.9375 (lr).
+    // Two cmap U+1F600 -> gid16 glyphs are 2500*24/2048=29.296875px apart.
+    // Expected placement uses these literals, never accepted glyph origins,
+    // glyph transforms, PhysicalConverter, or the caller's bitmap painter.
+    let scale = 24. / 109.;
+    for (mode, x) in [
+        (WritingMode::VerticalRl, 52.796875),
+        (WritingMode::VerticalLr, 10.015625),
+    ] {
+        let mut expected = tiny_skia::Pixmap::new(100, 160).unwrap();
+        expected.fill(tiny_skia::Color::WHITE);
+        for y in [32.265625, 61.5625] {
+            expected.draw_pixmap(
+                0,
+                0,
+                decoded.as_ref(),
+                &tiny_skia::PixmapPaint {
+                    quality: tiny_skia::FilterQuality::Bilinear,
+                    ..Default::default()
+                },
+                tiny_skia::Transform::from_row(scale, 0., 0., scale, x, y - 101. * scale),
+                None,
+            );
+        }
+        let lines = sample("😀😀", mode, [0, 0, 0, 255]);
+        let (actual, count) = glyph_paint::try_paint_styled_on_canvas(&lines, 100, 160).unwrap();
+        assert_eq!(count, 2);
+        // Permit one RGBA quantization unit, as in the translation test below.
+        let mismatch = actual
+            .data()
+            .iter()
+            .zip(expected.data())
+            .enumerate()
+            .find(|(_, (actual, expected))| actual.abs_diff(**expected) > 1);
+        assert!(
+            mismatch.is_none(),
+            "{mode:?}: upright placement/orientation pixel mismatch: {mismatch:?}"
+        );
+    }
+}
 #[test]
 fn latin_color_and_decorations_coexist_with_intrinsic_emoji() {
     let fonts = load_emoji_fonts(&Default::default()).unwrap();
