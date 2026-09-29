@@ -52,7 +52,21 @@ python dev/bench/tools/raikiri_measure.py \
 ```
 
 The diagnostic inventory's `source` field must locate its original log;
-`source_sha256`, message counts, phase and document set are checked. Cargo builds
+absolute paths are accepted, and relative paths resolve beside the inventory.
+`source_sha256`, message counts, phase and document set are checked. Both
+collectors save the log bytes as `original-native-diagnostics.log`, retain the
+original `source` value in `original_source`, and point the saved inventory to
+that local log with a relative path. The saved inventory can still be verified
+after moving the collection or removing the external original. Re-archiving a
+saved inventory preserves its existing `original_source`.
+
+Whole-caller metadata keeps `native_diagnostic_inventory_sha256` as the input
+inventory hash and records `archived_native_diagnostic_inventory_sha256` for
+the rewritten saved inventory. Library metadata's `diagnostic_inventory_sha256`
+continues to describe its saved inventory. These changes apply to new
+collections; historical records are unchanged.
+
+Cargo builds
 offline with the installed `+stable` toolchain. The new output directory retains
 archive/probe source, the original and resolved locks, compiler logs, actual
 Cargo artifacts and feature graphs, executable hashes, host/configuration

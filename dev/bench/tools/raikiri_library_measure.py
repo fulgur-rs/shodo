@@ -138,11 +138,7 @@ def collect(args):
     write_json(stage / "progress.json", status)
     shutil.copy2(args.selection, stage / "selection.json")
     selector = stage / "selection.json"
-    inventory = json.loads(args.diagnostics.read_text())
-    shutil.copy2(inventory["source"], stage / "original-native-diagnostics.log")
-    inventory["original_source"] = inventory["source"]
-    inventory["source"] = str(stage / "original-native-diagnostics.log")
-    write_json(stage / "native-diagnostic-inventory.json", inventory)
+    measurement.archive_diagnostics(args.diagnostics, stage)
     sources = measurement.source_hashes()
     for name in ["raikiri_library_measure.py", "raikiri_library_overlay.py"]:
         p = HERE / name
