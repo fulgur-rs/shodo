@@ -18,11 +18,10 @@ impl FastHasher {
 impl Hasher for FastHasher {
     #[inline]
     fn write(&mut self, bytes: &[u8]) {
-        let mut chunks = bytes.chunks_exact(8);
-        for c in &mut chunks {
-            self.mix(u64::from_le_bytes(c.try_into().expect("8-byte chunk")));
+        let (chunks, rest) = bytes.as_chunks::<8>();
+        for c in chunks {
+            self.mix(u64::from_le_bytes(*c));
         }
-        let rest = chunks.remainder();
         if !rest.is_empty() {
             let mut tail = [0u8; 8];
             tail[..rest.len()].copy_from_slice(rest);
