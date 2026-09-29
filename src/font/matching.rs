@@ -132,7 +132,9 @@ fn key_hash(query: &FontQuery, script: [u8; 4], cluster: &str) -> u64 {
     use std::hash::{Hash, Hasher};
     // f32 equality treats -0.0 == 0.0; hash them identically.
     let bits = |x: f32| if x == 0.0 { 0 } else { x.to_bits() };
-    let mut h = crate::fast_hash::FastHasher::default();
+    // Deterministic seed: keys are hashed only to index a bounded, self-
+    // verifying cache, so DoS resistance is not needed.
+    let mut h = std::hash::BuildHasher::build_hasher(&foldhash::fast::FixedState::default());
     cluster.hash(&mut h);
     query.families.len().hash(&mut h);
     for family in &query.families {
