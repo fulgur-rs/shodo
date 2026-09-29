@@ -679,6 +679,48 @@ fn font_units_report_selected_fallback_face_and_css_missing_defaults() {
 }
 
 #[test]
+fn ch_advance_matches_shaped_zero_at_exact_fit_width() {
+    let fonts = no_system();
+    let id = fonts
+        .register_face(test_font("Exact", &['0'], 1000), 0, descriptor("Exact"))
+        .unwrap();
+    let query = query(&["Exact"], 400.);
+    let style = crate::style::ParagraphStyle {
+        root: crate::style::InlineStyle {
+            font_size: 16.0,
+            font_families: query.families.clone(),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut builder = crate::ParagraphBuilder::new(&style, &Limits::default());
+    builder.push_text(
+        crate::node::TextSource::Generated {
+            node: crate::node::NodeId(1),
+        },
+        "0",
+    );
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    assert_eq!(paragraph.data.runs[0].font, id);
+    let shaped = paragraph.data.glyphs.advance[0].to_f32();
+    assert_eq!(shaped, 16.0);
+
+    let unit = fonts.resolve_ch(&query, 16.0);
+    assert_eq!(unit.id, Some(id));
+    assert_eq!(unit.advance, shaped);
+    let ten_ch = ChLength {
+        query,
+        size: 16.0,
+        factor: 10.0,
+    }
+    .resolve(&fonts)
+    .unwrap();
+    assert_eq!(ten_ch.advance, 160.0);
+}
+
+#[test]
 fn shaper_cache_is_shared_bounded_and_zero_capacity_still_returns_data() {
     let limits = Limits {
         max_shaper_cache_entries: Some(1),

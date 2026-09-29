@@ -1,6 +1,7 @@
 //! Size and variation-dependent metrics, including CSS ch/ic units.
 
 use super::{FontCollection, FontId, FontMetrics, FontQuery, NormalizedCoord};
+use crate::geometry::{LayoutUnit, Saturation};
 use skrifa::{
     FontRef, MetadataProvider,
     instance::{LocationRef, Size},
@@ -9,6 +10,7 @@ use skrifa::{
 
 /// A CSS unit's advance in pixels and the face which actually supplies it.
 /// `id` is None when the CSS fallback advance is used.
+/// A selected glyph's advance uses the same 1/64px rounding as shaping.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FontUnit {
     pub id: Option<FontId>,
@@ -138,13 +140,27 @@ impl FontCollection {
         let location = font
             .axes()
             .location(found.variations.iter().map(|v| (Tag::new(&v.tag), v.value)));
+        let Some(upem) = font
+            .head()
+            .ok()
+            .map(|head| head.units_per_em())
+            .filter(|upem| *upem != 0)
+        else {
+            return missing;
+        };
         match font
-            .glyph_metrics(Size::new(size), location.coords())
+            .glyph_metrics(Size::unscaled(), location.coords())
             .advance_width(glyph)
         {
             Some(advance) => FontUnit {
                 id: Some(found.id),
-                advance,
+                // Match shaping's f32 scale and 1/64px glyph rounding. A
+                // pre-scaled skrifa metric rounds the scale to 16.16 first.
+                advance: LayoutUnit::from_f32_round(
+                    advance * (size / f32::from(upem)),
+                    &mut Saturation::default(),
+                )
+                .to_f32(),
             },
             None => missing,
         }
