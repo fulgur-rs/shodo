@@ -1,0 +1,450 @@
+{
+  "ligature:continuous": {
+    "line_count": 3,
+    "base_median_us": 27.1085,
+    "changed_median_us": 27.082375,
+    "changed_over_base": 0.9990362801335374,
+    "base_allocation": {
+      "calls": 340,
+      "allocated_bytes": 31274,
+      "deallocated_bytes": 26783,
+      "net_bytes": 4491,
+      "peak_extra_bytes": 7079
+    },
+    "changed_allocation": {
+      "calls": 340,
+      "allocated_bytes": 31274,
+      "deallocated_bytes": 26783,
+      "net_bytes": 4491,
+      "peak_extra_bytes": 7079
+    },
+    "base_block_median_us": [
+      26.12175,
+      27.11725
+    ],
+    "changed_block_median_us": [
+      26.2615,
+      27.09975
+    ]
+  },
+  "ligature:height_retry": {
+    "line_count": 1,
+    "base_median_us": 5.46525,
+    "changed_median_us": 5.448,
+    "changed_over_base": 0.9968436942500343,
+    "base_allocation": {
+      "calls": 48,
+      "allocated_bytes": 2064,
+      "deallocated_bytes": 1936,
+      "net_bytes": 128,
+      "peak_extra_bytes": 624
+    },
+    "changed_allocation": {
+      "calls": 48,
+      "allocated_bytes": 2064,
+      "deallocated_bytes": 1936,
+      "net_bytes": 128,
+      "peak_extra_bytes": 624
+    },
+    "base_block_median_us": [
+      5.34325,
+      5.50025
+    ],
+    "changed_block_median_us": [
+      5.46525,
+      5.44775
+    ]
+  },
+  "ligature:shrink_1": {
+    "line_count": 2,
+    "base_median_us": 9.6735,
+    "changed_median_us": 9.76075,
+    "changed_over_base": 1.0090194862252546,
+    "base_allocation": {
+      "calls": 91,
+      "allocated_bytes": 4032,
+      "deallocated_bytes": 3112,
+      "net_bytes": 920,
+      "peak_extra_bytes": 1712
+    },
+    "changed_allocation": {
+      "calls": 91,
+      "allocated_bytes": 4032,
+      "deallocated_bytes": 3112,
+      "net_bytes": 920,
+      "peak_extra_bytes": 1712
+    },
+    "base_block_median_us": [
+      9.6385,
+      9.77825
+    ],
+    "changed_block_median_us": [
+      9.76075,
+      9.74325
+    ]
+  },
+  "ligature:shrink_4": {
+    "line_count": 5,
+    "base_median_us": 13.76825,
+    "changed_median_us": 13.48,
+    "changed_over_base": 0.979064151217475,
+    "base_allocation": {
+      "calls": 127,
+      "allocated_bytes": 6168,
+      "deallocated_bytes": 5248,
+      "net_bytes": 920,
+      "peak_extra_bytes": 1712
+    },
+    "changed_allocation": {
+      "calls": 127,
+      "allocated_bytes": 6168,
+      "deallocated_bytes": 5248,
+      "net_bytes": 920,
+      "peak_extra_bytes": 1712
+    },
+    "base_block_median_us": [
+      13.60225,
+      13.82925
+    ],
+    "changed_block_median_us": [
+      13.48,
+      13.4625
+    ]
+  },
+  "long:continuous": {
+    "line_count": 129,
+    "base_median_us": 979.536625,
+    "changed_median_us": 980.7765,
+    "changed_over_base": 1.0012657770708675,
+    "base_allocation": {
+      "calls": 15680,
+      "allocated_bytes": 1228395,
+      "deallocated_bytes": 1108958,
+      "net_bytes": 119437,
+      "peak_extra_bytes": 149981
+    },
+    "changed_allocation": {
+      "calls": 15680,
+      "allocated_bytes": 1228395,
+      "deallocated_bytes": 1108958,
+      "net_bytes": 119437,
+      "peak_extra_bytes": 149981
+    },
+    "base_block_median_us": [
+      970.99825,
+      981.33525
+    ],
+    "changed_block_median_us": [
+      976.4985,
+      986.748
+    ]
+  },
+  "long:height_retry": {
+    "line_count": 1,
+    "base_median_us": 189.776875,
+    "changed_median_us": 190.091,
+    "changed_over_base": 1.0016552332838233,
+    "base_allocation": {
+      "calls": 1265,
+      "allocated_bytes": 47200,
+      "deallocated_bytes": 39008,
+      "net_bytes": 8192,
+      "peak_extra_bytes": 13416
+    },
+    "changed_allocation": {
+      "calls": 1265,
+      "allocated_bytes": 47200,
+      "deallocated_bytes": 39008,
+      "net_bytes": 8192,
+      "peak_extra_bytes": 13416
+    },
+    "base_block_median_us": [
+      188.94725,
+      191.025
+    ],
+    "changed_block_median_us": [
+      189.78525,
+      190.62375
+    ]
+  },
+  "long:shrink_1": {
+    "line_count": 2,
+    "base_median_us": 362.10975,
+    "changed_median_us": 184.538375,
+    "changed_over_base": 0.5096200116125015,
+    "base_allocation": {
+      "calls": 2548,
+      "allocated_bytes": 152976,
+      "deallocated_bytes": 105064,
+      "net_bytes": 47912,
+      "peak_extra_bytes": 56480
+    },
+    "changed_allocation": {
+      "calls": 1338,
+      "allocated_bytes": 44256,
+      "deallocated_bytes": 44000,
+      "net_bytes": 256,
+      "peak_extra_bytes": 13416
+    },
+    "base_block_median_us": [
+      363.41925,
+      361.67325
+    ],
+    "changed_block_median_us": [
+      184.3375,
+      184.9835
+    ]
+  },
+  "long:shrink_4": {
+    "line_count": 5,
+    "base_median_us": 367.871875,
+    "changed_median_us": 198.734375,
+    "changed_over_base": 0.5402271510971042,
+    "base_allocation": {
+      "calls": 2590,
+      "allocated_bytes": 155276,
+      "deallocated_bytes": 107364,
+      "net_bytes": 47912,
+      "peak_extra_bytes": 56480
+    },
+    "changed_allocation": {
+      "calls": 1466,
+      "allocated_bytes": 51884,
+      "deallocated_bytes": 49476,
+      "net_bytes": 2408,
+      "peak_extra_bytes": 13416
+    },
+    "base_block_median_us": [
+      367.88925,
+      367.8545
+    ],
+    "changed_block_median_us": [
+      198.1495,
+      199.005
+    ]
+  },
+  "owned_shy_overlay:continuous": {
+    "line_count": 2,
+    "base_median_us": 41.278125,
+    "changed_median_us": 40.675875,
+    "changed_over_base": 0.9854099477628889,
+    "base_allocation": {
+      "calls": 540,
+      "allocated_bytes": 46294,
+      "deallocated_bytes": 42431,
+      "net_bytes": 3863,
+      "peak_extra_bytes": 7206
+    },
+    "changed_allocation": {
+      "calls": 540,
+      "allocated_bytes": 46294,
+      "deallocated_bytes": 42431,
+      "net_bytes": 3863,
+      "peak_extra_bytes": 7206
+    },
+    "base_block_median_us": [
+      40.4925,
+      41.47025
+    ],
+    "changed_block_median_us": [
+      40.1085,
+      40.859
+    ]
+  },
+  "owned_shy_overlay:height_retry": {
+    "line_count": 1,
+    "base_median_us": 13.45375,
+    "changed_median_us": 13.183125,
+    "changed_over_base": 0.979884790485924,
+    "base_allocation": {
+      "calls": 189,
+      "allocated_bytes": 18124,
+      "deallocated_bytes": 14740,
+      "net_bytes": 3384,
+      "peak_extra_bytes": 5000
+    },
+    "changed_allocation": {
+      "calls": 189,
+      "allocated_bytes": 18124,
+      "deallocated_bytes": 14740,
+      "net_bytes": 3384,
+      "peak_extra_bytes": 5000
+    },
+    "base_block_median_us": [
+      13.253,
+      13.58475
+    ],
+    "changed_block_median_us": [
+      13.0435,
+      13.2355
+    ]
+  },
+  "owned_shy_overlay:shrink_1": {
+    "line_count": 2,
+    "base_median_us": 20.342375,
+    "changed_median_us": 20.324875,
+    "changed_over_base": 0.9991397268018115,
+    "base_allocation": {
+      "calls": 273,
+      "allocated_bytes": 25823,
+      "deallocated_bytes": 22655,
+      "net_bytes": 3168,
+      "peak_extra_bytes": 6848
+    },
+    "changed_allocation": {
+      "calls": 273,
+      "allocated_bytes": 25823,
+      "deallocated_bytes": 22655,
+      "net_bytes": 3168,
+      "peak_extra_bytes": 6848
+    },
+    "base_block_median_us": [
+      20.0105,
+      20.41225
+    ],
+    "changed_block_median_us": [
+      20.2725,
+      20.3945
+    ]
+  },
+  "owned_shy_overlay:shrink_4": {
+    "line_count": 5,
+    "base_median_us": 34.6605,
+    "changed_median_us": 34.16275,
+    "changed_over_base": 0.9856392723705659,
+    "base_allocation": {
+      "calls": 492,
+      "allocated_bytes": 45824,
+      "deallocated_bytes": 42656,
+      "net_bytes": 3168,
+      "peak_extra_bytes": 6848
+    },
+    "changed_allocation": {
+      "calls": 492,
+      "allocated_bytes": 45824,
+      "deallocated_bytes": 42656,
+      "net_bytes": 3168,
+      "peak_extra_bytes": 6848
+    },
+    "base_block_median_us": [
+      34.45075,
+      34.80025
+    ],
+    "changed_block_median_us": [
+      34.04925,
+      34.224
+    ]
+  },
+  "short:continuous": {
+    "line_count": 4,
+    "base_median_us": 17.077,
+    "changed_median_us": 16.71025,
+    "changed_over_base": 0.9785237453885343,
+    "base_allocation": {
+      "calls": 213,
+      "allocated_bytes": 18012,
+      "deallocated_bytes": 14521,
+      "net_bytes": 3491,
+      "peak_extra_bytes": 6187
+    },
+    "changed_allocation": {
+      "calls": 213,
+      "allocated_bytes": 18012,
+      "deallocated_bytes": 14521,
+      "net_bytes": 3491,
+      "peak_extra_bytes": 6187
+    },
+    "base_block_median_us": [
+      16.693,
+      17.18175
+    ],
+    "changed_block_median_us": [
+      16.71025,
+      16.7105
+    ]
+  },
+  "short:height_retry": {
+    "line_count": 1,
+    "base_median_us": 6.775,
+    "changed_median_us": 6.705125,
+    "changed_over_base": 0.9896863468634687,
+    "base_allocation": {
+      "calls": 58,
+      "allocated_bytes": 2304,
+      "deallocated_bytes": 2176,
+      "net_bytes": 128,
+      "peak_extra_bytes": 624
+    },
+    "changed_allocation": {
+      "calls": 58,
+      "allocated_bytes": 2304,
+      "deallocated_bytes": 2176,
+      "net_bytes": 128,
+      "peak_extra_bytes": 624
+    },
+    "base_block_median_us": [
+      6.65275,
+      6.79225
+    ],
+    "changed_block_median_us": [
+      6.74,
+      6.68775
+    ]
+  },
+  "short:shrink_1": {
+    "line_count": 2,
+    "base_median_us": 12.537,
+    "changed_median_us": 12.3975,
+    "changed_over_base": 0.988872936109117,
+    "base_allocation": {
+      "calls": 111,
+      "allocated_bytes": 5176,
+      "deallocated_bytes": 3864,
+      "net_bytes": 1312,
+      "peak_extra_bytes": 2104
+    },
+    "changed_allocation": {
+      "calls": 111,
+      "allocated_bytes": 5176,
+      "deallocated_bytes": 3864,
+      "net_bytes": 1312,
+      "peak_extra_bytes": 2104
+    },
+    "base_block_median_us": [
+      12.41475,
+      12.6595
+    ],
+    "changed_block_median_us": [
+      12.43225,
+      12.38
+    ]
+  },
+  "short:shrink_4": {
+    "line_count": 5,
+    "base_median_us": 17.146875,
+    "changed_median_us": 16.9375,
+    "changed_over_base": 0.9877893202114088,
+    "base_allocation": {
+      "calls": 150,
+      "allocated_bytes": 7416,
+      "deallocated_bytes": 6104,
+      "net_bytes": 1312,
+      "peak_extra_bytes": 2104
+    },
+    "changed_allocation": {
+      "calls": 150,
+      "allocated_bytes": 7416,
+      "deallocated_bytes": 6104,
+      "net_bytes": 1312,
+      "peak_extra_bytes": 2104
+    },
+    "base_block_median_us": [
+      16.92,
+      17.19925
+    ],
+    "changed_block_median_us": [
+      16.95475,
+      16.91975
+    ]
+  }
+}
