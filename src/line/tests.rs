@@ -295,3 +295,52 @@ fn final_review_prohibited_positions_do_not_reshape_unsafe_edge_windows() {
         );
     }
 }
+
+/// Every allowed break candidate on a line used to reshape the same handful of
+/// edge windows again (a 959-character Latin paragraph made 482 shape calls for
+/// 41 distinct windows). Identical windows must be shaped once per context.
+#[test]
+fn edge_window_shapes_are_reused_across_candidates_and_relayouts() {
+    let fonts = final_review_fonts();
+    fonts
+        .register_face(
+            include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Shodo Fixture Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut style = ParagraphStyle::default();
+    style.root.font_families = vec![crate::style::FontFamily::Named(
+        "Shodo Fixture Latin".into(),
+    )];
+    style.root.font_size = 16.0;
+    let words = 120usize;
+    let text = vec!["Typography affects readability of wave forms"; words / 6].join(" ");
+    let mut b = ParagraphBuilder::new(&style, &Limits::default());
+    b.push_text(TextSource::Generated { node: NodeId(1) }, &text);
+    let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+    let calls = |p: &crate::Paragraph| {
+        p.data
+            .edge_shape_calls
+            .load(std::sync::atomic::Ordering::Relaxed)
+    };
+    let mut cx = LayoutContext::new();
+    let summary = |lines: &[crate::Line]| {
+        lines
+            .iter()
+            .map(|l| (l.text_range(), l.inline_size().to_bits()))
+            .collect::<Vec<_>>()
+    };
+    let first = p.break_all(&mut cx, &LineOptions::default(), 200.0, &AtomicSizes::EMPTY);
+    let first_calls = calls(&p);
+    let second = p.break_all(&mut cx, &LineOptions::default(), 200.0, &AtomicSizes::EMPTY);
+    assert_eq!(summary(&first), summary(&second));
+    assert_eq!(calls(&p), first_calls, "re-layout reshaped cached windows");
+    assert!(
+        first_calls * 2 < words,
+        "{first_calls} edge-window shape calls for {words} words"
+    );
+}

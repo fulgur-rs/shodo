@@ -127,6 +127,31 @@ fn partial(data: &ParagraphData, range: &Range<usize>) -> bool {
         })
 }
 
+/// Edge windows are a pure function of the paragraph, unit range and glyph
+/// budget, and a line scan revisits the same few windows at every break
+/// candidate. Keep results for the most recent paragraph only, so memory stays
+/// bounded by the entry cap regardless of how many paragraphs a context lays
+/// out. Only clean, unedited results are retained.
+#[derive(Debug, Default)]
+pub(crate) struct EdgeShapeCache {
+    owner: Option<(u64, usize)>,
+    entries: std::collections::HashMap<(usize, usize, Option<u64>), ShapedWindow>,
+}
+
+type ShapedWindow = (crate::shape::GlyphStore, Vec<crate::shape::ShapedRun>);
+
+const EDGE_SHAPE_CACHE_ENTRIES: usize = 256;
+
+impl EdgeShapeCache {
+    fn begin(&mut self, data: &ParagraphData) {
+        let owner = (data.id, data as *const ParagraphData as usize);
+        if self.owner != Some(owner) {
+            self.entries.clear();
+            self.owner = Some(owner);
+        }
+    }
+}
+
 fn shape(
     data: &ParagraphData,
     range: &Range<usize>,
@@ -134,7 +159,14 @@ fn shape(
     sat: &mut Saturation,
     budget: Option<u64>,
     replacement: Option<&crate::shape::Replacement>,
-) -> Option<(crate::shape::GlyphStore, Vec<crate::shape::ShapedRun>)> {
+) -> Option<ShapedWindow> {
+    let key = (range.start, range.end, budget);
+    if replacement.is_none() {
+        cx.edge_shapes.begin(data);
+        if let Some(hit) = cx.edge_shapes.entries.get(&key) {
+            return Some(hit.clone());
+        }
+    }
     let mut unit = data.units[range.start].clone();
     unit.text = unit.text.start..data.units[range.end - 1].text.end;
     #[cfg(test)]
@@ -147,9 +179,21 @@ fn shape(
         );
     }
     let mut warnings = WarningSink::new(data.limits.max_warnings);
+    let saturation_before = *sat;
     let result =
         crate::shape::shape_window_edit(data, &unit, budget, replacement, cx, &mut warnings, sat);
-    for w in warnings.take() {
+    let warned = warnings.take();
+    let clean = warned.is_empty() && *sat == saturation_before;
+    if replacement.is_none()
+        && clean
+        && let Some(shaped) = &result
+    {
+        if cx.edge_shapes.entries.len() >= EDGE_SHAPE_CACHE_ENTRIES {
+            cx.edge_shapes.entries.clear();
+        }
+        cx.edge_shapes.entries.insert(key, shaped.clone());
+    }
+    for w in warned {
         cx.warnings.push(w.kind, w.message);
     }
     result

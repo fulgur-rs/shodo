@@ -14,6 +14,7 @@ pub struct LayoutContext {
     _not_sync: std::marker::PhantomData<std::cell::Cell<()>>,
     pub(crate) partial: Option<crate::line::cache::PartialLine>,
     pub(crate) ruby_ranges: crate::line::range::RangeCache,
+    pub(crate) edge_shapes: crate::line::windows::EdgeShapeCache,
     #[cfg(test)]
     pub(crate) cache_visits: usize,
     #[cfg(test)]
