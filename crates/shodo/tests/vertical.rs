@@ -2082,6 +2082,29 @@ fn combine_all_reports_candidates_rejected_across_an_inherited_box_boundary() {
 }
 
 #[test]
+fn combine_rejection_warning_is_not_duplicated_by_first_line_build() {
+    use shodo::limits::WarningKind;
+    let mut root = style(WritingMode::VerticalRl, TextOrientation::Mixed);
+    root.root.text_combine_upright = TextCombineUpright::All;
+    let mut first = root.root.clone();
+    first.font_size = 24.0;
+    root.first_line = Some(first);
+    let limits = Limits {
+        max_warnings: Some(2),
+        ..Default::default()
+    };
+    let paragraph = build_paragraph(&root, &limits, |builder| {
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, "12");
+        builder.open_inline(NodeId(2), &root.root, InlineEdges::default());
+        builder.push_text(TextSource::Generated { node: NodeId(3) }, "34");
+        builder.close_inline();
+    });
+    let warnings = paragraph.warnings();
+    assert_eq!(warnings.len(), 2, "{warnings:?}");
+    assert!(warnings.iter().all(|w| w.kind == WarningKind::Unsupported));
+}
+
+#[test]
 fn combine_all_isolates_internal_arabic_joining_from_vertical_neighbors() {
     let limits = Limits::default();
     let fonts = FontCollection::with_options(
