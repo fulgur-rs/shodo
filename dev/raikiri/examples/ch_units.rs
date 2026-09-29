@@ -1,65 +1,20 @@
 //! A fixed horizontal CSS→font measurement→shodo caller reproduction.
 //! This is separate from the unmerged raikiri integration spikes.
 use raikiri_html::{ParseOptions, parse_html};
-use raikiri_style::{
-    ChFontKey, ChLengthProvenance, ComputedLengthPercentage as Length,
-    ComputedLengthPercentageOrAuto as Margin,
-};
+use raikiri_style::{ComputedLengthPercentage as Length, ComputedLengthPercentageOrAuto as Margin};
 use raikiri_traits::{Dom, NodeId as DomId};
-use shodo::font::{FontCollection, FontQuery};
+
+#[path = "../adapter/ch.rs"]
+mod ch_adapter;
+use ch_adapter::{
+    Physical, family, font_style, resolve_edge as edge, resolve_px as ch, to_logical,
+};
+use shodo::font::FontCollection;
 use shodo::limits::Limits;
-use shodo::node::{InlineEdges, NodeId, Sides, TextSource};
-use shodo::style::{FontFamily, FontStyle, InlineStyle, LineOptions, ParagraphStyle};
+use shodo::node::{InlineEdges, NodeId, TextSource};
+use shodo::style::{InlineStyle, LineOptions, ParagraphStyle};
 use shodo::{AtomicSizes, Fragment, LayoutContext, Line, ParagraphBuilder};
 
-fn family(names: &[raikiri_style::property::FontFamilyName]) -> Vec<FontFamily> {
-    // This fixed example supplies named fixture families, never host fonts.
-    names
-        .iter()
-        .map(|n| FontFamily::Named(n.as_str().to_owned()))
-        .collect()
-}
-fn font_style(style: raikiri_style::property::FontStyle) -> Result<FontStyle, String> {
-    match style {
-        raikiri_style::property::FontStyle::Normal => Ok(FontStyle::Normal),
-        raikiri_style::property::FontStyle::Italic => Ok(FontStyle::Italic),
-        raikiri_style::property::FontStyle::Oblique => Ok(FontStyle::Oblique(14.0)),
-        _ => Err("example font style unsupported".into()),
-    }
-}
-fn ch(
-    fonts: &FontCollection,
-    factor: Option<f32>,
-    key: Option<&ChFontKey>,
-    fallback: f32,
-) -> Result<f32, String> {
-    match factor {
-        None => Ok(fallback),
-        Some(factor) => {
-            let key = key.ok_or("ch value lost its declaring-font key")?;
-            let query = FontQuery {
-                families: family(&key.family),
-                weight: key.weight,
-                style: font_style(key.style)?,
-                ..Default::default()
-            };
-            // Select the face supplying U+0030, including normal CSS fallback.
-            Ok(factor * fonts.resolve_ch(&query, key.size.0).advance)
-        }
-    }
-}
-fn edge(
-    fonts: &FontCollection,
-    provenance: Option<&ChLengthProvenance>,
-    fallback: f32,
-) -> Result<f32, String> {
-    ch(
-        fonts,
-        provenance.map(|p| p.factor),
-        provenance.map(|p| &p.font),
-        fallback,
-    )
-}
 fn padding(value: Length) -> Result<f32, String> {
     match value {
         Length::Px(px) => Ok(px),
@@ -93,10 +48,8 @@ fn layout(html: &str, fonts: &FontCollection) -> Result<Line, String> {
     let cv = &doc.cascade().computed[child];
     let root = &doc.cascade().computed[parent];
     for values in [root, cv] {
-        if values.direction != raikiri_style::property::Direction::Ltr
-            || values.cssom_writing_mode != raikiri_style::property::WritingMode::HorizontalTb
-        {
-            return Err("fixed example requires horizontal LTR layout".into());
+        if values.cssom_writing_mode != raikiri_style::property::WritingMode::HorizontalTb {
+            return Err("fixed example requires a horizontal writing mode".into());
         }
     }
     let absolute = |v| match v {
@@ -135,41 +88,50 @@ fn layout(html: &str, fonts: &FontCollection) -> Result<Line, String> {
     )?;
     options.text_indent.hanging = root.text_indent_hanging;
     options.text_indent.each_line = root.text_indent_each_line;
-    let sides = |top, right, bottom, left| Sides {
-        inline_start: left,
-        inline_end: right,
-        block_start: top,
-        block_end: bottom,
+    let physical = |top, right, bottom, left| Physical {
+        top,
+        right,
+        bottom,
+        left,
     };
+    let (dir, wm) = (cv.direction, cv.cssom_writing_mode);
     let edges = InlineEdges {
-        margin: sides(
-            edge(fonts, cv.margin_ch.top.as_ref(), margin(cv.margin.top)?)?,
-            edge(fonts, cv.margin_ch.right.as_ref(), margin(cv.margin.right)?)?,
-            edge(
-                fonts,
-                cv.margin_ch.bottom.as_ref(),
-                margin(cv.margin.bottom)?,
-            )?,
-            edge(fonts, cv.margin_ch.left.as_ref(), margin(cv.margin.left)?)?,
-        ),
-        padding: sides(
-            edge(fonts, cv.padding_ch.top.as_ref(), padding(cv.padding.top)?)?,
-            edge(
-                fonts,
-                cv.padding_ch.right.as_ref(),
-                padding(cv.padding.right)?,
-            )?,
-            edge(
-                fonts,
-                cv.padding_ch.bottom.as_ref(),
-                padding(cv.padding.bottom)?,
-            )?,
-            edge(
-                fonts,
-                cv.padding_ch.left.as_ref(),
-                padding(cv.padding.left)?,
-            )?,
-        ),
+        margin: to_logical(
+            dir,
+            wm,
+            physical(
+                edge(fonts, cv.margin_ch.top.as_ref(), margin(cv.margin.top)?)?,
+                edge(fonts, cv.margin_ch.right.as_ref(), margin(cv.margin.right)?)?,
+                edge(
+                    fonts,
+                    cv.margin_ch.bottom.as_ref(),
+                    margin(cv.margin.bottom)?,
+                )?,
+                edge(fonts, cv.margin_ch.left.as_ref(), margin(cv.margin.left)?)?,
+            ),
+        )?,
+        padding: to_logical(
+            dir,
+            wm,
+            physical(
+                edge(fonts, cv.padding_ch.top.as_ref(), padding(cv.padding.top)?)?,
+                edge(
+                    fonts,
+                    cv.padding_ch.right.as_ref(),
+                    padding(cv.padding.right)?,
+                )?,
+                edge(
+                    fonts,
+                    cv.padding_ch.bottom.as_ref(),
+                    padding(cv.padding.bottom)?,
+                )?,
+                edge(
+                    fonts,
+                    cv.padding_ch.left.as_ref(),
+                    padding(cv.padding.left)?,
+                )?,
+            ),
+        )?,
         ..Default::default()
     };
     let paragraph_style = ParagraphStyle {
@@ -300,11 +262,47 @@ mod tests {
     }
 
     #[test]
+    fn rtl_maps_physical_ch_margins_to_inline_edges() {
+        let fonts = load_fonts(&Default::default()).unwrap();
+        // Only the physical left margin is 4ch (child 40px: 88.8px).
+        let base = HTML
+            .replace("margin-right:4ch", "margin-right:0px")
+            .replace(
+                "padding-left:5ch;padding-right:5ch",
+                "padding-left:0px;padding-right:0px",
+            );
+        let rtl = base.replace("#child{", "#child{direction:rtl;");
+        let first = |line: &shodo::Line| {
+            line.fragments()
+                .find_map(|f| match f {
+                    Fragment::GlyphRun(r) => Some(r.inline_start()),
+                    _ => None,
+                })
+                .unwrap()
+        };
+        let ltr_line = layout(&base, &fonts.collection).unwrap();
+        let rtl_line = layout(&rtl, &fonts.collection).unwrap();
+        let ltr_none = layout(
+            &base.replace("margin-left:4ch", "margin-left:0px"),
+            &fonts.collection,
+        )
+        .unwrap();
+        let rtl_none = layout(
+            &rtl.replace("margin-left:4ch", "margin-left:0px"),
+            &fonts.collection,
+        )
+        .unwrap();
+        // LTR: the left margin is inline-start and shifts the first run.
+        close(first(&ltr_line) - first(&ltr_none), 88.8);
+        // RTL: it is inline-end; the first run does not move, the line grows.
+        close(first(&rtl_line) - first(&rtl_none), 0.0);
+        close(rtl_line.inline_size() - rtl_none.inline_size(), 88.8);
+    }
+
+    #[test]
     fn fixed_example_rejects_other_directions_and_writing_modes() {
         let fonts = load_fonts(&Default::default()).unwrap();
         for (selector, declaration) in [
-            ("#parent", "direction:rtl"),
-            ("#child", "direction:rtl"),
             ("#parent", "writing-mode:vertical-rl"),
             ("#child", "writing-mode:sideways-lr"),
         ] {

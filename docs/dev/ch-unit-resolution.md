@@ -99,3 +99,22 @@ assess those additional inputs explicitly.
 No pinned WPT baseline was rerun or updated for this issue. Successful
 fixture tests establish the caller's numeric behavior, not a WPT PASS
 increase or a fix to the unmerged spike's `Unsupported` diagnostics.
+
+## Adoptable caller layer (`shodo-pn5`)
+
+The measurement step is split at the raikiri boundary so it can move into
+the production caller unchanged:
+
+- `shodo::font::ChLength { query, size, factor }` is raikiri-independent.
+  `resolve` returns `factor` times the U+0030 advance of the selected face
+  (0.5em fallback when absent) and `None` for non-finite or negative input.
+- `dev/raikiri/adapter/ch.rs` converts `ChFontKey`/`ChLengthProvenance` to
+  `ChLength`. A `ch` factor without its declaring key is an error, never a
+  cascade approximation. `to_logical` maps physical margin/padding to
+  inline/block sides for horizontal LTR and RTL; every vertical or sideways
+  writing mode, and any unknown direction, is rejected.
+- `dev/raikiri/examples/ch_units.rs` uses that adapter and covers RTL
+  physical-to-logical margins in accepted lines.
+
+Neither S4 spike was modified. The production connection itself and any WPT
+comparison still depend on S4's adoption decision.
