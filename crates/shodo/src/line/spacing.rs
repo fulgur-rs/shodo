@@ -33,6 +33,11 @@ pub(crate) fn build(
     let script = CodePointMapData::<Script>::new();
     let mut previous_text = None;
     let mut gaps = Vec::new();
+    // `data.units` and each unit's `typographic_starts` sub-range advance
+    // `offset` monotonically, so `item_cursor` tracks
+    // `partition_point(|item| item.text.end <= offset)` instead of
+    // re-searching `data.items` from the start for every character.
+    let mut item_cursor = 0usize;
     let mut result: Vec<_> = data
         .units
         .iter()
@@ -109,7 +114,18 @@ pub(crate) fn build(
                         // A resource-limited cluster can span source items and
                         // inline markers; ownership comes from the character,
                         // not the cluster's first shaping slice.
-                        let source = data.items.partition_point(|item| item.text.end <= offset);
+                        while item_cursor < data.items.len()
+                            && data.items[item_cursor].text.end <= offset
+                        {
+                            item_cursor += 1;
+                        }
+                        let source = item_cursor;
+                        debug_assert_eq!(
+                            source,
+                            data.items.partition_point(|item| item.text.end <= offset),
+                            "item_cursor must track partition_point(|item| item.text.end <= offset); \
+                             data.items is not text-ascending"
+                        );
                         let style = &data.styles[data.items[source].style as usize];
                         let edge = Edge {
                             tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
