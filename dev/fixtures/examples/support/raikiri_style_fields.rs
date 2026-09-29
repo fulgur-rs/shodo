@@ -225,7 +225,7 @@ fn reset_public(values: &mut ComputedValues, initial: &ComputedValues) {
     values.column_width = clone_value(&initial.column_width);
 }
 
-fn public_differences(values: &ComputedValues, initial: &ComputedValues) -> Vec<Difference> {
+pub(crate) fn public_differences(values: &ComputedValues, initial: &ComputedValues) -> Vec<Difference> {
     let mut differences = Vec::new();
     macro_rules! check {
         ($field:ident) => {
