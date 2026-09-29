@@ -5,14 +5,13 @@ use crate::font::FontMetrics;
 use crate::geometry::{BaselineKind, LayoutUnit, Saturation};
 use crate::paragraph::ParagraphData;
 use crate::style::{InlineStyle, LineHeight, VerticalAlign};
-use std::collections::HashMap;
 use std::ops::Range;
 
 pub(crate) struct LineMetrics {
     pub(crate) baseline: LayoutUnit,
     pub(crate) block_size: LayoutUnit,
     pub(crate) shifts: Vec<LayoutUnit>,
-    pub(crate) combination_shifts: HashMap<usize, LayoutUnit>,
+    pub(crate) combination_shifts: crate::hashing::FastMap<usize, LayoutUnit>,
     pub(crate) empty: bool,
 }
 
@@ -63,7 +62,7 @@ fn shift(s: &InlineStyle, parent: StyleMetrics, parent_upright: bool, a: f32, d:
 fn box_shift(
     data: &ParagraphData,
     box_: u32,
-    cache: &mut HashMap<u32, (f32, Option<u32>)>,
+    cache: &mut crate::hashing::FastMap<u32, (f32, Option<u32>)>,
 ) -> (f32, Option<u32>) {
     let mut path = Vec::new();
     let mut cursor = Some(box_);
@@ -129,9 +128,9 @@ fn box_shift(
 /// Both accepted lines and indexed ruby probes use these exact font instances.
 #[derive(Debug, Default)]
 pub(crate) struct ProfileResolver {
-    boxes: HashMap<u32, (f32, Option<u32>)>,
-    parents: HashMap<u32, Option<u32>>,
-    atomic_styles: HashMap<crate::node::NodeId, (u32, Option<u32>)>,
+    boxes: crate::hashing::FastMap<u32, (f32, Option<u32>)>,
+    parents: crate::hashing::FastMap<u32, Option<u32>>,
+    atomic_styles: crate::hashing::FastMap<crate::node::NodeId, (u32, Option<u32>)>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -342,7 +341,7 @@ pub(crate) fn measure(
     );
     let mut resolver = ProfileResolver::new(data, units.clone());
     let mut empty = true;
-    let mut groups: HashMap<u32, (f32, f32)> = HashMap::new();
+    let mut groups: crate::hashing::FastMap<u32, (f32, f32)> = crate::hashing::FastMap::default();
     let mut combination_bases = Vec::new();
     for (offset, u) in data.units[units.clone()].iter().enumerate() {
         empty &= !matches!(u.kind, UnitKind::Tab | UnitKind::ForcedBreak);
@@ -371,7 +370,8 @@ pub(crate) fn measure(
         }
     }
     let mut shifts = Vec::with_capacity(records.len());
-    let mut own_groups: HashMap<usize, (f32, f32, bool)> = HashMap::new();
+    let mut own_groups: crate::hashing::FastMap<usize, (f32, f32, bool)> =
+        crate::hashing::FastMap::default();
     let mut memberships = Vec::with_capacity(records.len());
     for (i, r) in records.iter().enumerate() {
         match &r.kind {
@@ -439,7 +439,7 @@ pub(crate) fn measure(
     if height > above + below {
         above = above.max(bottom_height - below);
     }
-    let mut deltas = HashMap::new();
+    let mut deltas = crate::hashing::FastMap::default();
     for (g, (top, bottom)) in groups {
         let align = data.styles[data.boxes[g as usize].style as usize].vertical_align;
         deltas.insert(

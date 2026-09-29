@@ -9,16 +9,16 @@ use crate::LayoutContext;
 use crate::analysis::units::UnitKind;
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::paragraph::{AtomicSizes, ParagraphData};
-use std::collections::HashMap;
 use std::ops::Range;
 
 #[derive(Debug, Default)]
 pub(crate) struct RangeCache {
     root: Option<(u64, usize, u64)>,
-    sets: HashMap<(u64, usize), Costs>,
-    pub(super) metrics: HashMap<(u64, usize), super::metric_index::MetricIndex>,
-    blocks: HashMap<(u64, usize, usize, usize), LayoutUnit>,
-    pub(crate) neighbors: HashMap<(u64, usize), crate::ruby::overhang::NeighborIndex>,
+    sets: crate::hashing::FastMap<(u64, usize), Costs>,
+    pub(super) metrics: crate::hashing::FastMap<(u64, usize), super::metric_index::MetricIndex>,
+    blocks: crate::hashing::FastMap<(u64, usize, usize, usize), LayoutUnit>,
+    pub(crate) neighbors:
+        crate::hashing::FastMap<(u64, usize), crate::ruby::overhang::NeighborIndex>,
 }
 
 impl RangeCache {

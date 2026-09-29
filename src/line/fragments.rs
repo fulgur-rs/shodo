@@ -320,8 +320,8 @@ pub(crate) fn build(
     // Edge-unit advances move all descendants; remove these external gaps
     // from the wrapper's own geometry so its annotation shares that move.
     if let Some(leading) = leading {
-        let mut gaps: std::collections::HashMap<u32, (LayoutUnit, LayoutUnit)> =
-            std::collections::HashMap::new();
+        let mut gaps: crate::hashing::FastMap<u32, (LayoutUnit, LayoutUnit)> =
+            crate::hashing::FastMap::default();
         for (k, i) in units.clone().enumerate() {
             if leading[k] == LayoutUnit::ZERO {
                 continue;
@@ -359,8 +359,8 @@ pub(crate) fn build(
     // Selectable source slices paint from a single composition origin.
     // Before-spacing belongs ahead of that square; after-spacing belongs
     // after its last unit, regardless of source fragmentation or bidi order.
-    let mut starts = std::collections::HashMap::new();
-    let mut before = std::collections::HashMap::new();
+    let mut starts = crate::hashing::FastMap::default();
+    let mut before = crate::hashing::FastMap::default();
     for (k, i) in units.enumerate() {
         if let Some(span) = data.combine_at_text(data.units[i].text.start) {
             let amount = leading.map_or(LayoutUnit::ZERO, |values| values[k]);

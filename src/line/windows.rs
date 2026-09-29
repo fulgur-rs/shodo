@@ -135,7 +135,7 @@ fn partial(data: &ParagraphData, range: &Range<usize>) -> bool {
 #[derive(Debug, Default)]
 pub(crate) struct EdgeShapeCache {
     owner: Option<(u64, usize)>,
-    entries: std::collections::HashMap<(usize, usize, Option<u64>), ShapedWindow>,
+    entries: crate::hashing::FastMap<(usize, usize, Option<u64>), ShapedWindow>,
 }
 
 type ShapedWindow = (crate::shape::GlyphStore, Vec<crate::shape::ShapedRun>);
