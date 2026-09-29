@@ -169,7 +169,7 @@ completed core contracts:
 | --- | --- | --- |
 | shodo-9an.1 | None/First → real production LineOptions, retaining native leading U+3000 behavior. The representative caller now wires None/First ([record](raikiri-hanging-punctuation.md)); production adoption is not done | required by shodo-p2m.6; production adoption waits for S4 adoption policy |
 | shodo-3v2 | resolved writing-mode/text-orientation → existing vertical APIs | waits for S4; actual native/candidate effects must determine cutover necessity |
-| shodo-0zm | separate text validation from BFC/paint properties; preserve actual box effects and source underlines | waits for S4; compare rendering before deciding cutover necessity |
+| shodo-0zm | separate text validation from BFC/paint properties; preserve actual box effects and source underlines. The representative caller now retains these values per owner ([record](raikiri-style-handoff.md)); painting/placement and production adoption are not done | waits for S4 adoption policy; compare rendering before deciding cutover necessity |
 
 The original `shodo-9an` diagnosis that hanging-punctuation had no field/parser
 was wrong. The pinned `property/parse/text.rs:1431` accepts **none/first** and
