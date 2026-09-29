@@ -443,7 +443,7 @@ impl Line {
         self.measure_combinations(&metrics.combination_shifts);
     }
 
-    fn measure_combinations(&mut self, shifts: &std::collections::HashMap<usize, LayoutUnit>) {
+    fn measure_combinations(&mut self, shifts: &crate::hashing::FastMap<usize, LayoutUnit>) {
         self.combinations.clear();
         if self.data.combine_spans.is_empty() {
             return;

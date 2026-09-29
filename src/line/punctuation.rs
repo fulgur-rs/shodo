@@ -342,7 +342,11 @@ pub(super) fn boundary(
     b: super::spacing_summary::Edge,
     blocked: bool,
 ) -> (LayoutUnit, LayoutUnit) {
-    if blocked
+    // Most neighbors are ordinary letters whose pair adjustment is zero
+    // either way, so decide that before consulting the spacing tree.
+    let adjustment = pair(a.punctuation, b.punctuation);
+    if adjustment == (LayoutUnit::ZERO, LayoutUnit::ZERO)
+        || blocked
         || !super::spacing_summary::allowed(a, b)
         || !data
             .spacing_tree
@@ -350,7 +354,7 @@ pub(super) fn boundary(
     {
         return (LayoutUnit::ZERO, LayoutUnit::ZERO);
     }
-    pair(a.punctuation, b.punctuation)
+    adjustment
 }
 
 #[derive(Clone, Copy, Debug, Default)]

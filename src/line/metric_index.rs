@@ -8,7 +8,7 @@ use crate::geometry::{LayoutUnit, Saturation, WritingMode};
 use crate::paragraph::ParagraphData;
 use crate::style::{TextOrientation, VerticalAlign};
 use crate::{AtomicSizes, LayoutContext};
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
 
 #[derive(Clone, Copy, Debug)]
@@ -113,7 +113,7 @@ struct Selection {
     above: f32,
     replacements: BTreeMap<usize, ContentSummary>,
     removed: Vec<Range<usize>>,
-    partial: HashMap<usize, Bounds>,
+    partial: crate::hashing::FastMap<usize, Bounds>,
 }
 
 #[derive(Debug)]
@@ -132,7 +132,7 @@ pub(super) struct MetricIndex {
     box_contents: Vec<ContentBounds>,
     box_paints: Vec<ContentBounds>,
     groups: Vec<Group>,
-    group_keys: HashMap<u64, usize>,
+    group_keys: crate::hashing::FastMap<u64, usize>,
     group_at: Vec<Option<u64>>,
     boxes: Vec<RecordProfile>,
     resolver: ProfileResolver,
@@ -186,7 +186,7 @@ impl MetricIndex {
         let size = data.units.len().max(1).next_power_of_two();
         let mut tree = vec![Summary::default(); size * 2];
         let mut nonglyph = tree.clone();
-        let mut groups: HashMap<u64, Group> = HashMap::new();
+        let mut groups: crate::hashing::FastMap<u64, Group> = crate::hashing::FastMap::default();
         let mut group_at = vec![None; data.units.len()];
         let mut boxes = vec![None; data.boxes.len()];
         let mut record_content = vec![None; data.units.len()];
@@ -253,7 +253,7 @@ impl MetricIndex {
         }
         let mut groups: Vec<_> = groups.into_iter().collect();
         groups.sort_unstable_by_key(|(_, g)| g.units.start);
-        let group_keys: HashMap<u64, usize> = groups
+        let group_keys: crate::hashing::FastMap<u64, usize> = groups
             .iter()
             .enumerate()
             .map(|(i, (key, _))| (*key, i))
@@ -535,7 +535,7 @@ impl MetricIndex {
                 }
             }
         }
-        let mut affected = HashSet::new();
+        let mut affected = crate::hashing::FastSet::default();
         let first = self.groups.partition_point(|g| g.units.end <= range.start);
         let last = self.groups.partition_point(|g| g.units.start < range.end);
         for i in [first, last.saturating_sub(1)] {
@@ -564,8 +564,8 @@ impl MetricIndex {
             }
         }
         let mut extra = Summary::default();
-        let mut group_extra = HashMap::new();
-        let mut ancestors = HashSet::new();
+        let mut group_extra = crate::hashing::FastMap::default();
+        let mut ancestors = crate::hashing::FastSet::default();
         for unit in [range.start, range.end - 1] {
             let mut cursor = data.units[unit].parent_box;
             while let Some(b) = cursor {
@@ -611,7 +611,7 @@ impl MetricIndex {
         let mut summary = self
             .query(range, &replacements, &excluded, &removed, cx)
             .join(extra);
-        let mut partial = HashMap::new();
+        let mut partial = crate::hashing::FastMap::default();
         for i in affected {
             let group = &self.groups[i];
             let selected = range.start.max(group.units.start)..range.end.min(group.units.end);
@@ -973,7 +973,7 @@ pub(crate) fn content(
             }
             let mut area = leaf_areas[i];
             let boundary = boxes.get(i).copied().flatten();
-            let mut seen = HashSet::new();
+            let mut seen = crate::hashing::FastSet::default();
             for unit in [range.start, range.end - 1] {
                 let mut owner = data.units[unit].parent_box;
                 while let Some(b) = owner {
