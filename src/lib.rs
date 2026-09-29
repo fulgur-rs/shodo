@@ -23,7 +23,6 @@ pub use ruby::{
 mod analysis;
 mod builder;
 mod context;
-mod fast_hash;
 mod line;
 mod output;
 mod paragraph;
