@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.3](https://github.com/fulgur-rs/shodo/compare/v0.0.2...v0.0.3) - 2026-09-29
+
+### Other
+
+- *(metric_index)* split scalar and content queries
+- Merge pull request #83 from fulgur-rs/refactor/c6r56-window-tests
+- *(windows)* extract edge-window regression tests
+- Merge pull request #81 from fulgur-rs/refactor/c6r53-paragraph-build
+- Merge pull request #80 from fulgur-rs/perf/xy2-build-profile
+- *(output)* separate line and glyph operations
+- *(shape)* extract regression tests
+- Merge pull request #76 from fulgur-rs/refactor/c6r54-font-matching-tests
+- *(font)* extract matching and retention tests
+
 ## [0.0.2](https://github.com/fulgur-rs/shodo/compare/v0.0.1...v0.0.2) - 2026-09-29
 
 ### Other
