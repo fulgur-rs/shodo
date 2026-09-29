@@ -65,10 +65,177 @@ pub struct FontMatch {
 }
 
 pub(super) struct CacheEntry {
-    query: FontQuery,
-    cluster: String,
-    generations: (u64, Option<u64>),
+    query: std::sync::Arc<FontQuery>,
+    cluster: Box<str>,
     result: Option<FontMatch>,
+    hash: u64,
+    used: u64,
+}
+impl CacheEntry {
+    fn matches_key(&self, query: &FontQuery, cluster: &str) -> bool {
+        #[cfg(test)]
+        matching_tests::record_key_comparison();
+        *self.query == *query && *self.cluster == *cluster
+    }
+}
+
+/// Bounded LRU of cluster matches. Lookup is a hash probe plus one key
+/// comparison; hits only bump a recency counter and never move entries.
+///
+/// Memory is what a cache like this is easy to waste, so entries stay small:
+/// every entry of one style shares a single `Arc<FontQuery>` (a document
+/// typically uses a handful of distinct queries but caches hundreds of
+/// clusters), the cluster is a `Box<str>`, and the font generation lives once
+/// on the cache instead of on each entry. A generation change drops every
+/// entry, which could never be hit again anyway. The per-entry overhead of the
+/// index is one `u64` hash, one `u64` recency stamp and a `u64 -> u32` bucket,
+/// all bounded by `match_cache_entries`. A 64-bit hash collision between two
+/// different keys just replaces the older entry, which is safe for a cache.
+#[derive(Default)]
+pub(super) struct MatchCache {
+    slots: Vec<CacheEntry>,
+    index: std::collections::HashMap<u64, u32, std::hash::BuildHasherDefault<PreHashed>>,
+    clock: u64,
+    generations: Option<(u64, Option<u64>)>,
+    queries: Vec<std::sync::Weak<FontQuery>>,
+}
+
+/// The index keys are already well-mixed 64-bit hashes.
+#[derive(Default)]
+pub(super) struct PreHashed(u64);
+impl std::hash::Hasher for PreHashed {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        for b in bytes {
+            self.0 = (self.0 << 8) | u64::from(*b);
+        }
+    }
+    fn write_u64(&mut self, n: u64) {
+        self.0 = n;
+    }
+}
+
+fn key_hash(query: &FontQuery, cluster: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    // f32 equality treats -0.0 == 0.0; hash them identically.
+    let bits = |x: f32| if x == 0.0 { 0 } else { x.to_bits() };
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    cluster.hash(&mut h);
+    query.families.len().hash(&mut h);
+    for family in &query.families {
+        match family {
+            FontFamily::Named(name) => (0u8, name).hash(&mut h),
+            FontFamily::Generic(generic) => (1u8, generic).hash(&mut h),
+        }
+    }
+    bits(query.weight).hash(&mut h);
+    bits(query.width).hash(&mut h);
+    match query.style {
+        FontStyle::Normal => 0u8.hash(&mut h),
+        FontStyle::Italic => 1u8.hash(&mut h),
+        FontStyle::Oblique(angle) => (2u8, bits(angle)).hash(&mut h),
+    }
+    query.script.hash(&mut h);
+    query.language.hash(&mut h);
+    (query.presentation as u8).hash(&mut h);
+    let s = query.synthesis;
+    (s.weight, s.style, s.small_caps).hash(&mut h);
+    h.finish()
+}
+
+impl MatchCache {
+    #[cfg(test)]
+    pub(super) fn len(&self) -> usize {
+        self.slots.len()
+    }
+    #[cfg(test)]
+    pub(super) fn is_empty(&self) -> bool {
+        self.slots.is_empty()
+    }
+    fn sync(&mut self, generations: (u64, Option<u64>)) {
+        if self.generations != Some(generations) {
+            self.slots = Vec::new();
+            self.index = Default::default();
+            self.queries = Vec::new();
+            self.generations = Some(generations);
+        }
+    }
+    fn get(
+        &mut self,
+        generations: (u64, Option<u64>),
+        hash: u64,
+        query: &FontQuery,
+        cluster: &str,
+    ) -> Option<Option<FontMatch>> {
+        self.sync(generations);
+        let slot = *self.index.get(&hash)? as usize;
+        let entry = self.slots.get_mut(slot)?;
+        if !entry.matches_key(query, cluster) {
+            return None;
+        }
+        self.clock += 1;
+        entry.used = self.clock;
+        Some(entry.result.clone())
+    }
+    /// Reuse the shared query when an equal one is already retained by a live
+    /// entry; dead references are pruned as we look, so the list never
+    /// outgrows the number of live entries.
+    fn intern(&mut self, query: FontQuery) -> std::sync::Arc<FontQuery> {
+        let mut found = None;
+        self.queries.retain(|weak| match weak.upgrade() {
+            Some(shared) => {
+                if found.is_none() && *shared == query {
+                    found = Some(shared);
+                }
+                true
+            }
+            None => false,
+        });
+        found.unwrap_or_else(|| {
+            let shared = std::sync::Arc::new(query);
+            self.queries.push(std::sync::Arc::downgrade(&shared));
+            shared
+        })
+    }
+    fn insert(
+        &mut self,
+        cap: usize,
+        generations: (u64, Option<u64>),
+        query: FontQuery,
+        cluster: &str,
+        hash: u64,
+        result: Option<FontMatch>,
+    ) {
+        self.sync(generations);
+        self.clock += 1;
+        let entry = CacheEntry {
+            query: self.intern(query),
+            cluster: cluster.into(),
+            result,
+            hash,
+            used: self.clock,
+        };
+        if let Some(&slot) = self.index.get(&entry.hash) {
+            // Same hash: an equal key was concurrently inserted, or a
+            // 64-bit collision. Either way keep exactly one entry.
+            self.slots[slot as usize] = entry;
+            return;
+        }
+        if self.slots.len() >= cap {
+            let Some((victim, _)) = self.slots.iter().enumerate().min_by_key(|(_, e)| e.used)
+            else {
+                return;
+            };
+            self.index.remove(&self.slots[victim].hash);
+            self.index.insert(entry.hash, victim as u32);
+            self.slots[victim] = entry;
+        } else {
+            self.index.insert(entry.hash, self.slots.len() as u32);
+            self.slots.push(entry);
+        }
+    }
 }
 pub(super) struct FallbackEntry {
     script: [u8; 4],
@@ -153,16 +320,9 @@ impl FontCollection {
     fn cached_match(&self, query: &FontQuery, cluster: &str) -> Option<FontMatch> {
         let query = query.clone().normalized();
         let generations = self.generations();
-        {
-            let mut state = self.state();
-            if let Some(index) = state.matches.iter().position(|entry| {
-                entry.generations == generations && entry.query == query && entry.cluster == cluster
-            }) {
-                let entry = state.matches.remove(index)?;
-                let result = entry.result.clone();
-                state.matches.push_back(entry);
-                return result;
-            }
+        let hash = key_hash(&query, cluster);
+        if let Some(result) = self.state().matches.get(generations, hash, &query, cluster) {
+            return result;
         }
         let result = self.find_cluster(&query, cluster);
         let mut state = self.state();
@@ -179,15 +339,9 @@ impl FontCollection {
                 .sum::<usize>()
             + query.language.as_ref().map_or(0, String::len);
         if cap > 0 && key_bytes <= 4096 && query.families.len() <= 128 {
-            while state.matches.len() >= cap {
-                state.matches.pop_front();
-            }
-            state.matches.push_back(CacheEntry {
-                query,
-                cluster: cluster.into(),
-                generations,
-                result: result.clone(),
-            });
+            state
+                .matches
+                .insert(cap, generations, query, cluster, hash, result.clone());
         }
         result
     }
@@ -708,6 +862,85 @@ mod matching_tests {
     std::thread_local! {
         static INFO_READS: Cell<usize> = const { Cell::new(0) };
         static FONT_READS: Cell<usize> = const { Cell::new(0) };
+        static KEY_COMPARISONS: Cell<usize> = const { Cell::new(0) };
+    }
+
+    pub(super) fn record_key_comparison() {
+        KEY_COMPARISONS.with(|n| n.set(n.get() + 1));
+    }
+
+    #[test]
+    fn cache_hit_compares_few_keys_regardless_of_cache_size() {
+        let fonts = FontCollection::with_options(
+            &Limits::default(),
+            FontOptions {
+                system_fonts: false,
+                match_cache_entries: 64,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register(super::super::browser_tests::test_font("Web", &['a'], 600))
+            .unwrap();
+        let query = FontQuery {
+            families: vec![FontFamily::Named("Web".into())],
+            ..Default::default()
+        };
+        let clusters: Vec<String> = (0..64)
+            .map(|i| format!("{}", char::from(b'A' + i)))
+            .collect();
+        for c in &clusters {
+            fonts.match_cluster(&query, c);
+        }
+        assert_eq!(fonts.state().matches.len(), 64);
+        // The newest entry is the worst case for a front-to-back scan.
+        KEY_COMPARISONS.with(|n| n.set(0));
+        fonts.match_cluster(&query, clusters.last().unwrap());
+        let compared = KEY_COMPARISONS.with(Cell::get);
+        assert!(
+            compared <= 2,
+            "{compared} key comparisons for one cache hit"
+        );
+        assert_eq!(fonts.state().matches.len(), 64);
+    }
+
+    #[test]
+    fn cache_evicts_least_recently_used_entry_first() {
+        let fonts = FontCollection::with_options(
+            &Limits::default(),
+            FontOptions {
+                system_fonts: false,
+                match_cache_entries: 2,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register(super::super::browser_tests::test_font("Web", &['a'], 600))
+            .unwrap();
+        let query = FontQuery {
+            families: vec![FontFamily::Named("Web".into())],
+            ..Default::default()
+        };
+        let hit_cost = |c: &str| {
+            KEY_COMPARISONS.with(|n| n.set(0));
+            fonts.match_cluster(&query, c);
+            KEY_COMPARISONS.with(Cell::get)
+        };
+        fonts.match_cluster(&query, "A");
+        fonts.match_cluster(&query, "B");
+        fonts.match_cluster(&query, "A"); // A is now most recent
+        fonts.match_cluster(&query, "C"); // evicts B, not A
+        assert!(
+            hit_cost("A") > 0,
+            "A must still be cached: a hit compares its key"
+        );
+        // A miss on B compares no cached key against an equal entry; re-inserting
+        // it must not have kept a stale copy.
+        assert_eq!(fonts.state().matches.len(), 2);
+        fonts.match_cluster(&query, "B"); // evicts C (A was just touched)
+        let a_after = hit_cost("A");
+        assert!(a_after > 0);
+        assert_eq!(fonts.state().matches.len(), 2);
     }
 
     pub(super) fn record_info_read() {

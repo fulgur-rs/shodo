@@ -161,7 +161,7 @@ struct LayerState {
     options: FontOptions,
     generics: std::collections::HashMap<crate::style::GenericFamily, Vec<String>>,
     fallbacks: Vec<matching::FallbackEntry>,
-    matches: std::collections::VecDeque<matching::CacheEntry>,
+    matches: matching::MatchCache,
     shapers: std::collections::VecDeque<(u32, Arc<harfrust::ShaperData>)>,
 }
 
