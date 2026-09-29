@@ -12,9 +12,38 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  check-release-commit:
+    name: Check whether this push is a release PR merge
+    if: github.repository == 'fulgur-rs/shodo' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      is_release: ${{ steps.check.outputs.is_release }}
+    steps:
+      # release-plz itself only releases when HEAD is associated with a PR
+      # whose branch starts with the release-pr branch prefix (default
+      # `release-plz-`); everything else is a no-op inside the action. Skip
+      # the job entirely for ordinary merges so the `release` environment's
+      # required reviewer isn't asked to approve a deployment that release-plz
+      # would just skip anyway.
+      - name: Check associated PRs for a release-plz branch
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          is_release=$(gh api "repos/$REPO/commits/$SHA/pulls" \
+            --jq '[.[] | select(.head.ref | startswith("release-plz-"))] | length > 0')
+          echo "is_release=$is_release" >> "$GITHUB_OUTPUT"
+
   release:
     name: Publish release
-    if: github.repository == 'fulgur-rs/shodo' && github.ref == 'refs/heads/main'
+    needs: check-release-commit
+    if: needs.check-release-commit.outputs.is_release == 'true'
     runs-on: ubuntu-latest
     environment: release
     permissions:
