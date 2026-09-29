@@ -142,27 +142,41 @@ struct Frame {
     summary: Summary,
 }
 
-#[derive(Clone, Debug)]
-pub(super) struct Cursor {
+#[derive(Clone)]
+pub(super) struct Cursor<'a> {
     frames: Vec<Frame>,
+    // Retain the immutable context borrow so pointer identity cannot be reused
+    // or the context mutated while a cached result may still be read.
+    cached: std::cell::Cell<Option<(Option<&'a ParagraphData>, Summary)>>,
     #[cfg(test)]
     visits: std::cell::Cell<usize>,
 }
 
-impl Default for Cursor {
+impl Default for Cursor<'_> {
     fn default() -> Self {
         Self {
             frames: vec![Frame {
                 level: 0,
                 summary: Summary::default(),
             }],
+            cached: std::cell::Cell::new(None),
             #[cfg(test)]
             visits: std::cell::Cell::new(0),
         }
     }
 }
 
-impl Cursor {
+impl std::fmt::Debug for Cursor<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut result = f.debug_struct("Cursor");
+        result.field("frames", &self.frames);
+        #[cfg(test)]
+        result.field("visits", &self.visits);
+        result.finish()
+    }
+}
+
+impl<'a> Cursor<'a> {
     fn append(frame: &mut Frame, summary: Summary, data: Option<&ParagraphData>) {
         frame.summary = if frame.level.is_multiple_of(2) {
             frame.summary.join(summary, data)
@@ -172,6 +186,7 @@ impl Cursor {
     }
 
     pub(super) fn push(&mut self, level: u8, summary: Summary, data: Option<&ParagraphData>) {
+        self.cached.set(None);
         #[cfg(test)]
         self.visits.set(self.visits.get() + 1);
         let mut carry = None;
@@ -205,7 +220,17 @@ impl Cursor {
         );
     }
 
-    pub(super) fn summary(&self, data: Option<&ParagraphData>) -> Summary {
+    pub(super) fn summary(&self, data: Option<&'a ParagraphData>) -> Summary {
+        if let Some((cached_data, value)) = self.cached.get() {
+            let same_context = match (cached_data, data) {
+                (None, None) => true,
+                (Some(a), Some(b)) => std::ptr::eq(a, b),
+                _ => false,
+            };
+            if same_context {
+                return value;
+            }
+        }
         // Folding the innermost frame into an empty carry returns that
         // frame's summary unchanged (for either direction), so start from it.
         // The common single-level paragraph then needs no joins at all.
@@ -223,6 +248,7 @@ impl Cursor {
             Self::append(&mut frame, carry, data);
             carry = frame.summary;
         }
+        self.cached.set(Some((data, carry)));
         carry
     }
 }
@@ -587,6 +613,164 @@ mod tests {
             carry = frame.summary;
         }
         carry
+    }
+
+    #[test]
+    fn unchanged_deep_cursor_summary_does_not_repeat_frame_work() {
+        let mut cursor = Cursor::default();
+        for level in 0..=126 {
+            cursor.push(level, Summary::leaf(edge(64, u32::from(level))), None);
+        }
+        assert_eq!(cursor.summary(None).cost, 8064);
+        cursor.visits.set(0);
+        for _ in 0..256 {
+            assert_eq!(cursor.summary(None).cost, 8064);
+        }
+        assert_eq!(
+            cursor.visits.get(),
+            0,
+            "unchanged reads must not refold frames"
+        );
+
+        for (level, want) in [
+            (126, 8128),
+            (80, 8192),
+            (1, 8256),
+            (0, 8320),
+            (123, 8384),
+            (0, 8448),
+        ] {
+            cursor.push(level, Summary::leaf(edge(64, 127)), None);
+            assert_eq!(cursor.summary(None).cost, want);
+            cursor.visits.set(0);
+            for _ in 0..16 {
+                assert_eq!(cursor.summary(None).cost, want);
+            }
+            assert_eq!(cursor.visits.get(), 0, "reads after level {level} push");
+        }
+    }
+
+    fn summary_state(value: Summary) -> (Option<u32>, Option<u32>, i64, [bool; 4]) {
+        (
+            value.first.map(|e| e.unit),
+            value.last.map(|e| e.unit),
+            value.cost,
+            [
+                value.before,
+                value.after,
+                value.hang_before,
+                value.hang_after,
+            ],
+        )
+    }
+
+    #[test]
+    fn summary_cache_retains_empty_and_barrier_flags() {
+        let mut cursor = Cursor::default();
+        for _ in 0..2 {
+            assert_eq!(
+                summary_state(cursor.summary(None)),
+                (None, None, 0, [false; 4])
+            );
+        }
+        cursor.push(0, Summary::barrier(), None);
+        for _ in 0..2 {
+            assert_eq!(
+                summary_state(cursor.summary(None)),
+                (None, None, 0, [true; 4])
+            );
+        }
+        cursor.push(0, Summary::leaf(edge(64, 2)), None);
+        for _ in 0..2 {
+            assert_eq!(
+                summary_state(cursor.summary(None)),
+                (Some(2), Some(2), 0, [true, false, true, false])
+            );
+        }
+        cursor.push(0, Summary::barrier(), None);
+        for _ in 0..2 {
+            assert_eq!(
+                summary_state(cursor.summary(None)),
+                (Some(2), Some(2), 0, [true; 4])
+            );
+        }
+    }
+
+    fn summary_context(ic: f32) -> crate::Paragraph {
+        let limits = crate::limits::Limits::default();
+        let style = crate::style::ParagraphStyle::default();
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        builder.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            "水a",
+        );
+        let mut paragraph = builder
+            .build(
+                &mut crate::LayoutContext::new(),
+                &crate::font::FontCollection::new(&limits),
+            )
+            .unwrap();
+        // Controlled geometry input, set before the Cursor borrows this context.
+        std::sync::Arc::get_mut(&mut paragraph.data)
+            .unwrap()
+            .style_metrics[0]
+            .ic = ic;
+        paragraph
+    }
+
+    #[test]
+    fn summary_cache_distinguishes_paragraph_contexts() {
+        let a = summary_context(32.0);
+        let b = summary_context(64.0);
+        let mut cursor = Cursor::default();
+        cursor.push(
+            0,
+            Summary::leaf(Edge {
+                class: super::super::autospace::Class::Ideograph,
+                ..edge(0, 0)
+            }),
+            None,
+        );
+        cursor.push(
+            1,
+            Summary::leaf(Edge {
+                class: super::super::autospace::Class::Letter,
+                ..edge(0, 1)
+            }),
+            None,
+        );
+        // The root's autospace is ic/8, with 64 layout units per pixel.
+        for (data, want) in [
+            (None, 0),
+            (Some(a.data.as_ref()), 256),
+            (Some(b.data.as_ref()), 512),
+            (None, 0),
+            (Some(a.data.as_ref()), 256),
+        ] {
+            assert_eq!(cursor.summary(data).cost, want);
+            assert_eq!(cursor.summary(data).cost, want);
+        }
+    }
+
+    #[test]
+    fn cloned_cursor_cache_is_independent() {
+        let mut original = Cursor::default();
+        for level in 0..=126 {
+            original.push(level, Summary::leaf(edge(64, u32::from(level))), None);
+        }
+        assert_eq!(original.summary(None).cost, 8064);
+        original.visits.set(0);
+        let mut clone = original.clone();
+        clone.push(0, Summary::leaf(edge(128, 127)), None);
+        assert_eq!(clone.summary(None).cost, 8160);
+        assert_eq!(original.summary(None).cost, 8064);
+        assert_eq!(
+            original.visits.get(),
+            0,
+            "clone append must not invalidate original"
+        );
     }
 
     #[test]
