@@ -138,8 +138,9 @@ pub(crate) fn source_cursor_ranges(input: &Processed) -> Vec<std::ops::RangeIncl
         .collect()
 }
 
-// Only these options affect ICU's rule selection: at most4*3*2=24 full
-// segmenter passes, independently of the number of distinct inline styles.
+// At most 4*4*2=32 active profiles can each run a segmenter pass,
+// independently of the number of distinct inline styles. Manual uses ICU's
+// normal word option but needs its own post-filtering profile.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct Profile {
     strict: u8,
@@ -166,6 +167,7 @@ impl Profile {
                 WordBreak::Normal | WordBreak::AutoPhrase => 0,
                 WordBreak::BreakAll => 1,
                 WordBreak::KeepAll => 2,
+                WordBreak::Manual => 3,
             },
             ja_zh: lang.eq_ignore_ascii_case("ja") || lang.eq_ignore_ascii_case("zh"),
         }
@@ -258,6 +260,37 @@ pub(crate) fn analyze_breaks(
     }
     let ja: LanguageIdentifier = "ja".parse().expect("constant language");
     let lb = CodePointMapData::<props::LineBreak>::new();
+    // CSS Text 4 word-break:manual resolves SA letters as AL. Substitute AL
+    // scalars of the same UTF-8 width so ICU applies all UAX #14 rules while
+    // its returned byte offsets still index the original projection.
+    let manual_text = active
+        .iter()
+        .any(|profile| profile.word == 3 && profile.strict != 3)
+        .then(|| {
+            let gc = CodePointMapData::<props::GeneralCategory>::new();
+            projection
+                .text
+                .chars()
+                .map(|c| {
+                    if lb.get(c) == props::LineBreak::ComplexContext
+                        && !matches!(
+                            gc.get(c),
+                            props::GeneralCategory::NonspacingMark
+                                | props::GeneralCategory::SpacingMark
+                        )
+                    {
+                        match c.len_utf8() {
+                            1 => 'a',
+                            2 => 'Ā',
+                            3 => 'ꓐ',
+                            _ => '𐐀',
+                        }
+                    } else {
+                        c
+                    }
+                })
+                .collect::<String>()
+        });
     for profile in active {
         let mut options = LineBreakOptions::default();
         options.strictness = Some(match profile.strict {
@@ -276,7 +309,12 @@ pub(crate) fn analyze_breaks(
         let line = LineSegmenter::new_auto(options);
         #[cfg(not(feature = "complex-scripts"))]
         let line = LineSegmenter::new_for_non_complex_scripts(options);
-        for at in line.segment_str(&projection.text) {
+        let segment_text = if profile.word == 3 && profile.strict != 3 {
+            manual_text.as_deref().unwrap_or(&projection.text)
+        } else {
+            &projection.text
+        };
+        for at in line.segment_str(segment_text) {
             // ICU's Normal mode relaxes CJ as well as CJK hyphen-like
             // characters. CSS Text §6.2 only permits CJ (small kana and
             // prolonged sound marks) in Loose mode. Tailor the projected
@@ -400,7 +438,9 @@ pub(crate) fn analyze_breaks(
             o.min_content = o.class == BreakClass::Hyphen;
         } else if o.class == BreakClass::Prohibited {
             #[cfg(not(feature = "complex-scripts"))]
-            if last.is_some_and(|c| lb.get(c) == props::LineBreak::ComplexContext) {
+            if s.word_break != WordBreak::Manual
+                && last.is_some_and(|c| lb.get(c) == props::LineBreak::ComplexContext)
+            {
                 o.class = BreakClass::Allowed;
                 o.min_content = true;
             }
@@ -797,6 +837,97 @@ mod tests {
             .class,
             BreakClass::Allowed
         );
+    }
+
+    #[test]
+    fn manual_suppresses_thai_lexical_breaks_but_preserves_explicit_and_anywhere_breaks() {
+        let thai = "ภาษาไทยภาษาไทย";
+        let boundary = "ภาษา".len() as u32;
+        assert_eq!(
+            analyze(thai, InlineStyle::default(), true)
+                .at(boundary)
+                .class,
+            BreakClass::Allowed,
+            "normal uses Thai lexical word boundaries"
+        );
+        let manual = InlineStyle {
+            word_break: WordBreak::Manual,
+            ..InlineStyle::default()
+        };
+        let blocked = analyze(thai, manual.clone(), true).at(boundary);
+        assert_eq!(blocked.class, BreakClass::Prohibited);
+        assert!(!blocked.min_content);
+        assert_eq!(
+            analyze("ภาษา\u{200B}ไทย", manual.clone(), true)
+                .at(("ภาษา\u{200B}".len()) as u32)
+                .class,
+            BreakClass::Allowed,
+            "authored zero-width space remains a break opportunity"
+        );
+        assert_eq!(
+            analyze(
+                thai,
+                InlineStyle {
+                    line_break: LineBreak::Anywhere,
+                    ..manual.clone()
+                },
+                true
+            )
+            .at(boundary)
+            .class,
+            BreakClass::Allowed
+        );
+        let emergency = analyze(
+            thai,
+            InlineStyle {
+                overflow_wrap: OverflowWrap::Anywhere,
+                ..manual.clone()
+            },
+            true,
+        )
+        .at(boundary);
+        assert_eq!(emergency.class, BreakClass::Emergency);
+        assert!(emergency.min_content);
+        assert_eq!(
+            analyze("日本語", manual, true).at(3).class,
+            BreakClass::Allowed,
+            "manual must retain normal CJK breaks"
+        );
+    }
+
+    #[test]
+    fn manual_treats_thai_as_alphabetic_at_other_class_boundaries() {
+        let lb = icu_properties::CodePointMapData::<icu_properties::props::LineBreak>::new();
+        for c in ['a', 'Ā', 'ꓐ', '𐐀'] {
+            assert_eq!(
+                lb.get(c),
+                icu_properties::props::LineBreak::Alphabetic,
+                "{c:?}"
+            );
+        }
+        let manual = InlineStyle {
+            word_break: WordBreak::Manual,
+            ..InlineStyle::default()
+        };
+        for text in ["ภาษา๐", "ภาษา§"] {
+            assert_eq!(
+                analyze(text, InlineStyle::default(), true)
+                    .at("ภาษา".len() as u32)
+                    .class,
+                BreakClass::Allowed,
+                "ICU normal initially permits this SA boundary in {text:?}"
+            );
+        }
+        for (text, at) in [
+            ("ภาษา๐", "ภาษา".len() as u32),
+            ("ภาษา§", "ภาษา".len() as u32),
+            ("ภาษา$", "ภาษา".len() as u32),
+            ("$ภาษา", "$".len() as u32),
+        ] {
+            let result = analyze(text, manual.clone(), true).at(at);
+            assert_eq!(result.class, BreakClass::Prohibited, "{text:?}");
+            assert!(!result.min_content, "{text:?}");
+        }
     }
 
     #[test]
