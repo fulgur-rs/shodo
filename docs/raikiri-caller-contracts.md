@@ -97,8 +97,12 @@ LTR text, the static normal 400-weight Latin fixture, absolute spacing,
 computed line height, normal/pre legacy whitespace with supported
 collapse/preserve and wrapping longhands, supported case transforms,
 and a single solid underline with font offset. Other fields of the
-raikiri computed style are not generally projected. Structural display
-changes in the alternate cascade are rejected. Font fallback, font axes,
+raikiri computed style are not generally projected. Display checks require
+a block IFC root and inline span/a/em descendants in both the normal and
+alternate cascades; other display values for these elements are rejected.
+The caller handles br as an unconditional forced break before inspecting
+display in either cascade, so even `br { display: none }` still produces
+a break in this fixed example caller. Font fallback, font axes,
 vertical/RTL layout, full decoration layering, block descendants, ch or
 percentage/calc used-value resolution, and general CSS layout require
 separate integration work. Mixed noninitial legacy whitespace and
