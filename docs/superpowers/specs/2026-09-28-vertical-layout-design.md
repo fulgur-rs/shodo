@@ -99,11 +99,17 @@ preserved tabも内部の水平tab stopとsource cutを保持し、glyphが無�
 
 ## 公開出力の契約
 
+2026-09-29（`shodo-hz6`）: この節の `glyph_origin` 条件を現行実装と
+[公開ガイド](../../vertical-layout.md)に合わせて訂正した。過去の検証・レビュー記録は当時のまま保持する。
+
 既存Glyphのinline_positionとblock_offsetの結果は横書き互換を維持する。
 `GlyphRunView::glyph_origin(index: usize) -> Option<(f32, f32)>` は、
 font outline用の論理inline/block originを返す。block座標にはrunのbaselineを含める。
-物理inline軸が負の場合は既存glyph positionに元のshaping advanceを加えたoriginを使う。
-layout spacing込みのGlyph.advanceを加算してはいけない。
+`Line::used_direction()` がRTLで、`GlyphRunView::orientation()` が `Combined` でない場合だけ、
+既存glyphのinline_positionにGlyphStoreの元のshaping advanceを加えたoriginを使う。
+TCY（`Combined`）は内部の水平paint penを使うため、この加算を行わない。
+SidewaysLr/LTRは物理inline軸が負でも加算しない。物理軸の符号やcomputed directionだけで判定しない。
+layout spacing込みの `Glyph.advance`、CSS trackingやjustificationを再加算してはいけない。
 `GlyphRunView::orientation()` は公開GlyphOrientationを返す。
 `GlyphRunView::glyph_transform()` はGlyphTransformを返す。
 GlyphTransformはfont-size適用済みのoutline（x右、y下）の局所座標を、
