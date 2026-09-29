@@ -432,7 +432,13 @@ fn source_ids_survive_reflow_and_shifted_repeated_transformed_text() {
     let mut counter = 10;
     let mut original_ids = None;
     let mut previous_position = None;
-    for (prefix, width) in [(true, 1000.0), (false, 16.0), (false, 1000.0)] {
+    // Keep the expected reflow independent of the width input so a mistaken
+    // wide value in the narrow step cannot silently remove its coverage.
+    for (prefix, width, expect_multiple_lines) in [
+        (true, 1000.0, false),
+        (false, 16.0, true),
+        (false, 1000.0, false),
+    ] {
         let mut builder = ParagraphBuilder::new(&s, &limits);
         if prefix {
             builder.push_text(
@@ -465,6 +471,11 @@ fn source_ids_survive_reflow_and_shifted_repeated_transformed_text() {
             &AtomicSizes::EMPTY,
         );
         let layout = AccessibleLayout::new(&lines);
+        if expect_multiple_lines {
+            assert!(layout.lines().len() > 1, "narrow step must actually reflow");
+        } else {
+            assert_eq!(layout.lines().len(), 1, "wide step must stay on one line");
+        }
         let at = |offset, affinity| {
             layout
                 .lines()
