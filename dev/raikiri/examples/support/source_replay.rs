@@ -79,6 +79,7 @@ fn text_style(
     let word_break = match cv.word_break {
         css::WordBreak::Normal => s::WordBreak::Normal,
         css::WordBreak::KeepAll => s::WordBreak::KeepAll,
+        css::WordBreak::Manual => s::WordBreak::Manual,
         _ => return Err("word-break outside the verified source input footprint".into()),
     };
     Ok(s::InlineStyle {
@@ -239,4 +240,17 @@ pub fn project(
         .build(context, fonts)
         .map_err(|e| format!("{e:?}"))?;
     Ok(Prepared { paragraph, options })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn manual_word_break_projects_from_pinned_raikiri_style() {
+        let mut values = ComputedValues::initial();
+        values.word_break = css::WordBreak::Manual;
+        let projected = text_style(&values, diagnostic::InputProfile::Plain).unwrap();
+        assert_eq!(projected.word_break, s::WordBreak::Manual);
+    }
 }

@@ -200,12 +200,16 @@ mod tests {
 
     const HTML: &str = "<style>#parent{font-family:'Shodo Fixture Latin';font-size:20px;word-spacing:2ch;letter-spacing:0px;text-indent:3ch}#child{font-family:'Shodo Fixture CJK';font-size:40px;margin-left:4ch;margin-right:4ch;padding-left:5ch;padding-right:5ch}</style><div id=parent><span id=child>0 0</span></div>";
     fn close(actual: f32, expected: f32) {
-        // Caller lengths are rounded to 1/64px. The two inline edges can
-        // together differ from the unrounded font-table oracle by one unit.
+        // The caller rounds each applied length to 1/64px.
         assert!(
             (actual - expected).abs() < 1.0 / 64.0,
             "{actual} != {expected}"
         );
+    }
+    fn rounded_ch(advance: f32, size: f32) -> f32 {
+        // The pinned fixtures use 1000 units per em. Match the glyph's
+        // layout-unit rounding before multiplying by a CSS ch factor.
+        ((advance * (size / 1000.0)) * 64.0).round() / 64.0
     }
     #[test]
     fn inherited_ch_spacing_uses_declaring_font_in_actual_lines() {
@@ -217,8 +221,11 @@ mod tests {
         )
         .unwrap();
         // Raw pinned Latin hmtx: U+0030 gid19, advance572/1000em.
-        // Parent20px means2ch=22.88px, even though the text uses CJK40px.
-        close(full.inline_size() - zero.inline_size(), 22.88);
+        // Parent20px supplies ch, even though the text uses CJK40px.
+        close(
+            full.inline_size() - zero.inline_size(),
+            2.0 * rounded_ch(572.0, 20.0),
+        );
         let runs: Vec<_> = full
             .fragments()
             .filter_map(|f| match f {
@@ -247,7 +254,10 @@ mod tests {
                 })
                 .unwrap()
         };
-        close(first(&full) - first(&no_indent), 34.32);
+        close(
+            first(&full) - first(&no_indent),
+            3.0 * rounded_ch(572.0, 20.0),
+        );
         // Raw pinned CJK hmtx: U+0030 gid17, advance555/1000em.
         // Each4ch margin /5ch padding uses child's40px, not parent's20px.
         let no_margin = layout(
@@ -266,10 +276,14 @@ mod tests {
             &fonts.collection,
         )
         .unwrap();
-        close(full.inline_size() - no_margin.inline_size(), 177.6);
-        close(full.inline_size() - no_padding.inline_size(), 222.0);
-        close(first(&full) - first(&no_margin), 88.8);
-        close(first(&full) - first(&no_padding), 111.0);
+        let child_ch = rounded_ch(555.0, 40.0);
+        close(full.inline_size() - no_margin.inline_size(), 8.0 * child_ch);
+        close(
+            full.inline_size() - no_padding.inline_size(),
+            10.0 * child_ch,
+        );
+        close(first(&full) - first(&no_margin), 4.0 * child_ch);
+        close(first(&full) - first(&no_padding), 5.0 * child_ch);
     }
 
     fn first_run(line: &shodo::Line) -> f32 {

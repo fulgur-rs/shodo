@@ -50,3 +50,7 @@ test = true
 [[example]]
 name = "vertical_wiring"
 test = true
+
+[[example]]
+name = "style_handoff"
+test = true
