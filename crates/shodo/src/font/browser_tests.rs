@@ -679,6 +679,124 @@ fn font_units_report_selected_fallback_face_and_css_missing_defaults() {
 }
 
 #[test]
+fn ch_advance_matches_shaped_zero_at_exact_fit_width() {
+    let fonts = no_system();
+    let id = fonts
+        .register_face(test_font("Exact", &['0'], 1000), 0, descriptor("Exact"))
+        .unwrap();
+    let query = query(&["Exact"], 400.);
+    let style = crate::style::ParagraphStyle {
+        root: crate::style::InlineStyle {
+            font_size: 16.0,
+            font_families: query.families.clone(),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut builder = crate::ParagraphBuilder::new(&style, &Limits::default());
+    builder.push_text(
+        crate::node::TextSource::Generated {
+            node: crate::node::NodeId(1),
+        },
+        "0",
+    );
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    assert_eq!(paragraph.data.runs[0].font, id);
+    let shaped = paragraph.data.glyphs.advance[0].to_f32();
+    assert_eq!(shaped, 16.0);
+
+    let unit = fonts.resolve_ch(&query, 16.0);
+    assert_eq!(unit.id, Some(id));
+    assert_eq!(unit.advance, shaped);
+    let ten_ch = ChLength {
+        query,
+        size: 16.0,
+        factor: 10.0,
+    }
+    .resolve(&fonts)
+    .unwrap();
+    assert_eq!(ten_ch.advance, 160.0);
+}
+
+#[test]
+fn ch_advance_matches_shaping_at_intermediate_hvar_axis() {
+    let base = test_font("Variable Zero", &['0'], 1000);
+    let mut tables = Vec::new();
+    for n in 0..u16::from_be_bytes(base[4..6].try_into().unwrap()) as usize {
+        let at = 12 + n * 16;
+        let offset = u32::from_be_bytes(base[at + 8..at + 12].try_into().unwrap()) as usize;
+        let len = u32::from_be_bytes(base[at + 12..at + 16].try_into().unwrap()) as usize;
+        tables.push((
+            base[at..at + 4].try_into().unwrap(),
+            base[offset..offset + len].to_vec(),
+        ));
+    }
+    let mut fvar = Vec::new();
+    for value in [1u16, 0, 16, 2, 1, 20, 0, 8] {
+        fvar.extend(value.to_be_bytes());
+    }
+    fvar.extend(b"wght");
+    for value in [400i32, 400, 900] {
+        fvar.extend((value << 16).to_be_bytes());
+    }
+    fvar.extend([0, 0, 1, 0]);
+    let mut hvar = Vec::new();
+    for value in [1u16, 0] {
+        hvar.extend(value.to_be_bytes());
+    }
+    for value in [20u32, 0, 0, 0] {
+        hvar.extend(value.to_be_bytes());
+    }
+    hvar.extend(1u16.to_be_bytes());
+    hvar.extend(12u32.to_be_bytes());
+    hvar.extend(1u16.to_be_bytes());
+    hvar.extend(22u32.to_be_bytes());
+    for value in [1u16, 1, 0, 16384, 16384, 2, 1, 1, 0] {
+        hvar.extend(value.to_be_bytes());
+    }
+    for _ in 0..2 {
+        hvar.extend(1i16.to_be_bytes());
+    }
+    tables.push((*b"fvar", fvar));
+    tables.push((*b"HVAR", hvar));
+    tables.sort_by_key(|t| t.0);
+    let fonts = no_system();
+    let mut desc = descriptor("Variable Zero");
+    desc.weight = (400., 900.);
+    let id = fonts
+        .register_face(sfnt::build_sfnt(&tables), 0, desc)
+        .unwrap();
+    let query = query(&["Variable Zero"], 650.);
+    let style = crate::style::ParagraphStyle {
+        root: crate::style::InlineStyle {
+            font_size: 16.,
+            font_families: query.families.clone(),
+            font_weight: 650.,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut builder = crate::ParagraphBuilder::new(&style, &Limits::default());
+    builder.push_text(
+        crate::node::TextSource::Generated {
+            node: crate::node::NodeId(1),
+        },
+        "0",
+    );
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    assert_eq!(paragraph.data.runs[0].font, id);
+    let shaped = paragraph.data.glyphs.advance[0].to_f32();
+    assert_eq!(shaped, 16.015625);
+    let unit = fonts.resolve_ch(&query, 16.);
+    assert_eq!(unit.id, Some(id));
+    assert_eq!(unit.advance, shaped);
+}
+
+#[test]
 fn shaper_cache_is_shared_bounded_and_zero_capacity_still_returns_data() {
     let limits = Limits {
         max_shaper_cache_entries: Some(1),

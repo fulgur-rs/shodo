@@ -1,6 +1,7 @@
 //! Size and variation-dependent metrics, including CSS ch/ic units.
 
 use super::{FontCollection, FontId, FontMetrics, FontQuery, NormalizedCoord};
+use crate::geometry::{LayoutUnit, Saturation};
 use skrifa::{
     FontRef, MetadataProvider,
     instance::{LocationRef, Size},
@@ -9,6 +10,7 @@ use skrifa::{
 
 /// A CSS unit's advance in pixels and the face which actually supplies it.
 /// `id` is None when the CSS fallback advance is used.
+/// A selected character's advance uses the same 1/64px rounding as shaping.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FontUnit {
     pub id: Option<FontId>,
@@ -132,21 +134,58 @@ impl FontCollection {
         let Ok(font) = FontRef::from_index(data.data.as_ref(), data.index) else {
             return missing;
         };
-        let Some(glyph) = font.charmap().map(ch) else {
+        if font.charmap().map(ch).is_none() {
+            return missing;
+        }
+        let Ok(shape_font) = harfrust::FontRef::from_index(data.data.as_ref(), data.index) else {
             return missing;
         };
-        let location = font
-            .axes()
-            .location(found.variations.iter().map(|v| (Tag::new(&v.tag), v.value)));
-        match font
-            .glyph_metrics(Size::new(size), location.coords())
-            .advance_width(glyph)
-        {
-            Some(advance) => FontUnit {
-                id: Some(found.id),
-                advance,
-            },
-            None => missing,
+        let Some(shaper_data) = self.shaper_data(found.id) else {
+            return missing;
+        };
+        let instance = harfrust::ShaperInstance::from_variations(
+            &shape_font,
+            found.variations.iter().map(|v| harfrust::Variation {
+                tag: harfrust::Tag::new(&v.tag),
+                value: v.value,
+            }),
+        );
+        let shaper = shaper_data
+            .shaper(&shape_font)
+            .instance(Some(&instance))
+            .build();
+        let upem = shaper.units_per_em();
+        if upem == 0 {
+            return missing;
+        }
+        let mut buffer = harfrust::UnicodeBuffer::new();
+        buffer.push_str(ch.encode_utf8(&mut encoded));
+        buffer.set_direction(harfrust::Direction::LeftToRight);
+        buffer.set_script(
+            harfrust::Script::from_iso15924_tag(harfrust::Tag::new(&query.script))
+                .unwrap_or(harfrust::script::UNKNOWN),
+        );
+        if let Some(language) = query.language.as_ref().and_then(|l| l.parse().ok()) {
+            buffer.set_language(language);
+        }
+        let shaped = shaper.shape(buffer, harfrust::ShapeOptions::default());
+        if shaped.glyph_positions().is_empty() {
+            return missing;
+        }
+        let mut sat = Saturation::default();
+        let scale = size / upem as f32;
+        let advance = shaped
+            .glyph_positions()
+            .iter()
+            .fold(LayoutUnit::ZERO, |sum, pos| {
+                sum.add(
+                    LayoutUnit::from_f32_round(pos.x_advance as f32 * scale, &mut sat),
+                    &mut sat,
+                )
+            });
+        FontUnit {
+            id: Some(found.id),
+            advance: advance.to_f32(),
         }
     }
 }
