@@ -16,11 +16,12 @@ digests, line ranges/reasons, source and binary hashes, and environment are in
 - `build` times `Workload::build` with an already loaded, fixed font collection
   and a reused `LayoutContext`. `break_all` times `Paragraph::break_all` on a
   built paragraph at the fixture width with default line options. A sample
-  ends before `black_box` and output destruction. Digest and line-semantic
-  inspection happen outside the timed interval. These are warm operation
+  ends before `black_box` and output destruction. One digest and line-semantic
+  snapshot per pass is inspected outside the timed interval; individual timed
+  outputs are black-boxed but not each digested. These are warm operation
   timings, not initialization or end-to-end browser timings.
 - Both revisions used `cargo build --offline --release`, Rust 1.96.0, the
-  same resolved Cargo.lock (SHA-256
+  same [resolved Cargo.lock](shodo-6j5-Cargo.lock) (SHA-256
   `2b18280c59bba45cafc0be0d077a9aaee8bf1814c4639675312c23204f81fdc5`),
   and **separate empty target directories**. An attempted shared target
   directory incorrectly reused the base binary and was discarded. The
@@ -56,13 +57,14 @@ layout speedup.
 
 ## Reproduction
 
-Use the two commits above as separate worktrees and copy the measurement
-program to `dev/bench/examples/spacing_summary_elapsed.rs` in each. Build
-each in an **independent empty** `CARGO_TARGET_DIR`:
+Use the two commits above as separate worktrees. Copy the measurement program
+to `dev/bench/examples/spacing_summary_elapsed.rs` and the saved lockfile to
+`Cargo.lock` in **both** worktrees. Verify the saved lockfile SHA-256 shown
+above. Build each in an **independent empty** `CARGO_TARGET_DIR`:
 
 ```sh
-CARGO_TARGET_DIR=/tmp/shodo-6j5-base-target cargo build --offline --release -p shodo-bench --example spacing_summary_elapsed
-CARGO_TARGET_DIR=/tmp/shodo-6j5-changed-target cargo build --offline --release -p shodo-bench --example spacing_summary_elapsed
+CARGO_TARGET_DIR=/tmp/shodo-6j5-base-target cargo build --offline --locked --release -p shodo-bench --example spacing_summary_elapsed
+CARGO_TARGET_DIR=/tmp/shodo-6j5-changed-target cargo build --offline --locked --release -p shodo-bench --example spacing_summary_elapsed
 ```
 
 From the respective worktrees, run each built binary as
