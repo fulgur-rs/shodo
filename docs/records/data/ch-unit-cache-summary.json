@@ -1,0 +1,426 @@
+{
+  "time": {
+    "ch": {
+      "post87_process_median_ns": 810260.0,
+      "cached_process_median_ns": 4456.875,
+      "paired_ratio_median": 0.0055102893880319016,
+      "paired_ratio_min": 0.005401132718840662,
+      "paired_ratio_max": 0.009276729849465615,
+      "pairs_cached_slower": 0,
+      "pair_medians": [
+        {
+          "post87_ns": 807719.375,
+          "cached_ns": 4452.5,
+          "cached_over_post87": 0.005512434315445262
+        },
+        {
+          "post87_ns": 820265.25,
+          "cached_ns": 4435.25,
+          "cached_over_post87": 0.005407092400903244
+        },
+        {
+          "post87_ns": 810583.0,
+          "cached_ns": 4635.875,
+          "cached_over_post87": 0.005719186067312046
+        },
+        {
+          "post87_ns": 802594.5,
+          "cached_ns": 4461.375,
+          "cached_over_post87": 0.005558691219538634
+        },
+        {
+          "post87_ns": 809937.0,
+          "cached_ns": 4461.25,
+          "cached_over_post87": 0.005508144460618542
+        },
+        {
+          "post87_ns": 821828.0,
+          "cached_ns": 4583.5,
+          "cached_over_post87": 0.005577201068836788
+        },
+        {
+          "post87_ns": 816310.25,
+          "cached_ns": 4409.0,
+          "cached_over_post87": 0.005401132718840662
+        },
+        {
+          "post87_ns": 807597.125,
+          "cached_ns": 4435.125,
+          "cached_over_post87": 0.005491754319952538
+        },
+        {
+          "post87_ns": 802873.875,
+          "cached_ns": 4426.375,
+          "cached_over_post87": 0.005513163571301906
+        },
+        {
+          "post87_ns": 800944.375,
+          "cached_ns": 4409.0,
+          "cached_over_post87": 0.005504751812508827
+        },
+        {
+          "post87_ns": 814066.5,
+          "cached_ns": 7551.875,
+          "cached_over_post87": 0.009276729849465615
+        },
+        {
+          "post87_ns": 1473322.125,
+          "cached_ns": 7979.75,
+          "cached_over_post87": 0.005416161112764121
+        }
+      ]
+    },
+    "ic": {
+      "post87_process_median_ns": 230884.9375,
+      "cached_process_median_ns": 1706.8125,
+      "paired_ratio_median": 0.007336317644023855,
+      "paired_ratio_min": 0.006387458298762609,
+      "paired_ratio_max": 0.01177729319161273,
+      "pairs_cached_slower": 0,
+      "pair_medians": [
+        {
+          "post87_ns": 233394.875,
+          "cached_ns": 1685.0,
+          "cached_over_post87": 0.007219524421862305
+        },
+        {
+          "post87_ns": 234940.125,
+          "cached_ns": 1693.75,
+          "cached_over_post87": 0.007209283641949199
+        },
+        {
+          "post87_ns": 229928.875,
+          "cached_ns": 1763.625,
+          "cached_over_post87": 0.007670306741595635
+        },
+        {
+          "post87_ns": 228112.875,
+          "cached_ns": 1702.5,
+          "cached_over_post87": 0.007463410384003972
+        },
+        {
+          "post87_ns": 231273.375,
+          "cached_ns": 1685.0,
+          "cached_over_post87": 0.007285750034996463
+        },
+        {
+          "post87_ns": 235691.0,
+          "cached_ns": 1711.125,
+          "cached_over_post87": 0.007260035385313822
+        },
+        {
+          "post87_ns": 230522.625,
+          "cached_ns": 1676.375,
+          "cached_over_post87": 0.007272062774749333
+        },
+        {
+          "post87_ns": 231247.25,
+          "cached_ns": 1719.875,
+          "cached_over_post87": 0.007437385741884498
+        },
+        {
+          "post87_ns": 229291.5,
+          "cached_ns": 1693.75,
+          "cached_over_post87": 0.007386885253051247
+        },
+        {
+          "post87_ns": 230155.875,
+          "cached_ns": 1728.625,
+          "cached_over_post87": 0.007510670757372585
+        },
+        {
+          "post87_ns": 229806.625,
+          "cached_ns": 2706.5,
+          "cached_over_post87": 0.01177729319161273
+        },
+        {
+          "post87_ns": 433290.5,
+          "cached_ns": 2767.625,
+          "cached_over_post87": 0.006387458298762609
+        }
+      ]
+    },
+    "units": {
+      "post87_process_median_ns": 1090904.8125,
+      "cached_process_median_ns": 6473.8125,
+      "paired_ratio_median": 0.005952625989773576,
+      "paired_ratio_min": 0.005497490640027577,
+      "paired_ratio_max": 0.00975014276000775,
+      "pairs_cached_slower": 0,
+      "pair_medians": [
+        {
+          "post87_ns": 1066485.375,
+          "cached_ns": 6513.0,
+          "cached_over_post87": 0.0061069754472723075
+        },
+        {
+          "post87_ns": 1103520.5,
+          "cached_ns": 6504.375,
+          "cached_over_post87": 0.005894204049675561
+        },
+        {
+          "post87_ns": 1067437.0,
+          "cached_ns": 6443.25,
+          "cached_over_post87": 0.006036187615756246
+        },
+        {
+          "post87_ns": 1043070.0,
+          "cached_ns": 6513.0,
+          "cached_over_post87": 0.006244067991601714
+        },
+        {
+          "post87_ns": 1106794.5,
+          "cached_ns": 6443.25,
+          "cached_over_post87": 0.005821541397251251
+        },
+        {
+          "post87_ns": 1089612.625,
+          "cached_ns": 6513.0,
+          "cached_over_post87": 0.005977353648963089
+        },
+        {
+          "post87_ns": 1085439.5,
+          "cached_ns": 6434.375,
+          "cached_over_post87": 0.005927898330584063
+        },
+        {
+          "post87_ns": 1092197.0,
+          "cached_ns": 6443.25,
+          "cached_over_post87": 0.005899347828276401
+        },
+        {
+          "post87_ns": 1047653.5,
+          "cached_ns": 6443.25,
+          "cached_over_post87": 0.006150172743182742
+        },
+        {
+          "post87_ns": 1172012.0,
+          "cached_ns": 6443.125,
+          "cached_over_post87": 0.005497490640027577
+        },
+        {
+          "post87_ns": 1136303.875,
+          "cached_ns": 11079.125,
+          "cached_over_post87": 0.00975014276000775
+        },
+        {
+          "post87_ns": 1943639.0,
+          "cached_ns": 11323.625,
+          "cached_over_post87": 0.0058259918637154325
+        }
+      ]
+    },
+    "layout_only": {
+      "post87_process_median_ns": 1940050.875,
+      "cached_process_median_ns": 1931525.4375,
+      "paired_ratio_median": 1.002004213858061,
+      "paired_ratio_min": 0.9624895008186934,
+      "paired_ratio_max": 1.941035348541559,
+      "pairs_cached_slower": 6,
+      "pair_medians": [
+        {
+          "post87_ns": 1925488.125,
+          "cached_ns": 1933468.0,
+          "cached_over_post87": 1.0041443387244988
+        },
+        {
+          "post87_ns": 1945612.25,
+          "cached_ns": 1908900.125,
+          "cached_over_post87": 0.9811308111367
+        },
+        {
+          "post87_ns": 1945978.875,
+          "cached_ns": 1918530.0,
+          "cached_over_post87": 0.9858945668153771
+        },
+        {
+          "post87_ns": 1920363.375,
+          "cached_ns": 1929582.875,
+          "cached_over_post87": 1.0048009143061272
+        },
+        {
+          "post87_ns": 1927732.0,
+          "cached_ns": 1927470.0,
+          "cached_over_post87": 0.9998640889916233
+        },
+        {
+          "post87_ns": 1939562.0,
+          "cached_ns": 1956281.0,
+          "cached_over_post87": 1.008619987399217
+        },
+        {
+          "post87_ns": 1952430.875,
+          "cached_ns": 1927924.0,
+          "cached_over_post87": 0.9874480191264133
+        },
+        {
+          "post87_ns": 1926448.5,
+          "cached_ns": 1905669.75,
+          "cached_over_post87": 0.9892139603005219
+        },
+        {
+          "post87_ns": 1919813.25,
+          "cached_ns": 1935930.0,
+          "cached_over_post87": 1.0083949571657556
+        },
+        {
+          "post87_ns": 2021437.375,
+          "cached_ns": 1945612.25,
+          "cached_over_post87": 0.9624895008186934
+        },
+        {
+          "post87_ns": 1940539.75,
+          "cached_ns": 3766656.25,
+          "cached_over_post87": 1.941035348541559
+        },
+        {
+          "post87_ns": 3978460.375,
+          "cached_ns": 4630513.25,
+          "cached_over_post87": 1.1638957821717655
+        }
+      ]
+    },
+    "full_layout": {
+      "post87_process_median_ns": 3160535.125,
+      "cached_process_median_ns": 1951767.25,
+      "paired_ratio_median": 0.6235960673976659,
+      "paired_ratio_min": 0.6122820383483153,
+      "paired_ratio_max": 0.6782057409902088,
+      "pairs_cached_slower": 0,
+      "pair_medians": [
+        {
+          "post87_ns": 3133610.0,
+          "cached_ns": 1943962.125,
+          "cached_over_post87": 0.6203586677984816
+        },
+        {
+          "post87_ns": 3163809.125,
+          "cached_ns": 1937143.5,
+          "cached_over_post87": 0.6122820383483153
+        },
+        {
+          "post87_ns": 3117135.375,
+          "cached_ns": 1925994.625,
+          "cached_over_post87": 0.6178732692993804
+        },
+        {
+          "post87_ns": 3157261.125,
+          "cached_ns": 1936628.375,
+          "cached_over_post87": 0.6133887246972644
+        },
+        {
+          "post87_ns": 3166663.875,
+          "cached_ns": 1989492.25,
+          "cached_over_post87": 0.6282612643882199
+        },
+        {
+          "post87_ns": 3164516.25,
+          "cached_ns": 1974405.75,
+          "cached_over_post87": 0.6239202437339356
+        },
+        {
+          "post87_ns": 3154580.75,
+          "cached_ns": 1947410.625,
+          "cached_over_post87": 0.6173278731254541
+        },
+        {
+          "post87_ns": 3122199.0,
+          "cached_ns": 1945978.875,
+          "cached_over_post87": 0.6232718910613961
+        },
+        {
+          "post87_ns": 3123578.5,
+          "cached_ns": 1956123.875,
+          "cached_over_post87": 0.6262445061009352
+        },
+        {
+          "post87_ns": 3178816.875,
+          "cached_ns": 2146153.875,
+          "cached_over_post87": 0.6751423436431833
+        },
+        {
+          "post87_ns": 6004682.125,
+          "cached_ns": 3791442.375,
+          "cached_over_post87": 0.6314143356922495
+        },
+        {
+          "post87_ns": 6158567.375,
+          "cached_ns": 4176775.75,
+          "cached_over_post87": 0.6782057409902088
+        }
+      ]
+    }
+  },
+  "alloc": {
+    "ch": {
+      "post87": {
+        "calls": 5184,
+        "allocated_bytes": 1182528,
+        "peak_extra_bytes": 2752,
+        "net_bytes": 0
+      },
+      "cached": {
+        "calls": 0,
+        "allocated_bytes": 0,
+        "peak_extra_bytes": 0,
+        "net_bytes": 0
+      }
+    },
+    "ic": {
+      "post87": {
+        "calls": 1440,
+        "allocated_bytes": 301920,
+        "peak_extra_bytes": 1984,
+        "net_bytes": 0
+      },
+      "cached": {
+        "calls": 0,
+        "allocated_bytes": 0,
+        "peak_extra_bytes": 0,
+        "net_bytes": 0
+      }
+    },
+    "units": {
+      "post87": {
+        "calls": 6624,
+        "allocated_bytes": 1484448,
+        "peak_extra_bytes": 2752,
+        "net_bytes": 0
+      },
+      "cached": {
+        "calls": 0,
+        "allocated_bytes": 0,
+        "peak_extra_bytes": 0,
+        "net_bytes": 0
+      }
+    },
+    "layout_only": {
+      "post87": {
+        "calls": 15211,
+        "allocated_bytes": 2604484,
+        "peak_extra_bytes": 669328,
+        "net_bytes": 0
+      },
+      "cached": {
+        "calls": 15211,
+        "allocated_bytes": 2604484,
+        "peak_extra_bytes": 669328,
+        "net_bytes": 0
+      }
+    },
+    "full_layout": {
+      "post87": {
+        "calls": 21835,
+        "allocated_bytes": 4088932,
+        "peak_extra_bytes": 669328,
+        "net_bytes": 0
+      },
+      "cached": {
+        "calls": 15211,
+        "allocated_bytes": 2604484,
+        "peak_extra_bytes": 669328,
+        "net_bytes": 0
+      }
+    }
+  }
+}
