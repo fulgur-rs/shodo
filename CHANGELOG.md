@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2](https://github.com/fulgur-rs/shodo/compare/v0.0.1...v0.0.2) - 2026-09-29
+
+### Other
+
+- *(line)* defer edge adjustment to break candidates and walk selectable clusters once
+- consolidate Python tools under tools/, reorganize docs/
+- split dev/fixtures into fixtures/harness/raikiri crates
+- move shodo to crates/shodo, make the root a virtual workspace
+
 ## [0.0.1](https://github.com/fulgur-rs/shodo/compare/v0.0.0...v0.0.1) - 2026-09-28
 
 ### Added
