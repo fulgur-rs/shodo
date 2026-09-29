@@ -38,6 +38,7 @@ developer-facing verification procedures; the crates behind them are
 | Exact image/geometry checks and intentional baseline updates | [Snapshot tests](dev/snapshot-tests.md) |
 | Saved Chrome measurements, known differences, and recollection | [Browser comparison](dev/browser-comparison.md) |
 | Standalone release timing and allocation measurements | [Performance harness](dev/performance-measurements.md) |
+| Internal module boundaries and required regression checks | [Module reorganization](dev/module-reorganization.md) |
 
 Snapshot and browser checks cover fixed cases; they do not certify general
 CSS or WPT conformance.
