@@ -43,10 +43,19 @@ pub fn owner(field: &str) -> Option<Owner> {
     Some(match field {
         "float" | "clear" => Owner::Flow,
         "position" | "left" | "top" | "z_index" => Owner::Positioned,
-        "background_color" | "background_image" | "background_position" | "background_repeat"
-        | "background_size" | "outline" | "outline_offset" | "overflow" => Owner::BoxPaint,
-        "text_decoration_line" | "text_decoration_style" | "text_decoration_color"
-        | "text_decoration_thickness" | "text_underline_offset" => Owner::Decoration,
+        "background_color"
+        | "background_image"
+        | "background_position"
+        | "background_repeat"
+        | "background_size"
+        | "outline"
+        | "outline_offset"
+        | "overflow" => Owner::BoxPaint,
+        "text_decoration_line"
+        | "text_decoration_style"
+        | "text_decoration_color"
+        | "text_decoration_thickness"
+        | "text_underline_offset" => Owner::Decoration,
         "hanging_punctuation" => Owner::HangingPunctuation,
         "cssom_writing_mode" | "text_orientation" => Owner::VerticalText,
         _ => return None,
