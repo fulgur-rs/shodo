@@ -167,7 +167,7 @@ completed core contracts:
 
 | Issue | Scope | Cutover status |
 | --- | --- | --- |
-| shodo-9an.1 | None/First → real production LineOptions, retaining native leading U+3000 behavior | required by shodo-p2m.6; waits for S4 adoption policy |
+| shodo-9an.1 | None/First → real production LineOptions, retaining native leading U+3000 behavior. The representative caller now wires None/First ([record](raikiri-hanging-punctuation.md)); production adoption is not done | required by shodo-p2m.6; production adoption waits for S4 adoption policy |
 | shodo-3v2 | resolved writing-mode/text-orientation → existing vertical APIs | waits for S4; actual native/candidate effects must determine cutover necessity |
 | shodo-0zm | separate text validation from BFC/paint properties; preserve actual box effects and source underlines | waits for S4; compare rendering before deciding cutover necessity |
 
@@ -177,7 +177,12 @@ was wrong. The pinned `property/parse/text.rs:1431` accepts **none/first** and
 the glyph and shifting the first line by its advance. The 11 residual attempts
 in four documents are **First already parsed but not wired by S4**. The broader
 last/force-end/allow-end/combined CSS values remain separate upstream work in
-`shodo-9an`; the existing acceptance was retained when correcting its premise.
+`shodo-9an` (they need raikiri-style parser support); the existing acceptance
+was retained when correcting its premise. The representative caller now maps
+None/First into `LineOptions` (see
+[raikiri hanging-punctuation](raikiri-hanging-punctuation.md)); that does not
+satisfy the cutover dependency, which still waits for the S4 adoption policy
+and `shodo-p2m.6`.
 
 `hanging-punctuation-first-002.html` is registered in the pinned baseline.
 The original native static-screen pair has 0 changed pixels and satisfies its
