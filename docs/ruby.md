@@ -200,7 +200,7 @@ fixtures exclude ruby and are not evidence of ruby interoperability.
 Run the real-font example with:
 
 ```sh
-cargo run -p shodo-fixtures --example ruby_png -- target/ruby-png
+cargo run -p shodo-harness --example ruby_png -- target/ruby-png
 ```
 
 It writes horizontal, VerticalRl and VerticalLr PNG/JSON pairs. Each records

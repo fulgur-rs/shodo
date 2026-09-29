@@ -103,7 +103,7 @@ negotiation API. Applications choose backends appropriate for their fonts.
 From the repository root, choose an explicit destination:
 
 ```sh
-cargo run -p shodo-fixtures --example emoji_png -- /tmp/shodo-emoji.png
+cargo run -p shodo-harness --example emoji_png -- /tmp/shodo-emoji.png
 ```
 
 The PNG contains all representative sequences mixed with Japanese/Latin. Standard

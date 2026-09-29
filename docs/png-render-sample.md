@@ -3,7 +3,7 @@
 Run from the repository root with an optional output path:
 
 ```sh
-cargo +stable run --offline -p shodo-fixtures --example render_png -- /tmp/shodo-sample.png
+cargo +stable run --offline -p shodo-harness --example render_png -- /tmp/shodo-sample.png
 ```
 
 Without the path, the example writes `target/shodo-sample.png` relative to the
@@ -82,8 +82,9 @@ unit test checks retained fixture font data, glyph/atomic counts and determinist
 PNG encoding after paragraph/context/font collection owners have been dropped.
 
 ```sh
-cargo +stable test --offline -p shodo-fixtures --test png_render --test shared_glyph
-cargo +stable test --offline -p shodo-fixtures --example render_png
+cargo +stable test --offline -p shodo-harness --test png_render
+cargo +stable test --offline -p shodo-raikiri --test shared_glyph
+cargo +stable test --offline -p shodo-harness --example render_png
 ```
 
 The [Parley Tiny-Skia sample](https://github.com/linebender/parley/blob/main/examples/tiny_skia_render/src/main.rs)

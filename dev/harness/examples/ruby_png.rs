@@ -1,6 +1,4 @@
 //! Fixed-font ruby example: ruby_png OUTPUT_DIR emits three PNG/JSON pairs.
-#[path = "support/glyph_paint.rs"]
-mod glyph_paint;
 use serde_json::{Value, json};
 use shodo::geometry::WritingMode;
 use shodo::limits::Limits;
@@ -12,6 +10,7 @@ use shodo::{
     RubyVisibility,
 };
 use shodo_fixtures::{FONTS, load_fonts};
+use shodo_harness::glyph_paint;
 use std::path::Path;
 
 fn style(size: f32, color: [u8; 4]) -> InlineStyle {

@@ -247,7 +247,7 @@ def write_json(path, value):
 
 
 def source_hashes():
-    paths = list((ROOT / "dev/bench/raikiri_probe").glob("*.rs"))
+    paths = list((ROOT / "dev/raikiri/probe").glob("*.rs"))
     paths += [HERE / "raikiri_measure.py", HERE / "raikiri_overlay.py", HERE / "run.py",
               ROOT / "dev/bench/src/allocator.rs"]
     return {str(p.relative_to(ROOT)): file_hash(p) for p in sorted(paths)}

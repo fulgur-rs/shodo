@@ -3,7 +3,7 @@
 //! general CSS painter (no skip-ink or decoration propagation).
 //! Color-font support is CBDT/CBLC PNG only; other color formats need a backend.
 #[path = "bitmap_paint.rs"]
-pub(crate) mod bitmap_paint;
+pub mod bitmap_paint;
 use shodo::geometry::{LogicalRect, PhysicalConverter, PhysicalSize, WritingMode};
 use shodo::node::NodeId;
 use shodo::{Fragment, Line};

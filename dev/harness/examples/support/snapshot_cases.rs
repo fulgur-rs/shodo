@@ -1,8 +1,6 @@
 //! Fixed accepted-output inputs. No renderer-side shaping or host fonts.
 #[path = "float_flow.rs"]
 mod flow;
-#[path = "glyph_paint.rs"]
-mod glyph_paint;
 use serde_json::{Value, json};
 use shodo::geometry::{
     BaselineKind, Direction, LogicalRect, PhysicalConverter, PhysicalSize, WritingMode,
@@ -19,6 +17,7 @@ use shodo::{
     ParagraphBuilder,
 };
 use shodo_fixtures::{FONTS, FixtureFonts, load_fonts};
+use shodo_harness::glyph_paint;
 
 const VARIANTS: [&str; 14] = [
     "shared-ffi-color",

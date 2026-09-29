@@ -46,7 +46,7 @@ def prepare_library(spike, raikiri, destination):
     observer = destination / "observer"
     observer.mkdir()
     root = Path(__file__).resolve().parents[3]
-    observer_source = root / "dev/bench/raikiri_probe/observer.rs"
+    observer_source = root / "dev/raikiri/probe/observer.rs"
     (observer / "lib.rs").write_bytes(observer_source.read_bytes())
     (observer / "Cargo.toml").write_text('''[package]
 name = "shodo-benchmark-observer"
@@ -99,7 +99,7 @@ path = "lib.rs"
     manifest = destination / "Cargo.toml"
     dependency(manifest, 'shodo-benchmark-observer = { path = "observer" }')
     value = manifest.read_text().replace('exclude = ["s4"]', 'exclude = ["s4", "raikiri", "observer"]')
-    value += '\n[[bin]]\nname = "library-probe"\npath = ' + json.dumps(str(root / "dev/bench/raikiri_probe/library.rs")) + '\n'
+    value += '\n[[bin]]\nname = "library-probe"\npath = ' + json.dumps(str(root / "dev/raikiri/probe/library.rs")) + '\n'
     value += '\n[patch."https://github.com/fulgur-rs/raikiri.git"]\n'
     # Patch all internal packages together so original DOM/style/trait types
     # share one identity, retaining original upstream workspace dependency specs.

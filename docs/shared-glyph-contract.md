@@ -89,7 +89,7 @@ raikiri renderer replacement, WPT or browser parity.
 
 ```sh
 SHODO_SHARED_GLYPH_PNG=/tmp/shared-glyph.png \
-  cargo +stable test --offline -p shodo-fixtures --test shared_glyph
+  cargo +stable test --offline -p shodo-raikiri --test shared_glyph
 ```
 
 The fixed-font [glyph painter](../dev/fixtures/examples/support/glyph_paint.rs)

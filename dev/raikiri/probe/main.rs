@@ -1,6 +1,6 @@
 //! Original whole-layout samples, independent time and allocation builds.
 #[cfg(feature = "allocation-counting")]
-#[path = "../src/allocator.rs"]
+#[path = "../../bench/src/allocator.rs"]
 mod allocator;
 mod caller;
 mod core;

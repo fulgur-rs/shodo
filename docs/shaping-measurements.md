@@ -8,7 +8,7 @@ The reusable context retains only shaping plans/scratch, not the paragraphs.
 
 ```sh
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 RUSTFLAGS='-D warnings' \
-  cargo +1.89.0 run --offline -p shodo-fixtures --example shape_timing
+  cargo +1.89.0 run --offline -p shodo-harness --example shape_timing
 ```
 
 | Context state | Time for all 12 paragraph builds |

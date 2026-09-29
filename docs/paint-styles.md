@@ -90,7 +90,7 @@ It is not a complete CSS decoration or WPT conformance claim.
 Run the fixed-font, DOM-independent solid painter:
 
 ```sh
-cargo run -p shodo-fixtures --example paint_styles -- /tmp/paint-styles.png
+cargo run -p shodo-harness --example paint_styles -- /tmp/paint-styles.png
 ```
 
 The red ffi is drawn once even though its later source is blue and has green

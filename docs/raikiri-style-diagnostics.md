@@ -20,7 +20,7 @@ this repository's root; output paths below are disposable development artifacts.
 
 ```sh
 mkdir -p target/style-diagnosis
-cargo run -p shodo-fixtures --example raikiri_style_diffs -- \
+cargo run -p shodo-raikiri --example raikiri_style_diffs -- \
   /home/mitz/.cache/raikiri/wpt \
   target/worktrees/shodo-s4-v2/target/s4v2/wpt-batch-full/comparison.json \
   target/style-diagnosis/residual.json

@@ -1,10 +1,16 @@
 # Shared development fixtures
 
-`shodo-fixtures` is an unpublished workspace crate for tests, benchmarks, browser
-recorders and drawing tools. It owns fixed fonts and original prose; shodo's normal
-dependency graph does not include it. The root library remains the default workspace
-member. All consumers load the same face index, font bytes and case settings with
-system font discovery disabled.
+`shodo-fixtures` is an unpublished workspace crate holding fixed fonts and
+original prose: font bytes, provenance, and a minimal loader. shodo's normal
+dependency graph does not include it. All consumers load the same face
+index, font bytes and case settings with system font discovery disabled.
+
+Rendering, snapshot, browser-comparison, and AccessKit checks that consume
+this data live in [`dev/harness`](../harness); raikiri-integration checks
+live in [`dev/raikiri`](../raikiri). This crate itself stays limited to
+`shodo`, `serde`, `serde_json`, and `sha2` (plus `fontique`/`skrifa`/`harfrust`
+as dev-dependencies for the two data-integrity tests below that inspect font
+bytes directly).
 
 ## Use
 
@@ -14,8 +20,8 @@ From the repository root:
 cargo test --workspace
 cargo run -p shodo-fixtures --example inspect_fonts
 cargo run -p shodo-fixtures --example layout_cases
-cargo run -p shodo-fixtures --example float_png -- target/shodo-floats.png
 cargo run -p shodo-fixtures --example layout_cases -- arabic-short
+cargo run -p shodo-fixtures --example shape_timing
 python3 dev/fixtures/tools/regenerate.py --check
 ```
 
@@ -29,9 +35,9 @@ IDs in snapshots/recorded data, not those runtime IDs.
 
 The font-information example reads real metrics and shaping data. The paragraph
 layout example shapes with the fixed fonts through shodo and reports real glyph
-counts. Corpus tests check actual face IDs, contextual Arabic shaping, Latin
-ligatures/kerning, source ranges and finite positions. These results are not
-Chrome reference baselines; a browser comparison needs its own recorder.
+counts. `tests/fixtures.rs` and `tests/emoji_fixtures.rs` check the checked-in
+font/corpus data itself (face IDs, hashes, provenance); behavioral regression
+tests that render or shape with these fonts live in `dev/harness/tests/`.
 
 `cargo run -p shodo-fixtures --example shape_timing` measures paragraph builds for
 all 12 cases before and after context reuse and `shrink_to(0)`, excluding font
@@ -102,8 +108,8 @@ For an intentional corpus/coverage/font update:
    validated before checked-in assets are replaced; the 768KiB total font budget applies to both offline checking and rebuild/update.
 3. Copy updated family/face/hash values from the manifest into `FONTS` in src/lib.rs;
    update this size table if needed. Tests catch any disagreement.
-4. Run `--check`, `--rebuild`, Python tests, `cargo test --workspace`, and both
-   consumer examples. Review coverage, Arabic shaping, provenance and byte changes.
+4. Run `--check`, `--rebuild`, Python tests, `cargo test --workspace`, and the
+   dev/harness consumer examples. Review coverage, Arabic shaping, provenance and byte changes.
 5. Review/commit the intended diff. Changes to browser data or approved images in
    later tools require their own explicit baseline-update commands.
 
@@ -115,13 +121,13 @@ is development-only; ordinary cargo users do not need Python. The separate
 The CJK subset also retains 水 (U+6C34) for size-adjust metric verification.
 
 The [float caller harness](../../docs/float-integration-harness.md) shares an owned
-Taffy checkpoint driver between numeric regressions and the fixed-font PNG example.
-It remains dev-only; root shodo consumers acquire no Taffy dependency.
+Taffy checkpoint driver between numeric regressions and the fixed-font PNG example,
+in `dev/harness`. It remains dev-only; root shodo consumers acquire no Taffy dependency.
 
 The [Chrome comparison](../../docs/browser-comparison.md) shares seeded fixed inputs
 through `shodo_fixtures::browser`, checks saved source positions/boundary widths
-offline, and reports every raw difference. Recollection is an explicit Python
-standard-library/headless Chromium command using a disposable profile.
+offline, and reports every raw difference from `dev/harness`. Recollection is an
+explicit Python standard-library/headless Chromium command using a disposable profile.
 
 ## Optional real emoji fixtures
 
@@ -155,21 +161,22 @@ budget overflow leaves checked-in outputs untouched. Subsets are a fixed test
 corpus, not coverage of every Unicode emoji or host fallback policy.
 
 See [emoji layout and caller color drawing](../../docs/emoji.md) for sequence
-limitations, missing-font behavior and `cargo run -p shodo-fixtures --example
+limitations, missing-font behavior and `cargo run -p shodo-harness --example
 emoji_png -- OUTPUT.png`. The renderer draws accepted CBDT PNG glyphs and outlines.
 
 ## Retained ruby output
 
-Run `cargo run -p shodo-fixtures --example ruby_png -- target/ruby-png`. The
+Run `cargo run -p shodo-harness --example ruby_png -- target/ruby-png`. The
 example writes horizontal, VerticalRl and VerticalLr PNG/JSON pairs, using only
 the registered CJK fixture. JSON keeps base and annotation source ranges separate
 and records retained glyph IDs, font checksums, sizes, advances, origins, transforms
-and overflow. The shared painter traverses visible lanes and composes their
-transforms before physical conversion; it reuses outline/bitmap and source
-decoration paths. `ruby_paint` pins source colors, asymmetric vertical outlines,
-nested translations, hidden/ collapsed lanes and strict clipping. See
-[the caller contract](../../docs/ruby.md). The existing browser recorder does not
-measure ruby and its fixture exclusions remain applicable.
+and overflow. The shared painter (`shodo-harness`'s `glyph_paint`) traverses visible
+lanes and composes their transforms before physical conversion; it reuses
+outline/bitmap and source decoration paths. `ruby_paint` pins source colors,
+asymmetric vertical outlines, nested translations, hidden/collapsed lanes and
+strict clipping. See [the caller contract](../../docs/ruby.md). The existing
+browser recorder does not measure ruby and its fixture exclusions remain
+applicable.
 
 The [raikiri style diagnostic](../../docs/raikiri-style-diagnostics.md) replays original
 WPT HTML/CSS with the real pinned parser/cascade, verifies original resource

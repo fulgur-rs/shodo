@@ -1,9 +1,8 @@
 //! Caller CBDT/CBLC PNG example using retained, accepted glyph output.
 //! cargo run -p shodo-fixtures --example emoji_png -- OUTPUT.png
-#[path = "support/glyph_paint.rs"]
-mod glyph_paint;
 use shodo::{AtomicSizes, Fragment, LayoutContext};
 use shodo_fixtures::{emoji_cases, load_emoji_fonts};
+use shodo_harness::glyph_paint;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let output = args.next().ok_or("usage: emoji_png OUTPUT.png")?;

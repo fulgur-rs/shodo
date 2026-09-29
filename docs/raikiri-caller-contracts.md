@@ -9,8 +9,8 @@ used by the fixtures; it does not copy raikiri's implementation.
 Run from the repository root:
 
 ```sh
-cargo run -p shodo-fixtures --example raikiri_contracts -- /tmp/raikiri-contracts
-cargo test -p shodo-fixtures --example raikiri_contracts
+cargo run -p shodo-raikiri --example raikiri_contracts -- /tmp/raikiri-contracts
+cargo test -p shodo-raikiri --example raikiri_contracts
 ```
 
 The CLI writes `caller.png` and `caller.json`. The fixed sample produces

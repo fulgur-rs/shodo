@@ -7,66 +7,17 @@ publish = false
 license.workspace = true
 description = "Fixed development inputs for shodo (font assets separately licensed under OFL-1.1)"
 
-[features]
-accesskit = ["shodo/accesskit", "dep:accesskit_consumer"]
-
 [dependencies]
-accesskit_consumer = { version = "=0.38.0", optional = true }
 shodo = { path = "../../crates/shodo", default-features = false }
 serde.workspace = true
 serde_json = { workspace = true, features = ["float_roundtrip"] }
 sha2.workspace = true
 
+# fontique/skrifa/harfrust are used directly (not through shodo's public API) by
+# tests/fixtures.rs and tests/emoji_fixtures.rs to validate the checked-in font
+# assets themselves. Rendering, browser-comparison, and raikiri-integration
+# dependencies moved out to shodo-harness / shodo-raikiri (see shodo-c6r.3).
 [dev-dependencies]
 fontique.workspace = true
-raikiri-dom = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
 skrifa.workspace = true
 harfrust.workspace = true
-raikiri-html = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
-raikiri-style = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
-raikiri-traits = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
-tiny-skia = "=0.12.0"
-url = "2"
-percent-encoding = "2"
-taffy = { version = "0.14", default-features = false, features = ["std", "float_layout"] }
-
-[[example]]
-name = "render_png"
-test = true
-
-[[example]]
-name = "snapshots"
-test = true
-
-[[example]]
-name = "paint_styles"
-test = true
-
-[[example]]
-name = "accessibility"
-required-features = ["accesskit"]
-test = true
-
-[[example]]
-name = "emoji_png"
-test = true
-
-[[example]]
-name = "ruby_png"
-test = true
-
-[[example]]
-name = "ch_units"
-test = true
-
-[[example]]
-name = "raikiri_contracts"
-test = true
-
-[[example]]
-name = "raikiri_style_diffs"
-test = true
-
-[[example]]
-name = "source_coverage"
-test = true

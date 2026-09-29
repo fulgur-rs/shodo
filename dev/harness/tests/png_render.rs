@@ -1,9 +1,8 @@
-#[path = "../examples/support/glyph_paint.rs"]
-mod glyph_paint;
 use shodo::node::{NodeId, TextSource};
 use shodo::style::{FontFamily, InlineStyle, ParagraphStyle};
 use shodo::{AtomicSize, AtomicSizes, Fragment, LayoutContext, ParagraphBuilder};
 use shodo_fixtures::{FONTS, load_fonts};
+use shodo_harness::glyph_paint;
 
 #[test]
 fn vertical_outlines_match_literal_physical_rotation_and_compression() {

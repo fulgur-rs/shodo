@@ -9,15 +9,15 @@ fn saved_browser_metadata_and_source_endpoints_are_valid() {
     let hashes = [
         (
             "inputs_sha256",
-            include_bytes!("../assets/browser-inputs.json").as_slice(),
+            include_bytes!("../../fixtures/assets/browser-inputs.json").as_slice(),
         ),
         (
             "corpus_sha256",
-            include_bytes!("../assets/cases.json").as_slice(),
+            include_bytes!("../../fixtures/assets/cases.json").as_slice(),
         ),
         (
             "recorder_sha256",
-            include_bytes!("../tools/browser_recorder.js").as_slice(),
+            include_bytes!("../../fixtures/tools/browser_recorder.js").as_slice(),
         ),
     ];
     for (key, bytes) in hashes {

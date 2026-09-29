@@ -36,11 +36,11 @@ first unbreakable segment), rather than an invented zero-width transition.
 From the repository root:
 
 ```sh
-cargo test -p shodo-fixtures --test browser_inputs --test browser_comparison
-cargo run -p shodo-fixtures --example browser_compare -- --check
-cargo run -p shodo-fixtures --example browser_compare -- --json
-cargo run -p shodo-fixtures --example browser_compare -- --transitions
-cargo run -p shodo-fixtures --example browser_compare -- --atomics
+cargo test -p shodo-harness --test browser_inputs --test browser_comparison
+cargo run -p shodo-harness --example browser_compare -- --check
+cargo run -p shodo-harness --example browser_compare -- --json
+cargo run -p shodo-harness --example browser_compare -- --transitions
+cargo run -p shodo-harness --example browser_compare -- --atomics
 python3 -m unittest discover -s dev/fixtures/tools -v
 ```
 

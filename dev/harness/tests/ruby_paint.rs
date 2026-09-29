@@ -1,7 +1,5 @@
 //! Real retained output: missing lanes, wrong source paint, nested displacement,
 //! mirrored vertical outlines, intrinsic bitmap tint and clipping regressions.
-#[path = "../examples/support/glyph_paint.rs"]
-mod glyph_paint;
 use shodo::geometry::{PhysicalConverter, PhysicalSize, WritingMode};
 use shodo::limits::Limits;
 use shodo::node::{NodeId, TextSource};
@@ -13,6 +11,7 @@ use shodo::{
     RubyBase, RubyContent, RubyLevel, RubyOverhang, RubyPosition, RubyStyle, RubyVisibility,
 };
 use shodo_fixtures::{EMOJI_FONTS, FONTS, load_emoji_fonts, load_fonts};
+use shodo_harness::glyph_paint;
 use skrifa::{
     FontRef, GlyphId, MetadataProvider,
     instance::{LocationRef, Size},

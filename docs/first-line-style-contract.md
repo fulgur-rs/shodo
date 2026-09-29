@@ -112,7 +112,7 @@ Generate the inspected PNG with:
 
 ```sh
 SHODO_FIRST_LINE_PNG=/tmp/resolved-first-line.png \
-  cargo +stable test --offline -p shodo-fixtures --test first_line_cascade
+  cargo +stable test --offline -p shodo-raikiri --test first_line_cascade
 ```
 
 The pinned raikiri parser/cascade does **not** expose `::first-line`: adding

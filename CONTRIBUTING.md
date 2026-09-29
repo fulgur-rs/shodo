@@ -45,8 +45,8 @@ package therefore requires a Git checkout of this repository, not
 `cargo download`/tarball extraction, because `crates/shodo/tests/vertical.rs`
 and `crates/shodo/tests/japanese.rs` currently load real fonts from
 `dev/fixtures/assets/` (tracked as shodo-c6r; the plan is to move that
-dependency into a development harness crate so the published package's own
-test target no longer needs it).
+dependency into `dev/harness` so the published package's own test target no
+longer needs it).
 
 | Location | Purpose |
 | --- | --- |
@@ -54,7 +54,9 @@ test target no longer needs it).
 | `crates/shodo/src/test_support/` | Shared fixed-font bytes for `src/` unit tests only (`#[cfg(test)]`); not part of the published crate. |
 | `crates/shodo/tests/` | Public API integration tests. |
 | `crates/shodo/examples/` | Library examples. |
-| `dev/fixtures/` | Fixed-font cases, rendering examples, snapshots, and browser checks. |
+| `dev/fixtures/` | Fixed fonts, original sample cases, and a minimal loader; no rendering/raikiri dependencies. |
+| `dev/harness/` | Rendering, snapshots, browser comparison, float, and AccessKit checks that consume the fixtures. |
+| `dev/raikiri/` | raikiri-integration checks (contract verification, source coverage, style diffs); pulls in the git-pinned raikiri crates. |
 | `dev/bench/` | Standalone performance and allocation tools. |
 | `docs/` | Integration contracts, measurements, and design history. |
 
@@ -81,10 +83,10 @@ checks, including Rust 1.89.0 and Wasm builds.
 For accessibility and optional-feature work:
 
 ```sh
-cargo clippy --workspace --all-targets --features shodo-fixtures/accesskit -- -D warnings
-cargo test --workspace --features shodo-fixtures/accesskit
-RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --features shodo-fixtures/accesskit
-cargo run -p shodo-fixtures --features accesskit,shodo/complex-scripts --example accessibility
+cargo clippy --workspace --all-targets --features shodo-harness/accesskit -- -D warnings
+cargo test --workspace --features shodo-harness/accesskit
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --features shodo-harness/accesskit
+cargo run -p shodo-harness --features accesskit,shodo/complex-scripts --example accessibility
 ```
 
 Run feature-isolation tests with `-p shodo` as above. Workspace packages can
@@ -115,23 +117,24 @@ Python is for development tooling; ordinary library users do not need it.
 
 Add a regression test for a behavior change. Public API behavior belongs in
 `crates/shodo/tests/`; real-font shaping and rendering regressions belong in
-`dev/fixtures/tests/`. Use fixed registered fonts with system discovery
-disabled for deterministic assertions. Keep expected geometry or glyph
-ownership grounded in the behavior being tested, rather than copying the
-implementation's calculation.
+`dev/harness/tests/` (data-integrity checks on the checked-in fonts/corpus
+themselves stay in `dev/fixtures/tests/`). Use fixed registered fonts with
+system discovery disabled for deterministic assertions. Keep expected
+geometry or glyph ownership grounded in the behavior being tested, rather
+than copying the implementation's calculation.
 
 `crates/shodo/tests/vertical.rs` and `crates/shodo/tests/japanese.rs` are a
 known, tracked exception: they load real fonts directly from
 `dev/fixtures/assets/` instead of following the rule above. Do not add
 further real-font `include_bytes!` calls under `crates/shodo/tests/`;
-new real-font regressions belong in `dev/fixtures/tests/` until these two
-files are migrated to a development harness crate (shodo-c6r).
+new real-font regressions belong in `dev/harness/tests/` until these two
+files are migrated there (shodo-c6r).
 
 Normal checks do not rewrite expected data:
 
 ```sh
-cargo run -p shodo-fixtures --example snapshots -- --output target/snapshot-report
-cargo run -p shodo-fixtures --example browser_compare -- --check
+cargo run -p shodo-harness --example snapshots -- --output target/snapshot-report
+cargo run -p shodo-harness --example browser_compare -- --check
 ```
 
 Snapshot reports require a new output directory on each run. Open the generated

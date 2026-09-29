@@ -10,8 +10,8 @@ production raikiri caller or merge either integration spike.
 ## Reproduce
 
 ```sh
-cargo run -p shodo-fixtures --example ch_units
-cargo test -p shodo-fixtures --example ch_units
+cargo run -p shodo-raikiri --example ch_units
+cargo test -p shodo-raikiri --example ch_units
 ```
 
 The example uses the existing development-only raikiri HTML/cascade

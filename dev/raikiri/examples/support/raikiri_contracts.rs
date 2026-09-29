@@ -1,9 +1,7 @@
 //! Development caller over two resolved cascades on one immutable DOM.
 //! The fixture supplier uses ordinary CSS overrides; it is not a CSS
 //! ::first-line producer. Layout and paint below are shared with the CLI.
-#[path = "glyph_paint.rs"]
-mod glyph_paint;
-
+use shodo_harness::glyph_paint;
 use std::{collections::HashMap, ops::Range};
 
 use raikiri_html::{ParseOptions, UncascadedDocument, parse_html};

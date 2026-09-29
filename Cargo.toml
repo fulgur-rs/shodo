@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/shodo", "dev/fixtures", "dev/bench"]
+members = ["crates/shodo", "dev/fixtures", "dev/harness", "dev/raikiri", "dev/bench"]
 default-members = ["crates/shodo"]
 resolver = "3"
 

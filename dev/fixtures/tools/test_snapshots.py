@@ -73,7 +73,7 @@ def change_first_pixel(path):
 class SnapshotCliTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        result = subprocess.run(['cargo', '+stable', 'build', '--offline', '-p', 'shodo-fixtures', '--example', 'snapshots', '--message-format=json'], cwd=ROOT, text=True, capture_output=True)
+        result = subprocess.run(['cargo', '+stable', 'build', '--offline', '-p', 'shodo-harness', '--example', 'snapshots', '--message-format=json'], cwd=ROOT, text=True, capture_output=True)
         if result.returncode:
             raise AssertionError(f'snapshot CLI build failed:\n{result.stderr}')
         artifacts = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]

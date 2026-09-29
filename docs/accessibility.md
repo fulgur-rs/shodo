@@ -147,8 +147,8 @@ plus an unrestricted semantic description; core output has no255-byte limit.
 ## Reproducible read-only example
 
 ```sh
-cargo run -p shodo-fixtures --features accesskit,shodo/complex-scripts --example accessibility
-cargo test -p shodo-fixtures --features accesskit
+cargo run -p shodo-harness --features accesskit,shodo/complex-scripts --example accessibility
+cargo test -p shodo-harness --features accesskit
 ```
 
 The fixture crate disables core default features, so the command above explicitly

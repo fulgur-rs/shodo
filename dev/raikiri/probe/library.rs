@@ -1,6 +1,6 @@
 //! Fresh actual library construction, with exclusive preparation/library phases.
 #[cfg(feature = "allocation-counting")]
-#[path = "../src/allocator.rs"]
+#[path = "../../bench/src/allocator.rs"]
 mod allocator;
 #[cfg(feature = "allocation-counting")]
 #[global_allocator]

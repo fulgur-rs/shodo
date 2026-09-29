@@ -31,7 +31,7 @@
 ## 再実行
 
 ```sh
-cargo +stable run -p shodo-fixtures --example source_coverage -- \
+cargo +stable run -p shodo-raikiri --example source_coverage -- \
   /path/to/pinned/wpt \
   /path/to/original/s4v2/wpt-batch-full/comparison.json \
   /tmp/source-coverage.json

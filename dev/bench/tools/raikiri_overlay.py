@@ -165,7 +165,7 @@ def prepare(spike, destination, *, expose_layout_boundary=True):
         lib = archived / "dev/raikiri/src/lib.rs"
         lib.write_bytes(lib.read_bytes() + b"\npub use candidate_page::{layout_candidate_screen_page, candidate_page_inputs, CandidatePageInputs, CandidateBlockInput};\n")
     root = Path(__file__).resolve().parents[3]
-    main = root / "dev/bench/raikiri_probe/layout_check.rs"
+    main = root / "dev/raikiri/probe/layout_check.rs"
     manifest = f'''[package]
 name = "shodo-raikiri-measurement"
 version = "0.0.0"
@@ -192,10 +192,10 @@ name = "layout-check"
 path = {json.dumps(str(main))}
 [[bin]]
 name = "core-contract-check"
-path = {json.dumps(str(root / "dev/bench/raikiri_probe/core_contract_check.rs"))}
+path = {json.dumps(str(root / "dev/raikiri/probe/core_contract_check.rs"))}
 [[bin]]
 name = "measurement-probe"
-path = {json.dumps(str(root / "dev/bench/raikiri_probe/main.rs"))}
+path = {json.dumps(str(root / "dev/raikiri/probe/main.rs"))}
 '''
     (destination / "Cargo.toml").write_text(manifest)
     (destination / "Cargo.lock").write_bytes(original_lock)
@@ -207,7 +207,7 @@ path = {json.dumps(str(root / "dev/bench/raikiri_probe/main.rs"))}
     provenance["checkout_observed"] = dict(head=checkout_before[0], status_sha256=checkout_before[1], diff_sha256=checkout_before[2])
     provenance["probe_sources_sha256"] = {
         str(path.relative_to(root)): sha(path.read_bytes())
-        for path in sorted((root / "dev/bench/raikiri_probe").glob("*.rs"))
+        for path in sorted((root / "dev/raikiri/probe").glob("*.rs"))
     }
     provenance["allocator_source_sha256"] = sha((root / "dev/bench/src/allocator.rs").read_bytes())
     (destination / "archive-provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")

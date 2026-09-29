@@ -8,8 +8,8 @@ It is a state-management example for callers, not part of shodo's library API.
 Taffy is a fixture dev dependency only.
 
 ```sh
-cargo test -p shodo-fixtures --test float_flow
-cargo run -p shodo-fixtures --example float_png -- target/shodo-floats.png
+cargo test -p shodo-harness --test float_flow
+cargo run -p shodo-harness --example float_png -- target/shodo-floats.png
 ```
 
 The output path is relative to the working directory; parent directories are

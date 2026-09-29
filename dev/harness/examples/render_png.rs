@@ -1,6 +1,4 @@
 //! Fixed public-API layout -> accepted glyph/atomic output -> PNG.
-#[path = "support/glyph_paint.rs"]
-mod glyph_paint;
 use shodo::hit::{LineLayout, TextPosition};
 use shodo::mapping::Affinity;
 use shodo::node::{NodeId, TextSource};
@@ -9,6 +7,7 @@ use shodo::{
     AtomicSize, AtomicSizes, LayoutContext, Line, LineConstraint, LineResult, ParagraphBuilder,
 };
 use shodo_fixtures::{FONTS, load_fonts};
+use shodo_harness::glyph_paint;
 
 fn sample() -> Result<Vec<Line>, Box<dyn std::error::Error>> {
     let limits = Default::default();

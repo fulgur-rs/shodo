@@ -145,11 +145,12 @@ For API documentation including the optional AccessKit adapter, add
 To draw public glyph output with the checked-in fixture fonts:
 
 ```sh
-cargo run -p shodo-fixtures --example render_png -- target/shodo-sample.png
+cargo run -p shodo-harness --example render_png -- target/shodo-sample.png
 ```
 
-The fixture and benchmark packages are development tools. Normal builds of the
-root library do not include their fonts or rendering dependencies.
+The fixture, harness, raikiri, and benchmark packages are development tools.
+Normal builds of the library do not include their fonts or rendering
+dependencies.
 
 ## Known limitations
 

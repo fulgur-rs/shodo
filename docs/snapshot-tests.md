@@ -8,7 +8,7 @@ unpublished fixture crate, not the main library.
 Run a full check from the repository:
 
 ```sh
-cargo run -p shodo-fixtures --example snapshots -- --output target/snapshot-report
+cargo run -p shodo-harness --example snapshots -- --output target/snapshot-report
 ```
 
 Open `target/snapshot-report/index.html` to inspect expected, actual and magenta
@@ -39,7 +39,7 @@ an absent expectation cannot provide an expected image.
 Review the layout change first, then generate a complete replacement explicitly:
 
 ```sh
-cargo run -p shodo-fixtures --example snapshots -- --output target/snapshot-update --update
+cargo run -p shodo-harness --example snapshots -- --output target/snapshot-update --update
 ```
 
 Inspect the HTML, PNGs, manifest and geometry changes in

@@ -1,11 +1,10 @@
 //! Mutations caught: reshaping/tinting accepted emoji, wrong bitmap bearings,
 //! baseline/transform placement, missing whitespace, and unsafe decode bounds.
-#[path = "../examples/support/glyph_paint.rs"]
-mod glyph_paint;
 use shodo::geometry::{Direction, WritingMode};
 use shodo::style::{FontFamily, InlineStyle, PaintStyle, ParagraphStyle, TextOrientation};
 use shodo::{AtomicSizes, Fragment, LayoutContext, Line, RichText};
 use shodo_fixtures::{EMOJI_FONTS, FONTS, load_emoji_fonts};
+use shodo_harness::glyph_paint;
 fn sample(text: &str, mode: WritingMode, color: [u8; 4]) -> Vec<Line> {
     let fonts = load_emoji_fonts(&Default::default()).unwrap();
     let s = InlineStyle {

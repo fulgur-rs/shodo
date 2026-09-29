@@ -1,8 +1,6 @@
 //! Fixed-font float caller example; no DOM or CSS parsing is involved.
 #[path = "support/float_flow.rs"]
 pub mod flow;
-#[path = "support/glyph_paint.rs"]
-mod glyph_paint;
 use flow::{Checkpoint, Clear, Driver, FloatSpec, Outcome, Side};
 use shodo::{AtomicSizes, LayoutContext, Line, ParagraphBuilder};
 use shodo::{
@@ -10,6 +8,7 @@ use shodo::{
     node::{NodeId, OutOfFlowKind, TextSource},
     style::{FontFamily, LineHeight, LineOptions, ParagraphStyle},
 };
+use shodo_harness::glyph_paint;
 
 pub fn sample() -> Result<(Vec<Line>, Checkpoint), Box<dyn std::error::Error>> {
     let limits = Limits::default();

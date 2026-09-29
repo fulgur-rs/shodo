@@ -86,7 +86,7 @@ geometry includes physical glyph origins, public matrices and composition
 squares. The original 26 horizontal PNGs and geometry are byte-identical.
 
 ```sh
-cargo run -p shodo-fixtures --example snapshots -- --output target/vertical-report
+cargo run -p shodo-harness --example snapshots -- --output target/vertical-report
 ```
 
 Use a fresh report directory for each run. Expectations are generated from fixed

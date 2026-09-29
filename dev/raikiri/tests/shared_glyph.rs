@@ -1,6 +1,4 @@
 //! Paint ownership and source interaction are deliberately separate contracts.
-#[path = "../examples/support/glyph_paint.rs"]
-mod glyph_paint;
 use shodo::geometry::Direction;
 use shodo::hit::{LineLayout, TextPosition};
 use shodo::mapping::{Affinity, TextOrigin};
@@ -8,6 +6,7 @@ use shodo::node::{NodeId, TextSource};
 use shodo::style::{FontFamily, InlineStyle, ParagraphStyle};
 use shodo::{AtomicSizes, Fragment, LayoutContext, Line, ParagraphBuilder};
 use shodo_fixtures::{FONTS, load_fonts};
+use shodo_harness::glyph_paint;
 
 fn build(parts: &[&str], direction: Direction, font: usize, width: f32) -> Vec<Line> {
     let limits = Default::default();

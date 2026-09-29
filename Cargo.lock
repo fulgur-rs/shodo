@@ -1624,9 +1624,37 @@ dependencies = [
 name = "shodo-fixtures"
 version = "0.0.0"
 dependencies = [
+ "fontique",
+ "harfrust",
+ "serde",
+ "serde_json",
+ "sha2",
+ "shodo",
+ "skrifa",
+]
+
+[[package]]
+name = "shodo-harness"
+version = "0.0.0"
+dependencies = [
  "accesskit_consumer",
  "fontique",
  "harfrust",
+ "serde",
+ "serde_json",
+ "sha2",
+ "shodo",
+ "shodo-fixtures",
+ "skrifa",
+ "taffy",
+ "tiny-skia",
+]
+
+[[package]]
+name = "shodo-raikiri"
+version = "0.0.0"
+dependencies = [
+ "fontique",
  "percent-encoding",
  "raikiri-dom",
  "raikiri-html",
@@ -1636,8 +1664,9 @@ dependencies = [
  "serde_json",
  "sha2",
  "shodo",
+ "shodo-fixtures",
+ "shodo-harness",
  "skrifa",
- "taffy",
  "tiny-skia",
  "url",
 ]

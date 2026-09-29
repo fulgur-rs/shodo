@@ -1,11 +1,10 @@
 //! Solid retained text paint over fixed fonts; no DOM or system fonts.
 //! cargo run -p shodo-fixtures --example paint_styles -- /tmp/paint-styles.png
-#[path = "support/glyph_paint.rs"]
-mod glyph_paint;
 use shodo::geometry::{Direction, WritingMode};
 use shodo::style::{FontFamily, InlineStyle, PaintStyle, ParagraphStyle, TextDecoration};
 use shodo::{AtomicSizes, LayoutContext, Line, RichText};
 use shodo_fixtures::{FONTS, load_fonts};
+use shodo_harness::glyph_paint;
 const RED: [u8; 4] = [220, 20, 30, 255];
 const BLUE: [u8; 4] = [20, 40, 220, 255];
 const GREEN: [u8; 4] = [0, 160, 0, 255];
