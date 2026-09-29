@@ -7,6 +7,8 @@ pub use ::accesskit as types;
 use std::collections::HashMap;
 mod nodes;
 mod positions;
+#[cfg(test)]
+mod tests;
 use nodes::{Key, NodeBuilder};
 use positions::PositionState;
 
