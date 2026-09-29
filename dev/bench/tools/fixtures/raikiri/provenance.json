@@ -1,0 +1,102 @@
+{
+  "layout-candidate.json": {
+    "original_result_sha256": "7500ba8a8bc2b584d4d51a265bf285dc290422d593ffc958dbd6e6702c4605e6",
+    "id": "css/css-text/white-space/lone-cr-001-ref.html",
+    "purpose": "unchanged actual collected result record; gzip is storage only; correctness fixtures are not benchmark samples"
+  },
+  "layout-native.json": {
+    "original_result_sha256": "6268ab438ba9d15a5c874e41547816a1b13131a4d0063558424f8786dc048bcf",
+    "id": "css/css-text/white-space/lone-cr-001-ref.html",
+    "purpose": "unchanged actual collected result record; gzip is storage only; correctness fixtures are not benchmark samples"
+  },
+  "pipeline-candidate.json": {
+    "original_result_sha256": "a491a5366fc56d81b6affc8d6c90e3f7f21c7b4955eecaf4627760f99a937a9e",
+    "id": "css/css-text/white-space/lone-cr-001-ref.html",
+    "purpose": "unchanged actual collected result record; gzip is storage only; correctness fixtures are not benchmark samples"
+  },
+  "pipeline-native.json": {
+    "original_result_sha256": "582792d75c4c614d7ebcf73958ea93990449b0d963409b8370accb3debd1db7c",
+    "id": "css/css-text/white-space/lone-cr-001-ref.html",
+    "purpose": "unchanged actual collected result record; gzip is storage only; correctness fixtures are not benchmark samples"
+  },
+  "isolated-candidate.json": {
+    "original_result_sha256": "a8a6265d58536deb9fcb5d64869d0c2e06a7c505b29f387e12192f843add354e",
+    "id": "css/css-text/white-space/lone-cr-001-ref.html",
+    "purpose": "unchanged actual collected result record; gzip is storage only; correctness fixtures are not benchmark samples"
+  },
+  "isolated-native.json": {
+    "original_result_sha256": "2296a2cc7f472542bafe9208dc3295dda6cf932fe53890f48f5efa409473b36a",
+    "id": "css/css-text/white-space/lone-cr-001-ref.html",
+    "purpose": "unchanged actual collected result record; gzip is storage only; correctness fixtures are not benchmark samples"
+  },
+  "pagination-candidate.json": {
+    "original_result_sha256": "293b83ffeab3315d90564f2ab58e68098c113450cdb6725462b29fdfdfa0ec98",
+    "id": "css/css-text/hyphens/reference/hyphens-none-shy-on-2nd-line-001-ref.html",
+    "purpose": "unchanged actual collected result record; gzip is storage only; correctness fixtures are not benchmark samples"
+  },
+  "pagination-native.json": {
+    "original_result_sha256": "c9b969577446d4b85a0566b4f80e9061f91c611585a0c8cf8451c644a1aa26e9",
+    "id": "css/css-text/hyphens/reference/hyphens-none-shy-on-2nd-line-001-ref.html",
+    "purpose": "unchanged actual collected result record; gzip is storage only; correctness fixtures are not benchmark samples"
+  },
+  "pipeline-native-time.json": {
+    "original_result_sha256": "c5769a1993d090e493c11988d6b00357b4d8dd639f4be03e4a805fdd85063198",
+    "id": "css/css-text/white-space/lone-cr-001-ref.html",
+    "binary_sha256": "26342275314c5b70fb2502d5f061322530b905bbd8847515d151276103eb60b0",
+    "purpose": "unchanged actual release result/fresh-output reference; gzip storage only, not additional benchmark samples"
+  },
+  "pipeline-native-time-reference.json": {
+    "original_result_sha256": "178e00d706330f3d681c1bfa1a6ab98f2365ec74eb66adc47d3d3ad4fe1ff60e",
+    "id": "css/css-text/white-space/lone-cr-001-ref.html",
+    "binary_sha256": "26342275314c5b70fb2502d5f061322530b905bbd8847515d151276103eb60b0",
+    "purpose": "unchanged actual release result/fresh-output reference; gzip storage only, not additional benchmark samples"
+  },
+  "pipeline-candidate-time.json": {
+    "original_result_sha256": "42e2740ed279453829210d9e798789ab87d5949c446d98e3e69450b697853fa6",
+    "id": "css/css-text/white-space/lone-cr-001-ref.html",
+    "binary_sha256": "26342275314c5b70fb2502d5f061322530b905bbd8847515d151276103eb60b0",
+    "purpose": "unchanged actual release result/fresh-output reference; gzip storage only, not additional benchmark samples"
+  },
+  "pipeline-candidate-time-reference.json": {
+    "original_result_sha256": "8593479cf643eaa5c505d1719fdade9fc3e2c5da4942f04397de234baf94f0ec",
+    "id": "css/css-text/white-space/lone-cr-001-ref.html",
+    "binary_sha256": "26342275314c5b70fb2502d5f061322530b905bbd8847515d151276103eb60b0",
+    "purpose": "unchanged actual release result/fresh-output reference; gzip storage only, not additional benchmark samples"
+  },
+  "isolated-native-time.json": {
+    "original_result_sha256": "33e82ed5a7692ec158b57bbb0fda452d683d4aa18b7a58762cdf5d2e1ca97b44",
+    "id": "css/css-text/white-space/lone-cr-001-ref.html",
+    "binary_sha256": "26342275314c5b70fb2502d5f061322530b905bbd8847515d151276103eb60b0",
+    "purpose": "unchanged actual release result/fresh-output reference; gzip storage only, not additional benchmark samples"
+  },
+  "isolated-native-time-reference.json": {
+    "original_result_sha256": "e0c483c491e5404574f002b166b89f86f6a12d3bc325e37d41d81cdf35050d47",
+    "id": "css/css-text/white-space/lone-cr-001-ref.html",
+    "binary_sha256": "26342275314c5b70fb2502d5f061322530b905bbd8847515d151276103eb60b0",
+    "purpose": "unchanged actual release result/fresh-output reference; gzip storage only, not additional benchmark samples"
+  },
+  "isolated-candidate-time.json": {
+    "original_result_sha256": "2d60b47e1dddf66582bec03e7da90706ecfbd6e62096b7d34daee3effc99b9db",
+    "id": "css/css-text/white-space/lone-cr-001-ref.html",
+    "binary_sha256": "26342275314c5b70fb2502d5f061322530b905bbd8847515d151276103eb60b0",
+    "purpose": "unchanged actual release result/fresh-output reference; gzip storage only, not additional benchmark samples"
+  },
+  "isolated-candidate-time-reference.json": {
+    "original_result_sha256": "cfcb350b1b51919f0785265eac7609055423f49c20fe2eceedf27671bf4db53e",
+    "id": "css/css-text/white-space/lone-cr-001-ref.html",
+    "binary_sha256": "26342275314c5b70fb2502d5f061322530b905bbd8847515d151276103eb60b0",
+    "purpose": "unchanged actual release result/fresh-output reference; gzip storage only, not additional benchmark samples"
+  },
+  "library-candidate.json": {
+    "source": "/home/mitz/Work/oss/shodo/target/8ei-artifacts/library-contract-green/candidate.json",
+    "sha256": "d2414bf17f1383cac2f5eec66373064c7094b46f1d57313c12322da47d5c7dcc",
+    "storage": "gzip of unchanged actual dev memory record; test evidence, not release benchmark",
+    "build_log": "/home/mitz/Work/oss/shodo/target/8ei-artifacts/library-memory-field-fix-build.log"
+  },
+  "library-native.json": {
+    "source": "/home/mitz/Work/oss/shodo/target/8ei-artifacts/library-contract-green/native.json",
+    "sha256": "ba62a59e15f92024e7cc6efac1542f148905b579dae48deb3acefa145ead51ad",
+    "storage": "gzip of unchanged actual dev memory record; test evidence, not release benchmark",
+    "build_log": "/home/mitz/Work/oss/shodo/target/8ei-artifacts/library-memory-field-fix-build.log"
+  }
+}
