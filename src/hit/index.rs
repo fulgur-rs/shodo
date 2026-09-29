@@ -376,7 +376,30 @@ impl LineIndex {
         result
             .visual
             .dedup_by(|a, b| visual_key(&result.stops[*a]) == visual_key(&result.stops[*b]));
-        for span in &line.data.combine_spans {
+        // Sorted, nonoverlapping spans only contribute if their closed range
+        // reaches a caret on this line. Keep touching endpoint spans too.
+        let first = result
+            .stops
+            .first()
+            .map_or(result.range.start, |stop| stop.position.offset);
+        let last = result
+            .stops
+            .last()
+            .map_or(result.range.end, |stop| stop.position.offset);
+        let spans = &line.data.combine_spans;
+        let begin = spans.partition_point(|span| {
+            #[cfg(test)]
+            tests::range_visit();
+            span.text.end < first
+        });
+        let end = spans.partition_point(|span| {
+            #[cfg(test)]
+            tests::range_visit();
+            span.text.start <= last
+        });
+        for span in &spans[begin..end] {
+            #[cfg(test)]
+            tests::span_visit();
             let begin = result
                 .stops
                 .partition_point(|stop| stop.position.offset < span.text.start);
@@ -685,6 +708,146 @@ mod tests {
     use crate::node::{NodeId, TextSource};
     use crate::style::{FontFamily, FontVariation, InlineStyle, ParagraphStyle};
     use crate::{AtomicSizes, LayoutContext, ParagraphBuilder};
+    std::thread_local! {
+        static COMBINE_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+    }
+    pub(super) fn span_visit() {
+        COMBINE_WORK.with(|work| {
+            let (searches, spans) = work.get();
+            work.set((searches, spans + 1));
+        });
+    }
+    pub(super) fn range_visit() {
+        COMBINE_WORK.with(|work| {
+            let (searches, spans) = work.get();
+            work.set((searches + 1, spans));
+        });
+    }
+    fn take_combine_work() -> (usize, usize) {
+        COMBINE_WORK.with(|work| work.replace((0, 0)))
+    }
+    fn tcy_lines(
+        count: usize,
+        mode: crate::geometry::WritingMode,
+        direction: crate::geometry::Direction,
+    ) -> Vec<Line> {
+        use crate::style::{TextCombineUpright, WordBreak};
+        let limits = Default::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register_face(
+                include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: "TCY".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let style = ParagraphStyle {
+            writing_mode: mode,
+            direction,
+            root: InlineStyle {
+                direction,
+                font_families: vec![FontFamily::Named("TCY".into())],
+                font_size: 16.0,
+                word_break: WordBreak::BreakAll,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut builder = ParagraphBuilder::new(&style, &limits);
+        for i in 0..count {
+            let combined = InlineStyle {
+                font_size: if i % 2 == 0 { 16.0 } else { 20.0 },
+                text_combine_upright: TextCombineUpright::All,
+                ..style.root.clone()
+            };
+            builder
+                .open_inline(NodeId(10_000 + i as u64), &combined, Default::default())
+                .push_text(
+                    TextSource::Dom {
+                        node: NodeId(i as u64 + 1),
+                        offset: 0,
+                    },
+                    "12",
+                )
+                .close_inline();
+        }
+        let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        assert_eq!(paragraph.data.combine_spans.len(), count);
+        let lines = paragraph.break_all(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            20.0,
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(lines.len(), count, "one real TCY box must fit per line");
+        assert!(lines.iter().all(|line| line.text_combinations().len() == 1));
+        lines
+    }
+    #[test]
+    fn tcy_hit_index_work_tracks_line_spans_instead_of_paragraph_spans() {
+        use crate::geometry::{Direction, WritingMode};
+        for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+            for direction in [Direction::Ltr, Direction::Rtl] {
+                for count in [64, 128, 256] {
+                    let lines = tcy_lines(count, mode, direction);
+                    take_combine_work();
+                    let layout = super::super::LineLayout::new(&lines);
+                    let (searches, spans) = take_combine_work();
+                    println!(
+                        "TCY {mode:?}/{direction:?}: {count} lines, {searches} span-range comparisons, {spans} spans"
+                    );
+                    // At most the own span and its two touching neighbors.
+                    assert!(spans >= count, "work counter must observe real spans");
+                    assert!(spans <= 3 * count, "{count} lines examined {spans} spans");
+                    // Two binary searches into at most 256 spans plus visits.
+                    assert!(searches > 0, "work counter must observe range searches");
+                    assert!(searches + spans <= 32 * count);
+                    assert_eq!(layout.index.len(), count);
+                }
+            }
+        }
+    }
+    #[test]
+    fn tcy_hit_groups_keep_closed_caret_endpoints_at_line_boundaries() {
+        use crate::geometry::{Direction, WritingMode};
+        let expected = [
+            vec![(16.0, vec![0, 1, 2]), (20.0, vec![2])],
+            vec![(16.0, vec![2]), (20.0, vec![2, 3, 4]), (16.0, vec![4])],
+            vec![(20.0, vec![4]), (16.0, vec![4, 5, 6])],
+        ];
+        for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+            for direction in [Direction::Ltr, Direction::Rtl] {
+                let lines = tcy_lines(3, mode, direction);
+                let layout = super::super::LineLayout::new(&lines);
+                for (line, want) in expected.iter().enumerate() {
+                    let index = &layout.index[line];
+                    let actual: Vec<_> = index
+                        .combined
+                        .iter()
+                        .map(|group| {
+                            let mut offsets: Vec<_> = group
+                                .stops
+                                .iter()
+                                .map(|i| index.stops[*i].position.offset)
+                                .collect();
+                            offsets.sort_unstable();
+                            (group.rect.block_size, offsets)
+                        })
+                        .collect();
+                    assert_eq!(&actual, want, "{mode:?}/{direction:?} line {line}");
+                }
+            }
+        }
+    }
     fn synthetic_font(format: u16, bad: bool) -> Vec<u8> {
         let bytes = include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf");
         let glyph = 367u16;
