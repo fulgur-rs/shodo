@@ -4,14 +4,14 @@
 #[path = "support/raikiri_style_diffs.rs"]
 mod diagnostic;
 #[allow(dead_code)]
+#[path = "support/source_fonts.rs"]
+mod fonts;
+#[allow(dead_code)]
 #[path = "support/offline_wpt.rs"]
 mod offline;
 #[allow(dead_code)]
 #[path = "support/source_replay.rs"]
 mod replay;
-#[allow(dead_code)]
-#[path = "support/source_fonts.rs"]
-mod fonts;
 
 use shodo::{
     AtomicSizes, Fragment, LayoutContext, LineConstraint, LineResult, font::FontCollection,
@@ -34,7 +34,10 @@ struct LineMeasure {
 fn find_by_attr(input: &offline::ScreenInput, name: &str, value: &str) -> Result<usize, String> {
     let dom = &input.parsed.dom;
     (0..dom.node_count())
-        .find(|&id| dom.get_node(id).is_some_and(|n| n.attribute(name) == Some(value)))
+        .find(|&id| {
+            dom.get_node(id)
+                .is_some_and(|n| n.attribute(name) == Some(value))
+        })
         .ok_or_else(|| format!("no element with {name}={value}"))
 }
 
@@ -48,7 +51,8 @@ fn measure(
     force_none: bool,
 ) -> Result<Vec<LineMeasure>, String> {
     let mut context = LayoutContext::new();
-    let mut prepared = replay::project(input, root, width, &mut context, fonts, &Limits::default())?;
+    let mut prepared =
+        replay::project(input, root, width, &mut context, fonts, &Limits::default())?;
     if force_none {
         prepared.options.hanging_punctuation = HangingPunctuation::default();
     }
@@ -111,16 +115,26 @@ fn run(wpt: &std::path::Path, output: &std::path::Path) -> Result<(), String> {
     let test_root = find_by_attr(&test, "class", "test")?;
     let dom = &reference.parsed.dom;
     let reference_root = (0..dom.node_count())
-        .find(|&id| dom.get_node(id).is_some_and(|n| n.tag_name() == Some("div")))
+        .find(|&id| {
+            dom.get_node(id)
+                .is_some_and(|n| n.tag_name() == Some("div"))
+        })
         .ok_or("reference has no div")?;
     let width = VIEWPORT_WIDTH;
     let hung = measure(&test, test_root, &registry.collection, width, false)?;
     let control = measure(&test, test_root, &registry.collection, width, true)?;
-    let reference_lines = measure(&reference, reference_root, &registry.collection, width, false)?;
-    let (hung, control, reference_line) = match (hung.first(), control.first(), reference_lines.first()) {
-        (Some(a), Some(b), Some(c)) => (a, b, c),
-        _ => return Err("expected one accepted line in every replay".into()),
-    };
+    let reference_lines = measure(
+        &reference,
+        reference_root,
+        &registry.collection,
+        width,
+        false,
+    )?;
+    let (hung, control, reference_line) =
+        match (hung.first(), control.first(), reference_lines.first()) {
+            (Some(a), Some(b), Some(c)) => (a, b, c),
+            _ => return Err("expected one accepted line in every replay".into()),
+        };
     let hung_glyph = hung.glyphs.first().ok_or("hung line has no glyph")?;
     let checks = serde_json::json!({
         "glyph_retained": hung.glyphs.len() == control.glyphs.len() && hung.glyphs.len() >= 2,
@@ -144,15 +158,26 @@ fn run(wpt: &std::path::Path, output: &std::path::Path) -> Result<(), String> {
         "resolved": {"test": describe(hung), "control_none": describe(control), "reference": describe(reference_line)},
         "checks": checks, "passed": passed,
     });
-    std::fs::write(output, serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n")
-        .map_err(|e| e.to_string())?;
-    if passed { Ok(()) } else { Err("hanging-punctuation-first-002 replay did not reproduce the expected behavior".into()) }
+    std::fs::write(
+        output,
+        serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n",
+    )
+    .map_err(|e| e.to_string())?;
+    if passed {
+        Ok(())
+    } else {
+        Err("hanging-punctuation-first-002 replay did not reproduce the expected behavior".into())
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
-    let wpt = args.next().ok_or("usage: hanging_punctuation <wpt-root> [output.json]")?;
-    let output = args.next().unwrap_or_else(|| "hanging-punctuation-first-002.json".into());
+    let wpt = args
+        .next()
+        .ok_or("usage: hanging_punctuation <wpt-root> [output.json]")?;
+    let output = args
+        .next()
+        .unwrap_or_else(|| "hanging-punctuation-first-002.json".into());
     run(std::path::Path::new(&wpt), std::path::Path::new(&output))?;
     println!("{output}: original test aligns with its reference; none control does not");
     Ok(())
@@ -168,10 +193,8 @@ mod tests {
         fn new(html: &str) -> Self {
             static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
             let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let dir = std::env::temp_dir().join(format!(
-                "shodo-hanging-{}-{n}",
-                std::process::id()
-            ));
+            let dir =
+                std::env::temp_dir().join(format!("shodo-hanging-{}-{n}", std::process::id()));
             std::fs::create_dir_all(&dir).unwrap();
             std::fs::write(dir.join("index.html"), html).unwrap();
             Self(dir)
@@ -206,15 +229,25 @@ mod tests {
             hang_start: hang,
             glyphs: xs
                 .iter()
-                .map(|&x| G { inline_position: x, advance: 40.0, cluster: 0 })
+                .map(|&x| G {
+                    inline_position: x,
+                    advance: 40.0,
+                    cluster: 0,
+                })
                 .collect(),
         }
     }
 
     #[test]
     fn arrows_are_the_last_glyph_and_must_share_an_inline_position() {
-        assert!(arrows_aligned(&line(40.0, &[-40.0, 0.0]), &line(0.0, &[0.0])));
-        assert!(!arrows_aligned(&line(0.0, &[0.0, 40.0]), &line(0.0, &[0.0])));
+        assert!(arrows_aligned(
+            &line(40.0, &[-40.0, 0.0]),
+            &line(0.0, &[0.0])
+        ));
+        assert!(!arrows_aligned(
+            &line(0.0, &[0.0, 40.0]),
+            &line(0.0, &[0.0])
+        ));
         assert!(!arrows_aligned(&line(0.0, &[]), &line(0.0, &[0.0])));
     }
 
@@ -225,7 +258,10 @@ mod tests {
         assert_eq!(line.glyphs.len(), 2, "the hung glyph is retained");
         assert!(line.hang_start > 0.0);
         assert!(close(line.hang_start, line.glyphs[0].advance));
-        assert!(close(line.glyphs[0].inline_position, -line.glyphs[0].advance));
+        assert!(close(
+            line.glyphs[0].inline_position,
+            -line.glyphs[0].advance
+        ));
         assert!(close(line.glyphs[1].inline_position, 0.0));
     }
 
@@ -235,7 +271,10 @@ mod tests {
         let line = &lines[0];
         assert_eq!(line.hang_start, 0.0);
         assert!(close(line.glyphs[0].inline_position, 0.0));
-        assert!(close(line.glyphs[1].inline_position, line.glyphs[0].advance));
+        assert!(close(
+            line.glyphs[1].inline_position,
+            line.glyphs[0].advance
+        ));
     }
 
     #[test]

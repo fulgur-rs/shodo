@@ -147,9 +147,7 @@ pub fn project(
         // `HangingPunctuation` is non-exhaustive; fail closed for values
         // this caller does not map.
         _ => {
-            return Err(
-                "hanging-punctuation outside the verified source input footprint".into(),
-            );
+            return Err("hanging-punctuation outside the verified source input footprint".into());
         }
     };
     let options = s::LineOptions {
