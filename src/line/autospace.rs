@@ -427,7 +427,7 @@ mod tests {
             for end in 1..=6 {
                 cursor.push(
                     levels[end - 1].number(),
-                    Summary::leaf(edges[end - 1]),
+                    Summary::leaf(edges[end - 1], Some(&p.data)),
                     Some(&p.data),
                 );
                 let order = BidiInfo::reorder_visual(&levels[..end]);

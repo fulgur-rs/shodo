@@ -48,13 +48,16 @@ pub(crate) fn build(
             if let Some(combine) = unit.combine {
                 let span = &data.combine_spans[combine as usize];
                 if index == span.units.start {
-                    value.summary = Summary::leaf(Edge {
-                        tracking,
-                        kind: Kind::Atomic,
-                        unit: index as u32,
-                        box_node: data.spacing_tree.item_nodes[unit.item as usize],
-                        ..Default::default()
-                    });
+                    value.summary = Summary::leaf(
+                        Edge {
+                            tracking,
+                            kind: Kind::Atomic,
+                            unit: index as u32,
+                            box_node: data.spacing_tree.item_nodes[unit.item as usize],
+                            ..Default::default()
+                        },
+                        Some(data),
+                    );
                 }
                 previous_text = Some(unit.text.clone());
                 return value;
@@ -114,7 +117,7 @@ pub(crate) fn build(
                             unit: index as u32,
                             box_node: data.spacing_tree.item_nodes[source],
                             class: super::autospace::classify(ch),
-                            punctuation: data.punctuation[start + character],
+                            punct: (start + character) as u32,
                         };
                         if let Some(previous) = value.summary.last {
                             let amount = super::autospace::gap(data, previous, edge, false);
@@ -126,7 +129,9 @@ pub(crate) fn build(
                                 });
                             }
                         }
-                        value.summary = value.summary.join(Summary::leaf(edge), Some(data));
+                        value.summary = value
+                            .summary
+                            .join(Summary::leaf(edge, Some(data)), Some(data));
                         if word_separator(ch) {
                             value.word = value
                                 .word
@@ -135,20 +140,26 @@ pub(crate) fn build(
                     }
                 }
                 UnitKind::Atomic { .. } => {
-                    value.summary = Summary::leaf(Edge {
-                        tracking,
-                        kind: Kind::Atomic,
-                        unit: index as u32,
-                        ..Default::default()
-                    })
+                    value.summary = Summary::leaf(
+                        Edge {
+                            tracking,
+                            kind: Kind::Atomic,
+                            unit: index as u32,
+                            ..Default::default()
+                        },
+                        Some(data),
+                    )
                 }
                 UnitKind::Tab | UnitKind::ForcedBreak | UnitKind::BlockInInline { .. } => {
-                    value.summary = Summary::leaf(Edge {
-                        tracking: 0,
-                        kind: Kind::Barrier,
-                        unit: index as u32,
-                        ..Default::default()
-                    })
+                    value.summary = Summary::leaf(
+                        Edge {
+                            tracking: 0,
+                            kind: Kind::Barrier,
+                            unit: index as u32,
+                            ..Default::default()
+                        },
+                        Some(data),
+                    )
                 }
                 UnitKind::Open { box_index } | UnitKind::Close { box_index }
                     if !data.spacing_tree.has_content[box_index as usize + 1] =>
@@ -235,10 +246,10 @@ pub(crate) fn needed(data: &ParagraphData) -> bool {
                 .into_iter()
                 .flatten()
                 .any(|e| {
+                    let p = e.punctuation(data);
                     e.class == super::autospace::Class::Ideograph
-                        || e.punctuation.trim != crate::style::TextSpacingTrim::SpaceAll
-                            && (e.punctuation.left != LayoutUnit::ZERO
-                                || e.punctuation.right != LayoutUnit::ZERO)
+                        || p.trim != crate::style::TextSpacingTrim::SpaceAll
+                            && (p.left != LayoutUnit::ZERO || p.right != LayoutUnit::ZERO)
                 })
     })
 }
@@ -338,12 +349,15 @@ pub(super) fn hyphen_summary<'a>(
 pub(super) fn hyphen_leaf(data: &ParagraphData, index: usize, sat: &mut Saturation) -> Summary {
     let unit = &data.units[index];
     let style = &data.styles[data.items[unit.item as usize].style as usize];
-    Summary::leaf(Edge {
-        tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
-        kind: Kind::Text,
-        unit: index as u32,
-        ..Default::default()
-    })
+    Summary::leaf(
+        Edge {
+            tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
+            kind: Kind::Text,
+            unit: index as u32,
+            ..Default::default()
+        },
+        Some(data),
+    )
 }
 
 pub(super) fn width(
@@ -362,12 +376,15 @@ pub(super) fn width(
             let style = &data.styles[data.items[unit.item as usize].style as usize];
             cursor.push(
                 unit.level,
-                Summary::leaf(Edge {
-                    tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
-                    kind: Kind::Text,
-                    unit: i as u32,
-                    ..Default::default()
-                }),
+                Summary::leaf(
+                    Edge {
+                        tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
+                        kind: Kind::Text,
+                        unit: i as u32,
+                        ..Default::default()
+                    },
+                    Some(data),
+                ),
                 Some(data),
             );
         } else {
@@ -416,17 +433,20 @@ pub(super) fn apply(
             && data.text[unit.text.start as usize..].starts_with('\u{ad}')
         {
             let style = &data.styles[data.items[unit.item as usize].style as usize];
-            metadata[k] = Summary::leaf(Edge {
-                tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
-                kind: Kind::Text,
-                unit: (start + k) as u32,
-                ..Default::default()
-            });
+            metadata[k] = Summary::leaf(
+                Edge {
+                    tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
+                    kind: Kind::Text,
+                    unit: (start + k) as u32,
+                    ..Default::default()
+                },
+                Some(data),
+            );
         }
         scan.widths[k] =
             scan.widths[k].add(super::spacing_summary::raw(metadata[k].cost, sat), sat);
         if let Some(first) = metadata[k].first {
-            let (left, right) = first.punctuation.own_blanks();
+            let (left, right) = first.punctuation(data).own_blanks();
             leading[k] = leading[k].sub(if unit.level % 2 == 1 { right } else { left }, sat);
         }
     }

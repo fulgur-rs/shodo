@@ -13,14 +13,41 @@ pub(super) enum Kind {
     Barrier,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+/// Marks an edge with no punctuation entry (a marker, atomic or barrier).
+const NO_PUNCTUATION: u32 = u32::MAX;
+
+#[derive(Clone, Copy, Debug)]
 pub(super) struct Edge {
     pub(super) tracking: i32,
     pub(super) kind: Kind,
     pub(super) unit: u32,
     pub(super) box_node: u32,
     pub(super) class: super::autospace::Class,
-    pub(super) punctuation: super::punctuation::Punctuation,
+    /// Index into `ParagraphData::punctuation`. Edges are copied on every
+    /// join, so they refer to the entry instead of carrying a 28-byte copy.
+    pub(super) punct: u32,
+}
+
+impl Default for Edge {
+    fn default() -> Self {
+        Self {
+            tracking: 0,
+            kind: Kind::default(),
+            unit: 0,
+            box_node: 0,
+            class: Default::default(),
+            punct: NO_PUNCTUATION,
+        }
+    }
+}
+
+impl Edge {
+    pub(super) fn punctuation(&self, data: &ParagraphData) -> super::punctuation::Punctuation {
+        data.punctuation
+            .get(self.punct as usize)
+            .copied()
+            .unwrap_or_default()
+    }
 }
 
 pub(super) fn allowed(a: Edge, b: Edge) -> bool {
@@ -49,8 +76,10 @@ pub(crate) struct Summary {
 }
 
 impl Summary {
-    pub(super) fn leaf(edge: Edge) -> Self {
-        let (left, right) = edge.punctuation.own_blanks();
+    pub(super) fn leaf(edge: Edge, data: Option<&ParagraphData>) -> Self {
+        let (left, right) = data.map_or((LayoutUnit::ZERO, LayoutUnit::ZERO), |d| {
+            edge.punctuation(d).own_blanks()
+        });
         Self {
             first: Some(edge),
             last: Some(edge),
@@ -492,10 +521,13 @@ impl VisualNeighbors {
                 (
                     level,
                     if event {
-                        Summary::leaf(Edge {
-                            unit: unit as u32,
-                            ..Default::default()
-                        })
+                        Summary::leaf(
+                            Edge {
+                                unit: unit as u32,
+                                ..Default::default()
+                            },
+                            None,
+                        )
                     } else {
                         Summary::default()
                     },
@@ -513,10 +545,13 @@ impl VisualNeighbors {
                     unit,
                     level,
                     if event {
-                        Summary::leaf(Edge {
-                            unit: unit as u32,
-                            ..Default::default()
-                        })
+                        Summary::leaf(
+                            Edge {
+                                unit: unit as u32,
+                                ..Default::default()
+                            },
+                            None,
+                        )
                     } else {
                         Summary::default()
                     },
@@ -619,7 +654,7 @@ mod tests {
     fn unchanged_deep_cursor_summary_does_not_repeat_frame_work() {
         let mut cursor = Cursor::default();
         for level in 0..=126 {
-            cursor.push(level, Summary::leaf(edge(64, u32::from(level))), None);
+            cursor.push(level, Summary::leaf(edge(64, u32::from(level)), None), None);
         }
         assert_eq!(cursor.summary(None).cost, 8064);
         cursor.visits.set(0);
@@ -640,7 +675,7 @@ mod tests {
             (123, 8384),
             (0, 8448),
         ] {
-            cursor.push(level, Summary::leaf(edge(64, 127)), None);
+            cursor.push(level, Summary::leaf(edge(64, 127), None), None);
             assert_eq!(cursor.summary(None).cost, want);
             cursor.visits.set(0);
             for _ in 0..16 {
@@ -680,7 +715,7 @@ mod tests {
                 (None, None, 0, [true; 4])
             );
         }
-        cursor.push(0, Summary::leaf(edge(64, 2)), None);
+        cursor.push(0, Summary::leaf(edge(64, 2), None), None);
         for _ in 0..2 {
             assert_eq!(
                 summary_state(cursor.summary(None)),
@@ -727,18 +762,24 @@ mod tests {
         let mut cursor = Cursor::default();
         cursor.push(
             0,
-            Summary::leaf(Edge {
-                class: super::super::autospace::Class::Ideograph,
-                ..edge(0, 0)
-            }),
+            Summary::leaf(
+                Edge {
+                    class: super::super::autospace::Class::Ideograph,
+                    ..edge(0, 0)
+                },
+                None,
+            ),
             None,
         );
         cursor.push(
             1,
-            Summary::leaf(Edge {
-                class: super::super::autospace::Class::Letter,
-                ..edge(0, 1)
-            }),
+            Summary::leaf(
+                Edge {
+                    class: super::super::autospace::Class::Letter,
+                    ..edge(0, 1)
+                },
+                None,
+            ),
             None,
         );
         // The root's autospace is ic/8, with 64 layout units per pixel.
@@ -758,12 +799,12 @@ mod tests {
     fn cloned_cursor_cache_is_independent() {
         let mut original = Cursor::default();
         for level in 0..=126 {
-            original.push(level, Summary::leaf(edge(64, u32::from(level))), None);
+            original.push(level, Summary::leaf(edge(64, u32::from(level)), None), None);
         }
         assert_eq!(original.summary(None).cost, 8064);
         original.visits.set(0);
         let mut clone = original.clone();
-        clone.push(0, Summary::leaf(edge(128, 127)), None);
+        clone.push(0, Summary::leaf(edge(128, 127), None), None);
         assert_eq!(clone.summary(None).cost, 8160);
         assert_eq!(original.summary(None).cost, 8064);
         assert_eq!(
@@ -791,7 +832,7 @@ mod tests {
                 let summary = match next() % 4 {
                     0 => Summary::default(),
                     1 => Summary::barrier(),
-                    _ => Summary::leaf(edge((next() % 9) as i32 - 4, unit)),
+                    _ => Summary::leaf(edge((next() % 9) as i32 - 4, unit), None),
                 };
                 cursor.push(level, summary, None);
                 let (got, want) = (cursor.summary(None), reference_summary(&cursor));
@@ -895,12 +936,15 @@ mod tests {
                 .map(|i| {
                     (
                         ((profile >> (2 * i)) & 3) as u8,
-                        Summary::leaf(Edge {
-                            tracking: (i as i32 - 2) * 64,
-                            kind: [Kind::Text, Kind::Cursive, Kind::Atomic, Kind::Barrier]
-                                [(i + profile) % 4],
-                            ..Default::default()
-                        }),
+                        Summary::leaf(
+                            Edge {
+                                tracking: (i as i32 - 2) * 64,
+                                kind: [Kind::Text, Kind::Cursive, Kind::Atomic, Kind::Barrier]
+                                    [(i + profile) % 4],
+                                ..Default::default()
+                            },
+                            None,
+                        ),
                     )
                 })
                 .collect();
@@ -934,11 +978,14 @@ mod tests {
                 (0..count).map(|i| {
                     (
                         ((i * 37) % 127) as u8,
-                        Summary::leaf(Edge {
-                            tracking: 64,
-                            kind: Kind::Text,
-                            ..Default::default()
-                        }),
+                        Summary::leaf(
+                            Edge {
+                                tracking: 64,
+                                kind: Kind::Text,
+                                ..Default::default()
+                            },
+                            None,
+                        ),
                     )
                 }),
                 None,
@@ -947,11 +994,14 @@ mod tests {
             for end in 1..=count {
                 cursor.push(
                     (((end - 1) * 37) % 127) as u8,
-                    Summary::leaf(Edge {
-                        tracking: 64,
-                        kind: Kind::Text,
-                        ..Default::default()
-                    }),
+                    Summary::leaf(
+                        Edge {
+                            tracking: 64,
+                            kind: Kind::Text,
+                            ..Default::default()
+                        },
+                        None,
+                    ),
                     None,
                 );
                 assert_eq!(index.query(0..end, None).cost, cursor.summary(None).cost);
@@ -992,7 +1042,7 @@ mod tests {
             for end in 1..=6 {
                 cursor.push(
                     levels[end - 1].number(),
-                    Summary::leaf(edges[end - 1]),
+                    Summary::leaf(edges[end - 1], None),
                     None,
                 );
                 let order = BidiInfo::reorder_visual(&levels[..end]);
@@ -1026,11 +1076,14 @@ mod tests {
         for level in 0..=126 {
             cursor.push(
                 level,
-                Summary::leaf(Edge {
-                    tracking: 64,
-                    kind: Kind::Text,
-                    ..Default::default()
-                }),
+                Summary::leaf(
+                    Edge {
+                        tracking: 64,
+                        kind: Kind::Text,
+                        ..Default::default()
+                    },
+                    None,
+                ),
                 None,
             );
         }
@@ -1041,16 +1094,33 @@ mod tests {
             let level = ((i * 37) % 127) as u8;
             cursor.push(
                 level,
-                Summary::leaf(Edge {
-                    tracking: 64,
-                    kind: Kind::Text,
-                    ..Default::default()
-                }),
+                Summary::leaf(
+                    Edge {
+                        tracking: 64,
+                        kind: Kind::Text,
+                        ..Default::default()
+                    },
+                    None,
+                ),
                 None,
             );
             assert_eq!(cursor.summary(None).cost, i * 64);
             assert!(cursor.frames.len() <= 127);
         }
         assert!(cursor.visits.get() < 100_000 * 130);
+    }
+}
+
+#[cfg(test)]
+mod size_tests {
+    use super::*;
+
+    /// Summaries are copied on every join and kept per unit and per range
+    /// node, so their size is both a speed and a memory cost. Edges refer to
+    /// their punctuation entry instead of carrying a copy.
+    #[test]
+    fn edges_and_summaries_stay_compact() {
+        assert!(std::mem::size_of::<Edge>() <= 24, "Edge grew");
+        assert!(std::mem::size_of::<Summary>() <= 64, "Summary grew");
     }
 }
