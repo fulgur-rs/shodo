@@ -344,7 +344,7 @@ pub(super) fn boundary(
 ) -> (LayoutUnit, LayoutUnit) {
     // Most neighbors are ordinary letters whose pair adjustment is zero
     // either way, so decide that before consulting the spacing tree.
-    let adjustment = pair(a.punctuation, b.punctuation);
+    let adjustment = pair(a.punctuation(data), b.punctuation(data));
     if adjustment == (LayoutUnit::ZERO, LayoutUnit::ZERO)
         || blocked
         || !super::spacing_summary::allowed(a, b)
@@ -397,7 +397,7 @@ pub(super) fn edges(
     };
     if let Some(first) = first {
         value.start_unit = Some(first.unit);
-        let p = first.punctuation;
+        let p = first.punctuation(data);
         let blocked = (if ltr {
             summary.hang_before
         } else {
@@ -430,7 +430,7 @@ pub(super) fn edges(
     }
     if let Some(end) = end {
         value.end_unit = Some(end.unit);
-        let p = end.punctuation;
+        let p = end.punctuation(data);
         let blocked = (if ltr {
             summary.hang_after
         } else {
@@ -446,7 +446,7 @@ pub(super) fn edges(
             // Storage units may contain several typographic characters. Only
             // deductions on this very source character share its advance.
             let start_removed = first
-                .filter(|first| first.punctuation.source == p.source)
+                .filter(|first| first.punctuation(data).source == p.source)
                 .map_or(LayoutUnit::ZERO, |_| {
                     value.start_trim.add(value.hang_start, sat)
                 });
