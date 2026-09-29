@@ -265,14 +265,30 @@ def selection(path):
     return value
 
 
+def diagnostic_source(path, value):
+    source = Path(value["source"])
+    return source if source.is_absolute() else Path(path).resolve().parent / source
+
+
 def diagnostic_inventory(path):
     value = json.loads(Path(path).read_text())
-    require(file_hash(value["source"]) == value["source_sha256"], "native diagnostic source log changed")
+    require(file_hash(diagnostic_source(path, value)) == value["source_sha256"], "native diagnostic source log changed")
     require(value["diagnostic_count"] == len(value["messages"]), "native diagnostic count differs")
     documents = {m["id"] for m in value["messages"]}
     require(set(value["documents"]) == documents and value["document_count"] == len(documents), "native diagnostic case set differs")
     require(all(m["phase"] == "native-initial" for m in value["messages"]), "wrong native diagnostic phase")
     return documents
+
+
+def archive_diagnostics(path, stage):
+    value = json.loads(Path(path).read_text())
+    source = diagnostic_source(path, value)
+    saved = stage / "original-native-diagnostics.log"
+    shutil.copy2(source, saved)
+    require(file_hash(saved) == value["source_sha256"], "archived native diagnostic source log changed")
+    value.setdefault("original_source", value["source"])
+    value["source"] = saved.name
+    write_json(stage / "native-diagnostic-inventory.json", value)
 
 
 def invoke(binary, mode, engine, wpt, selector, case, output, operation):
@@ -359,7 +375,7 @@ def collect(args):
     status = {"collection_complete": False, "original_case_count": len(selected["cases"]), "runs": [], "references": []}
     write_json(stage / "progress.json", status)
     shutil.copy2(args.selection, stage / "selection.json")
-    shutil.copy2(args.diagnostics, stage / "native-diagnostic-inventory.json")
+    archive_diagnostics(args.diagnostics, stage)
     selector = stage / "selection.json"
     sources = source_hashes()
     snapshots = stage / "harness-sources"
@@ -379,6 +395,7 @@ def collect(args):
     metadata = {"schema": 1, "archive": archive, "source_sha256": sources,
                 "harness_base_revision": foundation.execute(["git", "rev-parse", "HEAD"], stage / "harness-revision.log", cwd=ROOT).strip(),
                 "input_selection_sha256": file_hash(selector), "native_diagnostic_inventory_sha256": file_hash(args.diagnostics),
+                "archived_native_diagnostic_inventory_sha256": file_hash(stage / "native-diagnostic-inventory.json"),
                 "wpt_revision": selected["wpt_revision"], "raikiri_revision": overlay.RAIKIRI_REVISION,
                 "candidate_revision": overlay.S4_REVISION, "builds": builds, "build_configuration": configuration,
                 "rustc": foundation.execute(["rustc", "+stable", "-Vv"], stage / "rustc.log").strip(),
