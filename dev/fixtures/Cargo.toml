@@ -18,6 +18,8 @@ serde_json = { version = "1", features = ["float_roundtrip"] }
 sha2 = "0.10"
 
 [dev-dependencies]
+fontique = { version = "0.11", default-features = false, features = ["std"] }
+raikiri-dom = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
 skrifa = "=0.44.0"
 harfrust = "0.12"
 raikiri-html = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
@@ -63,4 +65,8 @@ test = true
 
 [[example]]
 name = "raikiri_style_diffs"
+test = true
+
+[[example]]
+name = "source_coverage"
 test = true
