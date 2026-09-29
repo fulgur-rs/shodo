@@ -37,9 +37,19 @@ include raikiri crates pinned to a Git revision; a first workspace build needs
 access to that repository. After dependencies are cached, use `--offline` where
 appropriate. No browser or font download is needed for ordinary Rust tests.
 
+The published `shodo` package on crates.io only contains `src/`, `tests/`,
+`examples/`, and top-level metadata (see `[package].include` in `Cargo.toml`);
+`dev/`, `docs/`, and `.github/` are not part of the tarball. Building or
+testing the published package therefore requires a Git checkout of this
+repository, not `cargo download`/tarball extraction, because `tests/vertical.rs`
+and `tests/japanese.rs` currently load real fonts from `dev/fixtures/assets/`
+(tracked as shodo-c6r; the plan is to move that dependency into a development
+harness crate so the published package's own test target no longer needs it).
+
 | Location | Purpose |
 | --- | --- |
 | `src/` | Library implementation and module tests. |
+| `src/test_support/` | Shared fixed-font bytes for `src/` unit tests only (`#[cfg(test)]`); not part of the published crate. |
 | `tests/` | Public API integration tests. |
 | `examples/` | Library examples. |
 | `dev/fixtures/` | Fixed-font cases, rendering examples, snapshots, and browser checks. |
@@ -106,6 +116,12 @@ Add a regression test for a behavior change. Public API behavior belongs in
 Use fixed registered fonts with system discovery disabled for deterministic
 assertions. Keep expected geometry or glyph ownership grounded in the behavior
 being tested, rather than copying the implementation's calculation.
+
+`tests/vertical.rs` and `tests/japanese.rs` are a known, tracked exception:
+they load real fonts directly from `dev/fixtures/assets/` instead of following
+the rule above. Do not add further real-font `include_bytes!` calls to `tests/`;
+new real-font regressions belong in `dev/fixtures/tests/` until these two files
+are migrated to a development harness crate (shodo-c6r).
 
 Normal checks do not rewrite expected data:
 

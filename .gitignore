@@ -1,3 +1,8 @@
 /target
 Cargo.lock
 /.claude/worktrees/
+
+# Local agent-tool state, not shared or published (see shodo-c6r.1).
+/.beads/
+/.codex/
+/.agents/

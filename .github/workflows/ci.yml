@@ -32,6 +32,13 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets
       - run: cargo clippy --workspace --all-targets --features shodo-fixtures/accesskit
+      - name: Check published package contents
+        run: |
+          cargo package --list --offline -p shodo > /tmp/shodo-pkg-list.txt
+          if grep -vE '^(src/|tests/|examples/)|^(Cargo\.(toml|toml\.orig|lock)|\.cargo_vcs_info\.json|CHANGELOG\.md|LICENSE-(APACHE|MIT)|README\.md)$' /tmp/shodo-pkg-list.txt; then
+            echo "::error::cargo package -p shodo would publish unexpected paths (see above); update Cargo.toml [package].include"
+            exit 1
+          fi
       - run: cargo test --workspace
       - name: Check line cache with debug assertions disabled
         run: cargo test --release -p shodo --lib line::cache::tests

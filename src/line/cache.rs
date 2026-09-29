@@ -624,7 +624,7 @@ mod tests {
             },
         );
         fonts
-            .register(include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec())
+            .register(crate::test_support::fonts::LATIN.to_vec())
             .unwrap();
         let mut builder = crate::ParagraphBuilder::new(style, &limits);
         builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
@@ -1477,7 +1477,7 @@ mod tests {
         );
         fonts
             .register_face(
-                include_bytes!("../../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+                crate::test_support::fonts::CJK.to_vec(),
                 0,
                 FontFaceDescriptor {
                     family: "CJK".into(),

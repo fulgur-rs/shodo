@@ -927,7 +927,7 @@ mod tests {
     fn missing_vorg_uses_vmtx_top_bearing_for_vertical_origin() {
         // CJK 水 has yMax=838 in this pinned outline and vmtx TSB=42.
         // Remove VORG and change only its TSB to 142: origin becomes 980.
-        let original = include_bytes!("../dev/fixtures/assets/fonts/cjk.otf");
+        let original = crate::test_support::fonts::CJK;
         let face = skrifa::FontRef::from_index(original, 0).unwrap();
         let gid = face.charmap().map('水').unwrap().to_u32() as usize;
         let mut tables = Vec::new();
@@ -1078,7 +1078,7 @@ mod tests {
         );
         fonts
             .register_face(
-                include_bytes!("../dev/fixtures/assets/fonts/arabic.ttf").to_vec(),
+                crate::test_support::fonts::ARABIC.to_vec(),
                 0,
                 crate::font::FontFaceDescriptor {
                     family: "Shodo Fixture Arabic".into(),
@@ -1108,7 +1108,7 @@ mod tests {
     }
     #[test]
     fn optical_sizing_and_explicit_variations_survive_public_views() {
-        let bytes = include_bytes!("../dev/fixtures/assets/fonts/latin.ttf");
+        let bytes = crate::test_support::fonts::LATIN;
         let mut tables = Vec::new();
         for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
             let at = 12 + n * 16;
@@ -1225,7 +1225,7 @@ mod tests {
         );
         fonts
             .register_face(
-                include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+                crate::test_support::fonts::LATIN.to_vec(),
                 0,
                 crate::font::FontFaceDescriptor {
                     family: "Latin".into(),
@@ -1263,7 +1263,7 @@ mod tests {
     #[test]
     fn expanded_single_cluster_pen_splits_without_new_breaks() {
         use skrifa::MetadataProvider;
-        let bytes = include_bytes!("../dev/fixtures/assets/fonts/latin.ttf");
+        let bytes = crate::test_support::fonts::LATIN;
         let font = skrifa::FontRef::from_index(bytes, 0).unwrap();
         let a = font.charmap().map('a').unwrap().to_u32() as u16;
         let w = font.charmap().map('W').unwrap().to_u32() as u16;
@@ -1360,7 +1360,7 @@ mod tests {
     #[test]
     fn negative_positioning_advances_obey_run_pen_budget() {
         use skrifa::MetadataProvider;
-        let bytes = include_bytes!("../dev/fixtures/assets/fonts/latin.ttf");
+        let bytes = crate::test_support::fonts::LATIN;
         let glyph = skrifa::FontRef::from_index(bytes, 0)
             .unwrap()
             .charmap()
@@ -1473,7 +1473,7 @@ mod tests {
             if real {
                 fonts
                     .register_face(
-                        include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+                        crate::test_support::fonts::LATIN.to_vec(),
                         0,
                         crate::font::FontFaceDescriptor {
                             family: "Latin".into(),
@@ -1524,7 +1524,7 @@ mod tests {
         );
         fonts
             .register_face(
-                include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+                crate::test_support::fonts::LATIN.to_vec(),
                 0,
                 crate::font::FontFaceDescriptor {
                     family: "Latin".into(),

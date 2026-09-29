@@ -158,7 +158,7 @@ mod tests {
     use super::*;
     #[test]
     fn ic_height_adjust_uses_vertical_variation_delta() {
-        let bytes = include_bytes!("../../dev/fixtures/assets/fonts/cjk.otf");
+        let bytes = crate::test_support::fonts::CJK;
         let font = FontRef::from_index(bytes, 0).unwrap();
         let glyph = font.charmap().map('水').unwrap();
         let nominal = font.vmtx().unwrap().advance(glyph).unwrap() as f32;

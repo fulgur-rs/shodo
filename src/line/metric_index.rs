@@ -1047,7 +1047,7 @@ mod tests {
         );
         fonts
             .register_face(
-                include_bytes!("../../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+                crate::test_support::fonts::CJK.to_vec(),
                 0,
                 FontFaceDescriptor {
                     family: "Shodo Fixture CJK".into(),

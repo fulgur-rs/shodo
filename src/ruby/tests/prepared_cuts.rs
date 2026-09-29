@@ -18,17 +18,11 @@ fn fonts() -> FontCollection {
         },
     );
     for (family, bytes) in [
-        (
-            "Shodo Fixture CJK",
-            include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf").as_slice(),
-        ),
-        (
-            "Shodo Fixture Latin",
-            include_bytes!("../../../dev/fixtures/assets/fonts/latin.ttf").as_slice(),
-        ),
+        ("Shodo Fixture CJK", crate::test_support::fonts::CJK),
+        ("Shodo Fixture Latin", crate::test_support::fonts::LATIN),
         (
             "Shodo Fixture Emoji",
-            include_bytes!("../../../dev/fixtures/assets/fonts/emoji-color.ttf").as_slice(),
+            crate::test_support::fonts::EMOJI_COLOR,
         ),
     ] {
         fonts

@@ -742,7 +742,7 @@ mod tests {
         );
         fonts
             .register_face(
-                include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+                crate::test_support::fonts::LATIN.to_vec(),
                 0,
                 FontFaceDescriptor {
                     family: "TCY".into(),
@@ -849,7 +849,7 @@ mod tests {
         }
     }
     fn synthetic_font(format: u16, bad: bool) -> Vec<u8> {
-        let bytes = include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf");
+        let bytes = crate::test_support::fonts::LATIN;
         let glyph = 367u16;
         let mut gdef = Vec::new();
         for word in [1u16, 3, 0, 0, 18, 0, 0] {

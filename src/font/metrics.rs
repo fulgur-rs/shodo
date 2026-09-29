@@ -180,7 +180,7 @@ mod tests {
 
     #[test]
     fn variation_and_decoration_metrics_match_run_instance() {
-        let base = include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf");
+        let base = crate::test_support::fonts::LATIN;
         let mut tables = Vec::new();
         for n in 0..u16::from_be_bytes(base[4..6].try_into().unwrap()) as usize {
             let at = 12 + n * 16;

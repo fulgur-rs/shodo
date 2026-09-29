@@ -198,7 +198,7 @@ fn final_review_giant_grapheme_reuses_identical_font_queries_across_styles() {
 fn final_review_zero_window_bounds_unsafe_chain_expansion() {
     let fonts = final_review_fonts();
     fonts
-        .register(include_bytes!("../../dev/fixtures/assets/fonts/arabic.ttf").to_vec())
+        .register(crate::test_support::fonts::ARABIC.to_vec())
         .unwrap();
     for budget in [0, 4, 16] {
         let limits = Limits {
@@ -253,7 +253,7 @@ fn final_review_prohibited_positions_do_not_reshape_unsafe_edge_windows() {
     let fonts = final_review_fonts();
     fonts
         .register_face(
-            include_bytes!("../../dev/fixtures/assets/fonts/arabic.ttf").to_vec(),
+            crate::test_support::fonts::ARABIC.to_vec(),
             0,
             crate::font::FontFaceDescriptor {
                 family: "Shodo Fixture Arabic".into(),
@@ -304,7 +304,7 @@ fn edge_window_shapes_are_reused_across_candidates_and_relayouts() {
     let fonts = final_review_fonts();
     fonts
         .register_face(
-            include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+            crate::test_support::fonts::LATIN.to_vec(),
             0,
             crate::font::FontFaceDescriptor {
                 family: "Shodo Fixture Latin".into(),
@@ -352,7 +352,7 @@ fn shrink_to_releases_the_edge_window_cache() {
     let fonts = final_review_fonts();
     fonts
         .register_face(
-            include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+            crate::test_support::fonts::LATIN.to_vec(),
             0,
             crate::font::FontFaceDescriptor {
                 family: "Shodo Fixture Latin".into(),
@@ -383,7 +383,7 @@ fn arabic_fonts() -> crate::font::FontCollection {
     let fonts = final_review_fonts();
     fonts
         .register_face(
-            include_bytes!("../../dev/fixtures/assets/fonts/arabic.ttf").to_vec(),
+            crate::test_support::fonts::ARABIC.to_vec(),
             0,
             crate::font::FontFaceDescriptor {
                 family: "Shodo Fixture Arabic".into(),

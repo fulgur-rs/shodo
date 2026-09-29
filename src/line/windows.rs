@@ -621,11 +621,7 @@ fn remaining_valid(
 #[cfg(test)]
 mod tests {
     fn ligature_font(substitutions: &[(&str, char)]) -> Vec<u8> {
-        ligature_font_for(
-            include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf"),
-            *b"latn",
-            substitutions,
-        )
+        ligature_font_for(crate::test_support::fonts::LATIN, *b"latn", substitutions)
     }
 
     fn ligature_font_for(bytes: &[u8], script: [u8; 4], substitutions: &[(&str, char)]) -> Vec<u8> {
@@ -739,11 +735,7 @@ mod tests {
             MetadataProvider,
             instance::{LocationRef, Size},
         };
-        let bytes = ligature_font_for(
-            include_bytes!("../../dev/fixtures/assets/fonts/cjk.otf"),
-            *b"kana",
-            &[("カｶ", '水')],
-        );
+        let bytes = ligature_font_for(crate::test_support::fonts::CJK, *b"kana", &[("カｶ", '水')]);
         let font = skrifa::FontRef::from_index(&bytes, 0).unwrap();
         let metrics = font.glyph_metrics(Size::new(20.0), LocationRef::default());
         let water = font.charmap().map('水').unwrap();
@@ -831,7 +823,7 @@ mod tests {
 
     fn expanded_hyphen_font(count: u16) -> Vec<u8> {
         use skrifa::MetadataProvider;
-        let bytes = include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf");
+        let bytes = crate::test_support::fonts::LATIN;
         let font = skrifa::FontRef::from_index(bytes, 0).unwrap();
         let dash = font.charmap().map('-').unwrap().to_u32() as u16;
         let w = font.charmap().map('W').unwrap().to_u32() as u16;
@@ -917,7 +909,7 @@ mod tests {
             );
             fonts
                 .register_face(
-                    include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+                    crate::test_support::fonts::LATIN.to_vec(),
                     0,
                     FontFaceDescriptor {
                         family: "Letters".into(),
@@ -928,7 +920,7 @@ mod tests {
                 .unwrap();
             fonts
                 .register_face(
-                    include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+                    crate::test_support::fonts::LATIN.to_vec(),
                     0,
                     FontFaceDescriptor {
                         family: "Other".into(),
@@ -1334,14 +1326,8 @@ mod tests {
             },
         );
         for (family, bytes) in [
-            (
-                "Latin",
-                include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").as_slice(),
-            ),
-            (
-                "Arabic",
-                include_bytes!("../../dev/fixtures/assets/fonts/arabic.ttf").as_slice(),
-            ),
+            ("Latin", crate::test_support::fonts::LATIN),
+            ("Arabic", crate::test_support::fonts::ARABIC),
         ] {
             fonts
                 .register_face(
@@ -1469,7 +1455,7 @@ mod tests {
         );
         let latin = fonts
             .register_face(
-                include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+                crate::test_support::fonts::LATIN.to_vec(),
                 0,
                 FontFaceDescriptor {
                     family: "Latin".into(),
@@ -1479,7 +1465,7 @@ mod tests {
             .unwrap();
         let cjk = fonts
             .register_face(
-                include_bytes!("../../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+                crate::test_support::fonts::CJK.to_vec(),
                 0,
                 FontFaceDescriptor {
                     family: "Cjk".into(),

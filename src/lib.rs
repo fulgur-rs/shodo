@@ -29,6 +29,8 @@ mod output;
 mod paragraph;
 mod sanitize;
 mod shape;
+#[cfg(test)]
+mod test_support;
 
 pub use builder::{ParagraphBuilder, RichText};
 pub use context::LayoutContext;

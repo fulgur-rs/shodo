@@ -7,7 +7,7 @@ use crate::ruby::*;
 use crate::style::{FontFamily, InlineStyle, ParagraphStyle};
 use crate::{LayoutContext, ParagraphBuilder};
 
-const CJK: &[u8] = include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf");
+const CJK: &[u8] = crate::test_support::fonts::CJK;
 
 fn style(size: f32) -> InlineStyle {
     InlineStyle {

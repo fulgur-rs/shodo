@@ -640,7 +640,7 @@ mod tests {
     use skrifa::{FontRef, MetadataProvider, raw::TableProvider};
 
     fn cjk_tables() -> Vec<([u8; 4], Vec<u8>)> {
-        let base = include_bytes!("../../dev/fixtures/assets/fonts/cjk.otf");
+        let base = crate::test_support::fonts::CJK;
         (0..u16::from_be_bytes(base[4..6].try_into().unwrap()) as usize)
             .map(|n| {
                 let at = 12 + n * 16;
@@ -665,7 +665,7 @@ mod tests {
     fn justification_filters_boundaries_inside_an_actual_punctuation_ligature() {
         use crate::Fragment;
         use crate::style::{TextAlign, TextJustify};
-        let font = FontRef::new(include_bytes!("../../dev/fixtures/assets/fonts/cjk.otf")).unwrap();
+        let font = FontRef::new(crate::test_support::fonts::CJK).unwrap();
         let ids: Vec<_> = ['「', '日', '」']
             .iter()
             .map(|c| font.charmap().map(*c).unwrap().to_u32() as u16)
@@ -760,7 +760,7 @@ mod tests {
     #[test]
     fn fallback_variation_and_size_adjust_use_the_actual_blank() {
         let mut tables = cjk_tables();
-        let count = FontRef::new(include_bytes!("../../dev/fixtures/assets/fonts/cjk.otf"))
+        let count = FontRef::new(crate::test_support::fonts::CJK)
             .unwrap()
             .maxp()
             .unwrap()
@@ -806,7 +806,7 @@ mod tests {
         );
         fonts
             .register_face(
-                include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+                crate::test_support::fonts::LATIN.to_vec(),
                 0,
                 FontFaceDescriptor {
                     family: "Latin".into(),
@@ -880,7 +880,7 @@ mod tests {
 
     #[test]
     fn proportional_punctuation_keeps_its_advance_and_ink() {
-        let font = FontRef::new(include_bytes!("../../dev/fixtures/assets/fonts/cjk.otf")).unwrap();
+        let font = FontRef::new(crate::test_support::fonts::CJK).unwrap();
         let opening = font.charmap().map('「').unwrap().to_u32() as usize;
         let mut tables = cjk_tables();
         let hmtx = &mut tables.iter_mut().find(|t| t.0 == *b"hmtx").unwrap().1;

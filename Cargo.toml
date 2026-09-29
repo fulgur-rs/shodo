@@ -10,6 +10,18 @@ homepage = "https://fulgur.dev/"
 readme = "README.md"
 keywords = ["typesetting", "text", "layout", "shaping"]
 categories = ["text-processing", "graphics"]
+# Keep the published tarball limited to the library and its own tests/examples.
+# `dev/`, `docs/`, and `.github/` are development-only content; see shodo-c6r.1.
+include = [
+    "src/**",
+    "tests/**",
+    "examples/**",
+    "/Cargo.toml",
+    "/README.md",
+    "/LICENSE-APACHE",
+    "/LICENSE-MIT",
+    "/CHANGELOG.md",
+]
 
 [features]
 accesskit = ["dep:accesskit"]

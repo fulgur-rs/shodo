@@ -77,7 +77,7 @@ mod tests {
             },
         );
         let id = fonts
-            .register(include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec())
+            .register(crate::test_support::fonts::LATIN.to_vec())
             .unwrap();
         let data = fonts.font_data(id).unwrap();
         let font = harfrust::FontRef::from_index(data.data.as_ref(), 0).unwrap();

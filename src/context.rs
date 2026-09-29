@@ -93,7 +93,7 @@ mod tests {
             },
         );
         fonts
-            .register(include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").to_vec())
+            .register(crate::test_support::fonts::LATIN.to_vec())
             .unwrap();
         let mut style = ParagraphStyle::default();
         style.first_line = Some(style.root.clone());

@@ -575,7 +575,7 @@ mod tests {
         );
         fonts
             .register_face(
-                include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+                crate::test_support::fonts::LATIN.to_vec(),
                 0,
                 FontFaceDescriptor {
                     family: "Latin".into(),
@@ -713,7 +713,7 @@ mod tests {
         );
         fonts
             .register_face(
-                include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+                crate::test_support::fonts::LATIN.to_vec(),
                 0,
                 FontFaceDescriptor {
                     family: "Latin".into(),
@@ -774,11 +774,7 @@ mod tests {
             })
             .flat_map(|r| r.glyphs())
             .collect::<Vec<_>>();
-        let font = harfrust::FontRef::from_index(
-            include_bytes!("../../dev/fixtures/assets/fonts/latin.ttf"),
-            0,
-        )
-        .unwrap();
+        let font = harfrust::FontRef::from_index(crate::test_support::fonts::LATIN, 0).unwrap();
         let d = harfrust::ShaperData::new(&font);
         let shaper = d.shaper(&font).build();
         let mut buffer = harfrust::UnicodeBuffer::new();
