@@ -13,7 +13,8 @@ and initial library collections. The library collection completed 1,446 of
 owners across 71,052 allocation windows. Both modes have 97 eligible documents
 after known native model diagnostics and the sequential observation bound are
 excluded. Raw/source/binary/lock/reference hashes and independent full-output
-matches are audited. Repository verification and final review remain outstanding.
+matches are audited. Results retain the unsupported and incompatible operations
+described below; they do not establish production-switch readiness.
 
 ## Reproduce
 

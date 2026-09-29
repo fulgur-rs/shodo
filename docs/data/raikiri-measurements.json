@@ -891,8 +891,8 @@
     }
   },
   "remaining_acceptance": [
-    "final combined original-acceptance audit",
-    "normal repo verification, fresh final review, ordinary measurement PR/exact CI/merge/close/owned cleanup"
+    "one fresh whole-branch review and any required TDD fixes",
+    "ordinary measurement PR; exact-head CI; merge; issue close; owned cleanup"
   ],
   "initial_library_construction": {
     "collection_complete": true,
@@ -1258,5 +1258,6 @@
     "baseline_git_path": "expectations/raikiri-baseline.txt",
     "baseline_sha256": "56154e4748a14a4762f1d25cf05f1c009e63151cba726fffd31dc2ebb6be0d65",
     "baseline_source": "immutable git object; shared current baseline has advanced externally and is not substituted"
-  }
+  },
+  "measurement_requirements_verified": true
 }
