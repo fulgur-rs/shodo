@@ -27,6 +27,10 @@ OPERATIONS = ["pipeline", "layout", "isolated"]
 PAIRS = 16
 MAX_PINNED_CPU_BUSY = 0.25
 LOADED_ABOVE = 6.0
+NOTES = [
+    "isolated not measured: the pinned pipeline-release time binary (SHA256 7caf472b...) does not implement the isolated operation ('unknown operation'); the failure records are kept as evidence, not skipped. A separate isolated-release binary exists but is not part of this summary.",
+    "Load label uses the 1-minute load average sampled before and after the run only; load during the run is not observed.",
+]
 
 
 def sha256(path):
@@ -66,6 +70,25 @@ def run_probe(binary, mode, engine, doc, output, operation):
     return {"argv": argv, "ok": True, "report": json.loads(Path(output).read_text())}
 
 
+def measure_document(scratch, operation, doc, probe=None):
+    """Paired native/candidate measurement for one operation/document, or an explicit failure record."""
+    probe = probe or run_probe
+    slug = doc.rsplit("/", 1)[1].removesuffix(".html")
+    medians = {"native": [], "candidate": []}
+    for repeat in range(PAIRS):
+        order = ["native", "candidate"] if repeat % 2 == 0 else ["candidate", "native"]
+        for engine in order:
+            out = scratch / f"{operation}-{slug}-r{repeat:02d}-{engine}.json"
+            try:
+                result = probe(TIME_BINARY, "time", engine, doc, out, operation)
+                if not result["ok"]:
+                    return {"failed": {"repeat": repeat, "engine": engine, "returncode": result["returncode"], "stderr_tail": result["stderr_tail"]}}
+                medians[engine].append(attribution.process_median_ns(result["report"], operation))
+            except (ValueError, KeyError, TypeError, IndexError) as error:
+                return {"failed": {"repeat": repeat, "engine": engine, "error": f"{type(error).__name__}: {error}"}}
+    return attribution.paired_summary(medians["native"], medians["candidate"])
+
+
 def reproduce(scratch, output):
     if sha256(TIME_BINARY) != TIME_BINARY_SHA256:
         raise SystemExit("time binary SHA256 does not match the saved pin")
@@ -80,29 +103,14 @@ def reproduce(scratch, output):
     for operation in OPERATIONS:
         summary["operations"][operation] = {}
         for doc in DOCUMENTS:
-            slug = doc.rsplit("/", 1)[1].removesuffix(".html")
-            medians = {"native": [], "candidate": []}
-            failure = None
-            for repeat in range(PAIRS):
-                order = ["native", "candidate"] if repeat % 2 == 0 else ["candidate", "native"]
-                for engine in order:
-                    out = scratch / f"{operation}-{slug}-r{repeat:02d}-{engine}.json"
-                    result = run_probe(TIME_BINARY, "time", engine, doc, out, operation)
-                    if not result["ok"]:
-                        failure = {"repeat": repeat, "engine": engine, "returncode": result["returncode"], "stderr_tail": result["stderr_tail"]}
-                        break
-                    medians[engine].append(attribution.process_median_ns(result["report"], operation))
-                if failure:
-                    break
-            summary["operations"][operation][doc] = (
-                {"failed": failure} if failure else attribution.paired_summary(medians["native"], medians["candidate"])
-            )
+            summary["operations"][operation][doc] = measure_document(scratch, operation, doc)
     after = cpu_busy()
     env.update({"chosen_cpu_busy_after": after[cpu], "loadavg_after": os.getloadavg()})
     env["label"] = "loaded" if max(env["loadavg_before"][0], env["loadavg_after"][0]) > LOADED_ABOVE else "quiet"
     summary["environment"] = env
     summary["binary_sha256"] = TIME_BINARY_SHA256
     summary["pairs"] = PAIRS
+    summary["notes"] = NOTES
     summary["scope"] = (
         "saved candidate fe67a281 vs native raikiri ab7e619a, original parse/screen cascade/Ahem preflight/layout at 800x600, "
         "warm calls per independent process (first call is not cold startup); not current main, not WPT PASS, not a switching-necessity decision"
@@ -125,6 +133,10 @@ def main():
             for doc, row in docs.items():
                 print(operation, doc.rsplit("/", 1)[1], "FAILED" if "failed" in row else f"ratio median {row['paired_ratio_median']:.3f}")
         print("environment:", summary["environment"]["label"])
+        for operation, docs in summary["operations"].items():
+            for doc, row in docs.items():
+                if "failed" in row:
+                    print(f"not measured: {operation}/{doc.rsplit('/', 1)[1]} {json.dumps(row['failed'])}")
     else:
         raise SystemExit(f"{args.command} is added by a later task")
 
