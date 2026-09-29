@@ -128,8 +128,9 @@ impl ParagraphBuilder {
 
     /// Open an inline with caller-resolved normal and first-line styles.
     /// The supported first-line font/language/line-height/spacing/transform/
-    /// emphasis properties use the supplied values exactly, including values
-    /// equal to the normal root. Other formatting stays in `normal`.
+    /// emphasis properties and resolved paint (text color, underline and
+    /// strike-through) use the supplied values exactly, including values equal
+    /// to the normal root. Other formatting stays in `normal`.
     /// Resolve inheritance and relative values in the caller's cascade.
     /// An explicit alternative activates first-line layout even without a
     /// `ParagraphStyle::first_line` root override. Legacy `open_inline` keeps
