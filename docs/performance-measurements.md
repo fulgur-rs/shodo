@@ -11,7 +11,11 @@ python3 dev/bench/tools/run.py --output /tmp/shodo-latin-after --quick --case la
 ```
 
 Each output directory must be new. Failed commands, invalid output or incompatible
-baselines fail the run before publishing results. Remove `--quick` for Criterion's
+baselines fail the run before publishing results. A failed child command's captured
+stdout and stderr are printed to the runner's stderr before the failure summary,
+so its diagnostics remain available after the temporary staging directory is
+removed. Successful results keep their command logs in the output directory.
+Remove `--quick` for Criterion's
 default 100 samples, 3-second warmup and 5-second measurement per operation.
 Quick runs use 10 samples, 100-millisecond warmup and 200-millisecond measurement;
 actual sampling may take longer for expensive workloads. `--cold-samples N`
