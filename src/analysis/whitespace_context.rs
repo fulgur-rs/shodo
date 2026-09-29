@@ -21,19 +21,6 @@ pub(super) fn ignorable(c: char) -> bool {
         && CodePointSetData::new::<props::DefaultIgnorableCodePoint>().contains(c)
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn ignorable_fast_path_matches_the_table_for_every_scalar() {
-        use icu_properties::{CodePointSetData, props};
-        let table = CodePointSetData::new::<props::DefaultIgnorableCodePoint>();
-        for c in ('\0'..=char::MAX).filter(|c| *c != '\u{200B}') {
-            assert_eq!(super::ignorable(c), table.contains(c), "{c:?}");
-        }
-        assert!(!super::ignorable('\u{200B}'));
-    }
-}
-
 fn wide(c: char) -> bool {
     // Korean joins need spaces even when Hangul has East Asian Width W.
     if matches!(c, '\u{1100}'..='\u{11FF}' | '\u{3130}'..='\u{318F}'
@@ -163,4 +150,17 @@ pub(super) fn flags_in_context(
         }
     }
     flags
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn ignorable_fast_path_matches_the_table_for_every_scalar() {
+        use icu_properties::{CodePointSetData, props};
+        let table = CodePointSetData::new::<props::DefaultIgnorableCodePoint>();
+        for c in ('\0'..=char::MAX).filter(|c| *c != '\u{200B}') {
+            assert_eq!(super::ignorable(c), table.contains(c), "{c:?}");
+        }
+        assert!(!super::ignorable('\u{200B}'));
+    }
 }
