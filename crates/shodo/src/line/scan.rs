@@ -1,4 +1,5 @@
 use super::Scan;
+use super::punctuation::removed;
 use crate::analysis::units::{BreakClass, Unit, UnitKind};
 use crate::context::LayoutContext;
 use crate::geometry::{LayoutUnit, Saturation};
@@ -100,17 +101,23 @@ pub(super) fn scan(
             (LayoutUnit::ZERO, false)
         };
         let extent = shared_extent.add(edge_delta, sat);
-        let adjustment = super::punctuation::edges(
-            data,
-            spacing.summary(Some(data)),
-            flags,
-            super::punctuation::last_edge(data, i + 1),
-            options,
-            LayoutUnit::ZERO,
-            extent,
-            sat,
-        );
-        let extent = extent.sub(adjustment.removed(sat), sat);
+        // Edge adjustments only ever remove width (see `EdgeAdjustment`), so a
+        // candidate that already fits cannot start to overflow.
+        let extent = if !hangs && !overflowing && extent > available {
+            let adjustment = super::punctuation::edges(
+                data,
+                spacing.summary(Some(data)),
+                flags,
+                super::punctuation::last_edge(data, i + 1),
+                options,
+                LayoutUnit::ZERO,
+                extent,
+                sat,
+            );
+            extent.sub(adjustment.removed(sat), sat)
+        } else {
+            extent
+        };
         if !hangs && !overflowing && extent > available {
             if let Some((b, edge)) = last_break.take() {
                 taken_hyphen = edge.then_some(b);
@@ -152,17 +159,9 @@ pub(super) fn scan(
             .add(ruby_delta, sat)
             .sub(hanging, sat)
             .add(suffix, sat);
-        let adjustment = super::punctuation::edges(
-            data,
-            spacing.summary(Some(data)),
-            flags,
-            super::punctuation::last_edge(data, i + 1),
-            options,
-            LayoutUnit::ZERO,
-            required,
-            sat,
-        );
-        let required = required.sub(adjustment.removed(sat), sat);
+        // Only break candidates compare `required` against the width, so the
+        // edge adjustment is computed for those alone.
+        let last = super::punctuation::last_edge(data, i + 1);
         i += 1;
         match unit.break_after {
             BreakClass::Mandatory => break BreakReason::Forced,
@@ -170,7 +169,11 @@ pub(super) fn scan(
                 if overflowing {
                     break BreakReason::Regular;
                 }
-                if required <= available {
+                if required.sub(
+                    removed(data, &mut spacing, flags, last, options, required, sat),
+                    sat,
+                ) <= available
+                {
                     last_break = Some((i, false));
                 }
             }
@@ -209,7 +212,11 @@ pub(super) fn scan(
                 if overflowing {
                     break BreakReason::Emergency;
                 }
-                if required <= available {
+                if required.sub(
+                    removed(data, &mut spacing, flags, last, options, required, sat),
+                    sat,
+                ) <= available
+                {
                     last_emergency = Some(i);
                 }
             }
