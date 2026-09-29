@@ -1,10 +1,10 @@
 [package]
 name = "shodo-fixtures"
 version = "0.0.0"
-edition = "2024"
-rust-version = "1.89.0"
+edition.workspace = true
+rust-version.workspace = true
 publish = false
-license = "MIT OR Apache-2.0"
+license.workspace = true
 description = "Fixed development inputs for shodo (font assets separately licensed under OFL-1.1)"
 
 [features]
@@ -12,16 +12,16 @@ accesskit = ["shodo/accesskit", "dep:accesskit_consumer"]
 
 [dependencies]
 accesskit_consumer = { version = "=0.38.0", optional = true }
-shodo = { path = "../..", default-features = false }
-serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["float_roundtrip"] }
-sha2 = "0.10"
+shodo = { path = "../../crates/shodo", default-features = false }
+serde.workspace = true
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+sha2.workspace = true
 
 [dev-dependencies]
-fontique = { version = "0.11", default-features = false, features = ["std"] }
+fontique.workspace = true
 raikiri-dom = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
-skrifa = "=0.44.0"
-harfrust = "0.12"
+skrifa.workspace = true
+harfrust.workspace = true
 raikiri-html = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
 raikiri-style = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
 raikiri-traits = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }

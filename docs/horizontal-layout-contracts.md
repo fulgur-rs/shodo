@@ -7,9 +7,9 @@ metrics and independent synthetic font tables. These tests cover layout and
 source contracts, rather than claiming pixel equality with a particular renderer.
 
 Test references use `module::test_name`. Public API tests are in
-[`tests/`](../tests/), fixed-font tests in
+[`crates/shodo/tests/`](../crates/shodo/tests/), fixed-font tests in
 [`dev/fixtures/tests/`](../dev/fixtures/tests/), and library module tests in
-[`src/`](../src/).
+[`crates/shodo/src/`](../crates/shodo/src/).
 
 | Contract | Regression evidence |
 | --- | --- |

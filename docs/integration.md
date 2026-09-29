@@ -213,7 +213,7 @@ editing or IME operations.
 
 Accepted `Line`s own their paragraph/font data, so they can outlive the original
 handles. Relayout and justification never mutate previously accepted lines.
-See the executable [horizontal hit example](../examples/horizontal_hit.rs) and the
+See the executable [horizontal hit example](../crates/shodo/examples/horizontal_hit.rs) and the
 [contract coverage](horizontal-layout-contracts.md):
 
 ```sh

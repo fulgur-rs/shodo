@@ -5,3 +5,6 @@ release_always = false
 [[package]]
 name = "shodo"
 release = true
+# shodo lives at crates/shodo/ but keeps its changelog at the workspace root
+# (see shodo-c6r.2); changelog_path is resolved relative to the workspace root.
+changelog_path = "./CHANGELOG.md"

@@ -58,7 +58,7 @@ fn build_paragraph(
     );
     fonts
         .register_face(
-            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
             0,
             FontFaceDescriptor {
                 family: "Shodo Fixture CJK".into(),
@@ -433,7 +433,7 @@ fn upright_arabic_isolated_forms_differ_from_mixed_joined_forms() {
     );
     fonts
         .register_face(
-            include_bytes!("../dev/fixtures/assets/fonts/arabic.ttf").to_vec(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/arabic.ttf").to_vec(),
             0,
             FontFaceDescriptor {
                 family: "Shodo Fixture Arabic".into(),
@@ -524,7 +524,7 @@ fn latin_font_without_vertical_tables_synthesizes_ttb_advance_and_central_baseli
     );
     fonts
         .register_face(
-            include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
             0,
             FontFaceDescriptor {
                 family: "Shodo Fixture Latin".into(),
@@ -575,7 +575,7 @@ fn mixed_vertical_line_keeps_distinct_font_instances_and_metrics() {
     );
     let cjk = fonts
         .register_face(
-            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
             0,
             FontFaceDescriptor {
                 family: "Shodo Fixture CJK".into(),
@@ -585,7 +585,7 @@ fn mixed_vertical_line_keeps_distinct_font_instances_and_metrics() {
         .unwrap();
     let latin = fonts
         .register_face(
-            include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
             0,
             FontFaceDescriptor {
                 family: "Shodo Fixture Latin".into(),
@@ -849,7 +849,7 @@ fn vertical_float_and_height_retry_replay_the_same_glyphs() {
     );
     fonts
         .register_face(
-            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
             0,
             FontFaceDescriptor {
                 family: "Shodo Fixture CJK".into(),
@@ -984,7 +984,7 @@ fn small_vertical_shaping_windows_preserve_glyphs_and_orientation() {
     );
     fonts
         .register_face(
-            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
             0,
             FontFaceDescriptor {
                 family: "Shodo Fixture CJK".into(),
@@ -1028,7 +1028,7 @@ fn small_vertical_shaping_windows_preserve_glyphs_and_orientation() {
 
 #[test]
 fn vertical_lr_uses_right_line_over_with_asymmetric_vhea() {
-    let mut bytes = include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec();
+    let mut bytes = include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf").to_vec();
     let count = u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize;
     let vhea = (0..count)
         .find_map(|index| {
@@ -1120,7 +1120,7 @@ fn vertical_line_over_and_under_align_inline_boxes_in_both_column_directions() {
     );
     fonts
         .register_face(
-            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
             0,
             FontFaceDescriptor {
                 family: "Shodo Fixture CJK".into(),
@@ -1196,7 +1196,7 @@ fn vertical_text_edges_align_to_parent_vertical_font_metrics() {
     );
     fonts
         .register_face(
-            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
             0,
             FontFaceDescriptor {
                 family: "Shodo Fixture CJK".into(),
@@ -1277,7 +1277,7 @@ fn vertical_atomic_without_baseline_uses_margin_box_centre() {
     );
     fonts
         .register_face(
-            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
             0,
             FontFaceDescriptor {
                 family: "Shodo Fixture CJK".into(),
@@ -1334,7 +1334,7 @@ fn vertical_grapheme_shared_across_nodes_keeps_one_orientation_and_owner() {
     );
     fonts
         .register_face(
-            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
             0,
             FontFaceDescriptor {
                 family: "Shodo Fixture CJK".into(),
@@ -1701,7 +1701,7 @@ fn combine_all_uses_third_and_quarter_width_then_scales_remaining_excess() {
         (*b"twid", "123", vec![853, 854, 855], 2.0 / 3.0),
         (*b"qwid", "1234", vec![853, 854, 855, 856], 0.5),
     ] {
-        let mut bytes = include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec();
+        let mut bytes = include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf").to_vec();
         let count = u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize;
         let gsub = (0..count)
             .find_map(|i| {
@@ -1940,7 +1940,7 @@ fn combine_all_isolates_internal_arabic_joining_from_vertical_neighbors() {
     );
     fonts
         .register_face(
-            include_bytes!("../dev/fixtures/assets/fonts/arabic.ttf").to_vec(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/arabic.ttf").to_vec(),
             0,
             FontFaceDescriptor {
                 family: "Shodo Fixture Arabic".into(),
@@ -2025,7 +2025,7 @@ fn combine_all_isolates_internal_arabic_joining_from_vertical_neighbors() {
 
 #[test]
 fn combine_all_centers_its_square_on_parent_text_edges_before_alignment() {
-    let mut bytes = include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec();
+    let mut bytes = include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf").to_vec();
     let count = u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize;
     let vhea = (0..count)
         .find_map(|index| {
@@ -2305,11 +2305,11 @@ fn combine_all_scales_marks_and_keeps_fallback_fonts_on_one_horizontal_baseline(
     for (family, bytes) in [
         (
             "Shodo Fixture Latin",
-            include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").as_slice(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/latin.ttf").as_slice(),
         ),
         (
             "Shodo Fixture CJK",
-            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").as_slice(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf").as_slice(),
         ),
     ] {
         fonts
@@ -2617,7 +2617,7 @@ fn combine_all_compression_does_not_bypass_the_real_glyph_budget() {
     );
     fonts
         .register_face(
-            include_bytes!("../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
             0,
             FontFaceDescriptor {
                 family: "Shodo Fixture CJK".into(),
@@ -2681,7 +2681,7 @@ fn combine_all_adjusted_fonts_and_space_tabs_keep_original_shaping_metrics() {
     );
     fonts
         .register_face(
-            include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
             0,
             FontFaceDescriptor {
                 family: "Adjusted".into(),
@@ -2786,11 +2786,11 @@ fn combine_all_mixed_bidi_reorders_only_its_internal_horizontal_sources() {
     for (family, bytes) in [
         (
             "Shodo Fixture Latin",
-            include_bytes!("../dev/fixtures/assets/fonts/latin.ttf").as_slice(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/latin.ttf").as_slice(),
         ),
         (
             "Shodo Fixture Arabic",
-            include_bytes!("../dev/fixtures/assets/fonts/arabic.ttf").as_slice(),
+            include_bytes!("../../../dev/fixtures/assets/fonts/arabic.ttf").as_slice(),
         ),
     ] {
         fonts

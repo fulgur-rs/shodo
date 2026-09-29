@@ -56,7 +56,7 @@ your checkout:
 
 ```toml
 [dependencies]
-shodo = { path = "../shodo" }
+shodo = { path = "../shodo/crates/shodo" }
 ```
 
 Build styled text and lay it out at a fixed width:
@@ -120,7 +120,7 @@ For bundled sfnt/TTC fonts without system discovery or web-font decoding:
 
 ```toml
 [dependencies]
-shodo = { path = "../shodo", default-features = false, features = ["complex-scripts"] }
+shodo = { path = "../shodo/crates/shodo", default-features = false, features = ["complex-scripts"] }
 ```
 
 Font matching, metrics, and OpenType shaping remain available with all default
