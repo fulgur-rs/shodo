@@ -35,6 +35,7 @@
 //! # Ok(()) }
 //! ```
 
+mod ch;
 mod check;
 mod descriptor;
 mod matching;
@@ -43,6 +44,7 @@ mod source;
 mod web_font;
 pub use web_font::decode_web_font;
 mod structure;
+pub use ch::ChLength;
 pub use descriptor::FontFaceDescriptor;
 pub use matching::{FontMatch, FontPresentation, FontQuery};
 pub use metrics::{FontUnit, VerticalFontMetrics};
