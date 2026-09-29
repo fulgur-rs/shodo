@@ -70,7 +70,12 @@ Create `tests/vertical.rs`;必要な固定font table fixtureを既存fixture生�
 - Produces: ShapedRunのorientation/scale metadata、公開 `GlyphOrientation`、
   `GlyphTransform { inline_x, inline_y, block_x, block_y: f32 }`。
   `GlyphRunView::orientation() -> GlyphOrientation`, `glyph_transform() -> GlyphTransform`。
-  `GlyphRunView::glyph_origin(index: usize) -> Option<(f32, f32)>` はspacingを除いたshaping advanceで負の物理inline軸を補償する。
+  `GlyphRunView::glyph_origin(index: usize) -> Option<(f32, f32)>` は、`Line::used_direction()` がRTLで
+  orientationが `Combined` でない場合だけ、inline_positionにGlyphStoreの元のshaping advanceを加える。
+  TCY（`Combined`）とSidewaysLr/LTRでは加算しない。物理inline軸の符号やcomputed directionだけで判定しない。
+  layout spacing込みの `Glyph.advance`、CSS trackingやjustificationを再加算しない。
+  この条件は2026-09-29（`shodo-hz6`）に[公開ガイド](../../vertical-layout.md)と現行実装に合わせて訂正した。
+  以下の完了チェックと過去の検証記録は当時のまま保持する。
   `PhysicalConverter::point(inline: f32, block: f32) -> (f32, f32)`、
   `vector(inline: f32, block: f32) -> (f32, f32)` と逆point変換。
   glyph originにmatrixを加えphysical point/vectorを合成する。
