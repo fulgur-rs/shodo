@@ -22,6 +22,20 @@ class FailureRecords(unittest.TestCase):
         self.assertIn("error", row["failed"])
         self.assertEqual(row["failed"]["repeat"], 0)
 
+    def test_memory_failed_probe_is_failure_record(self):
+        probe = lambda *a: {"ok": False, "returncode": 1, "stderr_tail": "unknown operation"}
+        with tempfile.TemporaryDirectory() as d:
+            row = m.memory_document(Path(d), "layout", m.DOCUMENTS[0], probe)
+        self.assertEqual(row["failed"]["engine"], "native")
+        self.assertEqual(row["failed"]["returncode"], 1)
+
+    def test_memory_malformed_report_is_failure_record(self):
+        probe = lambda *a: {"ok": True, "report": {}}
+        with tempfile.TemporaryDirectory() as d:
+            row = m.memory_document(Path(d), "pipeline", m.DOCUMENTS[0], probe)
+        self.assertIn("error", row["failed"])
+        self.assertEqual(row["failed"]["repeat"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

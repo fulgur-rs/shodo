@@ -119,7 +119,7 @@ class Attribution(unittest.TestCase):
         self.assertEqual(self.m.bucket(rows[1][1]), "cssparser")
 
     def test_window_memory_on_real_memory_fixtures(self):
-        # Hand-read from the fixtures: every warm sample of these two records has identical counts.
+        # Hand-read from the fixtures: the four asserted fields are identical in every warm sample of these two records (live_bytes and start_live_bytes vary, and are not asserted).
         native = self.m.window_memory(record("pipeline-native"), "pipeline")
         candidate = self.m.window_memory(record("pipeline-candidate"), "pipeline")
         self.assertEqual(native, {"allocated_bytes": 558186, "calls": 1350, "peak_extra_bytes": 157847, "net_bytes": 50927, "warm_samples": 9})

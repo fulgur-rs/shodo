@@ -126,7 +126,24 @@ PERF_RUNS = 200
 PERF_TOP = 25
 PERF_COMMAND = ["perf", "record", "-F", "20000"]
 PERF_REPORT = ["--stdio", "--no-children", "-g", "none", "--comm", "measurement-pro", "--fields", "sample,sym", "--sort", "sym"]
-PERF_LOOP = 'for i in $(seq %d); do "$0" time "$1" "$2" "$3" "$4" /dev/null pipeline >/dev/null 2>&1; done' % PERF_RUNS
+PERF_LOOP = 'for i in $(seq %d); do "$0" time "$1" "$2" "$3" "$4" /dev/null pipeline >/dev/null 2>&1 || exit 1; done' % PERF_RUNS
+
+
+PERF_SCOPE = (
+    "Flat perf (no call graph) over 200 whole probe processes of the pipeline operation at 20 kHz; user-space [.] symbols only, kernel [k] samples are dropped. "
+    "Whole-process samples include setup outside the measured windows, so interpret only engine-to-engine differences per bucket; "
+    "buckets are an approximation by the first shodo:: path or known crate in a symbol, not call-graph attribution. Counts are divided by the 200 runs."
+)
+PERF_NOTES = [
+    "Each engine/document comes from a SINGLE recording (200 process runs, one perf record): no repeat and no variance estimate.",
+    "The recording was labelled loaded (1-minute load average 8.44 before, 4.59 after; the label in environment repeats this).",
+    "Noise is large: the other bucket differs in sign between the two documents (about -95.7 per run vs +49.6) and runtime is about +1 vs +25 per run, so small deltas are not distinguishable from noise; only positives that appear on BOTH documents with large size (shodo::line, shodo::analysis, shodo::font) are candidates for interpretation.",
+    "other is setup-dominated (sha2 digest, serde_json in the probe's unmeasured setup).",
+    "The bucket rule assigns a symbol to the FIRST shodo:: path in it, so generic runtime/core code instantiated with shodo types (for example an Iterator::position closure over shodo::font::matching::CacheEntry) lands in a shodo bucket: buckets are symbol-name attribution, not call-graph or inclusive time.",
+    "Kernel [k] rows are dropped (user space only).",
+    "The perf loop exits non-zero on the first failing probe and perf() then returns an explicit failed record.",
+]
+MEMORY_NOTE_PEAK = "Observation, not a conclusion: peak_extra_bytes is identical for both engines in the pipeline windows and probably reflects a shared setup allocation."
 
 
 def slug_of(doc):
@@ -168,6 +185,7 @@ def memory(scratch, output):
     summary["notes"] = [
         "Requested-heap accounting per window (allocator counters), not RSS. Values are the median over warm samples per run, then the median over runs.",
         "isolated not run: the pinned probe binaries do not implement it.",
+        MEMORY_NOTE_PEAK,
     ]
     output.write_text(json.dumps(summary, indent=2) + "\n")
     return summary
@@ -177,10 +195,17 @@ def perf_engine_document(scratch, engine, doc):
     """One flat perf recording of PERF_RUNS pipeline probe processes; returns normalized buckets and top symbols."""
     data = scratch / f"perf-{engine}-{slug_of(doc)}.data"
     record = PERF_COMMAND + ["-o", str(data), "--", "bash", "-c", PERF_LOOP, str(TIME_BINARY), engine, str(WPT), str(SELECTION), doc]
-    done = subprocess.run(record, capture_output=True, text=True)
+    try:
+        done = subprocess.run(record, capture_output=True, text=True)
+    except FileNotFoundError as error:
+        return {"failed": {"stage": "record", "error": f"perf tool not found: {error}"}}
     if done.returncode != 0:
+        # The loop exits non-zero on the first failing probe, so this also covers probe failures.
         return {"failed": {"stage": "record", "returncode": done.returncode, "stderr_tail": done.stderr[-400:]}}
-    report = subprocess.run(["perf", "report", "-i", str(data)] + PERF_REPORT, capture_output=True, text=True)
+    try:
+        report = subprocess.run(["perf", "report", "-i", str(data)] + PERF_REPORT, capture_output=True, text=True)
+    except FileNotFoundError as error:
+        return {"failed": {"stage": "report", "error": f"perf tool not found: {error}"}}
     if report.returncode != 0:
         return {"failed": {"stage": "report", "returncode": report.returncode, "stderr_tail": report.stderr[-400:]}}
     (scratch / f"perf-{engine}-{slug_of(doc)}.txt").write_text(report.stdout)
@@ -228,11 +253,8 @@ def perf(scratch, output):
     summary["binary_sha256"] = TIME_BINARY_SHA256
     summary["runs_per_recording"] = PERF_RUNS
     summary["sampling_hz"] = 20000
-    summary["scope"] = (
-        "Flat perf (no call graph) over 200 whole probe processes of the pipeline operation at 20 kHz; user-space [.] symbols only, kernel [k] samples are dropped. "
-        "Whole-process samples include setup outside the measured windows, so interpret only engine-to-engine differences per bucket; "
-        "buckets are an approximation by the first shodo:: path or known crate in a symbol, not call-graph attribution. Counts are divided by the 200 runs."
-    )
+    summary["scope"] = PERF_SCOPE
+    summary["notes"] = PERF_NOTES
     output.write_text(json.dumps(summary, indent=2) + "\n")
     return summary
 

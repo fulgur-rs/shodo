@@ -291,7 +291,8 @@
     "runs": 3,
     "notes": [
       "Requested-heap accounting per window (allocator counters), not RSS. Values are the median over warm samples per run, then the median over runs.",
-      "isolated not run: the pinned probe binaries do not implement it."
+      "isolated not run: the pinned probe binaries do not implement it.",
+      "Observation, not a conclusion: peak_extra_bytes is identical for both engines in the pipeline windows and probably reflects a shared setup allocation."
     ]
   },
   "perf": {
@@ -1071,7 +1072,17 @@
     "binary_sha256": "7caf472b3d40d670c270e4a97291a05c8ecc76056fefa222e26b7be9d66d7d30",
     "runs_per_recording": 200,
     "sampling_hz": 20000,
-    "scope": "Flat perf (no call graph) over 200 whole probe processes of the pipeline operation at 20 kHz; user-space [.] symbols only, kernel [k] samples are dropped. Whole-process samples include setup outside the measured windows, so interpret only engine-to-engine differences per bucket; buckets are an approximation by the first shodo:: path or known crate in a symbol, not call-graph attribution. Counts are divided by the 200 runs."
+    "scope": "Flat perf (no call graph) over 200 whole probe processes of the pipeline operation at 20 kHz; user-space [.] symbols only, kernel [k] samples are dropped. Whole-process samples include setup outside the measured windows, so interpret only engine-to-engine differences per bucket; buckets are an approximation by the first shodo:: path or known crate in a symbol, not call-graph attribution. Counts are divided by the 200 runs.",
+    "notes": [
+      "Each engine/document comes from a SINGLE recording (200 process runs, one perf record): no repeat and no variance estimate.",
+      "The recording was labelled loaded (1-minute load average 8.44 before, 4.59 after; the label in environment repeats this).",
+      "Noise is large: the other bucket differs in sign between the two documents (about -95.7 per run vs +49.6) and runtime is about +1 vs +25 per run, so small deltas are not distinguishable from noise; only positives that appear on BOTH documents with large size (shodo::line, shodo::analysis, shodo::font) are candidates for interpretation.",
+      "other is setup-dominated (sha2 digest, serde_json in the probe's unmeasured setup).",
+      "The bucket rule assigns a symbol to the FIRST shodo:: path in it, so generic runtime/core code instantiated with shodo types (for example an Iterator::position closure over shodo::font::matching::CacheEntry) lands in a shodo bucket: buckets are symbol-name attribution, not call-graph or inclusive time.",
+      "Kernel [k] rows are dropped (user space only).",
+      "The perf loop exits non-zero on the first failing probe and perf() then returns an explicit failed record.",
+      "Verified after the fact from the saved recordings (perf script -F pid,comm): candidate-hyphens-auto-001-ref: 200 probe processes, samples per process min/median/max 1744/1765.5/1950; candidate-hyphens-out-of-flow-001-ref: 200 probe processes, samples per process min/median/max 1877/1943.0/3165; native-hyphens-auto-001-ref: 200 probe processes, samples per process min/median/max 1499/1525.0/1736; native-hyphens-out-of-flow-001-ref: 200 probe processes, samples per process min/median/max 1597/2274.5/2342. Each recording also has 23-35 extra pids with a single sample (short-lived fork/exec artifacts of the shell loop), which are not probe runs; no probe process has a tiny sample count, so no probe exited early."
+    ]
   },
   "scope": "shodo-jt1 attribution of the saved S4 candidate (fe67a281) vs native raikiri (ab7e619a) increase on two hyphens reference documents, pipeline and layout operations only (isolated is not implemented by the pinned binaries). memory: requested-heap allocator counters per window, not RSS. perf: flat user-space sampling of whole processes including setup outside the measured windows; interpret only candidate-minus-native differences per bucket; environment label and loads are recorded in perf.environment. Not current main, not a switching decision."
 }
