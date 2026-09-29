@@ -387,7 +387,7 @@ impl OffsetMapping {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     fn unit(kind: MappingKind, dom: Range<u32>, text: Range<u32>) -> MappingUnit {
@@ -505,10 +505,10 @@ mod tests {
     pub(super) fn visit() {
         QUERY_VISITS.with(|n| n.set(n.get() + 1));
     }
-    fn reset_visits() {
+    pub(crate) fn reset_visits() {
         QUERY_VISITS.with(|n| n.set(0));
     }
-    fn visits() -> usize {
+    pub(crate) fn visits() -> usize {
         QUERY_VISITS.with(std::cell::Cell::get)
     }
 

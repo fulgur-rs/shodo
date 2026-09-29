@@ -419,6 +419,120 @@ fn adapter_reuses_ids_and_rejects_removed_positions_after_reflow() {
 }
 
 #[test]
+fn source_ids_survive_reflow_and_shifted_repeated_transformed_text() {
+    // Using processed offsets as DOM anchors would lose these IDs when the
+    // prefix is removed. Collapsing the two source occurrences would lose one
+    // ID. Ignoring remapped offsets would misidentify the omitted LF and SS.
+    let limits = Default::default();
+    let fonts = load_fonts(&limits).unwrap();
+    let mut s = style();
+    s.root.text_transform = TextTransform::Uppercase;
+    s.root.overflow_wrap = OverflowWrap::Anywhere;
+    let mut adapter = AccessKitAdapter::new(ak::NodeId(1));
+    let mut counter = 10;
+    let mut original_ids = None;
+    let mut previous_position = None;
+    for (prefix, width) in [(true, 1000.0), (false, 16.0), (false, 1000.0)] {
+        let mut builder = ParagraphBuilder::new(&s, &limits);
+        if prefix {
+            builder.push_text(
+                TextSource::Dom {
+                    node: NodeId(99),
+                    offset: 0,
+                },
+                "X",
+            );
+        }
+        for occurrence in 0..2 {
+            if occurrence == 1 {
+                builder.push_text(TextSource::Generated { node: NodeId(42) }, "!");
+            }
+            builder.push_text(
+                TextSource::Dom {
+                    node: NodeId(7),
+                    offset: 0,
+                },
+                "水\n水ß",
+            );
+        }
+        let paragraph = builder
+            .build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap();
+        let lines = paragraph.break_all(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            width,
+            &AtomicSizes::EMPTY,
+        );
+        let layout = AccessibleLayout::new(&lines);
+        let at = |offset, affinity| {
+            layout
+                .lines()
+                .iter()
+                .find_map(|line| {
+                    line.characters
+                        .iter()
+                        .position(|character| character.text_range.start == offset)
+                        .map(|character| layout.position(line.index, character, affinity).unwrap())
+                })
+                .expect("literal processed boundary")
+        };
+        let prefix_len = u32::from(prefix);
+        let first = at(prefix_len, Affinity::Downstream);
+        let second = at(prefix_len + 9, Affinity::Downstream);
+        for (offset, source_offset) in [(0, 0), (3, 4), (6, 7), (9, 0), (12, 4), (15, 7)] {
+            assert_eq!(
+                layout
+                    .to_source(at(prefix_len + offset, Affinity::Downstream))
+                    .unwrap()
+                    .origin,
+                shodo::mapping::TextOrigin::Dom {
+                    node: NodeId(7),
+                    offset: source_offset,
+                }
+            );
+        }
+        let selection = AccessibleSelection {
+            anchor: first,
+            focus: at(prefix_len + 8, Affinity::Upstream),
+        };
+        let tree = accesskit_consumer::Tree::new(
+            export(&mut adapter, &layout, Some(selection), &mut counter),
+            true,
+        );
+        let state = tree.state();
+        assert_eq!(
+            state.root().document_range().text(),
+            if prefix {
+                "X水水SS!水水SS"
+            } else {
+                "水水SS!水水SS"
+            }
+        );
+        assert_eq!(state.root().text_selection().unwrap().text(), "水水SS");
+        let ids = [
+            adapter.to_position(first).unwrap().node,
+            adapter.to_position(second).unwrap().node,
+        ];
+        assert_ne!(ids[0], ids[1]);
+        if let Some(original) = original_ids {
+            assert_eq!(ids, original);
+        }
+        original_ids = Some(ids);
+        if let Some(previous) = previous_position {
+            assert!(adapter.to_position(previous).is_none());
+        }
+        previous_position = Some(first);
+        for position in [first, second, selection.focus] {
+            assert_eq!(
+                adapter.from_position(adapter.to_position(position).unwrap(), position.affinity),
+                Some(position)
+            );
+        }
+    }
+}
+
+#[test]
 fn failed_exports_preserve_last_successful_state() {
     let ls = lines("a", style(), 1000.0);
     let l = AccessibleLayout::new(&ls);
