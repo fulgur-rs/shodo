@@ -44,8 +44,15 @@ cargo run --example horizontal_hit
 `horizontal_hit` prints layout and hit-test geometry. Without a font path, it uses
 deterministic missing-font fallback; pass `-- path/to/a-font.ttf` to use a real face.
 
-To use this checkout from another project, add a path dependency, adjusting the
-path to your checkout:
+To use the published crate from another project:
+
+```toml
+[dependencies]
+shodo = "0.0.1"
+```
+
+To use a local checkout instead, add a path dependency, adjusting the path to
+your checkout:
 
 ```toml
 [dependencies]
