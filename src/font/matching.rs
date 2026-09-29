@@ -121,7 +121,7 @@ fn key_hash(query: &FontQuery, cluster: &str) -> u64 {
     use std::hash::{Hash, Hasher};
     // f32 equality treats -0.0 == 0.0; hash them identically.
     let bits = |x: f32| if x == 0.0 { 0 } else { x.to_bits() };
-    let mut h = std::collections::hash_map::DefaultHasher::new();
+    let mut h = crate::fast_hash::FastHasher::default();
     cluster.hash(&mut h);
     query.families.len().hash(&mut h);
     for family in &query.families {
