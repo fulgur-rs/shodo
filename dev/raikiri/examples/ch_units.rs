@@ -48,6 +48,7 @@ fn layout(html: &str, fonts: &FontCollection) -> Result<Line, String> {
     let cv = &doc.cascade().computed[child];
     let root = &doc.cascade().computed[parent];
     for values in [root, cv] {
+        ch_adapter::require_keyed_font_inputs(values)?;
         if values.cssom_writing_mode != raikiri_style::property::WritingMode::HorizontalTb {
             return Err("fixed example requires a horizontal writing mode".into());
         }
@@ -305,6 +306,8 @@ mod tests {
         for (selector, declaration) in [
             ("#parent", "writing-mode:vertical-rl"),
             ("#child", "writing-mode:sideways-lr"),
+            ("#parent", "font-variation-settings:'wght' 700"),
+            ("#child", "font-variation-settings:'wght' 700"),
         ] {
             let html = HTML.replace(
                 &format!("{selector}{{"),

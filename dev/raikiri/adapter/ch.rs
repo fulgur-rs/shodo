@@ -3,8 +3,10 @@
 //! `ChFontKey` covers family, size, weight and style only. Variation axes and
 //! vertical text orientation are not represented, so callers must reject
 //! cascades that depend on them instead of measuring with a different font.
-use raikiri_style::property::{Direction, FontFamilyName, FontStyle as RFontStyle, WritingMode};
-use raikiri_style::{ChFontKey, ChLengthProvenance};
+use raikiri_style::property::{
+    Direction, FontFamilyName, FontStyle as RFontStyle, FontVariationSettings, WritingMode,
+};
+use raikiri_style::{ChFontKey, ChLengthProvenance, ComputedValues};
 use shodo::font::{ChLength, FontCollection, FontQuery};
 use shodo::node::Sides;
 use shodo::style::{FontFamily, FontStyle};
@@ -24,6 +26,17 @@ pub fn font_style(style: RFontStyle) -> Result<FontStyle, String> {
         RFontStyle::Oblique => Ok(FontStyle::Oblique(14.0)),
         _ => Err("font style unsupported".into()),
     }
+}
+
+/// Rejects font inputs that `ChFontKey` cannot carry. Measuring with the key
+/// alone would silently ignore them, so a cascade that sets any of these
+/// fails closed (`font-optical-sizing:auto` on an `opsz` face and
+/// `font-stretch` remain unassessed; see docs/records/raikiri-ch-used-value.md).
+pub fn require_keyed_font_inputs(values: &ComputedValues) -> Result<(), String> {
+    if values.font_variation_settings != FontVariationSettings::Normal {
+        return Err("font-variation-settings is not carried by ChFontKey".into());
+    }
+    Ok(())
 }
 
 /// The declaring-font `ch` length for `factor` (no fallback approximation).
