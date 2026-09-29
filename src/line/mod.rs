@@ -19,7 +19,7 @@ mod scan;
 pub(crate) mod spacing;
 pub(crate) mod spacing_summary;
 mod whitespace;
-mod windows;
+pub(crate) mod windows;
 
 pub(crate) use scan::tab_advance;
 
