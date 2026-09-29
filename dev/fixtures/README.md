@@ -22,7 +22,7 @@ cargo run -p shodo-fixtures --example inspect_fonts
 cargo run -p shodo-fixtures --example layout_cases
 cargo run -p shodo-fixtures --example layout_cases -- arabic-short
 cargo run -p shodo-fixtures --example shape_timing
-python3 dev/fixtures/tools/regenerate.py --check
+python3 tools/fixtures/regenerate.py --check
 ```
 
 A separate development tool can add `shodo-fixtures = { path = "../fixtures" }`
@@ -41,7 +41,7 @@ tests that render or shape with these fonts live in `dev/harness/tests/`.
 
 `cargo run -p shodo-fixtures --example shape_timing` measures paragraph builds for
 all 12 cases before and after context reuse and `shrink_to(0)`, excluding font
-registration. See [the measurement record](../../docs/shaping-measurements.md).
+registration. See [the measurement record](../../docs/records/shaping-measurements.md).
 
 ## Data and provenance
 
@@ -88,9 +88,9 @@ regeneration needs Python and the exact FontTools version in tools/requirements.
 
 ```sh
 python3 -m venv /tmp/shodo-fonttools
-/tmp/shodo-fonttools/bin/python -m pip install -r dev/fixtures/tools/requirements.txt
-/tmp/shodo-fonttools/bin/python -m unittest discover -s dev/fixtures/tools -v
-/tmp/shodo-fonttools/bin/python dev/fixtures/tools/regenerate.py --rebuild
+/tmp/shodo-fonttools/bin/python -m pip install -r tools/requirements.txt
+/tmp/shodo-fonttools/bin/python -m unittest discover -s tools -v
+/tmp/shodo-fonttools/bin/python tools/fixtures/regenerate.py --rebuild
 ```
 
 `--rebuild` downloads only the pinned sources, verifies each original checksum,
@@ -120,11 +120,11 @@ is development-only; ordinary cargo users do not need Python. The separate
 
 The CJK subset also retains 水 (U+6C34) for size-adjust metric verification.
 
-The [float caller harness](../../docs/float-integration-harness.md) shares an owned
+The [float caller harness](../../docs/guides/float-integration-harness.md) shares an owned
 Taffy checkpoint driver between numeric regressions and the fixed-font PNG example,
 in `dev/harness`. It remains dev-only; root shodo consumers acquire no Taffy dependency.
 
-The [Chrome comparison](../../docs/browser-comparison.md) shares seeded fixed inputs
+The [Chrome comparison](../../docs/dev/browser-comparison.md) shares seeded fixed inputs
 through `shodo_fixtures::browser`, checks saved source positions/boundary widths
 offline, and reports every raw difference from `dev/harness`. Recollection is an
 explicit Python standard-library/headless Chromium command using a disposable profile.
@@ -160,7 +160,7 @@ closure. It verifies every source before updating assets; source mismatch or tot
 budget overflow leaves checked-in outputs untouched. Subsets are a fixed test
 corpus, not coverage of every Unicode emoji or host fallback policy.
 
-See [emoji layout and caller color drawing](../../docs/emoji.md) for sequence
+See [emoji layout and caller color drawing](../../docs/guides/emoji.md) for sequence
 limitations, missing-font behavior and `cargo run -p shodo-harness --example
 emoji_png -- OUTPUT.png`. The renderer draws accepted CBDT PNG glyphs and outlines.
 
@@ -174,11 +174,11 @@ and overflow. The shared painter (`shodo-harness`'s `glyph_paint`) traverses vis
 lanes and composes their transforms before physical conversion; it reuses
 outline/bitmap and source decoration paths. `ruby_paint` pins source colors,
 asymmetric vertical outlines, nested translations, hidden/collapsed lanes and
-strict clipping. See [the caller contract](../../docs/ruby.md). The existing
+strict clipping. See [the caller contract](../../docs/guides/ruby.md). The existing
 browser recorder does not measure ruby and its fixture exclusions remain
 applicable.
 
-The [raikiri style diagnostic](../../docs/raikiri-style-diagnostics.md) replays original
+The [raikiri style diagnostic](../../docs/records/raikiri-style-diagnostics.md) replays original
 WPT HTML/CSS with the real pinned parser/cascade, verifies original resource
 bytes, and identifies residual fields from the frozen S4 caller profile. It
 keeps the integration spike separate and emits no WPT image verdict.

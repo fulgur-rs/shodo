@@ -17,7 +17,7 @@ fn saved_browser_metadata_and_source_endpoints_are_valid() {
         ),
         (
             "recorder_sha256",
-            include_bytes!("../../fixtures/tools/browser_recorder.js").as_slice(),
+            include_bytes!("../../../tools/browser/browser_recorder.js").as_slice(),
         ),
     ];
     for (key, bytes) in hashes {

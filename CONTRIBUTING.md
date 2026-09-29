@@ -58,7 +58,11 @@ longer needs it).
 | `dev/harness/` | Rendering, snapshots, browser comparison, float, and AccessKit checks that consume the fixtures. |
 | `dev/raikiri/` | raikiri-integration checks (contract verification, source coverage, style diffs); pulls in the git-pinned raikiri crates. |
 | `dev/bench/` | Standalone performance and allocation tools. |
-| `docs/` | Integration contracts, measurements, and design history. |
+| `tools/{fixtures,browser,bench,raikiri}/` | Python development tooling, grouped to match the `dev/` crate its scripts serve; every path is resolved from the repository root. |
+| `docs/guides/` | Public API and caller integration contracts. |
+| `docs/dev/` | Developer-facing verification procedures (snapshots, browser comparison, performance). |
+| `docs/records/` | Measurement and diagnostic records. |
+| `docs/superpowers/` | Design history; paths fixed by the superpowers plugin, may describe superseded APIs. |
 
 `crates/shodo` is the default workspace member. Use `--workspace` to include
 development packages; plain `cargo test` does not exercise the entire workspace.
@@ -105,10 +109,9 @@ Python tooling checks use Python 3.12 in CI and the pinned FontTools dependency:
 
 ```sh
 python3 -m venv /tmp/shodo-fonttools
-/tmp/shodo-fonttools/bin/python -m pip install -r dev/fixtures/tools/requirements.txt
-/tmp/shodo-fonttools/bin/python -m unittest discover -s dev/fixtures/tools -v
-/tmp/shodo-fonttools/bin/python -m unittest discover -s dev/bench/tools -v
-/tmp/shodo-fonttools/bin/python dev/fixtures/tools/regenerate.py --check
+/tmp/shodo-fonttools/bin/python -m pip install -r tools/requirements.txt
+/tmp/shodo-fonttools/bin/python -m unittest discover -s tools -v
+/tmp/shodo-fonttools/bin/python tools/fixtures/regenerate.py --check
 ```
 
 Python is for development tooling; ordinary library users do not need it.
@@ -139,15 +142,15 @@ cargo run -p shodo-harness --example browser_compare -- --check
 
 Snapshot reports require a new output directory on each run. Open the generated
 `index.html` to inspect expected, actual, and difference images. For an intentional
-layout change, follow the [snapshot update procedure](docs/snapshot-tests.md),
+layout change, follow the [snapshot update procedure](docs/dev/snapshot-tests.md),
 review both pixel and geometry changes, and include the baseline diff in the same
 PR. Do not update expectations just to make an unexplained failure pass.
 
 Font or corpus changes must preserve provenance, hashes, and the separate OFL
 notices. Follow [fixture reproduction and updates](dev/fixtures/README.md).
 Browser recollection and the exact difference ledger have a separate
-[review procedure](docs/browser-comparison.md). Performance work should use the
-[standalone harness](docs/performance-measurements.md) and report comparable
+[review procedure](docs/dev/browser-comparison.md). Performance work should use the
+[standalone harness](docs/dev/performance-measurements.md) and report comparable
 machine/toolchain conditions; avoid treating one timing run as proof of a speedup.
 
 ## Pull requests

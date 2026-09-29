@@ -4,7 +4,7 @@ The `.rs` files in this directory are **not a Cargo target** in this
 workspace. `cargo build`/`cargo test` never compile them, and no
 `Cargo.toml` in this repository lists them as a `[[bin]]` or example.
 
-`dev/bench/tools/raikiri_overlay.py` and `raikiri_library_overlay.py`
+`tools/raikiri/raikiri_overlay.py` and `raikiri_library_overlay.py`
 copy these files into a fresh, disposable checkout of the separate
 [`fulgur-rs/raikiri`](https://github.com/fulgur-rs/raikiri) repository
 (pinned to a specific revision) and add them there as `[[bin]]` targets,
@@ -15,7 +15,7 @@ layout integration). `main.rs` and `library.rs` reference
 allocation-counting instrumentation as `shodo-bench`, without adding a
 Cargo dependency from `shodo-bench` on raikiri.
 
-See `dev/bench/tools/raikiri_overlay.py`, `raikiri_library_overlay.py`,
+See `tools/raikiri/raikiri_overlay.py`, `raikiri_library_overlay.py`,
 and `raikiri_measure.py` for the exact overlay, build, and measurement
-recipe, and [`docs/raikiri-measurements.md`](../../../docs/raikiri-measurements.md)
+recipe, and [`docs/raikiri-measurements.md`](../../../docs/records/raikiri-measurements.md)
 for the recorded results.
