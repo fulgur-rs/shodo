@@ -251,10 +251,9 @@ mod tests {
         same(&test, &reference).unwrap();
     }
 
-    // Known shodo core difference (shodo-39u): autospace is applied to upright
-    // vertical text. Kept as the oracle; remove `ignore` when it is fixed.
+    // shodo-39u: upright vertical letters and digits are excluded from
+    // autospace, so the test document matches its no-autospace reference.
     #[test]
-    #[ignore = "shodo-39u: text-autospace applied to upright vertical text"]
     fn upright_test_matches_reference() {
         let fonts = load_fonts(&Default::default()).unwrap();
         let test = fixture_lines(
@@ -269,29 +268,6 @@ mod tests {
         .unwrap();
         assert_eq!(test.len(), 4);
         same(&test, &reference).unwrap();
-    }
-
-    #[test]
-    fn upright_autospace_divergence_is_pinned() {
-        // Pins the current shodo-39u behavior: the test document is 5px longer
-        // per line than its no-autospace reference (2.5px on each side of the
-        // upright X/1). This test must be deleted when that issue is fixed.
-        let fonts = load_fonts(&Default::default()).unwrap();
-        let test = fixture_lines(
-            &doc("text-autospace-vertical-upright-001"),
-            &fonts.collection,
-        )
-        .unwrap();
-        let reference = fixture_lines(
-            &doc("text-autospace-vertical-upright-001-ref"),
-            &fonts.collection,
-        )
-        .unwrap();
-        assert_eq!(test.len(), 4);
-        assert_eq!(reference.len(), 4);
-        for (t, r) in test.iter().zip(&reference) {
-            assert!(close(t.inline_size - r.inline_size, 5.0), "{t:?} {r:?}");
-        }
     }
 
     #[test]
@@ -355,7 +331,7 @@ mod tests {
     /// initial generic family. Needs a WPT checkout: set `SHODO_WPT_ROOT`
     /// (CI has none, so the test is skipped there).
     #[test]
-    fn pinned_registry_matches_references_for_combine_and_pins_upright() {
+    fn pinned_registry_matches_references_for_combine_and_upright() {
         let Some(root) = std::env::var_os("SHODO_WPT_ROOT") else {
             eprintln!("skipped: SHODO_WPT_ROOT is not set");
             return;
@@ -380,9 +356,7 @@ mod tests {
                 );
             }
         }
-        for (t, r) in upright.iter().zip(&upright_ref) {
-            assert!(close(t.inline_size - r.inline_size, 5.0), "{t:?} {r:?}");
-        }
+        same(&upright, &upright_ref).unwrap();
     }
 
     #[test]

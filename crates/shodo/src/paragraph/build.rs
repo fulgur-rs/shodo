@@ -137,6 +137,7 @@ impl Paragraph {
             &mut warnings,
             &mut sat,
             &mut bases,
+            true,
         )
         .map_err(|error| bases.translate(error, budget))?;
         budget.paragraph(&data)?;
@@ -224,6 +225,7 @@ impl Paragraph {
                 &mut warnings,
                 &mut sat,
                 &mut bases,
+                false,
             )
             .map_err(|mut e| {
                 if budget.enabled() {
@@ -346,15 +348,32 @@ fn build_data(
     warnings: &mut WarningSink,
     sat: &mut Saturation,
     bases: &mut crate::ruby::base_budget::BaseScopes,
+    report_combine_rejections: bool,
 ) -> Result<ParagraphData, LimitExceeded> {
     let mut shape_limits = limits.clone();
     shape_limits.max_shaped_glyphs = glyph_budget;
-    let mut combine_spans = crate::analysis::combine::prepare(
+    let (mut combine_spans, combine_rejected) = crate::analysis::combine::prepare_with_rejections(
         &processed.text,
         &processed.items,
         &styles,
         style.writing_mode,
     );
+    // First-line builds the same combine scopes twice with alternate paint
+    // and shaping styles. Report each rejected boundary only on the normal
+    // pass, so a duplicate does not consume the caller's warning budget.
+    if report_combine_rejections {
+        for range in combine_rejected {
+            warnings.push(
+                crate::limits::WarningKind::Unsupported,
+                format!(
+                    "text-combine-upright: all was not applied to processed text bytes {}..{}: \
+                     a box boundary separates it from an adjacent candidate in the same combine \
+                     scope, so it is laid out as normal text",
+                    range.start, range.end
+                ),
+            );
+        }
+    }
     let mut breaks = crate::analysis::breaks::analyze_breaks(&processed, &styles, warnings);
     for opportunity in &mut breaks.opportunities {
         let index = combine_spans.partition_point(|span| span.text.end <= opportunity.offset);

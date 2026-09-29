@@ -39,36 +39,31 @@ documents.
   font and orientation with both the fixture face and the pinned registry
   (2 lines, 60px each = 国 + one combined 20px em + 国). Its two-character
   `.tcy` spans reach shodo as `Combined` runs. This is shown for these spans
-  only: shodo silently declines to combine some candidates (see below).
-- `text-autospace-vertical-upright-001`: all glyphs are `Upright`, but it does
-  **not** match its reference. With `text-autospace: normal`, each of the four
-  lines is 65px against the reference's 60px (2.5px on each side of the
-  upright `X`/`1`); the reference uses `no-autospace`. It reproduces with the
-  pinned registry and real glyphs. The adapter maps the values 1:1 and the
-  example's `lang="ja"` does not affect it, so this is shodo core behavior,
-  filed as **shodo-39u**: CSS Text 4 excludes non-ideographic letters and
-  numerals from the autospace classes when they are upright in vertical text,
-  but `classify` in `crates/shodo/src/line/autospace.rs` looks only at the
-  character, with no orientation input. A fix must stay limited to vertical
-  typographic mode (WPT text-autospace-003/004 need horizontal and
-  sideways modes unchanged).
-  `upright_test_matches_reference` is kept as the oracle but `#[ignore]`d;
-  `upright_autospace_divergence_is_pinned` records the current 5px difference
-  and must be removed when shodo-39u is fixed.
+  only: shodo declines to combine some candidates and reports them as
+  warnings (see below).
+- `text-autospace-vertical-upright-001`: all glyphs are `Upright` and it
+  **matches its reference** (`upright_test_matches_reference`). CSS Text 4
+  excludes non-ideographic letters and numerals from the autospace classes
+  when they are upright in vertical text; shodo-39u made
+  `crates/shodo/src/line/autospace.rs` use the same per-character orientation
+  resolver as shaping, so each line is 60px like the `no-autospace` reference
+  (it was 65px before). Horizontal and sideways modes are unchanged.
 - Vertical is not dropped: forcing the same document to `horizontal-tb`
   yields `Horizontal` runs. Mapping `vertical-rl` to horizontal in the
   adapter was tried and failed 4 tests.
 - `text-autospace: auto` is rejected (not treated as `normal`).
 
-## TCY limits (not fail-closed)
+## TCY limits
 
 The adapter maps `text-combine-upright: all` 1:1 and does not check that the
-content meets shodo's combine conditions. shodo silently declines some
-candidates (`crates/shodo/src/analysis/combine.rs`, where adjacent `all`
-candidates split by a box boundary in one scope are rejected), so e.g.
+content meets shodo's combine conditions. shodo declines some candidates
+(`crates/shodo/src/analysis/combine.rs`, where adjacent `all` candidates split
+by a box boundary in one scope are rejected), so e.g.
 `<span style="text-combine-upright:all"><b>1</b><b>2</b></span>` is laid out
-as ordinary text without an error. Detecting that at the caller, or making
-shodo report it, is tracked in shodo-trj.
+as ordinary text. shodo-trj makes shodo report each rejected candidate as a
+`WarningKind::Unsupported` warning naming its processed-text byte range, so a
+caller can read `Paragraph::warnings()` and refuse to treat the paragraph as
+composed. Other reasons a candidate is not composed are not diagnosed.
 
 ## Classification (provisional; native and baseline not measured)
 
@@ -76,10 +71,8 @@ shodo report it, is tracked in shodo-trj.
   `text-combine-upright`: likely required for the production switch, since
   the current root construction and guard reject the 16 vertical blocks /
   4 documents found by shodo-zt3. Re-judge after native is measured.
-- shodo-39u (autospace on upright vertical text): a shodo core correctness
-  bug that keeps one of the two documents from matching its reference. Whether
-  it is required for the switch depends on whether native passes that test;
-  not measured.
+- shodo-39u (autospace on upright vertical text): fixed in shodo core; the
+  document now matches its reference.
 - `text-autospace: auto` and custom boundary sets are unsupported and fail
   closed.
 

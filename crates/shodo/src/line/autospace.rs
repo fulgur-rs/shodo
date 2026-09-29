@@ -1,8 +1,9 @@
 //! CSS Text4 classes and indexed ownership/edge tests for visual boundaries.
 use super::spacing_summary::Edge;
-use crate::geometry::{Direction, LayoutUnit, Saturation};
+use crate::geometry::{Direction, LayoutUnit, Saturation, WritingMode};
 use crate::paragraph::ParagraphData;
-use crate::style::TextAutospace;
+use crate::shape::orientation::{RunOrientation, resolve};
+use crate::style::{TextAutospace, TextOrientation};
 use icu_properties::{
     CodePointMapData,
     props::{EastAsianWidth, GeneralCategory, Script},
@@ -18,7 +19,21 @@ pub(super) enum Class {
     Digit,
 }
 
-pub(super) fn classify(ch: char) -> Class {
+pub(super) fn classify(ch: char, mode: WritingMode, orientation: TextOrientation) -> Class {
+    let class = classify_character(ch);
+    // CSS Text 4 §8.4.1 excludes non-ideographic letters and numerals
+    // typeset upright in vertical text. The shaping resolver is the source
+    // of the used orientation, including `mixed` and sideways writing modes.
+    if matches!(class, Class::Letter | Class::Digit)
+        && resolve(mode, orientation, ch) == RunOrientation::Upright
+    {
+        Class::Other
+    } else {
+        class
+    }
+}
+
+fn classify_character(ch: char) -> Class {
     let gc = CodePointMapData::<GeneralCategory>::new().get(ch);
     // Punctuation and separators interrupt the boundary even when Han is
     // among Script_Extensions (e.g. CJK punctuation shared by several scripts).
