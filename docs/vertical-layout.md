@@ -70,6 +70,14 @@ CSS lookaround rules determine which inherited `all` sequences can combine.
 Only `None` and `All` are exposed; digit-count variants are not provided.
 Ruby uses the same retained vertical glyph output; see the [ruby contract](ruby.md).
 
+TCY hit-group construction uses two binary searches to select paragraph spans
+whose closed text ranges reach the accepted line's caret offsets. Touching
+endpoint spans remain eligible. With C paragraph spans and L lines, selecting
+span candidates takes O(L log(C + 2) + K) work for K total candidates, instead of
+visiting all C spans on every line. This bounds span selection only; finding each
+span's caret stops, cluster construction, sorting and spatial indexing have their
+own costs. It is not an elapsed-time comparison.
+
 ## Fixed images
 
 The snapshot matrix includes 20 vertical/sideways cases covering both directions,
