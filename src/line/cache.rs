@@ -979,6 +979,123 @@ mod tests {
         assert_eq!(signatures[0], signatures[3]);
     }
 
+    fn vector_allocation<T>(values: &Vec<T>) -> usize {
+        values.capacity() * std::mem::size_of::<T>()
+    }
+
+    fn raw_hyphen_overlay_cache() -> (
+        crate::LayoutContext,
+        std::sync::Weak<crate::paragraph::ParagraphData>,
+        usize,
+        usize,
+    ) {
+        use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult};
+        let paragraph = plain_paragraph("ab\u{ad}cdef\u{ad}ghijkl\u{ad}mn");
+        let weak = std::sync::Arc::downgrade(&paragraph.data);
+        let mut cx = LayoutContext::new();
+        let LineResult::Line(line) = paragraph.next_line(
+            &mut cx,
+            paragraph.start_token(),
+            &Default::default(),
+            &LineConstraint::new(48.),
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("expected a line with a selected discretionary hyphen")
+        };
+        assert_eq!(line.break_reason(), crate::BreakReason::Regular);
+        assert!(line.text_range().end < paragraph.text().chars().count());
+        assert!(line_signature(&line).1.iter().any(|glyph| {
+            paragraph.text().chars().nth(glyph.cluster as usize) == Some('\u{ad}')
+                && glyph.advance > 0.
+        }));
+        assert_eq!(cx.cache_prepare_visits, 0);
+        let partial = cx.partial.as_ref().unwrap();
+        assert!(partial.scan.overlays.iter().any(|overlay| {
+            overlay.hyphen.is_some() && !overlay.store.id.is_empty() && !overlay.runs.is_empty()
+        }));
+        // A first non-float scan has no candidate-search allocations. Keep
+        // this prerequisite explicit so an indexed cache cannot satisfy it.
+        let searches = [
+            partial.prefix.capacity(),
+            partial.tracking.capacity(),
+            partial.thresholds.capacity(),
+            partial.floats.capacity(),
+            partial.breaks.candidates.capacity(),
+            partial.breaks.frontier.capacity(),
+            partial.breaks.undo.capacity(),
+            partial.breaks.popped.capacity(),
+            partial.emergencies.candidates.capacity(),
+            partial.emergencies.frontier.capacity(),
+            partial.emergencies.undo.capacity(),
+            partial.emergencies.popped.capacity(),
+            partial.hyphens.candidates.capacity(),
+            partial.hyphens.frontier.capacity(),
+            partial.hyphens.undo.capacity(),
+            partial.hyphens.popped.capacity(),
+        ];
+        assert!(searches.iter().all(|capacity| *capacity == 0));
+        assert!(partial.scan.ruby.is_none());
+        // Derive bytes from actual allocations and inferred element types,
+        // without using PartialLine::bytes to choose the expected budget.
+        let without_inner = std::mem::size_of_val(partial)
+            + vector_allocation(&partial.scan.widths)
+            + partial.scan.leading.as_ref().map_or(0, vector_allocation)
+            + vector_allocation(&partial.scan.autospace_gaps)
+            + vector_allocation(&partial.scan.ruby_caret_gaps)
+            + vector_allocation(&partial.scan.overlays);
+        let inner: usize = partial
+            .scan
+            .overlays
+            .iter()
+            .map(|overlay| {
+                let store = &overlay.store;
+                vector_allocation(&store.id)
+                    + vector_allocation(&store.advance)
+                    + vector_allocation(&store.pen)
+                    + vector_allocation(&store.offset_inline)
+                    + vector_allocation(&store.offset_block)
+                    + vector_allocation(&store.cluster)
+                    + vector_allocation(&store.flags)
+                    + store.spacing.as_ref().map_or(0, vector_allocation)
+                    + store.leading.as_ref().map_or(0, vector_allocation)
+                    + vector_allocation(&overlay.runs)
+            })
+            .sum();
+        assert!(inner > 1);
+        (cx, weak, without_inner, inner)
+    }
+
+    #[test]
+    fn plain_raw_overlay_bytes_include_owned_glyph_and_run_allocations() {
+        let (mut cx, weak, without_inner, inner) = raw_hyphen_overlay_cache();
+        let expected = without_inner + inner;
+        assert_eq!(cx.partial.as_ref().unwrap().bytes(), expected);
+        let scratch = cx.scratch_bytes;
+        cx.shrink_to(scratch + expected);
+        assert_eq!(cx.scratch_bytes, scratch);
+        assert!(cx.partial.is_some(), "the exact aggregate budget must fit");
+        assert!(weak.upgrade().is_some());
+    }
+
+    #[test]
+    fn plain_raw_overlay_budget_releases_owned_paragraph() {
+        for zero_budget in [false, true] {
+            let (mut cx, weak, without_inner, inner) = raw_hyphen_overlay_cache();
+            let partial_budget = without_inner + inner / 2;
+            assert!(without_inner < partial_budget && partial_budget < without_inner + inner);
+            let scratch = cx.scratch_bytes;
+            let budget = if zero_budget {
+                0
+            } else {
+                scratch + partial_budget
+            };
+            cx.shrink_to(budget);
+            assert_eq!(cx.scratch_bytes, if zero_budget { 0 } else { scratch });
+            assert!(cx.partial.is_none(), "over-budget owned overlays must drop");
+            assert!(weak.upgrade().is_none(), "the paragraph must be released");
+        }
+    }
+
     #[test]
     fn plain_raw_cache_releases_its_paragraph_on_shrink() {
         use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult};
