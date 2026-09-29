@@ -557,6 +557,92 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn same_node_dom_queries_prune_many_nonmerged_ranges() {
+        let mut m = OffsetMapping::default();
+        for i in 0..4096 {
+            m.push_unit(MappingUnit {
+                kind: MappingKind::Expanded,
+                node: NodeId(7),
+                dom: 4 * i..4 * i + 2,
+                text: 3 * i..3 * i + 1,
+            });
+        }
+        assert_eq!(m.units().len(), 4096);
+        // Exclude lazy index construction from the repeated-query work count.
+        m.dom_to_text(NodeId(7), 0);
+        for (offset, expected) in [
+            (16381, Some((12285, Affinity::Downstream))),
+            (16382, Some((12286, Affinity::Upstream))),
+            (16383, None),
+        ] {
+            reset_visits();
+            assert_eq!(m.dom_to_text(NodeId(7), offset), expected);
+            let work = visits();
+            assert!(
+                work < 128,
+                "same-node offset {offset} examined {work} records"
+            );
+        }
+    }
+
+    #[test]
+    fn same_node_dom_queries_prune_short_ranges_under_an_early_long_overlap() {
+        let mut m = OffsetMapping::default();
+        m.push_unit(MappingUnit {
+            kind: MappingKind::Expanded,
+            node: NodeId(7),
+            dom: 0..16384,
+            text: 0..1,
+        });
+        for i in 1..4096 {
+            m.push_unit(MappingUnit {
+                kind: MappingKind::Expanded,
+                node: NodeId(7),
+                dom: 4 * i..4 * i + 2,
+                text: 3 * i..3 * i + 1,
+            });
+        }
+        assert_eq!(m.units().len(), 4096);
+        m.dom_to_text(NodeId(7), 0);
+        // A late short range's start, end and gap are all inside the first
+        // record. Its original ordinal wins even over a later end boundary.
+        // The gap also catches backwards prefix-max scans poisoned by the
+        // long interval: no short range contains it, but the first one does.
+        for (offset, expected) in [
+            (16380, Some((0, Affinity::Downstream))),
+            (16382, Some((0, Affinity::Downstream))),
+            (16383, Some((0, Affinity::Downstream))),
+            (16384, Some((1, Affinity::Upstream))),
+            (16385, None),
+        ] {
+            reset_visits();
+            assert_eq!(m.dom_to_text(NodeId(7), offset), expected);
+            let work = visits();
+            assert!(
+                work < 128,
+                "long-overlap offset {offset} examined {work} records"
+            );
+        }
+        // With no containing interior, the last original end wins, including
+        // an empty source range whose processed-text end is different.
+        m.push_unit(MappingUnit {
+            kind: MappingKind::Expanded,
+            node: NodeId(7),
+            dom: 16384..16384,
+            text: 20000..20001,
+        });
+        assert_eq!(m.units().len(), 4097);
+        m.dom_to_text(NodeId(7), 0);
+        reset_visits();
+        assert_eq!(
+            m.dom_to_text(NodeId(7), 16384),
+            Some((20001, Affinity::Upstream))
+        );
+        let work = visits();
+        assert!(work < 128, "last-end tie examined {work} records");
+    }
+
+    #[test]
     fn repeated_nonmonotonic_sources_keep_first_interior_and_last_end() {
         let mut m = OffsetMapping::default();
         for (node, dom, text) in [
