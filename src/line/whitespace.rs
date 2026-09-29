@@ -31,6 +31,33 @@ pub(super) fn preserved(data: &ParagraphData, i: usize) -> bool {
     s.white_space_collapse == WhiteSpaceCollapse::Preserve
 }
 
+/// Bidi-class membership tests with a constant-time path for ASCII, where
+/// the boundary-neutral controls are 00-08, 0E-1B and 7F. Other characters
+/// take the Unicode table.
+fn transparent_char(c: char) -> bool {
+    use unicode_bidi::BidiClass::*;
+    if c.is_ascii() {
+        return matches!(c, '\0'..='\u{8}' | '\u{e}'..='\u{1b}' | '\u{7f}');
+    }
+    matches!(
+        unicode_bidi::bidi_class(c),
+        LRI | RLI | FSI | PDI | LRE | RLE | LRO | RLO | PDF | BN
+    )
+}
+
+/// Characters UAX #9 L1 resets at the end of a line: whitespace, segment and
+/// paragraph separators, isolate/embedding controls and boundary neutrals.
+fn trailing_char(c: char) -> bool {
+    use unicode_bidi::BidiClass::*;
+    if c.is_ascii() {
+        return matches!(c, '\t'..='\r' | ' ' | '\u{1c}'..='\u{1f}') || transparent_char(c);
+    }
+    matches!(
+        unicode_bidi::bidi_class(c),
+        WS | S | B | LRI | RLI | FSI | PDI | LRE | RLE | LRO | RLO | PDF | BN
+    )
+}
+
 pub(super) fn transparent(data: &ParagraphData, i: usize) -> bool {
     match data.units[i].kind {
         UnitKind::Close { .. }
@@ -38,17 +65,10 @@ pub(super) fn transparent(data: &ParagraphData, i: usize) -> bool {
         | UnitKind::Float { .. }
         | UnitKind::Absolute { .. }
         | UnitKind::ForcedBreak => true,
-        UnitKind::Cluster { .. } => {
-            use unicode_bidi::BidiClass::*;
-            data.text[data.units[i].text.start as usize..data.units[i].text.end as usize]
-                .chars()
-                .all(|c| {
-                    matches!(
-                        unicode_bidi::bidi_class(c),
-                        LRI | RLI | FSI | PDI | LRE | RLE | LRO | RLO | PDF | BN
-                    )
-                })
-        }
+        UnitKind::Cluster { .. } => data.text
+            [data.units[i].text.start as usize..data.units[i].text.end as usize]
+            .chars()
+            .all(transparent_char),
         _ => false,
     }
 }
@@ -113,15 +133,9 @@ pub(super) fn bidi_trailing(data: &ParagraphData, start: usize, end: usize) -> u
                 if data.combine_at_text(data.units[i].text.start).is_some() {
                     break;
                 }
-                use unicode_bidi::BidiClass::*;
                 let text =
                     &data.text[data.units[i].text.start as usize..data.units[i].text.end as usize];
-                if text.chars().all(|c| {
-                    matches!(
-                        unicode_bidi::bidi_class(c),
-                        WS | S | B | LRI | RLI | FSI | PDI | LRE | RLE | LRO | RLO | PDF | BN
-                    )
-                }) {
+                if text.chars().all(trailing_char) {
                     begin = i;
                 } else {
                     break;
@@ -173,5 +187,34 @@ pub(super) fn finalize(
     scan.hanging_end = total.sub(retained, sat);
     if scan.hanging_end == LayoutUnit::ZERO {
         scan.hang_start = scan.end;
+    }
+}
+
+#[cfg(test)]
+mod class_tests {
+    use super::*;
+    use unicode_bidi::{BidiClass::*, bidi_class};
+
+    #[test]
+    fn ascii_class_shortcuts_match_the_unicode_table() {
+        for c in ('\0'..='\u{7f}').chain(['\u{85}', '\u{a0}', '\u{200e}', '\u{2066}', '\u{5d0}']) {
+            let class = bidi_class(c);
+            assert_eq!(
+                transparent_char(c),
+                matches!(
+                    class,
+                    LRI | RLI | FSI | PDI | LRE | RLE | LRO | RLO | PDF | BN
+                ),
+                "transparent {c:?}"
+            );
+            assert_eq!(
+                trailing_char(c),
+                matches!(
+                    class,
+                    WS | S | B | LRI | RLI | FSI | PDI | LRE | RLE | LRO | RLO | PDF | BN
+                ),
+                "trailing {c:?}"
+            );
+        }
     }
 }
