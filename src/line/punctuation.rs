@@ -10,7 +10,6 @@ use skrifa::{
     FontRef, GlyphId, MetadataProvider,
     instance::{LocationRef, Size},
 };
-use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum PunctuationClass {
@@ -197,16 +196,16 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
             }
         })
         .collect();
-    let indices: HashMap<_, _> = data
-        .breaks
-        .typographic_starts
-        .iter()
-        .copied()
-        .enumerate()
-        .map(|(i, offset)| (offset, i))
-        .collect();
+    // `typographic_starts` is sorted, so a binary search replaces the
+    // offset -> index map (no hashing, no extra allocation); the last equal
+    // start wins, as it did when the map was collected.
+    let starts = &data.breaks.typographic_starts;
+    let start_index = |offset: u32| {
+        let after = starts.partition_point(|s| *s <= offset);
+        after.checked_sub(1).filter(|i| starts[*i] == offset)
+    };
     for (g, &offset) in data.glyphs.cluster.iter().enumerate() {
-        if let Some(&index) = indices.get(&offset) {
+        if let Some(index) = start_index(offset) {
             result[index].advance = result[index].advance.add(data.glyphs.advance[g], sat);
         }
     }
@@ -258,7 +257,7 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
             while g < run.glyphs.end as usize && data.glyphs.cluster[g] == offset {
                 g += 1;
             }
-            let Some(&index) = indices.get(&offset) else {
+            let Some(index) = start_index(offset) else {
                 continue;
             };
             let p = &mut result[index];

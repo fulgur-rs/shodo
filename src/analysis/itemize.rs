@@ -246,13 +246,11 @@ pub(crate) fn itemize(
                 );
                 let query_id = style_queries[style as usize];
                 let select = || {
-                    let mut query = queries[query_id].clone();
-                    query.script = script;
                     #[cfg(test)]
                     MATCH_CALLS.with(|calls| calls.set(calls.get() + 1));
                     #[cfg(test)]
                     tests::record_cluster(cluster);
-                    fonts.match_cluster(&query, cluster)
+                    fonts.match_scripted(&queries[query_id], script, cluster)
                 };
                 let font = if part_start == scalar_start && part_end == scalar_end {
                     // Ordinary one-style graphemes need no local cache allocation.

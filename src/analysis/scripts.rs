@@ -7,10 +7,33 @@ fn neutral(script: Script) -> bool {
     matches!(script, Script::Common | Script::Inherited | Script::Unknown)
 }
 
+/// ASCII letters are Latin and every other ASCII character is Common, so
+/// ASCII skips the property trie.
+fn ascii_script(c: char) -> Option<Script> {
+    c.is_ascii().then(|| {
+        if c.is_ascii_alphabetic() {
+            Script::Latin
+        } else {
+            Script::Common
+        }
+    })
+}
+
+/// The only ASCII characters with a matched opening bracket are `()[]{}`.
+fn matched_bracket(c: char) -> Option<unicode_bidi::data_source::BidiMatchedOpeningBracket> {
+    if c.is_ascii() && !matches!(c, '(' | ')' | '[' | ']' | '{' | '}') {
+        return None;
+    }
+    HardcodedBidiData.bidi_matched_opening_bracket(c)
+}
+
 pub(super) fn resolve(chars: impl Iterator<Item = char>) -> Vec<Script> {
     let data = ScriptWithExtensions::new();
     let chars: Vec<_> = chars.collect();
-    let mut scripts: Vec<_> = chars.iter().map(|c| data.get_script_val(*c)).collect();
+    let mut scripts: Vec<_> = chars
+        .iter()
+        .map(|c| ascii_script(*c).unwrap_or_else(|| data.get_script_val(*c)))
+        .collect();
     let permits = |c, script| {
         let ext = data.get_script_extensions_val(c);
         !ext.iter().any(|s| !neutral(s)) || ext.contains(&script)
@@ -24,7 +47,7 @@ pub(super) fn resolve(chars: impl Iterator<Item = char>) -> Vec<Script> {
         if neutral(scripts[i]) && permits(*c, last) {
             scripts[i] = last;
         }
-        if let Some(bracket) = HardcodedBidiData.bidi_matched_opening_bracket(*c) {
+        if let Some(bracket) = matched_bracket(*c) {
             if bracket.is_open {
                 by_class
                     .entry(bracket.opening)
@@ -62,4 +85,30 @@ pub(super) fn resolve(chars: impl Iterator<Item = char>) -> Vec<Script> {
         last = scripts[i];
     }
     scripts
+}
+
+#[cfg(test)]
+mod ascii_tests {
+    use super::*;
+
+    #[test]
+    fn ascii_shortcuts_match_the_property_tables() {
+        let data = ScriptWithExtensions::new();
+        for c in '\0'..='\u{7f}' {
+            assert_eq!(
+                ascii_script(c),
+                Some(data.get_script_val(c)),
+                "script {c:?}"
+            );
+            let expected = HardcodedBidiData
+                .bidi_matched_opening_bracket(c)
+                .map(|b| (b.opening, b.is_open));
+            assert_eq!(
+                matched_bracket(c).map(|b| (b.opening, b.is_open)),
+                expected,
+                "bracket {c:?}"
+            );
+        }
+        assert_eq!(ascii_script('\u{3042}'), None);
+    }
 }

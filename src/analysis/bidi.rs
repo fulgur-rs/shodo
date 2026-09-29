@@ -89,30 +89,55 @@ pub(crate) fn upright_analysis_text(
     Some(String::from_utf8(bytes).expect("same-width Unicode scalar replacement"))
 }
 
+/// Bidi-class shortcuts for ASCII. ASCII has no R/AL/explicit-format
+/// characters, its only letters are L, and its only paragraph separators are
+/// the B class controls (LF, CR, FS, GS, RS). Anything else takes the table.
+fn paragraph_separator(c: char) -> bool {
+    if c.is_ascii() {
+        matches!(c, '\n' | '\r' | '\u{1c}'..='\u{1e}')
+    } else {
+        bidi_class(c) == BidiClass::B || c == '\u{2028}'
+    }
+}
+
+fn forces_bidi(c: char) -> bool {
+    use BidiClass::*;
+    !c.is_ascii()
+        && matches!(
+            bidi_class(c),
+            R | AL | RLE | RLO | RLI | LRE | LRO | LRI | FSI | PDF | PDI
+        )
+}
+
+/// `Some(is_L)` for ASCII, `None` when the table must decide.
+fn strong_ltr_ascii(c: char) -> Option<bool> {
+    c.is_ascii().then(|| c.is_ascii_alphabetic())
+}
+
 pub(crate) fn needs_bidi(
     text: &str,
     style: &ParagraphStyle,
     styles: &[InlineStyle],
     direction: Direction,
 ) -> bool {
-    use BidiClass::*;
     style.unicode_bidi_plaintext
         || direction == Direction::Rtl
         || styles
             .iter()
             .any(|s| s.direction != Direction::Ltr || s.unicode_bidi != UnicodeBidi::Normal)
-        || text.chars().any(|c| {
-            matches!(
-                bidi_class(c),
-                R | AL | RLE | RLO | RLI | LRE | LRO | LRI | FSI | PDF | PDI
-            )
-        })
+        || text.chars().any(forces_bidi)
 }
 
 fn first_strong(text: &str) -> Option<u8> {
     use BidiClass::*;
     let mut depth = 0usize;
     for c in text.chars() {
+        if let Some(is_l) = strong_ltr_ascii(c) {
+            if is_l && depth == 0 {
+                return Some(0);
+            }
+            continue;
+        }
         match bidi_class(c) {
             LRI | RLI | FSI => depth += 1,
             PDI => depth = depth.saturating_sub(1),
@@ -135,7 +160,7 @@ pub(crate) fn analyze_bidi(
         let mut paragraphs = Vec::new();
         let mut start = 0;
         for (pos, c) in text.char_indices() {
-            if bidi_class(c) == BidiClass::B || c == '\u{2028}' {
+            if paragraph_separator(c) {
                 let end = (pos + c.len_utf8()) as u32;
                 paragraphs.push(BidiParagraph {
                     text: start..end,
@@ -191,6 +216,47 @@ pub(crate) fn analyze_bidi(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn ascii_fast_paths_match_the_unicode_tables() {
+        use super::*;
+        for c in ('\0'..='\u{7f}').chain(['\u{85}', '\u{2028}', '\u{2029}', '\u{5d0}']) {
+            let class = bidi_class(c);
+            assert_eq!(
+                paragraph_separator(c),
+                class == BidiClass::B || c == '\u{2028}',
+                "separator {c:?}"
+            );
+            assert_eq!(
+                forces_bidi(c),
+                matches!(
+                    class,
+                    BidiClass::R
+                        | BidiClass::AL
+                        | BidiClass::RLE
+                        | BidiClass::RLO
+                        | BidiClass::RLI
+                        | BidiClass::LRE
+                        | BidiClass::LRO
+                        | BidiClass::LRI
+                        | BidiClass::FSI
+                        | BidiClass::PDF
+                        | BidiClass::PDI
+                ),
+                "forces_bidi {c:?}"
+            );
+        }
+        assert_eq!(strong_ltr_ascii('a'), Some(true));
+        assert_eq!(strong_ltr_ascii('1'), Some(false));
+        assert_eq!(strong_ltr_ascii('\u{5d0}'), None);
+        for c in '\0'..='\u{7f}' {
+            assert_eq!(
+                strong_ltr_ascii(c),
+                Some(bidi_class(c) == BidiClass::L),
+                "strong ltr {c:?}"
+            );
+        }
+    }
+
     use super::*;
     use crate::font::{FontCollection, FontOptions};
     use crate::geometry::Direction;

@@ -14,7 +14,11 @@ const LEFT_WIDE: u8 = 16;
 const LEFT_ZWSP: u8 = 32;
 
 pub(super) fn ignorable(c: char) -> bool {
-    c != '\u{200B}' && CodePointSetData::new::<props::DefaultIgnorableCodePoint>().contains(c)
+    // The first Default_Ignorable_Code_Point is U+00AD; ASCII text, which is
+    // most text, skips the table lookup.
+    c >= '\u{AD}'
+        && c != '\u{200B}'
+        && CodePointSetData::new::<props::DefaultIgnorableCodePoint>().contains(c)
 }
 
 fn wide(c: char) -> bool {
@@ -146,4 +150,17 @@ pub(super) fn flags_in_context(
         }
     }
     flags
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn ignorable_fast_path_matches_the_table_for_every_scalar() {
+        use icu_properties::{CodePointSetData, props};
+        let table = CodePointSetData::new::<props::DefaultIgnorableCodePoint>();
+        for c in ('\0'..=char::MAX).filter(|c| *c != '\u{200B}') {
+            assert_eq!(super::ignorable(c), table.contains(c), "{c:?}");
+        }
+        assert!(!super::ignorable('\u{200B}'));
+    }
 }
