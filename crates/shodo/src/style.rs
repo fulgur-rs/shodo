@@ -204,6 +204,7 @@ pub enum WordBreak {
     Normal,
     BreakAll,
     KeepAll,
+    Manual,
     AutoPhrase,
 }
 
