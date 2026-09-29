@@ -9,6 +9,9 @@ mod offline;
 #[allow(dead_code)]
 #[path = "support/source_replay.rs"]
 mod replay;
+#[allow(dead_code)]
+#[path = "support/source_fonts.rs"]
+mod fonts;
 
 use shodo::{
     AtomicSizes, Fragment, LayoutContext, LineConstraint, LineResult, font::FontCollection,
@@ -85,8 +88,74 @@ fn measure(
     Ok(lines)
 }
 
-fn main() {
-    eprintln!("Run `cargo test -p shodo-raikiri --example hanging_punctuation`.");
+const TEST: &str = "css/css-text/hanging-punctuation/hanging-punctuation-first-002.html";
+const REFERENCE: &str =
+    "css/css-text/hanging-punctuation/reference/hanging-punctuation-first-002-ref.html";
+const RAIKIRI_PIN: &str = "ab7e619a8f321f03de8b8c8b9342954868e044c8";
+/// The pinned screen viewport used by the original comparison.
+const VIEWPORT_WIDTH: f32 = 800.0;
+
+/// The WPT pass condition: the arrow (last glyph on the line) sits at the
+/// same inline position in the test and in the reference.
+fn arrows_aligned(test: &LineMeasure, reference: &LineMeasure) -> bool {
+    match (test.glyphs.last(), reference.glyphs.last()) {
+        (Some(t), Some(r)) => (t.inline_position - r.inline_position).abs() <= 1.0 / 64.0,
+        _ => false,
+    }
+}
+
+fn run(wpt: &std::path::Path, output: &std::path::Path) -> Result<(), String> {
+    let registry = fonts::load(&wpt.join("fonts"), &Limits::default())?;
+    let test = offline::parse_screen(wpt, TEST)?;
+    let reference = offline::parse_screen(wpt, REFERENCE)?;
+    let test_root = find_by_attr(&test, "class", "test")?;
+    let dom = &reference.parsed.dom;
+    let reference_root = (0..dom.node_count())
+        .find(|&id| dom.get_node(id).is_some_and(|n| n.tag_name() == Some("div")))
+        .ok_or("reference has no div")?;
+    let width = VIEWPORT_WIDTH;
+    let hung = measure(&test, test_root, &registry.collection, width, false)?;
+    let control = measure(&test, test_root, &registry.collection, width, true)?;
+    let reference_lines = measure(&reference, reference_root, &registry.collection, width, false)?;
+    let (hung, control, reference_line) = match (hung.first(), control.first(), reference_lines.first()) {
+        (Some(a), Some(b), Some(c)) => (a, b, c),
+        _ => return Err("expected one accepted line in every replay".into()),
+    };
+    let hung_glyph = hung.glyphs.first().ok_or("hung line has no glyph")?;
+    let checks = serde_json::json!({
+        "glyph_retained": hung.glyphs.len() == control.glyphs.len() && hung.glyphs.len() >= 2,
+        "hang_start_equals_leading_advance": (hung.hang_start - hung_glyph.advance).abs() <= 1.0 / 64.0 && hung.hang_start > 0.0,
+        "arrows_aligned_with_reference": arrows_aligned(hung, reference_line),
+        "control_none_is_not_aligned": !arrows_aligned(control, reference_line),
+    });
+    let passed = checks.as_object().unwrap().values().all(|v| v == true);
+    let describe = |l: &LineMeasure| {
+        serde_json::json!({"hang_start": l.hang_start,
+            "glyphs": l.glyphs.iter().map(|g| serde_json::json!({
+                "inline_position": g.inline_position, "advance": g.advance, "cluster": g.cluster
+            })).collect::<Vec<_>>()})
+    };
+    let report = serde_json::json!({
+        "scope": "shodo layout of the original static test/reference through the representative caller; not a WPT verdict, page paint or baseline PASS count",
+        "raikiri_pin": RAIKIRI_PIN, "viewport_width": width,
+        "test": TEST, "reference": REFERENCE,
+        "font_registry_sha256": registry.hashes,
+        "resources": {"test": test.resources, "reference": reference.resources},
+        "resolved": {"test": describe(hung), "control_none": describe(control), "reference": describe(reference_line)},
+        "checks": checks, "passed": passed,
+    });
+    std::fs::write(output, serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n")
+        .map_err(|e| e.to_string())?;
+    if passed { Ok(()) } else { Err("hanging-punctuation-first-002 replay did not reproduce the expected behavior".into()) }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut args = std::env::args().skip(1);
+    let wpt = args.next().ok_or("usage: hanging_punctuation <wpt-root> [output.json]")?;
+    let output = args.next().unwrap_or_else(|| "hanging-punctuation-first-002.json".into());
+    run(std::path::Path::new(&wpt), std::path::Path::new(&output))?;
+    println!("{output}: original test aligns with its reference; none control does not");
+    Ok(())
 }
 
 #[cfg(test)]
@@ -130,6 +199,23 @@ mod tests {
 
     fn close(a: f32, b: f32) -> bool {
         (a - b).abs() <= 1.0 / 64.0
+    }
+
+    fn line(hang: f32, xs: &[f32]) -> LineMeasure {
+        LineMeasure {
+            hang_start: hang,
+            glyphs: xs
+                .iter()
+                .map(|&x| G { inline_position: x, advance: 40.0, cluster: 0 })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn arrows_are_the_last_glyph_and_must_share_an_inline_position() {
+        assert!(arrows_aligned(&line(40.0, &[-40.0, 0.0]), &line(0.0, &[0.0])));
+        assert!(!arrows_aligned(&line(0.0, &[0.0, 40.0]), &line(0.0, &[0.0])));
+        assert!(!arrows_aligned(&line(0.0, &[]), &line(0.0, &[0.0])));
     }
 
     #[test]
