@@ -52,6 +52,7 @@ recorded machine, toolchain, and scope at the time, not a live guarantee.
 | --- | --- |
 | Earlier shaping measurements and their scope | [Shaping measurement record](records/shaping-measurements.md) |
 | Frozen raikiri S4 residual fields, all109 document classification and caller gaps | [raikiri style diagnostics](records/raikiri-style-diagnostics.md) |
+| Representative caller wiring of hanging-punctuation none/first | [raikiri hanging-punctuation](records/raikiri-hanging-punctuation.md) |
 | An unsent proposal concerning upstream shaping status | [harfrust status proposal](records/harfrust-shaping-status-proposal.md) |
 
 ## Design history (`docs/superpowers/`)

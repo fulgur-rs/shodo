@@ -23,8 +23,9 @@ fn text_style(
     let prepared = diagnostic::prepare_input(cv, profile);
     let initial = ComputedValues::initial();
     let mut remaining = prepared.clone();
-    // These are the nine noninitial fields observed across all 167 original
-    // IFCs. Root sizing is already retained by the original measured width.
+    // Nine noninitial fields were observed across all 167 original IFCs, and
+    // hanging-punctuation is mapped explicitly below. Root sizing is already
+    // retained by the original measured width.
     remaining.font_family = initial.font_family;
     remaining.font_size = initial.font_size;
     remaining.font_weight = initial.font_weight;
@@ -34,6 +35,10 @@ fn text_style(
     remaining.text_align = initial.text_align;
     remaining.text_autospace = initial.text_autospace;
     remaining.word_break = initial.word_break;
+    // Block-container property; the IFC root's value is mapped into
+    // `LineOptions` by `project`, so descendants' inherited copies are not
+    // residual style.
+    remaining.hanging_punctuation = initial.hanging_punctuation;
     if remaining != ComputedValues::initial() {
         return Err("computed style outside the verified ordinary-source input footprint".into());
     }
@@ -136,6 +141,15 @@ pub fn project(
         root: root_style,
         ..Default::default()
     };
+    let hanging_first = match root_cv.hanging_punctuation {
+        css::HangingPunctuation::None => false,
+        css::HangingPunctuation::First => true,
+        // `HangingPunctuation` is non-exhaustive; fail closed for values
+        // this caller does not map.
+        _ => {
+            return Err("hanging-punctuation outside the verified source input footprint".into());
+        }
+    };
     let options = s::LineOptions {
         text_align: match root_cv.text_align {
             css::TextAlign::Start => s::TextAlign::Start,
@@ -143,6 +157,10 @@ pub fn project(
             css::TextAlign::Left => s::TextAlign::Left,
             css::TextAlign::Right => s::TextAlign::Right,
             _ => return Err("text-align outside the verified source input footprint".into()),
+        },
+        hanging_punctuation: s::HangingPunctuation {
+            first: hanging_first,
+            ..Default::default()
         },
         ..Default::default()
     };

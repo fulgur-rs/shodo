@@ -42,3 +42,7 @@ test = true
 [[example]]
 name = "source_coverage"
 test = true
+
+[[example]]
+name = "hanging_punctuation"
+test = true
