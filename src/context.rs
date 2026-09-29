@@ -18,6 +18,8 @@ pub struct LayoutContext {
     #[cfg(test)]
     pub(crate) cache_visits: usize,
     #[cfg(test)]
+    pub(crate) cache_prepare_visits: usize,
+    #[cfg(test)]
     pub(crate) float_search_visits: usize,
     #[cfg(test)]
     pub(crate) ruby_measure_visits: usize,
