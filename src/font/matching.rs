@@ -65,25 +65,39 @@ pub struct FontMatch {
 }
 
 pub(super) struct CacheEntry {
-    query: FontQuery,
-    cluster: String,
-    generations: (u64, Option<u64>),
+    query: std::sync::Arc<FontQuery>,
+    cluster: Box<str>,
     result: Option<FontMatch>,
     hash: u64,
     used: u64,
 }
+impl CacheEntry {
+    fn matches_key(&self, query: &FontQuery, cluster: &str) -> bool {
+        #[cfg(test)]
+        matching_tests::record_key_comparison();
+        *self.query == *query && *self.cluster == *cluster
+    }
+}
 
 /// Bounded LRU of cluster matches. Lookup is a hash probe plus one key
 /// comparison; hits only bump a recency counter and never move entries.
-/// Extra memory over the entries themselves is one `u64` hash and one `u64`
-/// recency stamp per entry plus a `u64 -> u32` index, all bounded by
-/// `match_cache_entries`. A 64-bit hash collision between two different keys
-/// just replaces the older entry, which is safe for a cache.
+///
+/// Memory is what a cache like this is easy to waste, so entries stay small:
+/// every entry of one style shares a single `Arc<FontQuery>` (a document
+/// typically uses a handful of distinct queries but caches hundreds of
+/// clusters), the cluster is a `Box<str>`, and the font generation lives once
+/// on the cache instead of on each entry. A generation change drops every
+/// entry, which could never be hit again anyway. The per-entry overhead of the
+/// index is one `u64` hash, one `u64` recency stamp and a `u64 -> u32` bucket,
+/// all bounded by `match_cache_entries`. A 64-bit hash collision between two
+/// different keys just replaces the older entry, which is safe for a cache.
 #[derive(Default)]
 pub(super) struct MatchCache {
     slots: Vec<CacheEntry>,
     index: std::collections::HashMap<u64, u32, std::hash::BuildHasherDefault<PreHashed>>,
     clock: u64,
+    generations: Option<(u64, Option<u64>)>,
+    queries: Vec<std::sync::Weak<FontQuery>>,
 }
 
 /// The index keys are already well-mixed 64-bit hashes.
@@ -103,12 +117,11 @@ impl std::hash::Hasher for PreHashed {
     }
 }
 
-fn key_hash(generations: (u64, Option<u64>), query: &FontQuery, cluster: &str) -> u64 {
+fn key_hash(query: &FontQuery, cluster: &str) -> u64 {
     use std::hash::{Hash, Hasher};
     // f32 equality treats -0.0 == 0.0; hash them identically.
     let bits = |x: f32| if x == 0.0 { 0 } else { x.to_bits() };
     let mut h = std::collections::hash_map::DefaultHasher::new();
-    generations.hash(&mut h);
     cluster.hash(&mut h);
     query.families.len().hash(&mut h);
     for family in &query.families {
@@ -141,25 +154,69 @@ impl MatchCache {
     pub(super) fn is_empty(&self) -> bool {
         self.slots.is_empty()
     }
+    fn sync(&mut self, generations: (u64, Option<u64>)) {
+        if self.generations != Some(generations) {
+            self.slots = Vec::new();
+            self.index = Default::default();
+            self.queries = Vec::new();
+            self.generations = Some(generations);
+        }
+    }
     fn get(
         &mut self,
-        hash: u64,
         generations: (u64, Option<u64>),
+        hash: u64,
         query: &FontQuery,
         cluster: &str,
     ) -> Option<Option<FontMatch>> {
+        self.sync(generations);
         let slot = *self.index.get(&hash)? as usize;
         let entry = self.slots.get_mut(slot)?;
-        if !entry.matches_key(generations, query, cluster) {
+        if !entry.matches_key(query, cluster) {
             return None;
         }
         self.clock += 1;
         entry.used = self.clock;
         Some(entry.result.clone())
     }
-    fn insert(&mut self, cap: usize, mut entry: CacheEntry) {
+    /// Reuse the shared query when an equal one is already retained by a live
+    /// entry; dead references are pruned as we look, so the list never
+    /// outgrows the number of live entries.
+    fn intern(&mut self, query: FontQuery) -> std::sync::Arc<FontQuery> {
+        let mut found = None;
+        self.queries.retain(|weak| match weak.upgrade() {
+            Some(shared) => {
+                if found.is_none() && *shared == query {
+                    found = Some(shared);
+                }
+                true
+            }
+            None => false,
+        });
+        found.unwrap_or_else(|| {
+            let shared = std::sync::Arc::new(query);
+            self.queries.push(std::sync::Arc::downgrade(&shared));
+            shared
+        })
+    }
+    fn insert(
+        &mut self,
+        cap: usize,
+        generations: (u64, Option<u64>),
+        query: FontQuery,
+        cluster: &str,
+        hash: u64,
+        result: Option<FontMatch>,
+    ) {
+        self.sync(generations);
         self.clock += 1;
-        entry.used = self.clock;
+        let entry = CacheEntry {
+            query: self.intern(query),
+            cluster: cluster.into(),
+            result,
+            hash,
+            used: self.clock,
+        };
         if let Some(&slot) = self.index.get(&entry.hash) {
             // Same hash: an equal key was concurrently inserted, or a
             // 64-bit collision. Either way keep exactly one entry.
@@ -178,18 +235,6 @@ impl MatchCache {
             self.index.insert(entry.hash, self.slots.len() as u32);
             self.slots.push(entry);
         }
-    }
-}
-impl CacheEntry {
-    fn matches_key(
-        &self,
-        generations: (u64, Option<u64>),
-        query: &FontQuery,
-        cluster: &str,
-    ) -> bool {
-        #[cfg(test)]
-        matching_tests::record_key_comparison();
-        self.generations == generations && self.query == *query && self.cluster == cluster
     }
 }
 pub(super) struct FallbackEntry {
@@ -275,8 +320,8 @@ impl FontCollection {
     fn cached_match(&self, query: &FontQuery, cluster: &str) -> Option<FontMatch> {
         let query = query.clone().normalized();
         let generations = self.generations();
-        let hash = key_hash(generations, &query, cluster);
-        if let Some(result) = self.state().matches.get(hash, generations, &query, cluster) {
+        let hash = key_hash(&query, cluster);
+        if let Some(result) = self.state().matches.get(generations, hash, &query, cluster) {
             return result;
         }
         let result = self.find_cluster(&query, cluster);
@@ -294,17 +339,9 @@ impl FontCollection {
                 .sum::<usize>()
             + query.language.as_ref().map_or(0, String::len);
         if cap > 0 && key_bytes <= 4096 && query.families.len() <= 128 {
-            state.matches.insert(
-                cap,
-                CacheEntry {
-                    query,
-                    cluster: cluster.into(),
-                    generations,
-                    result: result.clone(),
-                    hash,
-                    used: 0,
-                },
-            );
+            state
+                .matches
+                .insert(cap, generations, query, cluster, hash, result.clone());
         }
         result
     }
