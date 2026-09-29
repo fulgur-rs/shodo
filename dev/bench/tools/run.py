@@ -303,6 +303,10 @@ def main(argv=None):
         if args.baseline:validate_report(json.loads((args.baseline/"results.json").read_text()))
         publish(args.output.resolve(),lambda stage:collect(stage,args))
     except (ValueError,OSError,subprocess.CalledProcessError) as error:
+        if isinstance(error,subprocess.CalledProcessError):
+            for output in (error.stdout,error.stderr):
+                if output:
+                    print(output,file=sys.stderr,end="")
         print(f"benchmark failed: {error}",file=sys.stderr)
         return 1
     print(f"Saved validated measurements: {args.output}")

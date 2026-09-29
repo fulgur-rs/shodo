@@ -126,6 +126,39 @@ class ReportTests(unittest.TestCase):
             with self.assertRaises(subprocess.CalledProcessError):runner.publish(target,collect)
             self.assertFalse(target.exists())
             self.assertIn("partial",log.read_text())
+    def test_cli_failed_child_exposes_diagnostics_after_staging_cleanup(self):
+        # Losing CalledProcessError stdout/stderr at the CLI boundary hides
+        # diagnostics once publish removes its real temporary stage.
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);target=root/"new";marker=root/"child.json"
+            old=root/"old";old.mkdir();(old/"results.json").write_bytes(b"existing results")
+            commands=root/"commands";commands.mkdir();cargo=commands/"cargo"
+            cargo.write_text(f"#!{sys.executable}\n" + '''import json, os, sys
+from pathlib import Path
+marker = Path(os.environ["SHODO_TEST_CHILD_MARKER"])
+stage = next(marker.parent.glob("new-staging-*"))
+marker.write_text(json.dumps({"stage": str(stage), "logs": (stage / "logs").is_dir()}))
+print("partial benchmark output")
+print("診断のstdout")
+print("compiler failed", file=sys.stderr)
+print("診断のstderr", file=sys.stderr)
+raise SystemExit(7)
+''',encoding="utf-8")
+            cargo.chmod(0o755)
+            env=dict(os.environ,PATH=str(commands)+os.pathsep+os.environ.get("PATH",""),
+                     SHODO_TEST_CHILD_MARKER=str(marker),PYTHONIOENCODING="utf-8")
+            result=subprocess.run([sys.executable,str(Path(__file__).with_name("run.py")),
+                                   "--output",str(target),"--case","latin-short","--quick"],
+                                  env=env,capture_output=True,text=True,encoding="utf-8")
+            self.assertEqual(result.returncode,1)
+            observed=json.loads(marker.read_text())
+            self.assertTrue(observed["logs"])
+            self.assertFalse(Path(observed["stage"]).exists())
+            self.assertFalse(target.exists())
+            self.assertEqual((old/"results.json").read_bytes(),b"existing results")
+            self.assertEqual(result.stdout,"")
+            for diagnostic in ["partial benchmark output", "診断のstdout", "compiler failed", "診断のstderr"]:
+                self.assertIn(diagnostic,result.stderr)
     def test_invalid_selection_rejected_before_output_or_commands(self):
         with tempfile.TemporaryDirectory() as tmp:
             target=Path(tmp)/"new"
