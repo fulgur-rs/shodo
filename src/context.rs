@@ -15,6 +15,8 @@ pub struct LayoutContext {
     pub(crate) partial: Option<crate::line::cache::PartialLine>,
     pub(crate) ruby_ranges: crate::line::range::RangeCache,
     pub(crate) edge_shapes: crate::line::windows::EdgeShapeCache,
+    /// Bytes of line-edge reshape windows requested by the line being laid out.
+    pub(crate) edge_reshape_spent: u64,
     #[cfg(test)]
     pub(crate) cache_visits: usize,
     #[cfg(test)]
@@ -51,13 +53,15 @@ impl LayoutContext {
 
     /// Releases shaping plans and bounds the combined accounted storage of
     /// shaping scratch and partial-line buffers by `bytes`. Ruby range indexes
-    /// are released conservatively on every explicit shrink.
+    /// are released conservatively on every explicit shrink, as is the cache of
+    /// reshaped line-edge windows.
     /// `shrink_to(0)` also releases any partial line's paragraph reference.
     pub fn shrink_to(&mut self, bytes: usize) {
         // Harfrust does not expose a plan's heap size; dropping the bounded
         // cache conservatively releases all of it on an explicit shrink.
         self.plans.clear();
         self.ruby_ranges = Default::default();
+        self.edge_shapes.clear();
         if bytes == 0 || self.scratch_bytes > bytes {
             self.scratch = None;
             self.scratch_bytes = 0;

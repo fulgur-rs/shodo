@@ -130,26 +130,118 @@ fn partial(data: &ParagraphData, range: &Range<usize>) -> bool {
 /// Edge windows are a pure function of the paragraph, unit range and glyph
 /// budget, and a line scan revisits the same few windows at every break
 /// candidate. Keep results for the most recent paragraph only, so memory stays
-/// bounded by the entry cap regardless of how many paragraphs a context lays
-/// out. Only clean, unedited results are retained.
-#[derive(Debug, Default)]
+/// bounded regardless of how many paragraphs a context lays out. Only clean,
+/// unedited results are retained.
+///
+/// Retention is bounded by an accounted cost, not just the entry count: a
+/// hostile font can expand one window into a very large glyph run, so the
+/// total is capped in glyph-equivalents and oversized results are not cached.
+#[derive(Default)]
 pub(crate) struct EdgeShapeCache {
     owner: Option<(u64, usize)>,
     entries: crate::hashing::FastMap<(usize, usize, Option<u64>), ShapedWindow>,
+    cost: usize,
+}
+
+impl std::fmt::Debug for EdgeShapeCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EdgeShapeCache")
+            .field("entries", &self.entries.len())
+            .field("cost", &self.cost)
+            .finish()
+    }
 }
 
 type ShapedWindow = (crate::shape::GlyphStore, Vec<crate::shape::ShapedRun>);
 
 const EDGE_SHAPE_CACHE_ENTRIES: usize = 256;
+/// Total retained cost in glyph-equivalents (about 26 bytes each): roughly
+/// 0.9 MiB at most.
+const EDGE_SHAPE_CACHE_COST: usize = 1 << 15;
+/// A single window costing more than this is shaped every time instead.
+const EDGE_SHAPE_ENTRY_COST_MAX: usize = 1 << 10;
+
+fn window_cost(window: &ShapedWindow) -> usize {
+    // A run holds an `Arc` and a few scalars; count it as a few glyphs.
+    window.0.len() + window.1.len() * 4
+}
 
 impl EdgeShapeCache {
     fn begin(&mut self, data: &ParagraphData) {
         let owner = (data.id, data as *const ParagraphData as usize);
         if self.owner != Some(owner) {
-            self.entries.clear();
+            self.clear();
             self.owner = Some(owner);
         }
     }
+
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.entries = Default::default();
+        self.cost = 0;
+        self.owner = None;
+    }
+
+    fn get(&self, key: &(usize, usize, Option<u64>)) -> Option<&ShapedWindow> {
+        self.entries.get(key)
+    }
+
+    /// Returns whether the window was retained.
+    fn insert(&mut self, key: (usize, usize, Option<u64>), window: &ShapedWindow) -> bool {
+        let cost = window_cost(window);
+        if cost > EDGE_SHAPE_ENTRY_COST_MAX {
+            return false;
+        }
+        if self.entries.len() >= EDGE_SHAPE_CACHE_ENTRIES
+            || self.cost + cost > EDGE_SHAPE_CACHE_COST
+        {
+            self.entries.clear();
+            self.cost = 0;
+        }
+        if let Some(previous) = self.entries.insert(key, window.clone()) {
+            self.cost -= window_cost(&previous);
+        }
+        self.cost += cost;
+        true
+    }
+}
+
+/// Each edge window is bounded by `max_reshape_window_bytes`, but a line scan
+/// asks for one per break candidate, so a long unsafe-joined run (for example
+/// cursive text under `word-break: break-all`) multiplies that bound by the
+/// candidate count. Cap the bytes requested per line at this many windows;
+/// beyond it the line keeps shared glyphs and warns.
+const EDGE_RESHAPE_LINE_WINDOWS: u64 = 64;
+
+/// Charge a request against the line's reshape budget. Requests are charged
+/// whether or not the cache can answer them, so the outcome never depends on
+/// what an earlier layout left in the context.
+fn within_line_reshape_budget(
+    data: &ParagraphData,
+    range: &Range<usize>,
+    cx: &mut LayoutContext,
+) -> bool {
+    let Some(window) = data.limits.max_reshape_window_bytes else {
+        return true;
+    };
+    let limit = window.saturating_mul(EDGE_RESHAPE_LINE_WINDOWS);
+    let bytes = u64::from(data.units[range.end - 1].text.end - data.units[range.start].text.start);
+    let before = cx.edge_reshape_spent;
+    cx.edge_reshape_spent = before.saturating_add(bytes);
+    if cx.edge_reshape_spent <= limit {
+        return true;
+    }
+    if before <= limit {
+        cx.warnings.push(
+            WarningKind::Unsupported,
+            "line edge reshape budget exceeded; keeping shared glyphs",
+        );
+    }
+    false
 }
 
 fn shape(
@@ -160,10 +252,13 @@ fn shape(
     budget: Option<u64>,
     replacement: Option<&crate::shape::Replacement>,
 ) -> Option<ShapedWindow> {
+    if !within_line_reshape_budget(data, range, cx) {
+        return None;
+    }
     let key = (range.start, range.end, budget);
     if replacement.is_none() {
         cx.edge_shapes.begin(data);
-        if let Some(hit) = cx.edge_shapes.entries.get(&key) {
+        if let Some(hit) = cx.edge_shapes.get(&key) {
             return Some(hit.clone());
         }
     }
@@ -188,10 +283,7 @@ fn shape(
         && clean
         && let Some(shaped) = &result
     {
-        if cx.edge_shapes.entries.len() >= EDGE_SHAPE_CACHE_ENTRIES {
-            cx.edge_shapes.entries.clear();
-        }
-        cx.edge_shapes.entries.insert(key, shaped.clone());
+        cx.edge_shapes.insert(key, shaped);
     }
     for w in warned {
         cx.warnings.push(w.kind, w.message);
@@ -1450,5 +1542,58 @@ mod tests {
             runs.iter().map(|r| r.text_range()).collect::<Vec<_>>(),
             vec![2..3, 3..6]
         );
+    }
+}
+
+#[cfg(test)]
+mod edge_shape_cache_tests {
+    use super::*;
+    use crate::shape::GlyphStore;
+
+    fn window(glyphs: usize) -> ShapedWindow {
+        let store = GlyphStore {
+            id: vec![0; glyphs],
+            ..Default::default()
+        };
+        (store, Vec::new())
+    }
+
+    #[test]
+    fn an_oversized_window_is_never_retained() {
+        let mut cache = EdgeShapeCache::default();
+        assert!(!cache.insert((0, 1, None), &window(EDGE_SHAPE_ENTRY_COST_MAX + 1)));
+        assert_eq!(cache.entries.len(), 0);
+        assert_eq!(cache.cost, 0);
+        assert!(cache.insert((0, 1, None), &window(EDGE_SHAPE_ENTRY_COST_MAX)));
+    }
+
+    #[test]
+    fn retained_cost_never_exceeds_the_cap_even_with_few_entries() {
+        let mut cache = EdgeShapeCache::default();
+        // 64 entries at the per-entry maximum is far below the entry-count cap
+        // (256) but far above the cost cap.
+        for i in 0..64 {
+            cache.insert((i, i + 1, None), &window(EDGE_SHAPE_ENTRY_COST_MAX));
+            assert!(
+                cache.cost <= EDGE_SHAPE_CACHE_COST,
+                "retained {} > {} after {} entries",
+                cache.cost,
+                EDGE_SHAPE_CACHE_COST,
+                i + 1
+            );
+        }
+        assert!(cache.entries.len() < 64);
+    }
+
+    #[test]
+    fn replacing_a_key_keeps_the_cost_consistent_and_clear_releases_everything() {
+        let mut cache = EdgeShapeCache::default();
+        cache.insert((0, 1, None), &window(10));
+        cache.insert((0, 1, None), &window(30));
+        assert_eq!(cache.cost, 30);
+        assert_eq!(cache.entries.len(), 1);
+        cache.clear();
+        assert_eq!((cache.cost, cache.entries.len()), (0, 0));
+        assert_eq!(cache.entries.capacity(), 0, "clear must free the table");
     }
 }
