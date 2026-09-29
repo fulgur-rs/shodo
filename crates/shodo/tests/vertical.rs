@@ -8,7 +8,7 @@ use shodo::limits::Limits;
 use shodo::mapping::Affinity;
 use shodo::node::{InlineEdges, NodeId, OutOfFlowKind, TextSource};
 use shodo::style::{
-    FontFamily, FontFeature, FontKerning, InlineStyle, LineOptions, ParagraphStyle,
+    FontFamily, FontFeature, FontKerning, InlineStyle, LineOptions, ParagraphStyle, TextAutospace,
     TextCombineUpright, TextOrientation, TextSpacingTrim, VerticalAlign,
 };
 use shodo::{
@@ -69,6 +69,96 @@ fn build_paragraph(
     let mut builder = ParagraphBuilder::new(style, limits);
     add(&mut builder);
     builder.build(&mut LayoutContext::new(), &fonts).unwrap()
+}
+
+#[test]
+fn upright_latin_letters_and_digits_do_not_trigger_vertical_autospace() {
+    for text in ["国X国", "国1国"] {
+        for (mode, orientation, should_space) in [
+            (WritingMode::VerticalRl, TextOrientation::Upright, false),
+            (WritingMode::VerticalLr, TextOrientation::Upright, false),
+            (WritingMode::VerticalRl, TextOrientation::Mixed, true),
+            (WritingMode::VerticalRl, TextOrientation::Sideways, true),
+            (WritingMode::HorizontalTb, TextOrientation::Upright, true),
+            (WritingMode::SidewaysRl, TextOrientation::Upright, true),
+        ] {
+            let width = |autospace| {
+                let mut input = style(mode, orientation);
+                input.root.font_size = 20.0;
+                input.root.text_autospace = autospace;
+                first_line(
+                    &paragraph(&input, text),
+                    300.,
+                    &LineOptions::default(),
+                    &AtomicSizes::EMPTY,
+                )
+                .inline_size()
+            };
+            let normal = width(TextAutospace::Normal);
+            let no_autospace = width(TextAutospace::NoAutospace);
+            if should_space {
+                assert!(normal > no_autospace, "{text:?} {mode:?} {orientation:?}");
+            } else {
+                assert_eq!(normal, no_autospace, "{text:?} {mode:?} {orientation:?}");
+                assert_eq!(normal, 60.0, "{text:?} {mode:?} {orientation:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn upright_inline_orientation_controls_autospace_at_both_edges() {
+    for (root_orientation, inline_orientation, should_space) in [
+        (TextOrientation::Mixed, TextOrientation::Upright, false),
+        (TextOrientation::Upright, TextOrientation::Mixed, true),
+    ] {
+        let width = |autospace| {
+            let limits = Limits::default();
+            let mut root = style(WritingMode::VerticalRl, root_orientation);
+            root.root.font_size = 20.0;
+            root.root.text_autospace = autospace;
+            let mut inline = root.root.clone();
+            inline.text_orientation = inline_orientation;
+            let fonts = FontCollection::with_options(
+                &limits,
+                FontOptions {
+                    system_fonts: false,
+                    ..Default::default()
+                },
+            );
+            fonts
+                .register_face(
+                    include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+                    0,
+                    FontFaceDescriptor {
+                        family: "Shodo Fixture CJK".into(),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+            let mut builder = ParagraphBuilder::new(&root, &limits);
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, "国");
+            builder.open_inline(NodeId(2), &inline, InlineEdges::default());
+            builder.push_text(TextSource::Generated { node: NodeId(3) }, "X");
+            builder.close_inline();
+            builder.push_text(TextSource::Generated { node: NodeId(4) }, "国");
+            let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+            first_line(
+                &paragraph,
+                300.,
+                &LineOptions::default(),
+                &AtomicSizes::EMPTY,
+            )
+            .inline_size()
+        };
+        let normal = width(TextAutospace::Normal);
+        let no_autospace = width(TextAutospace::NoAutospace);
+        if should_space {
+            assert!(normal > no_autospace);
+        } else {
+            assert_eq!(normal, no_autospace);
+        }
+    }
 }
 
 #[test]

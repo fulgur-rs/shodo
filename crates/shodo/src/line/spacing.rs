@@ -132,7 +132,11 @@ pub(crate) fn build(
                             kind: if cursive { Kind::Cursive } else { Kind::Text },
                             unit: index as u32,
                             box_node: data.spacing_tree.item_nodes[source],
-                            class: super::autospace::classify(ch),
+                            class: super::autospace::classify(
+                                ch,
+                                data.style.writing_mode,
+                                style.text_orientation,
+                            ),
                             punct: (start + character) as u32,
                         };
                         if let Some(previous) = value.summary.last {
