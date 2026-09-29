@@ -43,6 +43,15 @@ impl Default for Edge {
 
 impl Edge {
     pub(super) fn punctuation(&self, data: &ParagraphData) -> super::punctuation::Punctuation {
+        // An edge is always resolved against the data whose units produced it;
+        // the default below is for edges that have no entry, not for a
+        // mismatched paragraph.
+        debug_assert!(
+            self.punct == NO_PUNCTUATION || (self.punct as usize) < data.punctuation.len(),
+            "punctuation index {} outside {} entries",
+            self.punct,
+            data.punctuation.len()
+        );
         data.punctuation
             .get(self.punct as usize)
             .copied()
