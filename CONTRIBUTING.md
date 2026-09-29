@@ -37,16 +37,34 @@ include raikiri crates pinned to a Git revision; a first workspace build needs
 access to that repository. After dependencies are cached, use `--offline` where
 appropriate. No browser or font download is needed for ordinary Rust tests.
 
+The published `shodo` package on crates.io only contains `crates/shodo/src/`,
+`crates/shodo/tests/`, `crates/shodo/examples/`, and top-level metadata (see
+`[package].include` in `crates/shodo/Cargo.toml`); `dev/`, `docs/`, and
+`.github/` are not part of the tarball. Building or testing the published
+package therefore requires a Git checkout of this repository, not
+`cargo download`/tarball extraction, because `crates/shodo/tests/vertical.rs`
+and `crates/shodo/tests/japanese.rs` currently load real fonts from
+`dev/fixtures/assets/` (tracked as shodo-c6r; the plan is to move that
+dependency into `dev/harness` so the published package's own test target no
+longer needs it).
+
 | Location | Purpose |
 | --- | --- |
-| `src/` | Library implementation and module tests. |
-| `tests/` | Public API integration tests. |
-| `examples/` | Library examples. |
-| `dev/fixtures/` | Fixed-font cases, rendering examples, snapshots, and browser checks. |
+| `crates/shodo/src/` | Library implementation and module tests. |
+| `crates/shodo/src/test_support/` | Shared fixed-font bytes for `src/` unit tests only (`#[cfg(test)]`); not part of the published crate. |
+| `crates/shodo/tests/` | Public API integration tests. |
+| `crates/shodo/examples/` | Library examples. |
+| `dev/fixtures/` | Fixed fonts, original sample cases, and a minimal loader; no rendering/raikiri dependencies. |
+| `dev/harness/` | Rendering, snapshots, browser comparison, float, and AccessKit checks that consume the fixtures. |
+| `dev/raikiri/` | raikiri-integration checks (contract verification, source coverage, style diffs); pulls in the git-pinned raikiri crates. |
 | `dev/bench/` | Standalone performance and allocation tools. |
-| `docs/` | Integration contracts, measurements, and design history. |
+| `tools/{fixtures,browser,bench,raikiri}/` | Python development tooling, grouped to match the `dev/` crate its scripts serve; every path is resolved from the repository root. |
+| `docs/guides/` | Public API and caller integration contracts. |
+| `docs/dev/` | Developer-facing verification procedures (snapshots, browser comparison, performance). |
+| `docs/records/` | Measurement and diagnostic records. |
+| `docs/superpowers/` | Design history; paths fixed by the superpowers plugin, may describe superseded APIs. |
 
-The root library is the default workspace member. Use `--workspace` to include
+`crates/shodo` is the default workspace member. Use `--workspace` to include
 development packages; plain `cargo test` does not exercise the entire workspace.
 
 ## Checking a change
@@ -69,10 +87,10 @@ checks, including Rust 1.89.0 and Wasm builds.
 For accessibility and optional-feature work:
 
 ```sh
-cargo clippy --workspace --all-targets --features shodo-fixtures/accesskit -- -D warnings
-cargo test --workspace --features shodo-fixtures/accesskit
-RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --features shodo-fixtures/accesskit
-cargo run -p shodo-fixtures --features accesskit,shodo/complex-scripts --example accessibility
+cargo clippy --workspace --all-targets --features shodo-harness/accesskit -- -D warnings
+cargo test --workspace --features shodo-harness/accesskit
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --features shodo-harness/accesskit
+cargo run -p shodo-harness --features accesskit,shodo/complex-scripts --example accessibility
 ```
 
 Run feature-isolation tests with `-p shodo` as above. Workspace packages can
@@ -91,10 +109,9 @@ Python tooling checks use Python 3.12 in CI and the pinned FontTools dependency:
 
 ```sh
 python3 -m venv /tmp/shodo-fonttools
-/tmp/shodo-fonttools/bin/python -m pip install -r dev/fixtures/tools/requirements.txt
-/tmp/shodo-fonttools/bin/python -m unittest discover -s dev/fixtures/tools -v
-/tmp/shodo-fonttools/bin/python -m unittest discover -s dev/bench/tools -v
-/tmp/shodo-fonttools/bin/python dev/fixtures/tools/regenerate.py --check
+/tmp/shodo-fonttools/bin/python -m pip install -r tools/requirements.txt
+/tmp/shodo-fonttools/bin/python -m unittest discover -s tools -v
+/tmp/shodo-fonttools/bin/python tools/fixtures/regenerate.py --check
 ```
 
 Python is for development tooling; ordinary library users do not need it.
@@ -102,29 +119,38 @@ Python is for development tooling; ordinary library users do not need it.
 ## Tests, fixtures, and expected output
 
 Add a regression test for a behavior change. Public API behavior belongs in
-`tests/`; real-font shaping and rendering regressions belong in `dev/fixtures/tests/`.
-Use fixed registered fonts with system discovery disabled for deterministic
-assertions. Keep expected geometry or glyph ownership grounded in the behavior
-being tested, rather than copying the implementation's calculation.
+`crates/shodo/tests/`; real-font shaping and rendering regressions belong in
+`dev/harness/tests/` (data-integrity checks on the checked-in fonts/corpus
+themselves stay in `dev/fixtures/tests/`). Use fixed registered fonts with
+system discovery disabled for deterministic assertions. Keep expected
+geometry or glyph ownership grounded in the behavior being tested, rather
+than copying the implementation's calculation.
+
+`crates/shodo/tests/vertical.rs` and `crates/shodo/tests/japanese.rs` are a
+known, tracked exception: they load real fonts directly from
+`dev/fixtures/assets/` instead of following the rule above. Do not add
+further real-font `include_bytes!` calls under `crates/shodo/tests/`;
+new real-font regressions belong in `dev/harness/tests/` until these two
+files are migrated there (shodo-c6r).
 
 Normal checks do not rewrite expected data:
 
 ```sh
-cargo run -p shodo-fixtures --example snapshots -- --output target/snapshot-report
-cargo run -p shodo-fixtures --example browser_compare -- --check
+cargo run -p shodo-harness --example snapshots -- --output target/snapshot-report
+cargo run -p shodo-harness --example browser_compare -- --check
 ```
 
 Snapshot reports require a new output directory on each run. Open the generated
 `index.html` to inspect expected, actual, and difference images. For an intentional
-layout change, follow the [snapshot update procedure](docs/snapshot-tests.md),
+layout change, follow the [snapshot update procedure](docs/dev/snapshot-tests.md),
 review both pixel and geometry changes, and include the baseline diff in the same
 PR. Do not update expectations just to make an unexplained failure pass.
 
 Font or corpus changes must preserve provenance, hashes, and the separate OFL
 notices. Follow [fixture reproduction and updates](dev/fixtures/README.md).
 Browser recollection and the exact difference ledger have a separate
-[review procedure](docs/browser-comparison.md). Performance work should use the
-[standalone harness](docs/performance-measurements.md) and report comparable
+[review procedure](docs/dev/browser-comparison.md). Performance work should use the
+[standalone harness](docs/dev/performance-measurements.md) and report comparable
 machine/toolchain conditions; avoid treating one timing run as proof of a speedup.
 
 ## Pull requests

@@ -87,7 +87,7 @@ impl BrowserCapture {
             ),
             (
                 "recorder_sha256",
-                include_bytes!("../../tools/browser_recorder.js").as_slice(),
+                include_bytes!("../../../../tools/browser/browser_recorder.js").as_slice(),
             ),
         ] {
             if self.metadata[key] != format!("{:x}", Sha256::digest(bytes)) {

@@ -1,0 +1,53 @@
+[package]
+name = "shodo"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Text typesetting library for raikiri (work in progress)"
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords = ["typesetting", "text", "layout", "shaping"]
+categories = ["text-processing", "graphics"]
+# Keep the published tarball limited to the library and its own tests/examples.
+# `dev/`, `docs/`, and `.github/` (at the workspace root) are development-only
+# content; see shodo-c6r.1. README.md/LICENSE-*/CHANGELOG.md are symlinks to
+# the workspace-root copies so a single source of truth stays outside crates/.
+include = [
+    "src/**",
+    "tests/**",
+    "examples/**",
+    "/Cargo.toml",
+    "/README.md",
+    "/LICENSE-APACHE",
+    "/LICENSE-MIT",
+    "/CHANGELOG.md",
+]
+
+[features]
+accesskit = ["dep:accesskit"]
+default = ["system-fonts", "web-fonts", "complex-scripts"]
+complex-scripts = ["icu_segmenter/auto"]
+web-fonts = ["dep:wuff", "dep:flate2", "dep:brotli-decompressor"]
+system-fonts = ["fontique/system"]
+
+[dependencies]
+accesskit = { version = "=0.24.1", default-features = false, optional = true }
+wuff = { version = "=0.2.9", default-features = false, optional = true }
+flate2 = { version = "1.1", optional = true }
+brotli-decompressor = { version = "5.0", optional = true }
+foldhash = { version = "0.2", default-features = false }
+fontique.workspace = true
+skrifa.workspace = true
+harfrust.workspace = true
+icu_properties = "2.3"
+icu_casemap = "2.3"
+icu_locale_core = "2.3"
+icu_normalizer = "2.3"
+icu_segmenter = { version = "2.3", default-features = false, features = ["compiled_data"] }
+peniko = "0.6"
+unicode-bidi = "0.3.18"
+
+[dev-dependencies]
+brotli = "8"

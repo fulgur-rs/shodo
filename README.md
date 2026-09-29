@@ -18,7 +18,7 @@ the source API documentation for current contracts.
 - Japanese line-break restrictions, punctuation spacing and hanging; vertical and
   sideways writing, glyph orientation, and `text-combine-upright: all`.
 - Ruby pairing, coordinated wrapping, alignment, placement and safe overhang
-  in horizontal and vertical text. See the [ruby contract](docs/ruby.md).
+  in horizontal and vertical text. See the [ruby contract](docs/guides/ruby.md).
 - Retained glyph/font output, solid text paint and decoration geometry, source
   mapping, caret placement, hit testing, selections, and accessibility text.
 - Shared and document-local font collections, system fonts, WOFF/WOFF2 decoding,
@@ -56,7 +56,7 @@ your checkout:
 
 ```toml
 [dependencies]
-shodo = { path = "../shodo" }
+shodo = { path = "../shodo/crates/shodo" }
 ```
 
 Build styled text and lay it out at a fixed width:
@@ -104,7 +104,7 @@ and `LayoutContext::take_warnings()`.
 
 `break_all` is for fixed-width layout without float placement. Use `next_line`
 for changing widths, page-height constraints, or incremental float integration.
-The [integration guide](docs/integration.md) covers that loop, font registration,
+The [integration guide](docs/guides/integration.md) covers that loop, font registration,
 output ownership, resource budgets, and coordinate conventions.
 
 ## Cargo features
@@ -120,7 +120,7 @@ For bundled sfnt/TTC fonts without system discovery or web-font decoding:
 
 ```toml
 [dependencies]
-shodo = { path = "../shodo", default-features = false, features = ["complex-scripts"] }
+shodo = { path = "../shodo/crates/shodo", default-features = false, features = ["complex-scripts"] }
 ```
 
 Font matching, metrics, and OpenType shaping remain available with all default
@@ -132,11 +132,11 @@ available. Wasm builds use memory-backed fonts.
 
 Start with the [documentation index](docs/README.md), or choose a topic:
 
-- [Integration and incremental layout](docs/integration.md)
-- [Japanese typography](docs/japanese-layout.md) and [vertical output](docs/vertical-layout.md)
-- [Text paint](docs/paint-styles.md), [PNG rendering](docs/png-render-sample.md), and [emoji](docs/emoji.md)
-- [Accessibility and AccessKit](docs/accessibility.md)
-- [Fixed-font regression snapshots](docs/snapshot-tests.md) and [browser comparisons](docs/browser-comparison.md)
+- [Integration and incremental layout](docs/guides/integration.md)
+- [Japanese typography](docs/guides/japanese-layout.md) and [vertical output](docs/guides/vertical-layout.md)
+- [Text paint](docs/guides/paint-styles.md), [PNG rendering](docs/guides/png-render-sample.md), and [emoji](docs/guides/emoji.md)
+- [Accessibility and AccessKit](docs/guides/accessibility.md)
+- [Fixed-font regression snapshots](docs/dev/snapshot-tests.md) and [browser comparisons](docs/dev/browser-comparison.md)
 
 Generate API documentation locally with `cargo doc -p shodo --no-deps --open`.
 For API documentation including the optional AccessKit adapter, add
@@ -145,11 +145,12 @@ For API documentation including the optional AccessKit adapter, add
 To draw public glyph output with the checked-in fixture fonts:
 
 ```sh
-cargo run -p shodo-fixtures --example render_png -- target/shodo-sample.png
+cargo run -p shodo-harness --example render_png -- target/shodo-sample.png
 ```
 
-The fixture and benchmark packages are development tools. Normal builds of the
-root library do not include their fonts or rendering dependencies.
+The fixture, harness, raikiri, and benchmark packages are development tools.
+Normal builds of the library do not include their fonts or rendering
+dependencies.
 
 ## Known limitations
 
@@ -158,7 +159,7 @@ hyphenation warns and uses manual soft-hyphen opportunities. Invalid locale tags
 fall back to the root locale with a warning; unknown shaping languages use the
 default OpenType language system with a warning.
 
-The [float harness](docs/float-integration-harness.md) demonstrates caller placement
+The [float harness](docs/guides/float-integration-harness.md) demonstrates caller placement
 and retries, and the browser comparison records known differences. These checks
 do not establish browser or WPT conformance. See individual guides for renderer,
 emoji, and accessibility integration limits.

@@ -1,0 +1,44 @@
+[package]
+name = "shodo-raikiri"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+license.workspace = true
+description = "raikiri integration checks for shodo: contract verification, source coverage, style diffs (git-pinned raikiri dependency)"
+
+# No [lib]; everything here is an example or integration test, so every
+# dependency below is dev-only. `dev/raikiri/probe/` is not a Cargo target
+# (see its own note) and is intentionally not reflected here.
+[dev-dependencies]
+shodo = { path = "../../crates/shodo", default-features = false }
+shodo-fixtures = { path = "../fixtures" }
+shodo-harness = { path = "../harness" }
+fontique.workspace = true
+skrifa.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+raikiri-dom = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
+raikiri-html = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
+raikiri-style = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
+raikiri-traits = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
+tiny-skia = "=0.12.0"
+url = "2"
+percent-encoding = "2"
+
+[[example]]
+name = "ch_units"
+test = true
+
+[[example]]
+name = "raikiri_contracts"
+test = true
+
+[[example]]
+name = "raikiri_style_diffs"
+test = true
+
+[[example]]
+name = "source_coverage"
+test = true

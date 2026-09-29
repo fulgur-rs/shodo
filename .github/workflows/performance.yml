@@ -43,7 +43,7 @@ jobs:
           if [[ "$SELECTED_CASE" != all ]]; then
             args+=(--case "$SELECTED_CASE")
           fi
-          python dev/bench/tools/run.py "${args[@]}"
+          python tools/bench/run.py "${args[@]}"
       - uses: actions/upload-artifact@v4
         with:
           name: performance-${{ github.sha }}-${{ inputs.case }}

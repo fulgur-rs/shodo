@@ -10,43 +10,56 @@ their integration contracts. For API reference, run
 
 | Topic | Guide |
 | --- | --- |
-| Fonts, incremental layout, output lifetime, limits, and hit testing | [Integration guide](integration.md) |
-| Exact caller-resolved normal and `::first-line` styles | [First-line style contract](first-line-style-contract.md) |
-| Shared ligatures and Arabic glyph ownership across source nodes | [Shared glyph contract](shared-glyph-contract.md) |
-| Line metrics, spacing, source positions, and regression evidence | [Horizontal output contracts](horizontal-layout-contracts.md) |
-| Japanese breaks, punctuation spacing, hanging, and justification | [Japanese horizontal layout](japanese-layout.md) |
-| Vertical/sideways glyphs and combined text | [Vertical output](vertical-layout.md) |
-| Paired readings, coordinated wrapping, source metadata and retained painting | [Ruby layout](ruby.md) |
-| Retained colors, underlines, and strike-through | [Text paint](paint-styles.md) |
-| Outline painting and caller-sized atomic inlines | [PNG rendering sample](png-render-sample.md) |
-| Emoji sequences, font fallback, and caller color drawing | [Emoji layout](emoji.md) |
-| Retained text, source anchors, and the optional AccessKit adapter | [Accessibility output](accessibility.md) |
-| Caller float placement, withdrawal, and page checkpoints | [Float integration harness](float-integration-harness.md) |
+| Fonts, incremental layout, output lifetime, limits, and hit testing | [Integration guide](guides/integration.md) |
+| Exact caller-resolved normal and `::first-line` styles | [First-line style contract](guides/first-line-style-contract.md) |
+| Shared ligatures and Arabic glyph ownership across source nodes | [Shared glyph contract](guides/shared-glyph-contract.md) |
+| Line metrics, spacing, source positions, and regression evidence | [Horizontal output contracts](guides/horizontal-layout-contracts.md) |
+| Japanese breaks, punctuation spacing, hanging, and justification | [Japanese horizontal layout](guides/japanese-layout.md) |
+| Vertical/sideways glyphs and combined text | [Vertical output](guides/vertical-layout.md) |
+| Paired readings, coordinated wrapping, source metadata and retained painting | [Ruby layout](guides/ruby.md) |
+| Retained colors, underlines, and strike-through | [Text paint](guides/paint-styles.md) |
+| Outline painting and caller-sized atomic inlines | [PNG rendering sample](guides/png-render-sample.md) |
+| Emoji sequences, font fallback, and caller color drawing | [Emoji layout](guides/emoji.md) |
+| Retained text, source anchors, and the optional AccessKit adapter | [Accessibility output](guides/accessibility.md) |
+| Caller float placement, withdrawal, and page checkpoints | [Float integration harness](guides/float-integration-harness.md) |
 
 ## Developing and validating changes
 
 Read [CONTRIBUTING.md](../CONTRIBUTING.md) for development setup and checks.
-Commands in these guides run from the repository root.
+Commands in these guides run from the repository root. `docs/dev/` holds
+developer-facing verification procedures; the crates behind them are
+[`dev/fixtures`](../dev/fixtures/README.md) (data), [`dev/harness`](../dev/harness)
+(rendering/snapshot/browser/AccessKit checks), and [`dev/raikiri`](../dev/raikiri)
+(raikiri-integration checks).
 
 | Topic | Guide |
 | --- | --- |
 | Fixed font assets, original test cases, and reproduction | [Development fixtures](../dev/fixtures/README.md) |
-| Exact image/geometry checks and intentional baseline updates | [Snapshot tests](snapshot-tests.md) |
-| Saved Chrome measurements, known differences, and recollection | [Browser comparison](browser-comparison.md) |
-| Standalone release timing and allocation measurements | [Performance harness](performance-measurements.md) |
-| Earlier shaping measurements and their scope | [Shaping measurement record](shaping-measurements.md) |
-| Frozen raikiri S4 residual fields, all109 document classification and caller gaps | [raikiri style diagnostics](raikiri-style-diagnostics.md) |
-| An unsent proposal concerning upstream shaping status | [harfrust status proposal](harfrust-shaping-status-proposal.md) |
+| Exact image/geometry checks and intentional baseline updates | [Snapshot tests](dev/snapshot-tests.md) |
+| Saved Chrome measurements, known differences, and recollection | [Browser comparison](dev/browser-comparison.md) |
+| Standalone release timing and allocation measurements | [Performance harness](dev/performance-measurements.md) |
 
-Performance records describe the recorded machine and toolchain. Snapshot and
-browser checks cover fixed cases; they do not certify general CSS or WPT
-conformance.
+Snapshot and browser checks cover fixed cases; they do not certify general
+CSS or WPT conformance.
 
-## Design history
+## Records
+
+Measurement and diagnostic records in `docs/records/`; they describe the
+recorded machine, toolchain, and scope at the time, not a live guarantee.
+
+| Topic | Record |
+| --- | --- |
+| Earlier shaping measurements and their scope | [Shaping measurement record](records/shaping-measurements.md) |
+| Frozen raikiri S4 residual fields, all109 document classification and caller gaps | [raikiri style diagnostics](records/raikiri-style-diagnostics.md) |
+| An unsent proposal concerning upstream shaping status | [harfrust status proposal](records/harfrust-shaping-status-proposal.md) |
+
+## Design history (`docs/superpowers/`)
 
 The [foundation design](superpowers/specs/2026-09-26-shodo-foundation-design.md),
 [design specifications](superpowers/specs/), and
 [implementation plans](superpowers/plans/) preserve the project's design history,
 mostly in Japanese. They can describe planned work, superseded choices, or APIs
 that have since changed. Check current guides, source, and tests before treating
-a design document as an implemented contract.
+a design document as an implemented contract. This directory's name and layout
+are fixed by the superpowers plugin's own conventions and are not reorganized
+along with the rest of `docs/`.
