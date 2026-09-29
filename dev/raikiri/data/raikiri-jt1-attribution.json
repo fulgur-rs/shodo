@@ -1,0 +1,1077 @@
+{
+  "memory": {
+    "operations": {
+      "pipeline": {
+        "css/css-text/hyphens/reference/hyphens-out-of-flow-001-ref.html": {
+          "runs": {
+            "native": [
+              {
+                "allocated_bytes": 945849,
+                "calls": 2177,
+                "peak_extra_bytes": 288937,
+                "net_bytes": 203169,
+                "warm_samples": 9
+              },
+              {
+                "allocated_bytes": 945849,
+                "calls": 2177,
+                "peak_extra_bytes": 288937,
+                "net_bytes": 203169,
+                "warm_samples": 9
+              },
+              {
+                "allocated_bytes": 945849,
+                "calls": 2177,
+                "peak_extra_bytes": 288937,
+                "net_bytes": 203169,
+                "warm_samples": 9
+              }
+            ],
+            "candidate": [
+              {
+                "allocated_bytes": 1126344,
+                "calls": 4222,
+                "peak_extra_bytes": 288937,
+                "net_bytes": 178337,
+                "warm_samples": 9
+              },
+              {
+                "allocated_bytes": 1126344,
+                "calls": 4222,
+                "peak_extra_bytes": 288937,
+                "net_bytes": 178337,
+                "warm_samples": 9
+              },
+              {
+                "allocated_bytes": 1126344,
+                "calls": 4222,
+                "peak_extra_bytes": 288937,
+                "net_bytes": 178337,
+                "warm_samples": 9
+              }
+            ]
+          },
+          "median": {
+            "native": {
+              "allocated_bytes": 945849,
+              "calls": 2177,
+              "peak_extra_bytes": 288937,
+              "net_bytes": 203169
+            },
+            "candidate": {
+              "allocated_bytes": 1126344,
+              "calls": 4222,
+              "peak_extra_bytes": 288937,
+              "net_bytes": 178337
+            }
+          },
+          "candidate_over_native": {
+            "allocated_bytes": 1.190828557200991,
+            "calls": 1.9393661001378044,
+            "peak_extra_bytes": 1.0,
+            "net_bytes": 0.8777766293086051
+          }
+        },
+        "css/css-text/hyphens/reference/hyphens-auto-001-ref.html": {
+          "runs": {
+            "native": [
+              {
+                "allocated_bytes": 695855,
+                "calls": 1649,
+                "peak_extra_bytes": 202263,
+                "net_bytes": 109327,
+                "warm_samples": 9
+              },
+              {
+                "allocated_bytes": 695855,
+                "calls": 1649,
+                "peak_extra_bytes": 202263,
+                "net_bytes": 109327,
+                "warm_samples": 9
+              },
+              {
+                "allocated_bytes": 695855,
+                "calls": 1649,
+                "peak_extra_bytes": 202263,
+                "net_bytes": 109327,
+                "warm_samples": 9
+              }
+            ],
+            "candidate": [
+              {
+                "allocated_bytes": 850288,
+                "calls": 3107,
+                "peak_extra_bytes": 202263,
+                "net_bytes": 91311,
+                "warm_samples": 9
+              },
+              {
+                "allocated_bytes": 850288,
+                "calls": 3107,
+                "peak_extra_bytes": 202263,
+                "net_bytes": 91311,
+                "warm_samples": 9
+              },
+              {
+                "allocated_bytes": 850288,
+                "calls": 3107,
+                "peak_extra_bytes": 202263,
+                "net_bytes": 91311,
+                "warm_samples": 9
+              }
+            ]
+          },
+          "median": {
+            "native": {
+              "allocated_bytes": 695855,
+              "calls": 1649,
+              "peak_extra_bytes": 202263,
+              "net_bytes": 109327
+            },
+            "candidate": {
+              "allocated_bytes": 850288,
+              "calls": 3107,
+              "peak_extra_bytes": 202263,
+              "net_bytes": 91311
+            }
+          },
+          "candidate_over_native": {
+            "allocated_bytes": 1.2219327302383398,
+            "calls": 1.8841722255912674,
+            "peak_extra_bytes": 1.0,
+            "net_bytes": 0.8352099664309823
+          }
+        }
+      },
+      "layout": {
+        "css/css-text/hyphens/reference/hyphens-out-of-flow-001-ref.html": {
+          "runs": {
+            "native": [
+              {
+                "allocated_bytes": 227275,
+                "calls": 673,
+                "peak_extra_bytes": 144539,
+                "net_bytes": 85648,
+                "warm_samples": 9
+              },
+              {
+                "allocated_bytes": 227275,
+                "calls": 673,
+                "peak_extra_bytes": 144539,
+                "net_bytes": 85648,
+                "warm_samples": 9
+              },
+              {
+                "allocated_bytes": 227275,
+                "calls": 673,
+                "peak_extra_bytes": 144539,
+                "net_bytes": 85648,
+                "warm_samples": 9
+              }
+            ],
+            "candidate": [
+              {
+                "allocated_bytes": 347658,
+                "calls": 2685,
+                "peak_extra_bytes": 51435,
+                "net_bytes": 704,
+                "warm_samples": 9
+              },
+              {
+                "allocated_bytes": 347658,
+                "calls": 2685,
+                "peak_extra_bytes": 51435,
+                "net_bytes": 704,
+                "warm_samples": 9
+              },
+              {
+                "allocated_bytes": 347658,
+                "calls": 2685,
+                "peak_extra_bytes": 51435,
+                "net_bytes": 704,
+                "warm_samples": 9
+              }
+            ]
+          },
+          "median": {
+            "native": {
+              "allocated_bytes": 227275,
+              "calls": 673,
+              "peak_extra_bytes": 144539,
+              "net_bytes": 85648
+            },
+            "candidate": {
+              "allocated_bytes": 347658,
+              "calls": 2685,
+              "peak_extra_bytes": 51435,
+              "net_bytes": 704
+            }
+          },
+          "candidate_over_native": {
+            "allocated_bytes": 1.529679903200968,
+            "calls": 3.989598811292719,
+            "peak_extra_bytes": 0.35585551304492213,
+            "net_bytes": 0.008219689893517654
+          }
+        },
+        "css/css-text/hyphens/reference/hyphens-auto-001-ref.html": {
+          "runs": {
+            "native": [
+              {
+                "allocated_bytes": 176028,
+                "calls": 377,
+                "peak_extra_bytes": 110295,
+                "net_bytes": 49632,
+                "warm_samples": 9
+              },
+              {
+                "allocated_bytes": 176028,
+                "calls": 377,
+                "peak_extra_bytes": 110295,
+                "net_bytes": 49632,
+                "warm_samples": 9
+              },
+              {
+                "allocated_bytes": 176028,
+                "calls": 377,
+                "peak_extra_bytes": 110295,
+                "net_bytes": 49632,
+                "warm_samples": 9
+              }
+            ],
+            "candidate": [
+              {
+                "allocated_bytes": 299197,
+                "calls": 1814,
+                "peak_extra_bytes": 98203,
+                "net_bytes": 352,
+                "warm_samples": 9
+              },
+              {
+                "allocated_bytes": 299197,
+                "calls": 1814,
+                "peak_extra_bytes": 98203,
+                "net_bytes": 352,
+                "warm_samples": 9
+              },
+              {
+                "allocated_bytes": 299197,
+                "calls": 1814,
+                "peak_extra_bytes": 98203,
+                "net_bytes": 352,
+                "warm_samples": 9
+              }
+            ]
+          },
+          "median": {
+            "native": {
+              "allocated_bytes": 176028,
+              "calls": 377,
+              "peak_extra_bytes": 110295,
+              "net_bytes": 49632
+            },
+            "candidate": {
+              "allocated_bytes": 299197,
+              "calls": 1814,
+              "peak_extra_bytes": 98203,
+              "net_bytes": 352
+            }
+          },
+          "candidate_over_native": {
+            "allocated_bytes": 1.6997125457313609,
+            "calls": 4.811671087533156,
+            "peak_extra_bytes": 0.8903667437327168,
+            "net_bytes": 0.0070921985815602835
+          }
+        }
+      }
+    },
+    "binary": "measurement-probe-memory",
+    "binary_sha256": "3b33bf189edfddd569977959e93d525edf61328448d8c1bc2aae2b9f9c6c722d",
+    "runs": 3,
+    "notes": [
+      "Requested-heap accounting per window (allocator counters), not RSS. Values are the median over warm samples per run, then the median over runs.",
+      "isolated not run: the pinned probe binaries do not implement it."
+    ]
+  },
+  "perf": {
+    "documents": {
+      "css/css-text/hyphens/reference/hyphens-out-of-flow-001-ref.html": {
+        "engines": {
+          "native": {
+            "total_samples": 412041,
+            "buckets_per_run": {
+              "other": 1274.83,
+              "runtime": 379.64,
+              "cssparser": 113.175,
+              "raikiri_style": 112.865,
+              "parley": 51.825,
+              "raikiri_dom": 40.985,
+              "fontique": 24.08,
+              "harfrust": 16.985,
+              "icu_segmenter": 11.845,
+              "read_fonts": 10.275,
+              "icu_collections": 7.45,
+              "raikiri_html": 7.2,
+              "smol_str": 2.545,
+              "taffy": 1.66,
+              "shodo::font": 1.635,
+              "selectors": 0.945,
+              "icu_properties": 0.87,
+              "html5ever": 0.495,
+              "skrifa": 0.445,
+              "raikiri_traits": 0.41,
+              "shodo::style": 0.045
+            },
+            "bucket_samples": {
+              "runtime": 75928,
+              "parley": 10365,
+              "other": 254966,
+              "html5ever": 99,
+              "shodo::font": 327,
+              "raikiri_traits": 82,
+              "raikiri_style": 22573,
+              "taffy": 332,
+              "raikiri_dom": 8197,
+              "smol_str": 509,
+              "fontique": 4816,
+              "harfrust": 3397,
+              "read_fonts": 2055,
+              "icu_segmenter": 2369,
+              "raikiri_html": 1440,
+              "cssparser": 22635,
+              "shodo::style": 9,
+              "icu_collections": 1490,
+              "icu_properties": 174,
+              "skrifa": 89,
+              "selectors": 189
+            },
+            "top_symbols": [
+              {
+                "symbol": "sha2::sha256::x86::digest_blocks",
+                "samples": 106690
+              },
+              {
+                "symbol": "<serde_json::de::MapAccess<_> as serde_core::de::MapAccess>::next_key_seed::has_next_key::<serde_json::read::SliceRead>",
+                "samples": 27177
+              },
+              {
+                "symbol": "<serde_json::value::Value as serde_core::de::Deserialize>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>",
+                "samples": 19865
+              },
+              {
+                "symbol": "cssparser::tokenizer::consume_comment",
+                "samples": 13509
+              },
+              {
+                "symbol": "core::str::converts::from_utf8",
+                "samples": 13320
+              },
+              {
+                "symbol": "<alloc::collections::btree::map::BTreeMap<alloc::string::String, serde_json::value::Value>>::insert",
+                "samples": 13223
+              },
+              {
+                "symbol": "<<serde_json::value::Value as serde_core::de::Deserialize>::deserialize::ValueVisitor as serde_core::de::Visitor>::visit_map::<serde_json::de::MapAccess<serde_json::read::SliceRead>>",
+                "samples": 11059
+              },
+              {
+                "symbol": "<serde_json::read::SliceRead>::skip_to_escape",
+                "samples": 10077
+              },
+              {
+                "symbol": "<serde_json::read::SliceRead as serde_json::read::Read>::parse_str",
+                "samples": 7923
+              },
+              {
+                "symbol": "<serde_json::de::MapAccess<serde_json::read::SliceRead> as serde_core::de::MapAccess>::next_key_seed::<core::marker::PhantomData<alloc::string::String>>",
+                "samples": 7099
+              },
+              {
+                "symbol": "malloc",
+                "samples": 6327
+              },
+              {
+                "symbol": "<alloc::collections::btree::map::IntoIter<alloc::string::String, serde_json::value::Value>>::dying_next",
+                "samples": 6309
+              },
+              {
+                "symbol": "core::ptr::drop_glue::<serde_json::value::Value>",
+                "samples": 6052
+              },
+              {
+                "symbol": "<alloc::collections::btree::node::Handle<alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Mut, alloc::string::String, serde_json::value::Value, alloc::collections::btree::node::marker::Leaf>, alloc::collections::btree::node::marker::Edge>>::insert_recursing::<alloc::alloc::Global, <alloc::collections::btree::map::entry::VacantEntry<alloc::string::String, serde_json::value::Value>>::insert_entry::{closure#0}>",
+                "samples": 5250
+              },
+              {
+                "symbol": "<serde_json::de::Deserializer<serde_json::read::SliceRead>>::parse_number",
+                "samples": 4980
+              },
+              {
+                "symbol": "cfree",
+                "samples": 4691
+              },
+              {
+                "symbol": "<serde_json::de::Deserializer<serde_json::read::SliceRead>>::parse_integer",
+                "samples": 4372
+              },
+              {
+                "symbol": "raikiri_style::ruletree::next_css_top_level_construct",
+                "samples": 4064
+              },
+              {
+                "symbol": "core::ptr::drop_glue::<alloc::collections::btree::map::IntoIter<alloc::string::String, serde_json::value::Value>>",
+                "samples": 3946
+              },
+              {
+                "symbol": "raikiri_style::ruletree::expand_supports",
+                "samples": 3647
+              },
+              {
+                "symbol": "<raikiri_style::ruletree::RuleTree>::add_stylesheet",
+                "samples": 3633
+              },
+              {
+                "symbol": "0x0000000000176411",
+                "samples": 3443
+              },
+              {
+                "symbol": "serde_json::lexical::parse::parse_concise_float::<f64>",
+                "samples": 3267
+              },
+              {
+                "symbol": "raikiri_dom::layout::inline_text::preshape_text",
+                "samples": 2225
+              },
+              {
+                "symbol": "0x00000000000a4ffe",
+                "samples": 2135
+              }
+            ]
+          },
+          "candidate": {
+            "total_samples": 426941,
+            "buckets_per_run": {
+              "other": 1179.105,
+              "runtime": 380.685,
+              "raikiri_style": 121.28,
+              "shodo::line": 98.07,
+              "cssparser": 96.725,
+              "shodo::analysis": 55.825,
+              "shodo::font": 49.825,
+              "read_fonts": 26.395,
+              "shodo::shape": 25.95,
+              "harfrust": 20.015,
+              "shodo::style": 11.685,
+              "shodo::paragraph": 9.305,
+              "fontique": 9.07,
+              "icu_collections": 7.71,
+              "icu_segmenter": 7.345,
+              "raikiri_html": 7.195,
+              "skrifa": 6.005,
+              "shodo::output": 3.67,
+              "shodo::ruby": 2.8,
+              "raikiri_dom": 2.79,
+              "smol_str": 2.275,
+              "icu_properties": 2.15,
+              "icu_provider": 1.905,
+              "shodo::geometry": 1.66,
+              "shodo::sanitize": 1.66,
+              "shodo::builder": 0.93,
+              "selectors": 0.77,
+              "html5ever": 0.645,
+              "shodo::node": 0.34,
+              "shodo::limits": 0.34,
+              "raikiri_traits": 0.32,
+              "taffy": 0.18,
+              "shodo::context": 0.075,
+              "parley": 0.005
+            },
+            "bucket_samples": {
+              "shodo::style": 2337,
+              "runtime": 76137,
+              "shodo::analysis": 11165,
+              "shodo::font": 9965,
+              "other": 235821,
+              "shodo::shape": 5190,
+              "html5ever": 129,
+              "shodo::node": 68,
+              "harfrust": 4003,
+              "shodo::ruby": 560,
+              "raikiri_style": 24256,
+              "smol_str": 455,
+              "fontique": 1814,
+              "raikiri_dom": 558,
+              "shodo::geometry": 332,
+              "shodo::line": 19614,
+              "read_fonts": 5279,
+              "shodo::paragraph": 1861,
+              "shodo::output": 734,
+              "icu_segmenter": 1469,
+              "raikiri_html": 1439,
+              "cssparser": 19345,
+              "icu_collections": 1542,
+              "icu_provider": 381,
+              "icu_properties": 430,
+              "raikiri_traits": 64,
+              "skrifa": 1201,
+              "shodo::builder": 186,
+              "shodo::context": 15,
+              "shodo::limits": 68,
+              "taffy": 36,
+              "parley": 1,
+              "selectors": 154,
+              "shodo::sanitize": 332
+            },
+            "top_symbols": [
+              {
+                "symbol": "sha2::sha256::x86::digest_blocks",
+                "samples": 101634
+              },
+              {
+                "symbol": "<serde_json::de::MapAccess<_> as serde_core::de::MapAccess>::next_key_seed::has_next_key::<serde_json::read::SliceRead>",
+                "samples": 18274
+              },
+              {
+                "symbol": "<serde_json::value::Value as serde_core::de::Deserialize>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>",
+                "samples": 16794
+              },
+              {
+                "symbol": "cssparser::tokenizer::consume_comment",
+                "samples": 11791
+              },
+              {
+                "symbol": "<alloc::collections::btree::map::BTreeMap<alloc::string::String, serde_json::value::Value>>::insert",
+                "samples": 10577
+              },
+              {
+                "symbol": "core::str::converts::from_utf8",
+                "samples": 10274
+              },
+              {
+                "symbol": "<<serde_json::value::Value as serde_core::de::Deserialize>::deserialize::ValueVisitor as serde_core::de::Visitor>::visit_map::<serde_json::de::MapAccess<serde_json::read::SliceRead>>",
+                "samples": 9485
+              },
+              {
+                "symbol": "<serde_json::read::SliceRead>::skip_to_escape",
+                "samples": 7693
+              },
+              {
+                "symbol": "<serde_json::read::SliceRead as serde_json::read::Read>::parse_str",
+                "samples": 6963
+              },
+              {
+                "symbol": "malloc",
+                "samples": 6595
+              },
+              {
+                "symbol": "<&mut core::iter::traits::iterator::Iterator::position::check<&shodo::font::matching::CacheEntry, <shodo::font::FontCollection>::cached_match::{closure#0}>::{closure#0} as core::ops::function::FnMut<((), &shodo::font::matching::CacheEntry)>>::call_mut",
+                "samples": 6277
+              },
+              {
+                "symbol": "<alloc::collections::btree::map::IntoIter<alloc::string::String, serde_json::value::Value>>::dying_next",
+                "samples": 5753
+              },
+              {
+                "symbol": "cfree",
+                "samples": 5606
+              },
+              {
+                "symbol": "<serde_json::de::MapAccess<serde_json::read::SliceRead> as serde_core::de::MapAccess>::next_key_seed::<core::marker::PhantomData<alloc::string::String>>",
+                "samples": 5307
+              },
+              {
+                "symbol": "<alloc::collections::btree::node::Handle<alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Mut, alloc::string::String, serde_json::value::Value, alloc::collections::btree::node::marker::Leaf>, alloc::collections::btree::node::marker::Edge>>::insert_recursing::<alloc::alloc::Global, <alloc::collections::btree::map::entry::VacantEntry<alloc::string::String, serde_json::value::Value>>::insert_entry::{closure#0}>",
+                "samples": 5293
+              },
+              {
+                "symbol": "core::ptr::drop_glue::<serde_json::value::Value>",
+                "samples": 5262
+              },
+              {
+                "symbol": "<serde_json::de::Deserializer<serde_json::read::SliceRead>>::parse_number",
+                "samples": 4042
+              },
+              {
+                "symbol": "<shodo::line::spacing_summary::Summary>::join",
+                "samples": 3998
+              },
+              {
+                "symbol": "unicode_bidi::char_data::bsearch_range_value_table",
+                "samples": 3489
+              },
+              {
+                "symbol": "core::ptr::drop_glue::<alloc::collections::btree::map::IntoIter<alloc::string::String, serde_json::value::Value>>",
+                "samples": 3404
+              },
+              {
+                "symbol": "<serde_json::de::Deserializer<serde_json::read::SliceRead>>::parse_integer",
+                "samples": 3327
+              },
+              {
+                "symbol": "shodo::shape::shape_items_with_base_scopes",
+                "samples": 3253
+              },
+              {
+                "symbol": "raikiri_style::ruletree::next_css_top_level_construct",
+                "samples": 3026
+              },
+              {
+                "symbol": "serde_json::lexical::parse::parse_concise_float::<f64>",
+                "samples": 2811
+              },
+              {
+                "symbol": "<raikiri_style::ruletree::RuleTree>::add_stylesheet",
+                "samples": 2721
+              }
+            ]
+          }
+        },
+        "candidate_minus_native_per_run": {
+          "shodo::line": 98.07,
+          "shodo::analysis": 55.825,
+          "shodo::font": 48.190000000000005,
+          "shodo::shape": 25.95,
+          "read_fonts": 16.119999999999997,
+          "shodo::style": 11.64,
+          "shodo::paragraph": 9.305,
+          "raikiri_style": 8.415000000000006,
+          "skrifa": 5.56,
+          "shodo::output": 3.67,
+          "harfrust": 3.030000000000001,
+          "shodo::ruby": 2.8,
+          "icu_provider": 1.905,
+          "shodo::sanitize": 1.66,
+          "shodo::geometry": 1.66,
+          "icu_properties": 1.2799999999999998,
+          "runtime": 1.045000000000016,
+          "shodo::builder": 0.93,
+          "shodo::node": 0.34,
+          "shodo::limits": 0.34,
+          "icu_collections": 0.2599999999999998,
+          "html5ever": 0.15000000000000002,
+          "shodo::context": 0.075,
+          "raikiri_html": -0.004999999999999893,
+          "raikiri_traits": -0.08999999999999997,
+          "selectors": -0.17499999999999993,
+          "smol_str": -0.27,
+          "taffy": -1.48,
+          "icu_segmenter": -4.500000000000001,
+          "fontique": -15.009999999999998,
+          "cssparser": -16.450000000000003,
+          "raikiri_dom": -38.195,
+          "parley": -51.82,
+          "other": -95.72499999999991
+        }
+      },
+      "css/css-text/hyphens/reference/hyphens-auto-001-ref.html": {
+        "engines": {
+          "native": {
+            "total_samples": 281756,
+            "buckets_per_run": {
+              "other": 934.81,
+              "runtime": 235.265,
+              "cssparser": 83.315,
+              "raikiri_style": 62.3,
+              "parley": 30.49,
+              "raikiri_dom": 16.025,
+              "fontique": 12.515,
+              "harfrust": 9.885,
+              "icu_segmenter": 6.805,
+              "read_fonts": 5.02,
+              "icu_collections": 4.495,
+              "raikiri_html": 3.125,
+              "smol_str": 1.745,
+              "shodo::font": 0.845,
+              "icu_properties": 0.65,
+              "selectors": 0.535,
+              "taffy": 0.445,
+              "html5ever": 0.18,
+              "raikiri_traits": 0.16,
+              "skrifa": 0.14,
+              "shodo::style": 0.02,
+              "shodo::analysis": 0.01
+            },
+            "bucket_samples": {
+              "parley": 6098,
+              "runtime": 47053,
+              "other": 186962,
+              "html5ever": 36,
+              "raikiri_traits": 32,
+              "shodo::analysis": 2,
+              "raikiri_style": 12460,
+              "taffy": 89,
+              "raikiri_dom": 3205,
+              "smol_str": 349,
+              "shodo::font": 169,
+              "fontique": 2503,
+              "harfrust": 1977,
+              "read_fonts": 1004,
+              "icu_segmenter": 1361,
+              "raikiri_html": 625,
+              "cssparser": 16663,
+              "shodo::style": 4,
+              "icu_collections": 899,
+              "icu_properties": 130,
+              "skrifa": 28,
+              "selectors": 107
+            },
+            "top_symbols": [
+              {
+                "symbol": "sha2::sha256::x86::digest_blocks",
+                "samples": 99634
+              },
+              {
+                "symbol": "<serde_json::value::Value as serde_core::de::Deserialize>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>",
+                "samples": 14341
+              },
+              {
+                "symbol": "cssparser::tokenizer::consume_comment",
+                "samples": 10867
+              },
+              {
+                "symbol": "<serde_json::de::MapAccess<_> as serde_core::de::MapAccess>::next_key_seed::has_next_key::<serde_json::read::SliceRead>",
+                "samples": 10763
+              },
+              {
+                "symbol": "<<serde_json::value::Value as serde_core::de::Deserialize>::deserialize::ValueVisitor as serde_core::de::Visitor>::visit_map::<serde_json::de::MapAccess<serde_json::read::SliceRead>>",
+                "samples": 8471
+              },
+              {
+                "symbol": "<alloc::collections::btree::map::BTreeMap<alloc::string::String, serde_json::value::Value>>::insert",
+                "samples": 8022
+              },
+              {
+                "symbol": "core::str::converts::from_utf8",
+                "samples": 7631
+              },
+              {
+                "symbol": "<serde_json::read::SliceRead as serde_json::read::Read>::parse_str",
+                "samples": 6499
+              },
+              {
+                "symbol": "<serde_json::read::SliceRead>::skip_to_escape",
+                "samples": 5758
+              },
+              {
+                "symbol": "<alloc::collections::btree::node::Handle<alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Mut, alloc::string::String, serde_json::value::Value, alloc::collections::btree::node::marker::Leaf>, alloc::collections::btree::node::marker::Edge>>::insert_recursing::<alloc::alloc::Global, <alloc::collections::btree::map::entry::VacantEntry<alloc::string::String, serde_json::value::Value>>::insert_entry::{closure#0}>",
+                "samples": 5182
+              },
+              {
+                "symbol": "<alloc::collections::btree::map::IntoIter<alloc::string::String, serde_json::value::Value>>::dying_next",
+                "samples": 4648
+              },
+              {
+                "symbol": "<serde_json::de::MapAccess<serde_json::read::SliceRead> as serde_core::de::MapAccess>::next_key_seed::<core::marker::PhantomData<alloc::string::String>>",
+                "samples": 4129
+              },
+              {
+                "symbol": "core::ptr::drop_glue::<serde_json::value::Value>",
+                "samples": 4022
+              },
+              {
+                "symbol": "<serde_json::de::Deserializer<serde_json::read::SliceRead>>::parse_number",
+                "samples": 3418
+              },
+              {
+                "symbol": "malloc",
+                "samples": 3141
+              },
+              {
+                "symbol": "cfree",
+                "samples": 2995
+              },
+              {
+                "symbol": "core::ptr::drop_glue::<alloc::collections::btree::map::IntoIter<alloc::string::String, serde_json::value::Value>>",
+                "samples": 2713
+              },
+              {
+                "symbol": "serde_json::lexical::parse::parse_concise_float::<f64>",
+                "samples": 2438
+              },
+              {
+                "symbol": "raikiri_style::ruletree::next_css_top_level_construct",
+                "samples": 2266
+              },
+              {
+                "symbol": "<serde_json::de::Deserializer<serde_json::read::SliceRead>>::parse_integer",
+                "samples": 2230
+              },
+              {
+                "symbol": "raikiri_style::ruletree::expand_supports",
+                "samples": 2035
+              },
+              {
+                "symbol": "<raikiri_style::ruletree::RuleTree>::add_stylesheet",
+                "samples": 2010
+              },
+              {
+                "symbol": "0x00000000000a4ffe",
+                "samples": 1970
+              },
+              {
+                "symbol": "cssparser::tokenizer::consume_name",
+                "samples": 1190
+              },
+              {
+                "symbol": "<cssparser::parser::Parser>::next_including_whitespace_and_comments",
+                "samples": 1149
+              }
+            ]
+          },
+          "candidate": {
+            "total_samples": 329702,
+            "buckets_per_run": {
+              "other": 984.44,
+              "runtime": 260.35,
+              "cssparser": 83.17,
+              "shodo::line": 79.68,
+              "raikiri_style": 67.865,
+              "shodo::analysis": 50.855,
+              "shodo::font": 43.505,
+              "shodo::shape": 13.635,
+              "read_fonts": 11.165,
+              "harfrust": 9.69,
+              "icu_collections": 8.29,
+              "icu_segmenter": 5.975,
+              "fontique": 5.325,
+              "shodo::paragraph": 4.215,
+              "raikiri_html": 3.945,
+              "shodo::style": 3.91,
+              "skrifa": 2.14,
+              "smol_str": 1.825,
+              "raikiri_dom": 1.355,
+              "shodo::output": 1.295,
+              "icu_properties": 1.28,
+              "shodo::ruby": 1.065,
+              "shodo::geometry": 0.96,
+              "shodo::sanitize": 0.61,
+              "icu_provider": 0.59,
+              "selectors": 0.505,
+              "raikiri_traits": 0.195,
+              "html5ever": 0.19,
+              "shodo::builder": 0.185,
+              "shodo::limits": 0.075,
+              "shodo::node": 0.065,
+              "shodo::context": 0.065,
+              "taffy": 0.045,
+              "shodo::accessibility": 0.035,
+              "parley": 0.015
+            },
+            "bucket_samples": {
+              "shodo::style": 782,
+              "shodo::font": 8701,
+              "runtime": 52070,
+              "other": 196888,
+              "shodo::shape": 2727,
+              "shodo::analysis": 10171,
+              "shodo::node": 13,
+              "harfrust": 1938,
+              "html5ever": 38,
+              "raikiri_traits": 39,
+              "shodo::ruby": 213,
+              "raikiri_style": 13573,
+              "smol_str": 365,
+              "fontique": 1065,
+              "raikiri_dom": 271,
+              "shodo::accessibility": 7,
+              "shodo::geometry": 192,
+              "shodo::line": 15936,
+              "read_fonts": 2233,
+              "shodo::paragraph": 843,
+              "shodo::output": 259,
+              "icu_segmenter": 1195,
+              "raikiri_html": 789,
+              "cssparser": 16634,
+              "icu_collections": 1658,
+              "icu_provider": 118,
+              "icu_properties": 256,
+              "skrifa": 428,
+              "shodo::builder": 37,
+              "shodo::context": 13,
+              "shodo::limits": 15,
+              "taffy": 9,
+              "parley": 3,
+              "selectors": 101,
+              "shodo::sanitize": 122
+            },
+            "top_symbols": [
+              {
+                "symbol": "sha2::sha256::x86::digest_blocks",
+                "samples": 99614
+              },
+              {
+                "symbol": "<serde_json::value::Value as serde_core::de::Deserialize>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>",
+                "samples": 14389
+              },
+              {
+                "symbol": "cssparser::tokenizer::consume_comment",
+                "samples": 10733
+              },
+              {
+                "symbol": "<serde_json::de::MapAccess<_> as serde_core::de::MapAccess>::next_key_seed::has_next_key::<serde_json::read::SliceRead>",
+                "samples": 10565
+              },
+              {
+                "symbol": "<<serde_json::value::Value as serde_core::de::Deserialize>::deserialize::ValueVisitor as serde_core::de::Visitor>::visit_map::<serde_json::de::MapAccess<serde_json::read::SliceRead>>",
+                "samples": 8506
+              },
+              {
+                "symbol": "<alloc::collections::btree::map::BTreeMap<alloc::string::String, serde_json::value::Value>>::insert",
+                "samples": 7963
+              },
+              {
+                "symbol": "core::str::converts::from_utf8",
+                "samples": 7586
+              },
+              {
+                "symbol": "<serde_json::read::SliceRead as serde_json::read::Read>::parse_str",
+                "samples": 6630
+              },
+              {
+                "symbol": "<&mut core::iter::traits::iterator::Iterator::position::check<&shodo::font::matching::CacheEntry, <shodo::font::FontCollection>::cached_match::{closure#0}>::{closure#0} as core::ops::function::FnMut<((), &shodo::font::matching::CacheEntry)>>::call_mut",
+                "samples": 6156
+              },
+              {
+                "symbol": "<serde_json::read::SliceRead>::skip_to_escape",
+                "samples": 5758
+              },
+              {
+                "symbol": "<alloc::collections::btree::node::Handle<alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Mut, alloc::string::String, serde_json::value::Value, alloc::collections::btree::node::marker::Leaf>, alloc::collections::btree::node::marker::Edge>>::insert_recursing::<alloc::alloc::Global, <alloc::collections::btree::map::entry::VacantEntry<alloc::string::String, serde_json::value::Value>>::insert_entry::{closure#0}>",
+                "samples": 5301
+              },
+              {
+                "symbol": "<shodo::line::spacing_summary::Summary>::join",
+                "samples": 4681
+              },
+              {
+                "symbol": "<alloc::collections::btree::map::IntoIter<alloc::string::String, serde_json::value::Value>>::dying_next",
+                "samples": 4551
+              },
+              {
+                "symbol": "unicode_bidi::char_data::bsearch_range_value_table",
+                "samples": 4340
+              },
+              {
+                "symbol": "<serde_json::de::MapAccess<serde_json::read::SliceRead> as serde_core::de::MapAccess>::next_key_seed::<core::marker::PhantomData<alloc::string::String>>",
+                "samples": 4049
+              },
+              {
+                "symbol": "core::ptr::drop_glue::<serde_json::value::Value>",
+                "samples": 3981
+              },
+              {
+                "symbol": "malloc",
+                "samples": 3654
+              },
+              {
+                "symbol": "cfree",
+                "samples": 3439
+              },
+              {
+                "symbol": "<serde_json::de::Deserializer<serde_json::read::SliceRead>>::parse_number",
+                "samples": 3369
+              },
+              {
+                "symbol": "core::ptr::drop_glue::<alloc::collections::btree::map::IntoIter<alloc::string::String, serde_json::value::Value>>",
+                "samples": 2713
+              },
+              {
+                "symbol": "<core::iter::adapters::map::Map<core::iter::adapters::enumerate::Enumerate<core::slice::iter::Iter<shodo::analysis::units::Unit>>, shodo::line::spacing::build::{closure#0}> as core::iter::traits::iterator::Iterator>::fold::<(), core::iter::traits::iterator::Iterator::for_each::call<shodo::line::spacing::UnitSpacing, <alloc::vec::Vec<shodo::line::spacing::UnitSpacing>>::extend_trusted<core::iter::adapters::map::Map<core::iter::adapters::enumerate::Enumerate<core::slice::iter::Iter<shodo::analysis::units::Unit>>, shodo::line::spacing::build::{closure#0}>>::{closure#0}>::{closure#0}>",
+                "samples": 2618
+              },
+              {
+                "symbol": "shodo::line::cache::resolve",
+                "samples": 2545
+              },
+              {
+                "symbol": "serde_json::lexical::parse::parse_concise_float::<f64>",
+                "samples": 2432
+              },
+              {
+                "symbol": "raikiri_style::ruletree::next_css_top_level_construct",
+                "samples": 2379
+              },
+              {
+                "symbol": "shodo::shape::shape_items_with_base_scopes",
+                "samples": 2323
+              }
+            ]
+          }
+        },
+        "candidate_minus_native_per_run": {
+          "shodo::line": 79.68,
+          "shodo::analysis": 50.845,
+          "other": 49.63000000000011,
+          "shodo::font": 42.660000000000004,
+          "runtime": 25.085000000000036,
+          "shodo::shape": 13.635,
+          "read_fonts": 6.145,
+          "raikiri_style": 5.564999999999998,
+          "shodo::paragraph": 4.215,
+          "shodo::style": 3.89,
+          "icu_collections": 3.794999999999999,
+          "skrifa": 2.0,
+          "shodo::output": 1.295,
+          "shodo::ruby": 1.065,
+          "shodo::geometry": 0.96,
+          "raikiri_html": 0.8199999999999998,
+          "icu_properties": 0.63,
+          "shodo::sanitize": 0.61,
+          "icu_provider": 0.59,
+          "shodo::builder": 0.185,
+          "smol_str": 0.07999999999999985,
+          "shodo::limits": 0.075,
+          "shodo::node": 0.065,
+          "shodo::context": 0.065,
+          "raikiri_traits": 0.035,
+          "shodo::accessibility": 0.035,
+          "html5ever": 0.010000000000000009,
+          "selectors": -0.030000000000000027,
+          "cssparser": -0.14499999999999602,
+          "harfrust": -0.19500000000000028,
+          "taffy": -0.4,
+          "icu_segmenter": -0.8300000000000001,
+          "fontique": -7.19,
+          "raikiri_dom": -14.669999999999998,
+          "parley": -30.474999999999998
+        }
+      }
+    },
+    "environment": {
+      "affinity_cpu": 5,
+      "chosen_cpu_busy_before": 0.0490196078431373,
+      "loadavg_before": [
+        8.4375,
+        6.35986328125,
+        5.20458984375
+      ],
+      "allowed_cpus_before_pinning": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "chosen_cpu_busy_after": 0.010000000000000009,
+      "loadavg_after": [
+        4.587890625,
+        5.9287109375,
+        5.18798828125
+      ],
+      "label": "loaded"
+    },
+    "binary_sha256": "7caf472b3d40d670c270e4a97291a05c8ecc76056fefa222e26b7be9d66d7d30",
+    "runs_per_recording": 200,
+    "sampling_hz": 20000,
+    "scope": "Flat perf (no call graph) over 200 whole probe processes of the pipeline operation at 20 kHz; user-space [.] symbols only, kernel [k] samples are dropped. Whole-process samples include setup outside the measured windows, so interpret only engine-to-engine differences per bucket; buckets are an approximation by the first shodo:: path or known crate in a symbol, not call-graph attribution. Counts are divided by the 200 runs."
+  },
+  "scope": "shodo-jt1 attribution of the saved S4 candidate (fe67a281) vs native raikiri (ab7e619a) increase on two hyphens reference documents, pipeline and layout operations only (isolated is not implemented by the pinned binaries). memory: requested-heap allocator counters per window, not RSS. perf: flat user-space sampling of whole processes including setup outside the measured windows; interpret only candidate-minus-native differences per bucket; environment label and loads are recorded in perf.environment. Not current main, not a switching decision."
+}

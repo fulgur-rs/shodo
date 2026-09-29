@@ -10,6 +10,27 @@ WINDOWS = {
 }
 
 
+MEMORY_WINDOWS = {"pipeline": "parse_cascade_layout", "layout": "layout"}
+MEMORY_FIELDS = ("allocated_bytes", "calls", "peak_extra_bytes", "net_bytes")
+
+
+def window_memory(report, operation):
+    """Median over warm samples of the allocation counters of one memory-mode
+    window: requested bytes (allocated_bytes), allocation calls, the peak of
+    live bytes above the window start (peak_extra_bytes) and retained net
+    bytes (net_bytes, may be negative). These are allocator-requested heap
+    accounting, not RSS or resident pages. Sample 0 (first call) is skipped."""
+    key = MEMORY_WINDOWS[operation]
+    samples = report["samples"]
+    if len(samples) < 2 or samples[0].get("state") != "first-call-in-process":
+        raise ValueError("expected a first-call-in-process sample followed by warm samples")
+    if any(s.get("state") != "warm-process" for s in samples[1:]):
+        raise ValueError("samples after the first call must be warm-process")
+    result = {f: statistics.median(s[key]["counts"][f] for s in samples[1:]) for f in MEMORY_FIELDS}
+    result["warm_samples"] = len(samples) - 1
+    return result
+
+
 def warm_samples_ns(report, operation):
     """Warm-call durations of one time-mode report. Sample 0 is the first call
     in the process (not cold startup) and is never included."""

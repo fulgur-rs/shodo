@@ -118,6 +118,21 @@ class Attribution(unittest.TestCase):
         self.assertEqual(rows[1][1], "cssparser::tokenizer::consume_comment")
         self.assertEqual(self.m.bucket(rows[1][1]), "cssparser")
 
+    def test_window_memory_on_real_memory_fixtures(self):
+        # Hand-read from the fixtures: every warm sample of these two records has identical counts.
+        native = self.m.window_memory(record("pipeline-native"), "pipeline")
+        candidate = self.m.window_memory(record("pipeline-candidate"), "pipeline")
+        self.assertEqual(native, {"allocated_bytes": 558186, "calls": 1350, "peak_extra_bytes": 157847, "net_bytes": 50927, "warm_samples": 9})
+        self.assertEqual(candidate, {"allocated_bytes": 490338, "calls": 1302, "peak_extra_bytes": 157847, "net_bytes": 46895, "warm_samples": 9})
+
+    def test_window_memory_takes_median_and_skips_first_call(self):
+        def sample(state, alloc):
+            return {"state": state, "layout": {"counts": {"allocated_bytes": alloc, "calls": 1, "peak_extra_bytes": 2, "net_bytes": 3}}}
+        report = {"samples": [sample("first-call-in-process", 999), sample("warm-process", 10), sample("warm-process", 30), sample("warm-process", 20)]}
+        self.assertEqual(self.m.window_memory(report, "layout")["allocated_bytes"], 20)
+        with self.assertRaises(ValueError):
+            self.m.window_memory({"samples": [sample("warm-process", 1)]}, "layout")
+
     def test_buckets(self):
         b = self.m.bucket
         self.assertEqual(b("shodo::line::scan::next"), "shodo::line")
