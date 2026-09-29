@@ -16,6 +16,9 @@ use shodo::{AtomicSizes, Fragment, GlyphOrientation, LayoutContext, ParagraphBui
 #[path = "../adapter/ch.rs"]
 #[allow(dead_code)]
 mod ch_adapter;
+#[path = "support/source_fonts.rs"]
+#[allow(dead_code)]
+mod fonts;
 #[path = "../adapter/vertical.rs"]
 mod vertical_adapter;
 
@@ -29,6 +32,7 @@ struct LineSummary {
 
 #[derive(Debug, PartialEq)]
 struct RunSummary {
+    font: shodo::font::FontId,
     orientation: GlyphOrientation,
     font_size: f32,
     /// (glyph id, inline position, block offset, advance)
@@ -37,11 +41,14 @@ struct RunSummary {
 
 const FIXTURE_FAMILY: &str = "Shodo Fixture CJK";
 
-fn inline_style(values: &raikiri_style::ComputedValues) -> Result<InlineStyle, String> {
+fn inline_style(
+    values: &raikiri_style::ComputedValues,
+    families: &[FontFamily],
+) -> Result<InlineStyle, String> {
     Ok(InlineStyle {
-        // The documents name no font; the fixture face is supplied by the
-        // caller, exactly as `ch_units` supplies named fixture families.
-        font_families: vec![FontFamily::Named(FIXTURE_FAMILY.into())],
+        // The documents name no font, so the caller supplies the family: the
+        // fixture face for CI, or the pinned registry's generic serif.
+        font_families: families.to_vec(),
         font_size: values.font_size.0,
         font_weight: values.font_weight,
         font_style: ch_adapter::font_style(values.font_style)?,
@@ -57,6 +64,7 @@ fn add_children(
     doc: &raikiri_html::HtmlDocument,
     builder: &mut ParagraphBuilder,
     parent: usize,
+    families: &[FontFamily],
 ) -> Result<(), String> {
     for id in doc.dom().child_ids(DomId(parent as u64)) {
         let node = doc.dom().get_node(id.0 as usize).unwrap();
@@ -69,16 +77,20 @@ fn add_children(
                 text,
             );
         } else {
-            let style = inline_style(&doc.cascade().computed[id.0 as usize])?;
+            let style = inline_style(&doc.cascade().computed[id.0 as usize], families)?;
             builder.open_inline(NodeId(id.0), &style, InlineEdges::default());
-            add_children(doc, builder, id.0 as usize)?;
+            add_children(doc, builder, id.0 as usize, families)?;
             builder.close_inline();
         }
     }
     Ok(())
 }
 
-fn lines(html: &str, fonts: &FontCollection) -> Result<Vec<LineSummary>, String> {
+fn lines(
+    html: &str,
+    fonts: &FontCollection,
+    families: &[FontFamily],
+) -> Result<Vec<LineSummary>, String> {
     let doc = parse_html(
         html.as_bytes(),
         &ParseOptions {
@@ -102,14 +114,14 @@ fn lines(html: &str, fonts: &FontCollection) -> Result<Vec<LineSummary>, String>
         if node.text_content().is_some() {
             continue; // inter-block whitespace
         }
-        let root = inline_style(&doc.cascade().computed[block.0 as usize])?;
+        let root = inline_style(&doc.cascade().computed[block.0 as usize], families)?;
         let style = ParagraphStyle {
             writing_mode: mode,
             root,
             ..Default::default()
         };
         let mut builder = ParagraphBuilder::new(&style, &limits);
-        add_children(&doc, &mut builder, block.0 as usize)?;
+        add_children(&doc, &mut builder, block.0 as usize, families)?;
         let mut context = LayoutContext::new();
         let paragraph = builder
             .build(&mut context, fonts)
@@ -125,6 +137,7 @@ fn lines(html: &str, fonts: &FontCollection) -> Result<Vec<LineSummary>, String>
                 .fragments()
                 .filter_map(|f| match f {
                     Fragment::GlyphRun(run) => Some(RunSummary {
+                        font: run.font(),
                         orientation: run.orientation(),
                         font_size: run.font_size(),
                         glyphs: run
@@ -143,6 +156,10 @@ fn lines(html: &str, fonts: &FontCollection) -> Result<Vec<LineSummary>, String>
         }
     }
     Ok(summaries)
+}
+
+fn fixture_lines(html: &str, fonts: &FontCollection) -> Result<Vec<LineSummary>, String> {
+    lines(html, fonts, &[FontFamily::Named(FIXTURE_FAMILY.into())])
 }
 
 fn close(a: f32, b: f32) -> bool {
@@ -166,7 +183,11 @@ fn same(a: &[LineSummary], b: &[LineSummary]) -> Result<(), String> {
                 && rx.glyphs.iter().zip(&ry.glyphs).all(|(p, q)| {
                     p.0 == q.0 && close(p.1, q.1) && close(p.2, q.2) && close(p.3, q.3)
                 });
-            if rx.orientation != ry.orientation || !close(rx.font_size, ry.font_size) || !g_ok {
+            if rx.font != ry.font
+                || rx.orientation != ry.orientation
+                || !close(rx.font_size, ry.font_size)
+                || !g_ok
+            {
                 return Err(format!("line {i} glyphs differ: {rx:?} vs {ry:?}"));
             }
         }
@@ -187,8 +208,8 @@ fn main() -> Result<(), String> {
             ))
             .map_err(|e| e.to_string())
         };
-        let test = lines(&read("")?, &fonts.collection)?;
-        let reference = lines(&read("-ref")?, &fonts.collection)?;
+        let test = fixture_lines(&read("")?, &fonts.collection)?;
+        let reference = fixture_lines(&read("-ref")?, &fonts.collection)?;
         let sizes = |v: &[LineSummary]| v.iter().map(|l| l.inline_size).collect::<Vec<_>>();
         println!(
             "{name}: test {:?} reference {:?}, matches reference: {:?}",
@@ -216,12 +237,12 @@ mod tests {
     #[test]
     fn combine_test_matches_reference() {
         let fonts = load_fonts(&Default::default()).unwrap();
-        let test = lines(
+        let test = fixture_lines(
             &doc("text-autospace-vertical-combine-001"),
             &fonts.collection,
         )
         .unwrap();
-        let reference = lines(
+        let reference = fixture_lines(
             &doc("text-autospace-vertical-combine-001-ref"),
             &fonts.collection,
         )
@@ -236,12 +257,12 @@ mod tests {
     #[ignore = "shodo-39u: text-autospace applied to upright vertical text"]
     fn upright_test_matches_reference() {
         let fonts = load_fonts(&Default::default()).unwrap();
-        let test = lines(
+        let test = fixture_lines(
             &doc("text-autospace-vertical-upright-001"),
             &fonts.collection,
         )
         .unwrap();
-        let reference = lines(
+        let reference = fixture_lines(
             &doc("text-autospace-vertical-upright-001-ref"),
             &fonts.collection,
         )
@@ -256,17 +277,18 @@ mod tests {
         // per line than its no-autospace reference (2.5px on each side of the
         // upright X/1). This test must be deleted when that issue is fixed.
         let fonts = load_fonts(&Default::default()).unwrap();
-        let test = lines(
+        let test = fixture_lines(
             &doc("text-autospace-vertical-upright-001"),
             &fonts.collection,
         )
         .unwrap();
-        let reference = lines(
+        let reference = fixture_lines(
             &doc("text-autospace-vertical-upright-001-ref"),
             &fonts.collection,
         )
         .unwrap();
         assert_eq!(test.len(), 4);
+        assert_eq!(reference.len(), 4);
         for (t, r) in test.iter().zip(&reference) {
             assert!(close(t.inline_size - r.inline_size, 5.0), "{t:?} {r:?}");
         }
@@ -277,7 +299,7 @@ mod tests {
         let fonts = load_fonts(&Default::default()).unwrap();
         // The no-autospace reference isolates orientation and axis from the
         // autospace difference above.
-        let reference = lines(
+        let reference = fixture_lines(
             &doc("text-autospace-vertical-upright-001-ref"),
             &fonts.collection,
         )
@@ -297,7 +319,9 @@ mod tests {
         // vertical mode reached shodo.
         let horizontal =
             doc("text-autospace-vertical-upright-001-ref").replace("vertical-rl", "horizontal-tb");
-        let horizontal = lines(&horizontal, &fonts.collection).unwrap();
+        let horizontal = fixture_lines(&horizontal, &fonts.collection).unwrap();
+        assert_eq!(horizontal.len(), 4);
+        assert!(!horizontal[0].runs.is_empty());
         assert!(
             horizontal[0]
                 .runs
@@ -309,11 +333,12 @@ mod tests {
     #[test]
     fn tcy_span_occupies_one_em() {
         let fonts = load_fonts(&Default::default()).unwrap();
-        let combine = lines(
+        let combine = fixture_lines(
             &doc("text-autospace-vertical-combine-001"),
             &fonts.collection,
         )
         .unwrap();
+        assert_eq!(combine.len(), 2);
         for line in &combine {
             assert!(
                 line.runs
@@ -326,11 +351,45 @@ mod tests {
         }
     }
 
+    /// The same oracle with the original 88-font registry and the documents'
+    /// initial generic family. Needs a WPT checkout: set `SHODO_WPT_ROOT`
+    /// (CI has none, so the test is skipped there).
+    #[test]
+    fn pinned_registry_matches_references_for_combine_and_pins_upright() {
+        let Some(root) = std::env::var_os("SHODO_WPT_ROOT") else {
+            eprintln!("skipped: SHODO_WPT_ROOT is not set");
+            return;
+        };
+        let registry = fonts::load(
+            &std::path::Path::new(&root).join("fonts"),
+            &Limits::default(),
+        )
+        .unwrap();
+        let family = [FontFamily::Generic(shodo::style::GenericFamily::Serif)];
+        let run = |name: &str| lines(&doc(name), &registry.collection, &family).unwrap();
+        let combine = run("text-autospace-vertical-combine-001");
+        same(&combine, &run("text-autospace-vertical-combine-001-ref")).unwrap();
+        let upright = run("text-autospace-vertical-upright-001");
+        let upright_ref = run("text-autospace-vertical-upright-001-ref");
+        // Every character must come from a real glyph, not .notdef.
+        for line in combine.iter().chain(&upright) {
+            for r in &line.runs {
+                assert!(
+                    r.glyphs.iter().all(|g| g.0 != 0),
+                    ".notdef glyph in {line:?}"
+                );
+            }
+        }
+        for (t, r) in upright.iter().zip(&upright_ref) {
+            assert!(close(t.inline_size - r.inline_size, 5.0), "{t:?} {r:?}");
+        }
+    }
+
     #[test]
     fn autospace_auto_is_rejected() {
         let fonts = load_fonts(&Default::default()).unwrap();
         let html = doc("text-autospace-vertical-upright-001")
             .replace("text-autospace: normal", "text-autospace: auto");
-        assert!(lines(&html, &fonts.collection).is_err());
+        assert!(fixture_lines(&html, &fonts.collection).is_err());
     }
 }
