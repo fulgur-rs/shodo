@@ -78,8 +78,15 @@ spikes retain their original rejection behavior.
   It is a mandatory dependency of `shodo-p2m.6`, because native raikiri
   already measures plain `ch` values. It depends on S4's adoption decision.
 - `shodo-e7n`: investigate `calc(2ch + 4px)` and `calc(2ch + 10%)` losing
-  their declaration/provenance in the shared pinned cascade. Controls with
-  plain `2ch`, `calc(4px + 10%)` and `calc(2em + 4px)` retain their values.
+  their declaration/provenance in the shared pinned cascade. Plain `2ch`
+  preserves its factor and declaring-font key where declared. The saved
+  `target/3fl-artifacts/calc-controls-probe.json` shows `calc(4px + 10%)`
+  and `calc(2em + 4px)` retaining values for `word-spacing`, `letter-spacing`
+  and `text-indent` in both parent and child. Both controls instead yield
+  `Px(0.0)` for the probed `margin-left` and `padding-left` values. These
+  observations do not establish a `ch`-specific cause for edge properties
+  or identify whether parsing rejects the declarations or a later stage
+  loses their values.
   This is separate from the plain-unit measurement demonstrated here.
 
 The example deliberately covers static named fixture families, horizontal
