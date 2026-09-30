@@ -120,6 +120,12 @@ fn shaping_compatible(a: &InlineStyle, b: &InlineStyle) -> bool {
     )
 }
 
+fn after_context(scalars: &[Scalar]) -> String {
+    #[cfg(test)]
+    tests::AFTER_CONTEXT_CALLS.with(|calls| calls.set(calls.get() + 1));
+    scalars.iter().take(5).map(|s| s.c).collect()
+}
+
 pub(crate) fn itemize(
     input: &Processed,
     styles: &[InlineStyle],
@@ -283,11 +289,12 @@ pub(crate) fn itemize(
                         .scalars
                         .extend_from_slice(&scalars[part_start..part_end]);
                     previous.end = end;
-                    previous.after = scalars[part_end..(part_end + 5).min(scalars.len())]
-                        .iter()
-                        .map(|s| s.c)
-                        .collect();
                 } else {
+                    if result.len() > segment_start {
+                        // The preceding run is now complete. Intermediate
+                        // grapheme suffixes are never used by the shaper.
+                        result.last_mut().unwrap().after = after_context(&scalars[part_start..]);
+                    }
                     result.push(ShapeItem {
                         segment: segment_start as u32,
                         scalars: scalars[part_start..part_end].to_vec(),
@@ -303,15 +310,14 @@ pub(crate) fn itemize(
                             .iter()
                             .map(|s| s.c)
                             .collect(),
-                        after: scalars[part_end..(part_end + 5).min(scalars.len())]
-                            .iter()
-                            .map(|s| s.c)
-                            .collect(),
+                        after: String::new(),
                     });
                 }
                 part_start = part_end;
             }
         }
+        // The final run has no following context inside this hard segment.
+        result.last_mut().unwrap().after = after_context(&[]);
         text.clear();
         scalars.clear();
         style_indices.clear();
@@ -440,6 +446,7 @@ mod tests {
     use crate::{LayoutContext, Paragraph, ParagraphBuilder};
 
     std::thread_local! {
+        pub(super) static AFTER_CONTEXT_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
         static CLUSTERS: std::cell::RefCell<Option<Vec<String>>> = const {
             std::cell::RefCell::new(None)
         };
@@ -503,6 +510,86 @@ mod tests {
         let mut builder = ParagraphBuilder::new(style, &limits);
         add(&mut builder);
         builder.build(&mut LayoutContext::new(), &fonts).unwrap()
+    }
+
+    #[test]
+    fn after_context_work_is_bounded_by_runs_for_long_text_and_first_line() {
+        for text in ["abcdefgh".repeat(256), "مرحبا".repeat(256)] {
+            AFTER_CONTEXT_CALLS.with(|calls| calls.set(0));
+            let p = paragraph(WritingMode::HorizontalTb, &text);
+            assert_eq!(p.data.shape_items.len(), 1);
+            assert_eq!(p.data.shape_items[0].before, "");
+            assert_eq!(p.data.shape_items[0].after, "");
+            AFTER_CONTEXT_CALLS.with(|calls| assert_eq!(calls.get(), 1));
+        }
+        let mut style = ParagraphStyle::default();
+        let mut first = style.root.clone();
+        first.text_transform = crate::style::TextTransform::Uppercase;
+        style.first_line = Some(first);
+        AFTER_CONTEXT_CALLS.with(|calls| calls.set(0));
+        let p = build(&style, |builder| {
+            builder.push_text(
+                TextSource::Generated { node: NodeId(1) },
+                &"Straße".repeat(256),
+            );
+        });
+        assert_eq!(p.data.shape_items.len(), 1);
+        let alternate = &p.data.first_line.as_ref().unwrap().data;
+        assert_eq!(alternate.shape_items.len(), 1);
+        assert_eq!(alternate.text, "STRASSE".repeat(256));
+        assert_eq!(alternate.shape_items[0].after, "");
+        AFTER_CONTEXT_CALLS.with(|calls| assert_eq!(calls.get(), 2));
+    }
+
+    #[test]
+    fn after_context_preserves_split_grapheme_style_and_hard_boundaries() {
+        let style = ParagraphStyle::default();
+        let mut mark_style = style.root.clone();
+        mark_style.font_size += 2.0;
+        let mut edges = InlineEdges::default();
+        edges.padding.inline_start = 1.0;
+        let p = build(&style, |builder| {
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, "abcd");
+            builder.open_inline(NodeId(2), &mark_style, InlineEdges::default());
+            builder.push_text(TextSource::Generated { node: NodeId(3) }, "\u{301}efghijk");
+            builder.close_inline();
+            builder.push_text(TextSource::Generated { node: NodeId(4) }, "lmnopqr");
+            builder.open_inline(NodeId(5), &style.root, edges);
+            builder.push_text(TextSource::Generated { node: NodeId(6) }, "stuvwxy");
+            builder.close_inline();
+        });
+        let contexts: Vec<_> = p
+            .data
+            .shape_items
+            .iter()
+            .map(|item| {
+                (
+                    item.scalars.iter().map(|s| s.c).collect::<String>(),
+                    item.before.as_str(),
+                    item.after.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            contexts,
+            [
+                ("abcd".into(), "", "\u{301}efgh"),
+                ("\u{301}efghijk".into(), "abcd", "lmnop"),
+                ("lmnopqr".into(), "ghijk", ""),
+                ("stuvwxy".into(), "", ""),
+            ]
+        );
+        let ranges: Vec<_> = p
+            .data
+            .shape_items
+            .iter()
+            .map(|item| item.scalars[0].offset..item.end)
+            .collect();
+        assert_eq!(ranges, [0..4, 4..13, 13..20, 20..27]);
+        assert!(!p.data.shape_items[1].scalars[0].grapheme_start);
+        assert_eq!(p.data.shape_items[0].segment, p.data.shape_items[2].segment);
+        assert_ne!(p.data.shape_items[2].segment, p.data.shape_items[3].segment);
+        assert!(p.data.shape_items.iter().all(|item| item.combine.is_none()));
     }
 
     #[test]
