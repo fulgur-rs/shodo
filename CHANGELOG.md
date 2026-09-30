@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Reset the edge reshape budget for each intrinsic size measurement so reusing a layout context preserves min/max-content widths.
+
 ## [0.0.4](https://github.com/fulgur-rs/shodo/compare/v0.0.3...v0.0.4) - 2026-09-30
 
 ### Added

@@ -11,12 +11,15 @@ use crate::style::LineOptions;
 impl Paragraph {
     /// Measures intrinsic margin-box widths, including floats and clear.
     /// Missing caller dimensions collapse to zero and produce a warning.
+    /// Edge reshaping is budgeted per call, with first-line min/max passes
+    /// sharing the same budget.
     pub fn intrinsic_sizes(
         &self,
         cx: &mut LayoutContext,
         options: &LineOptions,
         inputs: &AtomicIntrinsics,
     ) -> IntrinsicSizes {
+        cx.edge_reshape_spent = 0;
         if self.data.first_line.is_some() {
             let min = self
                 .measure_intrinsics(cx, options, inputs, true)

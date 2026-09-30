@@ -213,13 +213,14 @@ impl EdgeShapeCache {
 /// Each edge window is bounded by `max_reshape_window_bytes`, but a line scan
 /// asks for one per break candidate, so a long unsafe-joined run (for example
 /// cursive text under `word-break: break-all`) multiplies that bound by the
-/// candidate count. Cap the bytes requested per line at this many windows;
-/// beyond it the line keeps shared glyphs and warns.
+/// candidate count. Cap the bytes requested per `next_line` or `intrinsic_sizes`
+/// call at this many windows; beyond it shared glyphs are kept and a warning is
+/// emitted. First-line intrinsic passes share this cap.
 const EDGE_RESHAPE_LINE_WINDOWS: u64 = 64;
 
-/// Charge a request against the line's reshape budget. Requests are charged
-/// whether or not the cache can answer them, so the outcome never depends on
-/// what an earlier layout left in the context.
+/// Charge a request against the current operation's reshape budget, whether or
+/// not the cache can answer it, so the outcome never depends on what an earlier
+/// layout left in the context.
 fn within_line_reshape_budget(
     data: &ParagraphData,
     range: &Range<usize>,
