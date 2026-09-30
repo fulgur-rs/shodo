@@ -1,0 +1,3791 @@
+{
+  "issue": "shodo-sbp.4",
+  "date": "2026-09-30",
+  "base_revision": "65d3fafb0e4315db28f179cfcb8db33140d0ce12",
+  "before_source": {
+    "harness_hash": "7c139740f9da6bc5ab72420426c81ad5456569e36a99b18b2266fe392b18f80b",
+    "source_hash": "e2b6e1fcee2ef82850951c974b5199bd79f4a2250d07351afad41192bdcba53a"
+  },
+  "after_source": {
+    "harness_hash": "7c139740f9da6bc5ab72420426c81ad5456569e36a99b18b2266fe392b18f80b",
+    "source_hash": "12a78c3f7609b32762c952dcc438d9b49e226fd4a0d72f3f0066ea980be2d061"
+  },
+  "probe_binary_sha256": {
+    "before-timing": "952ddef48a61765ab728158f68d3152dd15f33df81de74469fea1ca53ed78824",
+    "before-memory": "897fccf930a0aad708902e3a8eed2788645fe90aff014092c4de6a3c5c0f9f5f",
+    "after-timing": "1de4a2b702145b708a977604eea7ebbf345077b1234ee562aec2622b297fd50a",
+    "after-memory": "9c5c29390f6795ec78fc89801ef26992ec5f6ae72bd268fbe544f26394cbb5c2"
+  },
+  "probe_lock_sha256": "b4fab5def2a0eda2a38bc907ebcdeb0d8a188ce694638ad42d5c0a829d521a55",
+  "special_cases": 60,
+  "special_memory": {
+    "before": {
+      "instrumented": true,
+      "rows": [
+        {
+          "counts": {
+            "allocated_bytes": 4752,
+            "calls": 87,
+            "deallocated_bytes": 2408,
+            "live_bytes": 448516,
+            "net_bytes": 2344,
+            "peak_extra_bytes": 2496,
+            "start_live_bytes": 446172
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "ae278ac5263ac407571b4a410bb7455159dc8314bfd5270ff6f374c79e0e2f3f",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 4752,
+            "calls": 87,
+            "deallocated_bytes": 2408,
+            "live_bytes": 475515,
+            "net_bytes": 2344,
+            "peak_extra_bytes": 2496,
+            "start_live_bytes": 473171
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "11a6a65d0e41c18ea5a0fd1571fdd64c12013a4c49ecf66ef0f834ed047488e3",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 4752,
+            "calls": 87,
+            "deallocated_bytes": 2408,
+            "live_bytes": 453139,
+            "net_bytes": 2344,
+            "peak_extra_bytes": 2496,
+            "start_live_bytes": 450795
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "615fced487ffb737ca009a8d56e38fd740e2c680d2b181b4f71150023e3f9e35",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 4752,
+            "calls": 87,
+            "deallocated_bytes": 2408,
+            "live_bytes": 480521,
+            "net_bytes": 2344,
+            "peak_extra_bytes": 2496,
+            "start_live_bytes": 478177
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "a6eeb434edb57e76a7dc66dc253407db9ca417d1cde2f7feb525afc6240f16e5",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 4752,
+            "calls": 87,
+            "deallocated_bytes": 2408,
+            "live_bytes": 457491,
+            "net_bytes": 2344,
+            "peak_extra_bytes": 2496,
+            "start_live_bytes": 455147
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "615fced487ffb737ca009a8d56e38fd740e2c680d2b181b4f71150023e3f9e35",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 4752,
+            "calls": 87,
+            "deallocated_bytes": 2408,
+            "live_bytes": 485001,
+            "net_bytes": 2344,
+            "peak_extra_bytes": 2496,
+            "start_live_bytes": 482657
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "a6eeb434edb57e76a7dc66dc253407db9ca417d1cde2f7feb525afc6240f16e5",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 149904,
+            "calls": 4125,
+            "deallocated_bytes": 115304,
+            "live_bytes": 1582724,
+            "net_bytes": 34600,
+            "peak_extra_bytes": 49480,
+            "start_live_bytes": 1548124
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "4b50dcce3c5e3b1292b23053dc0925708487a072a5fecbf300d821781ff5e230",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 149904,
+            "calls": 4125,
+            "deallocated_bytes": 115304,
+            "live_bytes": 2827259,
+            "net_bytes": 34600,
+            "peak_extra_bytes": 49480,
+            "start_live_bytes": 2792659
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "b6dbcea3b2508968af57870831d354996a018430e58d46af79151cfd8f9ed111",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 149904,
+            "calls": 4125,
+            "deallocated_bytes": 115304,
+            "live_bytes": 1587219,
+            "net_bytes": 34600,
+            "peak_extra_bytes": 49480,
+            "start_live_bytes": 1552619
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "25cfcc5df43e35454caf86e717a72a103382733eafad0018627b95306dcc05b4",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 149904,
+            "calls": 4125,
+            "deallocated_bytes": 115304,
+            "live_bytes": 2832521,
+            "net_bytes": 34600,
+            "peak_extra_bytes": 49480,
+            "start_live_bytes": 2797921
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "ef72e6ed57c04206295db4d80990b5a6dc30201eb3c16f7ec887498ecbbb967a",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 149904,
+            "calls": 4125,
+            "deallocated_bytes": 115304,
+            "live_bytes": 1591827,
+            "net_bytes": 34600,
+            "peak_extra_bytes": 49480,
+            "start_live_bytes": 1557227
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "25cfcc5df43e35454caf86e717a72a103382733eafad0018627b95306dcc05b4",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 149904,
+            "calls": 4125,
+            "deallocated_bytes": 115304,
+            "live_bytes": 2836873,
+            "net_bytes": 34600,
+            "peak_extra_bytes": 49480,
+            "start_live_bytes": 2802273
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "ef72e6ed57c04206295db4d80990b5a6dc30201eb3c16f7ec887498ecbbb967a",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 21912,
+            "calls": 312,
+            "deallocated_bytes": 17492,
+            "live_bytes": 486547,
+            "net_bytes": 4420,
+            "peak_extra_bytes": 5712,
+            "start_live_bytes": 482127
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "5d90386486cde0b58f37785f832adb68b4793b934f6539c4e52c53ce9596e71d",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 21912,
+            "calls": 312,
+            "deallocated_bytes": 17492,
+            "live_bytes": 523229,
+            "net_bytes": 4420,
+            "peak_extra_bytes": 5712,
+            "start_live_bytes": 518809
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "7f7e55706dea3f5b3f58895b688a9ac79cf1a1ce7c6915276c945b6858580b46",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 21912,
+            "calls": 312,
+            "deallocated_bytes": 17492,
+            "live_bytes": 491154,
+            "net_bytes": 4420,
+            "peak_extra_bytes": 5712,
+            "start_live_bytes": 486734
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "9385c676d5815751616c718b09cb0d4572c30a3d8f72777b6124f81cd46cfd2e",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 21912,
+            "calls": 312,
+            "deallocated_bytes": 17492,
+            "live_bytes": 528459,
+            "net_bytes": 4420,
+            "peak_extra_bytes": 5712,
+            "start_live_bytes": 524039
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "4dcad12fb941117b3778dd8ba68e5ab446d7786f38381822f82ccaf31a403de4",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 21912,
+            "calls": 312,
+            "deallocated_bytes": 17492,
+            "live_bytes": 495506,
+            "net_bytes": 4420,
+            "peak_extra_bytes": 5712,
+            "start_live_bytes": 491086
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "9385c676d5815751616c718b09cb0d4572c30a3d8f72777b6124f81cd46cfd2e",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 21912,
+            "calls": 312,
+            "deallocated_bytes": 17492,
+            "live_bytes": 533323,
+            "net_bytes": 4420,
+            "peak_extra_bytes": 5712,
+            "start_live_bytes": 528903
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "4dcad12fb941117b3778dd8ba68e5ab446d7786f38381822f82ccaf31a403de4",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 554136,
+            "calls": 12414,
+            "deallocated_bytes": 517460,
+            "live_bytes": 1621011,
+            "net_bytes": 36676,
+            "peak_extra_bytes": 51712,
+            "start_live_bytes": 1584335
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "9df7ff9146ae5fc1d3d47814dbe4c719323069d8f2bcdbd9ee559cdd13ea477f",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 554136,
+            "calls": 12414,
+            "deallocated_bytes": 517460,
+            "live_bytes": 2875357,
+            "net_bytes": 36676,
+            "peak_extra_bytes": 51712,
+            "start_live_bytes": 2838681
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "decebd078a7ade3f950992294f5a5caa1dd11718d6c7bd70e71fcbcae49a8c3e",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 554136,
+            "calls": 12414,
+            "deallocated_bytes": 517460,
+            "live_bytes": 1625618,
+            "net_bytes": 36676,
+            "peak_extra_bytes": 51712,
+            "start_live_bytes": 1588942
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "baf3d94d8187638a3e679bc001171f0b8dbaf14876c57786bf79e693e60a88a8",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 554136,
+            "calls": 12414,
+            "deallocated_bytes": 517460,
+            "live_bytes": 2880587,
+            "net_bytes": 36676,
+            "peak_extra_bytes": 51712,
+            "start_live_bytes": 2843911
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "a82f6fd2c98e9f1c6a136aaeddd6af8c8bd0db1d57946dc0fd52417d1e5f6dba",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 554136,
+            "calls": 12414,
+            "deallocated_bytes": 517460,
+            "live_bytes": 1629970,
+            "net_bytes": 36676,
+            "peak_extra_bytes": 51712,
+            "start_live_bytes": 1593294
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "baf3d94d8187638a3e679bc001171f0b8dbaf14876c57786bf79e693e60a88a8",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 554136,
+            "calls": 12414,
+            "deallocated_bytes": 517460,
+            "live_bytes": 2884939,
+            "net_bytes": 36676,
+            "peak_extra_bytes": 51712,
+            "start_live_bytes": 2848263
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "a82f6fd2c98e9f1c6a136aaeddd6af8c8bd0db1d57946dc0fd52417d1e5f6dba",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 115992,
+            "calls": 945,
+            "deallocated_bytes": 103956,
+            "live_bytes": 551635,
+            "net_bytes": 12036,
+            "peak_extra_bytes": 18196,
+            "start_live_bytes": 539599
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "b6b96162dc1b462d77ee92f4748a9c3e736d605561c64f5d8ed77ce03952add0",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 115992,
+            "calls": 945,
+            "deallocated_bytes": 103956,
+            "live_bytes": 621725,
+            "net_bytes": 12036,
+            "peak_extra_bytes": 18196,
+            "start_live_bytes": 609689
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "8708580b02865e7df2502348088fb3b32efd69d8192bf202d7fd5199d9e99e5b",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 115992,
+            "calls": 945,
+            "deallocated_bytes": 103956,
+            "live_bytes": 556626,
+            "net_bytes": 12036,
+            "peak_extra_bytes": 18196,
+            "start_live_bytes": 544590
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "dd308e189396748aed8b2231722d5cafbd8641a39c6c566f4e0aa154021c0c1f",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 115992,
+            "calls": 945,
+            "deallocated_bytes": 103956,
+            "live_bytes": 627723,
+            "net_bytes": 12036,
+            "peak_extra_bytes": 18196,
+            "start_live_bytes": 615687
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "d6944bee2b97ed9815cbc258c6b6020915f69ef0982d4de71c9ff5cb776f7cdd",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 115992,
+            "calls": 945,
+            "deallocated_bytes": 103956,
+            "live_bytes": 560978,
+            "net_bytes": 12036,
+            "peak_extra_bytes": 18196,
+            "start_live_bytes": 548942
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "dd308e189396748aed8b2231722d5cafbd8641a39c6c566f4e0aa154021c0c1f",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 115992,
+            "calls": 945,
+            "deallocated_bytes": 103956,
+            "live_bytes": 632075,
+            "net_bytes": 12036,
+            "peak_extra_bytes": 18196,
+            "start_live_bytes": 620039
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "d6944bee2b97ed9815cbc258c6b6020915f69ef0982d4de71c9ff5cb776f7cdd",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 2195480,
+            "calls": 21110,
+            "deallocated_bytes": 2151700,
+            "live_bytes": 1685075,
+            "net_bytes": 43780,
+            "peak_extra_bytes": 59392,
+            "start_live_bytes": 1641295
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "7723248a270f7e469c99175f6acd35b56cdada7c69a8278fb8fade37a5a21361",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 2195480,
+            "calls": 21110,
+            "deallocated_bytes": 2151700,
+            "live_bytes": 2971805,
+            "net_bytes": 43780,
+            "peak_extra_bytes": 59392,
+            "start_live_bytes": 2928025
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "47ae2c7000948d6d2b04854ed6310a87bdee8755f313d1b7e4ea080f5e72f473",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 2195480,
+            "calls": 21110,
+            "deallocated_bytes": 2151700,
+            "live_bytes": 1690066,
+            "net_bytes": 43780,
+            "peak_extra_bytes": 59392,
+            "start_live_bytes": 1646286
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "f9dd3e918375b1e622813bd431cfe963003a5921096473beda824c45f543c121",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 2195480,
+            "calls": 21110,
+            "deallocated_bytes": 2151700,
+            "live_bytes": 2978827,
+            "net_bytes": 43780,
+            "peak_extra_bytes": 59392,
+            "start_live_bytes": 2935047
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "6a561a3be97cfef09334d281f62f0c158f310bd8d8f6d21cb62ed4895085ffed",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 2195480,
+            "calls": 21110,
+            "deallocated_bytes": 2151700,
+            "live_bytes": 1695442,
+            "net_bytes": 43780,
+            "peak_extra_bytes": 59392,
+            "start_live_bytes": 1651662
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "f9dd3e918375b1e622813bd431cfe963003a5921096473beda824c45f543c121",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 2195480,
+            "calls": 21110,
+            "deallocated_bytes": 2151700,
+            "live_bytes": 2983179,
+            "net_bytes": 43780,
+            "peak_extra_bytes": 59392,
+            "start_live_bytes": 2939399
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "6a561a3be97cfef09334d281f62f0c158f310bd8d8f6d21cb62ed4895085ffed",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 985688,
+            "calls": 3835,
+            "deallocated_bytes": 942164,
+            "live_bytes": 736867,
+            "net_bytes": 43524,
+            "peak_extra_bytes": 72532,
+            "start_live_bytes": 693343
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "f6ba9bcb38565a7bd18e25fda6bde1859dabbbc4ef79138ed0c3b71568baeac6",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 985688,
+            "calls": 3835,
+            "deallocated_bytes": 942164,
+            "live_bytes": 945853,
+            "net_bytes": 43524,
+            "peak_extra_bytes": 72532,
+            "start_live_bytes": 902329
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "ba019ddc2a3dc161ea435871dbe09ee447e0a658b03de33d183b48a56138d857",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 985688,
+            "calls": 3835,
+            "deallocated_bytes": 942164,
+            "live_bytes": 743394,
+            "net_bytes": 43524,
+            "peak_extra_bytes": 72532,
+            "start_live_bytes": 699870
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "790a3fb60fc63887d7fa32776635eae3a97d45ca99a799aa100f572a2997c116",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 985688,
+            "calls": 3835,
+            "deallocated_bytes": 942164,
+            "live_bytes": 954923,
+            "net_bytes": 43524,
+            "peak_extra_bytes": 72532,
+            "start_live_bytes": 911399
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "c9471c7694d0b3e7e729dc85cbd59edee7beb6901ae27d26ccdbe4357971570c",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 985688,
+            "calls": 3835,
+            "deallocated_bytes": 942164,
+            "live_bytes": 747746,
+            "net_bytes": 43524,
+            "peak_extra_bytes": 72532,
+            "start_live_bytes": 704222
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "790a3fb60fc63887d7fa32776635eae3a97d45ca99a799aa100f572a2997c116",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 985688,
+            "calls": 3835,
+            "deallocated_bytes": 942164,
+            "live_bytes": 959275,
+            "net_bytes": 43524,
+            "peak_extra_bytes": 72532,
+            "start_live_bytes": 915751
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "c9471c7694d0b3e7e729dc85cbd59edee7beb6901ae27d26ccdbe4357971570c",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 9252184,
+            "calls": 32062,
+            "deallocated_bytes": 9179988,
+            "live_bytes": 1867235,
+            "net_bytes": 72196,
+            "peak_extra_bytes": 101204,
+            "start_live_bytes": 1795039
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "4df58217eeeef755a9f4e477bfc35aaa56e3c3c36fddc832a3bbedfb703e5e3a",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 9252184,
+            "calls": 32062,
+            "deallocated_bytes": 9179988,
+            "live_bytes": 3286717,
+            "net_bytes": 72196,
+            "peak_extra_bytes": 101204,
+            "start_live_bytes": 3214521
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "9a386b2521877714bf44866f1f6d969f601536cfe494f198e8fdf8dc2400f52f",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 9252184,
+            "calls": 32062,
+            "deallocated_bytes": 9179988,
+            "live_bytes": 1873762,
+            "net_bytes": 72196,
+            "peak_extra_bytes": 101204,
+            "start_live_bytes": 1801566
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "b5c4504ab0fd31f3d8b2d71d11cfc33276e4c3332d084e5d03d54d86f9b72579",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 9252184,
+            "calls": 32062,
+            "deallocated_bytes": 9179988,
+            "live_bytes": 3295787,
+            "net_bytes": 72196,
+            "peak_extra_bytes": 101204,
+            "start_live_bytes": 3223591
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "a0ec0890049c83699e3b2a9e95fc1abd249b5dbdf31eef899c16cc28dabae9e2",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 9252184,
+            "calls": 32062,
+            "deallocated_bytes": 9179988,
+            "live_bytes": 1878114,
+            "net_bytes": 72196,
+            "peak_extra_bytes": 101204,
+            "start_live_bytes": 1805918
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "b5c4504ab0fd31f3d8b2d71d11cfc33276e4c3332d084e5d03d54d86f9b72579",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 9252184,
+            "calls": 32062,
+            "deallocated_bytes": 9179988,
+            "live_bytes": 3300139,
+            "net_bytes": 72196,
+            "peak_extra_bytes": 101204,
+            "start_live_bytes": 3227943
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "a0ec0890049c83699e3b2a9e95fc1abd249b5dbdf31eef899c16cc28dabae9e2",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 3368568,
+            "calls": 8256,
+            "deallocated_bytes": 3283060,
+            "live_bytes": 976235,
+            "net_bytes": 85508,
+            "peak_extra_bytes": 144980,
+            "start_live_bytes": 890727
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "cbb25fb48c3cdb9beb04a3a9b562610d9cedda6f759a77dc2a18483e9da72d28",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 3368568,
+            "calls": 8256,
+            "deallocated_bytes": 3283060,
+            "live_bytes": 1372877,
+            "net_bytes": 85508,
+            "peak_extra_bytes": 144980,
+            "start_live_bytes": 1287369
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "4f48e3407116729fec590c05354686aa266a4507c25a12fa566a7948abd1bb2f",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 3368568,
+            "calls": 8256,
+            "deallocated_bytes": 3283060,
+            "live_bytes": 984810,
+            "net_bytes": 85508,
+            "peak_extra_bytes": 144980,
+            "start_live_bytes": 899302
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "7a3a049e634d35414b16281fc87f17180facfdad6419910cc489bf15429c0d27",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 3368568,
+            "calls": 8256,
+            "deallocated_bytes": 3283060,
+            "live_bytes": 1386043,
+            "net_bytes": 85508,
+            "peak_extra_bytes": 144980,
+            "start_live_bytes": 1300535
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "1d768660868f785db98a03e96a7ee413e31a09203695bf01536d9b157f875141",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 3368568,
+            "calls": 8256,
+            "deallocated_bytes": 3283060,
+            "live_bytes": 989162,
+            "net_bytes": 85508,
+            "peak_extra_bytes": 144980,
+            "start_live_bytes": 903654
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "7a3a049e634d35414b16281fc87f17180facfdad6419910cc489bf15429c0d27",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 3368568,
+            "calls": 8256,
+            "deallocated_bytes": 3283060,
+            "live_bytes": 1390395,
+            "net_bytes": 85508,
+            "peak_extra_bytes": 144980,
+            "start_live_bytes": 1304887
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "1d768660868f785db98a03e96a7ee413e31a09203695bf01536d9b157f875141",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 19884408,
+            "calls": 40514,
+            "deallocated_bytes": 19774324,
+            "live_bytes": 2102507,
+            "net_bytes": 110084,
+            "peak_extra_bytes": 169556,
+            "start_live_bytes": 1992423
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "26b93daa7bd77f177f7e6c6d39d27e55426e4dd1aa90101b9bd8aa5b5a2e655e",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 19884408,
+            "calls": 40514,
+            "deallocated_bytes": 19774324,
+            "live_bytes": 3701453,
+            "net_bytes": 110084,
+            "peak_extra_bytes": 169556,
+            "start_live_bytes": 3591369
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "3f3d48cc9b5c9c1d64130b95824a0542c15336fd81b986c28551d1e2c1c790d6",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 19884408,
+            "calls": 40514,
+            "deallocated_bytes": 19774324,
+            "live_bytes": 2111082,
+            "net_bytes": 110084,
+            "peak_extra_bytes": 169556,
+            "start_live_bytes": 2000998
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "b4ab356fb3a640683f29b5631715c02600d88745770931551e2be38d72288de9",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 19884408,
+            "calls": 40514,
+            "deallocated_bytes": 19774324,
+            "live_bytes": 3714619,
+            "net_bytes": 110084,
+            "peak_extra_bytes": 169556,
+            "start_live_bytes": 3604535
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "ba1f16f0acb3e0eaa43e383afbdd8062af5ec6d7b125acba81e777d467c0fcbd",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 19884408,
+            "calls": 40514,
+            "deallocated_bytes": 19774324,
+            "live_bytes": 2115434,
+            "net_bytes": 110084,
+            "peak_extra_bytes": 169556,
+            "start_live_bytes": 2005350
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "b4ab356fb3a640683f29b5631715c02600d88745770931551e2be38d72288de9",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 19884408,
+            "calls": 40514,
+            "deallocated_bytes": 19774324,
+            "live_bytes": 3718971,
+            "net_bytes": 110084,
+            "peak_extra_bytes": 169556,
+            "start_live_bytes": 3608887
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "ba1f16f0acb3e0eaa43e383afbdd8062af5ec6d7b125acba81e777d467c0fcbd",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "mixed"
+        }
+      ],
+      "scope": "fresh break_all; context initialization and output checking excluded"
+    },
+    "after": {
+      "instrumented": true,
+      "rows": [
+        {
+          "counts": {
+            "allocated_bytes": 3712,
+            "calls": 22,
+            "deallocated_bytes": 1368,
+            "live_bytes": 448516,
+            "net_bytes": 2344,
+            "peak_extra_bytes": 2496,
+            "start_live_bytes": 446172
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "ae278ac5263ac407571b4a410bb7455159dc8314bfd5270ff6f374c79e0e2f3f",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 3712,
+            "calls": 22,
+            "deallocated_bytes": 1368,
+            "live_bytes": 475515,
+            "net_bytes": 2344,
+            "peak_extra_bytes": 2496,
+            "start_live_bytes": 473171
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "11a6a65d0e41c18ea5a0fd1571fdd64c12013a4c49ecf66ef0f834ed047488e3",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 3712,
+            "calls": 22,
+            "deallocated_bytes": 1368,
+            "live_bytes": 453139,
+            "net_bytes": 2344,
+            "peak_extra_bytes": 2496,
+            "start_live_bytes": 450795
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "615fced487ffb737ca009a8d56e38fd740e2c680d2b181b4f71150023e3f9e35",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 3712,
+            "calls": 22,
+            "deallocated_bytes": 1368,
+            "live_bytes": 480521,
+            "net_bytes": 2344,
+            "peak_extra_bytes": 2496,
+            "start_live_bytes": 478177
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "a6eeb434edb57e76a7dc66dc253407db9ca417d1cde2f7feb525afc6240f16e5",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 3712,
+            "calls": 22,
+            "deallocated_bytes": 1368,
+            "live_bytes": 457491,
+            "net_bytes": 2344,
+            "peak_extra_bytes": 2496,
+            "start_live_bytes": 455147
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "615fced487ffb737ca009a8d56e38fd740e2c680d2b181b4f71150023e3f9e35",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 3712,
+            "calls": 22,
+            "deallocated_bytes": 1368,
+            "live_bytes": 485001,
+            "net_bytes": 2344,
+            "peak_extra_bytes": 2496,
+            "start_live_bytes": 482657
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "a6eeb434edb57e76a7dc66dc253407db9ca417d1cde2f7feb525afc6240f16e5",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 84352,
+            "calls": 28,
+            "deallocated_bytes": 49752,
+            "live_bytes": 1582724,
+            "net_bytes": 34600,
+            "peak_extra_bytes": 49480,
+            "start_live_bytes": 1548124
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "4b50dcce3c5e3b1292b23053dc0925708487a072a5fecbf300d821781ff5e230",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 84352,
+            "calls": 28,
+            "deallocated_bytes": 49752,
+            "live_bytes": 2827259,
+            "net_bytes": 34600,
+            "peak_extra_bytes": 49480,
+            "start_live_bytes": 2792659
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "b6dbcea3b2508968af57870831d354996a018430e58d46af79151cfd8f9ed111",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 84352,
+            "calls": 28,
+            "deallocated_bytes": 49752,
+            "live_bytes": 1587219,
+            "net_bytes": 34600,
+            "peak_extra_bytes": 49480,
+            "start_live_bytes": 1552619
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "25cfcc5df43e35454caf86e717a72a103382733eafad0018627b95306dcc05b4",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 84352,
+            "calls": 28,
+            "deallocated_bytes": 49752,
+            "live_bytes": 2832521,
+            "net_bytes": 34600,
+            "peak_extra_bytes": 49480,
+            "start_live_bytes": 2797921
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "ef72e6ed57c04206295db4d80990b5a6dc30201eb3c16f7ec887498ecbbb967a",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 84352,
+            "calls": 28,
+            "deallocated_bytes": 49752,
+            "live_bytes": 1591827,
+            "net_bytes": 34600,
+            "peak_extra_bytes": 49480,
+            "start_live_bytes": 1557227
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "25cfcc5df43e35454caf86e717a72a103382733eafad0018627b95306dcc05b4",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 84352,
+            "calls": 28,
+            "deallocated_bytes": 49752,
+            "live_bytes": 2836873,
+            "net_bytes": 34600,
+            "peak_extra_bytes": 49480,
+            "start_live_bytes": 2802273
+          },
+          "depth": 1,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "ef72e6ed57c04206295db4d80990b5a6dc30201eb3c16f7ec887498ecbbb967a",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 12552,
+            "calls": 51,
+            "deallocated_bytes": 8132,
+            "live_bytes": 486547,
+            "net_bytes": 4420,
+            "peak_extra_bytes": 5712,
+            "start_live_bytes": 482127
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "5d90386486cde0b58f37785f832adb68b4793b934f6539c4e52c53ce9596e71d",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 12552,
+            "calls": 51,
+            "deallocated_bytes": 8132,
+            "live_bytes": 523229,
+            "net_bytes": 4420,
+            "peak_extra_bytes": 5712,
+            "start_live_bytes": 518809
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "7f7e55706dea3f5b3f58895b688a9ac79cf1a1ce7c6915276c945b6858580b46",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 12552,
+            "calls": 51,
+            "deallocated_bytes": 8132,
+            "live_bytes": 491154,
+            "net_bytes": 4420,
+            "peak_extra_bytes": 5712,
+            "start_live_bytes": 486734
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "9385c676d5815751616c718b09cb0d4572c30a3d8f72777b6124f81cd46cfd2e",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 12552,
+            "calls": 51,
+            "deallocated_bytes": 8132,
+            "live_bytes": 528459,
+            "net_bytes": 4420,
+            "peak_extra_bytes": 5712,
+            "start_live_bytes": 524039
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "4dcad12fb941117b3778dd8ba68e5ab446d7786f38381822f82ccaf31a403de4",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 12552,
+            "calls": 51,
+            "deallocated_bytes": 8132,
+            "live_bytes": 495506,
+            "net_bytes": 4420,
+            "peak_extra_bytes": 5712,
+            "start_live_bytes": 491086
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "9385c676d5815751616c718b09cb0d4572c30a3d8f72777b6124f81cd46cfd2e",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 12552,
+            "calls": 51,
+            "deallocated_bytes": 8132,
+            "live_bytes": 533323,
+            "net_bytes": 4420,
+            "peak_extra_bytes": 5712,
+            "start_live_bytes": 528903
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "4dcad12fb941117b3778dd8ba68e5ab446d7786f38381822f82ccaf31a403de4",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 93192,
+            "calls": 57,
+            "deallocated_bytes": 56516,
+            "live_bytes": 1621011,
+            "net_bytes": 36676,
+            "peak_extra_bytes": 51712,
+            "start_live_bytes": 1584335
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "9df7ff9146ae5fc1d3d47814dbe4c719323069d8f2bcdbd9ee559cdd13ea477f",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 93192,
+            "calls": 57,
+            "deallocated_bytes": 56516,
+            "live_bytes": 2875357,
+            "net_bytes": 36676,
+            "peak_extra_bytes": 51712,
+            "start_live_bytes": 2838681
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "decebd078a7ade3f950992294f5a5caa1dd11718d6c7bd70e71fcbcae49a8c3e",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 93192,
+            "calls": 57,
+            "deallocated_bytes": 56516,
+            "live_bytes": 1625618,
+            "net_bytes": 36676,
+            "peak_extra_bytes": 51712,
+            "start_live_bytes": 1588942
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "baf3d94d8187638a3e679bc001171f0b8dbaf14876c57786bf79e693e60a88a8",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 93192,
+            "calls": 57,
+            "deallocated_bytes": 56516,
+            "live_bytes": 2880587,
+            "net_bytes": 36676,
+            "peak_extra_bytes": 51712,
+            "start_live_bytes": 2843911
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "a82f6fd2c98e9f1c6a136aaeddd6af8c8bd0db1d57946dc0fd52417d1e5f6dba",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 93192,
+            "calls": 57,
+            "deallocated_bytes": 56516,
+            "live_bytes": 1629970,
+            "net_bytes": 36676,
+            "peak_extra_bytes": 51712,
+            "start_live_bytes": 1593294
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "baf3d94d8187638a3e679bc001171f0b8dbaf14876c57786bf79e693e60a88a8",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 93192,
+            "calls": 57,
+            "deallocated_bytes": 56516,
+            "live_bytes": 2884939,
+            "net_bytes": 36676,
+            "peak_extra_bytes": 51712,
+            "start_live_bytes": 2848263
+          },
+          "depth": 16,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "a82f6fd2c98e9f1c6a136aaeddd6af8c8bd0db1d57946dc0fd52417d1e5f6dba",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 43016,
+            "calls": 110,
+            "deallocated_bytes": 30980,
+            "live_bytes": 551635,
+            "net_bytes": 12036,
+            "peak_extra_bytes": 18196,
+            "start_live_bytes": 539599
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "b6b96162dc1b462d77ee92f4748a9c3e736d605561c64f5d8ed77ce03952add0",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 43016,
+            "calls": 110,
+            "deallocated_bytes": 30980,
+            "live_bytes": 621725,
+            "net_bytes": 12036,
+            "peak_extra_bytes": 18196,
+            "start_live_bytes": 609689
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "8708580b02865e7df2502348088fb3b32efd69d8192bf202d7fd5199d9e99e5b",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 43016,
+            "calls": 110,
+            "deallocated_bytes": 30980,
+            "live_bytes": 556626,
+            "net_bytes": 12036,
+            "peak_extra_bytes": 18196,
+            "start_live_bytes": 544590
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "dd308e189396748aed8b2231722d5cafbd8641a39c6c566f4e0aa154021c0c1f",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 43016,
+            "calls": 110,
+            "deallocated_bytes": 30980,
+            "live_bytes": 627723,
+            "net_bytes": 12036,
+            "peak_extra_bytes": 18196,
+            "start_live_bytes": 615687
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "d6944bee2b97ed9815cbc258c6b6020915f69ef0982d4de71c9ff5cb776f7cdd",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 43016,
+            "calls": 110,
+            "deallocated_bytes": 30980,
+            "live_bytes": 560978,
+            "net_bytes": 12036,
+            "peak_extra_bytes": 18196,
+            "start_live_bytes": 548942
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "dd308e189396748aed8b2231722d5cafbd8641a39c6c566f4e0aa154021c0c1f",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 43016,
+            "calls": 110,
+            "deallocated_bytes": 30980,
+            "live_bytes": 632075,
+            "net_bytes": 12036,
+            "peak_extra_bytes": 18196,
+            "start_live_bytes": 620039
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "d6944bee2b97ed9815cbc258c6b6020915f69ef0982d4de71c9ff5cb776f7cdd",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 122632,
+            "calls": 115,
+            "deallocated_bytes": 78852,
+            "live_bytes": 1685075,
+            "net_bytes": 43780,
+            "peak_extra_bytes": 59392,
+            "start_live_bytes": 1641295
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "7723248a270f7e469c99175f6acd35b56cdada7c69a8278fb8fade37a5a21361",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 122632,
+            "calls": 115,
+            "deallocated_bytes": 78852,
+            "live_bytes": 2971805,
+            "net_bytes": 43780,
+            "peak_extra_bytes": 59392,
+            "start_live_bytes": 2928025
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "47ae2c7000948d6d2b04854ed6310a87bdee8755f313d1b7e4ea080f5e72f473",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 122632,
+            "calls": 115,
+            "deallocated_bytes": 78852,
+            "live_bytes": 1690066,
+            "net_bytes": 43780,
+            "peak_extra_bytes": 59392,
+            "start_live_bytes": 1646286
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "f9dd3e918375b1e622813bd431cfe963003a5921096473beda824c45f543c121",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 122632,
+            "calls": 115,
+            "deallocated_bytes": 78852,
+            "live_bytes": 2978827,
+            "net_bytes": 43780,
+            "peak_extra_bytes": 59392,
+            "start_live_bytes": 2935047
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "6a561a3be97cfef09334d281f62f0c158f310bd8d8f6d21cb62ed4895085ffed",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 122632,
+            "calls": 115,
+            "deallocated_bytes": 78852,
+            "live_bytes": 1695442,
+            "net_bytes": 43780,
+            "peak_extra_bytes": 59392,
+            "start_live_bytes": 1651662
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "f9dd3e918375b1e622813bd431cfe963003a5921096473beda824c45f543c121",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 122632,
+            "calls": 115,
+            "deallocated_bytes": 78852,
+            "live_bytes": 2983179,
+            "net_bytes": 43780,
+            "peak_extra_bytes": 59392,
+            "start_live_bytes": 2939399
+          },
+          "depth": 64,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "6a561a3be97cfef09334d281f62f0c158f310bd8d8f6d21cb62ed4895085ffed",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 166728,
+            "calls": 314,
+            "deallocated_bytes": 123204,
+            "live_bytes": 736867,
+            "net_bytes": 43524,
+            "peak_extra_bytes": 72532,
+            "start_live_bytes": 693343
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "f6ba9bcb38565a7bd18e25fda6bde1859dabbbc4ef79138ed0c3b71568baeac6",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 166728,
+            "calls": 314,
+            "deallocated_bytes": 123204,
+            "live_bytes": 945853,
+            "net_bytes": 43524,
+            "peak_extra_bytes": 72532,
+            "start_live_bytes": 902329
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "ba019ddc2a3dc161ea435871dbe09ee447e0a658b03de33d183b48a56138d857",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 166728,
+            "calls": 314,
+            "deallocated_bytes": 123204,
+            "live_bytes": 743394,
+            "net_bytes": 43524,
+            "peak_extra_bytes": 72532,
+            "start_live_bytes": 699870
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "790a3fb60fc63887d7fa32776635eae3a97d45ca99a799aa100f572a2997c116",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 166728,
+            "calls": 314,
+            "deallocated_bytes": 123204,
+            "live_bytes": 954923,
+            "net_bytes": 43524,
+            "peak_extra_bytes": 72532,
+            "start_live_bytes": 911399
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "c9471c7694d0b3e7e729dc85cbd59edee7beb6901ae27d26ccdbe4357971570c",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 166728,
+            "calls": 314,
+            "deallocated_bytes": 123204,
+            "live_bytes": 747746,
+            "net_bytes": 43524,
+            "peak_extra_bytes": 72532,
+            "start_live_bytes": 704222
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "790a3fb60fc63887d7fa32776635eae3a97d45ca99a799aa100f572a2997c116",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 166728,
+            "calls": 314,
+            "deallocated_bytes": 123204,
+            "live_bytes": 959275,
+            "net_bytes": 43524,
+            "peak_extra_bytes": 72532,
+            "start_live_bytes": 915751
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "c9471c7694d0b3e7e729dc85cbd59edee7beb6901ae27d26ccdbe4357971570c",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 240200,
+            "calls": 317,
+            "deallocated_bytes": 168004,
+            "live_bytes": 1867235,
+            "net_bytes": 72196,
+            "peak_extra_bytes": 101204,
+            "start_live_bytes": 1795039
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "4df58217eeeef755a9f4e477bfc35aaa56e3c3c36fddc832a3bbedfb703e5e3a",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 240200,
+            "calls": 317,
+            "deallocated_bytes": 168004,
+            "live_bytes": 3286717,
+            "net_bytes": 72196,
+            "peak_extra_bytes": 101204,
+            "start_live_bytes": 3214521
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "9a386b2521877714bf44866f1f6d969f601536cfe494f198e8fdf8dc2400f52f",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 240200,
+            "calls": 317,
+            "deallocated_bytes": 168004,
+            "live_bytes": 1873762,
+            "net_bytes": 72196,
+            "peak_extra_bytes": 101204,
+            "start_live_bytes": 1801566
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "b5c4504ab0fd31f3d8b2d71d11cfc33276e4c3332d084e5d03d54d86f9b72579",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 240200,
+            "calls": 317,
+            "deallocated_bytes": 168004,
+            "live_bytes": 3295787,
+            "net_bytes": 72196,
+            "peak_extra_bytes": 101204,
+            "start_live_bytes": 3223591
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "a0ec0890049c83699e3b2a9e95fc1abd249b5dbdf31eef899c16cc28dabae9e2",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 240200,
+            "calls": 317,
+            "deallocated_bytes": 168004,
+            "live_bytes": 1878114,
+            "net_bytes": 72196,
+            "peak_extra_bytes": 101204,
+            "start_live_bytes": 1805918
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "b5c4504ab0fd31f3d8b2d71d11cfc33276e4c3332d084e5d03d54d86f9b72579",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 240200,
+            "calls": 317,
+            "deallocated_bytes": 168004,
+            "live_bytes": 3300139,
+            "net_bytes": 72196,
+            "peak_extra_bytes": 101204,
+            "start_live_bytes": 3227943
+          },
+          "depth": 256,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "a0ec0890049c83699e3b2a9e95fc1abd249b5dbdf31eef899c16cc28dabae9e2",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 331624,
+            "calls": 576,
+            "deallocated_bytes": 246116,
+            "live_bytes": 976235,
+            "net_bytes": 85508,
+            "peak_extra_bytes": 144980,
+            "start_live_bytes": 890727
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "cbb25fb48c3cdb9beb04a3a9b562610d9cedda6f759a77dc2a18483e9da72d28",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 331624,
+            "calls": 576,
+            "deallocated_bytes": 246116,
+            "live_bytes": 1372877,
+            "net_bytes": 85508,
+            "peak_extra_bytes": 144980,
+            "start_live_bytes": 1287369
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "4f48e3407116729fec590c05354686aa266a4507c25a12fa566a7948abd1bb2f",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 331624,
+            "calls": 576,
+            "deallocated_bytes": 246116,
+            "live_bytes": 984810,
+            "net_bytes": 85508,
+            "peak_extra_bytes": 144980,
+            "start_live_bytes": 899302
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "7a3a049e634d35414b16281fc87f17180facfdad6419910cc489bf15429c0d27",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 331624,
+            "calls": 576,
+            "deallocated_bytes": 246116,
+            "live_bytes": 1386043,
+            "net_bytes": 85508,
+            "peak_extra_bytes": 144980,
+            "start_live_bytes": 1300535
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "1d768660868f785db98a03e96a7ee413e31a09203695bf01536d9b157f875141",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 331624,
+            "calls": 576,
+            "deallocated_bytes": 246116,
+            "live_bytes": 989162,
+            "net_bytes": 85508,
+            "peak_extra_bytes": 144980,
+            "start_live_bytes": 903654
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "7a3a049e634d35414b16281fc87f17180facfdad6419910cc489bf15429c0d27",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 331624,
+            "calls": 576,
+            "deallocated_bytes": 246116,
+            "live_bytes": 1390395,
+            "net_bytes": 85508,
+            "peak_extra_bytes": 144980,
+            "start_live_bytes": 1304887
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "1d768660868f785db98a03e96a7ee413e31a09203695bf01536d9b157f875141",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 64,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 396904,
+            "calls": 578,
+            "deallocated_bytes": 286820,
+            "live_bytes": 2102507,
+            "net_bytes": 110084,
+            "peak_extra_bytes": 169556,
+            "start_live_bytes": 1992423
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "26b93daa7bd77f177f7e6c6d39d27e55426e4dd1aa90101b9bd8aa5b5a2e655e",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 396904,
+            "calls": 578,
+            "deallocated_bytes": 286820,
+            "live_bytes": 3701453,
+            "net_bytes": 110084,
+            "peak_extra_bytes": 169556,
+            "start_live_bytes": 3591369
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "3f3d48cc9b5c9c1d64130b95824a0542c15336fd81b986c28551d1e2c1c790d6",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "slice"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 396904,
+            "calls": 578,
+            "deallocated_bytes": 286820,
+            "live_bytes": 2111082,
+            "net_bytes": 110084,
+            "peak_extra_bytes": 169556,
+            "start_live_bytes": 2000998
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "b4ab356fb3a640683f29b5631715c02600d88745770931551e2be38d72288de9",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 396904,
+            "calls": 578,
+            "deallocated_bytes": 286820,
+            "live_bytes": 3714619,
+            "net_bytes": 110084,
+            "peak_extra_bytes": 169556,
+            "start_live_bytes": 3604535
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "ba1f16f0acb3e0eaa43e383afbdd8062af5ec6d7b125acba81e777d467c0fcbd",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "clone"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 396904,
+            "calls": 578,
+            "deallocated_bytes": 286820,
+            "live_bytes": 2115434,
+            "net_bytes": 110084,
+            "peak_extra_bytes": 169556,
+            "start_live_bytes": 2005350
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "b4ab356fb3a640683f29b5631715c02600d88745770931551e2be38d72288de9",
+            "synthetic_glyphs": 0
+          },
+          "first_line": false,
+          "length": 4096,
+          "mode": "mixed"
+        },
+        {
+          "counts": {
+            "allocated_bytes": 396904,
+            "calls": 578,
+            "deallocated_bytes": 286820,
+            "live_bytes": 3718971,
+            "net_bytes": 110084,
+            "peak_extra_bytes": 169556,
+            "start_live_bytes": 3608887
+          },
+          "depth": 512,
+          "digest": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "ba1f16f0acb3e0eaa43e383afbdd8062af5ec6d7b125acba81e777d467c0fcbd",
+            "synthetic_glyphs": 0
+          },
+          "first_line": true,
+          "length": 4096,
+          "mode": "mixed"
+        }
+      ],
+      "scope": "fresh break_all; context initialization and output checking excluded"
+    }
+  },
+  "timing_scope": "fresh break_all, context init/build/check excluded; 10 samples per case, CPU10, ABBA repeated after warmup; observable timing variance",
+  "timing_runs": [
+    {
+      "file": "repeat-timing-0-before-timing.json",
+      "case_medians_ns": [
+        11210.5,
+        11070.5,
+        11664.0,
+        19346.5,
+        11489.5,
+        11385.0,
+        526419.5,
+        527955.0,
+        559665.5,
+        561865.5,
+        989280.0,
+        554811.5,
+        23957.0,
+        24725.0,
+        28148.0,
+        28776.0,
+        25947.0,
+        26540.5,
+        896736.0,
+        1614774.0,
+        1195112.0,
+        1109237.5,
+        1041523.5,
+        1059823.0,
+        65025.5,
+        64396.0,
+        92300.5,
+        92055.0,
+        76654.5,
+        80949.5,
+        1529249.0,
+        1543008.5,
+        2420537.0,
+        2449941.0,
+        1980794.5,
+        2660627.5,
+        608032.5,
+        599406.5,
+        1115663.5,
+        1115349.5,
+        849695.5,
+        896491.0,
+        6564420.0,
+        6261190.0,
+        14845168.5,
+        13671219.0,
+        10051694.0,
+        10004060.0,
+        1756628.0,
+        1776603.5,
+        3620433.5,
+        3580202.0,
+        2587255.5,
+        2705398.0,
+        11882078.5,
+        12627565.5,
+        26349946.0,
+        26382633.0,
+        18695006.0,
+        18974804.0
+      ]
+    },
+    {
+      "file": "repeat-timing-1-after-timing.json",
+      "case_medians_ns": [
+        18474.0,
+        19452.0,
+        19940.0,
+        19906.0,
+        18439.0,
+        18579.0,
+        911822.5,
+        897643.5,
+        958687.5,
+        949783.0,
+        906409.5,
+        926873.5,
+        29160.5,
+        28182.0,
+        34328.5,
+        33874.5,
+        31220.5,
+        32757.5,
+        1014563.5,
+        1039149.0,
+        1409500.5,
+        1384810.0,
+        1214215.0,
+        1204785.5,
+        66248.0,
+        64502.0,
+        103754.5,
+        109447.0,
+        86293.0,
+        83010.5,
+        1456470.5,
+        1508191.0,
+        2740425.0,
+        2834820.0,
+        2092371.5,
+        2120344.0,
+        302811.5,
+        304418.0,
+        725721.0,
+        644003.0,
+        495827.0,
+        495547.5,
+        3272466.5,
+        3282385.0,
+        5012367.0,
+        4834612.5,
+        3255006.0,
+        3208664.0,
+        676829.0,
+        673372.0,
+        1248404.0,
+        1211560.5,
+        834818.5,
+        823574.0,
+        4778213.5,
+        4769168.5,
+        9198507.0,
+        9209612.5,
+        6054555.0,
+        6043449.0
+      ]
+    },
+    {
+      "file": "repeat-timing-2-after-timing.json",
+      "case_medians_ns": [
+        10511.5,
+        10477.0,
+        10546.0,
+        10546.5,
+        10407.0,
+        10477.0,
+        475397.5,
+        469496.0,
+        487585.5,
+        486538.0,
+        480915.5,
+        484966.5,
+        16623.0,
+        16763.0,
+        19591.0,
+        19486.5,
+        17635.5,
+        17741.0,
+        564274.5,
+        564240.0,
+        719854.0,
+        713777.5,
+        639812.5,
+        636564.5,
+        41802.0,
+        42396.0,
+        57062.5,
+        57691.5,
+        46761.5,
+        47110.0,
+        981038.0,
+        975555.0,
+        1465131.5,
+        1473303.0,
+        1117409.5,
+        1109413.0,
+        223992.0,
+        223538.0,
+        375694.0,
+        373913.0,
+        268168.5,
+        266771.5,
+        2494432.5,
+        2496423.0,
+        4614916.5,
+        4585511.5,
+        3101731.5,
+        3079346.0,
+        667156.0,
+        669915.0,
+        1207440.0,
+        1220186.5,
+        825668.5,
+        822316.5,
+        4783067.0,
+        4776956.0,
+        9178426.5,
+        9202243.5,
+        6026721.0,
+        6018095.5
+      ]
+    },
+    {
+      "file": "repeat-timing-3-before-timing.json",
+      "case_medians_ns": [
+        11454.5,
+        11420.0,
+        11909.0,
+        11874.0,
+        11838.5,
+        12048.0,
+        532181.5,
+        528549.5,
+        566370.0,
+        565916.0,
+        561097.0,
+        562564.0,
+        24446.0,
+        24794.5,
+        28566.5,
+        28950.5,
+        25772.5,
+        25772.5,
+        957255.5,
+        944894.0,
+        1096212.0,
+        1107352.0,
+        1044597.0,
+        993295.5,
+        66946.0,
+        66387.0,
+        90135.0,
+        90833.5,
+        75782.0,
+        76585.0,
+        1510809.5,
+        1552088.0,
+        2326001.5,
+        2434680.5,
+        1945139.0,
+        1963263.5,
+        337245.0,
+        348385.5,
+        604016.5,
+        606287.0,
+        459333.5,
+        482801.0,
+        3715142.0,
+        3775244.0,
+        7279560.0,
+        7313714.0,
+        5405941.5,
+        5486054.0,
+        1034644.0,
+        1020919.0,
+        1937107.0,
+        1938888.0,
+        1451407.0,
+        1454131.5,
+        7002172.0,
+        7045231.5,
+        14335233.0,
+        14308551.5,
+        10467549.5,
+        10368265.5
+      ]
+    },
+    {
+      "file": "timing-0-before-timing.json",
+      "case_medians_ns": [
+        19765.5,
+        18683.5,
+        18683.5,
+        19068.0,
+        19382.0,
+        22804.0,
+        899912.5,
+        991898.0,
+        997730.5,
+        981177.5,
+        996962.0,
+        1007893.0,
+        42605.0,
+        40230.5,
+        49834.0,
+        49066.0,
+        45783.5,
+        44211.5,
+        1611001.0,
+        1552366.5,
+        1963577.0,
+        2051686.0,
+        1755963.5,
+        1839463.0,
+        111751.5,
+        114545.5,
+        161830.5,
+        161759.5,
+        135184.0,
+        137210.0,
+        3659194.5,
+        2743461.5,
+        4209464.5,
+        3795880.5,
+        3072743.5,
+        3308958.0,
+        566858.0,
+        527222.0,
+        983098.0,
+        1011280.0,
+        775240.0,
+        2427310.5,
+        6104314.5,
+        6124081.0,
+        24661225.0,
+        12601156.0,
+        7226193.5,
+        7181667.5,
+        1036110.0,
+        1025074.5,
+        1967942.0,
+        1971399.5,
+        1550201.5,
+        1478471.0,
+        11427731.0,
+        11503442.5,
+        15405311.5,
+        14885947.0,
+        10867857.0,
+        11008104.5
+      ]
+    },
+    {
+      "file": "timing-1-after-timing.json",
+      "case_medians_ns": [
+        10931.0,
+        10826.0,
+        10930.5,
+        10860.5,
+        10476.5,
+        10477.0,
+        474664.0,
+        479064.5,
+        502008.5,
+        486327.5,
+        492718.5,
+        496490.5,
+        16658.0,
+        16798.0,
+        19592.0,
+        19836.0,
+        17950.5,
+        18125.0,
+        577719.5,
+        581386.5,
+        730924.0,
+        721565.0,
+        636494.0,
+        639008.0,
+        42919.5,
+        42815.0,
+        57692.0,
+        58285.5,
+        47599.0,
+        47494.5,
+        986520.0,
+        989348.5,
+        1493522.5,
+        1485141.0,
+        1122822.0,
+        1128374.5,
+        225842.5,
+        230277.5,
+        382958.5,
+        382539.0,
+        271067.0,
+        270787.0,
+        2531832.5,
+        2541680.5,
+        4701974.5,
+        4663000.5,
+        3160853.0,
+        3268274.0,
+        675642.0,
+        674943.5,
+        1227274.5,
+        1237577.0,
+        846132.5,
+        842151.5,
+        4852908.5,
+        5432898.5,
+        9524919.5,
+        9720030.0,
+        6181387.5,
+        6694501.5
+      ]
+    },
+    {
+      "file": "timing-2-after-timing.json",
+      "case_medians_ns": [
+        10406.5,
+        10476.5,
+        10476.5,
+        10511.5,
+        10512.0,
+        10476.5,
+        479832.0,
+        481089.5,
+        495302.5,
+        486398.0,
+        488388.5,
+        696874.5,
+        16902.5,
+        16798.0,
+        19522.0,
+        19696.5,
+        17600.5,
+        18055.0,
+        574193.0,
+        570595.5,
+        720342.5,
+        720831.5,
+        637402.0,
+        630278.0,
+        42779.5,
+        43339.0,
+        57586.5,
+        57307.0,
+        46830.5,
+        47284.5,
+        977790.0,
+        976043.5,
+        1470403.5,
+        1507421.0,
+        1121704.5,
+        1119854.0,
+        224236.0,
+        224131.0,
+        375345.0,
+        376427.5,
+        269041.0,
+        270194.0,
+        2516816.0,
+        2504174.0,
+        4650394.0,
+        4637123.5,
+        3154392.0,
+        3136756.5,
+        670508.5,
+        667958.5,
+        1222595.0,
+        1229789.0,
+        838904.0,
+        833735.5,
+        4826472.5,
+        4787429.0,
+        9473653.5,
+        9316887.0,
+        7166651.0,
+        6931728.5
+      ]
+    },
+    {
+      "file": "timing-3-before-timing.json",
+      "case_medians_ns": [
+        11664.0,
+        11350.0,
+        11838.5,
+        11874.0,
+        11839.0,
+        11909.0,
+        544613.5,
+        534276.5,
+        562633.0,
+        563961.0,
+        560502.5,
+        561096.5,
+        25284.0,
+        24864.5,
+        28741.0,
+        29056.0,
+        25843.0,
+        26995.0,
+        971818.0,
+        968570.0,
+        1143566.0,
+        1156417.0,
+        1057203.0,
+        1067260.5,
+        68692.0,
+        65968.5,
+        91042.0,
+        91042.0,
+        88003.5,
+        80809.5,
+        1594727.0,
+        1725720.5,
+        2363122.5,
+        2473826.5,
+        2002096.0,
+        2011455.5,
+        346011.0,
+        378732.5,
+        610686.5,
+        604540.0,
+        464606.5,
+        484058.0,
+        3767907.5,
+        3829161.0,
+        7418371.0,
+        7401014.5,
+        5442327.5,
+        5530890.0,
+        998603.0,
+        1039776.5,
+        1905151.5,
+        1907037.5,
+        1459892.5,
+        1456434.5,
+        7195531.5,
+        7155755.5,
+        14520485.5,
+        14570389.5,
+        10719227.5,
+        10580516.0
+      ]
+    },
+    {
+      "file": "warmup-timing-0-before-timing.json",
+      "case_medians_ns": [
+        11420.0,
+        11525.0,
+        11698.5,
+        11874.0,
+        11524.5,
+        11664.5,
+        528480.0,
+        536128.0,
+        547896.5,
+        571818.5,
+        558129.0,
+        563926.0,
+        25109.0,
+        23817.0,
+        27938.5,
+        28566.0,
+        26402.0,
+        26715.5,
+        911787.0,
+        947792.0,
+        1170701.5,
+        1145487.0,
+        1040790.0,
+        1045469.5,
+        65374.5,
+        65061.0,
+        89994.5,
+        89401.0,
+        78226.5,
+        78959.5,
+        1573181.5,
+        1543113.0,
+        2498972.0,
+        2432305.5,
+        1880393.0,
+        2009361.0,
+        340108.5,
+        350550.5,
+        595111.5,
+        605588.0,
+        465200.5,
+        460556.0,
+        3731939.5,
+        4003740.0,
+        7373536.0,
+        7354538.0,
+        5496146.0,
+        5563546.5,
+        1008976.0,
+        1006287.0,
+        1950517.0,
+        1927398.5,
+        1454654.5,
+        1427660.0,
+        7042367.5,
+        7701770.5,
+        16270907.5,
+        15632807.0,
+        11163621.0,
+        13202387.0
+      ]
+    },
+    {
+      "file": "warmup-timing-1-after-timing.json",
+      "case_medians_ns": [
+        10442.0,
+        10406.5,
+        10442.0,
+        10477.0,
+        10477.0,
+        10477.0,
+        473686.5,
+        472185.0,
+        477912.5,
+        481159.5,
+        477737.5,
+        482522.0,
+        16553.0,
+        16833.0,
+        19521.0,
+        19626.0,
+        17705.5,
+        17670.5,
+        565427.5,
+        563577.0,
+        712451.0,
+        710809.0,
+        627973.5,
+        623608.5,
+        42396.0,
+        42396.0,
+        56818.0,
+        57412.5,
+        47145.0,
+        47110.5,
+        969513.5,
+        968326.5,
+        1660801.5,
+        2511684.5,
+        1840896.0,
+        1112800.0,
+        235306.5,
+        222141.0,
+        382329.5,
+        375764.0,
+        278784.5,
+        265515.0,
+        2646484.0,
+        2499426.0,
+        4604369.5,
+        4560402.5,
+        5347516.5,
+        3207057.5,
+        702113.5,
+        665270.5,
+        1677110.0,
+        2215752.0,
+        1460626.0,
+        1431187.0,
+        5278056.5,
+        5712664.5,
+        13113963.5,
+        11280925.5,
+        7149963.0,
+        6028921.0
+      ]
+    }
+  ],
+  "standard_matrix": {
+    "cases": 54,
+    "warm_operations": 378,
+    "cold_processes": 108,
+    "memory_processes": 54,
+    "timing_and_memory_seven_digests_equal": true,
+    "conditions": {
+      "source_fingerprint_version": 2,
+      "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
+      "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+      "cpu": {
+        "models": [
+          "AMD Ryzen 5 5600G with Radeon Graphics"
+        ],
+        "machine": "x86_64",
+        "logical_cpus": 12,
+        "affinity": [
+          10
+        ]
+      },
+      "os": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+      "features": [
+        "complex-scripts"
+      ],
+      "profile": {
+        "name": "release",
+        "opt_level": 3,
+        "debug": 0,
+        "incremental": false,
+        "effective": {
+          "cold": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          },
+          "timing": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": true
+          },
+          "memory": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          }
+        }
+      },
+      "build_configuration": {
+        "workspace_profiles": {},
+        "cargo_configs": {},
+        "environment": {
+          "CARGO_BUILD_JOBS": "1",
+          "CARGO_PROFILE_RELEASE_OPT_LEVEL": "3",
+          "CARGO_PROFILE_RELEASE_DEBUG": "0",
+          "CARGO_PROFILE_RELEASE_INCREMENTAL": "false",
+          "CARGO_INCREMENTAL": "0"
+        }
+      },
+      "flags": {
+        "RUSTFLAGS": "",
+        "CARGO_ENCODED_RUSTFLAGS": "",
+        "RUSTDOCFLAGS": "",
+        "RUSTC": "",
+        "RUSTC_WRAPPER": "",
+        "RUSTC_WORKSPACE_WRAPPER": "",
+        "CARGO_PROFILE_RELEASE_LTO": "",
+        "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "",
+        "CARGO_PROFILE_RELEASE_PANIC": "",
+        "CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS": "",
+        "CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS": ""
+      },
+      "font_hashes": {
+        "arabic.ttf": "e9885fbcf3bdbddea94d1679d636a80f7421c6b63632a35c6f884a9ee74067d9",
+        "cjk.otf": "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b",
+        "emoji-color.ttf": "6047984e1da3b32e9629740378f2a143daa2c630f140edcf69b68696e3766362",
+        "emoji-mono.ttf": "76c91d377b0d3acb5e0feb696924d1fec7ea9cd4c7860dff52aa0cdd998f76f3",
+        "latin.ttf": "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25"
+      },
+      "input_hash": "1dbf30237e3d08dc20ea9f61a2576e7a6023b663584a464ca92f02b4ed35f292",
+      "harness_hash": "7c139740f9da6bc5ab72420426c81ad5456569e36a99b18b2266fe392b18f80b",
+      "lock_hash": "4d8a1d53a12ba7e53b177c5a309d0fc0c7cd6c8ebd733e459027e7f63bf09f3e",
+      "measurement_config": {
+        "quick": true,
+        "cold_samples": 2
+      }
+    }
+  },
+  "checks": {
+    "workspace": 1060,
+    "no_default": 607,
+    "complex_scripts": 610,
+    "fmt": "passed",
+    "clippy": "passed",
+    "docs": "passed",
+    "snapshots": "passed",
+    "independent_review": "no findings"
+  }
+}
