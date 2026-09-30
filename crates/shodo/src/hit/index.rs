@@ -28,6 +28,7 @@ pub(super) struct LineIndex {
     pub(super) stops: Vec<Caret>,
     pub(super) visual: Vec<usize>,
     pub(super) segments: Vec<Segment>,
+    pub(super) source: super::source::SourceIndex,
     range: Range<u32>,
     spatial: super::spatial::Tree,
     combined: Vec<CombineHit>,
@@ -51,6 +52,7 @@ impl LineIndex {
             stops: Vec::new(),
             visual: Vec::new(),
             segments: Vec::new(),
+            source: super::source::SourceIndex::Ordered,
             range: range.start as u32..range.end as u32,
             spatial: super::spatial::Tree::new(std::iter::empty(), false),
             combined: Vec::new(),
@@ -439,6 +441,7 @@ impl LineIndex {
                 .map(|(i, group)| (i, group.rect)),
             false,
         );
+        result.source = super::source::SourceIndex::new(&result.segments);
         result.spatial = super::spatial::Tree::new(
             result
                 .segments

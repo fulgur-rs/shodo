@@ -19,17 +19,19 @@ impl LineLayout<'_> {
         for line in a.line..=b.line {
             let from = if line == a.line { a.offset } else { 0 };
             let to = if line == b.line { b.offset } else { u32::MAX };
-            let mut rects: Vec<_> = self.index[line]
-                .segments
-                .iter()
-                .filter(|s| {
-                    s.text.start < to
-                        && s.text.end > from
-                        && s.rect.inline_size > 0.0
-                        && s.rect.block_size > 0.0
-                })
-                .map(|s| s.rect)
-                .collect();
+            let mut rects = Vec::new();
+            let index = &self.index[line];
+            index.source.for_each(from, to, &index.segments, |s| {
+                #[cfg(test)]
+                tests::visit();
+                if s.text.start < to
+                    && s.text.end > from
+                    && s.rect.inline_size > 0.0
+                    && s.rect.block_size > 0.0
+                {
+                    rects.push(s.rect);
+                }
+            });
             rects.sort_by(|a, b| {
                 a.block_start
                     .total_cmp(&b.block_start)
@@ -75,3 +77,6 @@ impl LineLayout<'_> {
         result
     }
 }
+
+#[cfg(test)]
+pub(super) mod tests;

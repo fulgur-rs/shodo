@@ -7,6 +7,7 @@
 mod index;
 mod navigation;
 mod selection;
+mod source;
 mod spatial;
 use crate::Line;
 use crate::geometry::LogicalRect;
