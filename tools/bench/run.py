@@ -18,7 +18,8 @@ from pathlib import Path
 OPS = ("build", "next_line", "all_lines", "intrinsic", "reuse_widths", "rebuild_widths", "page_retry")
 PHASES = ("context_init", "font_initialization_registration", "build", "all_lines")
 SCOPES = ("font_context_init", "build", "plain_lines", "release_plain_lines", "justify_lines", "release_justify_lines", "reuse_widths", "release_reuse", "rebuild_widths", "release_rebuild", "page_retry", "release_pages", "intrinsic", "release_intrinsic", "drop_paragraphs", "context_shrink_zero", "drop_context", "drop_fonts")
-CONDITIONS = ("rustc", "cargo", "cpu", "os", "features", "profile", "flags", "build_configuration", "font_hashes", "input_hash", "harness_hash", "lock_hash", "measurement_config")
+SOURCE_FINGERPRINT_VERSION = 2
+CONDITIONS = ("rustc", "cargo", "cpu", "os", "features", "profile", "flags", "build_configuration", "font_hashes", "input_hash", "harness_hash", "lock_hash", "measurement_config", "source_fingerprint_version")
 ROOT = Path(__file__).resolve().parents[2]
 VARIANTS = ("many-short-latin", "nested-atomic", "preserved-tabs", "float-retry", "justify", "fallback")
 
@@ -81,6 +82,10 @@ def validate_report(report):
     require(isinstance(metadata.get("revision"),str) and metadata["revision"], "missing revision")
     conditions=metadata.get("conditions",{})
     require(isinstance(conditions,dict) and all(k in conditions for k in CONDITIONS), "missing conditions")
+    version=conditions["source_fingerprint_version"]
+    require(type(version) is int and version==SOURCE_FINGERPRINT_VERSION, "unsupported source fingerprint coverage")
+    source=metadata.get("source_hash")
+    require(isinstance(source,str) and len(source)==64 and all(c in "0123456789abcdef" for c in source), "missing/invalid engine source hash")
     selected=keyed(report.get("selected"));rows=keyed(report.get("rows"))
     require(rows.keys()==selected.keys(), "missing or extra measured cases")
     for key,row in rows.items():
@@ -215,7 +220,7 @@ def tree_hash(paths):
 def source_hashes():
     harness=list((ROOT/"dev/bench/src").rglob("*.rs"))+list((ROOT/"dev/bench/benches").rglob("*.rs"))+list((ROOT/"dev/fixtures/src").rglob("*.rs"))
     harness += [ROOT/"tools/bench/run.py",ROOT/"dev/bench/Cargo.toml",ROOT/"dev/fixtures/Cargo.toml",ROOT/"dev/fixtures/assets/cases.json"]
-    engine=list((ROOT/"src").rglob("*.rs"))+[ROOT/"Cargo.toml"]
+    engine=list((ROOT/"crates/shodo/src").rglob("*.rs"))+[ROOT/"crates/shodo/Cargo.toml",ROOT/"Cargo.toml"]
     return dict(harness_hash=tree_hash(harness),source_hash=tree_hash(engine))
 
 def collect(stage,args):
@@ -279,7 +284,7 @@ def collect(stage,args):
     cpu=[]
     if Path("/proc/cpuinfo").is_file():
         cpu=sorted({line.split(":",1)[1].strip() for line in Path("/proc/cpuinfo").read_text().splitlines() if line.startswith("model name")})
-    conditions=dict(rustc=command(["rustc","+stable","-Vv"],"rustc").strip(),cargo=command(cargo+["-V"],"cargo").strip(),cpu=dict(models=cpu,machine=platform.machine(),logical_cpus=os.cpu_count(),affinity=sorted(os.sched_getaffinity(0)) if hasattr(os,"sched_getaffinity") else None),os=platform.platform(),features=["complex-scripts"],profile=dict(name="release",opt_level=3,debug=0,incremental=False,effective=actual_profiles),build_configuration=initial_build,flags={k:env.get(k,"") for k in ("RUSTFLAGS","CARGO_ENCODED_RUSTFLAGS","RUSTDOCFLAGS","RUSTC","RUSTC_WRAPPER","RUSTC_WORKSPACE_WRAPPER","CARGO_PROFILE_RELEASE_LTO","CARGO_PROFILE_RELEASE_CODEGEN_UNITS","CARGO_PROFILE_RELEASE_PANIC","CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS","CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS")},font_hashes={p.name:file_hash(p) for p in sorted((ROOT/"dev/fixtures/assets/fonts").iterdir()) if p.is_file()},input_hash=hashlib.sha256(json.dumps(selected,sort_keys=True,separators=(",",":")).encode()).hexdigest(),harness_hash=initial_hashes["harness_hash"],lock_hash=file_hash(stage/"Cargo.lock"),measurement_config=dict(quick=args.quick,cold_samples=args.cold_samples))
+    conditions=dict(source_fingerprint_version=SOURCE_FINGERPRINT_VERSION,rustc=command(["rustc","+stable","-Vv"],"rustc").strip(),cargo=command(cargo+["-V"],"cargo").strip(),cpu=dict(models=cpu,machine=platform.machine(),logical_cpus=os.cpu_count(),affinity=sorted(os.sched_getaffinity(0)) if hasattr(os,"sched_getaffinity") else None),os=platform.platform(),features=["complex-scripts"],profile=dict(name="release",opt_level=3,debug=0,incremental=False,effective=actual_profiles),build_configuration=initial_build,flags={k:env.get(k,"") for k in ("RUSTFLAGS","CARGO_ENCODED_RUSTFLAGS","RUSTDOCFLAGS","RUSTC","RUSTC_WRAPPER","RUSTC_WORKSPACE_WRAPPER","CARGO_PROFILE_RELEASE_LTO","CARGO_PROFILE_RELEASE_CODEGEN_UNITS","CARGO_PROFILE_RELEASE_PANIC","CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS","CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS")},font_hashes={p.name:file_hash(p) for p in sorted((ROOT/"dev/fixtures/assets/fonts").iterdir()) if p.is_file()},input_hash=hashlib.sha256(json.dumps(selected,sort_keys=True,separators=(",",":")).encode()).hexdigest(),harness_hash=initial_hashes["harness_hash"],lock_hash=file_hash(stage/"Cargo.lock"),measurement_config=dict(quick=args.quick,cold_samples=args.cold_samples))
     metadata=dict(revision=command(["git","rev-parse","HEAD"],"revision").strip(),dirty_status=command(["git","status","--porcelain"],"status").splitlines(),source_hash=initial_hashes["source_hash"],conditions=conditions,process_wall_scope="Parent subprocess invocation, startup, probe work, JSON output and log write; inner cold phases reported separately.")
     report=dict(schema=1,metadata=metadata,selected=selected,rows=rows)
     validate_report(report)

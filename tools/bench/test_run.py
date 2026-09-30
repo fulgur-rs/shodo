@@ -30,7 +30,131 @@ def valid_report():
     timing["page_retry"]["digest"]["height_retries"]=2
     timing["intrinsic"]["digest"].update(lines=0,glyphs=0,runs=0,intrinsic_measurements=1)
     timing["next_line"]["digest"].update(lines=1,glyphs=5)
-    return dict(schema=1, metadata=dict(revision="one",conditions=dict(rustc="rust",cargo="cargo",cpu="cpu",os="os",features=["complex-scripts"],profile="release",flags=[],build_configuration=dict(workspace_profiles={},cargo_configs={},environment={}),font_hashes=["b"*64],input_hash="c"*64,harness_hash="d"*64,lock_hash="e"*64,measurement_config=dict(quick=True,cold_samples=2))), selected=[dict(key=key,settings=settings)], rows=[dict(key=key,settings=settings,timing=timing,cold=[cold,cold],process_wall_ns=[20,20],memory=memory)])
+    return dict(schema=1, metadata=dict(revision="one",source_hash="f"*64,conditions=dict(source_fingerprint_version=2,rustc="rust",cargo="cargo",cpu="cpu",os="os",features=["complex-scripts"],profile="release",flags=[],build_configuration=dict(workspace_profiles={},cargo_configs={},environment={}),font_hashes=["b"*64],input_hash="c"*64,harness_hash="d"*64,lock_hash="e"*64,measurement_config=dict(quick=True,cold_samples=2))), selected=[dict(key=key,settings=settings)], rows=[dict(key=key,settings=settings,timing=timing,cold=[cold,cold],process_wall_ns=[20,20],memory=memory)])
+
+class SourceFingerprintTests(unittest.TestCase):
+    def prepare(self, root):
+        for rel, body in {
+            "Cargo.toml": "[workspace]\n",
+            "crates/shodo/Cargo.toml": '[package]\nname="engine"\nversion="0.0.0"\n',
+            "crates/shodo/src/lib.rs": "pub fn engine() {}\n",
+            "dev/bench/Cargo.toml": "",
+            "dev/fixtures/Cargo.toml": "",
+            "dev/fixtures/assets/cases.json": "[]",
+            "tools/bench/run.py": "# runner\n",
+        }.items():
+            p=root/rel;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(body)
+
+    def test_engine_source_bytes_and_file_set_change_fingerprint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);self.prepare(root)
+            with patch.object(runner,"ROOT",root):
+                before=runner.source_hashes()
+                source=root/"crates/shodo/src/lib.rs"
+                source.write_text("pub fn changed() {}\n")
+                changed=runner.source_hashes()
+                self.assertNotEqual(changed["source_hash"],before["source_hash"])
+                self.assertEqual(changed["harness_hash"],before["harness_hash"])
+                added=root/"crates/shodo/src/added.rs";added.write_text("pub fn added() {}\n")
+                self.assertNotEqual(runner.source_hashes()["source_hash"],changed["source_hash"])
+                added.unlink()
+                self.assertEqual(runner.source_hashes(),changed)
+                source.unlink()
+                self.assertNotEqual(runner.source_hashes()["source_hash"],changed["source_hash"])
+
+    def test_crate_and_workspace_manifests_change_engine_fingerprint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);self.prepare(root)
+            with patch.object(runner,"ROOT",root):
+                for rel in ["crates/shodo/Cargo.toml","Cargo.toml"]:
+                    with self.subTest(path=rel):
+                        before=runner.source_hashes()
+                        p=root/rel;p.write_bytes(p.read_bytes()+b"# setting changed\n")
+                        after=runner.source_hashes()
+                        self.assertNotEqual(after["source_hash"],before["source_hash"])
+                        self.assertEqual(after["harness_hash"],before["harness_hash"])
+
+    def test_output_artifacts_do_not_change_source_fingerprint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);self.prepare(root)
+            with patch.object(runner,"ROOT",root):
+                before=runner.source_hashes()
+                p=root/"target/results/generated.rs";p.parent.mkdir(parents=True);p.write_text("output")
+                (root/"crates/shodo/src/notes.txt").write_text("not Rust source")
+                self.assertEqual(runner.source_hashes(),before)
+
+    def test_legacy_or_unknown_fingerprint_coverage_is_rejected(self):
+        current=valid_report()
+        for value in [None,1,3,True]:
+            legacy=copy.deepcopy(current)
+            if value is None:legacy["metadata"]["conditions"].pop("source_fingerprint_version")
+            else:legacy["metadata"]["conditions"]["source_fingerprint_version"]=value
+            with self.subTest(version=value):
+                with self.assertRaises(ValueError):runner.validate_report(legacy)
+                with self.assertRaises(ValueError):runner.compare(legacy,legacy)
+
+    def test_collect_rejects_engine_mutation_during_real_child_execution(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);self.prepare(root)
+            for directory in ["src","dev/bench/benches","dev/fixtures/assets/fonts"]:
+                (root/directory).mkdir(parents=True,exist_ok=True)
+            (root/"Cargo.toml").write_text('[package]\nname="shodo-bench"\nversion="0.0.0"\nedition="2024"\n[workspace]\n[features]\nallocation-counting=[]\n[[bin]]\nname="shodo-probe"\npath="src/main.rs"\n[[bench]]\nname="layout"\npath="dev/bench/benches/layout.rs"\nharness=false\n')
+            row=valid_report()["rows"][0]
+            data={"describe":[row["settings"]],"cold":row["cold"][0],"memory":row["memory"]}
+            for name,value in data.items():(root/(name+".json")).write_text(json.dumps(value))
+            (root/"src/main.rs").write_text(r'''fn main() {
+    let mode = std::env::args().nth(1).unwrap();
+    let text = match mode.as_str() {
+        "--describe" => include_str!("../describe.json"),
+        "--cold" => include_str!("../cold.json"),
+        "--memory" => include_str!("../memory.json"),
+        _ => panic!("unexpected mode"),
+    };
+    println!("{text}");
+}
+            ''')
+            (root/"evidence.json").write_text(json.dumps([dict(settings=row["settings"],operations={op:row["timing"][op]["digest"] for op in OPS})]))
+            (root/"sample.json").write_text(json.dumps(row["timing"]["build"]["sample"]))
+            (root/"dev/bench/benches/layout.rs").write_text(r'''fn main() {
+    let output = std::path::PathBuf::from(std::env::var("SHODO_BENCH_OUTPUT").unwrap());
+    std::fs::create_dir_all(&output).unwrap();
+    std::fs::write(output.join("digests.json"), include_str!("../../../evidence.json")).unwrap();
+    for op in ["build", "next_line", "all_lines", "intrinsic", "reuse_widths", "rebuild_widths", "page_retry"] {
+        let path = output.join("latin-short").join(op).join("1/new");
+        std::fs::create_dir_all(&path).unwrap();
+        std::fs::write(path.join("sample.json"), include_str!("../../../sample.json")).unwrap();
+    }
+    if std::env::var_os("SHODO_TEST_MUTATE_SOURCE").is_some() {
+        std::fs::write("crates/shodo/src/lib.rs", "pub fn changed_during_measurement() {}\n").unwrap();
+    }
+}
+            ''')
+            args=SimpleNamespace(case="latin-short",quick=True,cold_samples=2,baseline=None)
+            env={"CARGO_TARGET_DIR":str(root/"target"),"CARGO_NET_OFFLINE":"true"}
+            subprocess.run(["git","init","--quiet",str(root)],check=True)
+            subprocess.run(["git","-C",str(root),"-c","user.name=Test","-c","user.email=test@example.invalid","commit","--allow-empty","--quiet","-m","fixture"],check=True)
+            actual_execute=runner.execute
+            def execute(argv,log,*,cwd=None,env=None):
+                return actual_execute(argv,log,cwd=root if cwd is None else cwd,env=env)
+            with patch.object(runner,"ROOT",root),patch.object(runner,"execute",execute),patch.dict(os.environ,env):
+                stage=root/"stable";stage.mkdir()
+                report=runner.collect(stage,args)
+                runner.validate_report(report)
+                self.assertEqual(report["metadata"]["source_hash"],runner.source_hashes()["source_hash"])
+                target=root/"mutated"
+                with patch.dict(os.environ,{"SHODO_TEST_MUTATE_SOURCE":"1"}):
+                    with self.assertRaisesRegex(ValueError,"source changed while measuring"):
+                        runner.publish(target,lambda stage:runner.collect(stage,args))
+                self.assertFalse(target.exists())
+                self.assertFalse(list(root.glob("mutated-staging-*")))
+                self.assertIn("changed_during_measurement",(root/"crates/shodo/src/lib.rs").read_text())
+
+    def test_missing_or_invalid_engine_hash_is_rejected(self):
+        for value in [None,"","abc","z"*64]:
+            report=valid_report()
+            if value is None:report["metadata"].pop("source_hash")
+            else:report["metadata"]["source_hash"]=value
+            with self.subTest(hash=value),self.assertRaises(ValueError):runner.validate_report(report)
 
 class ReportTests(unittest.TestCase):
     def test_reports_without_cargo_build_configuration_are_rejected(self):
@@ -74,10 +198,12 @@ class ReportTests(unittest.TestCase):
         class BuildsComplete(Exception): pass
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
-            for directory in ["src", "dev/bench/src", "dev/bench/benches", "tools/bench", "dev/fixtures/assets", "dev/fixtures/src"]:
+            for directory in ["src", "crates/shodo/src", "dev/bench/src", "dev/bench/benches", "tools/bench", "dev/fixtures/assets", "dev/fixtures/src"]:
                 (root/directory).mkdir(parents=True,exist_ok=True)
             (root/"Cargo.toml").write_text('[package]\nname="shodo-bench"\nversion="0.0.0"\nedition="2024"\n[workspace]\n[features]\nallocation-counting=[]\n[[bin]]\nname="shodo-probe"\npath="src/main.rs"\n[[bench]]\nname="layout"\npath="dev/bench/benches/layout.rs"\nharness=false\n')
             (root/"src/main.rs").write_text('fn main() {}')
+            (root/"crates/shodo/Cargo.toml").write_text("[package]\nname=\"engine\"\nversion=\"0.0.0\"\n")
+            (root/"crates/shodo/src/lib.rs").write_text("pub fn engine() {}\n")
             (root/"dev/bench/benches/layout.rs").write_text('fn main() {}')
             for name in ["dev/bench/Cargo.toml", "dev/fixtures/Cargo.toml", "dev/fixtures/assets/cases.json", "tools/bench/run.py"]:
                 (root/name).write_text("")
@@ -179,7 +305,7 @@ raise SystemExit(7)
             (root/"latin-short"/"all_lines"/"1"/"new"/"sample.json").unlink()
             with self.assertRaises(FileNotFoundError):runner.load_timings(root,[dict(key="latin-short/1",settings=settings)])
     def test_compatible_revision_change_has_literal_ratios_and_memory_deltas(self):
-        before=valid_report();after=copy.deepcopy(before);after["metadata"]["revision"]="two"
+        before=valid_report();after=copy.deepcopy(before);after["metadata"]["revision"]="two";after["metadata"]["source_hash"]="9"*64
         for op in OPS:
             after["rows"][0]["timing"][op]["median_ns"]=200
             after["rows"][0]["timing"][op]["sample"]["times"]=[200]*10
@@ -190,7 +316,7 @@ raise SystemExit(7)
         self.assertEqual(result["rows"][0]["cold_median_ratios"]["build"],1)
         self.assertEqual(result["rows"][0]["process_wall_median_ratio"],1)
     def test_changed_conditions_are_rejected(self):
-        for field in ["rustc","cargo","cpu","os","features","profile","flags","build_configuration","font_hashes","input_hash","harness_hash","lock_hash","measurement_config"]:
+        for field in ["rustc","cargo","cpu","os","features","profile","flags","build_configuration","font_hashes","input_hash","harness_hash","lock_hash","measurement_config","source_fingerprint_version"]:
             after=valid_report();after["metadata"]["conditions"][field]="different"
             with self.subTest(field=field),self.assertRaises(ValueError):runner.compare(after,valid_report())
     def test_missing_duplicate_or_empty_measurements_are_rejected(self):
