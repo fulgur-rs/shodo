@@ -217,7 +217,11 @@ pub(crate) fn bases(data: &ParagraphData, start: usize, scan: &mut Scan, sat: &m
                 start,
                 scan,
                 &groups,
-                &gaps(ruby.columns[column].align, groups.len(), extra),
+                &gaps(
+                    ruby.columns[fragment.column_start + column].align,
+                    groups.len(),
+                    extra,
+                ),
                 sat,
             );
         }

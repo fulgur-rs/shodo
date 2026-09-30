@@ -9,23 +9,6 @@ use crate::{AtomicSizes, LayoutContext, Line, RubyTransform};
 use std::collections::HashMap;
 use std::ops::Range;
 
-fn selected_columns(
-    fragment: &super::measure::RubyFragmentMeasure,
-    columns: Range<usize>,
-) -> Range<usize> {
-    let first = fragment
-        .bases
-        .iter()
-        .position(|b| !b.is_empty())
-        .unwrap_or(columns.start);
-    let last = fragment
-        .bases
-        .iter()
-        .rposition(|b| !b.is_empty())
-        .map_or(columns.end, |i| i + 1);
-    columns.start.max(first)..columns.end.min(last)
-}
-
 fn span_width(
     fragment: &super::measure::RubyFragmentMeasure,
     columns: &Range<usize>,
@@ -84,7 +67,7 @@ pub(crate) fn format(
     let mut heights = Vec::with_capacity(measure.fragments.len());
     for fragment in &measure.fragments {
         let ruby = &data.ruby.containers[fragment.container];
-        let mut origins = Vec::with_capacity(ruby.columns.len());
+        let mut origins = Vec::with_capacity(fragment.bases.len());
         let mut fallback = ruby
             .box_index
             .and_then(|b| box_origins.get(&b).copied())
@@ -94,7 +77,12 @@ pub(crate) fn format(
                     .map_or(0.0, |r| r.inline_start.to_f32())
             });
         let rtl = line.used_direction() == Direction::Rtl;
-        for (i, (column, selected)) in ruby.columns.iter().zip(&fragment.bases).enumerate() {
+        for (i, (column, selected)) in ruby.columns
+            [fragment.column_start..fragment.column_start + fragment.bases.len()]
+            .iter()
+            .zip(&fragment.bases)
+            .enumerate()
+        {
             let raw_origin = column
                 .box_index
                 .and_then(|b| box_origins.get(&b).copied())
@@ -121,14 +109,14 @@ pub(crate) fn format(
             }
             let lanes = &mut level_lanes[level];
             lanes.sort_by(|a, b| {
-                let a = selected_columns(fragment, ruby.lanes[a.lane].columns.clone());
-                let b = selected_columns(fragment, ruby.lanes[b.lane].columns.clone());
+                let a = fragment.local_columns(&ruby.lanes[a.lane].columns);
+                let b = fragment.local_columns(&ruby.lanes[b.lane].columns);
                 span_origin(&origins, &a).total_cmp(&span_origin(&origins, &b))
             });
             let natural = lanes
                 .iter()
                 .fold(LayoutUnit::ZERO, |w, l| w.add(l.width, sat));
-            let columns = selected_columns(fragment, 0..fragment.bases.len());
+            let columns = 0..fragment.bases.len();
             let overhang = fragment.level_overhang[level];
             let width = span_width(fragment, &columns, sat)
                 .add(overhang.0, sat)
@@ -160,7 +148,7 @@ pub(crate) fn format(
         for measured in &fragment.lanes {
             let lane = &ruby.lanes[measured.lane];
             let style = ruby.levels[lane.level];
-            let columns = selected_columns(fragment, lane.columns.clone());
+            let columns = fragment.local_columns(&lane.columns);
             let cross = super::measure::inter_character(data, style);
             let right = super::measure::rightmost(&fragment.right_columns, &columns);
             let (origin, width, alignment) = if cross {
@@ -243,7 +231,9 @@ pub(crate) fn format(
             };
             children.push(RubyAnnotationRecord {
                 container: ruby.node,
-                base_nodes: columns.filter_map(|i| ruby.columns[i].node).collect(),
+                base_nodes: columns
+                    .filter_map(|i| ruby.columns[fragment.column_start + i].node)
+                    .collect(),
                 node: lane.node,
                 level: lane.level,
                 base_text,

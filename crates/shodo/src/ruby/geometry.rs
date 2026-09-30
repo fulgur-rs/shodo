@@ -94,7 +94,12 @@ impl<'a> Frame<'a> {
         sat: &mut Saturation,
     ) -> Bounds {
         let ruby = &self.data.ruby.containers[fragment.container];
-        self.box_content(ruby.columns[column].box_index.or(ruby.box_index), sat)
+        self.box_content(
+            ruby.columns[fragment.column_start + column]
+                .box_index
+                .or(ruby.box_index),
+            sat,
+        )
     }
 
     fn owner(&self, record: &FragmentRecord) -> Option<u32> {
@@ -152,7 +157,7 @@ impl<'a> Frame<'a> {
         for (i, record) in self.records.iter().enumerate() {
             if self.belongs(
                 record,
-                ruby.columns[column].box_index,
+                ruby.columns[fragment.column_start + column].box_index,
                 &fragment.bases[column],
             ) && let Some(other) = self.record_bounds(i, sat)
             {
@@ -338,6 +343,7 @@ pub(crate) struct Tracks {
 pub(crate) fn tracks(
     data: &ParagraphData,
     ruby: &super::prepare::PreparedRuby,
+    column_start: usize,
     bases: &[Range<usize>],
     lanes: &[super::measure::LaneMeasure],
     mut base: Bounds,
@@ -372,19 +378,8 @@ pub(crate) fn tracks(
         let source = &ruby.lanes[lane.lane];
         let style = ruby.levels[source.level];
         if super::measure::inter_character(data, style) {
-            let first = source.columns.start.max(
-                bases
-                    .iter()
-                    .position(|r| !r.is_empty())
-                    .unwrap_or(source.columns.start),
-            );
-            let last = source.columns.end.min(
-                bases
-                    .iter()
-                    .rposition(|r| !r.is_empty())
-                    .map_or(source.columns.end, |i| i + 1),
-            );
-            let right = super::measure::rightmost(right_columns, &(first..last));
+            let columns = super::measure::local_columns(&source.columns, column_start, bases.len());
+            let right = super::measure::rightmost(right_columns, &columns);
             let content = contents[right];
             let height = lane.width.max(content.height(sat));
             let centered = if style.align == RubyAlign::Start {
@@ -493,6 +488,7 @@ pub(crate) fn layout(
         let result = tracks(
             data,
             ruby,
+            fragment.column_start,
             &fragment.bases,
             &fragment.lanes,
             base,

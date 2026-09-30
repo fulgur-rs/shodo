@@ -1,0 +1,5708 @@
+{
+  "schema": 1,
+  "issue": "shodo-sbp.5",
+  "base_commit": "973293d9aa5df544b7f801217ac79f4a1fdb06b7",
+  "implementation_commits": [
+    "8a5f7f5ea870fbc7e8c87fb882f54b37ae380037",
+    "4e69f9aa119168e9c58e83b5ac6f84703a68925f"
+  ],
+  "probe_cases": 22,
+  "probe_rows": 44,
+  "matrix_cases": 54,
+  "memory_repeats": 3,
+  "timing_samples_per_row": 10,
+  "scope": "build includes input snapshot construction and shaping with a fresh context; layout uses a prepared paragraph and fresh context; font loading/context initialization/output checking excluded",
+  "binary_sha256": {
+    "after-memory": "82c9d067fcd38d2e20ed881a8d0f4ebdcc7331c6746e2941ed960cf1b1a0c9cc",
+    "after-timing": "9ff7ef4eaa3afbd788d8165f92cbab59db1952eaab30f3a1d80ad17fc78c4447",
+    "before-memory": "d793832488b0b3b5fb4901bedca702c3fefcce58bbd492c33a0d0d567fc0632f",
+    "before-timing": "38c2e25b6c48f74f22893c329bb5b538c70463d2af3554d45da3c236df609ce1",
+    "compact-memory": "3e4b513476aacbae68a1e30dc8fc33b7866c3a1a4d082ba2065d1521cbcea3e5",
+    "compact-timing": "caa8ae234f325ddcead31b2653fdc241ff12fe8dd055a43bc242bad9b378ca5d",
+    "lanes-memory": "6ed17aeaab3a43150d1c14df73f566182f3d8dcd2a2744361098fd0446ee3a5f",
+    "lanes-timing": "cde4309ff4b2e9c91c9796543ff620cd8a719539c7fdc771b1c9d1394c055157"
+  },
+  "memory": {
+    "before": [
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 32,
+          "sha256": "34a8e08f9d5abf559fe8b04450f5ba1f05a4fa8437aa4a9db59edb3b61a5daff",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4330,
+          "allocated_bytes": 905148,
+          "deallocated_bytes": 718027,
+          "net_bytes": 187121,
+          "peak_extra_bytes": 276473
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 32,
+          "sha256": "34a8e08f9d5abf559fe8b04450f5ba1f05a4fa8437aa4a9db59edb3b61a5daff",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6911,
+          "allocated_bytes": 938334,
+          "deallocated_bytes": 679238,
+          "net_bytes": 259096,
+          "peak_extra_bytes": 267764
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 128,
+          "sha256": "e7e5c52e4ecf4d40630f749a9627d598f19d9454c9d6299bb728639634b20d40",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16354,
+          "allocated_bytes": 3568332,
+          "deallocated_bytes": 2822059,
+          "net_bytes": 746273,
+          "peak_extra_bytes": 1091801
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 128,
+          "sha256": "e7e5c52e4ecf4d40630f749a9627d598f19d9454c9d6299bb728639634b20d40",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 26881,
+          "allocated_bytes": 6146122,
+          "deallocated_bytes": 5111682,
+          "net_bytes": 1034440,
+          "peak_extra_bytes": 1044644
+        }
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 1024,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 64,
+          "runs": 512,
+          "sha256": "4e08224e0ec447bb58d2f69571888779b08656eb638be23780ce066ed049751e",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 64234,
+          "allocated_bytes": 14589708,
+          "deallocated_bytes": 11238187,
+          "net_bytes": 3351521,
+          "peak_extra_bytes": 4721753
+        }
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 1024,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 64,
+          "runs": 512,
+          "sha256": "4e08224e0ec447bb58d2f69571888779b08656eb638be23780ce066ed049751e",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 106683,
+          "allocated_bytes": 63103514,
+          "deallocated_bytes": 58967698,
+          "net_bytes": 4135816,
+          "peak_extra_bytes": 4158776
+        }
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 2048,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 128,
+          "runs": 1024,
+          "sha256": "a57aa70b405b71f2e9dedd6a35341707d9205c77e6f6a3f31e125e4a2fe314c2",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 128014,
+          "allocated_bytes": 30202380,
+          "deallocated_bytes": 22459691,
+          "net_bytes": 7742689,
+          "peak_extra_bytes": 10479193
+        }
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 2048,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 128,
+          "runs": 1024,
+          "sha256": "a57aa70b405b71f2e9dedd6a35341707d9205c77e6f6a3f31e125e4a2fe314c2",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 213064,
+          "allocated_bytes": 228961962,
+          "deallocated_bytes": 220690978,
+          "net_bytes": 8270984,
+          "peak_extra_bytes": 8318520
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 32,
+          "sha256": "1431afb4f0b6c7d90ca274377bba067dece82b51f7e4511dcd2b4255be0876c4",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4875,
+          "allocated_bytes": 1042481,
+          "deallocated_bytes": 797006,
+          "net_bytes": 245475,
+          "peak_extra_bytes": 330127
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 32,
+          "sha256": "1431afb4f0b6c7d90ca274377bba067dece82b51f7e4511dcd2b4255be0876c4",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 7075,
+          "allocated_bytes": 1084083,
+          "deallocated_bytes": 852835,
+          "net_bytes": 231248,
+          "peak_extra_bytes": 236116
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 24,
+          "sha256": "a76cfefedf6f3bb942285f9b93f662f1414ab9c890d6f215d6ae76658a47c4a3",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 2840,
+          "allocated_bytes": 655764,
+          "deallocated_bytes": 528539,
+          "net_bytes": 127225,
+          "peak_extra_bytes": 189073
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 24,
+          "sha256": "a76cfefedf6f3bb942285f9b93f662f1414ab9c890d6f215d6ae76658a47c4a3",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6637,
+          "allocated_bytes": 884350,
+          "deallocated_bytes": 642614,
+          "net_bytes": 241736,
+          "peak_extra_bytes": 248084
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 112,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 48,
+          "sha256": "f6e5f631d1c486bb9e6f943e96c5d4f2ab80be49334b9108fbd25416ced38202",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 7588,
+          "allocated_bytes": 1436976,
+          "deallocated_bytes": 1118667,
+          "net_bytes": 318309,
+          "peak_extra_bytes": 462733
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 112,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 48,
+          "sha256": "f6e5f631d1c486bb9e6f943e96c5d4f2ab80be49334b9108fbd25416ced38202",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 8398,
+          "allocated_bytes": 1260016,
+          "deallocated_bytes": 856568,
+          "net_bytes": 403448,
+          "peak_extra_bytes": 417324
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 60,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 28,
+          "sha256": "49235decf2451b90b3b5df4a42118603e2f339c794cd2fe147a17fc938546fd7",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4266,
+          "allocated_bytes": 892608,
+          "deallocated_bytes": 709695,
+          "net_bytes": 182913,
+          "peak_extra_bytes": 271845
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 60,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 28,
+          "sha256": "49235decf2451b90b3b5df4a42118603e2f339c794cd2fe147a17fc938546fd7",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6867,
+          "allocated_bytes": 927386,
+          "deallocated_bytes": 669250,
+          "net_bytes": 258136,
+          "peak_extra_bytes": 266632
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 66,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 34,
+          "sha256": "d4f690fba0c350dec4495af436b0158ed757417aa4f7720aac70e2df009d9224",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4364,
+          "allocated_bytes": 916490,
+          "deallocated_bytes": 723921,
+          "net_bytes": 192569,
+          "peak_extra_bytes": 281939
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 66,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 34,
+          "sha256": "d4f690fba0c350dec4495af436b0158ed757417aa4f7720aac70e2df009d9224",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 7176,
+          "allocated_bytes": 1046125,
+          "deallocated_bytes": 742389,
+          "net_bytes": 303736,
+          "peak_extra_bytes": 308604
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 66,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 34,
+          "sha256": "352f9a5c5f5ed980185a8bbf8be50b28113306f48bf17980aba0c0f6f173420c",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4364,
+          "allocated_bytes": 916490,
+          "deallocated_bytes": 723921,
+          "net_bytes": 192569,
+          "peak_extra_bytes": 281939
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 66,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 34,
+          "sha256": "352f9a5c5f5ed980185a8bbf8be50b28113306f48bf17980aba0c0f6f173420c",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6934,
+          "allocated_bytes": 955025,
+          "deallocated_bytes": 692189,
+          "net_bytes": 262836,
+          "peak_extra_bytes": 267704
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 8,
+          "runs": 32,
+          "sha256": "cd9e46c47c01f90317bfedce885c04d6ec1c549f8ae2579e7e31248d9c26f401",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4457,
+          "allocated_bytes": 912236,
+          "deallocated_bytes": 724987,
+          "net_bytes": 187249,
+          "peak_extra_bytes": 276601
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 8,
+          "runs": 32,
+          "sha256": "cd9e46c47c01f90317bfedce885c04d6ec1c549f8ae2579e7e31248d9c26f401",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6533,
+          "allocated_bytes": 1045690,
+          "deallocated_bytes": 737374,
+          "net_bytes": 308316,
+          "peak_extra_bytes": 313580
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 76,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 36,
+          "sha256": "f8975d12a298c277a19657ea7ae1c6a672f65d2c5d671d2b841942d4c04d677a",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 5504,
+          "allocated_bytes": 1178308,
+          "deallocated_bytes": 943391,
+          "net_bytes": 234917,
+          "peak_extra_bytes": 349589
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 76,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 36,
+          "sha256": "f8975d12a298c277a19657ea7ae1c6a672f65d2c5d671d2b841942d4c04d677a",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 13882,
+          "allocated_bytes": 1446490,
+          "deallocated_bytes": 1048130,
+          "net_bytes": 398360,
+          "peak_extra_bytes": 408228
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 32,
+          "sha256": "34a8e08f9d5abf559fe8b04450f5ba1f05a4fa8437aa4a9db59edb3b61a5daff",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4330,
+          "allocated_bytes": 905148,
+          "deallocated_bytes": 718027,
+          "net_bytes": 187121,
+          "peak_extra_bytes": 276473
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 32,
+          "sha256": "34a8e08f9d5abf559fe8b04450f5ba1f05a4fa8437aa4a9db59edb3b61a5daff",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 7338,
+          "allocated_bytes": 1385434,
+          "deallocated_bytes": 1361002,
+          "net_bytes": 24432,
+          "peak_extra_bytes": 168128
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 128,
+          "sha256": "beb88e435b0744a9a6d89e795ab89ad5fc506e6daaa4e67e378e72833bf099e6",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 17827,
+          "allocated_bytes": 4116881,
+          "deallocated_bytes": 3130910,
+          "net_bytes": 985971,
+          "peak_extra_bytes": 1305579
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 128,
+          "sha256": "beb88e435b0744a9a6d89e795ab89ad5fc506e6daaa4e67e378e72833bf099e6",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 27258,
+          "allocated_bytes": 6779183,
+          "deallocated_bytes": 5756415,
+          "net_bytes": 1022768,
+          "peak_extra_bytes": 1024564
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 96,
+          "sha256": "c7bd3686a4511b9ff21f13acf88bfd55412f574ce1a4b6f71acf5ecceace22f8",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 10400,
+          "allocated_bytes": 2551404,
+          "deallocated_bytes": 2063627,
+          "net_bytes": 487777,
+          "peak_extra_bytes": 723289
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 96,
+          "sha256": "c7bd3686a4511b9ff21f13acf88bfd55412f574ce1a4b6f71acf5ecceace22f8",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 25779,
+          "allocated_bytes": 5928626,
+          "deallocated_bytes": 4963626,
+          "net_bytes": 965000,
+          "peak_extra_bytes": 972884
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 448,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 192,
+          "sha256": "fc2a1c699409654f65fbf0a8ca337fe799b6aab0dd4f47c533a2246fdca07b9b",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 29360,
+          "allocated_bytes": 5721072,
+          "deallocated_bytes": 4425483,
+          "net_bytes": 1295589,
+          "peak_extra_bytes": 1861213
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 448,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 192,
+          "sha256": "fc2a1c699409654f65fbf0a8ca337fe799b6aab0dd4f47c533a2246fdca07b9b",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 32808,
+          "allocated_bytes": 7429928,
+          "deallocated_bytes": 5818080,
+          "net_bytes": 1611848,
+          "peak_extra_bytes": 1627260
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 240,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 112,
+          "sha256": "b2ae727e91da45adf8e919b9476f6ea5cfbee07b532246698930441b0fe3e270",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16122,
+          "allocated_bytes": 3512028,
+          "deallocated_bytes": 2788731,
+          "net_bytes": 723297,
+          "peak_extra_bytes": 1067145
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 240,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 112,
+          "sha256": "b2ae727e91da45adf8e919b9476f6ea5cfbee07b532246698930441b0fe3e270",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 26668,
+          "allocated_bytes": 5998450,
+          "deallocated_bytes": 4974074,
+          "net_bytes": 1024376,
+          "peak_extra_bytes": 1034408
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 258,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 130,
+          "sha256": "a13da0d9f96efea8a4b82612eeba7d7863ee21303943b3d2a8518ebbe85711f5",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16388,
+          "allocated_bytes": 3606938,
+          "deallocated_bytes": 2842497,
+          "net_bytes": 764441,
+          "peak_extra_bytes": 1109987
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 258,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 130,
+          "sha256": "a13da0d9f96efea8a4b82612eeba7d7863ee21303943b3d2a8518ebbe85711f5",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 27384,
+          "allocated_bytes": 6544649,
+          "deallocated_bytes": 5340385,
+          "net_bytes": 1204264,
+          "peak_extra_bytes": 1206060
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 258,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 130,
+          "sha256": "8fab5a1c1afd258a32d336f3bb8010a829b6aa4cf46b4458c512740f5088756f",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16388,
+          "allocated_bytes": 3606938,
+          "deallocated_bytes": 2842497,
+          "net_bytes": 764441,
+          "peak_extra_bytes": 1109987
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 258,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 130,
+          "sha256": "8fab5a1c1afd258a32d336f3bb8010a829b6aa4cf46b4458c512740f5088756f",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 26904,
+          "allocated_bytes": 6187773,
+          "deallocated_bytes": 5144985,
+          "net_bytes": 1042788,
+          "peak_extra_bytes": 1044584
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 32,
+          "runs": 128,
+          "sha256": "b6e9f98a3383557a4946733ef9c98a1cc5b421124861beb2d1d1e0b5d91ce906",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16865,
+          "allocated_bytes": 3598988,
+          "deallocated_bytes": 2851051,
+          "net_bytes": 747937,
+          "peak_extra_bytes": 1093465
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 32,
+          "runs": 128,
+          "sha256": "b6e9f98a3383557a4946733ef9c98a1cc5b421124861beb2d1d1e0b5d91ce906",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 25289,
+          "allocated_bytes": 6733730,
+          "deallocated_bytes": 5504102,
+          "net_bytes": 1229628,
+          "peak_extra_bytes": 1236428
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 304,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 144,
+          "sha256": "edd2fc7b1804253141978d27c4321426b76dbe794efa9347169d1814da1b8581",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 21024,
+          "allocated_bytes": 4662796,
+          "deallocated_bytes": 3725339,
+          "net_bytes": 937457,
+          "peak_extra_bytes": 1385513
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 304,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 144,
+          "sha256": "edd2fc7b1804253141978d27c4321426b76dbe794efa9347169d1814da1b8581",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 54408,
+          "allocated_bytes": 9120194,
+          "deallocated_bytes": 7529082,
+          "net_bytes": 1591112,
+          "peak_extra_bytes": 1602516
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 128,
+          "sha256": "e7e5c52e4ecf4d40630f749a9627d598f19d9454c9d6299bb728639634b20d40",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16354,
+          "allocated_bytes": 3568332,
+          "deallocated_bytes": 2822059,
+          "net_bytes": 746273,
+          "peak_extra_bytes": 1091801
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 128,
+          "sha256": "e7e5c52e4ecf4d40630f749a9627d598f19d9454c9d6299bb728639634b20d40",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 32300,
+          "allocated_bytes": 15059078,
+          "deallocated_bytes": 14962214,
+          "net_bytes": 96864,
+          "peak_extra_bytes": 559760
+        }
+      }
+    ],
+    "lanes": [
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 32,
+          "sha256": "34a8e08f9d5abf559fe8b04450f5ba1f05a4fa8437aa4a9db59edb3b61a5daff",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4330,
+          "allocated_bytes": 905148,
+          "deallocated_bytes": 718027,
+          "net_bytes": 187121,
+          "peak_extra_bytes": 276473
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 32,
+          "sha256": "34a8e08f9d5abf559fe8b04450f5ba1f05a4fa8437aa4a9db59edb3b61a5daff",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6911,
+          "allocated_bytes": 938334,
+          "deallocated_bytes": 679238,
+          "net_bytes": 259096,
+          "peak_extra_bytes": 267764
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 128,
+          "sha256": "e7e5c52e4ecf4d40630f749a9627d598f19d9454c9d6299bb728639634b20d40",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16354,
+          "allocated_bytes": 3568332,
+          "deallocated_bytes": 2822059,
+          "net_bytes": 746273,
+          "peak_extra_bytes": 1091801
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 128,
+          "sha256": "e7e5c52e4ecf4d40630f749a9627d598f19d9454c9d6299bb728639634b20d40",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 26881,
+          "allocated_bytes": 6146122,
+          "deallocated_bytes": 5111682,
+          "net_bytes": 1034440,
+          "peak_extra_bytes": 1044644
+        }
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 1024,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 64,
+          "runs": 512,
+          "sha256": "4e08224e0ec447bb58d2f69571888779b08656eb638be23780ce066ed049751e",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 64234,
+          "allocated_bytes": 14589708,
+          "deallocated_bytes": 11238187,
+          "net_bytes": 3351521,
+          "peak_extra_bytes": 4721753
+        }
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 1024,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 64,
+          "runs": 512,
+          "sha256": "4e08224e0ec447bb58d2f69571888779b08656eb638be23780ce066ed049751e",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 106683,
+          "allocated_bytes": 63103514,
+          "deallocated_bytes": 58967698,
+          "net_bytes": 4135816,
+          "peak_extra_bytes": 4158776
+        }
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 2048,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 128,
+          "runs": 1024,
+          "sha256": "a57aa70b405b71f2e9dedd6a35341707d9205c77e6f6a3f31e125e4a2fe314c2",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 128014,
+          "allocated_bytes": 30202380,
+          "deallocated_bytes": 22459691,
+          "net_bytes": 7742689,
+          "peak_extra_bytes": 10479193
+        }
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 2048,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 128,
+          "runs": 1024,
+          "sha256": "a57aa70b405b71f2e9dedd6a35341707d9205c77e6f6a3f31e125e4a2fe314c2",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 213064,
+          "allocated_bytes": 228961962,
+          "deallocated_bytes": 220690978,
+          "net_bytes": 8270984,
+          "peak_extra_bytes": 8318520
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 32,
+          "sha256": "1431afb4f0b6c7d90ca274377bba067dece82b51f7e4511dcd2b4255be0876c4",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4875,
+          "allocated_bytes": 1042481,
+          "deallocated_bytes": 797006,
+          "net_bytes": 245475,
+          "peak_extra_bytes": 330127
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 32,
+          "sha256": "1431afb4f0b6c7d90ca274377bba067dece82b51f7e4511dcd2b4255be0876c4",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 7075,
+          "allocated_bytes": 1084083,
+          "deallocated_bytes": 852835,
+          "net_bytes": 231248,
+          "peak_extra_bytes": 236116
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 24,
+          "sha256": "a76cfefedf6f3bb942285f9b93f662f1414ab9c890d6f215d6ae76658a47c4a3",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 2840,
+          "allocated_bytes": 655764,
+          "deallocated_bytes": 528539,
+          "net_bytes": 127225,
+          "peak_extra_bytes": 189073
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 24,
+          "sha256": "a76cfefedf6f3bb942285f9b93f662f1414ab9c890d6f215d6ae76658a47c4a3",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6637,
+          "allocated_bytes": 884350,
+          "deallocated_bytes": 642614,
+          "net_bytes": 241736,
+          "peak_extra_bytes": 248084
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 112,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 48,
+          "sha256": "f6e5f631d1c486bb9e6f943e96c5d4f2ab80be49334b9108fbd25416ced38202",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 7588,
+          "allocated_bytes": 1436976,
+          "deallocated_bytes": 1118667,
+          "net_bytes": 318309,
+          "peak_extra_bytes": 462733
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 112,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 48,
+          "sha256": "f6e5f631d1c486bb9e6f943e96c5d4f2ab80be49334b9108fbd25416ced38202",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 8398,
+          "allocated_bytes": 1260016,
+          "deallocated_bytes": 856568,
+          "net_bytes": 403448,
+          "peak_extra_bytes": 417324
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 60,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 28,
+          "sha256": "49235decf2451b90b3b5df4a42118603e2f339c794cd2fe147a17fc938546fd7",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4266,
+          "allocated_bytes": 892608,
+          "deallocated_bytes": 709695,
+          "net_bytes": 182913,
+          "peak_extra_bytes": 271845
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 60,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 28,
+          "sha256": "49235decf2451b90b3b5df4a42118603e2f339c794cd2fe147a17fc938546fd7",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6867,
+          "allocated_bytes": 927386,
+          "deallocated_bytes": 669250,
+          "net_bytes": 258136,
+          "peak_extra_bytes": 266632
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 66,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 34,
+          "sha256": "d4f690fba0c350dec4495af436b0158ed757417aa4f7720aac70e2df009d9224",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4364,
+          "allocated_bytes": 916490,
+          "deallocated_bytes": 723921,
+          "net_bytes": 192569,
+          "peak_extra_bytes": 281939
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 66,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 34,
+          "sha256": "d4f690fba0c350dec4495af436b0158ed757417aa4f7720aac70e2df009d9224",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 7176,
+          "allocated_bytes": 1046125,
+          "deallocated_bytes": 742389,
+          "net_bytes": 303736,
+          "peak_extra_bytes": 308604
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 66,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 34,
+          "sha256": "352f9a5c5f5ed980185a8bbf8be50b28113306f48bf17980aba0c0f6f173420c",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4364,
+          "allocated_bytes": 916490,
+          "deallocated_bytes": 723921,
+          "net_bytes": 192569,
+          "peak_extra_bytes": 281939
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 66,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 34,
+          "sha256": "352f9a5c5f5ed980185a8bbf8be50b28113306f48bf17980aba0c0f6f173420c",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6934,
+          "allocated_bytes": 955025,
+          "deallocated_bytes": 692189,
+          "net_bytes": 262836,
+          "peak_extra_bytes": 267704
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 8,
+          "runs": 32,
+          "sha256": "cd9e46c47c01f90317bfedce885c04d6ec1c549f8ae2579e7e31248d9c26f401",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4457,
+          "allocated_bytes": 912236,
+          "deallocated_bytes": 724987,
+          "net_bytes": 187249,
+          "peak_extra_bytes": 276601
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 8,
+          "runs": 32,
+          "sha256": "cd9e46c47c01f90317bfedce885c04d6ec1c549f8ae2579e7e31248d9c26f401",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6533,
+          "allocated_bytes": 1045690,
+          "deallocated_bytes": 737374,
+          "net_bytes": 308316,
+          "peak_extra_bytes": 313580
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 76,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 36,
+          "sha256": "f8975d12a298c277a19657ea7ae1c6a672f65d2c5d671d2b841942d4c04d677a",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 5504,
+          "allocated_bytes": 1178308,
+          "deallocated_bytes": 943391,
+          "net_bytes": 234917,
+          "peak_extra_bytes": 349589
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 76,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 36,
+          "sha256": "f8975d12a298c277a19657ea7ae1c6a672f65d2c5d671d2b841942d4c04d677a",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 13882,
+          "allocated_bytes": 1446490,
+          "deallocated_bytes": 1048130,
+          "net_bytes": 398360,
+          "peak_extra_bytes": 408228
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 32,
+          "sha256": "34a8e08f9d5abf559fe8b04450f5ba1f05a4fa8437aa4a9db59edb3b61a5daff",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4330,
+          "allocated_bytes": 905148,
+          "deallocated_bytes": 718027,
+          "net_bytes": 187121,
+          "peak_extra_bytes": 276473
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 32,
+          "sha256": "34a8e08f9d5abf559fe8b04450f5ba1f05a4fa8437aa4a9db59edb3b61a5daff",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 7338,
+          "allocated_bytes": 1385434,
+          "deallocated_bytes": 1361002,
+          "net_bytes": 24432,
+          "peak_extra_bytes": 168128
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 128,
+          "sha256": "beb88e435b0744a9a6d89e795ab89ad5fc506e6daaa4e67e378e72833bf099e6",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 17827,
+          "allocated_bytes": 4116881,
+          "deallocated_bytes": 3130910,
+          "net_bytes": 985971,
+          "peak_extra_bytes": 1305579
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 128,
+          "sha256": "beb88e435b0744a9a6d89e795ab89ad5fc506e6daaa4e67e378e72833bf099e6",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 27258,
+          "allocated_bytes": 6779183,
+          "deallocated_bytes": 5756415,
+          "net_bytes": 1022768,
+          "peak_extra_bytes": 1024564
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 96,
+          "sha256": "c7bd3686a4511b9ff21f13acf88bfd55412f574ce1a4b6f71acf5ecceace22f8",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 10400,
+          "allocated_bytes": 2551404,
+          "deallocated_bytes": 2063627,
+          "net_bytes": 487777,
+          "peak_extra_bytes": 723289
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 96,
+          "sha256": "c7bd3686a4511b9ff21f13acf88bfd55412f574ce1a4b6f71acf5ecceace22f8",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 25779,
+          "allocated_bytes": 5928626,
+          "deallocated_bytes": 4963626,
+          "net_bytes": 965000,
+          "peak_extra_bytes": 972884
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 448,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 192,
+          "sha256": "fc2a1c699409654f65fbf0a8ca337fe799b6aab0dd4f47c533a2246fdca07b9b",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 29360,
+          "allocated_bytes": 5721072,
+          "deallocated_bytes": 4425483,
+          "net_bytes": 1295589,
+          "peak_extra_bytes": 1861213
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 448,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 192,
+          "sha256": "fc2a1c699409654f65fbf0a8ca337fe799b6aab0dd4f47c533a2246fdca07b9b",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 32808,
+          "allocated_bytes": 7429928,
+          "deallocated_bytes": 5818080,
+          "net_bytes": 1611848,
+          "peak_extra_bytes": 1627260
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 240,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 112,
+          "sha256": "b2ae727e91da45adf8e919b9476f6ea5cfbee07b532246698930441b0fe3e270",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16122,
+          "allocated_bytes": 3512028,
+          "deallocated_bytes": 2788731,
+          "net_bytes": 723297,
+          "peak_extra_bytes": 1067145
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 240,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 112,
+          "sha256": "b2ae727e91da45adf8e919b9476f6ea5cfbee07b532246698930441b0fe3e270",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 26668,
+          "allocated_bytes": 5998450,
+          "deallocated_bytes": 4974074,
+          "net_bytes": 1024376,
+          "peak_extra_bytes": 1034408
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 258,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 130,
+          "sha256": "a13da0d9f96efea8a4b82612eeba7d7863ee21303943b3d2a8518ebbe85711f5",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16388,
+          "allocated_bytes": 3606938,
+          "deallocated_bytes": 2842497,
+          "net_bytes": 764441,
+          "peak_extra_bytes": 1109987
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 258,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 130,
+          "sha256": "a13da0d9f96efea8a4b82612eeba7d7863ee21303943b3d2a8518ebbe85711f5",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 27384,
+          "allocated_bytes": 6544649,
+          "deallocated_bytes": 5340385,
+          "net_bytes": 1204264,
+          "peak_extra_bytes": 1206060
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 258,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 130,
+          "sha256": "8fab5a1c1afd258a32d336f3bb8010a829b6aa4cf46b4458c512740f5088756f",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16388,
+          "allocated_bytes": 3606938,
+          "deallocated_bytes": 2842497,
+          "net_bytes": 764441,
+          "peak_extra_bytes": 1109987
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 258,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 130,
+          "sha256": "8fab5a1c1afd258a32d336f3bb8010a829b6aa4cf46b4458c512740f5088756f",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 26904,
+          "allocated_bytes": 6187773,
+          "deallocated_bytes": 5144985,
+          "net_bytes": 1042788,
+          "peak_extra_bytes": 1044584
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 32,
+          "runs": 128,
+          "sha256": "b6e9f98a3383557a4946733ef9c98a1cc5b421124861beb2d1d1e0b5d91ce906",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16865,
+          "allocated_bytes": 3598988,
+          "deallocated_bytes": 2851051,
+          "net_bytes": 747937,
+          "peak_extra_bytes": 1093465
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 32,
+          "runs": 128,
+          "sha256": "b6e9f98a3383557a4946733ef9c98a1cc5b421124861beb2d1d1e0b5d91ce906",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 25289,
+          "allocated_bytes": 6733730,
+          "deallocated_bytes": 5504102,
+          "net_bytes": 1229628,
+          "peak_extra_bytes": 1236428
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 304,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 144,
+          "sha256": "edd2fc7b1804253141978d27c4321426b76dbe794efa9347169d1814da1b8581",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 21024,
+          "allocated_bytes": 4662796,
+          "deallocated_bytes": 3725339,
+          "net_bytes": 937457,
+          "peak_extra_bytes": 1385513
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 304,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 144,
+          "sha256": "edd2fc7b1804253141978d27c4321426b76dbe794efa9347169d1814da1b8581",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 54408,
+          "allocated_bytes": 9120194,
+          "deallocated_bytes": 7529082,
+          "net_bytes": 1591112,
+          "peak_extra_bytes": 1602516
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 128,
+          "sha256": "e7e5c52e4ecf4d40630f749a9627d598f19d9454c9d6299bb728639634b20d40",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16354,
+          "allocated_bytes": 3568332,
+          "deallocated_bytes": 2822059,
+          "net_bytes": 746273,
+          "peak_extra_bytes": 1091801
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 128,
+          "sha256": "e7e5c52e4ecf4d40630f749a9627d598f19d9454c9d6299bb728639634b20d40",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 32300,
+          "allocated_bytes": 15059078,
+          "deallocated_bytes": 14962214,
+          "net_bytes": 96864,
+          "peak_extra_bytes": 559760
+        }
+      }
+    ],
+    "compact": [
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 32,
+          "sha256": "34a8e08f9d5abf559fe8b04450f5ba1f05a4fa8437aa4a9db59edb3b61a5daff",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4330,
+          "allocated_bytes": 905148,
+          "deallocated_bytes": 718027,
+          "net_bytes": 187121,
+          "peak_extra_bytes": 276473
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 32,
+          "sha256": "34a8e08f9d5abf559fe8b04450f5ba1f05a4fa8437aa4a9db59edb3b61a5daff",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6911,
+          "allocated_bytes": 767470,
+          "deallocated_bytes": 508374,
+          "net_bytes": 259096,
+          "peak_extra_bytes": 267412
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 128,
+          "sha256": "e7e5c52e4ecf4d40630f749a9627d598f19d9454c9d6299bb728639634b20d40",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16354,
+          "allocated_bytes": 3568332,
+          "deallocated_bytes": 2822059,
+          "net_bytes": 746273,
+          "peak_extra_bytes": 1091801
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 128,
+          "sha256": "e7e5c52e4ecf4d40630f749a9627d598f19d9454c9d6299bb728639634b20d40",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 26881,
+          "allocated_bytes": 3050618,
+          "deallocated_bytes": 2016178,
+          "net_bytes": 1034440,
+          "peak_extra_bytes": 1042756
+        }
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 1024,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 64,
+          "runs": 512,
+          "sha256": "4e08224e0ec447bb58d2f69571888779b08656eb638be23780ce066ed049751e",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 64234,
+          "allocated_bytes": 14589708,
+          "deallocated_bytes": 11238187,
+          "net_bytes": 3351521,
+          "peak_extra_bytes": 4721753
+        }
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 1024,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 64,
+          "runs": 512,
+          "sha256": "4e08224e0ec447bb58d2f69571888779b08656eb638be23780ce066ed049751e",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 106683,
+          "allocated_bytes": 12182730,
+          "deallocated_bytes": 8046914,
+          "net_bytes": 4135816,
+          "peak_extra_bytes": 4144132
+        }
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 2048,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 128,
+          "runs": 1024,
+          "sha256": "a57aa70b405b71f2e9dedd6a35341707d9205c77e6f6a3f31e125e4a2fe314c2",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 128014,
+          "allocated_bytes": 30202380,
+          "deallocated_bytes": 22459691,
+          "net_bytes": 7742689,
+          "peak_extra_bytes": 10479193
+        }
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 2048,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 128,
+          "runs": 1024,
+          "sha256": "a57aa70b405b71f2e9dedd6a35341707d9205c77e6f6a3f31e125e4a2fe314c2",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 213064,
+          "allocated_bytes": 24358746,
+          "deallocated_bytes": 16087762,
+          "net_bytes": 8270984,
+          "peak_extra_bytes": 8279300
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 32,
+          "sha256": "1431afb4f0b6c7d90ca274377bba067dece82b51f7e4511dcd2b4255be0876c4",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4875,
+          "allocated_bytes": 1042481,
+          "deallocated_bytes": 797006,
+          "net_bytes": 245475,
+          "peak_extra_bytes": 330127
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 32,
+          "sha256": "1431afb4f0b6c7d90ca274377bba067dece82b51f7e4511dcd2b4255be0876c4",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 7075,
+          "allocated_bytes": 906995,
+          "deallocated_bytes": 675747,
+          "net_bytes": 231248,
+          "peak_extra_bytes": 235668
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 24,
+          "sha256": "a76cfefedf6f3bb942285f9b93f662f1414ab9c890d6f215d6ae76658a47c4a3",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 2840,
+          "allocated_bytes": 655764,
+          "deallocated_bytes": 528539,
+          "net_bytes": 127225,
+          "peak_extra_bytes": 189073
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 24,
+          "sha256": "a76cfefedf6f3bb942285f9b93f662f1414ab9c890d6f215d6ae76658a47c4a3",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6637,
+          "allocated_bytes": 719934,
+          "deallocated_bytes": 478198,
+          "net_bytes": 241736,
+          "peak_extra_bytes": 247732
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 112,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 48,
+          "sha256": "f6e5f631d1c486bb9e6f943e96c5d4f2ab80be49334b9108fbd25416ced38202",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 7588,
+          "allocated_bytes": 1436976,
+          "deallocated_bytes": 1118667,
+          "net_bytes": 318309,
+          "peak_extra_bytes": 462733
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 112,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 48,
+          "sha256": "f6e5f631d1c486bb9e6f943e96c5d4f2ab80be49334b9108fbd25416ced38202",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 8398,
+          "allocated_bytes": 1089152,
+          "deallocated_bytes": 685704,
+          "net_bytes": 403448,
+          "peak_extra_bytes": 416972
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 60,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 28,
+          "sha256": "49235decf2451b90b3b5df4a42118603e2f339c794cd2fe147a17fc938546fd7",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4266,
+          "allocated_bytes": 892608,
+          "deallocated_bytes": 709695,
+          "net_bytes": 182913,
+          "peak_extra_bytes": 271845
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 60,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 28,
+          "sha256": "49235decf2451b90b3b5df4a42118603e2f339c794cd2fe147a17fc938546fd7",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6867,
+          "allocated_bytes": 765754,
+          "deallocated_bytes": 507618,
+          "net_bytes": 258136,
+          "peak_extra_bytes": 266280
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 66,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 34,
+          "sha256": "d4f690fba0c350dec4495af436b0158ed757417aa4f7720aac70e2df009d9224",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4364,
+          "allocated_bytes": 916490,
+          "deallocated_bytes": 723921,
+          "net_bytes": 192569,
+          "peak_extra_bytes": 281939
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 66,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 34,
+          "sha256": "d4f690fba0c350dec4495af436b0158ed757417aa4f7720aac70e2df009d9224",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 7176,
+          "allocated_bytes": 867509,
+          "deallocated_bytes": 563773,
+          "net_bytes": 303736,
+          "peak_extra_bytes": 308156
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 66,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 34,
+          "sha256": "352f9a5c5f5ed980185a8bbf8be50b28113306f48bf17980aba0c0f6f173420c",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4364,
+          "allocated_bytes": 916490,
+          "deallocated_bytes": 723921,
+          "net_bytes": 192569,
+          "peak_extra_bytes": 281939
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 66,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 34,
+          "sha256": "352f9a5c5f5ed980185a8bbf8be50b28113306f48bf17980aba0c0f6f173420c",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6934,
+          "allocated_bytes": 776409,
+          "deallocated_bytes": 513573,
+          "net_bytes": 262836,
+          "peak_extra_bytes": 267256
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 8,
+          "runs": 32,
+          "sha256": "cd9e46c47c01f90317bfedce885c04d6ec1c549f8ae2579e7e31248d9c26f401",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4457,
+          "allocated_bytes": 912236,
+          "deallocated_bytes": 724987,
+          "net_bytes": 187249,
+          "peak_extra_bytes": 276601
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 8,
+          "runs": 32,
+          "sha256": "cd9e46c47c01f90317bfedce885c04d6ec1c549f8ae2579e7e31248d9c26f401",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6533,
+          "allocated_bytes": 849098,
+          "deallocated_bytes": 540782,
+          "net_bytes": 308316,
+          "peak_extra_bytes": 313164
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 76,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 36,
+          "sha256": "f8975d12a298c277a19657ea7ae1c6a672f65d2c5d671d2b841942d4c04d677a",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 5504,
+          "allocated_bytes": 1178308,
+          "deallocated_bytes": 943391,
+          "net_bytes": 234917,
+          "peak_extra_bytes": 349589
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 76,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 36,
+          "sha256": "f8975d12a298c277a19657ea7ae1c6a672f65d2c5d671d2b841942d4c04d677a",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 13882,
+          "allocated_bytes": 1202282,
+          "deallocated_bytes": 803922,
+          "net_bytes": 398360,
+          "peak_extra_bytes": 407876
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 32,
+          "sha256": "34a8e08f9d5abf559fe8b04450f5ba1f05a4fa8437aa4a9db59edb3b61a5daff",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4330,
+          "allocated_bytes": 905148,
+          "deallocated_bytes": 718027,
+          "net_bytes": 187121,
+          "peak_extra_bytes": 276473
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 32,
+          "sha256": "34a8e08f9d5abf559fe8b04450f5ba1f05a4fa8437aa4a9db59edb3b61a5daff",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 7338,
+          "allocated_bytes": 1214570,
+          "deallocated_bytes": 1190138,
+          "net_bytes": 24432,
+          "peak_extra_bytes": 167776
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 128,
+          "sha256": "beb88e435b0744a9a6d89e795ab89ad5fc506e6daaa4e67e378e72833bf099e6",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 17827,
+          "allocated_bytes": 4116881,
+          "deallocated_bytes": 3130910,
+          "net_bytes": 985971,
+          "peak_extra_bytes": 1305579
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 128,
+          "sha256": "beb88e435b0744a9a6d89e795ab89ad5fc506e6daaa4e67e378e72833bf099e6",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 27258,
+          "allocated_bytes": 3666703,
+          "deallocated_bytes": 2643935,
+          "net_bytes": 1022768,
+          "peak_extra_bytes": 1023748
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 96,
+          "sha256": "c7bd3686a4511b9ff21f13acf88bfd55412f574ce1a4b6f71acf5ecceace22f8",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 10400,
+          "allocated_bytes": 2551404,
+          "deallocated_bytes": 2063627,
+          "net_bytes": 487777,
+          "peak_extra_bytes": 723289
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 96,
+          "sha256": "c7bd3686a4511b9ff21f13acf88bfd55412f574ce1a4b6f71acf5ecceace22f8",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 25779,
+          "allocated_bytes": 2858290,
+          "deallocated_bytes": 1893290,
+          "net_bytes": 965000,
+          "peak_extra_bytes": 970996
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 448,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 192,
+          "sha256": "fc2a1c699409654f65fbf0a8ca337fe799b6aab0dd4f47c533a2246fdca07b9b",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 29360,
+          "allocated_bytes": 5721072,
+          "deallocated_bytes": 4425483,
+          "net_bytes": 1295589,
+          "peak_extra_bytes": 1861213
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 448,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 192,
+          "sha256": "fc2a1c699409654f65fbf0a8ca337fe799b6aab0dd4f47c533a2246fdca07b9b",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 32808,
+          "allocated_bytes": 4334424,
+          "deallocated_bytes": 2722576,
+          "net_bytes": 1611848,
+          "peak_extra_bytes": 1625372
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 240,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 112,
+          "sha256": "b2ae727e91da45adf8e919b9476f6ea5cfbee07b532246698930441b0fe3e270",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16122,
+          "allocated_bytes": 3512028,
+          "deallocated_bytes": 2788731,
+          "net_bytes": 723297,
+          "peak_extra_bytes": 1067145
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 240,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 112,
+          "sha256": "b2ae727e91da45adf8e919b9476f6ea5cfbee07b532246698930441b0fe3e270",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 26668,
+          "allocated_bytes": 3019122,
+          "deallocated_bytes": 1994746,
+          "net_bytes": 1024376,
+          "peak_extra_bytes": 1032520
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 258,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 130,
+          "sha256": "a13da0d9f96efea8a4b82612eeba7d7863ee21303943b3d2a8518ebbe85711f5",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16388,
+          "allocated_bytes": 3606938,
+          "deallocated_bytes": 2842497,
+          "net_bytes": 764441,
+          "peak_extra_bytes": 1109987
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 258,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 130,
+          "sha256": "a13da0d9f96efea8a4b82612eeba7d7863ee21303943b3d2a8518ebbe85711f5",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 27384,
+          "allocated_bytes": 3425649,
+          "deallocated_bytes": 2221385,
+          "net_bytes": 1204264,
+          "peak_extra_bytes": 1205332
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 258,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 130,
+          "sha256": "8fab5a1c1afd258a32d336f3bb8010a829b6aa4cf46b4458c512740f5088756f",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16388,
+          "allocated_bytes": 3606938,
+          "deallocated_bytes": 2842497,
+          "net_bytes": 764441,
+          "peak_extra_bytes": 1109987
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 258,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 130,
+          "sha256": "8fab5a1c1afd258a32d336f3bb8010a829b6aa4cf46b4458c512740f5088756f",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 26904,
+          "allocated_bytes": 3068773,
+          "deallocated_bytes": 2025985,
+          "net_bytes": 1042788,
+          "peak_extra_bytes": 1043856
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 32,
+          "runs": 128,
+          "sha256": "b6e9f98a3383557a4946733ef9c98a1cc5b421124861beb2d1d1e0b5d91ce906",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16865,
+          "allocated_bytes": 3598988,
+          "deallocated_bytes": 2851051,
+          "net_bytes": 747937,
+          "peak_extra_bytes": 1093465
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 32,
+          "runs": 128,
+          "sha256": "b6e9f98a3383557a4946733ef9c98a1cc5b421124861beb2d1d1e0b5d91ce906",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 25289,
+          "allocated_bytes": 3364530,
+          "deallocated_bytes": 2134902,
+          "net_bytes": 1229628,
+          "peak_extra_bytes": 1234476
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 304,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 144,
+          "sha256": "edd2fc7b1804253141978d27c4321426b76dbe794efa9347169d1814da1b8581",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 21024,
+          "allocated_bytes": 4662796,
+          "deallocated_bytes": 3725339,
+          "net_bytes": 937457,
+          "peak_extra_bytes": 1385513
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 304,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 144,
+          "sha256": "edd2fc7b1804253141978d27c4321426b76dbe794efa9347169d1814da1b8581",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 54408,
+          "allocated_bytes": 4772850,
+          "deallocated_bytes": 3181738,
+          "net_bytes": 1591112,
+          "peak_extra_bytes": 1600628
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 128,
+          "sha256": "e7e5c52e4ecf4d40630f749a9627d598f19d9454c9d6299bb728639634b20d40",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16354,
+          "allocated_bytes": 3568332,
+          "deallocated_bytes": 2822059,
+          "net_bytes": 746273,
+          "peak_extra_bytes": 1091801
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 128,
+          "sha256": "e7e5c52e4ecf4d40630f749a9627d598f19d9454c9d6299bb728639634b20d40",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 32300,
+          "allocated_bytes": 11963574,
+          "deallocated_bytes": 11866710,
+          "net_bytes": 96864,
+          "peak_extra_bytes": 557872
+        }
+      }
+    ],
+    "after": [
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 32,
+          "sha256": "34a8e08f9d5abf559fe8b04450f5ba1f05a4fa8437aa4a9db59edb3b61a5daff",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4330,
+          "allocated_bytes": 905148,
+          "deallocated_bytes": 718027,
+          "net_bytes": 187121,
+          "peak_extra_bytes": 276473
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 32,
+          "sha256": "34a8e08f9d5abf559fe8b04450f5ba1f05a4fa8437aa4a9db59edb3b61a5daff",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6911,
+          "allocated_bytes": 767470,
+          "deallocated_bytes": 508374,
+          "net_bytes": 259096,
+          "peak_extra_bytes": 267412
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 128,
+          "sha256": "e7e5c52e4ecf4d40630f749a9627d598f19d9454c9d6299bb728639634b20d40",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16354,
+          "allocated_bytes": 3568332,
+          "deallocated_bytes": 2822059,
+          "net_bytes": 746273,
+          "peak_extra_bytes": 1091801
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 128,
+          "sha256": "e7e5c52e4ecf4d40630f749a9627d598f19d9454c9d6299bb728639634b20d40",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 26881,
+          "allocated_bytes": 3050618,
+          "deallocated_bytes": 2016178,
+          "net_bytes": 1034440,
+          "peak_extra_bytes": 1042756
+        }
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 1024,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 64,
+          "runs": 512,
+          "sha256": "4e08224e0ec447bb58d2f69571888779b08656eb638be23780ce066ed049751e",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 64234,
+          "allocated_bytes": 14589708,
+          "deallocated_bytes": 11238187,
+          "net_bytes": 3351521,
+          "peak_extra_bytes": 4721753
+        }
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 1024,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 64,
+          "runs": 512,
+          "sha256": "4e08224e0ec447bb58d2f69571888779b08656eb638be23780ce066ed049751e",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 106683,
+          "allocated_bytes": 12182730,
+          "deallocated_bytes": 8046914,
+          "net_bytes": 4135816,
+          "peak_extra_bytes": 4144132
+        }
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 2048,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 128,
+          "runs": 1024,
+          "sha256": "a57aa70b405b71f2e9dedd6a35341707d9205c77e6f6a3f31e125e4a2fe314c2",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 128014,
+          "allocated_bytes": 30202380,
+          "deallocated_bytes": 22459691,
+          "net_bytes": 7742689,
+          "peak_extra_bytes": 10479193
+        }
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 2048,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 128,
+          "runs": 1024,
+          "sha256": "a57aa70b405b71f2e9dedd6a35341707d9205c77e6f6a3f31e125e4a2fe314c2",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 213064,
+          "allocated_bytes": 24358746,
+          "deallocated_bytes": 16087762,
+          "net_bytes": 8270984,
+          "peak_extra_bytes": 8279300
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 32,
+          "sha256": "1431afb4f0b6c7d90ca274377bba067dece82b51f7e4511dcd2b4255be0876c4",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4875,
+          "allocated_bytes": 1042481,
+          "deallocated_bytes": 797006,
+          "net_bytes": 245475,
+          "peak_extra_bytes": 330127
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 32,
+          "sha256": "1431afb4f0b6c7d90ca274377bba067dece82b51f7e4511dcd2b4255be0876c4",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 7075,
+          "allocated_bytes": 906995,
+          "deallocated_bytes": 675747,
+          "net_bytes": 231248,
+          "peak_extra_bytes": 235668
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 24,
+          "sha256": "a76cfefedf6f3bb942285f9b93f662f1414ab9c890d6f215d6ae76658a47c4a3",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 2840,
+          "allocated_bytes": 655764,
+          "deallocated_bytes": 528539,
+          "net_bytes": 127225,
+          "peak_extra_bytes": 189073
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 24,
+          "sha256": "a76cfefedf6f3bb942285f9b93f662f1414ab9c890d6f215d6ae76658a47c4a3",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6637,
+          "allocated_bytes": 719934,
+          "deallocated_bytes": 478198,
+          "net_bytes": 241736,
+          "peak_extra_bytes": 247732
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 112,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 48,
+          "sha256": "f6e5f631d1c486bb9e6f943e96c5d4f2ab80be49334b9108fbd25416ced38202",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 7588,
+          "allocated_bytes": 1436976,
+          "deallocated_bytes": 1118667,
+          "net_bytes": 318309,
+          "peak_extra_bytes": 462733
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 112,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 48,
+          "sha256": "f6e5f631d1c486bb9e6f943e96c5d4f2ab80be49334b9108fbd25416ced38202",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 8398,
+          "allocated_bytes": 1089152,
+          "deallocated_bytes": 685704,
+          "net_bytes": 403448,
+          "peak_extra_bytes": 416972
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 60,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 28,
+          "sha256": "49235decf2451b90b3b5df4a42118603e2f339c794cd2fe147a17fc938546fd7",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4266,
+          "allocated_bytes": 892608,
+          "deallocated_bytes": 709695,
+          "net_bytes": 182913,
+          "peak_extra_bytes": 271845
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 60,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 28,
+          "sha256": "49235decf2451b90b3b5df4a42118603e2f339c794cd2fe147a17fc938546fd7",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6867,
+          "allocated_bytes": 765754,
+          "deallocated_bytes": 507618,
+          "net_bytes": 258136,
+          "peak_extra_bytes": 266280
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 66,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 34,
+          "sha256": "d4f690fba0c350dec4495af436b0158ed757417aa4f7720aac70e2df009d9224",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4364,
+          "allocated_bytes": 916490,
+          "deallocated_bytes": 723921,
+          "net_bytes": 192569,
+          "peak_extra_bytes": 281939
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 66,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 34,
+          "sha256": "d4f690fba0c350dec4495af436b0158ed757417aa4f7720aac70e2df009d9224",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 7176,
+          "allocated_bytes": 867509,
+          "deallocated_bytes": 563773,
+          "net_bytes": 303736,
+          "peak_extra_bytes": 308156
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 66,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 34,
+          "sha256": "352f9a5c5f5ed980185a8bbf8be50b28113306f48bf17980aba0c0f6f173420c",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4364,
+          "allocated_bytes": 916490,
+          "deallocated_bytes": 723921,
+          "net_bytes": 192569,
+          "peak_extra_bytes": 281939
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 66,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 5,
+          "runs": 34,
+          "sha256": "352f9a5c5f5ed980185a8bbf8be50b28113306f48bf17980aba0c0f6f173420c",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6934,
+          "allocated_bytes": 776409,
+          "deallocated_bytes": 513573,
+          "net_bytes": 262836,
+          "peak_extra_bytes": 267256
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 8,
+          "runs": 32,
+          "sha256": "cd9e46c47c01f90317bfedce885c04d6ec1c549f8ae2579e7e31248d9c26f401",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4457,
+          "allocated_bytes": 912236,
+          "deallocated_bytes": 724987,
+          "net_bytes": 187249,
+          "peak_extra_bytes": 276601
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 8,
+          "runs": 32,
+          "sha256": "cd9e46c47c01f90317bfedce885c04d6ec1c549f8ae2579e7e31248d9c26f401",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 6533,
+          "allocated_bytes": 849098,
+          "deallocated_bytes": 540782,
+          "net_bytes": 308316,
+          "peak_extra_bytes": 313164
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 76,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 36,
+          "sha256": "f8975d12a298c277a19657ea7ae1c6a672f65d2c5d671d2b841942d4c04d677a",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 5504,
+          "allocated_bytes": 1178308,
+          "deallocated_bytes": 943391,
+          "net_bytes": 234917,
+          "peak_extra_bytes": 349589
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 76,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 36,
+          "sha256": "f8975d12a298c277a19657ea7ae1c6a672f65d2c5d671d2b841942d4c04d677a",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 13882,
+          "allocated_bytes": 1202282,
+          "deallocated_bytes": 803922,
+          "net_bytes": 398360,
+          "peak_extra_bytes": 407876
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 32,
+          "sha256": "34a8e08f9d5abf559fe8b04450f5ba1f05a4fa8437aa4a9db59edb3b61a5daff",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 4330,
+          "allocated_bytes": 905148,
+          "deallocated_bytes": 718027,
+          "net_bytes": 187121,
+          "peak_extra_bytes": 276473
+        }
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 4,
+          "runs": 32,
+          "sha256": "34a8e08f9d5abf559fe8b04450f5ba1f05a4fa8437aa4a9db59edb3b61a5daff",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 7338,
+          "allocated_bytes": 1214570,
+          "deallocated_bytes": 1190138,
+          "net_bytes": 24432,
+          "peak_extra_bytes": 167776
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 128,
+          "sha256": "beb88e435b0744a9a6d89e795ab89ad5fc506e6daaa4e67e378e72833bf099e6",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 17827,
+          "allocated_bytes": 4116881,
+          "deallocated_bytes": 3130910,
+          "net_bytes": 985971,
+          "peak_extra_bytes": 1305579
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 128,
+          "sha256": "beb88e435b0744a9a6d89e795ab89ad5fc506e6daaa4e67e378e72833bf099e6",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 27258,
+          "allocated_bytes": 3666703,
+          "deallocated_bytes": 2643935,
+          "net_bytes": 1022768,
+          "peak_extra_bytes": 1023748
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 96,
+          "sha256": "c7bd3686a4511b9ff21f13acf88bfd55412f574ce1a4b6f71acf5ecceace22f8",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 10400,
+          "allocated_bytes": 2551404,
+          "deallocated_bytes": 2063627,
+          "net_bytes": 487777,
+          "peak_extra_bytes": 723289
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 96,
+          "sha256": "c7bd3686a4511b9ff21f13acf88bfd55412f574ce1a4b6f71acf5ecceace22f8",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 25779,
+          "allocated_bytes": 2858290,
+          "deallocated_bytes": 1893290,
+          "net_bytes": 965000,
+          "peak_extra_bytes": 970996
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 448,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 192,
+          "sha256": "fc2a1c699409654f65fbf0a8ca337fe799b6aab0dd4f47c533a2246fdca07b9b",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 29360,
+          "allocated_bytes": 5721072,
+          "deallocated_bytes": 4425483,
+          "net_bytes": 1295589,
+          "peak_extra_bytes": 1861213
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 448,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 192,
+          "sha256": "fc2a1c699409654f65fbf0a8ca337fe799b6aab0dd4f47c533a2246fdca07b9b",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 32808,
+          "allocated_bytes": 4334424,
+          "deallocated_bytes": 2722576,
+          "net_bytes": 1611848,
+          "peak_extra_bytes": 1625372
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 240,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 112,
+          "sha256": "b2ae727e91da45adf8e919b9476f6ea5cfbee07b532246698930441b0fe3e270",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16122,
+          "allocated_bytes": 3512028,
+          "deallocated_bytes": 2788731,
+          "net_bytes": 723297,
+          "peak_extra_bytes": 1067145
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 240,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 112,
+          "sha256": "b2ae727e91da45adf8e919b9476f6ea5cfbee07b532246698930441b0fe3e270",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 26668,
+          "allocated_bytes": 3019122,
+          "deallocated_bytes": 1994746,
+          "net_bytes": 1024376,
+          "peak_extra_bytes": 1032520
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 258,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 130,
+          "sha256": "a13da0d9f96efea8a4b82612eeba7d7863ee21303943b3d2a8518ebbe85711f5",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16388,
+          "allocated_bytes": 3606938,
+          "deallocated_bytes": 2842497,
+          "net_bytes": 764441,
+          "peak_extra_bytes": 1109987
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 258,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 130,
+          "sha256": "a13da0d9f96efea8a4b82612eeba7d7863ee21303943b3d2a8518ebbe85711f5",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 27384,
+          "allocated_bytes": 3425649,
+          "deallocated_bytes": 2221385,
+          "net_bytes": 1204264,
+          "peak_extra_bytes": 1205332
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 258,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 130,
+          "sha256": "8fab5a1c1afd258a32d336f3bb8010a829b6aa4cf46b4458c512740f5088756f",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16388,
+          "allocated_bytes": 3606938,
+          "deallocated_bytes": 2842497,
+          "net_bytes": 764441,
+          "peak_extra_bytes": 1109987
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 258,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 130,
+          "sha256": "8fab5a1c1afd258a32d336f3bb8010a829b6aa4cf46b4458c512740f5088756f",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 26904,
+          "allocated_bytes": 3068773,
+          "deallocated_bytes": 2025985,
+          "net_bytes": 1042788,
+          "peak_extra_bytes": 1043856
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 32,
+          "runs": 128,
+          "sha256": "b6e9f98a3383557a4946733ef9c98a1cc5b421124861beb2d1d1e0b5d91ce906",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16865,
+          "allocated_bytes": 3598988,
+          "deallocated_bytes": 2851051,
+          "net_bytes": 747937,
+          "peak_extra_bytes": 1093465
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 32,
+          "runs": 128,
+          "sha256": "b6e9f98a3383557a4946733ef9c98a1cc5b421124861beb2d1d1e0b5d91ce906",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 25289,
+          "allocated_bytes": 3364530,
+          "deallocated_bytes": 2134902,
+          "net_bytes": 1229628,
+          "peak_extra_bytes": 1234476
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 304,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 144,
+          "sha256": "edd2fc7b1804253141978d27c4321426b76dbe794efa9347169d1814da1b8581",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 21024,
+          "allocated_bytes": 4662796,
+          "deallocated_bytes": 3725339,
+          "net_bytes": 937457,
+          "peak_extra_bytes": 1385513
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 304,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 144,
+          "sha256": "edd2fc7b1804253141978d27c4321426b76dbe794efa9347169d1814da1b8581",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 54408,
+          "allocated_bytes": 4772850,
+          "deallocated_bytes": 3181738,
+          "net_bytes": 1591112,
+          "peak_extra_bytes": 1600628
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 128,
+          "sha256": "e7e5c52e4ecf4d40630f749a9627d598f19d9454c9d6299bb728639634b20d40",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16354,
+          "allocated_bytes": 3568332,
+          "deallocated_bytes": 2822059,
+          "net_bytes": 746273,
+          "peak_extra_bytes": 1091801
+        }
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 16,
+          "runs": 128,
+          "sha256": "e7e5c52e4ecf4d40630f749a9627d598f19d9454c9d6299bb728639634b20d40",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 32300,
+          "allocated_bytes": 11963574,
+          "deallocated_bytes": 11866710,
+          "net_bytes": 96864,
+          "peak_extra_bytes": 557872
+        }
+      }
+    ]
+  },
+  "balanced_timing": {
+    "balanced-0-before": [
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 627624.0
+      },
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 619243.0
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 2363160.5
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 3491152.5
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 9553916.5
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 27189178.0
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 20420284.5
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 84562126.5
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "build",
+        "median_ns": 697678.5
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "layout",
+        "median_ns": 625669.0
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "build",
+        "median_ns": 439253.5
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "layout",
+        "median_ns": 605972.5
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "build",
+        "median_ns": 1037857.5
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "layout",
+        "median_ns": 777231.5
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "build",
+        "median_ns": 609849.0
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "layout",
+        "median_ns": 690309.5
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "build",
+        "median_ns": 625249.5
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "layout",
+        "median_ns": 669950.0
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "build",
+        "median_ns": 785438.5
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "layout",
+        "median_ns": 647495.0
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "build",
+        "median_ns": 625564.0
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "layout",
+        "median_ns": 636250.0
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "build",
+        "median_ns": 779990.5
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "layout",
+        "median_ns": 1187290.0
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "build",
+        "median_ns": 612259.0
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "layout",
+        "median_ns": 715000.0
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "build",
+        "median_ns": 2558516.0
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "layout",
+        "median_ns": 3422949.0
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "build",
+        "median_ns": 1553241.5
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "layout",
+        "median_ns": 3276659.5
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "build",
+        "median_ns": 4016803.0
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "layout",
+        "median_ns": 4260038.0
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "build",
+        "median_ns": 2358027.0
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "layout",
+        "median_ns": 3373743.5
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "build",
+        "median_ns": 2315002.5
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "layout",
+        "median_ns": 3617466.5
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "build",
+        "median_ns": 2286959.5
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "layout",
+        "median_ns": 3587957.0
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "build",
+        "median_ns": 2351007.0
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "layout",
+        "median_ns": 3617641.0
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "build",
+        "median_ns": 2994382.0
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "layout",
+        "median_ns": 6298804.5
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "build",
+        "median_ns": 2311929.0
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "layout",
+        "median_ns": 4352931.5
+      }
+    ],
+    "balanced-1-lanes": [
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 620151.0
+      },
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 617916.0
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 2278438.5
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 3378318.0
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 9306910.0
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 25115978.0
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 19687544.0
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 79922517.0
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "build",
+        "median_ns": 707142.5
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "layout",
+        "median_ns": 633142.0
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "build",
+        "median_ns": 434434.0
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "layout",
+        "median_ns": 602411.0
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "build",
+        "median_ns": 1003284.0
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "layout",
+        "median_ns": 775101.5
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "build",
+        "median_ns": 615751.0
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "layout",
+        "median_ns": 610966.5
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "build",
+        "median_ns": 620710.0
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "layout",
+        "median_ns": 656889.5
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "build",
+        "median_ns": 621757.5
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "layout",
+        "median_ns": 656120.5
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "build",
+        "median_ns": 667680.5
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "layout",
+        "median_ns": 717584.5
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "build",
+        "median_ns": 865899.5
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "layout",
+        "median_ns": 1182576.0
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "build",
+        "median_ns": 612049.5
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "layout",
+        "median_ns": 675782.5
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "build",
+        "median_ns": 2549366.0
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "layout",
+        "median_ns": 3491711.0
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "build",
+        "median_ns": 1541542.0
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "layout",
+        "median_ns": 3227383.5
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "build",
+        "median_ns": 3886717.5
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "layout",
+        "median_ns": 4032239.5
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "build",
+        "median_ns": 2220816.5
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "layout",
+        "median_ns": 3317868.0
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "build",
+        "median_ns": 2262200.0
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "layout",
+        "median_ns": 3476834.5
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "build",
+        "median_ns": 2303688.0
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "layout",
+        "median_ns": 3388445.5
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "build",
+        "median_ns": 2313780.5
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "layout",
+        "median_ns": 3637966.0
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "build",
+        "median_ns": 3025498.0
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "layout",
+        "median_ns": 6230461.0
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "build",
+        "median_ns": 2296563.5
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "layout",
+        "median_ns": 4483750.0
+      }
+    ],
+    "balanced-2-after": [
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 657622.5
+      },
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 638066.0
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 2275296.0
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 2402203.5
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 9403715.0
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 10486168.5
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 20161370.0
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 22282274.5
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "build",
+        "median_ns": 701799.5
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "layout",
+        "median_ns": 581596.5
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "build",
+        "median_ns": 431570.5
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "layout",
+        "median_ns": 542309.5
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "build",
+        "median_ns": 1009116.5
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "layout",
+        "median_ns": 715524.0
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "build",
+        "median_ns": 617322.0
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "layout",
+        "median_ns": 558897.0
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "build",
+        "median_ns": 629580.0
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "layout",
+        "median_ns": 601607.5
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "build",
+        "median_ns": 622455.5
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "layout",
+        "median_ns": 571015.0
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "build",
+        "median_ns": 620151.0
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "layout",
+        "median_ns": 582819.0
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "build",
+        "median_ns": 771085.0
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "layout",
+        "median_ns": 1073129.0
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "build",
+        "median_ns": 624760.5
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "layout",
+        "median_ns": 619592.0
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "build",
+        "median_ns": 2584567.5
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "layout",
+        "median_ns": 2469324.0
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "build",
+        "median_ns": 1589805.0
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "layout",
+        "median_ns": 2346083.0
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "build",
+        "median_ns": 3842645.5
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "layout",
+        "median_ns": 3072747.5
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "build",
+        "median_ns": 2223541.0
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "layout",
+        "median_ns": 2357084.0
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "build",
+        "median_ns": 2281128.0
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "layout",
+        "median_ns": 2554150.5
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "build",
+        "median_ns": 2284585.0
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "layout",
+        "median_ns": 2401260.5
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "build",
+        "median_ns": 2277461.0
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "layout",
+        "median_ns": 2366338.5
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "build",
+        "median_ns": 2894923.0
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "layout",
+        "median_ns": 4630773.5
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "build",
+        "median_ns": 2266879.5
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "layout",
+        "median_ns": 3380657.5
+      }
+    ],
+    "balanced-3-after": [
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 621757.0
+      },
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 581980.5
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 2270721.5
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 2415230.0
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 9420723.0
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 10534187.0
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 19941778.5
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 21887547.0
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "build",
+        "median_ns": 693767.0
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "layout",
+        "median_ns": 577022.0
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "build",
+        "median_ns": 433735.0
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "layout",
+        "median_ns": 559805.5
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "build",
+        "median_ns": 1018580.5
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "layout",
+        "median_ns": 778803.0
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "build",
+        "median_ns": 610058.5
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "layout",
+        "median_ns": 566231.0
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "build",
+        "median_ns": 626367.5
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "layout",
+        "median_ns": 596963.0
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "build",
+        "median_ns": 626227.0
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "layout",
+        "median_ns": 576777.5
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "build",
+        "median_ns": 644736.5
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "layout",
+        "median_ns": 875643.5
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "build",
+        "median_ns": 1476621.5
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "layout",
+        "median_ns": 2226719.0
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "build",
+        "median_ns": 1213168.0
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "layout",
+        "median_ns": 1121391.5
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "build",
+        "median_ns": 5406817.5
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "layout",
+        "median_ns": 5008284.0
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "build",
+        "median_ns": 2950728.5
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "layout",
+        "median_ns": 4573395.5
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "build",
+        "median_ns": 7439193.5
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "layout",
+        "median_ns": 6463114.0
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "build",
+        "median_ns": 4479629.5
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "layout",
+        "median_ns": 6593933.0
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "build",
+        "median_ns": 4469397.0
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "layout",
+        "median_ns": 5026653.0
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "build",
+        "median_ns": 4551988.5
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "layout",
+        "median_ns": 4518463.0
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "build",
+        "median_ns": 4113154.0
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "layout",
+        "median_ns": 2780762.0
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "build",
+        "median_ns": 3098590.0
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "layout",
+        "median_ns": 4620820.5
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "build",
+        "median_ns": 2260524.0
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "layout",
+        "median_ns": 3406954.5
+      }
+    ],
+    "balanced-4-lanes": [
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 623643.5
+      },
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 616205.0
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 2222947.5
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 3310743.0
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 9222363.5
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 25084339.0
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 19090581.0
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 79749722.0
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "build",
+        "median_ns": 693732.5
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "layout",
+        "median_ns": 635237.5
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "build",
+        "median_ns": 430557.5
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "layout",
+        "median_ns": 625284.5
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "build",
+        "median_ns": 1004995.5
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "layout",
+        "median_ns": 785857.5
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "build",
+        "median_ns": 617776.5
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "layout",
+        "median_ns": 611979.0
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "build",
+        "median_ns": 625285.0
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "layout",
+        "median_ns": 653641.0
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "build",
+        "median_ns": 617845.5
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "layout",
+        "median_ns": 624447.0
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "build",
+        "median_ns": 621059.5
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "layout",
+        "median_ns": 633806.0
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "build",
+        "median_ns": 776533.0
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "layout",
+        "median_ns": 1169130.0
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "build",
+        "median_ns": 613411.0
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "layout",
+        "median_ns": 679484.0
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "build",
+        "median_ns": 2640374.5
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "layout",
+        "median_ns": 3404650.0
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "build",
+        "median_ns": 1572693.0
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "layout",
+        "median_ns": 3230247.0
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "build",
+        "median_ns": 3885984.5
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "layout",
+        "median_ns": 4027559.5
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "build",
+        "median_ns": 2252072.5
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "layout",
+        "median_ns": 3333652.5
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "build",
+        "median_ns": 2325025.0
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "layout",
+        "median_ns": 3431540.5
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "build",
+        "median_ns": 2298728.5
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "layout",
+        "median_ns": 3385686.5
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "build",
+        "median_ns": 2365989.0
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "layout",
+        "median_ns": 3670513.0
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "build",
+        "median_ns": 3198328.5
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "layout",
+        "median_ns": 6722587.0
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "build",
+        "median_ns": 4614883.0
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "layout",
+        "median_ns": 8017228.5
+      }
+    ],
+    "balanced-5-before": [
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 1111858.0
+      },
+      {
+        "columns": 16,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 1161866.5
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 2432202.0
+      },
+      {
+        "columns": 64,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 3596443.5
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 12727624.5
+      },
+      {
+        "columns": 256,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 37899304.0
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "build",
+        "median_ns": 31724718.5
+      },
+      {
+        "columns": 512,
+        "mode": "plain",
+        "operation": "layout",
+        "median_ns": 84433961.5
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "build",
+        "median_ns": 695374.0
+      },
+      {
+        "columns": 16,
+        "mode": "first-line",
+        "operation": "layout",
+        "median_ns": 622805.0
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "build",
+        "median_ns": 432338.5
+      },
+      {
+        "columns": 16,
+        "mode": "spanning",
+        "operation": "layout",
+        "median_ns": 599617.0
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "build",
+        "median_ns": 1033457.0
+      },
+      {
+        "columns": 16,
+        "mode": "multilevel",
+        "operation": "layout",
+        "median_ns": 783238.5
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "build",
+        "median_ns": 619418.0
+      },
+      {
+        "columns": 16,
+        "mode": "empty",
+        "operation": "layout",
+        "median_ns": 605763.0
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "build",
+        "median_ns": 618859.0
+      },
+      {
+        "columns": 16,
+        "mode": "merge",
+        "operation": "layout",
+        "median_ns": 645085.5
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "build",
+        "median_ns": 615680.5
+      },
+      {
+        "columns": 16,
+        "mode": "overhang",
+        "operation": "layout",
+        "median_ns": 632164.0
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "build",
+        "median_ns": 618405.0
+      },
+      {
+        "columns": 16,
+        "mode": "rtl",
+        "operation": "layout",
+        "median_ns": 639149.0
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "build",
+        "median_ns": 765777.0
+      },
+      {
+        "columns": 16,
+        "mode": "nested",
+        "operation": "layout",
+        "median_ns": 1182505.5
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "build",
+        "median_ns": 612363.0
+      },
+      {
+        "columns": 16,
+        "mode": "resume",
+        "operation": "layout",
+        "median_ns": 672499.0
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "build",
+        "median_ns": 2603530.5
+      },
+      {
+        "columns": 64,
+        "mode": "first-line",
+        "operation": "layout",
+        "median_ns": 3538192.5
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "build",
+        "median_ns": 1570597.5
+      },
+      {
+        "columns": 64,
+        "mode": "spanning",
+        "operation": "layout",
+        "median_ns": 3480186.0
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "build",
+        "median_ns": 4194698.0
+      },
+      {
+        "columns": 64,
+        "mode": "multilevel",
+        "operation": "layout",
+        "median_ns": 4236814.5
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "build",
+        "median_ns": 2380307.0
+      },
+      {
+        "columns": 64,
+        "mode": "empty",
+        "operation": "layout",
+        "median_ns": 3414847.0
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "build",
+        "median_ns": 4108194.5
+      },
+      {
+        "columns": 64,
+        "mode": "merge",
+        "operation": "layout",
+        "median_ns": 7003362.5
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "build",
+        "median_ns": 4699570.0
+      },
+      {
+        "columns": 64,
+        "mode": "overhang",
+        "operation": "layout",
+        "median_ns": 6984574.5
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "build",
+        "median_ns": 4455428.5
+      },
+      {
+        "columns": 64,
+        "mode": "rtl",
+        "operation": "layout",
+        "median_ns": 5406747.5
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "build",
+        "median_ns": 5292482.0
+      },
+      {
+        "columns": 64,
+        "mode": "nested",
+        "operation": "layout",
+        "median_ns": 11883237.0
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "build",
+        "median_ns": 2449872.5
+      },
+      {
+        "columns": 64,
+        "mode": "resume",
+        "operation": "layout",
+        "median_ns": 4637897.5
+      }
+    ]
+  },
+  "validation_counts": {
+    "workspace": 1064,
+    "no_default_features": 611,
+    "complex_only": 614
+  },
+  "measurement_limitations": [
+    "Gross requested allocation bytes are not retained memory or RSS; allocation calls and net retention do not improve in the primary cases.",
+    "Build still prepares all columns and dense paired cuts; this optimization is in candidate measurement and accepted placement.",
+    "Lane queries depend on preparation ordering (level, nonoverlapping columns); original paired-cut lane IDs and merge first-lane font cap are preserved.",
+    "Quick standard matrix timing overlaps validation builds; causal timing uses separate normal binaries after all checks, CPU affinity 10, and a balanced three-stage order.",
+    "Normal host timing remains an observation for this input and scope, not a general speed guarantee."
+  ],
+  "matrix_metadata": {
+    "before": {
+      "revision": "65d3fafb0e4315db28f179cfcb8db33140d0ce12",
+      "dirty_status": [
+        " M crates/shodo/src/line/decoration.rs"
+      ],
+      "source_hash": "12a78c3f7609b32762c952dcc438d9b49e226fd4a0d72f3f0066ea980be2d061",
+      "conditions": {
+        "source_fingerprint_version": 2,
+        "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
+        "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+        "cpu": {
+          "models": [
+            "AMD Ryzen 5 5600G with Radeon Graphics"
+          ],
+          "machine": "x86_64",
+          "logical_cpus": 12,
+          "affinity": [
+            10
+          ]
+        },
+        "os": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+        "features": [
+          "complex-scripts"
+        ],
+        "profile": {
+          "name": "release",
+          "opt_level": 3,
+          "debug": 0,
+          "incremental": false,
+          "effective": {
+            "cold": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": false
+            },
+            "timing": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": true
+            },
+            "memory": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": false
+            }
+          }
+        },
+        "build_configuration": {
+          "workspace_profiles": {},
+          "cargo_configs": {},
+          "environment": {
+            "CARGO_BUILD_JOBS": "1",
+            "CARGO_PROFILE_RELEASE_OPT_LEVEL": "3",
+            "CARGO_PROFILE_RELEASE_DEBUG": "0",
+            "CARGO_PROFILE_RELEASE_INCREMENTAL": "false",
+            "CARGO_INCREMENTAL": "0"
+          }
+        },
+        "flags": {
+          "RUSTFLAGS": "",
+          "CARGO_ENCODED_RUSTFLAGS": "",
+          "RUSTDOCFLAGS": "",
+          "RUSTC": "",
+          "RUSTC_WRAPPER": "",
+          "RUSTC_WORKSPACE_WRAPPER": "",
+          "CARGO_PROFILE_RELEASE_LTO": "",
+          "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "",
+          "CARGO_PROFILE_RELEASE_PANIC": "",
+          "CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS": "",
+          "CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS": ""
+        },
+        "font_hashes": {
+          "arabic.ttf": "e9885fbcf3bdbddea94d1679d636a80f7421c6b63632a35c6f884a9ee74067d9",
+          "cjk.otf": "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b",
+          "emoji-color.ttf": "6047984e1da3b32e9629740378f2a143daa2c630f140edcf69b68696e3766362",
+          "emoji-mono.ttf": "76c91d377b0d3acb5e0feb696924d1fec7ea9cd4c7860dff52aa0cdd998f76f3",
+          "latin.ttf": "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25"
+        },
+        "input_hash": "1dbf30237e3d08dc20ea9f61a2576e7a6023b663584a464ca92f02b4ed35f292",
+        "harness_hash": "7c139740f9da6bc5ab72420426c81ad5456569e36a99b18b2266fe392b18f80b",
+        "lock_hash": "4d8a1d53a12ba7e53b177c5a309d0fc0c7cd6c8ebd733e459027e7f63bf09f3e",
+        "measurement_config": {
+          "quick": true,
+          "cold_samples": 2
+        }
+      },
+      "process_wall_scope": "Parent subprocess invocation, startup, probe work, JSON output and log write; inner cold phases reported separately."
+    },
+    "after": {
+      "revision": "4e69f9aa119168e9c58e83b5ac6f84703a68925f",
+      "dirty_status": [
+        " M docs/superpowers/plans/2026-09-30-ruby-candidate-ranges.md"
+      ],
+      "source_hash": "d77ce89ad5fabc54d8bf963f12a355fa3c9fc49130dbd3904ac491c93659379c",
+      "conditions": {
+        "source_fingerprint_version": 2,
+        "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
+        "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+        "cpu": {
+          "models": [
+            "AMD Ryzen 5 5600G with Radeon Graphics"
+          ],
+          "machine": "x86_64",
+          "logical_cpus": 12,
+          "affinity": [
+            10
+          ]
+        },
+        "os": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+        "features": [
+          "complex-scripts"
+        ],
+        "profile": {
+          "name": "release",
+          "opt_level": 3,
+          "debug": 0,
+          "incremental": false,
+          "effective": {
+            "cold": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": false
+            },
+            "timing": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": true
+            },
+            "memory": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": false
+            }
+          }
+        },
+        "build_configuration": {
+          "workspace_profiles": {},
+          "cargo_configs": {},
+          "environment": {
+            "CARGO_BUILD_JOBS": "1",
+            "CARGO_PROFILE_RELEASE_OPT_LEVEL": "3",
+            "CARGO_PROFILE_RELEASE_DEBUG": "0",
+            "CARGO_PROFILE_RELEASE_INCREMENTAL": "false",
+            "CARGO_INCREMENTAL": "0"
+          }
+        },
+        "flags": {
+          "RUSTFLAGS": "",
+          "CARGO_ENCODED_RUSTFLAGS": "",
+          "RUSTDOCFLAGS": "",
+          "RUSTC": "",
+          "RUSTC_WRAPPER": "",
+          "RUSTC_WORKSPACE_WRAPPER": "",
+          "CARGO_PROFILE_RELEASE_LTO": "",
+          "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "",
+          "CARGO_PROFILE_RELEASE_PANIC": "",
+          "CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS": "",
+          "CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS": ""
+        },
+        "font_hashes": {
+          "arabic.ttf": "e9885fbcf3bdbddea94d1679d636a80f7421c6b63632a35c6f884a9ee74067d9",
+          "cjk.otf": "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b",
+          "emoji-color.ttf": "6047984e1da3b32e9629740378f2a143daa2c630f140edcf69b68696e3766362",
+          "emoji-mono.ttf": "76c91d377b0d3acb5e0feb696924d1fec7ea9cd4c7860dff52aa0cdd998f76f3",
+          "latin.ttf": "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25"
+        },
+        "input_hash": "1dbf30237e3d08dc20ea9f61a2576e7a6023b663584a464ca92f02b4ed35f292",
+        "harness_hash": "7c139740f9da6bc5ab72420426c81ad5456569e36a99b18b2266fe392b18f80b",
+        "lock_hash": "4d8a1d53a12ba7e53b177c5a309d0fc0c7cd6c8ebd733e459027e7f63bf09f3e",
+        "measurement_config": {
+          "quick": true,
+          "cold_samples": 2
+        }
+      },
+      "process_wall_scope": "Parent subprocess invocation, startup, probe work, JSON output and log write; inner cold phases reported separately."
+    }
+  },
+  "raw_archive_sha256": "4fbed78e89b46fa8c649f2b080886c5c9a1a5d95650001798d8a1fbbc93a5a7f"
+}
