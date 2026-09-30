@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4](https://github.com/fulgur-rs/shodo/compare/v0.0.3...v0.0.4) - 2026-09-30
+
+### Added
+
+- match Parley character-count line breaks
+- add processed grapheme limit to line layout
+- support CSS word-break manual
+
+### Fixed
+
+- pass first-line cursor map through deep shrink retry
+- resolve CSS ch and ic through shaping advance
+- *(font)* align ch advance with shaped glyph rounding
+
+### Other
+
+- Merge remote-tracking branch 'origin/main' into feat/aqy-character-limit
+- Rescan deeply narrower plain lines before building wide indexes
+- Avoid duplicate TCY rejection warnings with first-line styles
+- Warn when text-combine-upright: all candidates are rejected across a box boundary
+- Exclude upright vertical letters and digits from autospace
+- Cache resolved ch and ic units per font layer
+- Resolve manual SA text as AL for line breaking
+- Merge pull request #87 from fulgur-rs/fix/afq-ch-advance
+
 ## [0.0.3](https://github.com/fulgur-rs/shodo/compare/v0.0.2...v0.0.3) - 2026-09-29
 
 ### Other
