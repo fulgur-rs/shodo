@@ -1,0 +1,5 @@
+# Borrowed caret cuts (shodo-sbp.8)
+
+LineIndex::cuts returns the selected finalized caret_cuts slice with its lifetime tied to Line. LineIndex::add reads &[u32]; atomic/tab endpoints use temporary two-element stack arrays. Preserve inclusive endpoints, indecomposable transforms/shared graphemes, GDEF/variable ligature caret geometry, ruby alignment/annotations, RTL and both vertical combined writing modes. Index construction retains its existing Caret/Segment values; no public API or lifetime/retention change.
+
+Measure LineLayout::new independently on prebuilt finalized fixed-font lines in normal and allocation-counted binaries (time/calls/gross/net/peak). Output checks and layout preparation are outside scope. Preserve source/glyph/geometry and exact caret/selection/hit output; original inputs remain retained. Distinguish input sequence/allocator history and do not claim improvements for queries reusing an index or RSS. Run required validations and final source-frozen all54 matrix against sbp7. No performance gate for raikiri switch and no saved S4 spike modifications.
