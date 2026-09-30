@@ -9,6 +9,11 @@ use skrifa::{
 };
 use std::sync::Arc;
 
+#[cfg(test)]
+std::thread_local! {
+    static COORDINATE_INSTANCE_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 #[derive(Clone, Debug, Default)]
 pub(crate) struct RunInstance {
     pub(crate) metrics: Option<crate::font::FontMetrics>,
@@ -44,15 +49,17 @@ pub(crate) fn resolve(
     for v in &style.font_variations {
         set_variation(&mut variations, *v);
     }
-    let metric_instance = harfrust::ShaperInstance::from_variations(
-        &font,
-        variations.iter().map(|v| harfrust::Variation {
-            tag: harfrust::Tag::new(&v.tag),
-            value: v.value,
-        }),
-    );
     let mut size = style.font_size;
     if let Some(adjust) = style.font_size_adjust {
+        #[cfg(test)]
+        COORDINATE_INSTANCE_BUILDS.with(|count| count.set(count.get() + 1));
+        let metric_instance = harfrust::ShaperInstance::from_variations(
+            &font,
+            variations.iter().map(|v| harfrust::Variation {
+                tag: harfrust::Tag::new(&v.tag),
+                value: v.value,
+            }),
+        );
         let location = LocationRef::new(metric_instance.coords());
         let m = metric_font.metrics(Size::unscaled(), location);
         let metric = match adjust.metric {
@@ -115,6 +122,8 @@ pub(crate) fn resolve(
     for v in &style.font_variations {
         set_variation(&mut variations, *v);
     }
+    #[cfg(test)]
+    COORDINATE_INSTANCE_BUILDS.with(|count| count.set(count.get() + 1));
     let instance = harfrust::ShaperInstance::from_variations(
         &font,
         variations.iter().map(|v| harfrust::Variation {
@@ -158,6 +167,62 @@ fn set_variation(variations: &mut Vec<FontVariation>, value: FontVariation) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn no_size_adjust_uses_only_final_coordinate_instance() {
+        let fonts = crate::font::FontCollection::with_options(
+            &crate::limits::Limits::default(),
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        let found = FontMatch {
+            id: fonts
+                .register(crate::test_support::fonts::LATIN.to_vec())
+                .unwrap(),
+            variations: Vec::new(),
+            embolden: false,
+            skew: None,
+        };
+        for adjust in [
+            Some(crate::style::FontSizeAdjust {
+                metric: FontMetricKind::ExHeight,
+                value: 0.5,
+            }),
+            None,
+        ] {
+            let style = InlineStyle {
+                font_size: 16.0,
+                font_size_adjust: adjust,
+                ..Default::default()
+            };
+            COORDINATE_INSTANCE_BUILDS.with(|count| count.set(0));
+            let mut warnings = WarningSink::default();
+            let (shaper, run, size) = resolve(
+                crate::test_support::fonts::LATIN,
+                0,
+                &found,
+                &style,
+                *b"Latn",
+                &mut warnings,
+            );
+            assert!(warnings.take().is_empty());
+            assert!(run.coords.is_empty());
+            assert_eq!(run.coords, shaper.coords());
+            assert!(run.variations.is_empty());
+            if adjust.is_none() {
+                assert_eq!(size, 16.0);
+            } else {
+                assert!(size.is_finite() && size > 0.0);
+            }
+            assert_eq!(
+                COORDINATE_INSTANCE_BUILDS.with(|count| count.get()),
+                if adjust.is_some() { 2 } else { 1 },
+                "preliminary coordinates are needed only for size-adjust"
+            );
+        }
+    }
 
     #[test]
     fn metric_instance_does_not_build_shaping_features() {

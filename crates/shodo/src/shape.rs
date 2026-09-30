@@ -252,8 +252,8 @@ pub(crate) fn shape_items_with_base_scopes(
                     original.script,
                     warnings,
                 );
-                let metrics = fonts.metrics_with_coords(found.id, size, &instance.coords);
-                let vertical_metrics = fonts.vertical_metrics(found.id, size, &instance.coords);
+                let (metrics, vertical_metrics) =
+                    fonts.metrics_from_data(found.id, data, size, &instance.coords);
                 Arc::get_mut(&mut instance).expect("new instance").metrics = metrics;
                 Arc::get_mut(&mut instance)
                     .expect("new instance")
