@@ -2236,3 +2236,84 @@ fn accepted_ruby_continuations_reuse_root_and_child_indexes_without_prefix_resca
         );
     }
 }
+
+fn many_column_pair(count: usize) -> Ruby {
+    let bases = (0..count)
+        .map(|i| RubyBase {
+            node: NodeId(1000 + i as u64),
+            content: base("日"),
+            align: RubyAlign::Start,
+        })
+        .collect();
+    let levels = [1, 2, 4]
+        .into_iter()
+        .enumerate()
+        .map(|(level, step)| RubyLevel {
+            // Input order is deliberately reversed; preparation normalizes spans.
+            annotations: (0..count)
+                .step_by(step)
+                .rev()
+                .map(|i| RubyAnnotation {
+                    node: NodeId(2000 + level as u64 * 1000 + i as u64),
+                    content: RubyContent::text(
+                        TextSource::Generated {
+                            node: NodeId(2000 + level as u64 * 1000 + i as u64),
+                        },
+                        "に",
+                        &style(12.0),
+                        &Limits::default(),
+                    ),
+                    span: RubySpan::Columns(i..i + step),
+                    visibility: RubyVisibility::Visible,
+                })
+                .collect(),
+            style: RubyStyle {
+                overhang: RubyOverhang::None,
+                ..Default::default()
+            },
+        })
+        .collect();
+    Ruby::new(bases, levels).unwrap()
+}
+
+#[test]
+fn short_candidate_visits_only_intersecting_annotation_lanes() {
+    for count in [64, 128] {
+        let p = build(many_column_pair(count));
+        let ruby = &p.data.ruby.containers[0];
+        let first = count / 2;
+        let mut cx = LayoutContext::new();
+        let measure = crate::ruby::measure::candidate(
+            &p.data,
+            ruby.columns[first].units.start,
+            ruby.columns[first + 3].units.end,
+            &AtomicSizes::EMPTY,
+            &mut cx,
+            &mut Saturation::default(),
+        );
+        let fragment = &measure.fragments[0];
+        assert_eq!(fragment.lanes.len(), 7);
+        let nodes: Vec<_> = fragment
+            .lanes
+            .iter()
+            .map(|l| ruby.lanes[l.lane].node.unwrap())
+            .collect();
+        let expected: Vec<_> = [1, 2, 4]
+            .into_iter()
+            .enumerate()
+            .flat_map(|(level, step)| {
+                (first..first + 4)
+                    .step_by(step)
+                    .map(move |i| NodeId(2000 + level as u64 * 1000 + i as u64))
+            })
+            .collect();
+        assert_eq!(
+            nodes, expected,
+            "paired cut lookup must retain original global lane IDs"
+        );
+        assert_eq!(
+            cx.ruby_lane_visits, 7,
+            "out-of-window annotations must not be visited"
+        );
+    }
+}

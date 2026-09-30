@@ -77,6 +77,41 @@ fn intersect(a: &Range<usize>, b: &Range<usize>) -> Range<usize> {
     start..a.end.min(b.end).max(start)
 }
 
+/// Prepared columns are in source-unit order; trim empty boundary columns
+/// exactly as the full-array first/last nonempty scan did.
+fn selected_columns(ruby: &super::prepare::PreparedRuby, units: &Range<usize>) -> Range<usize> {
+    let first = ruby.columns.partition_point(|c| c.units.end <= units.start);
+    let last = ruby.columns.partition_point(|c| c.units.start < units.end);
+    if first >= last {
+        return 0..0;
+    }
+    let columns = &ruby.columns[first..last];
+    let Some(start) = columns.iter().position(|c| !c.units.is_empty()) else {
+        return 0..0;
+    };
+    let end = columns.iter().rposition(|c| !c.units.is_empty()).unwrap() + 1;
+    first + start..first + end
+}
+
+/// Normalization groups lanes by level and orders nonoverlapping column spans
+/// within each level. Return original indices for the dense paired-cut table.
+fn selected_lanes<'a>(
+    ruby: &'a super::prepare::PreparedRuby,
+    columns: &'a Range<usize>,
+) -> impl Iterator<Item = usize> + 'a {
+    (0..ruby.levels.len()).flat_map(move |level| {
+        let first = ruby.lanes.partition_point(|lane| lane.level < level);
+        let last = ruby.lanes.partition_point(|lane| lane.level <= level);
+        let lanes = &ruby.lanes[first..last];
+        if columns.is_empty() {
+            return first..first;
+        }
+        let start = lanes.partition_point(|lane| lane.columns.end <= columns.start);
+        let end = lanes.partition_point(|lane| lane.columns.start < columns.end);
+        first + start..first + end
+    })
+}
+
 fn cut_at_or_after(ruby: &super::prepare::PreparedRuby, unit: usize) -> usize {
     ruby.cuts
         .partition_point(|c| c.unit < unit)
@@ -177,8 +212,14 @@ pub(crate) fn candidate_inner(
             }
             base_widths.push(width);
         }
+        let selected_columns = selected_columns(ruby, &units);
         let mut lanes = Vec::new();
-        for (index, lane) in ruby.lanes.iter().enumerate() {
+        for index in selected_lanes(ruby, &selected_columns) {
+            let lane = &ruby.lanes[index];
+            #[cfg(test)]
+            {
+                cx.ruby_lane_visits += 1;
+            }
             let range = begin.lanes[index]..finish.lanes[index];
             if range.is_empty() {
                 continue;
@@ -202,22 +243,14 @@ pub(crate) fn candidate_inner(
         // Merge keeps the source-paired pieces; same-line width is one level
         // spanning the associated selected columns, not permanent raw merging.
         let mut separate = Vec::new();
-        let first = bases.iter().position(|r| !r.is_empty()).unwrap_or(0);
-        let last = bases
-            .iter()
-            .rposition(|r| !r.is_empty())
-            .map_or(first, |i| i + 1);
-        let selected_columns = first..last;
         let mut right_columns = std::collections::HashMap::new();
         if ruby
             .levels
             .iter()
             .any(|style| inter_character(data, *style))
         {
-            for columns in ruby
-                .lanes
-                .iter()
-                .map(|lane| intersect(&lane.columns, &selected_columns))
+            for columns in selected_lanes(ruby, &selected_columns)
+                .map(|index| intersect(&ruby.lanes[index].columns, &selected_columns))
                 .chain(std::iter::once(selected_columns.clone()))
             {
                 if !columns.is_empty() {
