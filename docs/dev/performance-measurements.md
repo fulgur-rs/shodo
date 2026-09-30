@@ -92,6 +92,13 @@ would be harmless. Config contents are not copied into the report. Older reports
 without this build fingerprint cannot serve as compatible baselines. Changes to
 these settings during collection also reject publication.
 
+Engine fingerprint version 2 covers every Rust source under `crates/shodo/src`,
+the crate manifest, and the workspace manifest. Source file additions, removals,
+and byte changes are checked again before publication; output artifacts are not
+part of the fingerprint. The version is a comparison condition, so older reports
+with missing or incomplete engine coverage cannot serve as baselines. Engine
+hashes themselves may differ when comparing two revisions under version 2.
+
 Baseline comparison requires identical machine/toolchain/build conditions,
 configuration, selected inputs, harness/lock/font hashes and operation output.
 Engine revision may differ. `comparison.json` reports warm median time ratios,
