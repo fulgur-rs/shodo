@@ -57,7 +57,7 @@ Preserve source/glyph/geometry, legal paired cuts, default limits, first-line an
   Expected: all required checks pass.
 - [ ] Run final probe and 54-case standard runner against sbp4; compare all source/glyph/geometry digests for timing and allocation outputs.
   Expected: exact output equivalence; build/layout gross/net/peak and timing separately recorded, no unmeasured claim.
-- [ ] Record evidence and limitations, request one fresh whole-branch review with plan/spec/ledger.
-  Expected: no unresolved Critical/Important finding.
-- [ ] Commit evidence, create PR, wait for every CI check, merge matching reviewed head, close beads and remove only this worktree/branch.
-  Expected: merged head verified, issue closed and next issue ready.
+- [ ] Record evidence and limitations and commit the record.
+  Expected: artifacts verify all collected digests, source fingerprint and successful validation logs.
+
+The native execution final review follows Task 3: request one fresh whole-branch review with plan/spec/ledger, resolve Critical/Important findings, then create PR, wait for every CI check, merge matching reviewed head, close beads and remove only this worktree/branch. User already authorized these integration steps.
