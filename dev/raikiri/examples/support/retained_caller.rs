@@ -111,75 +111,18 @@ impl RetainedCaller {
     /// limit so that the original token advances. This caller supports its
     /// existing inline-only DOM projection, not external floats/block children.
     pub fn layout_height(&mut self, width: f32, height: f32) -> Result<PagedOutput, String> {
-        if !width.is_finite() || width <= 0.0 || !height.is_finite() || height < 0.0 {
-            return Err("page width must be finite/positive and height finite/nonnegative".into());
-        }
         self.ensure_prepared()?;
-        let p = self.prepared.as_ref().unwrap();
-        let mut token = p.paragraph.start_token();
-        let mut pages = Vec::new();
-        let mut page_tokens = Vec::new();
-        let mut lines = Vec::new();
-        let mut offset = 0.0_f32;
-        let mut unbounded_retry = false;
-        let mut height_retries = 0;
-        let mut oversize_lines = 0;
-        loop {
-            let mut constraint = LineConstraint::new(width);
-            constraint.block_offset = offset;
-            constraint.max_block_size = if unbounded_retry {
-                None
-            } else {
-                Some((height - offset).max(0.0))
-            };
-            match p.paragraph.next_line(
-                &mut self.context,
-                token,
-                &Default::default(),
-                &constraint,
-                &AtomicSizes::EMPTY,
-            ) {
-                LineResult::Line(line) => {
-                    if unbounded_retry {
-                        oversize_lines += 1;
-                    }
-                    token = line.break_token();
-                    // The core line iterator accumulates accepted Q26.6 heights.
-                    offset = ((offset * 64.0).round() + (line.block_size() * 64.0).round()) / 64.0;
-                    lines.push(line);
-                    unbounded_retry = false;
-                }
-                LineResult::BlockSizeExceeded { .. } => {
-                    height_retries += 1;
-                    if lines.is_empty() {
-                        unbounded_retry = true;
-                    } else {
-                        pages.push(p.output(std::mem::take(&mut lines))?);
-                        page_tokens.push(token);
-                        offset = 0.0;
-                    }
-                    // No accepted line: retry exactly the same token.
-                }
-                LineResult::Done => {
-                    if !lines.is_empty() {
-                        pages.push(p.output(lines)?);
-                        page_tokens.push(token);
-                    }
-                    break;
-                }
-                other => {
-                    return Err(format!(
-                        "unsupported retained caller line result: {other:?}"
-                    ));
-                }
-            }
-        }
-        Ok(PagedOutput {
-            pages,
-            page_tokens,
-            height_retries,
-            oversize_lines,
-        })
+        paginate(
+            self.prepared.as_ref().unwrap(),
+            &mut self.context,
+            width,
+            height,
+        )
+    }
+    pub fn paragraph_warnings(&self) -> &[shodo::limits::Warning] {
+        self.prepared
+            .as_ref()
+            .map_or(&[], |p| p.paragraph.warnings())
     }
     pub fn take_warnings(&mut self) -> Vec<shodo::limits::Warning> {
         self.context.take_warnings()
@@ -195,4 +138,80 @@ impl RetainedCaller {
         );
         p.output(lines)
     }
+}
+
+/// Shared height caller for fresh, reused-context and retained-paragraph checks.
+pub fn paginate(
+    p: &PreparedParagraph,
+    context: &mut LayoutContext,
+    width: f32,
+    height: f32,
+) -> Result<PagedOutput, String> {
+    if !width.is_finite() || width <= 0.0 || !height.is_finite() || height < 0.0 {
+        return Err("page width must be finite/positive and height finite/nonnegative".into());
+    }
+    let mut token = p.paragraph.start_token();
+    let mut pages = Vec::new();
+    let mut page_tokens = Vec::new();
+    let mut lines = Vec::new();
+    let mut offset = 0.0_f32;
+    let mut unbounded_retry = false;
+    let mut height_retries = 0;
+    let mut oversize_lines = 0;
+    loop {
+        let mut constraint = LineConstraint::new(width);
+        constraint.block_offset = offset;
+        constraint.max_block_size = if unbounded_retry {
+            None
+        } else {
+            Some((height - offset).max(0.0))
+        };
+        match p.paragraph.next_line(
+            context,
+            token,
+            &Default::default(),
+            &constraint,
+            &AtomicSizes::EMPTY,
+        ) {
+            LineResult::Line(line) => {
+                if unbounded_retry {
+                    oversize_lines += 1;
+                }
+                token = line.break_token();
+                // The core line iterator accumulates accepted Q26.6 heights.
+                offset = ((offset * 64.0).round() + (line.block_size() * 64.0).round()) / 64.0;
+                lines.push(line);
+                unbounded_retry = false;
+            }
+            LineResult::BlockSizeExceeded { .. } => {
+                height_retries += 1;
+                if lines.is_empty() {
+                    unbounded_retry = true;
+                } else {
+                    pages.push(p.output(std::mem::take(&mut lines))?);
+                    page_tokens.push(token);
+                    offset = 0.0;
+                }
+                // No accepted line: retry exactly the same token.
+            }
+            LineResult::Done => {
+                if !lines.is_empty() {
+                    pages.push(p.output(lines)?);
+                    page_tokens.push(token);
+                }
+                break;
+            }
+            other => {
+                return Err(format!(
+                    "unsupported retained caller line result: {other:?}"
+                ));
+            }
+        }
+    }
+    Ok(PagedOutput {
+        pages,
+        page_tokens,
+        height_retries,
+        oversize_lines,
+    })
 }
