@@ -3,7 +3,7 @@
 mod caller;
 
 const CSS: &str = "#root{font-family:'Shodo Fixture Latin';font-size:16px;color:black}#link{color:blue;text-decoration-line:underline;text-decoration-color:lime;text-decoration-thickness:2px}";
-const FIRST: &str = "#root{font-size:32px;color:red}";
+const FIRST: &str = "#root::first-line{font-size:32px;color:red}";
 const BODY: &str = "<span id=owner>f</span><a id=link href='/target'>f</a><span>i</span>";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -11,12 +11,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nth(1)
         .unwrap_or_else(|| "raikiri-contracts".into());
     let directory = std::path::Path::new(&directory);
-    let input = caller::resolve_fixture(
-        &format!("<style>{CSS}</style><div id=root>{BODY}<br><a href='/later'>ß</a></div>"),
-        Some(FIRST),
+    let input = caller::resolve_html(
+        &format!("<style>{CSS}{FIRST}</style><div id=root>{BODY}<br><a href='/later'>ß</a></div>"),
+        "root",
     )?;
     let fonts = shodo_fixtures::load_fonts(&Default::default())?;
-    let output = caller::layout(&input, "root", &fonts.collection, 400.0)?;
+    let output = caller::layout(&input, &fonts.collection, 400.0)?;
     let (image, count) = caller::paint(&output)?;
     let lines: Vec<_> = output
         .lines
@@ -51,7 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::write(
         directory.join("caller.json"),
         serde_json::to_string_pretty(
-            &serde_json::json!({"first_line_supplier": "fixture ordinary-CSS alternate cascade; not ::first-line",
+            &serde_json::json!({"first_line_supplier": "raikiri cascade_with_first_line; real CSS ::first-line",
             "png_margin": 10, "drawn_glyphs": count, "lines": lines, "links": links}),
         )? + "\n",
     )?;
@@ -70,9 +70,12 @@ mod tests {
     use shodo::{Fragment, mapping::MappingKind};
 
     fn input(body: &str, extra: &str, first: Option<&str>) -> caller::ResolvedInput {
-        caller::resolve_fixture(
-            &format!("<style>{CSS}{extra}</style><div id=root>{body}</div>"),
-            first,
+        caller::resolve_html(
+            &format!(
+                "<style>{CSS}{extra}{}</style><div id=root>{body}</div>",
+                first.unwrap_or_default()
+            ),
+            "root",
         )
         .unwrap()
     }
@@ -93,10 +96,10 @@ mod tests {
     }
 
     #[test]
-    fn resolved_first_line_reaches_shared_glyph_and_source_underline() {
+    fn real_css_first_line_reaches_glyph_paint_and_mapping() {
         let input = input(BODY, "", Some(FIRST));
         let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
-        let output = caller::layout(&input, "root", &fonts.collection, 400.0).unwrap();
+        let output = caller::layout(&input, &fonts.collection, 400.0).unwrap();
         assert_eq!(output.lines.len(), 1);
         let run = first_run(&output.lines[0]);
         assert_eq!(run.font_size(), 32.0);
@@ -118,7 +121,7 @@ mod tests {
     fn middle_link_uses_mapping_units_instead_of_the_glyph_owner_range() {
         let input = input(BODY, "", Some(FIRST));
         let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
-        let output = caller::layout(&input, "root", &fonts.collection, 400.0).unwrap();
+        let output = caller::layout(&input, &fonts.collection, 400.0).unwrap();
         assert_eq!(output.links.len(), 1);
         let region = &output.links[0];
         assert_eq!(region.link.href, "/target");
@@ -150,7 +153,7 @@ mod tests {
             Some(FIRST),
         );
         let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
-        let output = caller::layout(&input, "root", &fonts.collection, 400.0).unwrap();
+        let output = caller::layout(&input, &fonts.collection, 400.0).unwrap();
         let sizes: Vec<_> = output.lines[0]
             .fragments()
             .filter_map(|f| match f {
@@ -165,11 +168,11 @@ mod tests {
     fn every_accepted_line_uses_its_own_transformed_mapping() {
         let input = input(
             "<a href='/first'>ß</a><br><a href='/later'>ß</a>",
-            "",
-            Some("#root{font-size:32px;color:red;text-transform:uppercase}"),
+            "a{color:inherit}",
+            Some("#root::first-line{font-size:32px;color:red;text-transform:uppercase}"),
         );
         let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
-        let output = caller::layout(&input, "root", &fonts.collection, 400.0).unwrap();
+        let output = caller::layout(&input, &fonts.collection, 400.0).unwrap();
         assert_eq!(output.lines.len(), 2);
         let text = |line: &shodo::Line| {
             line.text()[line.text_range()]
@@ -180,6 +183,14 @@ mod tests {
         assert_eq!(text(&output.lines[1]), "ß");
         assert_eq!(first_run(&output.lines[0]).font_size(), 32.0);
         assert_eq!(first_run(&output.lines[1]).font_size(), 16.0);
+        assert_eq!(
+            first_run(&output.lines[0]).paint_style().color,
+            [255, 0, 0, 255]
+        );
+        assert_eq!(
+            first_run(&output.lines[1]).paint_style().color,
+            [0, 0, 0, 255]
+        );
         assert_eq!(output.links.len(), 2);
         assert_eq!(output.links[0].line, 0);
         assert_eq!(output.links[0].kind, MappingKind::Expanded);
@@ -199,7 +210,7 @@ mod tests {
     fn one_text_nodes_source_ranges_are_clipped_to_each_line() {
         let input = input("<a href='/split'>a\nb</a>", "#root{white-space:pre}", None);
         let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
-        let output = caller::layout(&input, "root", &fonts.collection, 400.0).unwrap();
+        let output = caller::layout(&input, &fonts.collection, 400.0).unwrap();
         assert_eq!(output.lines.len(), 2);
         assert_eq!(output.links.len(), 2);
         assert_eq!(output.links[1].dom, 2..3);
@@ -215,7 +226,7 @@ mod tests {
             None,
         );
         let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
-        let output = caller::layout(&input, "root", &fonts.collection, 400.0).unwrap();
+        let output = caller::layout(&input, &fonts.collection, 400.0).unwrap();
         assert!(output.links.is_empty());
         assert!(
             output.lines[0]
@@ -235,7 +246,7 @@ mod tests {
             Some(FIRST),
         );
         let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
-        let output = caller::layout(&input, "root", &fonts.collection, 400.0).unwrap();
+        let output = caller::layout(&input, &fonts.collection, 400.0).unwrap();
         assert_eq!(output.links.len(), 2);
         assert_ne!(output.links[0].node, output.links[1].node);
         assert_eq!(output.links[0].link, output.links[1].link);
@@ -249,13 +260,81 @@ mod tests {
     }
 
     #[test]
-    fn alternate_cascade_cannot_change_the_representative_inline_structure() {
+    fn empty_first_line_leaves_following_text_normal() {
+        let input = input(
+            "<br><a href='/later'>ß</a>",
+            "a{color:inherit}",
+            Some("#root::first-line{font-size:32px;color:red;text-transform:uppercase}"),
+        );
         let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
-        for first in ["#root{display:none}", "#link{display:block}"] {
-            let input = input(BODY, "", Some(first));
+        let output = caller::layout(&input, &fonts.collection, 400.0).unwrap();
+        assert_eq!(output.lines.len(), 2);
+        assert_eq!(
+            output.lines[1].text()[output.lines[1].text_range()].trim(),
+            "ß"
+        );
+        assert_eq!(first_run(&output.lines[1]).font_size(), 16.0);
+        assert_eq!(
+            first_run(&output.lines[1]).paint_style().color,
+            [0, 0, 0, 255]
+        );
+    }
+
+    #[test]
+    fn wrapped_single_text_node_preserves_later_source_ranges() {
+        let input = input(
+            "<a href='/wrap'>ß a b c d</a>",
+            "a{color:inherit}",
+            Some("#root::first-line{font-size:32px;color:red;text-transform:uppercase}"),
+        );
+        let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
+        let output = caller::layout(&input, &fonts.collection, 50.0).unwrap();
+        assert!(output.lines.len() > 1);
+        assert_eq!(first_run(&output.lines[0]).font_size(), 32.0);
+        for line in &output.lines[1..] {
+            assert_eq!(first_run(line).font_size(), 16.0);
+            assert_eq!(first_run(line).paint_style().color, [0, 0, 0, 255]);
+        }
+        assert!(output.links.iter().all(|r| r.node == output.links[0].node));
+        assert_eq!(output.links[0].kind, MappingKind::Expanded);
+        assert!(
+            output
+                .links
+                .iter()
+                .filter(|r| r.line > 0)
+                .all(|r| r.kind == MappingKind::Identity)
+        );
+    }
+
+    #[test]
+    fn first_line_box_declarations_do_not_change_structure() {
+        let input = input(
+            BODY,
+            "",
+            Some("#root::first-line{display:none;font-size:32px}#link::first-line{display:block}"),
+        );
+        let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
+        let output = caller::layout(&input, &fonts.collection, 400.0).unwrap();
+        assert_eq!(first_run(&output.lines[0]).font_size(), 32.0);
+    }
+
+    #[test]
+    fn unsupported_first_line_values_are_rejected() {
+        let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
+        for css in [
+            "opacity:.5",
+            "background-color:red",
+            "font-style:italic",
+            "text-transform:full-width",
+        ] {
+            let input = input(
+                "<span>a</span>",
+                "",
+                Some(&format!("#root::first-line{{{css}}}")),
+            );
             assert!(
-                caller::layout(&input, "root", &fonts.collection, 400.0).is_err(),
-                "{first}"
+                caller::layout(&input, &fonts.collection, 400.0).is_err(),
+                "{css}"
             );
         }
     }

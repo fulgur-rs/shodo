@@ -1,9 +1,6 @@
-//! Real normal/alternate raikiri cascades, preserving identical DOM node IDs.
-//! The pinned raikiri version does not resolve ::first-line selectors. The
-//! alternate root rule below probes the explicit consumer boundary, not CSS
-//! pseudo-element conformance; a production caller must supply that cascade.
-use raikiri_html::{ParseOptions, UncascadedDocument, parse_html};
-use raikiri_style::{CascadeResult, ComputedValues, Origin};
+//! Real CSS first-line resolution, immutable DOM IDs and consumer rendering.
+use raikiri_html::{ParseOptions, UncascadedDocument, parse};
+use raikiri_style::{CascadeResult, ComputedValues, FirstLineStyles, MediaContext, StyleNodeId};
 use raikiri_traits::{Dom, NodeId as DomId};
 use shodo::limits::Limits;
 use shodo::node::{NodeId, TextSource};
@@ -21,24 +18,32 @@ const HTML: &str = "<style>#root{font-family:'Shodo Fixture Latin';font-size:16p
 struct Cascades {
     parsed: UncascadedDocument,
     normal: CascadeResult,
-    first: CascadeResult,
+    first: FirstLineStyles,
 }
 fn document(extra: &[&str]) -> Cascades {
-    let doc = parse_html(
+    let doc = parse(
         HTML.as_bytes(),
         &ParseOptions {
-            extra_stylesheets: &[],
+            extra_stylesheets: extra,
             network: None,
             base_url: None,
         },
     )
     .unwrap();
-    let (parsed, normal) = doc.into_parts();
-    let mut tree = raikiri_html::build_rule_tree(&parsed);
-    for source in extra {
-        tree.add_stylesheet(source, Origin::Author);
-    }
-    let first = raikiri_style::cascade(&parsed.dom, &tree).unwrap();
+    let parsed = doc;
+    let root = (0..parsed.dom.node_count())
+        .find(|&id| parsed.dom.get_node(id).unwrap().attribute("id") == Some("root"))
+        .unwrap();
+    let tree = raikiri_html::build_rule_tree(&parsed);
+    let resolved = raikiri_style::cascade_with_first_line(
+        &parsed.dom,
+        &tree,
+        &MediaContext::default(),
+        StyleNodeId(root as u64),
+    )
+    .unwrap();
+    let normal = resolved.normal;
+    let first = resolved.first_line.unwrap();
     Cascades {
         parsed,
         normal,
@@ -74,7 +79,7 @@ fn walk(normal: &Cascades, id: usize, b: &mut ParagraphBuilder) {
     b.open_inline_with_first_line(
         NodeId(id as u64),
         &style(&normal.normal.computed[id]),
-        &style(&normal.first.computed[id]),
+        &style(normal.first.computed[id].as_ref().unwrap()),
         Default::default(),
     );
     for child in normal.parsed.dom.child_ids(DomId::new(id as u64)) {
@@ -103,7 +108,8 @@ impl OutlinePen for Pen {
 
 #[test]
 fn five_resolved_child_cases_reach_actual_font_metrics_mapping_and_glyph_paint() {
-    let normal = document(&["#root{font-size:32px;color:red;text-transform:uppercase}"]);
+    let normal =
+        document(&["#root::first-line{font-size:32px;color:red;text-transform:uppercase}"]);
     assert_eq!(normal.normal.computed.len(), normal.first.computed.len());
     let root = (0..normal.parsed.dom.node_count())
         .find(|&id| normal.parsed.dom.get_node(id).unwrap().attribute("id") == Some("root"))
@@ -120,12 +126,16 @@ fn five_resolved_child_cases_reach_actual_font_metrics_mapping_and_glyph_paint()
             .find(|&id| normal.parsed.dom.get_node(id).unwrap().attribute("id") == Some(name))
             .unwrap();
         assert_eq!(normal.normal.computed[id].font_size.0, n, "normal {name}");
-        assert_eq!(normal.first.computed[id].font_size.0, a, "alternate {name}");
+        assert_eq!(
+            normal.first.computed[id].as_ref().unwrap().font_size.0,
+            a,
+            "alternate {name}"
+        );
     }
     let mut builder = ParagraphBuilder::new(
         &ParagraphStyle {
             root: style(&normal.normal.computed[root]),
-            first_line: Some(style(&normal.first.computed[root])),
+            first_line: Some(style(normal.first.computed[root].as_ref().unwrap())),
             ..Default::default()
         },
         &Limits::default(),
@@ -166,7 +176,7 @@ fn five_resolved_child_cases_reach_actual_font_metrics_mapping_and_glyph_paint()
         assert_eq!(data.data.as_ref(), FONTS[0].bytes);
         let font = FontRef::from_index(data.data.as_ref(), data.index).unwrap();
         let owner = run.node().unwrap().0 as usize;
-        let cv = &normal.first.computed[owner];
+        let cv = normal.first.computed[owner].as_ref().unwrap();
         let mut paint = tiny_skia::Paint::default();
         paint.set_color_rgba8(cv.color.r, cv.color.g, cv.color.b, cv.color.a);
         for glyph in run.glyphs() {
@@ -230,14 +240,14 @@ fn five_resolved_child_cases_reach_actual_font_metrics_mapping_and_glyph_paint()
 }
 
 #[test]
-fn pinned_raikiri_requires_a_real_first_line_cascade_provider() {
+fn real_css_first_line_is_resolved_without_root_overrides() {
     let doc = document(&["#root::first-line{font-size:32px}"]);
     let root = (0..doc.parsed.dom.node_count())
         .find(|&id| doc.parsed.dom.get_node(id).unwrap().attribute("id") == Some("root"))
         .unwrap();
-    assert_eq!(doc.first.computed[root].font_size.0, 16.0);
+    assert_eq!(doc.first.computed[root].as_ref().unwrap().font_size.0, 32.0);
     assert!(
-        doc.first.pseudo.is_empty(),
-        "revisit this limitation if upstream exposes first-line"
+        !doc.normal.pseudo.is_empty(),
+        "actual pseudo declaration is present"
     );
 }

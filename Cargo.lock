@@ -1279,7 +1279,7 @@ dependencies = [
 [[package]]
 name = "raikiri-dom"
 version = "0.1.0"
-source = "git+https://github.com/fulgur-rs/raikiri.git?rev=ab7e619a8f321f03de8b8c8b9342954868e044c8#ab7e619a8f321f03de8b8c8b9342954868e044c8"
+source = "git+https://github.com/fulgur-rs/raikiri.git?rev=a41dfcb4dc9ada1b39522238062d008d6169d10d#a41dfcb4dc9ada1b39522238062d008d6169d10d"
 dependencies = [
  "bitflags",
  "icu_properties",
@@ -1296,7 +1296,7 @@ dependencies = [
 [[package]]
 name = "raikiri-html"
 version = "0.1.0"
-source = "git+https://github.com/fulgur-rs/raikiri.git?rev=ab7e619a8f321f03de8b8c8b9342954868e044c8#ab7e619a8f321f03de8b8c8b9342954868e044c8"
+source = "git+https://github.com/fulgur-rs/raikiri.git?rev=a41dfcb4dc9ada1b39522238062d008d6169d10d#a41dfcb4dc9ada1b39522238062d008d6169d10d"
 dependencies = [
  "cssparser",
  "data-url",
@@ -1317,7 +1317,7 @@ dependencies = [
 [[package]]
 name = "raikiri-style"
 version = "0.1.0"
-source = "git+https://github.com/fulgur-rs/raikiri.git?rev=ab7e619a8f321f03de8b8c8b9342954868e044c8#ab7e619a8f321f03de8b8c8b9342954868e044c8"
+source = "git+https://github.com/fulgur-rs/raikiri.git?rev=a41dfcb4dc9ada1b39522238062d008d6169d10d#a41dfcb4dc9ada1b39522238062d008d6169d10d"
 dependencies = [
  "cssparser",
  "precomputed-hash",
@@ -1329,7 +1329,7 @@ dependencies = [
 [[package]]
 name = "raikiri-svg"
 version = "0.1.0"
-source = "git+https://github.com/fulgur-rs/raikiri.git?rev=ab7e619a8f321f03de8b8c8b9342954868e044c8#ab7e619a8f321f03de8b8c8b9342954868e044c8"
+source = "git+https://github.com/fulgur-rs/raikiri.git?rev=a41dfcb4dc9ada1b39522238062d008d6169d10d#a41dfcb4dc9ada1b39522238062d008d6169d10d"
 dependencies = [
  "cssparser",
  "raikiri-traits",
@@ -1342,7 +1342,7 @@ dependencies = [
 [[package]]
 name = "raikiri-traits"
 version = "0.2.0"
-source = "git+https://github.com/fulgur-rs/raikiri.git?rev=ab7e619a8f321f03de8b8c8b9342954868e044c8#ab7e619a8f321f03de8b8c8b9342954868e044c8"
+source = "git+https://github.com/fulgur-rs/raikiri.git?rev=a41dfcb4dc9ada1b39522238062d008d6169d10d#a41dfcb4dc9ada1b39522238062d008d6169d10d"
 dependencies = [
  "bytes",
  "libc",

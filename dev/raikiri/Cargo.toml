@@ -19,10 +19,10 @@ skrifa.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-raikiri-dom = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
-raikiri-html = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
-raikiri-style = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
-raikiri-traits = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
+raikiri-dom = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "a41dfcb4dc9ada1b39522238062d008d6169d10d" }
+raikiri-html = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "a41dfcb4dc9ada1b39522238062d008d6169d10d" }
+raikiri-style = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "a41dfcb4dc9ada1b39522238062d008d6169d10d" }
+raikiri-traits = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "a41dfcb4dc9ada1b39522238062d008d6169d10d" }
 tiny-skia = "=0.12.0"
 url = "2"
 percent-encoding = "2"

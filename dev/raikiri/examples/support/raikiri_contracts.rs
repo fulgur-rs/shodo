@@ -1,11 +1,10 @@
-//! Development caller over two resolved cascades on one immutable DOM.
-//! The fixture supplier uses ordinary CSS overrides; it is not a CSS
-//! ::first-line producer. Layout and paint below are shared with the CLI.
+//! Development caller for real CSS first-line styles on one immutable DOM.
+//! Layout and paint are shared by the fixture CLI and offline WPT probe.
 use shodo_harness::glyph_paint;
 use std::{collections::HashMap, ops::Range};
 
-use raikiri_html::{ParseOptions, UncascadedDocument, parse_html};
-use raikiri_style::{CascadeResult, ComputedValues, Origin};
+use raikiri_html::{ParseOptions, UncascadedDocument, parse};
+use raikiri_style::{CascadeResult, ComputedValues, FirstLineStyles, MediaContext, StyleNodeId};
 use raikiri_traits::{Dom, NodeId as DomId};
 use shodo::hit::{LineLayout, TextPosition};
 use shodo::style::{
@@ -22,13 +21,13 @@ use shodo::{
 pub struct ResolvedInput {
     parsed: UncascadedDocument,
     normal: CascadeResult,
-    first: Option<CascadeResult>,
+    first: Option<FirstLineStyles>,
+    root: StyleNodeId,
 }
 
-/// Fixture-only producer of explicit normal/alternate resolved inputs.
-/// Neither the original HTML nor its DOM IDs are rewritten.
-pub fn resolve_fixture(html: &str, alternate_css: Option<&str>) -> Result<ResolvedInput, String> {
-    let doc = parse_html(
+/// Resolve actual CSS against the original DOM, without root overrides.
+pub fn resolve_html(html: &str, root_id: &str) -> Result<ResolvedInput, String> {
+    let parsed = parse(
         html.as_bytes(),
         &ParseOptions {
             extra_stylesheets: &[],
@@ -37,18 +36,26 @@ pub fn resolve_fixture(html: &str, alternate_css: Option<&str>) -> Result<Resolv
         },
     )
     .map_err(|e| format!("{e:?}"))?;
-    let (parsed, normal) = doc.into_parts();
-    let first = alternate_css
-        .map(|css| {
-            let mut tree = raikiri_html::build_rule_tree(&parsed);
-            tree.add_stylesheet(css, Origin::Author);
-            raikiri_style::cascade(&parsed.dom, &tree).map_err(|e| format!("{e:?}"))
-        })
-        .transpose()?;
+    let root = (0..parsed.dom.node_count())
+        .find(|&id| parsed.dom.get_node(id).unwrap().attribute("id") == Some(root_id))
+        .ok_or("missing IFC root")?;
+    resolve_document(parsed, StyleNodeId(root as u64), &MediaContext::default())
+}
+
+/// Consume an unchanged document, including its original CSS and media.
+pub fn resolve_document(
+    parsed: UncascadedDocument,
+    root: StyleNodeId,
+    media: &MediaContext,
+) -> Result<ResolvedInput, String> {
+    let tree = raikiri_html::build_rule_tree(&parsed);
+    let resolved = raikiri_style::cascade_with_first_line(&parsed.dom, &tree, media, root)
+        .map_err(|e| format!("{e:?}"))?;
     Ok(ResolvedInput {
         parsed,
-        normal,
-        first,
+        normal: resolved.normal,
+        first: resolved.first_line,
+        root,
     })
 }
 
@@ -98,6 +105,12 @@ fn style(
     inherited_underline: Option<TextDecoration>,
 ) -> Result<InlineStyle, String> {
     use raikiri_style::property as css;
+    if cv.opacity != 1.0
+        || cv.background_color.a != 0
+        || cv.background_image != css::BackgroundImage::None
+    {
+        return Err("caller does not paint opacity or backgrounds".into());
+    }
     if cv.direction != css::Direction::Ltr
         || cv.cssom_writing_mode != css::WritingMode::HorizontalTb
     {
@@ -225,6 +238,9 @@ impl Walker<'_> {
             );
             return Ok(());
         }
+        if self.input.normal.computed[id].display == raikiri_style::property::DisplayValue::None {
+            return Ok(());
+        }
         if node.tag_name() == Some("br") {
             self.builder.push_forced_break(NodeId(id as u64));
             return Ok(());
@@ -234,11 +250,6 @@ impl Walker<'_> {
         }
         if self.input.normal.computed[id].display != raikiri_style::property::DisplayValue::Inline {
             return Err("representative caller expects inline descendants".into());
-        }
-        if self.input.first.as_ref().is_some_and(|c| {
-            c.computed[id].display != raikiri_style::property::DisplayValue::Inline
-        }) {
-            return Err("alternate cascade must preserve inline descendants".into());
         }
         let normal = style(&self.input.normal.computed[id], underline)?;
         let link = if node.tag_name() == Some("a") {
@@ -255,7 +266,12 @@ impl Walker<'_> {
             .input
             .first
             .as_ref()
-            .map(|cascade| style(&cascade.computed[id], first_underline))
+            .map(|cascade| {
+                let cv = cascade.computed[id]
+                    .as_ref()
+                    .ok_or("missing first-line descendant")?;
+                style(cv, first_underline)
+            })
             .transpose()?;
         if let Some(first) = &first {
             self.builder.open_inline_with_first_line(
@@ -281,12 +297,7 @@ impl Walker<'_> {
     }
 }
 
-pub fn layout(
-    input: &ResolvedInput,
-    root_id: &str,
-    fonts: &FontCollection,
-    width: f32,
-) -> Result<Output, String> {
+pub fn layout(input: &ResolvedInput, fonts: &FontCollection, width: f32) -> Result<Output, String> {
     let count = input.parsed.dom.node_count();
     if input.normal.computed.len() != count
         || input
@@ -296,24 +307,20 @@ pub fn layout(
     {
         return Err("resolved cascades must cover this same DOM".into());
     }
-    let root = (0..count)
-        .find(|&id| input.parsed.dom.get_node(id).unwrap().attribute("id") == Some(root_id))
-        .ok_or("missing IFC root")?;
+    let root = input.root.0 as usize;
     if input.normal.computed[root].display != raikiri_style::property::DisplayValue::Block {
         return Err("representative caller expects a block IFC root".into());
-    }
-    if input
-        .first
-        .as_ref()
-        .is_some_and(|c| c.computed[root].display != raikiri_style::property::DisplayValue::Block)
-    {
-        return Err("alternate cascade must preserve the block IFC root".into());
     }
     let normal = style(&input.normal.computed[root], None)?;
     let first = input
         .first
         .as_ref()
-        .map(|c| style(&c.computed[root], None))
+        .map(|c| {
+            style(
+                c.computed[root].as_ref().ok_or("missing first-line root")?,
+                normal.paint.underline,
+            )
+        })
         .transpose()?;
     let paragraph_style = ParagraphStyle {
         root: normal.clone(),
