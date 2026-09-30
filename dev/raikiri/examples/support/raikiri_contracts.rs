@@ -11,7 +11,7 @@ use shodo::style::{
     FontFamily, InlineStyle, LineHeight, PaintStyle, ParagraphStyle, TextDecoration, TextTransform,
     TextWrapMode, WhiteSpaceCollapse,
 };
-use shodo::{AtomicSizes, LayoutContext, Line, ParagraphBuilder};
+use shodo::{AtomicSizes, LayoutContext, Line, Paragraph, ParagraphBuilder};
 use shodo::{font::FontCollection, geometry::LogicalRect, limits::Limits};
 use shodo::{
     mapping::{Affinity, MappingKind},
@@ -552,6 +552,36 @@ pub fn layout_with_font_policy(
     width: f32,
     policy: FontPolicy,
 ) -> Result<Output, String> {
+    let mut context = LayoutContext::new();
+    let prepared = prepare(input, &mut context, fonts, policy)?;
+    let lines = prepared.paragraph.break_all(
+        &mut context,
+        &Default::default(),
+        width,
+        &AtomicSizes::EMPTY,
+    );
+    prepared.output(lines)
+}
+
+/// Prepared real CSS/DOM inputs, reusable while input and font generations match.
+pub struct PreparedParagraph {
+    pub paragraph: Paragraph,
+    sources: HashMap<NodeId, Option<Link>>,
+}
+
+impl PreparedParagraph {
+    /// Assemble source links from these accepted lines, independently of shaping.
+    pub fn output(&self, lines: Vec<Line>) -> Result<Output, String> {
+        output(lines, &self.sources)
+    }
+}
+
+pub fn prepare(
+    input: &ResolvedInput,
+    context: &mut LayoutContext,
+    fonts: &FontCollection,
+    policy: FontPolicy,
+) -> Result<PreparedParagraph, String> {
     let count = input.parsed.dom.node_count();
     if input.normal.computed.len() != count
         || input
@@ -603,17 +633,17 @@ pub fn layout_with_font_policy(
             first.as_ref().and_then(|s| s.paint.underline),
         )?;
     }
-    let mut context = LayoutContext::new();
     let paragraph = walker
         .builder
-        .build(&mut context, fonts)
+        .build(context, fonts)
         .map_err(|e| format!("{e:?}"))?;
-    let lines = paragraph.break_all(
-        &mut context,
-        &Default::default(),
-        width,
-        &AtomicSizes::EMPTY,
-    );
+    Ok(PreparedParagraph {
+        paragraph,
+        sources: walker.sources,
+    })
+}
+
+fn output(lines: Vec<Line>, sources: &HashMap<NodeId, Option<Link>>) -> Result<Output, String> {
     let index = LineLayout::new(&lines);
     let mut links = Vec::new();
     for (line_id, line) in lines.iter().enumerate() {
@@ -623,8 +653,7 @@ pub fn layout_with_font_policy(
             .ok_or("missing accepted-line mapping")?
             .units()
         {
-            let Some(link) = walker
-                .sources
+            let Some(link) = sources
                 .get(&unit.node)
                 .ok_or("mapping source lost its DOM identity")?
             else {
