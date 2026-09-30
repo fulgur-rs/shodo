@@ -1,0 +1,11 @@
+# shodo-sbp.15 — source-link projection cost
+
+Measure the actual development CSS/DOM caller from merged .14 (20823870de5b79ac7aec59356a77aee9516d435c). Preserve core APIs, limits, frozen original caller output/source order, shared glyph paint ownership and partial source links. No saved S4/native geometry edits or production switch gate.
+
+Separate single-node/no-link, many-node/no-link, many links, transformed expanded links, nested partial ffi links, nowrap and Arabic RTL runs in LTR paragraphs. Existing CSS direction:rtl rejection remains explicit; do not add unsupported root-direction behavior. Small/long conditions and narrow/wide widths distinguish coalesced mappings and line count. Fixed registered Latin/CJK/Arabic bytes and no system font discovery.
+
+Prepare includes actual DOM walker/IFC build; break includes core shaping/line acceptance; output includes index construction and link projection. Separately observe actual index construction and projection timing in a diagnostic overlay, and measure standalone index allocator/time as a control. Whole prepare/break/output time adoption uses counter-free binaries; trace phase timings are diagnostic, not speed evidence. Separate allocator gross/net/peak and release scopes; do not equate independent windows or net with RSS.
+
+Freeze original full snapshots; validate mapping, source range, glyph/paint/metrics, line geometry and ordered links exactly across all variants. Existing real CSS/ffi/expanded/collapsed/nested/decorative tests are mandatory. Count duplicate selection ranges before adding query memoization. Candidate A lazy index; candidate B overlap-first lookups only if measured material and all-source validation/error contract maintained. Capture isolated A/B and combination to justify adoption; reject unsupported performance claims. A no-link index-build resource assertion must fail on original then pass on candidate; corresponding repeated lookup assertion only if B is adopted.
+
+Inline three tasks, no task agents. One fresh Astra final whole-branch review, exact latest-head CI, merge, close and owned cleanup. User already authorized all steps. Keep all raw/adverse controls and any setup/verifier failures. Do not repeat standard core54 matrix while core/harness fingerprints remain unchanged absent a concrete concern.
