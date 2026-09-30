@@ -294,28 +294,24 @@ pub(super) fn prepare_cuts(
             (count as u64).saturating_mul(1 + lanes.len() as u64),
         )?;
         ruby.cuts = if let Some((normal, cursors)) = normal {
-            let mut paired = Vec::with_capacity(count);
+            let mut paired = cuts::PairedBuilder::new(count, lanes.len());
             source_matched_cuts(
                 &base,
                 &lanes,
                 &normal.containers[container],
                 cursors,
                 |unit, lanes, class| {
-                    paired.push(cuts::PairedCut {
-                        unit,
-                        lanes: lanes.to_vec(),
-                        class,
-                    });
+                    paired.push(unit, lanes, class);
                 },
             );
-            paired
+            paired.finish()
         } else if spans
             .iter()
             .all(|s| s.units == ruby.units && s.ordinals.start == 0)
         {
-            cuts::build(&base, &lanes)
+            cuts::build_counted(&base, &lanes, count)
         } else {
-            cuts::build_spanned(&base, &lanes, &spans)
+            cuts::build_spanned_counted(&base, &lanes, &spans, count)
         };
         index.restrict(ruby);
     }

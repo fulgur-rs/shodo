@@ -86,6 +86,201 @@ fn build(ruby: Ruby) -> Paragraph {
     b.build(&mut LayoutContext::new(), &fonts()).unwrap()
 }
 
+fn cursor_storage_fixture(count: usize, full_lanes: usize, first_line: bool) -> ParagraphBuilder {
+    let limits = Limits::default();
+    let mut root = style("Shodo Fixture CJK");
+    root.font_size = 16.0;
+    root.line_break = LineBreak::Normal;
+    let mut small = root.clone();
+    small.font_size = 8.0;
+    small.font_families = vec![FontFamily::Named("Shodo Fixture Latin".into())];
+    let mut first = root.clone();
+    first.font_size = 20.0;
+    let paragraph_style = ParagraphStyle {
+        root: root.clone(),
+        first_line: first_line.then_some(first),
+        ..Default::default()
+    };
+    let bases = (0..if full_lanes == 0 { count } else { 1 })
+        .map(|i| RubyBase {
+            node: NodeId(10000 + i as u64),
+            content: content(
+                10000 + i as u64,
+                &"日".repeat(if full_lanes == 0 { 1 } else { count }),
+                &root,
+            ),
+            align: RubyAlign::Start,
+        })
+        .collect();
+    let levels = (0..full_lanes.max(1))
+        .map(|level| RubyLevel {
+            annotations: (0..if full_lanes == 0 { count } else { 1 })
+                .map(|i| RubyAnnotation {
+                    node: NodeId(20000 + (level * count + i) as u64),
+                    content: content(
+                        20000 + (level * count + i) as u64,
+                        &if full_lanes == 0 {
+                            "aaa".into()
+                        } else {
+                            "に".repeat(count)
+                        },
+                        &if full_lanes == 0 {
+                            small.clone()
+                        } else {
+                            let mut s = root.clone();
+                            s.font_size = 8.0;
+                            s
+                        },
+                    ),
+                    span: RubySpan::Columns(if full_lanes == 0 { i..i + 1 } else { 0..1 }),
+                    visibility: RubyVisibility::Visible,
+                })
+                .collect(),
+            style: RubyStyle {
+                overhang: RubyOverhang::None,
+                ..Default::default()
+            },
+        })
+        .collect();
+    let ruby = Ruby::new(bases, levels).unwrap();
+    let mut builder = ParagraphBuilder::new(&paragraph_style, &limits);
+    builder.push_ruby(NodeId(1), &root, ruby);
+    builder
+}
+
+fn cursor_table_bytes(ruby: &crate::ruby::prepare::PreparedRuby) -> usize {
+    ruby.cuts.capacity() * std::mem::size_of::<crate::ruby::cuts::PairedCut>()
+        + ruby
+            .cuts
+            .first()
+            .map_or(0, |cut| cut.lanes.table_payload_bytes())
+}
+
+#[test]
+fn short_spanned_lanes_retain_changes_instead_of_every_row() {
+    let paragraph = cursor_storage_fixture(64, 0, false)
+        .build(&mut LayoutContext::new(), &fonts())
+        .unwrap();
+    let ruby = &paragraph.data.ruby.containers[0];
+    assert_eq!(ruby.cuts.len(), 65);
+    for (row, cut) in ruby.cuts.iter().enumerate() {
+        for lane in 0..64 {
+            let end = ruby.lanes[lane].paragraph.data.units.len();
+            assert_eq!(cut.lanes[lane], if row <= lane { 0 } else { end });
+        }
+    }
+    assert!(
+        cursor_table_bytes(ruby) < 16_384,
+        "64 short lanes must retain cursor changes within 16KiB, actual {} bytes",
+        cursor_table_bytes(ruby)
+    );
+}
+
+#[test]
+fn many_dense_lanes_do_not_retain_column_metadata() {
+    for first_line in [false, true] {
+        let paragraph = cursor_storage_fixture(7, 64, first_line)
+            .build(&mut LayoutContext::new(), &fonts())
+            .unwrap();
+        let tables = std::iter::once(&paragraph.data)
+            .chain(paragraph.data.first_line.iter().map(|first| &first.data));
+        for data in tables {
+            let ruby = &data.ruby.containers[0];
+            assert_eq!((ruby.cuts.len(), ruby.lanes.len()), (8, 64));
+            for (lane, prepared) in ruby.lanes.iter().enumerate() {
+                let child = &prepared.paragraph.data;
+                let cluster_ends: Vec<_> = child
+                    .units
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, unit)| matches!(unit.kind, UnitKind::Cluster { .. }))
+                    .map(|(index, _)| index + 1)
+                    .collect();
+                assert_eq!(cluster_ends.len(), 7);
+                for (row, cut) in ruby.cuts.iter().enumerate() {
+                    let expected = match row {
+                        0 => 0,
+                        7 => child.units.len(),
+                        _ => cluster_ends[row - 1],
+                    };
+                    assert_eq!(cut.lanes[lane], expected);
+                }
+            }
+            // Original 8 rows * (40-byte metadata + 64 full usize cursors).
+            assert!(
+                cursor_table_bytes(ruby) < 4_416,
+                "dense64 must fit the original table payload; actual {} bytes",
+                cursor_table_bytes(ruby)
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "prints actual cursor storage diagnostics for the performance record"]
+fn cursor_storage_diagnostic() {
+    use std::hash::{Hash, Hasher};
+    let fonts = fonts();
+    for (count, full_lanes, first_line) in [
+        (16, 0, false),
+        (64, 0, false),
+        (256, 0, false),
+        (512, 0, false),
+        (512, 0, true),
+        (64, 1, false),
+        (512, 1, false),
+        (512, 4, false),
+    ] {
+        let mut context = LayoutContext::new();
+        let paragraph = cursor_storage_fixture(count, full_lanes, first_line)
+            .build(&mut context, &fonts)
+            .unwrap();
+        assert!(context.take_warnings().is_empty());
+        let mut tables = vec![("normal", &paragraph.data)];
+        if let Some(first) = &paragraph.data.first_line {
+            tables.push(("first-line", &first.data));
+        }
+        for (kind, data) in tables {
+            let ruby = &data.ruby.containers[0];
+            let rows = ruby.cuts.len();
+            let lanes = ruby.lanes.len();
+            let mut changes = 0;
+            let mut hash = std::collections::hash_map::DefaultHasher::new();
+            for (row, cut) in ruby.cuts.iter().enumerate() {
+                cut.unit.hash(&mut hash);
+                (cut.class as u8).hash(&mut hash);
+                for lane in 0..lanes {
+                    cut.lanes[lane].hash(&mut hash);
+                    if row > 0 && cut.lanes[lane] != ruby.cuts[row - 1].lanes[lane] {
+                        changes += 1;
+                    }
+                }
+            }
+            let cells: usize = ruby.cuts.iter().map(|cut| cut.lanes.len()).sum();
+            let metadata_bytes =
+                ruby.cuts.capacity() * std::mem::size_of::<crate::ruby::cuts::PairedCut>();
+            let table_payload = ruby
+                .cuts
+                .first()
+                .map_or(0, |cut| cut.lanes.table_payload_bytes());
+            let dense_lanes = ruby.cuts.first().map_or(0, |cut| cut.lanes.dense_columns());
+            assert_eq!(cells, rows * lanes);
+            println!(
+                "CURSOR_STORAGE columns={count} full_lanes={full_lanes} kind={kind} rows={rows} lanes={lanes} logical_cells={cells} changes={changes} metadata_bytes={metadata_bytes} table_payload_bytes={table_payload} retained_payload_bytes={} dense_lanes={dense_lanes} fingerprint={:016x}",
+                cursor_table_bytes(ruby),
+                hash.finish()
+            );
+        }
+    }
+    let error = cursor_storage_fixture(1024, 0, false)
+        .build(&mut LayoutContext::new(), &fonts)
+        .unwrap_err();
+    println!("CURSOR_STORAGE default_C1024_refusal={error:?}");
+    assert_eq!(error.kind, crate::limits::LimitKind::Items);
+    assert_eq!(error.limit, 1 << 20);
+    assert_eq!(error.actual, 1064969);
+}
+
 #[test]
 fn shared_cluster_source_slices_keep_one_ligature_unbroken() {
     let mut base = ParagraphBuilder::new(
@@ -202,7 +397,13 @@ fn prepared_multi_level_cuts_advance_every_parallel_reading() {
     assert_eq!(ruby.cuts.len(), 3);
     for cuts in ruby.cuts.windows(2) {
         assert!(cuts[0].unit < cuts[1].unit);
-        assert!(cuts[0].lanes.iter().zip(&cuts[1].lanes).all(|(a, b)| a < b));
+        assert!(
+            cuts[0]
+                .lanes
+                .iter()
+                .zip(cuts[1].lanes.iter())
+                .all(|(a, b)| a < b)
+        );
     }
 }
 
