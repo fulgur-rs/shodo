@@ -273,8 +273,8 @@ mod tests {
     #[test]
     fn vertical_is_not_dropped_and_upright_reaches_glyph_runs() {
         let fonts = load_fonts(&Default::default()).unwrap();
-        // The no-autospace reference isolates orientation and axis from the
-        // autospace difference above.
+        // The no-autospace reference isolates orientation and axis from
+        // spacing behavior.
         let reference = fixture_lines(
             &doc("text-autospace-vertical-upright-001-ref"),
             &fonts.collection,
