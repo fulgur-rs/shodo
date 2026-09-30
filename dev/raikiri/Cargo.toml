@@ -69,3 +69,7 @@ test = true
 [[example]]
 name = "retained_caller"
 test = true
+
+[[example]]
+name = "caller_windows"
+test = false
