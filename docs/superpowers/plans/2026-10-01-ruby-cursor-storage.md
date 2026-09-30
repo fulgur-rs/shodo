@@ -51,10 +51,10 @@ Preserve every row unit/class/cursor, paired-cut ordinal (including duplicate pa
 **Interfaces — Consumes:** adopted Task2 state and Task1 original measurements.
 **Interfaces — Produces:** required validation, final source-frozen all54 equivalence, standalone A/B with normal and first-line/RTL/nested/full-span/empty coverage, immutable evidence and reviewable branch.
 
-- [ ] Run workspace/no-default/complex-only, fmt/all-target Clippy/docs denied warnings/fixed snapshots; inspect existing base/ancestor Items tests.
-- [ ] Collect final frozen all54 against sbp8; compare warm/memory each7 digests and final source fingerprint.
-- [ ] After builds/collector, run balanced normal timings and verify dedicated build/layout output/warning/source signatures and original row fingerprints. Keep calls/gross/net/peak and table bytes separate, RSS unmeasured.
-- [ ] Record adoption/rejection, scopes and all samples/source/lock/binary hashes/RED-GREEN/limits/diagnostic logs; verify facts and commit.
+- [x] Run workspace/no-default/complex-only, fmt/all-target Clippy/docs denied warnings/fixed snapshots; inspect existing base/ancestor Items tests.
+- [x] Collect final frozen all54 against sbp8; compare warm/memory each7 digests and final source fingerprint.
+- [x] After builds/collector, run balanced normal timings and verify dedicated build/layout output/warning/source signatures and original row fingerprints. Keep calls/gross/net/peak and table bytes separate, RSS unmeasured.
+- [x] Record adoption/rejection, scopes and all samples/source/lock/binary hashes/RED-GREEN/limits/diagnostic logs; verify facts and commit.
   Expected: every claim auditable; no budget relaxation or universal speed claim.
 
 One fresh read-only Astra whole-branch review after all tasks; fix Critical/Important, PR/all CI/merge matching reviewed head, close issue, copy native ledger/review externally and remove only this tree/branch. Continue next eligible child.
