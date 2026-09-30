@@ -1,11 +1,10 @@
-//! Development caller over two resolved cascades on one immutable DOM.
-//! The fixture supplier uses ordinary CSS overrides; it is not a CSS
-//! ::first-line producer. Layout and paint below are shared with the CLI.
+//! Development caller for real CSS first-line styles on one immutable DOM.
+//! Layout and paint are shared by the fixture CLI and offline WPT probe.
 use shodo_harness::glyph_paint;
 use std::{collections::HashMap, ops::Range};
 
-use raikiri_html::{ParseOptions, UncascadedDocument, parse_html};
-use raikiri_style::{CascadeResult, ComputedValues, Origin};
+use raikiri_html::{ParseOptions, UncascadedDocument, parse};
+use raikiri_style::{CascadeResult, ComputedValues, FirstLineStyles, MediaContext, StyleNodeId};
 use raikiri_traits::{Dom, NodeId as DomId};
 use shodo::hit::{LineLayout, TextPosition};
 use shodo::style::{
@@ -22,13 +21,13 @@ use shodo::{
 pub struct ResolvedInput {
     parsed: UncascadedDocument,
     normal: CascadeResult,
-    first: Option<CascadeResult>,
+    first: Option<FirstLineStyles>,
+    root: StyleNodeId,
 }
 
-/// Fixture-only producer of explicit normal/alternate resolved inputs.
-/// Neither the original HTML nor its DOM IDs are rewritten.
-pub fn resolve_fixture(html: &str, alternate_css: Option<&str>) -> Result<ResolvedInput, String> {
-    let doc = parse_html(
+/// Resolve actual CSS against the original DOM, without root overrides.
+pub fn resolve_html(html: &str, root_id: &str) -> Result<ResolvedInput, String> {
+    let parsed = parse(
         html.as_bytes(),
         &ParseOptions {
             extra_stylesheets: &[],
@@ -37,19 +36,39 @@ pub fn resolve_fixture(html: &str, alternate_css: Option<&str>) -> Result<Resolv
         },
     )
     .map_err(|e| format!("{e:?}"))?;
-    let (parsed, normal) = doc.into_parts();
-    let first = alternate_css
-        .map(|css| {
-            let mut tree = raikiri_html::build_rule_tree(&parsed);
-            tree.add_stylesheet(css, Origin::Author);
-            raikiri_style::cascade(&parsed.dom, &tree).map_err(|e| format!("{e:?}"))
-        })
-        .transpose()?;
+    let root = (0..parsed.dom.node_count())
+        .find(|&id| parsed.dom.get_node(id).unwrap().attribute("id") == Some(root_id))
+        .ok_or("missing IFC root")?;
+    resolve_document(parsed, StyleNodeId(root as u64), &MediaContext::default())
+}
+
+/// Consume an unchanged document, including its original CSS and media.
+pub fn resolve_document(
+    parsed: UncascadedDocument,
+    root: StyleNodeId,
+    media: &MediaContext,
+) -> Result<ResolvedInput, String> {
+    let tree = raikiri_html::build_rule_tree(&parsed);
+    let resolved = raikiri_style::cascade_with_first_line(&parsed.dom, &tree, media, root)
+        .map_err(|e| format!("{e:?}"))?;
     Ok(ResolvedInput {
         parsed,
-        normal,
-        first,
+        normal: resolved.normal,
+        first: resolved.first_line,
+        root,
     })
+}
+
+impl ResolvedInput {
+    pub fn has_first_line(&self) -> bool {
+        self.first.is_some()
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum FontPolicy {
+    FixtureLatin,
+    BundledWpt,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -93,18 +112,230 @@ fn rgba(c: raikiri_style::property::CssColor) -> [u8; 4] {
     [c.r, c.g, c.b, c.a]
 }
 
+/// Accept the mapped inline footprint explicitly. Custom-property environments
+/// are already resolved by raikiri and are intentionally not paint inputs.
+fn validate_projection(cv: &ComputedValues, root: bool) -> Result<(), String> {
+    let initial = ComputedValues::initial();
+    macro_rules! initial_only {
+        ($($field:ident),* $(,)?) => { $(
+            if cv.$field != initial.$field {
+                return Err(format!("unsupported computed value: {}",stringify!($field)));
+            }
+        )* };
+    }
+    initial_only!(
+        background_color,
+        list_style_type,
+        list_style_position,
+        list_style_image,
+        counter_reset,
+        counter_increment,
+        counter_set,
+        content,
+        string_set,
+        running_templates,
+        position,
+        text_align,
+        hanging_punctuation,
+        text_autospace,
+        word_space_transform,
+        text_spacing_trim,
+        text_justify,
+        text_align_last,
+        writing_mode,
+        ruby_position,
+        text_indent,
+        text_indent_ch_factor,
+        text_indent_ch_offset,
+        text_indent_ch_font,
+        text_indent_ch_inherited,
+        text_indent_hanging,
+        text_indent_each_line,
+        border,
+        border_radius,
+        box_shadow,
+        outline,
+        outline_offset,
+        top,
+        right,
+        bottom,
+        left,
+        overflow,
+        text_decoration_skip_ink,
+        text_decoration_skip_spaces,
+        text_decoration_inset,
+        text_decoration_inset_start_ch,
+        text_decoration_inset_end_ch,
+        text_underline_offset,
+        text_underline_position,
+        text_emphasis_position,
+        text_emphasis_style,
+        text_emphasis_color,
+        vertical_align,
+        font_kerning,
+        font_optical_sizing,
+        font_variant_emoji,
+        font_language_override,
+        font_variant_ligatures,
+        font_synthesis,
+        font_variant_position,
+        font_palette,
+        font_variant_numeric,
+        font_variant_east_asian,
+        font_variation_settings,
+        font_variant_caps,
+        text_combine_upright,
+        text_orientation,
+        unicode_bidi,
+        visibility,
+        z_index,
+        word_break,
+        line_break,
+        overflow_wrap,
+        letter_spacing_ch_factor,
+        letter_spacing_ch_offset,
+        letter_spacing_ch_font,
+        word_spacing_ch_factor,
+        word_spacing_ch_offset,
+        word_spacing_ch_font,
+        tab_size,
+        break_before,
+        break_after,
+        break_inside,
+        float,
+        clear,
+        text_wrap_style,
+        hyphens,
+        hyphenate_character,
+        hyphenate_limit_chars,
+        flex_direction,
+        flex_wrap,
+        flex_grow,
+        flex_shrink,
+        flex_basis,
+        order,
+        justify_content,
+        align_content,
+        align_items,
+        align_self,
+        row_gap,
+        column_gap,
+        quotes,
+        quotes_auto,
+        text_shadow,
+        grid_template_columns,
+        grid_template_rows,
+        grid_template_areas,
+        grid_auto_columns,
+        grid_auto_rows,
+        grid_auto_flow,
+        grid_row_start,
+        grid_row_end,
+        grid_column_start,
+        grid_column_end,
+        justify_items,
+        justify_self,
+        orphans,
+        widows,
+        background_repeat,
+        background_attachment,
+        background_clip,
+        background_origin,
+        background_size,
+        background_position,
+        background_image,
+        object_fit,
+        object_position,
+        opacity,
+        isolation,
+        mix_blend_mode,
+        mask_image,
+        clip_path,
+        transform,
+        transform_origin,
+        transform_origin_z,
+        filter,
+        table_layout,
+        border_collapse,
+        border_spacing,
+        caption_side,
+        empty_cells,
+        column_count,
+        column_width,
+    );
+    // The originating block's ordinary geometry belongs to the outer layout.
+    // Inline descendants must not require unsupported box geometry.
+    if !root {
+        initial_only!(
+            box_sizing,
+            height,
+            height_ch,
+            margin,
+            margin_ch,
+            max_height,
+            max_width,
+            min_block_size,
+            min_height,
+            min_width,
+            padding,
+            padding_ch,
+            width,
+            width_ch,
+        );
+    }
+    Ok(())
+}
+
+/// The core first-line projection retains these normal formatting controls.
+fn validate_first_line_projection(normal: &InlineStyle, first: &InlineStyle) -> Result<(), String> {
+    if normal.text_wrap_mode != first.text_wrap_mode
+        || normal.white_space_collapse != first.white_space_collapse
+    {
+        return Err("caller cannot project first-line wrapping/whitespace changes".into());
+    }
+    Ok(())
+}
+
+fn reject_generated_content(input: &ResolvedInput, id: usize) -> Result<(), String> {
+    for pseudo in [
+        raikiri_style::PseudoElem::Before,
+        raikiri_style::PseudoElem::After,
+    ] {
+        if let Some(cv) = input.normal.pseudo.get(&(StyleNodeId(id as u64), pseudo))
+            && cv.display != raikiri_style::property::DisplayValue::None
+            && cv
+                .content
+                .iter()
+                .any(|value| !matches!(value, raikiri_style::property::ContentComponent::None))
+        {
+            return Err("caller does not project generated before/after content".into());
+        }
+    }
+    Ok(())
+}
+
 fn style(
     cv: &ComputedValues,
     inherited_underline: Option<TextDecoration>,
+    policy: FontPolicy,
+    root: bool,
 ) -> Result<InlineStyle, String> {
     use raikiri_style::property as css;
+    validate_projection(cv, root)?;
+    if cv.opacity != 1.0
+        || cv.background_color.a != 0
+        || cv.background_image != css::BackgroundImage::None
+    {
+        return Err("caller does not paint opacity or backgrounds".into());
+    }
     if cv.direction != css::Direction::Ltr
         || cv.cssom_writing_mode != css::WritingMode::HorizontalTb
     {
         return Err("representative caller requires horizontal LTR input".into());
     }
-    if cv.font_family.len() != 1
-        || cv.font_family[0].as_str() != shodo_fixtures::FONTS[0].family
+    if (matches!(policy, FontPolicy::FixtureLatin)
+        && (cv.font_family.len() != 1
+            || cv.font_family[0].as_str() != shodo_fixtures::FONTS[0].family))
         || cv.font_weight != 400.0
         || cv.font_style != css::FontStyle::Normal
     {
@@ -157,7 +388,25 @@ fn style(
         inherited_underline
     };
     Ok(InlineStyle {
-        font_families: vec![FontFamily::Named(shodo_fixtures::FONTS[0].family.into())],
+        font_families: cv
+            .font_family
+            .iter()
+            .map(|f| {
+                if f.1 == css::FontFamilyKind::Named {
+                    return Ok(FontFamily::Named(f.as_str().into()));
+                }
+                let generic = match f.as_str() {
+                    "serif" => shodo::style::GenericFamily::Serif,
+                    "sans-serif" => shodo::style::GenericFamily::SansSerif,
+                    "monospace" => shodo::style::GenericFamily::Monospace,
+                    "cursive" => shodo::style::GenericFamily::Cursive,
+                    "fantasy" => shodo::style::GenericFamily::Fantasy,
+                    "system-ui" => shodo::style::GenericFamily::SystemUi,
+                    _ => return Err("font generic outside bundled registry".into()),
+                };
+                Ok(FontFamily::Generic(generic))
+            })
+            .collect::<Result<_, String>>()?,
         font_size: cv.font_size.0,
         font_weight: cv.font_weight,
         letter_spacing: spacing(cv.letter_spacing_computed)?,
@@ -197,6 +446,7 @@ struct Walker<'a> {
     input: &'a ResolvedInput,
     builder: ParagraphBuilder,
     sources: HashMap<NodeId, Option<Link>>,
+    policy: FontPolicy,
 }
 
 impl Walker<'_> {
@@ -225,6 +475,11 @@ impl Walker<'_> {
             );
             return Ok(());
         }
+        if self.input.normal.computed[id].display == raikiri_style::property::DisplayValue::None {
+            return Ok(());
+        }
+        reject_generated_content(self.input, id)?;
+        validate_projection(&self.input.normal.computed[id], false)?;
         if node.tag_name() == Some("br") {
             self.builder.push_forced_break(NodeId(id as u64));
             return Ok(());
@@ -235,12 +490,12 @@ impl Walker<'_> {
         if self.input.normal.computed[id].display != raikiri_style::property::DisplayValue::Inline {
             return Err("representative caller expects inline descendants".into());
         }
-        if self.input.first.as_ref().is_some_and(|c| {
-            c.computed[id].display != raikiri_style::property::DisplayValue::Inline
-        }) {
-            return Err("alternate cascade must preserve inline descendants".into());
-        }
-        let normal = style(&self.input.normal.computed[id], underline)?;
+        let normal = style(
+            &self.input.normal.computed[id],
+            underline,
+            self.policy,
+            false,
+        )?;
         let link = if node.tag_name() == Some("a") {
             node.attribute("href")
                 .map(|href| Link {
@@ -255,9 +510,15 @@ impl Walker<'_> {
             .input
             .first
             .as_ref()
-            .map(|cascade| style(&cascade.computed[id], first_underline))
+            .map(|cascade| {
+                let cv = cascade.computed[id]
+                    .as_ref()
+                    .ok_or("missing first-line descendant")?;
+                style(cv, first_underline, self.policy, false)
+            })
             .transpose()?;
         if let Some(first) = &first {
+            validate_first_line_projection(&normal, first)?;
             self.builder.open_inline_with_first_line(
                 NodeId(id as u64),
                 &normal,
@@ -281,11 +542,15 @@ impl Walker<'_> {
     }
 }
 
-pub fn layout(
+pub fn layout(input: &ResolvedInput, fonts: &FontCollection, width: f32) -> Result<Output, String> {
+    layout_with_font_policy(input, fonts, width, FontPolicy::FixtureLatin)
+}
+
+pub fn layout_with_font_policy(
     input: &ResolvedInput,
-    root_id: &str,
     fonts: &FontCollection,
     width: f32,
+    policy: FontPolicy,
 ) -> Result<Output, String> {
     let count = input.parsed.dom.node_count();
     if input.normal.computed.len() != count
@@ -296,25 +561,27 @@ pub fn layout(
     {
         return Err("resolved cascades must cover this same DOM".into());
     }
-    let root = (0..count)
-        .find(|&id| input.parsed.dom.get_node(id).unwrap().attribute("id") == Some(root_id))
-        .ok_or("missing IFC root")?;
+    let root = input.root.0 as usize;
     if input.normal.computed[root].display != raikiri_style::property::DisplayValue::Block {
         return Err("representative caller expects a block IFC root".into());
     }
-    if input
-        .first
-        .as_ref()
-        .is_some_and(|c| c.computed[root].display != raikiri_style::property::DisplayValue::Block)
-    {
-        return Err("alternate cascade must preserve the block IFC root".into());
-    }
-    let normal = style(&input.normal.computed[root], None)?;
+    reject_generated_content(input, root)?;
+    let normal = style(&input.normal.computed[root], None, policy, true)?;
     let first = input
         .first
         .as_ref()
-        .map(|c| style(&c.computed[root], None))
+        .map(|c| {
+            style(
+                c.computed[root].as_ref().ok_or("missing first-line root")?,
+                normal.paint.underline,
+                policy,
+                true,
+            )
+        })
         .transpose()?;
+    if let Some(first) = &first {
+        validate_first_line_projection(&normal, first)?;
+    }
     let paragraph_style = ParagraphStyle {
         root: normal.clone(),
         first_line: first.clone(),
@@ -326,6 +593,7 @@ pub fn layout(
         input,
         builder,
         sources: HashMap::new(),
+        policy,
     };
     for child in input.parsed.dom.child_ids(DomId(root as u64)) {
         walker.walk(

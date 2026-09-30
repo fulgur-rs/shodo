@@ -1,0 +1,716 @@
+{
+  "source_head": "fd5107a41ccfa7b47e22ea01281936dbf846d804",
+  "rustflags": "-D warnings",
+  "rustdocflags": "-D warnings",
+  "bench_case": "latin-short",
+  "checks": [
+    {
+      "name": "fmt",
+      "argv": [
+        "cargo",
+        "+stable",
+        "fmt",
+        "--all",
+        "--check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "clippy",
+      "argv": [
+        "cargo",
+        "+stable",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "clippy-accesskit",
+      "argv": [
+        "cargo",
+        "+stable",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--features",
+        "shodo-harness/accesskit",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "tests",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "--workspace"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "tests-accesskit",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "--workspace",
+        "--features",
+        "shodo-harness/accesskit"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "cache-release",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "--release",
+        "-p",
+        "shodo",
+        "--lib",
+        "line::cache::tests"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "accessibility",
+      "argv": [
+        "cargo",
+        "+stable",
+        "run",
+        "--locked",
+        "-p",
+        "shodo-harness",
+        "--features",
+        "accesskit,shodo/complex-scripts",
+        "--example",
+        "accessibility"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "emoji",
+      "argv": [
+        "cargo",
+        "+stable",
+        "run",
+        "--locked",
+        "-p",
+        "shodo-harness",
+        "--example",
+        "emoji_png",
+        "--",
+        "target/emoji-7ff.png"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "ruby",
+      "argv": [
+        "cargo",
+        "+stable",
+        "run",
+        "--locked",
+        "-p",
+        "shodo-harness",
+        "--example",
+        "ruby_png",
+        "--",
+        "target/ruby-7ff"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "snapshots",
+      "argv": [
+        "cargo",
+        "+stable",
+        "run",
+        "--locked",
+        "-p",
+        "shodo-harness",
+        "--example",
+        "snapshots",
+        "--",
+        "--output",
+        "target/snapshot-report-7ff"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "allocation",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "-p",
+        "shodo-bench",
+        "--features",
+        "allocation-counting",
+        "--test",
+        "allocator",
+        "--test",
+        "probe"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "bench",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "-p",
+        "shodo-bench",
+        "--bench",
+        "layout"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "no-default",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "-p",
+        "shodo",
+        "--no-default-features"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "complex-scripts",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "-p",
+        "shodo",
+        "--no-default-features",
+        "--features",
+        "complex-scripts"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "doc",
+      "argv": [
+        "cargo",
+        "+stable",
+        "doc",
+        "--locked",
+        "--workspace",
+        "--no-deps"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "doc-accesskit",
+      "argv": [
+        "cargo",
+        "+stable",
+        "doc",
+        "--locked",
+        "--workspace",
+        "--no-deps",
+        "--features",
+        "shodo-harness/accesskit"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "python",
+      "argv": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-v"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "fixtures",
+      "argv": [
+        "python3",
+        "tools/fixtures/regenerate.py",
+        "--check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "msrv",
+      "argv": [
+        "cargo",
+        "+1.89.0",
+        "test",
+        "--locked",
+        "--workspace"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "msrv-accesskit",
+      "argv": [
+        "cargo",
+        "+1.89.0",
+        "test",
+        "--locked",
+        "--workspace",
+        "--features",
+        "shodo-harness/accesskit"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "wasm",
+      "argv": [
+        "cargo",
+        "+stable",
+        "build",
+        "--locked",
+        "-p",
+        "shodo",
+        "--target",
+        "wasm32-unknown-unknown"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "wasm-no-default",
+      "argv": [
+        "cargo",
+        "+stable",
+        "build",
+        "--locked",
+        "-p",
+        "shodo",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--no-default-features"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "wasm-accesskit",
+      "argv": [
+        "cargo",
+        "+stable",
+        "build",
+        "--locked",
+        "-p",
+        "shodo",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--no-default-features",
+        "--features",
+        "accesskit"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "final-fmt",
+      "argv": [
+        "cargo",
+        "+stable",
+        "fmt",
+        "--all",
+        "--check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "final-caller-clippy",
+      "argv": [
+        "cargo",
+        "+stable",
+        "clippy",
+        "--locked",
+        "-p",
+        "shodo-raikiri",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "msrv-accessibility",
+      "argv": [
+        "cargo",
+        "+1.89.0",
+        "run",
+        "--locked",
+        "-p",
+        "shodo-harness",
+        "--features",
+        "accesskit,shodo/complex-scripts",
+        "--example",
+        "accessibility"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "msrv-emoji",
+      "argv": [
+        "cargo",
+        "+1.89.0",
+        "run",
+        "--locked",
+        "-p",
+        "shodo-harness",
+        "--example",
+        "emoji_png",
+        "--",
+        "target/msrv-emoji-7ff.png"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "msrv-ruby",
+      "argv": [
+        "cargo",
+        "+1.89.0",
+        "run",
+        "--locked",
+        "-p",
+        "shodo-harness",
+        "--example",
+        "ruby_png",
+        "--",
+        "target/msrv-ruby-7ff"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "msrv-snapshots",
+      "argv": [
+        "cargo",
+        "+1.89.0",
+        "run",
+        "--locked",
+        "-p",
+        "shodo-harness",
+        "--example",
+        "snapshots",
+        "--",
+        "--output",
+        "target/msrv-snapshot-report-7ff"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "package_content_gate": "passed:146 allowed paths",
+  "python": "69 tests, 3 skipped",
+  "upstream_gate": "ordinary checks and patch coverage passed; ignored flex-float WPT existing8944pixels failure reproduced on24c1abf0",
+  "final_review_fix": {
+    "raikiri_commit": "a62ea75b65a8547bcd0e7874addeeebee5b0beee",
+    "cargo_lock_sha256": "008d0be09f5c5061102d6c31ae25467e6020951ede20637df84f57cc8b9beaec",
+    "measured_source_files": [
+      {
+        "path": "examples/first_line_wpt.rs",
+        "sha256": "1ecef789591a49574997ed067a13309fdd6fee84ae5b1af2747d7b5ca5d47181"
+      },
+      {
+        "path": "examples/support/first_line_wpt.rs",
+        "sha256": "b3b5d3a0db713b27ac97d91963354552dfd938f1cf4304c48abcbddaca395a60"
+      },
+      {
+        "path": "examples/support/raikiri_contracts.rs",
+        "sha256": "982be011abcffdf88fadae537e5765b907cdb968848c0437b3dfe0e93743fd2f"
+      },
+      {
+        "path": "examples/support/source_fonts.rs",
+        "sha256": "19e1f584ed91d68c18529ebca41358e51ae762dcba4363d5c125adde213b3290"
+      },
+      {
+        "path": "examples/support/offline_wpt.rs",
+        "sha256": "ee24d4e52070fba51cb40e76f3771149970284396cba0800575dcb373132ff23"
+      }
+    ],
+    "caller_test_sha256": "0399cc51e54eec782656c0ae7766c3634dadfd10f566a434276cf8c8210ebf8a",
+    "rustflags": "-D warnings",
+    "rustdocflags": "-D warnings",
+    "checks": [
+      {
+        "name": "fmt",
+        "argv": [
+          "cargo",
+          "+stable",
+          "fmt",
+          "--all",
+          "--check"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "clippy",
+        "argv": [
+          "cargo",
+          "+stable",
+          "clippy",
+          "--locked",
+          "--workspace",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "clippy-accesskit",
+        "argv": [
+          "cargo",
+          "+stable",
+          "clippy",
+          "--locked",
+          "--workspace",
+          "--all-targets",
+          "--features",
+          "shodo-harness/accesskit",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "caller",
+        "argv": [
+          "cargo",
+          "+1.91.0",
+          "test",
+          "--locked",
+          "-p",
+          "shodo-raikiri",
+          "--all-targets"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "workspace",
+        "argv": [
+          "cargo",
+          "+stable",
+          "test",
+          "--locked",
+          "--workspace"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "msrv-caller",
+        "argv": [
+          "cargo",
+          "+1.89.0",
+          "test",
+          "--locked",
+          "-p",
+          "shodo-raikiri",
+          "--all-targets"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "docs",
+        "argv": [
+          "cargo",
+          "+stable",
+          "doc",
+          "--locked",
+          "--workspace",
+          "--no-deps"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "accesskit_workspace_before_equivalent_let_chain_lint_fix": {
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "--workspace",
+        "--features",
+        "shodo-harness/accesskit"
+      ],
+      "exit_code": 0,
+      "passed": 1067
+    },
+    "upstream_checks": [
+      {
+        "name": "fmt",
+        "argv": [
+          "cargo",
+          "+1.91.0",
+          "fmt",
+          "--all"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "workspace",
+        "argv": [
+          "cargo",
+          "+1.91.0",
+          "test",
+          "--locked",
+          "--workspace"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "clippy",
+        "argv": [
+          "cargo",
+          "+1.91.0",
+          "clippy",
+          "--locked",
+          "--workspace",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "orphan",
+        "argv": [
+          "bash",
+          "scripts/orphan-tests-lint.sh"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "docs",
+        "argv": [
+          "cargo",
+          "+1.91.0",
+          "doc",
+          "--locked",
+          "--no-deps",
+          "--workspace"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "private-doc",
+        "argv": [
+          "cargo",
+          "+1.91.0",
+          "doc",
+          "--locked",
+          "--no-deps",
+          "-p",
+          "raikiri-style",
+          "--document-private-items"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "test-doc",
+        "argv": [
+          "cargo",
+          "+1.91.0",
+          "rustdoc",
+          "--locked",
+          "-p",
+          "raikiri-style",
+          "--lib",
+          "--",
+          "--cfg",
+          "test",
+          "--document-private-items"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "upstream_patch_coverage": {
+      "argv": [
+        "env",
+        "RUSTUP_TOOLCHAIN=1.91.0",
+        "bash",
+        "scripts/patch-coverage.sh",
+        "24c1abf06b098539701f06dcf422154e3e8d2035"
+      ],
+      "exit_code": 0,
+      "unreported_test_entry_lines": 567
+    },
+    "upstream_final_ci": {
+      "headRefOid": "a62ea75b65a8547bcd0e7874addeeebee5b0beee",
+      "statusCheckRollup": [
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-30T03:55:10Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/fulgur-rs/raikiri/actions/runs/36666531861/job/109732281640",
+          "name": "detect relevant changes",
+          "startedAt": "2026-09-30T03:55:00Z",
+          "status": "COMPLETED",
+          "workflowName": "CI"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-30T04:01:45Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/fulgur-rs/raikiri/actions/runs/36666531861/job/109732327558",
+          "name": "fmt + test + clippy",
+          "startedAt": "2026-09-30T03:55:12Z",
+          "status": "COMPLETED",
+          "workflowName": "CI"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-30T04:04:00Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/fulgur-rs/raikiri/actions/runs/36666531861/job/109732327734",
+          "name": "coverage",
+          "startedAt": "2026-09-30T03:55:13Z",
+          "status": "COMPLETED",
+          "workflowName": "CI"
+        },
+        {
+          "__typename": "StatusContext",
+          "context": "CodeRabbit",
+          "startedAt": "2026-09-30T03:55:03Z",
+          "state": "SUCCESS",
+          "targetUrl": ""
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-30T04:04:49Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://app.codecov.io/gh/fulgur-rs/raikiri/pull/463",
+          "name": "codecov/patch",
+          "startedAt": "2026-09-30T04:04:49Z",
+          "status": "COMPLETED",
+          "workflowName": ""
+        }
+      ]
+    }
+  }
+}

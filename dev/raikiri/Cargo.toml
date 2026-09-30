@@ -19,10 +19,14 @@ skrifa.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-raikiri-dom = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
-raikiri-html = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
-raikiri-style = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
-raikiri-traits = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "ab7e619a8f321f03de8b8c8b9342954868e044c8" }
+raikiri-dom = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "a62ea75b65a8547bcd0e7874addeeebee5b0beee" }
+raikiri-html = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "a62ea75b65a8547bcd0e7874addeeebee5b0beee" }
+raikiri-style = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "a62ea75b65a8547bcd0e7874addeeebee5b0beee" }
+raikiri-traits = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "a62ea75b65a8547bcd0e7874addeeebee5b0beee" }
+raikiri-paint = { git = "https://github.com/fulgur-rs/raikiri.git", rev = "a62ea75b65a8547bcd0e7874addeeebee5b0beee" }
+anyrender = "=0.13.0"
+anyrender_vello_cpu = "=0.16.0"
+parley = "=0.11.1"
 tiny-skia = "=0.12.0"
 url = "2"
 percent-encoding = "2"
@@ -53,4 +57,8 @@ test = true
 
 [[example]]
 name = "style_handoff"
+test = true
+
+[[example]]
+name = "first_line_wpt"
 test = true
