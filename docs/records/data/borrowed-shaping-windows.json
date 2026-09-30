@@ -1,0 +1,1753 @@
+{
+  "schema": 1,
+  "issue": "shodo-sbp.7",
+  "base_commit": "89ae7f955aaa7f8795bc246a7e3f3064a459ced3",
+  "implementation_commit": "37a57580c0c4a0d88e50522e9232488e5151aca7",
+  "probe_cases": 16,
+  "matrix_cases": 54,
+  "memory_repeats": 3,
+  "timing_samples_per_case": 10,
+  "scope": "fresh Workload::build or ParagraphBuilder input snapshot construction and shaping; fixed font load, context init and output/warning/source-map checking excluded; expected output build warms font caches",
+  "binary_sha256": {
+    "after-memory": "95567c9ecce374387b8ff7c23f9940e12d1080df07f6d004d31ce0fc9ac92881",
+    "after-timing": "f5f537dda84994202a8bea91f111e83a0ebe0c155b34a6fe89ec4d1787b99ca2",
+    "before-memory": "f41373e0742f875e4fc85418320b29ba74ebf758ec030e8f71e175c4242dbd4b",
+    "before-timing": "54b8fb47c961458eae723ca0ff130fb34062cf40cd772e2fb4f69edf6cbe47d1",
+    "filtered-after-memory": "c46d6e29b8ed078b6b8de45dfcdca3232ee225c3a8b775d1cc2a5b98ea8b4d11",
+    "filtered-after-timing": "cf8eacb630baa079217e6d21727af67887ab66d7094f8d498cf136815d9158e3",
+    "filtered-before-timing": "922927401cf6b0ad8eec4aebf99f2b67d3bc8305c39d65eaf0aca733fbdf74ad"
+  },
+  "memory": {
+    "before": [
+      {
+        "id": "latin-short",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 79,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 3,
+          "runs": 3,
+          "sha256": "a328ba21be0ee73814b4b2db2760e2b39e42afb1884f0a32fc157a7d2aa729ac",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])"
+        ],
+        "counts": {
+          "calls": 326,
+          "allocated_bytes": 91375,
+          "deallocated_bytes": 54542,
+          "net_bytes": 36833,
+          "peak_extra_bytes": 39457
+        }
+      },
+      {
+        "id": "latin-short",
+        "scale": 64,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 5056,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 129,
+          "runs": 129,
+          "sha256": "6c0bbce9d8ec1dd810e225ff27296a5a54c2b30d37a6101930eeaa7f96655db3",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..5056, text: 0..5056 }])"
+        ],
+        "counts": {
+          "calls": 5418,
+          "allocated_bytes": 4742842,
+          "deallocated_bytes": 2891168,
+          "net_bytes": 1851674,
+          "peak_extra_bytes": 1872377
+        }
+      },
+      {
+        "id": "latin-long",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 959,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 18,
+          "runs": 30,
+          "sha256": "32d579dec942da2d3fa2ff5a3ed7525ec8c7a857b850a244b54def9acc2cef24",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..959, text: 0..959 }])"
+        ],
+        "counts": {
+          "calls": 1264,
+          "allocated_bytes": 771287,
+          "deallocated_bytes": 467078,
+          "net_bytes": 304209,
+          "peak_extra_bytes": 312607
+        }
+      },
+      {
+        "id": "latin-long",
+        "scale": 64,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 61376,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1152,
+          "runs": 1920,
+          "sha256": "179a465b23d1af707843b7988ed5ec5070c3bd8d59b00b420163aa104c715205",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..61376, text: 0..61376 }])"
+        ],
+        "counts": {
+          "calls": 61795,
+          "allocated_bytes": 48216762,
+          "deallocated_bytes": 29253024,
+          "net_bytes": 18963738,
+          "peak_extra_bytes": 19483129
+        }
+      },
+      {
+        "id": "arabic-long",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 755,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 12,
+          "runs": 23,
+          "sha256": "c664235362b08f0f55f803d701dbbab5e45af3ef7d5699f6bb64173bbd7c5f06",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..1379, text: 0..1379 }])"
+        ],
+        "counts": {
+          "calls": 1185,
+          "allocated_bytes": 697564,
+          "deallocated_bytes": 433637,
+          "net_bytes": 263927,
+          "peak_extra_bytes": 269482
+        }
+      },
+      {
+        "id": "arabic-long",
+        "scale": 64,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 48320,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 769,
+          "runs": 1537,
+          "sha256": "f2ec783ffddeca75e795065ff6c85e97ebc1aab668c6e5b8ee1364a4bf2390f2",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..88256, text: 0..88256 }])"
+        ],
+        "counts": {
+          "calls": 55675,
+          "allocated_bytes": 43286527,
+          "deallocated_bytes": 26907011,
+          "net_bytes": 16379516,
+          "peak_extra_bytes": 16716892
+        }
+      },
+      {
+        "id": "mixed-scripts",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 40,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 2,
+          "runs": 10,
+          "sha256": "f6b2eeb42337d58ad417180c3007278f903d1e322cdde4ba150826bbfa0f8e06",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..66, text: 0..66 }])"
+        ],
+        "counts": {
+          "calls": 488,
+          "allocated_bytes": 83415,
+          "deallocated_bytes": 53003,
+          "net_bytes": 30412,
+          "peak_extra_bytes": 33108
+        }
+      },
+      {
+        "id": "mixed-scripts",
+        "scale": 64,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 2560,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 77,
+          "runs": 678,
+          "sha256": "6457f42f19801d944da0e6cb42af4f5450b0ffdd1aba2005ae815fc841b99d77",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..4224, text: 0..4224 }])"
+        ],
+        "counts": {
+          "calls": 11306,
+          "allocated_bytes": 2647991,
+          "deallocated_bytes": 1541161,
+          "net_bytes": 1106830,
+          "peak_extra_bytes": 1119618
+        }
+      },
+      {
+        "id": "combining-latin",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 18,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 1,
+          "sha256": "6d9df70d98c5802fa12c8587e0f36c368153d4dce10b43638709655ea4d5d9e7",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..29, text: 0..29 }])"
+        ],
+        "counts": {
+          "calls": 226,
+          "allocated_bytes": 35561,
+          "deallocated_bytes": 20870,
+          "net_bytes": 14691,
+          "peak_extra_bytes": 17265
+        }
+      },
+      {
+        "id": "combining-latin",
+        "scale": 64,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 1152,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 33,
+          "runs": 64,
+          "sha256": "94120eb229a6bd6d015ed956f719e7cc123dcfded2a61fda5d83f19e55286b8a",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..1856, text: 0..1856 }])"
+        ],
+        "counts": {
+          "calls": 1412,
+          "allocated_bytes": 1141306,
+          "deallocated_bytes": 706720,
+          "net_bytes": 434586,
+          "peak_extra_bytes": 441593
+        }
+      },
+      {
+        "id": "many-short-latin",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 79,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 3,
+          "runs": 3,
+          "sha256": "a328ba21be0ee73814b4b2db2760e2b39e42afb1884f0a32fc157a7d2aa729ac",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])"
+        ],
+        "counts": {
+          "calls": 326,
+          "allocated_bytes": 91375,
+          "deallocated_bytes": 54542,
+          "net_bytes": 36833,
+          "peak_extra_bytes": 39457
+        }
+      },
+      {
+        "id": "many-short-latin",
+        "scale": 64,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 5056,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 192,
+          "runs": 192,
+          "sha256": "f7087f56ad7cc64b0e0331d6b8630933aa6a3339266c97c175d818b804c2c8ca",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])"
+        ],
+        "counts": {
+          "calls": 18911,
+          "allocated_bytes": 4903504,
+          "deallocated_bytes": 2970560,
+          "net_bytes": 1932944,
+          "peak_extra_bytes": 1935568
+        }
+      },
+      {
+        "id": "first-line",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 1280,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 37,
+          "runs": 73,
+          "sha256": "860a2dcc704321cae13f504c28f2032e40d593cc520ae48e6ab1432816b97f61",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(1), dom: 7..1287, text: 0..1280 }])"
+        ],
+        "counts": {
+          "calls": 3134,
+          "allocated_bytes": 2357877,
+          "deallocated_bytes": 1462932,
+          "net_bytes": 894945,
+          "peak_extra_bytes": 923285
+        }
+      },
+      {
+        "id": "budget8",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 1280,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 37,
+          "runs": 224,
+          "sha256": "764df4faa63e137e1b9e207e8a0f5eb644a3495afe11d10874b55ba1506b8e2a",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(1), dom: 7..1287, text: 0..1280 }])"
+        ],
+        "counts": {
+          "calls": 2359,
+          "allocated_bytes": 1059049,
+          "deallocated_bytes": 657210,
+          "net_bytes": 401839,
+          "peak_extra_bytes": 407129
+        }
+      },
+      {
+        "id": "rtl-budget8",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 1792,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 43,
+          "runs": 574,
+          "sha256": "ef659879ae5a33b56c2b90c53de5f681aef7380f914b7d7c3c92dad9d4294869",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(1), dom: 7..3335, text: 0..3328 }])"
+        ],
+        "counts": {
+          "calls": 5475,
+          "allocated_bytes": 1413262,
+          "deallocated_bytes": 894749,
+          "net_bytes": 518513,
+          "peak_extra_bytes": 534044
+        }
+      },
+      {
+        "id": "giant-grapheme",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 256,
+          "sha256": "d470edeaa2b984214ab1a8bb799ebbf411eb15301bac8c3d791292e312bf2e4a",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(1), dom: 7..391, text: 0..384 }])"
+        ],
+        "counts": {
+          "calls": 2537,
+          "allocated_bytes": 290589,
+          "deallocated_bytes": 184750,
+          "net_bytes": 105839,
+          "peak_extra_bytes": 111769
+        }
+      }
+    ],
+    "after": [
+      {
+        "id": "latin-short",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 79,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 3,
+          "runs": 3,
+          "sha256": "a328ba21be0ee73814b4b2db2760e2b39e42afb1884f0a32fc157a7d2aa729ac",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])"
+        ],
+        "counts": {
+          "calls": 325,
+          "allocated_bytes": 89795,
+          "deallocated_bytes": 52962,
+          "net_bytes": 36833,
+          "peak_extra_bytes": 39457
+        }
+      },
+      {
+        "id": "latin-short",
+        "scale": 64,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 5056,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 129,
+          "runs": 129,
+          "sha256": "6c0bbce9d8ec1dd810e225ff27296a5a54c2b30d37a6101930eeaa7f96655db3",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..5056, text: 0..5056 }])"
+        ],
+        "counts": {
+          "calls": 5417,
+          "allocated_bytes": 4641722,
+          "deallocated_bytes": 2790048,
+          "net_bytes": 1851674,
+          "peak_extra_bytes": 1872377
+        }
+      },
+      {
+        "id": "latin-long",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 959,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 18,
+          "runs": 30,
+          "sha256": "32d579dec942da2d3fa2ff5a3ed7525ec8c7a857b850a244b54def9acc2cef24",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..959, text: 0..959 }])"
+        ],
+        "counts": {
+          "calls": 1263,
+          "allocated_bytes": 752107,
+          "deallocated_bytes": 447898,
+          "net_bytes": 304209,
+          "peak_extra_bytes": 312607
+        }
+      },
+      {
+        "id": "latin-long",
+        "scale": 64,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 61376,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1152,
+          "runs": 1920,
+          "sha256": "179a465b23d1af707843b7988ed5ec5070c3bd8d59b00b420163aa104c715205",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..61376, text: 0..61376 }])"
+        ],
+        "counts": {
+          "calls": 61794,
+          "allocated_bytes": 46989242,
+          "deallocated_bytes": 28025504,
+          "net_bytes": 18963738,
+          "peak_extra_bytes": 19483129
+        }
+      },
+      {
+        "id": "arabic-long",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 755,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 12,
+          "runs": 23,
+          "sha256": "c664235362b08f0f55f803d701dbbab5e45af3ef7d5699f6bb64173bbd7c5f06",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..1379, text: 0..1379 }])"
+        ],
+        "counts": {
+          "calls": 1184,
+          "allocated_bytes": 682464,
+          "deallocated_bytes": 418537,
+          "net_bytes": 263927,
+          "peak_extra_bytes": 269482
+        }
+      },
+      {
+        "id": "arabic-long",
+        "scale": 64,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 48320,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 769,
+          "runs": 1537,
+          "sha256": "f2ec783ffddeca75e795065ff6c85e97ebc1aab668c6e5b8ee1364a4bf2390f2",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..88256, text: 0..88256 }])"
+        ],
+        "counts": {
+          "calls": 55673,
+          "allocated_bytes": 42320127,
+          "deallocated_bytes": 25940611,
+          "net_bytes": 16379516,
+          "peak_extra_bytes": 16716892
+        }
+      },
+      {
+        "id": "mixed-scripts",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 40,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 2,
+          "runs": 10,
+          "sha256": "f6b2eeb42337d58ad417180c3007278f903d1e322cdde4ba150826bbfa0f8e06",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..66, text: 0..66 }])"
+        ],
+        "counts": {
+          "calls": 460,
+          "allocated_bytes": 82443,
+          "deallocated_bytes": 52031,
+          "net_bytes": 30412,
+          "peak_extra_bytes": 33108
+        }
+      },
+      {
+        "id": "mixed-scripts",
+        "scale": 64,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 2560,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 77,
+          "runs": 678,
+          "sha256": "6457f42f19801d944da0e6cb42af4f5450b0ffdd1aba2005ae815fc841b99d77",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..4224, text: 0..4224 }])"
+        ],
+        "counts": {
+          "calls": 9388,
+          "allocated_bytes": 2584649,
+          "deallocated_bytes": 1477819,
+          "net_bytes": 1106830,
+          "peak_extra_bytes": 1119618
+        }
+      },
+      {
+        "id": "combining-latin",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 18,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 1,
+          "sha256": "6d9df70d98c5802fa12c8587e0f36c368153d4dce10b43638709655ea4d5d9e7",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..29, text: 0..29 }])"
+        ],
+        "counts": {
+          "calls": 225,
+          "allocated_bytes": 35101,
+          "deallocated_bytes": 20410,
+          "net_bytes": 14691,
+          "peak_extra_bytes": 17265
+        }
+      },
+      {
+        "id": "combining-latin",
+        "scale": 64,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 1152,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 33,
+          "runs": 64,
+          "sha256": "94120eb229a6bd6d015ed956f719e7cc123dcfded2a61fda5d83f19e55286b8a",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..1856, text: 0..1856 }])"
+        ],
+        "counts": {
+          "calls": 1411,
+          "allocated_bytes": 1111866,
+          "deallocated_bytes": 677280,
+          "net_bytes": 434586,
+          "peak_extra_bytes": 441593
+        }
+      },
+      {
+        "id": "many-short-latin",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 79,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 3,
+          "runs": 3,
+          "sha256": "a328ba21be0ee73814b4b2db2760e2b39e42afb1884f0a32fc157a7d2aa729ac",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])"
+        ],
+        "counts": {
+          "calls": 325,
+          "allocated_bytes": 89795,
+          "deallocated_bytes": 52962,
+          "net_bytes": 36833,
+          "peak_extra_bytes": 39457
+        }
+      },
+      {
+        "id": "many-short-latin",
+        "scale": 64,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 5056,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 192,
+          "runs": 192,
+          "sha256": "f7087f56ad7cc64b0e0331d6b8630933aa6a3339266c97c175d818b804c2c8ca",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]",
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])",
+          "Some([MappingUnit { kind: Identity, node: NodeId(0), dom: 0..79, text: 0..79 }])"
+        ],
+        "counts": {
+          "calls": 18847,
+          "allocated_bytes": 4802384,
+          "deallocated_bytes": 2869440,
+          "net_bytes": 1932944,
+          "peak_extra_bytes": 1935568
+        }
+      },
+      {
+        "id": "first-line",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 1280,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 37,
+          "runs": 73,
+          "sha256": "860a2dcc704321cae13f504c28f2032e40d593cc520ae48e6ab1432816b97f61",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(1), dom: 7..1287, text: 0..1280 }])"
+        ],
+        "counts": {
+          "calls": 3132,
+          "allocated_bytes": 2306677,
+          "deallocated_bytes": 1411732,
+          "net_bytes": 894945,
+          "peak_extra_bytes": 923285
+        }
+      },
+      {
+        "id": "budget8",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 1280,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 37,
+          "runs": 224,
+          "sha256": "764df4faa63e137e1b9e207e8a0f5eb644a3495afe11d10874b55ba1506b8e2a",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(1), dom: 7..1287, text: 0..1280 }])"
+        ],
+        "counts": {
+          "calls": 2199,
+          "allocated_bytes": 1033449,
+          "deallocated_bytes": 631610,
+          "net_bytes": 401839,
+          "peak_extra_bytes": 407129
+        }
+      },
+      {
+        "id": "rtl-budget8",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 1792,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 43,
+          "runs": 574,
+          "sha256": "ef659879ae5a33b56c2b90c53de5f681aef7380f914b7d7c3c92dad9d4294869",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(1), dom: 7..3335, text: 0..3328 }])"
+        ],
+        "counts": {
+          "calls": 5027,
+          "allocated_bytes": 1377422,
+          "deallocated_bytes": 858909,
+          "net_bytes": 518513,
+          "peak_extra_bytes": 534044
+        }
+      },
+      {
+        "id": "giant-grapheme",
+        "scale": 1,
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 256,
+          "sha256": "d470edeaa2b984214ab1a8bb799ebbf411eb15301bac8c3d791292e312bf2e4a",
+          "synthetic_glyphs": 0
+        },
+        "warnings": [
+          "[Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }, Warning { kind: Unsupported, message: \"giant grapheme exceeds shaping run budget; splitting at scalar boundary\" }, Warning { kind: Unsupported, message: \"scalar exceeds shaping run budget; forcing grapheme progress\" }]"
+        ],
+        "source_mapping": [
+          "Some([MappingUnit { kind: Identity, node: NodeId(1), dom: 7..391, text: 0..384 }])"
+        ],
+        "counts": {
+          "calls": 2281,
+          "allocated_bytes": 285469,
+          "deallocated_bytes": 179630,
+          "net_bytes": 105839,
+          "peak_extra_bytes": 111769
+        }
+      }
+    ]
+  },
+  "balanced_timing": {
+    "balanced-0-before": [
+      {
+        "id": "latin-short",
+        "scale": 1,
+        "median_ns": 66596.5
+      },
+      {
+        "id": "latin-short",
+        "scale": 64,
+        "median_ns": 2762008.0
+      },
+      {
+        "id": "latin-long",
+        "scale": 1,
+        "median_ns": 458355.5
+      },
+      {
+        "id": "latin-long",
+        "scale": 64,
+        "median_ns": 33026025.5
+      },
+      {
+        "id": "arabic-long",
+        "scale": 1,
+        "median_ns": 498621.0
+      },
+      {
+        "id": "arabic-long",
+        "scale": 64,
+        "median_ns": 32741164.0
+      },
+      {
+        "id": "mixed-scripts",
+        "scale": 1,
+        "median_ns": 95163.5
+      },
+      {
+        "id": "mixed-scripts",
+        "scale": 64,
+        "median_ns": 2558271.0
+      },
+      {
+        "id": "combining-latin",
+        "scale": 1,
+        "median_ns": 36598.5
+      },
+      {
+        "id": "combining-latin",
+        "scale": 64,
+        "median_ns": 638101.5
+      },
+      {
+        "id": "many-short-latin",
+        "scale": 1,
+        "median_ns": 58704.5
+      },
+      {
+        "id": "many-short-latin",
+        "scale": 64,
+        "median_ns": 3214566.5
+      },
+      {
+        "id": "first-line",
+        "scale": 1,
+        "median_ns": 1217323.0
+      },
+      {
+        "id": "budget8",
+        "scale": 1,
+        "median_ns": 738118.5
+      },
+      {
+        "id": "rtl-budget8",
+        "scale": 1,
+        "median_ns": 1629092.5
+      },
+      {
+        "id": "giant-grapheme",
+        "scale": 1,
+        "median_ns": 365113.0
+      }
+    ],
+    "balanced-1-after": [
+      {
+        "id": "latin-short",
+        "scale": 1,
+        "median_ns": 66841.5
+      },
+      {
+        "id": "latin-short",
+        "scale": 64,
+        "median_ns": 2789527.5
+      },
+      {
+        "id": "latin-long",
+        "scale": 1,
+        "median_ns": 456610.0
+      },
+      {
+        "id": "latin-long",
+        "scale": 64,
+        "median_ns": 35694896.0
+      },
+      {
+        "id": "arabic-long",
+        "scale": 1,
+        "median_ns": 496631.0
+      },
+      {
+        "id": "arabic-long",
+        "scale": 64,
+        "median_ns": 35433642.0
+      },
+      {
+        "id": "mixed-scripts",
+        "scale": 1,
+        "median_ns": 94954.0
+      },
+      {
+        "id": "mixed-scripts",
+        "scale": 64,
+        "median_ns": 2527644.0
+      },
+      {
+        "id": "combining-latin",
+        "scale": 1,
+        "median_ns": 36319.0
+      },
+      {
+        "id": "combining-latin",
+        "scale": 64,
+        "median_ns": 651546.5
+      },
+      {
+        "id": "many-short-latin",
+        "scale": 1,
+        "median_ns": 58949.0
+      },
+      {
+        "id": "many-short-latin",
+        "scale": 64,
+        "median_ns": 3197524.5
+      },
+      {
+        "id": "first-line",
+        "scale": 1,
+        "median_ns": 1222492.0
+      },
+      {
+        "id": "budget8",
+        "scale": 1,
+        "median_ns": 729109.0
+      },
+      {
+        "id": "rtl-budget8",
+        "scale": 1,
+        "median_ns": 1620571.5
+      },
+      {
+        "id": "giant-grapheme",
+        "scale": 1,
+        "median_ns": 359176.0
+      }
+    ],
+    "balanced-2-after": [
+      {
+        "id": "latin-short",
+        "scale": 1,
+        "median_ns": 69006.5
+      },
+      {
+        "id": "latin-short",
+        "scale": 64,
+        "median_ns": 2761519.0
+      },
+      {
+        "id": "latin-long",
+        "scale": 1,
+        "median_ns": 457238.0
+      },
+      {
+        "id": "latin-long",
+        "scale": 64,
+        "median_ns": 35736593.0
+      },
+      {
+        "id": "arabic-long",
+        "scale": 1,
+        "median_ns": 498935.0
+      },
+      {
+        "id": "arabic-long",
+        "scale": 64,
+        "median_ns": 36316409.0
+      },
+      {
+        "id": "mixed-scripts",
+        "scale": 1,
+        "median_ns": 92264.5
+      },
+      {
+        "id": "mixed-scripts",
+        "scale": 64,
+        "median_ns": 2520939.0
+      },
+      {
+        "id": "combining-latin",
+        "scale": 1,
+        "median_ns": 37401.5
+      },
+      {
+        "id": "combining-latin",
+        "scale": 64,
+        "median_ns": 642955.5
+      },
+      {
+        "id": "many-short-latin",
+        "scale": 1,
+        "median_ns": 59612.5
+      },
+      {
+        "id": "many-short-latin",
+        "scale": 64,
+        "median_ns": 3224135.5
+      },
+      {
+        "id": "first-line",
+        "scale": 1,
+        "median_ns": 1226438.0
+      },
+      {
+        "id": "budget8",
+        "scale": 1,
+        "median_ns": 736547.0
+      },
+      {
+        "id": "rtl-budget8",
+        "scale": 1,
+        "median_ns": 1638591.0
+      },
+      {
+        "id": "giant-grapheme",
+        "scale": 1,
+        "median_ns": 358338.0
+      }
+    ],
+    "balanced-3-before": [
+      {
+        "id": "latin-short",
+        "scale": 1,
+        "median_ns": 68028.5
+      },
+      {
+        "id": "latin-short",
+        "scale": 64,
+        "median_ns": 2772415.5
+      },
+      {
+        "id": "latin-long",
+        "scale": 1,
+        "median_ns": 462232.5
+      },
+      {
+        "id": "latin-long",
+        "scale": 64,
+        "median_ns": 33007761.0
+      },
+      {
+        "id": "arabic-long",
+        "scale": 1,
+        "median_ns": 500751.0
+      },
+      {
+        "id": "arabic-long",
+        "scale": 64,
+        "median_ns": 33054068.5
+      },
+      {
+        "id": "mixed-scripts",
+        "scale": 1,
+        "median_ns": 92858.5
+      },
+      {
+        "id": "mixed-scripts",
+        "scale": 64,
+        "median_ns": 2576850.0
+      },
+      {
+        "id": "combining-latin",
+        "scale": 1,
+        "median_ns": 36947.5
+      },
+      {
+        "id": "combining-latin",
+        "scale": 64,
+        "median_ns": 642920.0
+      },
+      {
+        "id": "many-short-latin",
+        "scale": 1,
+        "median_ns": 58635.0
+      },
+      {
+        "id": "many-short-latin",
+        "scale": 64,
+        "median_ns": 3239187.5
+      },
+      {
+        "id": "first-line",
+        "scale": 1,
+        "median_ns": 1224377.0
+      },
+      {
+        "id": "budget8",
+        "scale": 1,
+        "median_ns": 739760.5
+      },
+      {
+        "id": "rtl-budget8",
+        "scale": 1,
+        "median_ns": 1639709.0
+      },
+      {
+        "id": "giant-grapheme",
+        "scale": 1,
+        "median_ns": 362284.5
+      }
+    ]
+  },
+  "validation_counts": {
+    "workspace": 1065,
+    "no_default_features": 612,
+    "complex_only": 615
+  },
+  "matrix_metadata": {
+    "before": {
+      "revision": "4e69f9aa119168e9c58e83b5ac6f84703a68925f",
+      "dirty_status": [
+        " M docs/superpowers/plans/2026-09-30-ruby-candidate-ranges.md"
+      ],
+      "source_hash": "d77ce89ad5fabc54d8bf963f12a355fa3c9fc49130dbd3904ac491c93659379c",
+      "conditions": {
+        "source_fingerprint_version": 2,
+        "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
+        "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+        "cpu": {
+          "models": [
+            "AMD Ryzen 5 5600G with Radeon Graphics"
+          ],
+          "machine": "x86_64",
+          "logical_cpus": 12,
+          "affinity": [
+            10
+          ]
+        },
+        "os": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+        "features": [
+          "complex-scripts"
+        ],
+        "profile": {
+          "name": "release",
+          "opt_level": 3,
+          "debug": 0,
+          "incremental": false,
+          "effective": {
+            "cold": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": false
+            },
+            "timing": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": true
+            },
+            "memory": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": false
+            }
+          }
+        },
+        "build_configuration": {
+          "workspace_profiles": {},
+          "cargo_configs": {},
+          "environment": {
+            "CARGO_BUILD_JOBS": "1",
+            "CARGO_PROFILE_RELEASE_OPT_LEVEL": "3",
+            "CARGO_PROFILE_RELEASE_DEBUG": "0",
+            "CARGO_PROFILE_RELEASE_INCREMENTAL": "false",
+            "CARGO_INCREMENTAL": "0"
+          }
+        },
+        "flags": {
+          "RUSTFLAGS": "",
+          "CARGO_ENCODED_RUSTFLAGS": "",
+          "RUSTDOCFLAGS": "",
+          "RUSTC": "",
+          "RUSTC_WRAPPER": "",
+          "RUSTC_WORKSPACE_WRAPPER": "",
+          "CARGO_PROFILE_RELEASE_LTO": "",
+          "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "",
+          "CARGO_PROFILE_RELEASE_PANIC": "",
+          "CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS": "",
+          "CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS": ""
+        },
+        "font_hashes": {
+          "arabic.ttf": "e9885fbcf3bdbddea94d1679d636a80f7421c6b63632a35c6f884a9ee74067d9",
+          "cjk.otf": "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b",
+          "emoji-color.ttf": "6047984e1da3b32e9629740378f2a143daa2c630f140edcf69b68696e3766362",
+          "emoji-mono.ttf": "76c91d377b0d3acb5e0feb696924d1fec7ea9cd4c7860dff52aa0cdd998f76f3",
+          "latin.ttf": "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25"
+        },
+        "input_hash": "1dbf30237e3d08dc20ea9f61a2576e7a6023b663584a464ca92f02b4ed35f292",
+        "harness_hash": "7c139740f9da6bc5ab72420426c81ad5456569e36a99b18b2266fe392b18f80b",
+        "lock_hash": "4d8a1d53a12ba7e53b177c5a309d0fc0c7cd6c8ebd733e459027e7f63bf09f3e",
+        "measurement_config": {
+          "quick": true,
+          "cold_samples": 2
+        }
+      },
+      "process_wall_scope": "Parent subprocess invocation, startup, probe work, JSON output and log write; inner cold phases reported separately."
+    },
+    "after": {
+      "revision": "37a57580c0c4a0d88e50522e9232488e5151aca7",
+      "dirty_status": [],
+      "source_hash": "f766c3c25026bbc521771f029cbce453678b215205be1360b5227b5b8d5db47b",
+      "conditions": {
+        "source_fingerprint_version": 2,
+        "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
+        "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+        "cpu": {
+          "models": [
+            "AMD Ryzen 5 5600G with Radeon Graphics"
+          ],
+          "machine": "x86_64",
+          "logical_cpus": 12,
+          "affinity": [
+            10
+          ]
+        },
+        "os": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+        "features": [
+          "complex-scripts"
+        ],
+        "profile": {
+          "name": "release",
+          "opt_level": 3,
+          "debug": 0,
+          "incremental": false,
+          "effective": {
+            "cold": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": false
+            },
+            "timing": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": true
+            },
+            "memory": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": false
+            }
+          }
+        },
+        "build_configuration": {
+          "workspace_profiles": {},
+          "cargo_configs": {},
+          "environment": {
+            "CARGO_BUILD_JOBS": "1",
+            "CARGO_PROFILE_RELEASE_OPT_LEVEL": "3",
+            "CARGO_PROFILE_RELEASE_DEBUG": "0",
+            "CARGO_PROFILE_RELEASE_INCREMENTAL": "false",
+            "CARGO_INCREMENTAL": "0"
+          }
+        },
+        "flags": {
+          "RUSTFLAGS": "",
+          "CARGO_ENCODED_RUSTFLAGS": "",
+          "RUSTDOCFLAGS": "",
+          "RUSTC": "",
+          "RUSTC_WRAPPER": "",
+          "RUSTC_WORKSPACE_WRAPPER": "",
+          "CARGO_PROFILE_RELEASE_LTO": "",
+          "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "",
+          "CARGO_PROFILE_RELEASE_PANIC": "",
+          "CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS": "",
+          "CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS": ""
+        },
+        "font_hashes": {
+          "arabic.ttf": "e9885fbcf3bdbddea94d1679d636a80f7421c6b63632a35c6f884a9ee74067d9",
+          "cjk.otf": "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b",
+          "emoji-color.ttf": "6047984e1da3b32e9629740378f2a143daa2c630f140edcf69b68696e3766362",
+          "emoji-mono.ttf": "76c91d377b0d3acb5e0feb696924d1fec7ea9cd4c7860dff52aa0cdd998f76f3",
+          "latin.ttf": "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25"
+        },
+        "input_hash": "1dbf30237e3d08dc20ea9f61a2576e7a6023b663584a464ca92f02b4ed35f292",
+        "harness_hash": "7c139740f9da6bc5ab72420426c81ad5456569e36a99b18b2266fe392b18f80b",
+        "lock_hash": "4d8a1d53a12ba7e53b177c5a309d0fc0c7cd6c8ebd733e459027e7f63bf09f3e",
+        "measurement_config": {
+          "quick": true,
+          "cold_samples": 2
+        }
+      },
+      "process_wall_scope": "Parent subprocess invocation, startup, probe work, JSON output and log write; inner cold phases reported separately."
+    }
+  },
+  "measurement_limitations": [
+    "Gross requested bytes and allocation calls are reduced; net retention and peak are unchanged in all sixteen measured build cases. RSS is not measured.",
+    "Original ShapeItems remain retained; separate edge-edit owned input, neighboring context construction and other allocation costs are unchanged.",
+    "Normal timing uses separate binaries after validation builds and warmup, CPU affinity10, before/after/after/before order; observations are limited to this host/input/scope.",
+    "Default sequential workload history gives about 8–10% longer Latin/Arabic long builds despite lower gross bytes. Fresh-process isolated Latin is faster and Arabic is approximately equal. Perf/fixed-mmap-threshold counterfactuals support allocator-history sensitivity, not a proven exact glibc threshold cause. No allocator priming/tuning added.",
+    "Standard quick timing overlaps validation builds and is not used as a causal speedup claim."
+  ],
+  "isolated_timing": {
+    "isolated-normal-arabic-long-64-0-before": [
+      {
+        "id": "arabic-long",
+        "scale": 64,
+        "median_ns": 35066308.5
+      }
+    ],
+    "isolated-normal-arabic-long-64-1-after": [
+      {
+        "id": "arabic-long",
+        "scale": 64,
+        "median_ns": 34978199.0
+      }
+    ],
+    "isolated-normal-arabic-long-64-2-after": [
+      {
+        "id": "arabic-long",
+        "scale": 64,
+        "median_ns": 35005194.0
+      }
+    ],
+    "isolated-normal-arabic-long-64-3-before": [
+      {
+        "id": "arabic-long",
+        "scale": 64,
+        "median_ns": 35873852.5
+      }
+    ],
+    "isolated-normal-latin-long-64-0-before": [
+      {
+        "id": "latin-long",
+        "scale": 64,
+        "median_ns": 35850664.5
+      }
+    ],
+    "isolated-normal-latin-long-64-1-after": [
+      {
+        "id": "latin-long",
+        "scale": 64,
+        "median_ns": 32900982.5
+      }
+    ],
+    "isolated-normal-latin-long-64-2-after": [
+      {
+        "id": "latin-long",
+        "scale": 64,
+        "median_ns": 33390314.5
+      }
+    ],
+    "isolated-normal-latin-long-64-3-before": [
+      {
+        "id": "latin-long",
+        "scale": 64,
+        "median_ns": 35731928.5
+      }
+    ]
+  },
+  "profiling_logs": {
+    "isolated-arabic-long-64-0-before.perf.log": "# started on Wed Sep 30 23:34:49 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/filtered-before-timing':\n\n             20149      minor-faults:u                                                        \n\n       1.245981224 seconds time elapsed\n\n       1.214583000 seconds user\n       0.030989000 seconds sys\n\n\n",
+    "isolated-arabic-long-64-1-after.perf.log": "# started on Wed Sep 30 23:34:50 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/filtered-after-timing':\n\n             20351      minor-faults:u                                                        \n\n       1.236983127 seconds time elapsed\n\n       1.203582000 seconds user\n       0.032988000 seconds sys\n\n\n",
+    "isolated-arabic-long-64-2-after.perf.log": "# started on Wed Sep 30 23:34:52 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/filtered-after-timing':\n\n             21932      minor-faults:u                                                        \n\n       1.245888189 seconds time elapsed\n\n       1.208602000 seconds user\n       0.036987000 seconds sys\n\n\n",
+    "isolated-arabic-long-64-3-before.perf.log": "# started on Wed Sep 30 23:34:53 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/filtered-before-timing':\n\n             20110      minor-faults:u                                                        \n\n       1.245359743 seconds time elapsed\n\n       1.205137000 seconds user\n       0.039971000 seconds sys\n\n\n",
+    "isolated-latin-long-64-0-before.perf.log": "# started on Wed Sep 30 23:34:46 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/filtered-before-timing':\n\n             21152      minor-faults:u                                                        \n\n       0.748159995 seconds time elapsed\n\n       0.719798000 seconds user\n       0.027029000 seconds sys\n\n\n",
+    "isolated-latin-long-64-1-after.perf.log": "# started on Wed Sep 30 23:34:47 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/filtered-after-timing':\n\n              8304      minor-faults:u                                                        \n\n       0.725386915 seconds time elapsed\n\n       0.707337000 seconds user\n       0.017983000 seconds sys\n\n\n",
+    "isolated-latin-long-64-2-after.perf.log": "# started on Wed Sep 30 23:34:48 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/filtered-after-timing':\n\n              7793      minor-faults:u                                                        \n\n       0.703003499 seconds time elapsed\n\n       0.680824000 seconds user\n       0.021994000 seconds sys\n\n\n",
+    "isolated-latin-long-64-3-before.perf.log": "# started on Wed Sep 30 23:34:48 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/filtered-before-timing':\n\n             24216      minor-faults:u                                                        \n\n       0.741679942 seconds time elapsed\n\n       0.688639000 seconds user\n       0.052972000 seconds sys\n\n\n",
+    "isolated-mixed-scripts-64-0-before.perf.log": "# started on Wed Sep 30 23:34:54 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/filtered-before-timing':\n\n              1475      minor-faults:u                                                        \n\n       0.050619051 seconds time elapsed\n\n       0.045659000 seconds user\n       0.004963000 seconds sys\n\n\n",
+    "isolated-mixed-scripts-64-1-after.perf.log": "# started on Wed Sep 30 23:34:54 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/filtered-after-timing':\n\n              1362      minor-faults:u                                                        \n\n       0.050376341 seconds time elapsed\n\n       0.045334000 seconds user\n       0.005037000 seconds sys\n\n\n",
+    "isolated-mixed-scripts-64-2-after.perf.log": "# started on Wed Sep 30 23:34:54 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/filtered-after-timing':\n\n              1363      minor-faults:u                                                        \n\n       0.049973337 seconds time elapsed\n\n       0.042014000 seconds user\n       0.008002000 seconds sys\n\n\n",
+    "isolated-mixed-scripts-64-3-before.perf.log": "# started on Wed Sep 30 23:34:54 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/filtered-before-timing':\n\n              1475      minor-faults:u                                                        \n\n       0.050821810 seconds time elapsed\n\n       0.045814000 seconds user\n       0.004979000 seconds sys\n\n\n",
+    "mmap131072-after.perf.log": "# started on Wed Sep 30 23:32:51 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/after-timing':\n\n            114072      page-faults:u                                                         \n            114072      minor-faults:u                                                        \n                 0      major-faults:u                                                        \n\n       2.376960308 seconds time elapsed\n\n       2.164791000 seconds user\n       0.211979000 seconds sys\n\n\n",
+    "mmap131072-before.perf.log": "# started on Wed Sep 30 23:32:48 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/before-timing':\n\n            125615      page-faults:u                                                         \n            125615      minor-faults:u                                                        \n                 0      major-faults:u                                                        \n\n       2.421327777 seconds time elapsed\n\n       2.197179000 seconds user\n       0.224018000 seconds sys\n\n\n",
+    "mmap2097152-after.perf.log": "# started on Wed Sep 30 23:32:55 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/after-timing':\n\n             59364      page-faults:u                                                         \n             59364      minor-faults:u                                                        \n                 0      major-faults:u                                                        \n\n       2.290826949 seconds time elapsed\n\n       2.180545000 seconds user\n       0.110027000 seconds sys\n\n\n",
+    "mmap2097152-before.perf.log": "# started on Wed Sep 30 23:32:53 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/before-timing':\n\n             68157      page-faults:u                                                         \n             68157      minor-faults:u                                                        \n                 0      major-faults:u                                                        \n\n       2.298213312 seconds time elapsed\n\n       2.177686000 seconds user\n       0.119982000 seconds sys\n\n\n",
+    "perf-before.log": "# started on Wed Sep 30 23:26:53 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/before-timing':\n\n        9597932274      cycles:u                                                                (83.34%)\n       27924918561      instructions:u                                                          (83.31%)\n        5008573523      branches:u                                                              (83.38%)\n          17701805      branch-misses:u                                                         (83.31%)\n         564451389      cache-references:u                                                      (83.38%)\n          36666957      cache-misses:u                                                          (83.28%)\n\n       2.228620925 seconds time elapsed\n\n       2.209467000 seconds user\n       0.018995000 seconds sys\n\n\n",
+    "faults-before.log": "# started on Wed Sep 30 23:28:40 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/before-timing':\n\n             11559      page-faults:u                                                         \n             11559      minor-faults:u                                                        \n                 0      major-faults:u                                                        \n\n       2.215982115 seconds time elapsed\n\n       2.189671000 seconds user\n       0.024996000 seconds sys\n\n\n",
+    "perf-after.log": "# started on Wed Sep 30 23:27:14 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/after-timing':\n\n        9569451926      cycles:u                                                                (83.33%)\n       27860992409      instructions:u                                                          (83.33%)\n        4984818658      branches:u                                                              (83.33%)\n          17417532      branch-misses:u                                                         (83.33%)\n         561194805      cache-references:u                                                      (83.33%)\n          40573462      cache-misses:u                                                          (83.35%)\n\n       2.274999685 seconds time elapsed\n\n       2.201628000 seconds user\n       0.072987000 seconds sys\n\n\n",
+    "faults-after.log": "# started on Wed Sep 30 23:28:42 2026\n\n\n Performance counter stats for 'taskset -c 10 target/performance-artifacts/sbp7-probe/after-timing':\n\n             39381      page-faults:u                                                         \n             39381      minor-faults:u                                                        \n                 0      major-faults:u                                                        \n\n       2.266345165 seconds time elapsed\n\n       2.201868000 seconds user\n       0.063996000 seconds sys\n\n\n"
+  },
+  "raw_archive_sha256": "92a7a0c1545ae89c97c4e7bbd1a4c21eedbf7232c074d7d99e751dbb5160cdbe"
+}
