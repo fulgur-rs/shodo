@@ -62,6 +62,11 @@ use peniko::{Blob, FontData};
 
 use crate::limits::{LimitKind, Limits};
 
+#[cfg(test)]
+std::thread_local! {
+    pub(crate) static FONT_DATA_ACQUISITIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 static NEXT_LAYER_ID: AtomicU32 = AtomicU32::new(0);
 
 fn allocate_layer_id(counter: &AtomicU32) -> Option<u32> {
@@ -383,6 +388,8 @@ impl FontCollection {
 
     /// Font data of a face in this layer or its shared layer.
     pub fn font_data(&self, id: FontId) -> Option<FontData> {
+        #[cfg(test)]
+        FONT_DATA_ACQUISITIONS.with(|count| count.set(count.get() + 1));
         if id.layer == self.layer.id {
             self.state().faces.get(id.index as usize).cloned()
         } else {
