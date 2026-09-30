@@ -306,28 +306,16 @@ pub(crate) fn shape_items_with_base_scopes(
                 }
             }
             let last = &original.scalars[cursor - 1];
-            let item = crate::analysis::itemize::ShapeItem {
-                segment: original.segment,
-                scalars: original.scalars[start..cursor].to_vec(),
-                end: last.end,
-                style: original.style,
-                level: original.level,
-                script: original.script,
-                font: original.font.clone(),
-                orientation: original.orientation,
-                combine: original.combine,
-                width_feature: original.width_feature,
-                before: original.before.clone(),
-                after: original.after.clone(),
-            };
+            let scalars = &original.scalars[start..cursor];
+            let window_end = last.end;
             let window_run_start = runs.len();
-            let Some(found) = &item.font else {
+            let Some(found) = &original.font else {
                 warnings.push(
                     crate::limits::WarningKind::Unsupported,
                     "missing font; using .notdef glyphs",
                 );
                 let run_instance = missing_instance.as_ref().expect("missing font instance");
-                for scalar in &item.scalars {
+                for scalar in scalars {
                     if let Some(bases) = &mut bases {
                         bases.item(scalar.item as usize, LimitKind::ShapedGlyphs, 1)?;
                     }
@@ -346,7 +334,7 @@ pub(crate) fn shape_items_with_base_scopes(
                     let mut current = runs.pop().unwrap();
                     current.text.end = scalar.end;
                     current.instance = Arc::clone(run_instance);
-                    current.orientation = item.orientation;
+                    current.orientation = original.orientation;
                     if runs.len() > window_run_start
                         && let Some(previous) = runs.last_mut()
                         && previous.item == current.item
@@ -379,7 +367,7 @@ pub(crate) fn shape_items_with_base_scopes(
             let (instance, run_instance, font_size) = resolved.as_ref().expect("matched instance");
             let font_size = *font_size;
             let shaper = shared.shaper(&font).instance(Some(instance)).build();
-            let cff_without_vorg = if item.orientation == orientation::RunOrientation::Upright {
+            let cff_without_vorg = if original.orientation == orientation::RunOrientation::Upright {
                 skrifa::FontRef::from_index(data.data.as_ref(), data.index)
                     .ok()
                     .filter(|font| {
@@ -393,7 +381,7 @@ pub(crate) fn shape_items_with_base_scopes(
             let mut cff_origin_deltas = std::collections::HashMap::new();
             let mut buffer = cx.scratch.take().unwrap_or_default();
             buffer.clear();
-            for scalar in &item.scalars {
+            for scalar in scalars {
                 buffer.add(scalar.c, scalar.offset);
             }
             let pre: String = original.scalars[start.saturating_sub(5)..start]
@@ -410,23 +398,23 @@ pub(crate) fn shape_items_with_base_scopes(
             } else {
                 &post
             });
-            let upright = item.orientation == orientation::RunOrientation::Upright;
+            let upright = original.orientation == orientation::RunOrientation::Upright;
             buffer.set_direction(if upright {
                 harfrust::Direction::TopToBottom
-            } else if item.level % 2 == 1 {
+            } else if original.level % 2 == 1 {
                 harfrust::Direction::RightToLeft
             } else {
                 harfrust::Direction::LeftToRight
             });
             buffer.set_script(
-                harfrust::Script::from_iso15924_tag(harfrust::Tag::new(&item.script))
+                harfrust::Script::from_iso15924_tag(harfrust::Tag::new(&original.script))
                     .unwrap_or(harfrust::script::UNKNOWN),
             );
             if let Some(language) = style.lang.as_ref().and_then(|l| l.parse().ok()) {
                 buffer.set_language(language);
             }
             let mut flags = harfrust::BufferFlags::PRODUCE_UNSAFE_TO_CONCAT;
-            if !item.scalars[0].grapheme_start {
+            if !scalars[0].grapheme_start {
                 flags |= harfrust::BufferFlags::DO_NOT_INSERT_DOTTED_CIRCLE;
             }
             buffer.set_flags(flags);
@@ -449,7 +437,7 @@ pub(crate) fn shape_items_with_base_scopes(
                 // Ruby boundaries/isolation delimit shaping segments; transparent
                 // DOM node boundaries within a base keep the same scope.
                 bases.item(
-                    item.scalars[0].item as usize,
+                    scalars[0].item as usize,
                     LimitKind::ShapedGlyphs,
                     shaped.len() as u64,
                 )?;
@@ -462,7 +450,7 @@ pub(crate) fn shape_items_with_base_scopes(
             let mut begin = 0;
             // `order` is cluster-ascending, so the cluster value examined each
             // iteration only grows; `scalar_cursor` tracks the matching position
-            // in `item.scalars` (offset-ascending) instead of re-searching the
+            // in `scalars` (offset-ascending) instead of re-searching the
             // whole slice with `partition_point` on every cluster.
             let mut scalar_cursor = 0usize;
             while begin < order.len() {
@@ -471,40 +459,37 @@ pub(crate) fn shape_items_with_base_scopes(
                 while end < order.len() && shaped.glyph_infos()[order[end]].cluster == cluster {
                     end += 1;
                 }
-                while scalar_cursor < item.scalars.len()
-                    && item.scalars[scalar_cursor].offset <= cluster
-                {
+                while scalar_cursor < scalars.len() && scalars[scalar_cursor].offset <= cluster {
                     scalar_cursor += 1;
                 }
                 let scalar_index = scalar_cursor.saturating_sub(1);
                 debug_assert_eq!(
                     scalar_cursor,
-                    item.scalars.partition_point(|s| s.offset <= cluster),
+                    scalars.partition_point(|s| s.offset <= cluster),
                     "scalar_cursor must track partition_point(|s| s.offset <= cluster); \
-                     item.scalars is not offset-ascending"
+                     scalars is not offset-ascending"
                 );
-                let owner = item.scalars[scalar_index].item;
+                let owner = scalars[scalar_index].item;
                 let next_cluster = if end < order.len() {
                     shaped.glyph_infos()[order[end]].cluster
                 } else {
-                    item.end
+                    window_end
                 };
                 // Transparent anchors do not belong to the preceding cluster.
                 // A cluster spanning an anchor still covers all its real scalars,
                 // while a gap between clusters ends at the last actual scalar.
-                while scalar_cursor < item.scalars.len()
-                    && item.scalars[scalar_cursor].offset < next_cluster
+                while scalar_cursor < scalars.len() && scalars[scalar_cursor].offset < next_cluster
                 {
                     scalar_cursor += 1;
                 }
                 let scalar_end = scalar_cursor;
                 debug_assert_eq!(
                     scalar_end,
-                    item.scalars.partition_point(|s| s.offset < next_cluster),
+                    scalars.partition_point(|s| s.offset < next_cluster),
                     "scalar_cursor must track partition_point(|s| s.offset < next_cluster); \
-                     item.scalars is not offset-ascending"
+                     scalars is not offset-ascending"
                 );
-                let last_scalar = &item.scalars[scalar_end.saturating_sub(1)];
+                let last_scalar = &scalars[scalar_end.saturating_sub(1)];
                 let cluster_end = last_scalar.end;
                 let mut parts = Vec::new();
                 let mut part_start = begin;
@@ -537,7 +522,7 @@ pub(crate) fn shape_items_with_base_scopes(
                 // Splitting storage does not reverse a cluster's internal visual
                 // order. Bidi reverses the chunk units, so store RTL chunks in
                 // reverse order while keeping each chunk's glyph order intact.
-                if item.level % 2 == 1 {
+                if original.level % 2 == 1 {
                     parts.reverse();
                 }
                 for (part, part_advance) in parts {
@@ -586,7 +571,7 @@ pub(crate) fn shape_items_with_base_scopes(
                                 * scale,
                             sat,
                         );
-                        let offset = if item.level % 2 == 1 {
+                        let offset = if original.level % 2 == 1 {
                             LayoutUnit::from_raw(
                                 part_advance.clamp(i32::MIN as i64, i32::MAX as i64) as i32,
                             )
@@ -640,7 +625,7 @@ pub(crate) fn shape_items_with_base_scopes(
                             glyphs: run_start..store.len() as u32,
                             text: cluster..cluster_end,
                             item: owner,
-                            orientation: item.orientation,
+                            orientation: original.orientation,
                             font: found.id,
                             font_size,
                             instance: Arc::clone(run_instance),
@@ -650,7 +635,7 @@ pub(crate) fn shape_items_with_base_scopes(
                 begin = end;
             }
             cx.scratch_bytes = cx.scratch_bytes.max(
-                item.scalars
+                scalars
                     .len()
                     .max(shaped.len())
                     .max(4)

@@ -645,3 +645,103 @@ fn smaller_run_budget_automatically_releases_retained_scratch() {
     b.build(&mut cx, &fonts).unwrap();
     assert!(cx.scratch_bytes <= 8 * 128);
 }
+
+#[test]
+fn shaping_windows_borrow_source_scalars() {
+    for real in [false, true] {
+        for budget in [1, 1024] {
+            let limits = Limits {
+                max_shaping_run_bytes: Some(budget),
+                ..Default::default()
+            };
+            let fonts = FontCollection::with_options(
+                &limits,
+                crate::font::FontOptions {
+                    system_fonts: false,
+                    ..Default::default()
+                },
+            );
+            if real {
+                fonts
+                    .register_face(
+                        crate::test_support::fonts::LATIN.to_vec(),
+                        0,
+                        crate::font::FontFaceDescriptor {
+                            family: "Latin".into(),
+                            ..Default::default()
+                        },
+                    )
+                    .unwrap();
+            }
+            let style = crate::style::ParagraphStyle {
+                root: crate::style::InlineStyle {
+                    font_families: vec![crate::style::FontFamily::Named("Latin".into())],
+                    font_features: vec![crate::style::FontFeature {
+                        tag: *b"liga",
+                        value: 0,
+                    }],
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let mut b = crate::ParagraphBuilder::new(&style, &limits);
+            b.push_text(
+                crate::node::TextSource::Dom {
+                    node: crate::node::NodeId(1),
+                    offset: 7,
+                },
+                &"abcd".repeat(8),
+            );
+            let p = b.build(&mut crate::LayoutContext::new(), &fonts).unwrap();
+            let original: Vec<_> = p
+                .data
+                .shape_items
+                .iter()
+                .map(|item| (item.scalars.as_ptr(), item.scalars.len(), item.end))
+                .collect();
+            crate::analysis::itemize::SCALAR_CLONES.with(|count| count.set(0));
+            let mut warnings = crate::limits::WarningSink::default();
+            let (glyphs, runs) = shape_items(
+                &mut crate::LayoutContext::new(),
+                &p.data.shape_items,
+                &p.data.styles,
+                &fonts,
+                style.writing_mode,
+                &limits,
+                &mut warnings,
+                &mut Saturation::default(),
+            )
+            .unwrap();
+            assert_eq!(glyphs.id, p.data.glyphs.id);
+            assert_eq!(glyphs.cluster, p.data.glyphs.cluster);
+            assert_eq!(glyphs.advance, p.data.glyphs.advance);
+            assert_eq!(glyphs.pen, p.data.glyphs.pen);
+            assert_eq!(
+                runs.iter()
+                    .map(|r| (r.text.clone(), r.item))
+                    .collect::<Vec<_>>(),
+                p.data
+                    .runs
+                    .iter()
+                    .map(|r| (r.text.clone(), r.item))
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(runs.len(), if budget == 1 { 32 } else { 1 });
+            assert_eq!(warnings.take().is_empty(), real);
+            assert_eq!(
+                p.data
+                    .shape_items
+                    .iter()
+                    .map(|item| (item.scalars.as_ptr(), item.scalars.len(), item.end))
+                    .collect::<Vec<_>>(),
+                original,
+                "retained original scalar ownership must be preserved"
+            );
+            assert_eq!(
+                crate::analysis::itemize::SCALAR_CLONES.with(|count| count.get()),
+                0,
+                "real={real}, budget={budget}: shaping a window must borrow its scalars"
+            );
+        }
+    }
+}

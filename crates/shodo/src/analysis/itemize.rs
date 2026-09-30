@@ -12,7 +12,8 @@ std::thread_local! {
     pub(crate) static MATCH_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
+#[cfg_attr(not(test), derive(Clone))]
 pub(crate) struct Scalar {
     pub(crate) c: char,
     pub(crate) offset: u32,
@@ -20,6 +21,26 @@ pub(crate) struct Scalar {
     pub(crate) item: u32,
     pub(crate) grapheme_start: bool,
 }
+#[cfg(test)]
+std::thread_local! {
+    pub(crate) static SCALAR_CLONES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+// Observe actual cloning (including slice::to_vec), not a reported estimate.
+#[cfg(test)]
+impl Clone for Scalar {
+    fn clone(&self) -> Self {
+        SCALAR_CLONES.with(|count| count.set(count.get() + 1));
+        Self {
+            c: self.c,
+            offset: self.offset,
+            end: self.end,
+            item: self.item,
+            grapheme_start: self.grapheme_start,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct ShapeItem {
     /// Hard-boundary context; substitutions may join only within this segment.
