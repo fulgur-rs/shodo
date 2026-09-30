@@ -40182,5 +40182,5 @@
   },
   "retention_implementation_commit": "d8e3443d780d522ffad0f60361b957841a7a3cf5",
   "measured_caller_source_commit": "65e13f731336fcc5ae14e80b23b4b343a50dfc17",
-  "invalidation_contract": "Input snapshot immutable; rebuild on replacement/registration generations/layer identity. Document must derive from supplied shared layer. Font matching configuration setters do not advance registration generation: after such changes explicitly call replace_fonts, even with the same handles, or create a new session. Mutations are between operations; concurrent transaction guarantees unmeasured."
+  "invalidation_contract": "Input snapshot immutable; rebuild on replacement/registration generations/layer identity. Document must derive from supplied shared layer. Font matching configuration setters advance the shared layer generation: generic/fallback changes automatically invalidate the prepared paragraph on the next operation. Collection replacement uses replace_fonts; explicitly passing the same handles can also force rebuilding."
 }

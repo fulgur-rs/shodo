@@ -8,7 +8,7 @@
 
 - sessionはresolved DOM・normal style・first-line cascadeを所有し、mutable inputを公開しない。text/style/first-line変更はreplace_inputでpreparedを捨てる。
 - shared/document layer identityと実際の登録generationを各操作の前に照合し、変更やcollection置換で再構築する。documentは指定sharedから作ったlayerであることがcallerの契約。generation変更は操作間を対象とし、並列変更のtransaction保証をしない。
-- generic/fallback family設定は登録generationを進めない。設定を変えたら同じhandleでもreplace_fontsを呼ぶかsessionを作り直す。固定matching policyの自動再利用と区別する。
+- generic/fallback family設定の変更も共有layerのgenerationを進めるため、sessionは次の操作で自動再構築する。collectionの置換はreplace_fontsで明示し、同じhandleの明示的な再構築にも利用できる。
 - font準備中のgeneration変化は拒否し、再構築失敗時に古いpreparedを公開しない。古いtokenは再構築後にInvalidTokenとなる。fresh paragraph IDは当然異なるため、同位置のunit/flagsとcontinuationを照合し、同paragraphのrepeatはtokenを直接比較する。
 - 高さ拒否でtokenを進めず再試行する。空ページで高すぎる行は高さ制限を外して受け入れ、height0でも進行する。このinline-only callerは外部float/blockの配置を追加しない。
 
