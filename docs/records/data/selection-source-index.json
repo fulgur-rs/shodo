@@ -1,0 +1,6755 @@
+{
+  "schema": 1,
+  "issue": "shodo-sbp.9",
+  "base_commit": "ab33dfa758becbdecd61e74796f3bb9252fbefb5",
+  "implementation_commit": "65cf3e189e7558fc8d4286010fa04028abc22dc8",
+  "refinement_commit": "872d52fb9c4a417265c2f677c2ebad465124bdac",
+  "probe_conditions": 15,
+  "probe_cases": 93,
+  "matrix_cases": 54,
+  "memory_repeats": 3,
+  "normal_samples_per_case": 10,
+  "scope": "index: LineLayout::new from retained prepared lines, index held to scope end; queries: fixed iterations on one retained index, last Vec held to scope end; fonts/paragraph/shaping/layout/validation excluded; full16 queries, other query operations1000",
+  "memory": {
+    "before": [
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "9d3ea15d5341f8b46a3a7e15bdf549ccaabe22c40164c92cddefd823c368bd2a",
+        "rect_count": 1,
+        "counts": {
+          "calls": 56,
+          "allocated_bytes": 814544,
+          "deallocated_bytes": 601272,
+          "net_bytes": 213272,
+          "peak_extra_bytes": 237752
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "9d3ea15d5341f8b46a3a7e15bdf549ccaabe22c40164c92cddefd823c368bd2a",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1023,
+          0,
+          1024
+        ],
+        "signature_sha256": "c900afe97179da47c3089296cc8ceff82d6cdedcc3bb830647e9eba376a28054",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "9d3ea15d5341f8b46a3a7e15bdf549ccaabe22c40164c92cddefd823c368bd2a",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "9d3ea15d5341f8b46a3a7e15bdf549ccaabe22c40164c92cddefd823c368bd2a",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1024
+        ],
+        "signature_sha256": "25ab0b41a128450c2586e8c25ba2a268fcd9f59e1c81093a991c5809c28bfe68",
+        "rect_count": 1,
+        "counts": {
+          "calls": 208,
+          "allocated_bytes": 788480,
+          "deallocated_bytes": 788416,
+          "net_bytes": 64,
+          "peak_extra_bytes": 32832
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f93702550e5e3164cfd669617b1e1e5a58153f917bd369884ce538db12f41f45",
+        "rect_count": 1,
+        "counts": {
+          "calls": 66,
+          "allocated_bytes": 3259856,
+          "deallocated_bytes": 2407608,
+          "net_bytes": 852248,
+          "peak_extra_bytes": 950456
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f93702550e5e3164cfd669617b1e1e5a58153f917bd369884ce538db12f41f45",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          4095,
+          0,
+          4096
+        ],
+        "signature_sha256": "a9c8e450a99235e5d7a6f78863297e387b310153735e7800555bf17fc70d7cb7",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "f93702550e5e3164cfd669617b1e1e5a58153f917bd369884ce538db12f41f45",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f93702550e5e3164cfd669617b1e1e5a58153f917bd369884ce538db12f41f45",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          4096
+        ],
+        "signature_sha256": "481ba9ef653855ead12363ef37165851da15e43cfbf026a1b18bc937c4228350",
+        "rect_count": 1,
+        "counts": {
+          "calls": 240,
+          "allocated_bytes": 3147776,
+          "deallocated_bytes": 3147712,
+          "net_bytes": 64,
+          "peak_extra_bytes": 131136
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "787361c774e38d7345810189c2283d4e4588f8236e69c4a0de9a120a1a001841",
+        "rect_count": 1,
+        "counts": {
+          "calls": 76,
+          "allocated_bytes": 13041104,
+          "deallocated_bytes": 9632952,
+          "net_bytes": 3408152,
+          "peak_extra_bytes": 3801272
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "787361c774e38d7345810189c2283d4e4588f8236e69c4a0de9a120a1a001841",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          16383,
+          0,
+          16384
+        ],
+        "signature_sha256": "c18789ed23b7aeeaf1f512bf947c805c49bd45725a272fa66666d2c21271269e",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "787361c774e38d7345810189c2283d4e4588f8236e69c4a0de9a120a1a001841",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "787361c774e38d7345810189c2283d4e4588f8236e69c4a0de9a120a1a001841",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          16384
+        ],
+        "signature_sha256": "98b07e71f28075ddb0107e1f6db5978b996c7e8cec8907ef133bf4506f878102",
+        "rect_count": 1,
+        "counts": {
+          "calls": 272,
+          "allocated_bytes": 12584960,
+          "deallocated_bytes": 12584896,
+          "net_bytes": 64,
+          "peak_extra_bytes": 524352
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "d6a17a548ffbc6f7f32d29e9696be4abcaeba4861fa08bd5fc8a28f0275c727e",
+        "rect_count": 1,
+        "counts": {
+          "calls": 62,
+          "allocated_bytes": 1323180,
+          "deallocated_bytes": 1011268,
+          "net_bytes": 311912,
+          "peak_extra_bytes": 360968
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "d6a17a548ffbc6f7f32d29e9696be4abcaeba4861fa08bd5fc8a28f0275c727e",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1028,
+          0,
+          1029
+        ],
+        "signature_sha256": "a3035238877c0c3aba96eca308ed312885940ea0eb1615216a4b43b42fbe978f",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "d6a17a548ffbc6f7f32d29e9696be4abcaeba4861fa08bd5fc8a28f0275c727e",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "d6a17a548ffbc6f7f32d29e9696be4abcaeba4861fa08bd5fc8a28f0275c727e",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1029
+        ],
+        "signature_sha256": "cac7c24f11fe7e4ece9621547010736cbe9770b69b5b41807e02db08780408d8",
+        "rect_count": 4,
+        "counts": {
+          "calls": 224,
+          "allocated_bytes": 1313536,
+          "deallocated_bytes": 1313472,
+          "net_bytes": 64,
+          "peak_extra_bytes": 49264
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f046b4c301fc014401834219560fa713b0a709caaa0179fd94a8764bd8d2f9a4",
+        "rect_count": 1,
+        "counts": {
+          "calls": 72,
+          "allocated_bytes": 5292204,
+          "deallocated_bytes": 4046404,
+          "net_bytes": 1245800,
+          "peak_extra_bytes": 1442312
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f046b4c301fc014401834219560fa713b0a709caaa0179fd94a8764bd8d2f9a4",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          4100,
+          0,
+          4101
+        ],
+        "signature_sha256": "f3b178ebf320d9f691dba2fbe3cfc05ce82adfe02098eefe36ac66b2ec9ddbcd",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "f046b4c301fc014401834219560fa713b0a709caaa0179fd94a8764bd8d2f9a4",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f046b4c301fc014401834219560fa713b0a709caaa0179fd94a8764bd8d2f9a4",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          4101
+        ],
+        "signature_sha256": "da9cf1de36356cba0045b71c088b83f1f7afe1da04e2683f6cd9a64fe8954ddb",
+        "rect_count": 4,
+        "counts": {
+          "calls": 256,
+          "allocated_bytes": 5245696,
+          "deallocated_bytes": 5245632,
+          "net_bytes": 64,
+          "peak_extra_bytes": 196720
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "cd63947c97ebe812eb360459d1718d4b7eae87673f8502bf2cd82f94ed01f86a",
+        "rect_count": 1,
+        "counts": {
+          "calls": 82,
+          "allocated_bytes": 21168300,
+          "deallocated_bytes": 16186948,
+          "net_bytes": 4981352,
+          "peak_extra_bytes": 5767688
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "cd63947c97ebe812eb360459d1718d4b7eae87673f8502bf2cd82f94ed01f86a",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          16388,
+          0,
+          16389
+        ],
+        "signature_sha256": "52643b3d2464ead9de0504f3483a1479e331844708fdcc4a73c9a01b8d159b22",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "cd63947c97ebe812eb360459d1718d4b7eae87673f8502bf2cd82f94ed01f86a",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "cd63947c97ebe812eb360459d1718d4b7eae87673f8502bf2cd82f94ed01f86a",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          16389
+        ],
+        "signature_sha256": "e8f0ab5bebcaffa2e2d6eaac73f6ce39e9d6e3584a2ca802ca4f469fa8af1f70",
+        "rect_count": 4,
+        "counts": {
+          "calls": 288,
+          "allocated_bytes": 20974336,
+          "deallocated_bytes": 20974272,
+          "net_bytes": 64,
+          "peak_extra_bytes": 786544
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "81c484577f5ddda37f329a5a6611339bdb28073fed55314fdf85bb409dad79ed",
+        "rect_count": 1,
+        "counts": {
+          "calls": 445,
+          "allocated_bytes": 1483768,
+          "deallocated_bytes": 1114848,
+          "net_bytes": 368920,
+          "peak_extra_bytes": 417976
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "81c484577f5ddda37f329a5a6611339bdb28073fed55314fdf85bb409dad79ed",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          2175,
+          0,
+          2176
+        ],
+        "signature_sha256": "2fcd1925d966f2d3eeeefe838c3f66e42312413817431206a6ac3e4908b1408c",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "81c484577f5ddda37f329a5a6611339bdb28073fed55314fdf85bb409dad79ed",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "81c484577f5ddda37f329a5a6611339bdb28073fed55314fdf85bb409dad79ed",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          2176
+        ],
+        "signature_sha256": "0acd9180775b22f8fc11d02dd4917dd9dc02ec5d846d223400dd02ff6e982916",
+        "rect_count": 257,
+        "counts": {
+          "calls": 464,
+          "allocated_bytes": 2094592,
+          "deallocated_bytes": 2090480,
+          "net_bytes": 4112,
+          "peak_extra_bytes": 61456
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "gap",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          2,
+          0,
+          13
+        ],
+        "signature_sha256": "ffca2ccaf571f1b5e89bdeb74f42c99013084135ee0a66fa1d26873657f3960e",
+        "rect_count": 2,
+        "counts": {
+          "calls": 5000,
+          "allocated_bytes": 384000,
+          "deallocated_bytes": 383936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 256
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f07e35f2b39d0e95dbd5b182a73acda8d834955bfbcd2d084db75f533a1f0e34",
+        "rect_count": 1,
+        "counts": {
+          "calls": 1607,
+          "allocated_bytes": 5936632,
+          "deallocated_bytes": 4461792,
+          "net_bytes": 1474840,
+          "peak_extra_bytes": 1671352
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f07e35f2b39d0e95dbd5b182a73acda8d834955bfbcd2d084db75f533a1f0e34",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          8703,
+          0,
+          8704
+        ],
+        "signature_sha256": "b2b2316bf7a969fdc30b4195444790778f42bba65689f55d4fa52c9e606cb68d",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "f07e35f2b39d0e95dbd5b182a73acda8d834955bfbcd2d084db75f533a1f0e34",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f07e35f2b39d0e95dbd5b182a73acda8d834955bfbcd2d084db75f533a1f0e34",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          8704
+        ],
+        "signature_sha256": "8227cb700342a90e0ec79bb93f6da5fc367e2afa55beca89081d7665730d30ec",
+        "rect_count": 1025,
+        "counts": {
+          "calls": 560,
+          "allocated_bytes": 8386048,
+          "deallocated_bytes": 8369648,
+          "net_bytes": 16400,
+          "peak_extra_bytes": 245776
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "gap",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          2,
+          0,
+          13
+        ],
+        "signature_sha256": "d1c4dfc344d955b98c13c9c55c12405d423832a1eab353a747987be1bdfd2f43",
+        "rect_count": 2,
+        "counts": {
+          "calls": 5000,
+          "allocated_bytes": 384000,
+          "deallocated_bytes": 383936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 256
+        }
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "6832903d8bd25218933153f35222dfb66738372e91a16ceeae943f9f3e4bfa8b",
+        "rect_count": 1,
+        "counts": {
+          "calls": 574,
+          "allocated_bytes": 1491548,
+          "deallocated_bytes": 1122628,
+          "net_bytes": 368920,
+          "peak_extra_bytes": 417976
+        }
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "6832903d8bd25218933153f35222dfb66738372e91a16ceeae943f9f3e4bfa8b",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          2175,
+          0,
+          2176
+        ],
+        "signature_sha256": "2e903f3676dbfb86b072d42be8b1e89c6a2d3adb1327d8da64eeb3bce3063c85",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "6832903d8bd25218933153f35222dfb66738372e91a16ceeae943f9f3e4bfa8b",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "6832903d8bd25218933153f35222dfb66738372e91a16ceeae943f9f3e4bfa8b",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          2176
+        ],
+        "signature_sha256": "1537bac4806f251d5bd987d29c85f6e9a5a4955ad331d36cf92c09589dd3454c",
+        "rect_count": 257,
+        "counts": {
+          "calls": 464,
+          "allocated_bytes": 2094592,
+          "deallocated_bytes": 2090480,
+          "net_bytes": 4112,
+          "peak_extra_bytes": 61456
+        }
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "gap",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          2,
+          0,
+          13
+        ],
+        "signature_sha256": "296e4b6a8e5052de0c78682eae08fdd3574d1fd97e86747e0416f7cd33cd8473",
+        "rect_count": 2,
+        "counts": {
+          "calls": 5000,
+          "allocated_bytes": 384000,
+          "deallocated_bytes": 383936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 256
+        }
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          3
+        ],
+        "signature_sha256": "44d0b6aec5df52adaedab85fcd89518c8565c5a3e959dd2d0b33ee502a80ec33",
+        "rect_count": 1,
+        "counts": {
+          "calls": 557,
+          "allocated_bytes": 284112,
+          "deallocated_bytes": 230584,
+          "net_bytes": 53528,
+          "peak_extra_bytes": 65720
+        }
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          3
+        ],
+        "signature_sha256": "44d0b6aec5df52adaedab85fcd89518c8565c5a3e959dd2d0b33ee502a80ec33",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          765,
+          0,
+          768
+        ],
+        "signature_sha256": "72bce0157c9d00814dc22133c5265ab0b12656ef922336795c6a837575588b1f",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          3,
+          0,
+          0
+        ],
+        "signature_sha256": "44d0b6aec5df52adaedab85fcd89518c8565c5a3e959dd2d0b33ee502a80ec33",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          3
+        ],
+        "signature_sha256": "44d0b6aec5df52adaedab85fcd89518c8565c5a3e959dd2d0b33ee502a80ec33",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          768
+        ],
+        "signature_sha256": "70a4070e5bcad57281d842490913e3dd0a88012aea4b7a584d17f3aff7f4e2cf",
+        "rect_count": 1,
+        "counts": {
+          "calls": 160,
+          "allocated_bytes": 133120,
+          "deallocated_bytes": 133056,
+          "net_bytes": 64,
+          "peak_extra_bytes": 4224
+        }
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "0646a925f85c0edab5273facbfb36a4d99f29a7788a796c0d93f9f5574770abe",
+        "rect_count": 1,
+        "counts": {
+          "calls": 237,
+          "allocated_bytes": 117552,
+          "deallocated_bytes": 77848,
+          "net_bytes": 39704,
+          "peak_extra_bytes": 42680
+        }
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "0646a925f85c0edab5273facbfb36a4d99f29a7788a796c0d93f9f5574770abe",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          127,
+          0,
+          128
+        ],
+        "signature_sha256": "5c8b8b517402c848f5bcfc1d036a32218d6bb8deacdc1940a642d52a930d6f31",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "0646a925f85c0edab5273facbfb36a4d99f29a7788a796c0d93f9f5574770abe",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "0646a925f85c0edab5273facbfb36a4d99f29a7788a796c0d93f9f5574770abe",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          128
+        ],
+        "signature_sha256": "76dcc0a7c880bae7c2bcc91736f46f5b7e5aba8141e2b1e57c4f3f23bc0321e1",
+        "rect_count": 1,
+        "counts": {
+          "calls": 144,
+          "allocated_bytes": 67584,
+          "deallocated_bytes": 67520,
+          "net_bytes": 64,
+          "peak_extra_bytes": 2176
+        }
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "91bf0c8a1bfe4678471c34d018d8fe76686f4e79b317d5b1077d4b8f44e8702b",
+        "rect_count": 1,
+        "counts": {
+          "calls": 237,
+          "allocated_bytes": 117552,
+          "deallocated_bytes": 77848,
+          "net_bytes": 39704,
+          "peak_extra_bytes": 42680
+        }
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "91bf0c8a1bfe4678471c34d018d8fe76686f4e79b317d5b1077d4b8f44e8702b",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          127,
+          0,
+          128
+        ],
+        "signature_sha256": "8a2821c51aea7e703a18abed38963d7b4e6514da74474b21cb991f83b7b2d00f",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "91bf0c8a1bfe4678471c34d018d8fe76686f4e79b317d5b1077d4b8f44e8702b",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "91bf0c8a1bfe4678471c34d018d8fe76686f4e79b317d5b1077d4b8f44e8702b",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          128
+        ],
+        "signature_sha256": "78306399be7d09d6aeccb97e598b1e14668300d3c32dd3be755720ef45651ec2",
+        "rect_count": 1,
+        "counts": {
+          "calls": 144,
+          "allocated_bytes": 67584,
+          "deallocated_bytes": 67520,
+          "net_bytes": 64,
+          "peak_extra_bytes": 2176
+        }
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "9efb807bf3209f14de70901df1e81fb3a7d084ec6922ec782797d3b03723acf0",
+        "rect_count": 1,
+        "counts": {
+          "calls": 237,
+          "allocated_bytes": 117552,
+          "deallocated_bytes": 77848,
+          "net_bytes": 39704,
+          "peak_extra_bytes": 42680
+        }
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "9efb807bf3209f14de70901df1e81fb3a7d084ec6922ec782797d3b03723acf0",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          127,
+          0,
+          128
+        ],
+        "signature_sha256": "755c3193913401336f933b8245ae241c106942abe63fe5ba9fbbfabb3917416d",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "9efb807bf3209f14de70901df1e81fb3a7d084ec6922ec782797d3b03723acf0",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "9efb807bf3209f14de70901df1e81fb3a7d084ec6922ec782797d3b03723acf0",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          128
+        ],
+        "signature_sha256": "cb23e314d5f3f874c84f704c6ac0f8170503a4af2b5aaa9dcb9f3fed3a3a71fc",
+        "rect_count": 1,
+        "counts": {
+          "calls": 144,
+          "allocated_bytes": 67584,
+          "deallocated_bytes": 67520,
+          "net_bytes": 64,
+          "peak_extra_bytes": 2176
+        }
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "409d909dc0cac3b7f1aa46b7b0c41da4b9cd079089e454958327f37669867b11",
+        "rect_count": 1,
+        "counts": {
+          "calls": 64,
+          "allocated_bytes": 91656,
+          "deallocated_bytes": 60368,
+          "net_bytes": 31288,
+          "peak_extra_bytes": 32632
+        }
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "409d909dc0cac3b7f1aa46b7b0c41da4b9cd079089e454958327f37669867b11",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          1,
+          128,
+          1,
+          129
+        ],
+        "signature_sha256": "fe620da6f7fe5ce3b2aa58cb96c37dd12711e57d65418a36e045ac257d69edeb",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "409d909dc0cac3b7f1aa46b7b0c41da4b9cd079089e454958327f37669867b11",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "409d909dc0cac3b7f1aa46b7b0c41da4b9cd079089e454958327f37669867b11",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          1,
+          129
+        ],
+        "signature_sha256": "c053e3f92a74e390bdee3a3f8ff024c7558b1e1a834998fdcee7f34ef86ff07f",
+        "rect_count": 2,
+        "counts": {
+          "calls": 240,
+          "allocated_bytes": 68608,
+          "deallocated_bytes": 68544,
+          "net_bytes": 64,
+          "peak_extra_bytes": 1216
+        }
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "signature_sha256": "cb7dc10d8fdc98641f152b828ba6a4cd1d837d1782500a73d804b4ccad13ea80",
+        "rect_count": 0,
+        "counts": {
+          "calls": 0,
+          "allocated_bytes": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        }
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "signature_sha256": "cb7dc10d8fdc98641f152b828ba6a4cd1d837d1782500a73d804b4ccad13ea80",
+        "rect_count": 0,
+        "counts": {
+          "calls": 0,
+          "allocated_bytes": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        }
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "signature_sha256": "cb7dc10d8fdc98641f152b828ba6a4cd1d837d1782500a73d804b4ccad13ea80",
+        "rect_count": 0,
+        "counts": {
+          "calls": 0,
+          "allocated_bytes": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        }
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "signature_sha256": "cb7dc10d8fdc98641f152b828ba6a4cd1d837d1782500a73d804b4ccad13ea80",
+        "rect_count": 0,
+        "counts": {
+          "calls": 0,
+          "allocated_bytes": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        }
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "signature_sha256": "cb7dc10d8fdc98641f152b828ba6a4cd1d837d1782500a73d804b4ccad13ea80",
+        "rect_count": 0,
+        "counts": {
+          "calls": 0,
+          "allocated_bytes": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        }
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "signature_sha256": "cb7dc10d8fdc98641f152b828ba6a4cd1d837d1782500a73d804b4ccad13ea80",
+        "rect_count": 0,
+        "counts": {
+          "calls": 0,
+          "allocated_bytes": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        }
+      }
+    ],
+    "after": [
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "9d3ea15d5341f8b46a3a7e15bdf549ccaabe22c40164c92cddefd823c368bd2a",
+        "rect_count": 1,
+        "counts": {
+          "calls": 56,
+          "allocated_bytes": 814568,
+          "deallocated_bytes": 601272,
+          "net_bytes": 213296,
+          "peak_extra_bytes": 237776
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "9d3ea15d5341f8b46a3a7e15bdf549ccaabe22c40164c92cddefd823c368bd2a",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1023,
+          0,
+          1024
+        ],
+        "signature_sha256": "c900afe97179da47c3089296cc8ceff82d6cdedcc3bb830647e9eba376a28054",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "9d3ea15d5341f8b46a3a7e15bdf549ccaabe22c40164c92cddefd823c368bd2a",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "9d3ea15d5341f8b46a3a7e15bdf549ccaabe22c40164c92cddefd823c368bd2a",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1024
+        ],
+        "signature_sha256": "25ab0b41a128450c2586e8c25ba2a268fcd9f59e1c81093a991c5809c28bfe68",
+        "rect_count": 1,
+        "counts": {
+          "calls": 208,
+          "allocated_bytes": 788480,
+          "deallocated_bytes": 788416,
+          "net_bytes": 64,
+          "peak_extra_bytes": 32832
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f93702550e5e3164cfd669617b1e1e5a58153f917bd369884ce538db12f41f45",
+        "rect_count": 1,
+        "counts": {
+          "calls": 66,
+          "allocated_bytes": 3259880,
+          "deallocated_bytes": 2407608,
+          "net_bytes": 852272,
+          "peak_extra_bytes": 950480
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f93702550e5e3164cfd669617b1e1e5a58153f917bd369884ce538db12f41f45",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          4095,
+          0,
+          4096
+        ],
+        "signature_sha256": "a9c8e450a99235e5d7a6f78863297e387b310153735e7800555bf17fc70d7cb7",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "f93702550e5e3164cfd669617b1e1e5a58153f917bd369884ce538db12f41f45",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f93702550e5e3164cfd669617b1e1e5a58153f917bd369884ce538db12f41f45",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          4096
+        ],
+        "signature_sha256": "481ba9ef653855ead12363ef37165851da15e43cfbf026a1b18bc937c4228350",
+        "rect_count": 1,
+        "counts": {
+          "calls": 240,
+          "allocated_bytes": 3147776,
+          "deallocated_bytes": 3147712,
+          "net_bytes": 64,
+          "peak_extra_bytes": 131136
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "787361c774e38d7345810189c2283d4e4588f8236e69c4a0de9a120a1a001841",
+        "rect_count": 1,
+        "counts": {
+          "calls": 76,
+          "allocated_bytes": 13041128,
+          "deallocated_bytes": 9632952,
+          "net_bytes": 3408176,
+          "peak_extra_bytes": 3801296
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "787361c774e38d7345810189c2283d4e4588f8236e69c4a0de9a120a1a001841",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          16383,
+          0,
+          16384
+        ],
+        "signature_sha256": "c18789ed23b7aeeaf1f512bf947c805c49bd45725a272fa66666d2c21271269e",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "787361c774e38d7345810189c2283d4e4588f8236e69c4a0de9a120a1a001841",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "787361c774e38d7345810189c2283d4e4588f8236e69c4a0de9a120a1a001841",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          16384
+        ],
+        "signature_sha256": "98b07e71f28075ddb0107e1f6db5978b996c7e8cec8907ef133bf4506f878102",
+        "rect_count": 1,
+        "counts": {
+          "calls": 272,
+          "allocated_bytes": 12584960,
+          "deallocated_bytes": 12584896,
+          "net_bytes": 64,
+          "peak_extra_bytes": 524352
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "d6a17a548ffbc6f7f32d29e9696be4abcaeba4861fa08bd5fc8a28f0275c727e",
+        "rect_count": 1,
+        "counts": {
+          "calls": 63,
+          "allocated_bytes": 1339636,
+          "deallocated_bytes": 1011268,
+          "net_bytes": 328368,
+          "peak_extra_bytes": 377424
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "d6a17a548ffbc6f7f32d29e9696be4abcaeba4861fa08bd5fc8a28f0275c727e",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1028,
+          0,
+          1029
+        ],
+        "signature_sha256": "a3035238877c0c3aba96eca308ed312885940ea0eb1615216a4b43b42fbe978f",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "d6a17a548ffbc6f7f32d29e9696be4abcaeba4861fa08bd5fc8a28f0275c727e",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "d6a17a548ffbc6f7f32d29e9696be4abcaeba4861fa08bd5fc8a28f0275c727e",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1029
+        ],
+        "signature_sha256": "cac7c24f11fe7e4ece9621547010736cbe9770b69b5b41807e02db08780408d8",
+        "rect_count": 4,
+        "counts": {
+          "calls": 224,
+          "allocated_bytes": 1313536,
+          "deallocated_bytes": 1313472,
+          "net_bytes": 64,
+          "peak_extra_bytes": 49264
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f046b4c301fc014401834219560fa713b0a709caaa0179fd94a8764bd8d2f9a4",
+        "rect_count": 1,
+        "counts": {
+          "calls": 73,
+          "allocated_bytes": 5357812,
+          "deallocated_bytes": 4046404,
+          "net_bytes": 1311408,
+          "peak_extra_bytes": 1507920
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f046b4c301fc014401834219560fa713b0a709caaa0179fd94a8764bd8d2f9a4",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          4100,
+          0,
+          4101
+        ],
+        "signature_sha256": "f3b178ebf320d9f691dba2fbe3cfc05ce82adfe02098eefe36ac66b2ec9ddbcd",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "f046b4c301fc014401834219560fa713b0a709caaa0179fd94a8764bd8d2f9a4",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f046b4c301fc014401834219560fa713b0a709caaa0179fd94a8764bd8d2f9a4",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          4101
+        ],
+        "signature_sha256": "da9cf1de36356cba0045b71c088b83f1f7afe1da04e2683f6cd9a64fe8954ddb",
+        "rect_count": 4,
+        "counts": {
+          "calls": 256,
+          "allocated_bytes": 5245696,
+          "deallocated_bytes": 5245632,
+          "net_bytes": 64,
+          "peak_extra_bytes": 196720
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "cd63947c97ebe812eb360459d1718d4b7eae87673f8502bf2cd82f94ed01f86a",
+        "rect_count": 1,
+        "counts": {
+          "calls": 83,
+          "allocated_bytes": 21430516,
+          "deallocated_bytes": 16186948,
+          "net_bytes": 5243568,
+          "peak_extra_bytes": 6029904
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "cd63947c97ebe812eb360459d1718d4b7eae87673f8502bf2cd82f94ed01f86a",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          16388,
+          0,
+          16389
+        ],
+        "signature_sha256": "52643b3d2464ead9de0504f3483a1479e331844708fdcc4a73c9a01b8d159b22",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "cd63947c97ebe812eb360459d1718d4b7eae87673f8502bf2cd82f94ed01f86a",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "cd63947c97ebe812eb360459d1718d4b7eae87673f8502bf2cd82f94ed01f86a",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          16389
+        ],
+        "signature_sha256": "e8f0ab5bebcaffa2e2d6eaac73f6ce39e9d6e3584a2ca802ca4f469fa8af1f70",
+        "rect_count": 4,
+        "counts": {
+          "calls": 288,
+          "allocated_bytes": 20974336,
+          "deallocated_bytes": 20974272,
+          "net_bytes": 64,
+          "peak_extra_bytes": 786544
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "81c484577f5ddda37f329a5a6611339bdb28073fed55314fdf85bb409dad79ed",
+        "rect_count": 1,
+        "counts": {
+          "calls": 445,
+          "allocated_bytes": 1483792,
+          "deallocated_bytes": 1114848,
+          "net_bytes": 368944,
+          "peak_extra_bytes": 418000
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "81c484577f5ddda37f329a5a6611339bdb28073fed55314fdf85bb409dad79ed",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          2175,
+          0,
+          2176
+        ],
+        "signature_sha256": "2fcd1925d966f2d3eeeefe838c3f66e42312413817431206a6ac3e4908b1408c",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "81c484577f5ddda37f329a5a6611339bdb28073fed55314fdf85bb409dad79ed",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "81c484577f5ddda37f329a5a6611339bdb28073fed55314fdf85bb409dad79ed",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          2176
+        ],
+        "signature_sha256": "0acd9180775b22f8fc11d02dd4917dd9dc02ec5d846d223400dd02ff6e982916",
+        "rect_count": 257,
+        "counts": {
+          "calls": 464,
+          "allocated_bytes": 2094592,
+          "deallocated_bytes": 2090480,
+          "net_bytes": 4112,
+          "peak_extra_bytes": 61456
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "gap",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          2,
+          0,
+          13
+        ],
+        "signature_sha256": "ffca2ccaf571f1b5e89bdeb74f42c99013084135ee0a66fa1d26873657f3960e",
+        "rect_count": 2,
+        "counts": {
+          "calls": 5000,
+          "allocated_bytes": 384000,
+          "deallocated_bytes": 383936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 256
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f07e35f2b39d0e95dbd5b182a73acda8d834955bfbcd2d084db75f533a1f0e34",
+        "rect_count": 1,
+        "counts": {
+          "calls": 1607,
+          "allocated_bytes": 5936656,
+          "deallocated_bytes": 4461792,
+          "net_bytes": 1474864,
+          "peak_extra_bytes": 1671376
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f07e35f2b39d0e95dbd5b182a73acda8d834955bfbcd2d084db75f533a1f0e34",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          8703,
+          0,
+          8704
+        ],
+        "signature_sha256": "b2b2316bf7a969fdc30b4195444790778f42bba65689f55d4fa52c9e606cb68d",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "f07e35f2b39d0e95dbd5b182a73acda8d834955bfbcd2d084db75f533a1f0e34",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "f07e35f2b39d0e95dbd5b182a73acda8d834955bfbcd2d084db75f533a1f0e34",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          8704
+        ],
+        "signature_sha256": "8227cb700342a90e0ec79bb93f6da5fc367e2afa55beca89081d7665730d30ec",
+        "rect_count": 1025,
+        "counts": {
+          "calls": 560,
+          "allocated_bytes": 8386048,
+          "deallocated_bytes": 8369648,
+          "net_bytes": 16400,
+          "peak_extra_bytes": 245776
+        }
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "gap",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          2,
+          0,
+          13
+        ],
+        "signature_sha256": "d1c4dfc344d955b98c13c9c55c12405d423832a1eab353a747987be1bdfd2f43",
+        "rect_count": 2,
+        "counts": {
+          "calls": 5000,
+          "allocated_bytes": 384000,
+          "deallocated_bytes": 383936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 256
+        }
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "6832903d8bd25218933153f35222dfb66738372e91a16ceeae943f9f3e4bfa8b",
+        "rect_count": 1,
+        "counts": {
+          "calls": 574,
+          "allocated_bytes": 1491572,
+          "deallocated_bytes": 1122628,
+          "net_bytes": 368944,
+          "peak_extra_bytes": 418000
+        }
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "6832903d8bd25218933153f35222dfb66738372e91a16ceeae943f9f3e4bfa8b",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          2175,
+          0,
+          2176
+        ],
+        "signature_sha256": "2e903f3676dbfb86b072d42be8b1e89c6a2d3adb1327d8da64eeb3bce3063c85",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "6832903d8bd25218933153f35222dfb66738372e91a16ceeae943f9f3e4bfa8b",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "6832903d8bd25218933153f35222dfb66738372e91a16ceeae943f9f3e4bfa8b",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          2176
+        ],
+        "signature_sha256": "1537bac4806f251d5bd987d29c85f6e9a5a4955ad331d36cf92c09589dd3454c",
+        "rect_count": 257,
+        "counts": {
+          "calls": 464,
+          "allocated_bytes": 2094592,
+          "deallocated_bytes": 2090480,
+          "net_bytes": 4112,
+          "peak_extra_bytes": 61456
+        }
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "gap",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          2,
+          0,
+          13
+        ],
+        "signature_sha256": "296e4b6a8e5052de0c78682eae08fdd3574d1fd97e86747e0416f7cd33cd8473",
+        "rect_count": 2,
+        "counts": {
+          "calls": 5000,
+          "allocated_bytes": 384000,
+          "deallocated_bytes": 383936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 256
+        }
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          3
+        ],
+        "signature_sha256": "44d0b6aec5df52adaedab85fcd89518c8565c5a3e959dd2d0b33ee502a80ec33",
+        "rect_count": 1,
+        "counts": {
+          "calls": 557,
+          "allocated_bytes": 284136,
+          "deallocated_bytes": 230584,
+          "net_bytes": 53552,
+          "peak_extra_bytes": 65744
+        }
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          3
+        ],
+        "signature_sha256": "44d0b6aec5df52adaedab85fcd89518c8565c5a3e959dd2d0b33ee502a80ec33",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          765,
+          0,
+          768
+        ],
+        "signature_sha256": "72bce0157c9d00814dc22133c5265ab0b12656ef922336795c6a837575588b1f",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          3,
+          0,
+          0
+        ],
+        "signature_sha256": "44d0b6aec5df52adaedab85fcd89518c8565c5a3e959dd2d0b33ee502a80ec33",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          3
+        ],
+        "signature_sha256": "44d0b6aec5df52adaedab85fcd89518c8565c5a3e959dd2d0b33ee502a80ec33",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          768
+        ],
+        "signature_sha256": "70a4070e5bcad57281d842490913e3dd0a88012aea4b7a584d17f3aff7f4e2cf",
+        "rect_count": 1,
+        "counts": {
+          "calls": 160,
+          "allocated_bytes": 133120,
+          "deallocated_bytes": 133056,
+          "net_bytes": 64,
+          "peak_extra_bytes": 4224
+        }
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "0646a925f85c0edab5273facbfb36a4d99f29a7788a796c0d93f9f5574770abe",
+        "rect_count": 1,
+        "counts": {
+          "calls": 237,
+          "allocated_bytes": 117576,
+          "deallocated_bytes": 77848,
+          "net_bytes": 39728,
+          "peak_extra_bytes": 42704
+        }
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "0646a925f85c0edab5273facbfb36a4d99f29a7788a796c0d93f9f5574770abe",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          127,
+          0,
+          128
+        ],
+        "signature_sha256": "5c8b8b517402c848f5bcfc1d036a32218d6bb8deacdc1940a642d52a930d6f31",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "0646a925f85c0edab5273facbfb36a4d99f29a7788a796c0d93f9f5574770abe",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "0646a925f85c0edab5273facbfb36a4d99f29a7788a796c0d93f9f5574770abe",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          128
+        ],
+        "signature_sha256": "76dcc0a7c880bae7c2bcc91736f46f5b7e5aba8141e2b1e57c4f3f23bc0321e1",
+        "rect_count": 1,
+        "counts": {
+          "calls": 144,
+          "allocated_bytes": 67584,
+          "deallocated_bytes": 67520,
+          "net_bytes": 64,
+          "peak_extra_bytes": 2176
+        }
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "91bf0c8a1bfe4678471c34d018d8fe76686f4e79b317d5b1077d4b8f44e8702b",
+        "rect_count": 1,
+        "counts": {
+          "calls": 237,
+          "allocated_bytes": 117576,
+          "deallocated_bytes": 77848,
+          "net_bytes": 39728,
+          "peak_extra_bytes": 42704
+        }
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "91bf0c8a1bfe4678471c34d018d8fe76686f4e79b317d5b1077d4b8f44e8702b",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          127,
+          0,
+          128
+        ],
+        "signature_sha256": "8a2821c51aea7e703a18abed38963d7b4e6514da74474b21cb991f83b7b2d00f",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "91bf0c8a1bfe4678471c34d018d8fe76686f4e79b317d5b1077d4b8f44e8702b",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "91bf0c8a1bfe4678471c34d018d8fe76686f4e79b317d5b1077d4b8f44e8702b",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          128
+        ],
+        "signature_sha256": "78306399be7d09d6aeccb97e598b1e14668300d3c32dd3be755720ef45651ec2",
+        "rect_count": 1,
+        "counts": {
+          "calls": 144,
+          "allocated_bytes": 67584,
+          "deallocated_bytes": 67520,
+          "net_bytes": 64,
+          "peak_extra_bytes": 2176
+        }
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "9efb807bf3209f14de70901df1e81fb3a7d084ec6922ec782797d3b03723acf0",
+        "rect_count": 1,
+        "counts": {
+          "calls": 237,
+          "allocated_bytes": 117576,
+          "deallocated_bytes": 77848,
+          "net_bytes": 39728,
+          "peak_extra_bytes": 42704
+        }
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "9efb807bf3209f14de70901df1e81fb3a7d084ec6922ec782797d3b03723acf0",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          127,
+          0,
+          128
+        ],
+        "signature_sha256": "755c3193913401336f933b8245ae241c106942abe63fe5ba9fbbfabb3917416d",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "9efb807bf3209f14de70901df1e81fb3a7d084ec6922ec782797d3b03723acf0",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "9efb807bf3209f14de70901df1e81fb3a7d084ec6922ec782797d3b03723acf0",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          128
+        ],
+        "signature_sha256": "cb23e314d5f3f874c84f704c6ac0f8170503a4af2b5aaa9dcb9f3fed3a3a71fc",
+        "rect_count": 1,
+        "counts": {
+          "calls": 144,
+          "allocated_bytes": 67584,
+          "deallocated_bytes": 67520,
+          "net_bytes": 64,
+          "peak_extra_bytes": 2176
+        }
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "409d909dc0cac3b7f1aa46b7b0c41da4b9cd079089e454958327f37669867b11",
+        "rect_count": 1,
+        "counts": {
+          "calls": 64,
+          "allocated_bytes": 91704,
+          "deallocated_bytes": 60368,
+          "net_bytes": 31336,
+          "peak_extra_bytes": 32680
+        }
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "409d909dc0cac3b7f1aa46b7b0c41da4b9cd079089e454958327f37669867b11",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          1,
+          128,
+          1,
+          129
+        ],
+        "signature_sha256": "fe620da6f7fe5ce3b2aa58cb96c37dd12711e57d65418a36e045ac257d69edeb",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          1,
+          0,
+          0
+        ],
+        "signature_sha256": "409d909dc0cac3b7f1aa46b7b0c41da4b9cd079089e454958327f37669867b11",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "signature_sha256": "409d909dc0cac3b7f1aa46b7b0c41da4b9cd079089e454958327f37669867b11",
+        "rect_count": 1,
+        "counts": {
+          "calls": 4000,
+          "allocated_bytes": 256000,
+          "deallocated_bytes": 255936,
+          "net_bytes": 64,
+          "peak_extra_bytes": 192
+        }
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          1,
+          129
+        ],
+        "signature_sha256": "c053e3f92a74e390bdee3a3f8ff024c7558b1e1a834998fdcee7f34ef86ff07f",
+        "rect_count": 2,
+        "counts": {
+          "calls": 240,
+          "allocated_bytes": 68608,
+          "deallocated_bytes": 68544,
+          "net_bytes": 64,
+          "peak_extra_bytes": 1216
+        }
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "index",
+        "iterations": 1,
+        "endpoints": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "signature_sha256": "cb7dc10d8fdc98641f152b828ba6a4cd1d837d1782500a73d804b4ccad13ea80",
+        "rect_count": 0,
+        "counts": {
+          "calls": 0,
+          "allocated_bytes": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        }
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "short",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "signature_sha256": "cb7dc10d8fdc98641f152b828ba6a4cd1d837d1782500a73d804b4ccad13ea80",
+        "rect_count": 0,
+        "counts": {
+          "calls": 0,
+          "allocated_bytes": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        }
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "last",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "signature_sha256": "cb7dc10d8fdc98641f152b828ba6a4cd1d837d1782500a73d804b4ccad13ea80",
+        "rect_count": 0,
+        "counts": {
+          "calls": 0,
+          "allocated_bytes": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        }
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "reverse",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "signature_sha256": "cb7dc10d8fdc98641f152b828ba6a4cd1d837d1782500a73d804b4ccad13ea80",
+        "rect_count": 0,
+        "counts": {
+          "calls": 0,
+          "allocated_bytes": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        }
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "affinities",
+        "iterations": 1000,
+        "endpoints": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "signature_sha256": "cb7dc10d8fdc98641f152b828ba6a4cd1d837d1782500a73d804b4ccad13ea80",
+        "rect_count": 0,
+        "counts": {
+          "calls": 0,
+          "allocated_bytes": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        }
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "full",
+        "iterations": 16,
+        "endpoints": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "signature_sha256": "cb7dc10d8fdc98641f152b828ba6a4cd1d837d1782500a73d804b4ccad13ea80",
+        "rect_count": 0,
+        "counts": {
+          "calls": 0,
+          "allocated_bytes": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        }
+      }
+    ]
+  },
+  "source_hash": "ed629685f7919a4633725d326859f3492b2614141fd5cbf40d6daf69228ca1fd",
+  "binary_sha256": {
+    "before-timing": "960e8d9b8b5ffdba93bc4a3e7e57b2d55f8d5d0a1930c3ec4cf2f85830a21826",
+    "before-memory": "1da0917d5bb54034c7753207c381332168549b14d088d3a5f466ee5c8efb8274",
+    "final-timing": "b57e3d83bf76f5ec6cfe356a9eee8d9b0b6ad033c66c7a1bfcbd04b5ca8c4fb9",
+    "final-memory": "935dcac3e38955c996ec2eaee4924ee3e7cdf84a3bf6252517fd2e0ea2bda0b2"
+  },
+  "matrix_metadata": {
+    "before": {
+      "revision": "0562e02a0a72d4a2b8195ad95533dd58d2ad05dc",
+      "dirty_status": [],
+      "source_hash": "48fa29dc9309221c0fa55b1982f3866327e3eff84c4b85036084026afef1cf35",
+      "conditions": {
+        "source_fingerprint_version": 2,
+        "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
+        "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+        "cpu": {
+          "models": [
+            "AMD Ryzen 5 5600G with Radeon Graphics"
+          ],
+          "machine": "x86_64",
+          "logical_cpus": 12,
+          "affinity": [
+            10
+          ]
+        },
+        "os": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+        "features": [
+          "complex-scripts"
+        ],
+        "profile": {
+          "name": "release",
+          "opt_level": 3,
+          "debug": 0,
+          "incremental": false,
+          "effective": {
+            "cold": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": false
+            },
+            "timing": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": true
+            },
+            "memory": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": false
+            }
+          }
+        },
+        "build_configuration": {
+          "workspace_profiles": {},
+          "cargo_configs": {},
+          "environment": {
+            "CARGO_BUILD_JOBS": "1",
+            "CARGO_PROFILE_RELEASE_OPT_LEVEL": "3",
+            "CARGO_PROFILE_RELEASE_DEBUG": "0",
+            "CARGO_PROFILE_RELEASE_INCREMENTAL": "false",
+            "CARGO_INCREMENTAL": "0"
+          }
+        },
+        "flags": {
+          "RUSTFLAGS": "",
+          "CARGO_ENCODED_RUSTFLAGS": "",
+          "RUSTDOCFLAGS": "",
+          "RUSTC": "",
+          "RUSTC_WRAPPER": "",
+          "RUSTC_WORKSPACE_WRAPPER": "",
+          "CARGO_PROFILE_RELEASE_LTO": "",
+          "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "",
+          "CARGO_PROFILE_RELEASE_PANIC": "",
+          "CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS": "",
+          "CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS": ""
+        },
+        "font_hashes": {
+          "arabic.ttf": "e9885fbcf3bdbddea94d1679d636a80f7421c6b63632a35c6f884a9ee74067d9",
+          "cjk.otf": "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b",
+          "emoji-color.ttf": "6047984e1da3b32e9629740378f2a143daa2c630f140edcf69b68696e3766362",
+          "emoji-mono.ttf": "76c91d377b0d3acb5e0feb696924d1fec7ea9cd4c7860dff52aa0cdd998f76f3",
+          "latin.ttf": "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25"
+        },
+        "input_hash": "1dbf30237e3d08dc20ea9f61a2576e7a6023b663584a464ca92f02b4ed35f292",
+        "harness_hash": "7c139740f9da6bc5ab72420426c81ad5456569e36a99b18b2266fe392b18f80b",
+        "lock_hash": "4d8a1d53a12ba7e53b177c5a309d0fc0c7cd6c8ebd733e459027e7f63bf09f3e",
+        "measurement_config": {
+          "quick": true,
+          "cold_samples": 2
+        }
+      },
+      "process_wall_scope": "Parent subprocess invocation, startup, probe work, JSON output and log write; inner cold phases reported separately."
+    },
+    "after": {
+      "revision": "872d52fb9c4a417265c2f677c2ebad465124bdac",
+      "dirty_status": [],
+      "source_hash": "ed629685f7919a4633725d326859f3492b2614141fd5cbf40d6daf69228ca1fd",
+      "conditions": {
+        "source_fingerprint_version": 2,
+        "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
+        "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+        "cpu": {
+          "models": [
+            "AMD Ryzen 5 5600G with Radeon Graphics"
+          ],
+          "machine": "x86_64",
+          "logical_cpus": 12,
+          "affinity": [
+            10
+          ]
+        },
+        "os": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+        "features": [
+          "complex-scripts"
+        ],
+        "profile": {
+          "name": "release",
+          "opt_level": 3,
+          "debug": 0,
+          "incremental": false,
+          "effective": {
+            "cold": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": false
+            },
+            "timing": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": true
+            },
+            "memory": {
+              "opt_level": "3",
+              "debuginfo": 0,
+              "debug_assertions": false,
+              "overflow_checks": false,
+              "test": false
+            }
+          }
+        },
+        "build_configuration": {
+          "workspace_profiles": {},
+          "cargo_configs": {},
+          "environment": {
+            "CARGO_BUILD_JOBS": "1",
+            "CARGO_PROFILE_RELEASE_OPT_LEVEL": "3",
+            "CARGO_PROFILE_RELEASE_DEBUG": "0",
+            "CARGO_PROFILE_RELEASE_INCREMENTAL": "false",
+            "CARGO_INCREMENTAL": "0"
+          }
+        },
+        "flags": {
+          "RUSTFLAGS": "",
+          "CARGO_ENCODED_RUSTFLAGS": "",
+          "RUSTDOCFLAGS": "",
+          "RUSTC": "",
+          "RUSTC_WRAPPER": "",
+          "RUSTC_WORKSPACE_WRAPPER": "",
+          "CARGO_PROFILE_RELEASE_LTO": "",
+          "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "",
+          "CARGO_PROFILE_RELEASE_PANIC": "",
+          "CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS": "",
+          "CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS": ""
+        },
+        "font_hashes": {
+          "arabic.ttf": "e9885fbcf3bdbddea94d1679d636a80f7421c6b63632a35c6f884a9ee74067d9",
+          "cjk.otf": "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b",
+          "emoji-color.ttf": "6047984e1da3b32e9629740378f2a143daa2c630f140edcf69b68696e3766362",
+          "emoji-mono.ttf": "76c91d377b0d3acb5e0feb696924d1fec7ea9cd4c7860dff52aa0cdd998f76f3",
+          "latin.ttf": "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25"
+        },
+        "input_hash": "1dbf30237e3d08dc20ea9f61a2576e7a6023b663584a464ca92f02b4ed35f292",
+        "harness_hash": "7c139740f9da6bc5ab72420426c81ad5456569e36a99b18b2266fe392b18f80b",
+        "lock_hash": "4d8a1d53a12ba7e53b177c5a309d0fc0c7cd6c8ebd733e459027e7f63bf09f3e",
+        "measurement_config": {
+          "quick": true,
+          "cold_samples": 2
+        }
+      },
+      "process_wall_scope": "Parent subprocess invocation, startup, probe work, JSON output and log write; inner cold phases reported separately."
+    }
+  },
+  "validation_counts": {
+    "workspace": 1078,
+    "no_default_features": 625,
+    "complex_only": 628,
+    "hit": 14
+  },
+  "balanced_timing": {
+    "final-balanced-0-before": [
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 205274.0
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 375939.0
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 607055.5
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 372796.5
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 374088.0
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 142238.5
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 1079660.0
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 1168537.5
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 2024659.0
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 1200840.5
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 1184532.0
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 543741.5
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 4597530.0
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 5494371.0
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 8098077.0
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 5530724.5
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 5442511.0
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 2148179.5
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 183308.0
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 380689.0
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 609186.0
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 380653.5
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 382714.0
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 144159.0
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 843131.0
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 1167105.5
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 2031189.5
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 1193018.0
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 1191795.5
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 567698.0
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 4633150.5
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 5319828.5
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 8200051.0
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 5424072.5
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 5309841.5
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 2215405.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 385892.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 528515.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 858113.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 532810.5
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 525477.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 837578.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "gap",
+        "iterations": 1000,
+        "median_ns": 633631.5
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 1722615.5
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 1728203.0
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 2985164.0
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 1733476.5
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 1691220.0
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 3865382.0
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "gap",
+        "iterations": 1000,
+        "median_ns": 1844669.5
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 384355.5
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 527188.0
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 849591.0
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 524918.0
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 536163.5
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 839987.5
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "gap",
+        "iterations": 1000,
+        "median_ns": 644283.5
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 69810.5
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 162389.0
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 219452.5
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 163541.5
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 162109.5
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 39078.0
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 36040.5
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 128095.5
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 156382.0
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 130051.0
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 127502.0
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 52313.5
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 34817.5
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 129352.5
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 156906.0
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 130330.0
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 127815.5
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 50463.0
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 41732.5
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 128410.0
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 156417.0
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 130295.5
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 128270.0
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 63104.5
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 20988.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 113288.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 122612.5
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 116466.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 113881.5
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 24061.0
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 1397.0
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 9988.0
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 9952.5
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 10023.0
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 9883.0
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 1466.0
+      }
+    ],
+    "final-balanced-1-after": [
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 204889.5
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 122612.5
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 122891.5
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 125302.0
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 123066.5
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 138886.0
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 1059125.5
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 158757.0
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 157430.0
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 162878.0
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 159106.5
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 526839.0
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 4766449.0
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 179816.0
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 173634.0
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 183272.5
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 183866.5
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 2099323.0
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 201746.5
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 155614.0
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 148210.5
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 154042.5
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 154531.5
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 145731.0
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 890800.0
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 169827.0
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 174158.0
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 170246.5
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 170037.0
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 531763.0
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 5357265.5
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 201851.0
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 190816.0
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 202235.5
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 203737.5
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 2118740.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 381108.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 130749.5
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 131098.5
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 133752.5
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 130784.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 907213.5
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "gap",
+        "iterations": 1000,
+        "median_ns": 234993.0
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 1732219.0
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 148665.0
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 148978.5
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 150655.0
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 149013.5
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 3853333.5
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "gap",
+        "iterations": 1000,
+        "median_ns": 257797.0
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 386311.0
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 131553.0
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 131727.0
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 134032.0
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 131937.0
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 854655.0
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "gap",
+        "iterations": 1000,
+        "median_ns": 218928.0
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 70962.0
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 111577.0
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 111332.5
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 114056.5
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 111577.0
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 38484.0
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 36459.5
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 108538.5
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 108468.5
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 104662.5
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 108573.5
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 52348.5
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 35271.5
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 108469.0
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 108119.5
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 108958.0
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 108399.5
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 49485.0
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 41452.5
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 108643.5
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 108364.0
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 108399.0
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 108364.0
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 62930.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 21058.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 98830.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 94745.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 108643.5
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 98761.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 24027.0
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 1397.0
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 9638.5
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 9743.5
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 9638.5
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 9883.0
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 1397.0
+      }
+    ],
+    "final-balanced-2-after": [
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 208416.5
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 124184.0
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 124987.0
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 128654.0
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 124009.5
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 138747.0
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 1060592.0
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 157395.0
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 158931.5
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 164694.0
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 160049.0
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 531902.5
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 4770395.0
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 181701.0
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 176427.0
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 184739.0
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 185997.0
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 2100790.0
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 197381.5
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 162389.0
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 161934.5
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 162005.0
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 161865.0
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 144439.0
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 889752.0
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 168745.0
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 165322.5
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 169862.5
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 168640.0
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 539166.5
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 5379895.0
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 217532.0
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 192562.0
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 215925.0
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 218125.0
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 2115457.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 406287.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 131343.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 132006.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 136616.5
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 132216.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 841698.5
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "gap",
+        "iterations": 1000,
+        "median_ns": 239706.5
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 1714059.5
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 148769.5
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 148629.5
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 150725.0
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 149048.5
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 3881865.5
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "gap",
+        "iterations": 1000,
+        "median_ns": 257727.5
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 387987.5
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 131377.5
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 130923.5
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 133647.5
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 130994.0
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 838241.5
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "gap",
+        "iterations": 1000,
+        "median_ns": 219661.5
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 70089.0
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 111018.0
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 111227.5
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 113951.5
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 111437.0
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 38589.5
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 38379.5
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 108643.0
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 108538.5
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 108573.5
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 100611.0
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 52558.0
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 35341.0
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 99738.5
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 108260.0
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 108538.0
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 108224.5
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 49554.5
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 41522.5
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 104278.0
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 108294.0
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 108468.5
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 104033.5
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 65444.5
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 21582.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 98167.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 93871.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 108399.5
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 98062.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 24305.5
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 1397.0
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 9813.0
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 9778.0
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 9743.5
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 10302.0
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 1467.0
+      }
+    ],
+    "final-balanced-3-before": [
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 201537.0
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 379013.0
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 603877.5
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 372412.5
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 371748.5
+      },
+      {
+        "mode": "plain",
+        "count": 1024,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 142168.5
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 1062198.5
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 1185823.5
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 2024589.0
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 1191551.0
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 1188199.0
+      },
+      {
+        "mode": "plain",
+        "count": 4096,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 542903.0
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 4598053.5
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 5130269.5
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 7990760.5
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 5132330.5
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 5153319.0
+      },
+      {
+        "mode": "plain",
+        "count": 16384,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 2148633.5
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 184495.0
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 380584.0
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 843689.5
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 379222.0
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 379641.5
+      },
+      {
+        "mode": "mixed",
+        "count": 1024,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 143845.5
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 824971.0
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 1168851.5
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 2958867.0
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 1195602.5
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 1168258.0
+      },
+      {
+        "mode": "mixed",
+        "count": 4096,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 565916.5
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 4600742.0
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 5451346.5
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 11828938.5
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 5511762.0
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 5408601.5
+      },
+      {
+        "mode": "mixed",
+        "count": 16384,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 2219351.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 377930.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 527048.0
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 847460.5
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 524499.5
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 535918.5
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 833596.5
+      },
+      {
+        "mode": "bidi",
+        "count": 128,
+        "operation": "gap",
+        "iterations": 1000,
+        "median_ns": 633282.5
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 1715910.5
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 1692547.5
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 2984989.0
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 1735606.5
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 1727435.0
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 3858537.0
+      },
+      {
+        "mode": "bidi",
+        "count": 512,
+        "operation": "gap",
+        "iterations": 1000,
+        "median_ns": 1872432.5
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 390956.0
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 531588.5
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 860417.0
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 540283.5
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 529982.0
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 839813.0
+      },
+      {
+        "mode": "bidi-rtl",
+        "count": 128,
+        "operation": "gap",
+        "iterations": 1000,
+        "median_ns": 650708.5
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 70299.5
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 163122.5
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 219766.0
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 164658.5
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 162354.5
+      },
+      {
+        "mode": "shared",
+        "count": 256,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 39008.5
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 36459.0
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 127816.5
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 156731.5
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 130051.0
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 129596.5
+      },
+      {
+        "mode": "tcy-rl",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 52802.5
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 35271.0
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 128549.5
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 156836.5
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 129177.5
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 128304.5
+      },
+      {
+        "mode": "tcy-lr",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 50149.0
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 41627.5
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 128584.0
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 156487.0
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 130295.5
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 127955.0
+      },
+      {
+        "mode": "tcy-rtl",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 63419.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 20500.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 113218.5
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 121425.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 116152.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 113882.0
+      },
+      {
+        "mode": "first-line",
+        "count": 64,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 24376.0
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "index",
+        "iterations": 1,
+        "median_ns": 1432.0
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "short",
+        "iterations": 1000,
+        "median_ns": 10127.5
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "last",
+        "iterations": 1000,
+        "median_ns": 9988.0
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "reverse",
+        "iterations": 1000,
+        "median_ns": 9987.5
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "affinities",
+        "iterations": 1000,
+        "median_ns": 10092.5
+      },
+      {
+        "mode": "empty",
+        "count": 0,
+        "operation": "full",
+        "iterations": 16,
+        "median_ns": 1676.5
+      }
+    ]
+  },
+  "isolated_last_timing": {
+    "isolated-last-0-before": 8082709.5,
+    "isolated-last-1-after": 197241.5,
+    "isolated-last-2-after": 204225.5,
+    "isolated-last-3-before": 8073559.5
+  },
+  "limitations": [
+    "No source/glyph/shaping/limits change; only candidate enumeration changes, original visual sort/merge retained.",
+    "Per-line header adds24 requested bytes on this host; mixed source order adds16bytes per segment and one allocation, also affecting paint/accessibility construction paths. RSS not measured.",
+    "All78 measured query allocation scopes unchanged; this is scan/time optimization, not allocation reduction.",
+    "Fixed1000 queries show specific scaling, not measured O(N²). Ordered range search has two binary searches plus candidates; general balanced interval traversal can visit many nodes for overlapping/wide intervals, no universal speed bound promised.",
+    "Normal ABBA after all local builds/collector, CPU10; host/input/scope observations. Capture/quick timings concurrent with validation builds are not causal speed evidence.",
+    "Dedicated source/glyph digest and exact rectangle bits verify outputs; no complete DOM offset-map serialization. Existing real-font source/first-line/transform regressions and exhaustive legacy selection endpoint/affinity oracle confirm correspondence.",
+    "Initial capture recorded base+tracked diff+new-source files, committed65cf3e1. Final capture records65cf3e1+tracked refinement diff with frozen final hash, committed872d52f. Initial ~69% mixed full-query regression and all samples/validation remain separately identified."
+  ],
+  "raw_archive_sha256": "69f5de6274788d16f1d4ace86bd3e3abdb7b3b82efeb2be229b96a348f0a29dd",
+  "adoption_observation": "plain N16384: short1000query 5.312→0.181ms、index構築 4.598→4.768ms（+3.7%）、full16query 2.148→2.100ms（-2.3%）。 mixed N16384: short1000query 5.386→0.210ms、index構築 4.617→5.369ms（+16.3%）、full16query 2.217→2.117ms（-4.5%）。 短いqueryを同じindexで繰り返す費用削減として採用する。構築時間/保持増は実費であり、queryごとにindexを再構築するcallerに同じ速度比は適用しない。"
+}

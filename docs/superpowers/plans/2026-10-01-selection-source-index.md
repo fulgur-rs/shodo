@@ -47,9 +47,9 @@ Base ab33dfa758becbdecd61e74796f3bb9252fbefb5, baseline sbp6-ruby-cursors-final 
 **Interfaces — Consumes:** adopted Task2 frozen source and original immutable Task1 baseline.
 **Interfaces — Produces:** source-frozen equivalent matrix and auditable memory/time evidence, one final whole-branch review and latest-head CI integration.
 
-- [ ] Run workspace/no-default/complex-only/fmt/all-target Clippy/docs denied warnings/new-directory fixed snapshots, inspect source/affinity/atomic/tab/TCY regressions.
-- [ ] Collect frozen all54 against sbp6-ruby-cursors-final; verify source fingerprint and warm/memory each7 digests.
-- [ ] After all local builds/collector stop, run normal balanced A/B for index construction and short/full queries; retain every sample and investigate material anomalies. Verify all probe signatures/warnings and scoped repeats.
-- [ ] Package scopes, retained metadata, fixed1000 query scale, adoption/tradeoffs/limitations, all raw samples/config/lock/source/binary hashes/RED-GREEN/logs/ledger; verify facts and commit.
+- [x] Run workspace/no-default/complex-only/fmt/all-target Clippy/docs denied warnings/new-directory fixed snapshots, inspect source/affinity/atomic/tab/TCY regressions.
+- [x] Collect frozen all54 against sbp6-ruby-cursors-final; verify source fingerprint and warm/memory each7 digests.
+- [x] After all local builds/collector stop, run normal balanced A/B for index construction and short/full queries; retain every sample and investigate material anomalies. Verify all probe signatures/warnings and scoped repeats.
+- [x] Package scopes, retained metadata, fixed1000 query scale, adoption/tradeoffs/limitations, all raw samples/config/lock/source/binary hashes/RED-GREEN/logs/ledger; verify facts and commit.
 
 One fresh read-only Astra whole-branch review after all tasks, one fix pass for Critical/Important then exact frozen verification. PR/all latest-head CI/merge matching verified head, close issue, copy native artifacts and remove only owned tree/branch. Continue next child.
