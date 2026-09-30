@@ -123,11 +123,11 @@ pub fn run() -> Result<(), String> {
                         &AtomicSizes::EMPTY,
                     )
                 });
-                // This standalone index is a control; never include it in the caller's total.
-                let (index, index_control) = measured(|| LineLayout::new(&lines));
-                let (_, index_release) = measured(|| drop(index));
                 let (output, projection) = measured(|| prepared.output(lines));
                 let output = output?;
+                // This standalone index is a control; never include it in the caller's total.
+                let (index, index_control) = measured(|| LineLayout::new(&output.lines));
+                let (_, index_release) = measured(|| drop(index));
                 let payload = json!({"output":snapshot::output(&output),"paragraph_warnings":format!("{:?}",prepared.paragraph.warnings()),"layout_warnings":format!("{:?}",context.take_warnings())});
                 if let Some(previous) = &signature {
                     if previous != &payload {

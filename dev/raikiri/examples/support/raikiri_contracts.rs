@@ -643,16 +643,51 @@ pub fn prepare(
     })
 }
 
+// A private optimization of this caller, with a checked fallback for arbitrary mappings.
+fn mapping_is_ordered(units: &[shodo::mapping::MappingUnit]) -> bool {
+    units.windows(2).all(|pair| {
+        pair[0].text.start <= pair[1].text.start && pair[0].text.end <= pair[1].text.end
+    })
+}
+fn accepted_mapping_units(
+    units: &[shodo::mapping::MappingUnit],
+    accepted: Range<usize>,
+    ordered: bool,
+) -> &[shodo::mapping::MappingUnit] {
+    if accepted.is_empty() {
+        return &units[..0];
+    }
+    if !ordered {
+        return units;
+    }
+    let first = units.partition_point(|unit| unit.text.end <= accepted.start as u32);
+    let end = units.partition_point(|unit| unit.text.start < accepted.end as u32);
+    &units[first..end]
+}
+
 fn output(lines: Vec<Line>, sources: &HashMap<NodeId, Option<Link>>) -> Result<Output, String> {
-    let index = LineLayout::new(&lines);
+    let mut index = None;
     let mut links = Vec::new();
+    let mut checked_mapping = None;
     for (line_id, line) in lines.iter().enumerate() {
         let accepted = line.text_range();
-        for unit in line
+        let mapping = line
             .offset_mapping()
-            .ok_or("missing accepted-line mapping")?
-            .units()
-        {
+            .ok_or("missing accepted-line mapping")?;
+        if checked_mapping.is_none_or(|(last, _)| !std::ptr::eq(last, mapping)) {
+            // Preserve the original error contract even for unaccepted/collapsed sources.
+            for unit in mapping.units() {
+                if !sources.contains_key(&unit.node) {
+                    return Err("mapping source lost its DOM identity".into());
+                }
+            }
+            checked_mapping = Some((mapping, mapping_is_ordered(mapping.units())));
+        }
+        for unit in accepted_mapping_units(
+            mapping.units(),
+            accepted.clone(),
+            checked_mapping.unwrap().1,
+        ) {
             let Some(link) = sources
                 .get(&unit.node)
                 .ok_or("mapping source lost its DOM identity")?
@@ -672,6 +707,7 @@ fn output(lines: Vec<Line>, sources: &HashMap<NodeId, Option<Link>>) -> Result<O
             } else {
                 unit.dom.clone()
             };
+            let index = index.get_or_insert_with(|| LineLayout::new(&lines));
             for rect in index.selection_rects(
                 TextPosition {
                     line: line_id,
@@ -703,4 +739,56 @@ fn output(lines: Vec<Line>, sources: &HashMap<NodeId, Option<Link>>) -> Result<O
 
 pub fn paint(output: &Output) -> Result<(tiny_skia::Pixmap, usize), glyph_paint::PaintError> {
     glyph_paint::try_paint_styled_on_canvas(&output.lines, 512, 256)
+}
+#[cfg(test)]
+mod mapping_window_tests {
+    use super::*;
+    use shodo::mapping::MappingUnit;
+    fn unit(node: u64, range: Range<u32>) -> MappingUnit {
+        MappingUnit {
+            kind: MappingKind::Expanded,
+            node: NodeId(node),
+            dom: 0..1,
+            text: range,
+        }
+    }
+    #[test]
+    fn overlapping_expansions_collapsed_points_and_touching_boundaries_keep_original_order() {
+        let mut units = vec![
+            unit(1, 0..2),
+            unit(2, 2..4),
+            unit(3, 2..4),
+            unit(4, 4..4),
+            unit(5, 4..8),
+            unit(6, 8..10),
+        ];
+        units[3].kind = MappingKind::Collapsed;
+        assert!(mapping_is_ordered(&units));
+        assert_eq!(
+            accepted_mapping_units(&units, 3..5, true)
+                .iter()
+                .map(|u| u.node.0)
+                .collect::<Vec<_>>(),
+            [2, 3, 4, 5]
+        );
+        assert_eq!(
+            accepted_mapping_units(&units, 4..8, true)
+                .iter()
+                .map(|u| u.node.0)
+                .collect::<Vec<_>>(),
+            [5]
+        );
+        assert!(accepted_mapping_units(&units, 4..4, true).is_empty());
+        assert!(accepted_mapping_units(&units, 10..12, true).is_empty());
+    }
+    #[test]
+    fn disordered_ranges_fall_back_without_dropping_source_records() {
+        for units in [
+            vec![unit(1, 5..8), unit(2, 0..4)],
+            vec![unit(1, 0..8), unit(2, 2..4)],
+        ] {
+            assert!(!mapping_is_ordered(&units));
+            assert_eq!(accepted_mapping_units(&units, 3..6, false), units);
+        }
+    }
 }
