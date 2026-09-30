@@ -869,6 +869,123 @@ fn unit_cache_tracks_script_language_fallback_and_generic_changes() {
     assert_eq!(fonts.resolve_ic(&generic, 16.).id, Some(zh));
 }
 
+fn shaper_test_advance(data: &peniko::FontData, shared: &harfrust::ShaperData) -> i32 {
+    let font = harfrust::FontRef::from_index(data.data.as_ref(), data.index).unwrap();
+    let shaper = shared.shaper(&font).build();
+    let mut buffer = harfrust::UnicodeBuffer::new();
+    buffer.push_str("a");
+    buffer.set_script(harfrust::script::LATIN);
+    buffer.set_direction(harfrust::Direction::LeftToRight);
+    let shaped = shaper.shape(buffer, harfrust::ShapeOptions::default());
+    assert_eq!(shaped.glyph_infos().len(), 1);
+    assert_eq!(shaped.glyph_infos()[0].glyph_id, 1);
+    assert_eq!(shaped.glyph_infos()[0].cluster, 0);
+    shaped.glyph_positions()[0].x_advance
+}
+
+#[test]
+fn recent_shaper_hit_inspects_one_actual_entry() {
+    let fonts = no_system();
+    let mut ids = Vec::new();
+    for n in 0..32 {
+        let id = fonts
+            .register(test_font(&format!("Recent{n}"), &['a'], 500 + n))
+            .unwrap();
+        fonts.shaper_data(id).unwrap();
+        ids.push(id);
+    }
+    let id = ids[31];
+    let data = fonts.font_data(id).unwrap();
+    let last = fonts.shaper_data(id).unwrap();
+    assert_eq!(fonts.state().shapers.len(), 32);
+    SHAPER_SEARCH_COMPARISONS.with(|count| count.set(0));
+    let hit = fonts.shaper_data(id).unwrap();
+    let inspected = SHAPER_SEARCH_COMPARISONS.with(|count| count.get());
+    assert!(Arc::ptr_eq(&last, &hit));
+    assert_eq!(shaper_test_advance(&data, &hit), 531);
+    assert_eq!(
+        inspected, 1,
+        "an MRU hit must inspect one actual shaper entry"
+    );
+}
+
+#[test]
+fn shaper_hit_promotes_lru_and_retained_handles_survive_layer_drop() {
+    let fonts = FontCollection::with_options(
+        &Limits {
+            max_shaper_cache_entries: Some(2),
+            ..Default::default()
+        },
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    let a = fonts.register(test_font("A", &['a'], 500)).unwrap();
+    let b = fonts.register(test_font("B", &['a'], 600)).unwrap();
+    let c = fonts.register(test_font("C", &['a'], 700)).unwrap();
+    let d = fonts.register(test_font("D", &['a'], 800)).unwrap();
+    let data = fonts.font_data(a).unwrap();
+    let first = fonts.shaper_data(a).unwrap();
+    let victim = Arc::downgrade(&fonts.shaper_data(b).unwrap());
+    assert!(victim.upgrade().is_some());
+    assert!(Arc::ptr_eq(&first, &fonts.shaper_data(a).unwrap()));
+    fonts.shaper_data(c).unwrap();
+    assert!(victim.upgrade().is_none());
+    assert_eq!(
+        fonts
+            .state()
+            .shapers
+            .iter()
+            .map(|(index, _)| *index)
+            .collect::<Vec<_>>(),
+        [a.index(), c.index()]
+    );
+    fonts.shaper_data(d).unwrap();
+    assert_eq!(Arc::strong_count(&first), 1);
+    assert_eq!(shaper_test_advance(&data, &first), 500);
+    drop(fonts);
+    assert_eq!(shaper_test_advance(&data, &first), 500);
+}
+
+#[test]
+fn shaper_cache_qualifies_shared_and_document_indices_and_zero_retention() {
+    let shared = no_system();
+    let shared_id = shared.register(test_font("Shared", &['a'], 500)).unwrap();
+    let original = shared.shaper_data(shared_id).unwrap();
+    let doc = FontCollection::for_document(&shared, &Limits::default());
+    doc.register(test_font("Unused", &['a'], 700)).unwrap();
+    let own = doc.register(test_font("Own", &['a'], 900)).unwrap();
+    assert_eq!(shared_id.index(), own.index());
+    assert!(Arc::ptr_eq(&original, &doc.shaper_data(shared_id).unwrap()));
+    let own_handle = doc.shaper_data(own).unwrap();
+    assert!(!Arc::ptr_eq(&original, &own_handle));
+    assert_eq!(
+        shaper_test_advance(&doc.font_data(own).unwrap(), &own_handle),
+        900
+    );
+    assert_eq!(
+        shaper_test_advance(&doc.font_data(shared_id).unwrap(), &original),
+        500
+    );
+    let zero = FontCollection::with_options(
+        &Limits {
+            max_shaper_cache_entries: Some(0),
+            ..Default::default()
+        },
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    let id = zero.register(test_font("Zero", &['a'], 550)).unwrap();
+    let a = zero.shaper_data(id).unwrap();
+    let b = zero.shaper_data(id).unwrap();
+    assert!(!Arc::ptr_eq(&a, &b));
+    assert!(zero.state().shapers.is_empty());
+    assert_eq!(shaper_test_advance(&zero.font_data(id).unwrap(), &a), 550);
+}
+
 #[test]
 fn shaper_cache_is_shared_bounded_and_zero_capacity_still_returns_data() {
     let limits = Limits {

@@ -67,6 +67,9 @@ std::thread_local! {
     pub(crate) static FONT_DATA_ACQUISITIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+#[cfg(test)]
+std::thread_local! { pub(crate) static SHAPER_SEARCH_COMPARISONS:std::cell::Cell<usize>=const {std::cell::Cell::new(0)}; }
+
 static NEXT_LAYER_ID: AtomicU32 = AtomicU32::new(0);
 
 fn allocate_layer_id(counter: &AtomicU32) -> Option<u32> {
@@ -438,11 +441,11 @@ impl FontCollection {
             return self.layer.parent.as_ref()?.shaper_data(id);
         }
         let mut state = self.state();
-        if let Some(index) = state
-            .shapers
-            .iter()
-            .position(|(index, _)| *index == id.index)
-        {
+        if let Some(index) = state.shapers.iter().rposition(|(index, _)| {
+            #[cfg(test)]
+            SHAPER_SEARCH_COMPARISONS.with(|count| count.set(count.get() + 1));
+            *index == id.index
+        }) {
             let entry = state.shapers.remove(index)?;
             let result = entry.1.clone();
             state.shapers.push_back(entry);
