@@ -39,12 +39,13 @@ pub(super) fn scan(
     let mut graphemes_seen = 0usize;
     let mut counted_through = units[start].text.start;
     let max_graphemes = max_graphemes.map(|limit| limit.max(1));
+    let count_mode = max_graphemes.is_some();
     let reason = loop {
         let Some(unit) = units.get(i) else {
             break BreakReason::End;
         };
         match unit.kind {
-            UnitKind::ForcedBreak => {
+            UnitKind::ForcedBreak if !count_mode => {
                 widths.push(LayoutUnit::ZERO);
                 i += 1;
                 break BreakReason::Forced;
@@ -62,7 +63,7 @@ pub(super) fn scan(
                         .partition_point(|cut| *cut <= unit.text.end)
                         .saturating_sub(data.breaks.graphemes.partition_point(|cut| *cut <= from))
                 }
-                UnitKind::Atomic { .. } | UnitKind::Tab => {
+                UnitKind::Atomic { .. } | UnitKind::Tab | UnitKind::ForcedBreak => {
                     counted_through = counted_through.max(unit.text.end);
                     1
                 }
@@ -77,18 +78,6 @@ pub(super) fn scan(
         let character_cut = max_graphemes.is_some()
             && graphemes_seen > 0
             && i + 1 < units.len()
-            && !(i + 1..units.len())
-                .find(|next| {
-                    !matches!(
-                        units[*next].kind,
-                        UnitKind::Open { .. }
-                            | UnitKind::Close { .. }
-                            | UnitKind::BidiControl
-                            | UnitKind::Float { .. }
-                            | UnitKind::Absolute { .. }
-                    )
-                })
-                .is_some_and(|next| matches!(units[next].kind, UnitKind::ForcedBreak))
             && data.breaks.caret_cuts.binary_search(&cut).is_ok()
             && normal_cursors.is_none_or(|cursors| cursors.get(i + 1).is_some_and(Option::is_some))
             && data
@@ -142,10 +131,13 @@ pub(super) fn scan(
         // under-count a window that turns out unshapeable within budget
         // (the edge falls back to wider un-sliced glyphs), so those always
         // get the real measurement.
-        let need_edge = unit.break_after != BreakClass::Prohibited
-            || unit.shared_cluster.is_some()
-            || character_cut
-            || (!hangs && !overflowing && shared_extent > available);
+        let need_edge = if count_mode {
+            limited_cut
+        } else {
+            unit.break_after != BreakClass::Prohibited
+                || unit.shared_cluster.is_some()
+                || (!hangs && !overflowing && shared_extent > available)
+        };
         let (edge_delta, viable) = if need_edge {
             super::windows::candidate(data, start, i + 1, cx, sat)
         } else {
@@ -154,7 +146,7 @@ pub(super) fn scan(
         let extent = shared_extent.add(edge_delta, sat);
         // Edge adjustments only ever remove width (see `EdgeAdjustment`), so a
         // candidate that already fits cannot start to overflow.
-        let extent = if !hangs && !overflowing && extent > available {
+        let extent = if !count_mode && !hangs && !overflowing && extent > available {
             let adjustment = super::punctuation::edges(
                 data,
                 spacing.summary(Some(data)),
@@ -169,7 +161,7 @@ pub(super) fn scan(
         } else {
             extent
         };
-        if !hangs && !overflowing && extent > available {
+        if !count_mode && !hangs && !overflowing && extent > available {
             if let Some((b, edge)) = last_break.take() {
                 taken_hyphen = edge.then_some(b);
                 widths.truncate(b - start);
@@ -204,6 +196,13 @@ pub(super) fn scan(
         if hanging == LayoutUnit::ZERO {
             kept_spacing = tracking;
         }
+        i += 1;
+        if count_mode {
+            if limited_cut && viable {
+                break BreakReason::Regular;
+            }
+            continue;
+        }
         let required = pos
             .add(kept_spacing, sat)
             .add(edge_delta, sat)
@@ -212,11 +211,7 @@ pub(super) fn scan(
             .add(suffix, sat);
         // Only break candidates compare `required` against the width, so the
         // edge adjustment is computed for those alone.
-        let last = super::punctuation::last_edge(data, i + 1);
-        i += 1;
-        if character_cut && viable && overflowing && unit.break_after != BreakClass::Mandatory {
-            break BreakReason::Regular;
-        }
+        let last = super::punctuation::last_edge(data, i);
         match unit.break_after {
             BreakClass::Mandatory => break BreakReason::Forced,
             BreakClass::Allowed if viable => {
@@ -275,19 +270,6 @@ pub(super) fn scan(
                 }
             }
             _ => {}
-        }
-        if character_cut && viable {
-            if unit.break_after != BreakClass::Allowed
-                && required.sub(
-                    removed(data, &mut spacing, flags, last, options, required, sat),
-                    sat,
-                ) <= available
-            {
-                last_break = Some((i, false));
-            }
-            if limited_cut {
-                break BreakReason::Regular;
-            }
         }
     };
     // Inline box ends right after a soft break stay on the line that ends

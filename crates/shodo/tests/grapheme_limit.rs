@@ -54,7 +54,7 @@ fn grapheme_limit_yields_contiguous_lines_and_progresses_from_zero() {
 }
 
 #[test]
-fn width_can_break_before_the_character_cap() {
+fn character_cap_ignores_the_width() {
     let p = paragraph("abcdef");
     let lines = p.break_all_with_grapheme_limit(
         &mut LayoutContext::new(),
@@ -68,9 +68,38 @@ fn width_can_break_before_the_character_cap() {
             .iter()
             .map(|line| line.text_range())
             .collect::<Vec<_>>(),
-        vec![0..2, 2..4, 4..6]
+        vec![0..3, 3..6]
     );
-    assert!(lines.iter().all(|line| line.inline_size() <= 25.0));
+    assert!(lines.iter().any(|line| line.inline_size() > 25.0));
+}
+
+#[test]
+fn character_limit_ignores_width_and_normal_break_opportunities() {
+    let p = paragraph("ab cd");
+    let lines = p.break_all_with_grapheme_limit(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        1.0,
+        4,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(
+        lines
+            .iter()
+            .map(|line| line.text_range())
+            .collect::<Vec<_>>(),
+        vec![0..4, 4..5]
+    );
+}
+
+#[test]
+fn preserved_newline_counts_without_forcing_a_line() {
+    let mut s = style();
+    s.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
+    let p = build(&s, |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "a\nbc");
+    });
+    assert_eq!(ranges(&p, 3), vec![0..3, 3..4]);
 }
 
 #[test]
@@ -178,7 +207,7 @@ fn first_line_transform_maps_cut_back_to_normal_text() {
 }
 
 #[test]
-fn atomic_and_forced_break_respect_count_and_progress() {
+fn atomic_and_forced_break_each_count_one_and_progress() {
     let mut s = style();
     s.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
     let p = build(&s, |b| {
@@ -203,7 +232,7 @@ fn atomic_and_forced_break_respect_count_and_progress() {
         1,
         &sizes,
     );
-    assert_eq!(lines.len(), 4);
+    assert_eq!(lines.len(), 5);
     assert!(
         lines
             .iter()
@@ -212,13 +241,13 @@ fn atomic_and_forced_break_respect_count_and_progress() {
 }
 
 #[test]
-fn forced_break_after_exact_limit_stays_on_the_same_line() {
+fn forced_break_counts_without_ending_the_line() {
     let mut s = style();
     s.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
     let p = build(&s, |b| {
         b.push_text(TextSource::Generated { node: NodeId(1) }, "a\nb");
     });
-    assert_eq!(ranges(&p, 1), vec![0..2, 2..3]);
+    assert_eq!(ranges(&p, 1), vec![0..1, 1..2, 2..3]);
 
     let p = build(&s, |b| {
         b.open_inline(NodeId(2), &s.root, InlineEdges::default())
@@ -236,7 +265,7 @@ fn forced_break_after_exact_limit_stays_on_the_same_line() {
             &AtomicSizes::EMPTY,
         )
         .len(),
-        2
+        3
     );
 
     let p = build(&s, |b| {
@@ -246,7 +275,7 @@ fn forced_break_after_exact_limit_stays_on_the_same_line() {
             .close_inline()
             .push_text(TextSource::Generated { node: NodeId(4) }, "b");
     });
-    assert_eq!(ranges(&p, 1), vec![0..2, 2..3]);
+    assert_eq!(ranges(&p, 1), vec![0..1, 1..2, 2..3]);
 }
 
 #[test]

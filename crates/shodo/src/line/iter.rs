@@ -14,10 +14,12 @@ impl Paragraph {
         self.break_all_with_optional_grapheme_limit(cx, options, width, None, atomics)
     }
 
-    /// Greedy layout with both an inline-size limit and a per-line processed
-    /// Unicode grapheme limit. A zero limit accepts one indivisible unit to
-    /// guarantee progress. Floats are treated as zero-width anchors, as in
-    /// [`Self::break_all`]. For caller-managed floats and height constraints,
+    /// Layout by a per-line processed Unicode grapheme count. Normal line
+    /// break opportunities, forced breaks, and `width` do not end a line;
+    /// a newline and an atomic inline each count as one. A zero limit accepts
+    /// one indivisible unit to guarantee progress. `width` still sets the
+    /// line box for alignment. Floats are treated as zero-width anchors, as
+    /// in [`Self::break_all`]. For caller-managed floats and height limits,
     /// set [`LineConstraint::max_graphemes`] and use [`Self::next_line`].
     pub fn break_all_with_grapheme_limit(
         &self,

@@ -419,10 +419,11 @@ pub struct LineConstraint<'a> {
     /// Block position of the line within the container; copied to the line.
     pub block_offset: f32,
     pub max_block_size: Option<f32>,
-    /// Maximum processed Unicode grapheme clusters on this line. A value of
-    /// zero still accepts one indivisible unit so a continuation can progress.
-    /// Atomic inlines and preserved tabs count as one each. `None` has no
-    /// character limit. A shaping or transform group may exceed the limit.
+    /// Processed Unicode grapheme clusters per line. When set, normal line
+    /// break opportunities, forced breaks, and available width do not end
+    /// the line. Atomic inlines, preserved tabs, and newlines count as one
+    /// each. Zero still accepts one indivisible unit so layout progresses.
+    /// A shaping or transform group may exceed the limit.
     pub max_graphemes: Option<usize>,
     pub floats_placed_through: Option<FloatCursor>,
     pub break_plan: Option<&'a BreakPlan>,
