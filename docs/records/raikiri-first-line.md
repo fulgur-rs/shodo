@@ -76,4 +76,13 @@ upstream 全体 gate の ignored flex-float WPT 1件は8,944 pixelsの画像不�
 同じ WPT checkout で変更前 `24c1abf0` にも完全に同じ不一致を再現したため、
 既存失敗として記録する。全体 gate の成功は主張しない。
 Rust 1.96 での Unicode 分類テストの既存不一致を避け、upstream の指定通り
-1.91.0 を使った。shodo の最終 CI 相当結果は確定後に追記する。
+1.91.0 を使った。
+
+shodo は stable と Rust 1.89.0 の通常/accesskit workspace tests、通常/accesskit
+clippy、release cache、accessibility/emoji/ruby 実行、描画 snapshot、allocation、
+指定 benchmark、no-default/complex-scripts、doc、Python（69件、3 skip）、
+fixture 再生成、wasm 3構成、公開 package 内容検査が通過した。
+[実行コマンドと結果](../../dev/raikiri/data/first-line-checks.json) を保存した。
+両ブランチは draft PR として提出済み：
+[raikiri #463](https://github.com/fulgur-rs/raikiri/pull/463)、
+[shodo #104](https://github.com/fulgur-rs/shodo/pull/104)。

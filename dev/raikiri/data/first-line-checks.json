@@ -1,0 +1,428 @@
+{
+  "source_head": "fd5107a41ccfa7b47e22ea01281936dbf846d804",
+  "rustflags": "-D warnings",
+  "rustdocflags": "-D warnings",
+  "bench_case": "latin-short",
+  "checks": [
+    {
+      "name": "fmt",
+      "argv": [
+        "cargo",
+        "+stable",
+        "fmt",
+        "--all",
+        "--check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "clippy",
+      "argv": [
+        "cargo",
+        "+stable",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "clippy-accesskit",
+      "argv": [
+        "cargo",
+        "+stable",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--features",
+        "shodo-harness/accesskit",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "tests",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "--workspace"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "tests-accesskit",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "--workspace",
+        "--features",
+        "shodo-harness/accesskit"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "cache-release",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "--release",
+        "-p",
+        "shodo",
+        "--lib",
+        "line::cache::tests"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "accessibility",
+      "argv": [
+        "cargo",
+        "+stable",
+        "run",
+        "--locked",
+        "-p",
+        "shodo-harness",
+        "--features",
+        "accesskit,shodo/complex-scripts",
+        "--example",
+        "accessibility"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "emoji",
+      "argv": [
+        "cargo",
+        "+stable",
+        "run",
+        "--locked",
+        "-p",
+        "shodo-harness",
+        "--example",
+        "emoji_png",
+        "--",
+        "target/emoji-7ff.png"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "ruby",
+      "argv": [
+        "cargo",
+        "+stable",
+        "run",
+        "--locked",
+        "-p",
+        "shodo-harness",
+        "--example",
+        "ruby_png",
+        "--",
+        "target/ruby-7ff"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "snapshots",
+      "argv": [
+        "cargo",
+        "+stable",
+        "run",
+        "--locked",
+        "-p",
+        "shodo-harness",
+        "--example",
+        "snapshots",
+        "--",
+        "--output",
+        "target/snapshot-report-7ff"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "allocation",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "-p",
+        "shodo-bench",
+        "--features",
+        "allocation-counting",
+        "--test",
+        "allocator",
+        "--test",
+        "probe"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "bench",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "-p",
+        "shodo-bench",
+        "--bench",
+        "layout"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "no-default",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "-p",
+        "shodo",
+        "--no-default-features"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "complex-scripts",
+      "argv": [
+        "cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "-p",
+        "shodo",
+        "--no-default-features",
+        "--features",
+        "complex-scripts"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "doc",
+      "argv": [
+        "cargo",
+        "+stable",
+        "doc",
+        "--locked",
+        "--workspace",
+        "--no-deps"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "doc-accesskit",
+      "argv": [
+        "cargo",
+        "+stable",
+        "doc",
+        "--locked",
+        "--workspace",
+        "--no-deps",
+        "--features",
+        "shodo-harness/accesskit"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "python",
+      "argv": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-v"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "fixtures",
+      "argv": [
+        "python3",
+        "tools/fixtures/regenerate.py",
+        "--check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "msrv",
+      "argv": [
+        "cargo",
+        "+1.89.0",
+        "test",
+        "--locked",
+        "--workspace"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "msrv-accesskit",
+      "argv": [
+        "cargo",
+        "+1.89.0",
+        "test",
+        "--locked",
+        "--workspace",
+        "--features",
+        "shodo-harness/accesskit"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "wasm",
+      "argv": [
+        "cargo",
+        "+stable",
+        "build",
+        "--locked",
+        "-p",
+        "shodo",
+        "--target",
+        "wasm32-unknown-unknown"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "wasm-no-default",
+      "argv": [
+        "cargo",
+        "+stable",
+        "build",
+        "--locked",
+        "-p",
+        "shodo",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--no-default-features"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "wasm-accesskit",
+      "argv": [
+        "cargo",
+        "+stable",
+        "build",
+        "--locked",
+        "-p",
+        "shodo",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--no-default-features",
+        "--features",
+        "accesskit"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "final-fmt",
+      "argv": [
+        "cargo",
+        "+stable",
+        "fmt",
+        "--all",
+        "--check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "final-caller-clippy",
+      "argv": [
+        "cargo",
+        "+stable",
+        "clippy",
+        "--locked",
+        "-p",
+        "shodo-raikiri",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "msrv-accessibility",
+      "argv": [
+        "cargo",
+        "+1.89.0",
+        "run",
+        "--locked",
+        "-p",
+        "shodo-harness",
+        "--features",
+        "accesskit,shodo/complex-scripts",
+        "--example",
+        "accessibility"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "msrv-emoji",
+      "argv": [
+        "cargo",
+        "+1.89.0",
+        "run",
+        "--locked",
+        "-p",
+        "shodo-harness",
+        "--example",
+        "emoji_png",
+        "--",
+        "target/msrv-emoji-7ff.png"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "msrv-ruby",
+      "argv": [
+        "cargo",
+        "+1.89.0",
+        "run",
+        "--locked",
+        "-p",
+        "shodo-harness",
+        "--example",
+        "ruby_png",
+        "--",
+        "target/msrv-ruby-7ff"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "msrv-snapshots",
+      "argv": [
+        "cargo",
+        "+1.89.0",
+        "run",
+        "--locked",
+        "-p",
+        "shodo-harness",
+        "--example",
+        "snapshots",
+        "--",
+        "--output",
+        "target/msrv-snapshot-report-7ff"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "package_content_gate": "passed:146 allowed paths",
+  "python": "69 tests, 3 skipped",
+  "upstream_gate": "ordinary checks and patch coverage passed; ignored flex-float WPT existing8944pixels failure reproduced on24c1abf0"
+}
