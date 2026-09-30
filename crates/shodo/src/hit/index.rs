@@ -197,7 +197,7 @@ impl LineIndex {
                         result.add(
                             number,
                             unit.text.clone(),
-                            vec![unit.text.start, unit.text.end],
+                            &[unit.text.start, unit.text.end],
                             if reversed { to } else { from },
                             if reversed { from } else { to },
                             rect,
@@ -256,7 +256,7 @@ impl LineIndex {
             result.add(
                 number,
                 unit.text.clone(),
-                vec![unit.text.start, unit.text.end],
+                &[unit.text.start, unit.text.end],
                 rect.inline_start,
                 rect.inline_start + rect.inline_size,
                 rect,
@@ -450,18 +450,18 @@ impl LineIndex {
         );
         result
     }
-    fn cuts(&self, line: &Line, text: &Range<u32>) -> Vec<u32> {
+    fn cuts<'a>(&self, line: &'a Line, text: &Range<u32>) -> &'a [u32] {
         let all = &line.data.breaks.caret_cuts;
         let start = all.partition_point(|c| *c < text.start);
         let end = all.partition_point(|c| *c <= text.end);
-        all[start..end].to_vec()
+        &all[start..end]
     }
     #[allow(clippy::too_many_arguments)]
     fn add(
         &mut self,
         line: usize,
         text: Range<u32>,
-        cuts: Vec<u32>,
+        cuts: &[u32],
         from: f32,
         to: f32,
         rect: LogicalRect,
@@ -474,7 +474,7 @@ impl LineIndex {
         }
         let n = cuts.len() - 1;
         let mut previous = None;
-        for (i, offset) in cuts.into_iter().enumerate() {
+        for (i, offset) in cuts.iter().copied().enumerate() {
             let ratio = if i == 0 {
                 0.0
             } else if i == n {
@@ -791,6 +791,35 @@ mod tests {
         assert_eq!(lines.len(), count, "one real TCY box must fit per line");
         assert!(lines.iter().all(|line| line.text_combinations().len() == 1));
         lines
+    }
+    #[test]
+    fn cuts_borrow_finalized_line_data() {
+        use crate::geometry::{Direction, WritingMode};
+        for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+            for direction in [Direction::Ltr, Direction::Rtl] {
+                let lines = tcy_lines(3, mode, direction);
+                let line = &lines[1];
+                let index = LineIndex::new(1, line);
+                let all = &line.data.breaks.caret_cuts;
+                let original = (all.as_ptr(), all.len());
+                for (text, expected) in [
+                    (2..4, vec![2, 3, 4]),
+                    (3..4, vec![3, 4]),
+                    (3..3, vec![3]),
+                    (u32::MAX..u32::MAX, vec![]),
+                ] {
+                    let cuts = index.cuts(line, &text);
+                    assert_eq!(cuts, expected);
+                    let begin = all.partition_point(|c| *c < text.start);
+                    assert_eq!(
+                        cuts.as_ptr(),
+                        all[begin..].as_ptr(),
+                        "selected caret cuts must borrow finalized line data"
+                    );
+                }
+                assert_eq!((all.as_ptr(), all.len()), original);
+            }
+        }
     }
     #[test]
     fn tcy_hit_index_work_tracks_line_spans_instead_of_paragraph_spans() {
