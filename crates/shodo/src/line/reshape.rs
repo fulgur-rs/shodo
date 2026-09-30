@@ -25,19 +25,10 @@ pub(crate) fn initialize_slices(
     let original = std::mem::take(&mut data.units);
     let mut units = Vec::with_capacity(original.len());
     let mut markers = Vec::new();
-    // Neighbor text is only needed to detect storage splits; record it so the
-    // main pass can consume `original` without cloning every cluster.
-    let mut storage_split = Vec::with_capacity(original.len());
     for (i, unit) in original.iter().enumerate() {
         if !matches!(unit.kind, UnitKind::Cluster { .. }) {
             markers.push((i, unit.clone()));
         }
-        storage_split.push(
-            i > 0 && original[i - 1].text == unit.text
-                || original
-                    .get(i + 1)
-                    .is_some_and(|next| next.text == unit.text),
-        );
     }
     let mut offsets: Vec<_> = markers.iter().map(|(_, u)| u.text.start).collect();
     if data.style.first_line.is_some() {
@@ -48,31 +39,54 @@ pub(crate) fn initialize_slices(
         offsets.sort_unstable();
     }
     offsets.dedup();
-    for (i, unit) in original.into_iter().enumerate() {
+    let opportunities = &data.breaks.opportunities;
+    let mut opportunity_cursor = 0;
+    let mut previous_cluster_end = 0;
+    let mut previous_text = None;
+    let mut original = original.into_iter().enumerate().peekable();
+    while let Some((i, unit)) = original.next() {
+        let storage_split = previous_text
+            .as_ref()
+            .is_some_and(|text| text == &unit.text)
+            || original
+                .peek()
+                .is_some_and(|(_, next)| next.text == unit.text);
+        previous_text = Some(unit.text.clone());
         let UnitKind::Cluster { glyphs, .. } = &unit.kind else {
             continue;
         };
-        let begin = data
-            .breaks
-            .opportunities
-            .partition_point(|o| o.offset <= unit.text.start);
-        let end = data
-            .breaks
-            .opportunities
-            .partition_point(|o| o.offset < unit.text.end);
+        // Cluster ranges normally advance in source order. Reuse the cursor
+        // rather than binary-searching the whole opportunity list twice per
+        // cluster; overlapping storage owners still use an exact lookup.
+        let begin = if unit.text.start < previous_cluster_end {
+            opportunities.partition_point(|o| o.offset <= unit.text.start)
+        } else {
+            while opportunity_cursor < opportunities.len()
+                && opportunities[opportunity_cursor].offset <= unit.text.start
+            {
+                opportunity_cursor += 1;
+            }
+            opportunity_cursor
+        };
+        let mut end = begin;
+        while end < opportunities.len() && opportunities[end].offset < unit.text.end {
+            end += 1;
+        }
+        opportunity_cursor = end;
+        previous_cluster_end = unit.text.end;
         let marker_start = offsets.partition_point(|o| *o <= unit.text.start);
         let marker_end = offsets.partition_point(|o| *o < unit.text.end);
         // Nearly every cluster has no interior boundary; keep it as is
         // without allocating a boundary list.
         if marker_start == marker_end
-            && data.breaks.opportunities[begin..end]
+            && opportunities[begin..end]
                 .iter()
                 .all(|o| o.class == BreakClass::Prohibited)
         {
             units.push((i, unit));
             continue;
         }
-        let mut boundaries: Vec<_> = data.breaks.opportunities[begin..end]
+        let mut boundaries: Vec<_> = opportunities[begin..end]
             .iter()
             .filter(|o| o.class != BreakClass::Prohibited)
             .copied()
@@ -82,7 +96,7 @@ pub(crate) fn initialize_slices(
         }
         boundaries.sort_unstable_by_key(|b| b.offset);
         boundaries.dedup_by_key(|b| b.offset);
-        if boundaries.is_empty() || storage_split[i] {
+        if boundaries.is_empty() || storage_split {
             units.push((i, unit));
             continue;
         }
