@@ -10,6 +10,9 @@ description = "raikiri integration checks for shodo: contract verification, sour
 # No [lib]; everything here is an example or integration test, so every
 # dependency below is dev-only. `dev/raikiri/probe/` is not a Cargo target
 # (see its own note) and is intentionally not reflected here.
+[features]
+allocation-counting = []
+
 [dev-dependencies]
 shodo = { path = "../../crates/shodo", default-features = false }
 shodo-fixtures = { path = "../fixtures" }
@@ -61,4 +64,8 @@ test = true
 
 [[example]]
 name = "first_line_wpt"
+test = true
+
+[[example]]
+name = "retained_caller"
 test = true
