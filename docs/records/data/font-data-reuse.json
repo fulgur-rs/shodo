@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "issue": "shodo-sbp.11",
+  "issue": "shodo-sbp.12",
   "adoption": "A reuses acquired FontData and one metric parse; B creates preliminary coordinates only for size-adjust; no new cache or public API change",
   "raw": {
     "file": "font-data-reuse-raw.json.gz",
