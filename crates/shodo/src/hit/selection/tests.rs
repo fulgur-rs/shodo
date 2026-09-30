@@ -314,3 +314,20 @@ fn bidi_partial_selection_keeps_the_visual_gap() {
     assert!(rects[0].inline_start + rects[0].inline_size < rects[1].inline_start);
     assert_eq!(layout.selection_rects(b, a), rects);
 }
+
+#[test]
+fn full_selection_does_not_traverse_the_interval_tree_before_every_candidate() {
+    let lines = lines("mixed", 16384);
+    let layout = LineLayout::new(&lines);
+    let a = pos(0, 0, Affinity::Downstream);
+    let b = pos(0, lines[0].text_range().end as u32, Affinity::Upstream);
+    let expected = linear(&layout, a, b);
+    take_work();
+    assert_eq!(layout.selection_rects(a, b), expected);
+    let work = take_work();
+    let segments = layout.index[0].segments.len();
+    assert!(
+        work <= segments + 64,
+        "full selection must avoid extra tree visits, {work} visits for {segments} candidates"
+    );
+}

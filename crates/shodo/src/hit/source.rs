@@ -68,7 +68,24 @@ impl SourceIndex {
                     emit(segment);
                 }
             }
-            Self::Tree(entries) => Self::query(entries, from, to, segments, &mut emit),
+            Self::Tree(entries) => {
+                #[cfg(test)]
+                super::selection::tests::visit();
+                if from <= segments[entries[0].segment].text.start {
+                    #[cfg(test)]
+                    super::selection::tests::visit();
+                    if to >= entries[entries.len() / 2].max_end {
+                        // Everything can be a candidate. Keep the original
+                        // predicate in the consumer (including empty endpoints)
+                        // and avoid traversing a tree before every segment.
+                        for segment in segments {
+                            emit(segment);
+                        }
+                        return;
+                    }
+                }
+                Self::query(entries, from, to, segments, &mut emit);
+            }
         }
     }
     fn query(
@@ -125,7 +142,9 @@ mod tests {
     fn selected(index: &SourceIndex, segments: &[Segment], from: u32, to: u32) -> Vec<usize> {
         let mut ids = Vec::new();
         index.for_each(from, to, segments, |s| {
-            ids.push(s.rect.inline_start as usize)
+            if s.text.start < to && s.text.end > from {
+                ids.push(s.rect.inline_start as usize)
+            }
         });
         ids.sort_unstable();
         ids
@@ -170,5 +189,8 @@ mod tests {
         assert_eq!(selected(&index, &segments, 3, 5), vec![0, 2, 3]);
         assert_eq!(selected(&index, &segments, 50, 51), vec![0]);
         assert_eq!(selected(&index, &segments, 2, 3), vec![0]);
+        let endpoints = self::segments(&[5..5, 0..10, 10..10]);
+        let index = SourceIndex::new(&endpoints);
+        assert_eq!(selected(&index, &endpoints, 0, 10), vec![0, 1]);
     }
 }
