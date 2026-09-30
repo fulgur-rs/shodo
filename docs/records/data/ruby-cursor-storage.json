@@ -1,10 +1,12 @@
 {
-  "schema": 1,
+  "schema": 2,
   "issue": "shodo-sbp.6",
   "base_commit": "b2ad3ba72b2afd7c4193f07e37b151461d4518b0",
   "implementation_commit": "a956fcd12d898c8ca1a5298dc33623c55a368201",
-  "probe_conditions": 30,
-  "probe_cases": 60,
+  "review_fix_commit": "0562e02a0a72d4a2b8195ad95533dd58d2ad05dc",
+  "source_hash": "48fa29dc9309221c0fa55b1982f3866327e3eff84c4b85036084026afef1cf35",
+  "probe_conditions": 32,
+  "probe_cases": 64,
   "matrix_cases": 54,
   "memory_repeats": 3,
   "normal_samples_per_case": 10,
@@ -1330,6 +1332,94 @@
           "net_bytes": 4690132,
           "peak_extra_bytes": 4697304
         }
+      },
+      {
+        "columns": 7,
+        "mode": "dense-64",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 455,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 2,
+          "runs": 130,
+          "sha256": "231dafd02fbca02541152964aa00f19c503669228b2c2729016ab518133891ea",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 15307,
+          "allocated_bytes": 2400675,
+          "deallocated_bytes": 1798467,
+          "net_bytes": 602208,
+          "peak_extra_bytes": 850162
+        }
+      },
+      {
+        "columns": 7,
+        "mode": "dense-64",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 455,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 2,
+          "runs": 130,
+          "sha256": "231dafd02fbca02541152964aa00f19c503669228b2c2729016ab518133891ea",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 11848,
+          "allocated_bytes": 2404877,
+          "deallocated_bytes": 1305853,
+          "net_bytes": 1099024,
+          "peak_extra_bytes": 1196076
+        }
+      },
+      {
+        "columns": 7,
+        "mode": "dense-first-64",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 455,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 2,
+          "runs": 130,
+          "sha256": "0b870e08b43d83437654c8941418d31f725c4ebb3d9ed17b214d008858da005b",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16046,
+          "allocated_bytes": 2470092,
+          "deallocated_bytes": 1847763,
+          "net_bytes": 622329,
+          "peak_extra_bytes": 861635
+        }
+      },
+      {
+        "columns": 7,
+        "mode": "dense-first-64",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 455,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 2,
+          "runs": 130,
+          "sha256": "0b870e08b43d83437654c8941418d31f725c4ebb3d9ed17b214d008858da005b",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 14784,
+          "allocated_bytes": 3488157,
+          "deallocated_bytes": 2410125,
+          "net_bytes": 1078032,
+          "peak_extra_bytes": 1175084
+        }
       }
     ],
     "after": [
@@ -2536,11 +2626,11 @@
           "synthetic_glyphs": 0
         },
         "counts": {
-          "calls": 807,
-          "allocated_bytes": 204225,
-          "deallocated_bytes": 145006,
-          "net_bytes": 59219,
-          "peak_extra_bytes": 79579
+          "calls": 808,
+          "allocated_bytes": 204745,
+          "deallocated_bytes": 145558,
+          "net_bytes": 59187,
+          "peak_extra_bytes": 79547
         }
       },
       {
@@ -2580,11 +2670,11 @@
           "synthetic_glyphs": 0
         },
         "counts": {
-          "calls": 1829,
-          "allocated_bytes": 1053633,
-          "deallocated_bytes": 712174,
-          "net_bytes": 341459,
-          "peak_extra_bytes": 426779
+          "calls": 1830,
+          "allocated_bytes": 1057737,
+          "deallocated_bytes": 716310,
+          "net_bytes": 341427,
+          "peak_extra_bytes": 426747
         }
       },
       {
@@ -2624,11 +2714,11 @@
           "synthetic_glyphs": 0
         },
         "counts": {
-          "calls": 4427,
-          "allocated_bytes": 2485395,
-          "deallocated_bytes": 1687705,
-          "net_bytes": 797690,
-          "peak_extra_bytes": 971840
+          "calls": 4428,
+          "allocated_bytes": 2501811,
+          "deallocated_bytes": 1704249,
+          "net_bytes": 797562,
+          "peak_extra_bytes": 971792
         }
       },
       {
@@ -2652,209 +2742,203 @@
           "net_bytes": 4690132,
           "peak_extra_bytes": 4697304
         }
+      },
+      {
+        "columns": 7,
+        "mode": "dense-64",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 455,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 2,
+          "runs": 130,
+          "sha256": "231dafd02fbca02541152964aa00f19c503669228b2c2729016ab518133891ea",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 15495,
+          "allocated_bytes": 2411955,
+          "deallocated_bytes": 1809763,
+          "net_bytes": 602192,
+          "peak_extra_bytes": 853554
+        }
+      },
+      {
+        "columns": 7,
+        "mode": "dense-64",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 455,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 2,
+          "runs": 130,
+          "sha256": "231dafd02fbca02541152964aa00f19c503669228b2c2729016ab518133891ea",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 11848,
+          "allocated_bytes": 2404877,
+          "deallocated_bytes": 1305853,
+          "net_bytes": 1099024,
+          "peak_extra_bytes": 1196076
+        }
+      },
+      {
+        "columns": 7,
+        "mode": "dense-first-64",
+        "operation": "build",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 455,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 2,
+          "runs": 130,
+          "sha256": "0b870e08b43d83437654c8941418d31f725c4ebb3d9ed17b214d008858da005b",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 16423,
+          "allocated_bytes": 2492812,
+          "deallocated_bytes": 1870515,
+          "net_bytes": 622297,
+          "peak_extra_bytes": 865027
+        }
+      },
+      {
+        "columns": 7,
+        "mode": "dense-first-64",
+        "operation": "layout",
+        "digest": {
+          "float_reports": 0,
+          "glyphs": 455,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 2,
+          "runs": 130,
+          "sha256": "0b870e08b43d83437654c8941418d31f725c4ebb3d9ed17b214d008858da005b",
+          "synthetic_glyphs": 0
+        },
+        "counts": {
+          "calls": 14784,
+          "allocated_bytes": 3488157,
+          "deallocated_bytes": 2410125,
+          "net_bytes": 1078032,
+          "peak_extra_bytes": 1175084
+        }
       }
     ]
   },
   "table_diagnostics": {
     "before": "   Compiling shodo v0.0.4 (/home/mitz/Work/oss/shodo/target/worktrees/shodo-sbp-sequential/crates/shodo)\n    Finished `test` profile [optimized + debuginfo] target(s) in 16.26s\n     Running unittests src/lib.rs (/home/mitz/Work/oss/shodo/target/sbp1-tests/debug/deps/shodo-9f570468c6dd882d)\n\nrunning 1 test\nCURSOR_STORAGE columns=16 full_lanes=0 kind=normal rows=17 lanes=16 logical_cells=272 changes=16 cell_capacity=272 metadata_bytes=1280 cursor_bytes=2176 retained_bytes=3456 fingerprint=adf81f9fcb225047\nCURSOR_STORAGE columns=64 full_lanes=0 kind=normal rows=65 lanes=64 logical_cells=4160 changes=64 cell_capacity=4160 metadata_bytes=5120 cursor_bytes=33280 retained_bytes=38400 fingerprint=bc4736a2c9ec3c92\nCURSOR_STORAGE columns=256 full_lanes=0 kind=normal rows=257 lanes=256 logical_cells=65792 changes=256 cell_capacity=65792 metadata_bytes=20480 cursor_bytes=526336 retained_bytes=546816 fingerprint=8e958243d5eebab1\nCURSOR_STORAGE columns=512 full_lanes=0 kind=normal rows=513 lanes=512 logical_cells=262656 changes=512 cell_capacity=262656 metadata_bytes=40960 cursor_bytes=2101248 retained_bytes=2142208 fingerprint=f279adb3434dacca\nCURSOR_STORAGE columns=512 full_lanes=0 kind=normal rows=513 lanes=512 logical_cells=262656 changes=512 cell_capacity=262656 metadata_bytes=40960 cursor_bytes=2101248 retained_bytes=2142208 fingerprint=f279adb3434dacca\nCURSOR_STORAGE columns=512 full_lanes=0 kind=first-line rows=513 lanes=512 logical_cells=262656 changes=512 cell_capacity=262656 metadata_bytes=20520 cursor_bytes=2101248 retained_bytes=2121768 fingerprint=f279adb3434dacca\nCURSOR_STORAGE columns=64 full_lanes=1 kind=normal rows=65 lanes=1 logical_cells=65 changes=64 cell_capacity=65 metadata_bytes=5120 cursor_bytes=520 retained_bytes=5640 fingerprint=a79dac49bdf3b12a\nCURSOR_STORAGE columns=512 full_lanes=1 kind=normal rows=513 lanes=1 logical_cells=513 changes=512 cell_capacity=513 metadata_bytes=40960 cursor_bytes=4104 retained_bytes=45064 fingerprint=d5accf15a81cefb4\nCURSOR_STORAGE columns=512 full_lanes=4 kind=normal rows=513 lanes=4 logical_cells=2052 changes=2048 cell_capacity=2052 metadata_bytes=40960 cursor_bytes=16416 retained_bytes=57376 fingerprint=65aff77d915abdc3\nCURSOR_STORAGE default_C1024_refusal=LimitExceeded { kind: Items, limit: 1048576, actual: 1064969 }\ntest ruby::prepared_cut_tests::cursor_storage_diagnostic ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 351 filtered out; finished in 0.23s\n\n",
-    "after": "    Finished `test` profile [optimized + debuginfo] target(s) in 0.06s\n     Running unittests src/lib.rs (/home/mitz/Work/oss/shodo/target/sbp1-tests/debug/deps/shodo-9f570468c6dd882d)\n\nrunning 1 test\nCURSOR_STORAGE columns=16 full_lanes=0 kind=normal rows=17 lanes=16 logical_cells=272 changes=16 metadata_bytes=544 table_payload_bytes=800 retained_payload_bytes=1344 dense_lanes=0 fingerprint=adf81f9fcb225047\nCURSOR_STORAGE columns=64 full_lanes=0 kind=normal rows=65 lanes=64 logical_cells=4160 changes=64 metadata_bytes=2080 table_payload_bytes=3104 retained_payload_bytes=5184 dense_lanes=0 fingerprint=bc4736a2c9ec3c92\nCURSOR_STORAGE columns=256 full_lanes=0 kind=normal rows=257 lanes=256 logical_cells=65792 changes=256 metadata_bytes=8224 table_payload_bytes=12320 retained_payload_bytes=20544 dense_lanes=0 fingerprint=8e958243d5eebab1\nCURSOR_STORAGE columns=512 full_lanes=0 kind=normal rows=513 lanes=512 logical_cells=262656 changes=512 metadata_bytes=16416 table_payload_bytes=24608 retained_payload_bytes=41024 dense_lanes=0 fingerprint=f279adb3434dacca\nCURSOR_STORAGE columns=512 full_lanes=0 kind=normal rows=513 lanes=512 logical_cells=262656 changes=512 metadata_bytes=16416 table_payload_bytes=24608 retained_payload_bytes=41024 dense_lanes=0 fingerprint=f279adb3434dacca\nCURSOR_STORAGE columns=512 full_lanes=0 kind=first-line rows=513 lanes=512 logical_cells=262656 changes=512 metadata_bytes=16416 table_payload_bytes=24608 retained_payload_bytes=41024 dense_lanes=0 fingerprint=f279adb3434dacca\nCURSOR_STORAGE columns=64 full_lanes=1 kind=normal rows=65 lanes=1 logical_cells=65 changes=64 metadata_bytes=2080 table_payload_bytes=584 retained_payload_bytes=2664 dense_lanes=1 fingerprint=a79dac49bdf3b12a\nCURSOR_STORAGE columns=512 full_lanes=1 kind=normal rows=513 lanes=1 logical_cells=513 changes=512 metadata_bytes=16416 table_payload_bytes=4168 retained_payload_bytes=20584 dense_lanes=1 fingerprint=d5accf15a81cefb4\nCURSOR_STORAGE columns=512 full_lanes=4 kind=normal rows=513 lanes=4 logical_cells=2052 changes=2048 metadata_bytes=16416 table_payload_bytes=16576 retained_payload_bytes=32992 dense_lanes=4 fingerprint=65aff77d915abdc3\nCURSOR_STORAGE default_C1024_refusal=LimitExceeded { kind: Items, limit: 1048576, actual: 1064969 }\ntest ruby::prepared_cut_tests::cursor_storage_diagnostic ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 353 filtered out; finished in 0.17s\n\n"
+    "after": "    Finished `test` profile [optimized + debuginfo] target(s) in 0.06s\n     Running unittests src/lib.rs (/home/mitz/Work/oss/shodo/target/sbp1-tests/debug/deps/shodo-9f570468c6dd882d)\n\nrunning 1 test\nCURSOR_STORAGE columns=16 full_lanes=0 kind=normal rows=17 lanes=16 logical_cells=272 changes=16 metadata_bytes=544 table_payload_bytes=800 retained_payload_bytes=1344 dense_lanes=0 fingerprint=adf81f9fcb225047\nCURSOR_STORAGE columns=64 full_lanes=0 kind=normal rows=65 lanes=64 logical_cells=4160 changes=64 metadata_bytes=2080 table_payload_bytes=3104 retained_payload_bytes=5184 dense_lanes=0 fingerprint=bc4736a2c9ec3c92\nCURSOR_STORAGE columns=256 full_lanes=0 kind=normal rows=257 lanes=256 logical_cells=65792 changes=256 metadata_bytes=8224 table_payload_bytes=12320 retained_payload_bytes=20544 dense_lanes=0 fingerprint=8e958243d5eebab1\nCURSOR_STORAGE columns=512 full_lanes=0 kind=normal rows=513 lanes=512 logical_cells=262656 changes=512 metadata_bytes=16416 table_payload_bytes=24608 retained_payload_bytes=41024 dense_lanes=0 fingerprint=f279adb3434dacca\nCURSOR_STORAGE columns=512 full_lanes=0 kind=normal rows=513 lanes=512 logical_cells=262656 changes=512 metadata_bytes=16416 table_payload_bytes=24608 retained_payload_bytes=41024 dense_lanes=0 fingerprint=f279adb3434dacca\nCURSOR_STORAGE columns=512 full_lanes=0 kind=first-line rows=513 lanes=512 logical_cells=262656 changes=512 metadata_bytes=16416 table_payload_bytes=24608 retained_payload_bytes=41024 dense_lanes=0 fingerprint=f279adb3434dacca\nCURSOR_STORAGE columns=64 full_lanes=1 kind=normal rows=65 lanes=1 logical_cells=65 changes=64 metadata_bytes=2080 table_payload_bytes=552 retained_payload_bytes=2632 dense_lanes=1 fingerprint=a79dac49bdf3b12a\nCURSOR_STORAGE columns=512 full_lanes=1 kind=normal rows=513 lanes=1 logical_cells=513 changes=512 metadata_bytes=16416 table_payload_bytes=4136 retained_payload_bytes=20552 dense_lanes=1 fingerprint=d5accf15a81cefb4\nCURSOR_STORAGE columns=512 full_lanes=4 kind=normal rows=513 lanes=4 logical_cells=2052 changes=2048 metadata_bytes=16416 table_payload_bytes=16448 retained_payload_bytes=32864 dense_lanes=4 fingerprint=65aff77d915abdc3\nCURSOR_STORAGE default_C1024_refusal=LimitExceeded { kind: Items, limit: 1048576, actual: 1064969 }\ntest ruby::prepared_cut_tests::cursor_storage_diagnostic ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 355 filtered out; finished in 0.17s\n\n"
   },
-  "binary_sha256": {
-    "before-final-timing": "db416cd5b5a887d9c30cc3cbbffe337ce18d1416b325d8c03bb192eec6a231d9",
-    "before-final-memory": "a21570727e8f266e763dfa2f3df44136cb1d1e35dbc8c1de771621eeee4521f6",
-    "candidate-timing": "2cec3bad012552df4bf75065a45daf7582c4b4b0cbefa535b2502581f064ce01",
-    "candidate-memory": "47dce0581900308d8dcb26f428001dead5c1cb8071d384169ffe3624286d055c"
+  "final_binary_sha256": {
+    "before-timing": "eacf00d1f9bf61f4e60eb2ada74d737a06aeddc022f53ddf21d536e7b4d36b6c",
+    "before-memory": "13cd1492e337825cdc2830a0b3a3f21797ce56cc593716af1dde8ac9bc6094bd",
+    "after-timing": "1f69ba3b9df5347468049cf5691e5d111064d8193fedfa718d393f97f0a94a1a",
+    "after-memory": "5544b237f78d0c65e86d4ea67280248d08d9f51866617211798f20ac985275c8"
   },
   "matrix_metadata": {
-    "before": {
-      "revision": "0669ad93a78a4192ef82754e9d748a1630c1d405",
-      "dirty_status": [],
-      "source_hash": "8de8718bf88d98f45e94df545c8e467d064d1d62e44888ded676a915cb8a3589",
-      "conditions": {
-        "source_fingerprint_version": 2,
-        "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
-        "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
-        "cpu": {
-          "models": [
-            "AMD Ryzen 5 5600G with Radeon Graphics"
-          ],
-          "machine": "x86_64",
-          "logical_cpus": 12,
-          "affinity": [
-            10
-          ]
-        },
-        "os": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
-        "features": [
-          "complex-scripts"
+    "revision": "0562e02a0a72d4a2b8195ad95533dd58d2ad05dc",
+    "dirty_status": [],
+    "source_hash": "48fa29dc9309221c0fa55b1982f3866327e3eff84c4b85036084026afef1cf35",
+    "conditions": {
+      "source_fingerprint_version": 2,
+      "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
+      "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+      "cpu": {
+        "models": [
+          "AMD Ryzen 5 5600G with Radeon Graphics"
         ],
-        "profile": {
-          "name": "release",
-          "opt_level": 3,
-          "debug": 0,
-          "incremental": false,
-          "effective": {
-            "cold": {
-              "opt_level": "3",
-              "debuginfo": 0,
-              "debug_assertions": false,
-              "overflow_checks": false,
-              "test": false
-            },
-            "timing": {
-              "opt_level": "3",
-              "debuginfo": 0,
-              "debug_assertions": false,
-              "overflow_checks": false,
-              "test": true
-            },
-            "memory": {
-              "opt_level": "3",
-              "debuginfo": 0,
-              "debug_assertions": false,
-              "overflow_checks": false,
-              "test": false
-            }
+        "machine": "x86_64",
+        "logical_cpus": 12,
+        "affinity": [
+          10
+        ]
+      },
+      "os": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+      "features": [
+        "complex-scripts"
+      ],
+      "profile": {
+        "name": "release",
+        "opt_level": 3,
+        "debug": 0,
+        "incremental": false,
+        "effective": {
+          "cold": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          },
+          "timing": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": true
+          },
+          "memory": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
           }
-        },
-        "build_configuration": {
-          "workspace_profiles": {},
-          "cargo_configs": {},
-          "environment": {
-            "CARGO_BUILD_JOBS": "1",
-            "CARGO_PROFILE_RELEASE_OPT_LEVEL": "3",
-            "CARGO_PROFILE_RELEASE_DEBUG": "0",
-            "CARGO_PROFILE_RELEASE_INCREMENTAL": "false",
-            "CARGO_INCREMENTAL": "0"
-          }
-        },
-        "flags": {
-          "RUSTFLAGS": "",
-          "CARGO_ENCODED_RUSTFLAGS": "",
-          "RUSTDOCFLAGS": "",
-          "RUSTC": "",
-          "RUSTC_WRAPPER": "",
-          "RUSTC_WORKSPACE_WRAPPER": "",
-          "CARGO_PROFILE_RELEASE_LTO": "",
-          "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "",
-          "CARGO_PROFILE_RELEASE_PANIC": "",
-          "CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS": "",
-          "CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS": ""
-        },
-        "font_hashes": {
-          "arabic.ttf": "e9885fbcf3bdbddea94d1679d636a80f7421c6b63632a35c6f884a9ee74067d9",
-          "cjk.otf": "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b",
-          "emoji-color.ttf": "6047984e1da3b32e9629740378f2a143daa2c630f140edcf69b68696e3766362",
-          "emoji-mono.ttf": "76c91d377b0d3acb5e0feb696924d1fec7ea9cd4c7860dff52aa0cdd998f76f3",
-          "latin.ttf": "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25"
-        },
-        "input_hash": "1dbf30237e3d08dc20ea9f61a2576e7a6023b663584a464ca92f02b4ed35f292",
-        "harness_hash": "7c139740f9da6bc5ab72420426c81ad5456569e36a99b18b2266fe392b18f80b",
-        "lock_hash": "4d8a1d53a12ba7e53b177c5a309d0fc0c7cd6c8ebd733e459027e7f63bf09f3e",
-        "measurement_config": {
-          "quick": true,
-          "cold_samples": 2
         }
       },
-      "process_wall_scope": "Parent subprocess invocation, startup, probe work, JSON output and log write; inner cold phases reported separately."
+      "build_configuration": {
+        "workspace_profiles": {},
+        "cargo_configs": {},
+        "environment": {
+          "CARGO_BUILD_JOBS": "1",
+          "CARGO_PROFILE_RELEASE_OPT_LEVEL": "3",
+          "CARGO_PROFILE_RELEASE_DEBUG": "0",
+          "CARGO_PROFILE_RELEASE_INCREMENTAL": "false",
+          "CARGO_INCREMENTAL": "0"
+        }
+      },
+      "flags": {
+        "RUSTFLAGS": "",
+        "CARGO_ENCODED_RUSTFLAGS": "",
+        "RUSTDOCFLAGS": "",
+        "RUSTC": "",
+        "RUSTC_WRAPPER": "",
+        "RUSTC_WORKSPACE_WRAPPER": "",
+        "CARGO_PROFILE_RELEASE_LTO": "",
+        "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "",
+        "CARGO_PROFILE_RELEASE_PANIC": "",
+        "CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS": "",
+        "CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS": ""
+      },
+      "font_hashes": {
+        "arabic.ttf": "e9885fbcf3bdbddea94d1679d636a80f7421c6b63632a35c6f884a9ee74067d9",
+        "cjk.otf": "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b",
+        "emoji-color.ttf": "6047984e1da3b32e9629740378f2a143daa2c630f140edcf69b68696e3766362",
+        "emoji-mono.ttf": "76c91d377b0d3acb5e0feb696924d1fec7ea9cd4c7860dff52aa0cdd998f76f3",
+        "latin.ttf": "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25"
+      },
+      "input_hash": "1dbf30237e3d08dc20ea9f61a2576e7a6023b663584a464ca92f02b4ed35f292",
+      "harness_hash": "7c139740f9da6bc5ab72420426c81ad5456569e36a99b18b2266fe392b18f80b",
+      "lock_hash": "4d8a1d53a12ba7e53b177c5a309d0fc0c7cd6c8ebd733e459027e7f63bf09f3e",
+      "measurement_config": {
+        "quick": true,
+        "cold_samples": 2
+      }
     },
-    "after": {
-      "revision": "a956fcd12d898c8ca1a5298dc33623c55a368201",
-      "dirty_status": [],
-      "source_hash": "b259ff581ff4dde3994ed09946fec42b5b0044ab6b1f30348384c998dd9ce00e",
-      "conditions": {
-        "source_fingerprint_version": 2,
-        "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
-        "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
-        "cpu": {
-          "models": [
-            "AMD Ryzen 5 5600G with Radeon Graphics"
-          ],
-          "machine": "x86_64",
-          "logical_cpus": 12,
-          "affinity": [
-            10
-          ]
-        },
-        "os": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
-        "features": [
-          "complex-scripts"
-        ],
-        "profile": {
-          "name": "release",
-          "opt_level": 3,
-          "debug": 0,
-          "incremental": false,
-          "effective": {
-            "cold": {
-              "opt_level": "3",
-              "debuginfo": 0,
-              "debug_assertions": false,
-              "overflow_checks": false,
-              "test": false
-            },
-            "timing": {
-              "opt_level": "3",
-              "debuginfo": 0,
-              "debug_assertions": false,
-              "overflow_checks": false,
-              "test": true
-            },
-            "memory": {
-              "opt_level": "3",
-              "debuginfo": 0,
-              "debug_assertions": false,
-              "overflow_checks": false,
-              "test": false
-            }
-          }
-        },
-        "build_configuration": {
-          "workspace_profiles": {},
-          "cargo_configs": {},
-          "environment": {
-            "CARGO_BUILD_JOBS": "1",
-            "CARGO_PROFILE_RELEASE_OPT_LEVEL": "3",
-            "CARGO_PROFILE_RELEASE_DEBUG": "0",
-            "CARGO_PROFILE_RELEASE_INCREMENTAL": "false",
-            "CARGO_INCREMENTAL": "0"
-          }
-        },
-        "flags": {
-          "RUSTFLAGS": "",
-          "CARGO_ENCODED_RUSTFLAGS": "",
-          "RUSTDOCFLAGS": "",
-          "RUSTC": "",
-          "RUSTC_WRAPPER": "",
-          "RUSTC_WORKSPACE_WRAPPER": "",
-          "CARGO_PROFILE_RELEASE_LTO": "",
-          "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "",
-          "CARGO_PROFILE_RELEASE_PANIC": "",
-          "CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS": "",
-          "CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS": ""
-        },
-        "font_hashes": {
-          "arabic.ttf": "e9885fbcf3bdbddea94d1679d636a80f7421c6b63632a35c6f884a9ee74067d9",
-          "cjk.otf": "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b",
-          "emoji-color.ttf": "6047984e1da3b32e9629740378f2a143daa2c630f140edcf69b68696e3766362",
-          "emoji-mono.ttf": "76c91d377b0d3acb5e0feb696924d1fec7ea9cd4c7860dff52aa0cdd998f76f3",
-          "latin.ttf": "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25"
-        },
-        "input_hash": "1dbf30237e3d08dc20ea9f61a2576e7a6023b663584a464ca92f02b4ed35f292",
-        "harness_hash": "7c139740f9da6bc5ab72420426c81ad5456569e36a99b18b2266fe392b18f80b",
-        "lock_hash": "4d8a1d53a12ba7e53b177c5a309d0fc0c7cd6c8ebd733e459027e7f63bf09f3e",
-        "measurement_config": {
-          "quick": true,
-          "cold_samples": 2
-        }
-      },
-      "process_wall_scope": "Parent subprocess invocation, startup, probe work, JSON output and log write; inner cold phases reported separately."
-    }
+    "process_wall_scope": "Parent subprocess invocation, startup, probe work, JSON output and log write; inner cold phases reported separately."
   },
   "validation_counts": {
-    "workspace": 1069,
-    "no_default_features": 616,
-    "complex_only": 619
+    "workspace": 1071,
+    "no_default_features": 618,
+    "complex_only": 621
   },
   "balanced_timing": {
     "balanced-0-before": [
@@ -2862,361 +2946,385 @@
         "columns": 16,
         "mode": "plain",
         "operation": "build",
-        "median_ns": 631081.5
+        "median_ns": 615331.5
       },
       {
         "columns": 16,
         "mode": "plain",
         "operation": "layout",
-        "median_ns": 569408.5
+        "median_ns": 572446.5
       },
       {
         "columns": 64,
         "mode": "plain",
         "operation": "build",
-        "median_ns": 2227276.0
+        "median_ns": 2215508.5
       },
       {
         "columns": 64,
         "mode": "plain",
         "operation": "layout",
-        "median_ns": 2410304.5
+        "median_ns": 2422143.5
       },
       {
         "columns": 256,
         "mode": "plain",
         "operation": "build",
-        "median_ns": 9052881.5
+        "median_ns": 8901251.5
       },
       {
         "columns": 256,
         "mode": "plain",
         "operation": "layout",
-        "median_ns": 10183561.0
+        "median_ns": 10104396.5
       },
       {
         "columns": 512,
         "mode": "plain",
         "operation": "build",
-        "median_ns": 19182487.0
+        "median_ns": 18992412.0
       },
       {
         "columns": 512,
         "mode": "plain",
         "operation": "layout",
-        "median_ns": 22021567.5
+        "median_ns": 21338041.5
       },
       {
         "columns": 16,
         "mode": "first-line",
         "operation": "build",
-        "median_ns": 687236.0
+        "median_ns": 692790.0
       },
       {
         "columns": 16,
         "mode": "first-line",
         "operation": "layout",
-        "median_ns": 584215.5
+        "median_ns": 597591.5
       },
       {
         "columns": 16,
         "mode": "spanning",
         "operation": "build",
-        "median_ns": 424306.5
+        "median_ns": 419802.0
       },
       {
         "columns": 16,
         "mode": "spanning",
         "operation": "layout",
-        "median_ns": 547896.5
+        "median_ns": 560328.5
       },
       {
         "columns": 16,
         "mode": "multilevel",
         "operation": "build",
-        "median_ns": 1008452.5
+        "median_ns": 1007509.5
       },
       {
         "columns": 16,
         "mode": "multilevel",
         "operation": "layout",
-        "median_ns": 735569.0
+        "median_ns": 724289.0
       },
       {
         "columns": 16,
         "mode": "empty",
         "operation": "build",
-        "median_ns": 605657.5
+        "median_ns": 599721.0
       },
       {
         "columns": 16,
         "mode": "empty",
         "operation": "layout",
-        "median_ns": 567173.5
+        "median_ns": 564065.5
       },
       {
         "columns": 16,
         "mode": "merge",
         "operation": "build",
-        "median_ns": 626472.0
+        "median_ns": 621862.5
       },
       {
         "columns": 16,
         "mode": "merge",
         "operation": "layout",
-        "median_ns": 599861.0
+        "median_ns": 608661.5
       },
       {
         "columns": 16,
         "mode": "overhang",
         "operation": "build",
-        "median_ns": 620779.5
+        "median_ns": 619592.0
       },
       {
         "columns": 16,
         "mode": "overhang",
         "operation": "layout",
-        "median_ns": 576673.0
+        "median_ns": 581142.5
       },
       {
         "columns": 16,
         "mode": "rtl",
         "operation": "build",
-        "median_ns": 622037.0
+        "median_ns": 618230.5
       },
       {
         "columns": 16,
         "mode": "rtl",
         "operation": "layout",
-        "median_ns": 568011.5
+        "median_ns": 575625.0
       },
       {
         "columns": 16,
         "mode": "nested",
         "operation": "build",
-        "median_ns": 776777.0
+        "median_ns": 780479.5
       },
       {
         "columns": 16,
         "mode": "nested",
         "operation": "layout",
-        "median_ns": 1090484.0
+        "median_ns": 1072605.0
       },
       {
         "columns": 16,
         "mode": "resume",
         "operation": "build",
-        "median_ns": 608522.0
+        "median_ns": 613027.0
       },
       {
         "columns": 16,
         "mode": "resume",
         "operation": "layout",
-        "median_ns": 629824.0
+        "median_ns": 629475.5
       },
       {
         "columns": 64,
         "mode": "first-line",
         "operation": "build",
-        "median_ns": 2504420.5
+        "median_ns": 2493420.5
       },
       {
         "columns": 64,
         "mode": "first-line",
         "operation": "layout",
-        "median_ns": 2477739.5
+        "median_ns": 2501662.0
       },
       {
         "columns": 64,
         "mode": "spanning",
         "operation": "build",
-        "median_ns": 1517724.5
+        "median_ns": 1508016.5
       },
       {
         "columns": 64,
         "mode": "spanning",
         "operation": "layout",
-        "median_ns": 2339935.5
+        "median_ns": 2317691.0
       },
       {
         "columns": 64,
         "mode": "multilevel",
         "operation": "build",
-        "median_ns": 3792774.5
+        "median_ns": 3760403.0
       },
       {
         "columns": 64,
         "mode": "multilevel",
         "operation": "layout",
-        "median_ns": 3034017.5
+        "median_ns": 3032482.0
       },
       {
         "columns": 64,
         "mode": "empty",
         "operation": "build",
-        "median_ns": 2212504.0
+        "median_ns": 2221969.0
       },
       {
         "columns": 64,
         "mode": "empty",
         "operation": "layout",
-        "median_ns": 2377163.0
+        "median_ns": 2380866.0
       },
       {
         "columns": 64,
         "mode": "merge",
         "operation": "build",
-        "median_ns": 2276203.0
+        "median_ns": 2251828.0
       },
       {
         "columns": 64,
         "mode": "merge",
         "operation": "layout",
-        "median_ns": 2498518.0
+        "median_ns": 2492826.5
       },
       {
         "columns": 64,
         "mode": "overhang",
         "operation": "build",
-        "median_ns": 2261850.0
+        "median_ns": 2263876.0
       },
       {
         "columns": 64,
         "mode": "overhang",
         "operation": "layout",
-        "median_ns": 2457345.0
+        "median_ns": 2448091.5
       },
       {
         "columns": 64,
         "mode": "rtl",
         "operation": "build",
-        "median_ns": 2291463.5
+        "median_ns": 2243062.0
       },
       {
         "columns": 64,
         "mode": "rtl",
         "operation": "layout",
-        "median_ns": 2393402.0
+        "median_ns": 2389631.5
       },
       {
         "columns": 64,
         "mode": "nested",
         "operation": "build",
-        "median_ns": 2897820.0
+        "median_ns": 2837615.0
       },
       {
         "columns": 64,
         "mode": "nested",
         "operation": "layout",
-        "median_ns": 4558167.5
+        "median_ns": 4501036.0
       },
       {
         "columns": 64,
         "mode": "resume",
         "operation": "build",
-        "median_ns": 2249592.0
+        "median_ns": 2236706.0
       },
       {
         "columns": 64,
         "mode": "resume",
         "operation": "layout",
-        "median_ns": 3519367.5
+        "median_ns": 3411738.5
       },
       {
         "columns": 256,
         "mode": "first-line",
         "operation": "build",
-        "median_ns": 10801895.5
+        "median_ns": 10621980.5
       },
       {
         "columns": 256,
         "mode": "first-line",
         "operation": "layout",
-        "median_ns": 10506837.5
+        "median_ns": 10426416.0
       },
       {
         "columns": 512,
         "mode": "first-line",
         "operation": "build",
-        "median_ns": 24075455.0
+        "median_ns": 24022976.5
       },
       {
         "columns": 512,
         "mode": "first-line",
         "operation": "layout",
-        "median_ns": 22135589.0
+        "median_ns": 22667360.5
       },
       {
         "columns": 64,
         "mode": "full-1",
         "operation": "build",
-        "median_ns": 739271.0
+        "median_ns": 743357.0
       },
       {
         "columns": 64,
         "mode": "full-1",
         "operation": "layout",
-        "median_ns": 17978225.5
+        "median_ns": 16631976.0
       },
       {
         "columns": 512,
         "mode": "full-1",
         "operation": "build",
-        "median_ns": 5604265.5
+        "median_ns": 5638456.5
       },
       {
         "columns": 512,
         "mode": "full-1",
         "operation": "layout",
-        "median_ns": 1294250731.5
+        "median_ns": 1320531212.0
       },
       {
         "columns": 512,
         "mode": "full-4",
         "operation": "build",
-        "median_ns": 7207899.5
+        "median_ns": 7231754.0
       },
       {
         "columns": 512,
         "mode": "full-4",
         "operation": "layout",
-        "median_ns": 1302653495.5
+        "median_ns": 1336600551.5
       },
       {
         "columns": 64,
         "mode": "dense-1",
         "operation": "build",
-        "median_ns": 176568.0
+        "median_ns": 166265.5
       },
       {
         "columns": 64,
         "mode": "dense-1",
         "operation": "layout",
-        "median_ns": 375345.0
+        "median_ns": 372761.0
       },
       {
         "columns": 512,
         "mode": "dense-1",
         "operation": "build",
-        "median_ns": 740213.5
+        "median_ns": 708399.5
       },
       {
         "columns": 512,
         "mode": "dense-1",
         "operation": "layout",
-        "median_ns": 3021969.0
+        "median_ns": 2906447.0
       },
       {
         "columns": 512,
         "mode": "dense-4",
         "operation": "build",
-        "median_ns": 1833702.0
+        "median_ns": 1716887.0
       },
       {
         "columns": 512,
         "mode": "dense-4",
         "operation": "layout",
-        "median_ns": 5945526.5
+        "median_ns": 5700409.5
+      },
+      {
+        "columns": 7,
+        "mode": "dense-64",
+        "operation": "build",
+        "median_ns": 1856157.5
+      },
+      {
+        "columns": 7,
+        "mode": "dense-64",
+        "operation": "layout",
+        "median_ns": 1274141.5
+      },
+      {
+        "columns": 7,
+        "mode": "dense-first-64",
+        "operation": "build",
+        "median_ns": 1913849.0
+      },
+      {
+        "columns": 7,
+        "mode": "dense-first-64",
+        "operation": "layout",
+        "median_ns": 1438381.5
       }
     ],
     "balanced-1-after": [
@@ -3224,361 +3332,385 @@
         "columns": 16,
         "mode": "plain",
         "operation": "build",
-        "median_ns": 631640.0
+        "median_ns": 621583.0
       },
       {
         "columns": 16,
         "mode": "plain",
         "operation": "layout",
-        "median_ns": 575240.5
+        "median_ns": 571888.5
       },
       {
         "columns": 64,
         "mode": "plain",
         "operation": "build",
-        "median_ns": 2301626.0
+        "median_ns": 2279346.5
       },
       {
         "columns": 64,
         "mode": "plain",
         "operation": "layout",
-        "median_ns": 2450360.5
+        "median_ns": 2413762.0
       },
       {
         "columns": 256,
         "mode": "plain",
         "operation": "build",
-        "median_ns": 9318185.5
+        "median_ns": 9048449.0
       },
       {
         "columns": 256,
         "mode": "plain",
         "operation": "layout",
-        "median_ns": 10612337.5
+        "median_ns": 10094513.0
       },
       {
         "columns": 512,
         "mode": "plain",
         "operation": "build",
-        "median_ns": 39688425.5
+        "median_ns": 19309507.0
       },
       {
         "columns": 512,
         "mode": "plain",
         "operation": "layout",
-        "median_ns": 47912843.5
+        "median_ns": 21477066.5
       },
       {
         "columns": 16,
         "mode": "first-line",
         "operation": "build",
-        "median_ns": 1562041.0
+        "median_ns": 702358.0
       },
       {
         "columns": 16,
         "mode": "first-line",
         "operation": "layout",
-        "median_ns": 1388407.0
+        "median_ns": 588441.5
       },
       {
         "columns": 16,
         "mode": "spanning",
         "operation": "build",
-        "median_ns": 975730.0
+        "median_ns": 434992.5
       },
       {
         "columns": 16,
         "mode": "spanning",
         "operation": "layout",
-        "median_ns": 1540074.5
+        "median_ns": 556767.0
       },
       {
         "columns": 16,
         "mode": "multilevel",
         "operation": "build",
-        "median_ns": 2602133.5
+        "median_ns": 1026228.0
       },
       {
         "columns": 16,
         "mode": "multilevel",
         "operation": "layout",
-        "median_ns": 1700437.5
+        "median_ns": 725058.0
       },
       {
         "columns": 16,
         "mode": "empty",
         "operation": "build",
-        "median_ns": 1278436.5
+        "median_ns": 616065.0
       },
       {
         "columns": 16,
         "mode": "empty",
         "operation": "layout",
-        "median_ns": 1275782.5
+        "median_ns": 565602.0
       },
       {
         "columns": 16,
         "mode": "merge",
         "operation": "build",
-        "median_ns": 1144230.0
+        "median_ns": 631151.5
       },
       {
         "columns": 16,
         "mode": "merge",
         "operation": "layout",
-        "median_ns": 1073897.0
+        "median_ns": 616484.0
       },
       {
         "columns": 16,
         "mode": "overhang",
         "operation": "build",
-        "median_ns": 1125302.0
+        "median_ns": 626332.5
       },
       {
         "columns": 16,
         "mode": "overhang",
         "operation": "layout",
-        "median_ns": 1100193.0
+        "median_ns": 576324.0
       },
       {
         "columns": 16,
         "mode": "rtl",
         "operation": "build",
-        "median_ns": 1333230.0
+        "median_ns": 630243.5
       },
       {
         "columns": 16,
         "mode": "rtl",
         "operation": "layout",
-        "median_ns": 1219627.5
+        "median_ns": 582574.5
       },
       {
         "columns": 16,
         "mode": "nested",
         "operation": "build",
-        "median_ns": 1755999.0
+        "median_ns": 789559.0
       },
       {
         "columns": 16,
         "mode": "nested",
         "operation": "layout",
-        "median_ns": 2186208.0
+        "median_ns": 1084164.0
       },
       {
         "columns": 16,
         "mode": "resume",
         "operation": "build",
-        "median_ns": 1298936.0
+        "median_ns": 619627.5
       },
       {
         "columns": 16,
         "mode": "resume",
         "operation": "layout",
-        "median_ns": 1343637.0
+        "median_ns": 622735.0
       },
       {
         "columns": 64,
         "mode": "first-line",
         "operation": "build",
-        "median_ns": 5858396.0
+        "median_ns": 2564068.5
       },
       {
         "columns": 64,
         "mode": "first-line",
         "operation": "layout",
-        "median_ns": 5791310.0
+        "median_ns": 2470372.0
       },
       {
         "columns": 64,
         "mode": "spanning",
         "operation": "build",
-        "median_ns": 4401401.0
+        "median_ns": 1532986.5
       },
       {
         "columns": 64,
         "mode": "spanning",
         "operation": "layout",
-        "median_ns": 5887136.5
+        "median_ns": 2324431.5
       },
       {
         "columns": 64,
         "mode": "multilevel",
         "operation": "build",
-        "median_ns": 9102784.5
+        "median_ns": 3859443.0
       },
       {
         "columns": 64,
         "mode": "multilevel",
         "operation": "layout",
-        "median_ns": 8211916.0
+        "median_ns": 3024904.0
       },
       {
         "columns": 64,
         "mode": "empty",
         "operation": "build",
-        "median_ns": 4531277.5
+        "median_ns": 2247532.0
       },
       {
         "columns": 64,
         "mode": "empty",
         "operation": "layout",
-        "median_ns": 5206326.0
+        "median_ns": 2368887.0
       },
       {
         "columns": 64,
         "mode": "merge",
         "operation": "build",
-        "median_ns": 4706901.0
+        "median_ns": 2290976.0
       },
       {
         "columns": 64,
         "mode": "merge",
         "operation": "layout",
-        "median_ns": 5763931.0
+        "median_ns": 2526666.5
       },
       {
         "columns": 64,
         "mode": "overhang",
         "operation": "build",
-        "median_ns": 4555757.5
+        "median_ns": 2281267.0
       },
       {
         "columns": 64,
         "mode": "overhang",
         "operation": "layout",
-        "median_ns": 5304981.0
+        "median_ns": 2464435.0
       },
       {
         "columns": 64,
         "mode": "rtl",
         "operation": "build",
-        "median_ns": 4815021.0
+        "median_ns": 2278857.5
       },
       {
         "columns": 64,
         "mode": "rtl",
         "operation": "layout",
-        "median_ns": 6301559.5
+        "median_ns": 2393961.5
       },
       {
         "columns": 64,
         "mode": "nested",
         "operation": "build",
-        "median_ns": 7373884.5
+        "median_ns": 2871071.0
       },
       {
         "columns": 64,
         "mode": "nested",
         "operation": "layout",
-        "median_ns": 12558105.5
+        "median_ns": 4539066.5
       },
       {
         "columns": 64,
         "mode": "resume",
         "operation": "build",
-        "median_ns": 4398921.5
+        "median_ns": 2274248.0
       },
       {
         "columns": 64,
         "mode": "resume",
         "operation": "layout",
-        "median_ns": 6089547.0
+        "median_ns": 3401541.0
       },
       {
         "columns": 256,
         "mode": "first-line",
         "operation": "build",
-        "median_ns": 21558916.0
+        "median_ns": 10873840.0
       },
       {
         "columns": 256,
         "mode": "first-line",
         "operation": "layout",
-        "median_ns": 21406690.0
+        "median_ns": 10494094.5
       },
       {
         "columns": 512,
         "mode": "first-line",
         "operation": "build",
-        "median_ns": 49126464.5
+        "median_ns": 24981350.0
       },
       {
         "columns": 512,
         "mode": "first-line",
         "operation": "layout",
-        "median_ns": 45254346.5
+        "median_ns": 21922606.5
       },
       {
         "columns": 64,
         "mode": "full-1",
         "operation": "build",
-        "median_ns": 1306479.0
+        "median_ns": 757710.5
       },
       {
         "columns": 64,
         "mode": "full-1",
         "operation": "layout",
-        "median_ns": 17991286.0
+        "median_ns": 17890682.0
       },
       {
         "columns": 512,
         "mode": "full-1",
         "operation": "build",
-        "median_ns": 5630877.0
+        "median_ns": 5425605.5
       },
       {
         "columns": 512,
         "mode": "full-1",
         "operation": "layout",
-        "median_ns": 1229435614.5
+        "median_ns": 1259635438.5
       },
       {
         "columns": 512,
         "mode": "full-4",
         "operation": "build",
-        "median_ns": 7078058.0
+        "median_ns": 7208461.0
       },
       {
         "columns": 512,
         "mode": "full-4",
         "operation": "layout",
-        "median_ns": 1238986905.5
+        "median_ns": 1195833955.0
       },
       {
         "columns": 64,
         "mode": "dense-1",
         "operation": "build",
-        "median_ns": 168884.0
+        "median_ns": 164938.0
       },
       {
         "columns": 64,
         "mode": "dense-1",
         "operation": "layout",
-        "median_ns": 403178.5
+        "median_ns": 393959.0
       },
       {
         "columns": 512,
         "mode": "dense-1",
         "operation": "build",
-        "median_ns": 705920.0
+        "median_ns": 706130.0
       },
       {
         "columns": 512,
         "mode": "dense-1",
         "operation": "layout",
-        "median_ns": 2967211.0
+        "median_ns": 2905608.5
       },
       {
         "columns": 512,
         "mode": "dense-4",
         "operation": "build",
-        "median_ns": 1712102.0
+        "median_ns": 1719122.5
       },
       {
         "columns": 512,
         "mode": "dense-4",
         "operation": "layout",
-        "median_ns": 5771089.5
+        "median_ns": 5622846.5
+      },
+      {
+        "columns": 7,
+        "mode": "dense-64",
+        "operation": "build",
+        "median_ns": 1864294.0
+      },
+      {
+        "columns": 7,
+        "mode": "dense-64",
+        "operation": "layout",
+        "median_ns": 1233073.0
+      },
+      {
+        "columns": 7,
+        "mode": "dense-first-64",
+        "operation": "build",
+        "median_ns": 1914024.0
+      },
+      {
+        "columns": 7,
+        "mode": "dense-first-64",
+        "operation": "layout",
+        "median_ns": 1409780.5
       }
     ],
     "balanced-2-after": [
@@ -3586,361 +3718,385 @@
         "columns": 16,
         "mode": "plain",
         "operation": "build",
-        "median_ns": 639148.5
+        "median_ns": 628008.5
       },
       {
         "columns": 16,
         "mode": "plain",
         "operation": "layout",
-        "median_ns": 577615.5
+        "median_ns": 572517.0
       },
       {
         "columns": 64,
         "mode": "plain",
         "operation": "build",
-        "median_ns": 2294816.0
+        "median_ns": 2246310.5
       },
       {
         "columns": 64,
         "mode": "plain",
         "operation": "layout",
-        "median_ns": 2441000.5
+        "median_ns": 2405451.0
       },
       {
         "columns": 256,
         "mode": "plain",
         "operation": "build",
-        "median_ns": 9306417.0
+        "median_ns": 9060986.0
       },
       {
         "columns": 256,
         "mode": "plain",
         "operation": "layout",
-        "median_ns": 10389742.5
+        "median_ns": 10177803.0
       },
       {
         "columns": 512,
         "mode": "plain",
         "operation": "build",
-        "median_ns": 20184513.5
+        "median_ns": 19302348.0
       },
       {
         "columns": 512,
         "mode": "plain",
         "operation": "layout",
-        "median_ns": 21592826.0
+        "median_ns": 21372161.0
       },
       {
         "columns": 16,
         "mode": "first-line",
         "operation": "build",
-        "median_ns": 706199.5
+        "median_ns": 706828.5
       },
       {
         "columns": 16,
         "mode": "first-line",
         "operation": "layout",
-        "median_ns": 580898.5
+        "median_ns": 585229.0
       },
       {
         "columns": 16,
         "mode": "spanning",
         "operation": "build",
-        "median_ns": 442256.0
+        "median_ns": 428148.5
       },
       {
         "columns": 16,
         "mode": "spanning",
         "operation": "layout",
-        "median_ns": 557744.0
+        "median_ns": 551493.5
       },
       {
         "columns": 16,
         "mode": "multilevel",
         "operation": "build",
-        "median_ns": 1032479.0
+        "median_ns": 1022317.0
       },
       {
         "columns": 16,
         "mode": "multilevel",
         "operation": "layout",
-        "median_ns": 737105.5
+        "median_ns": 728864.0
       },
       {
         "columns": 16,
         "mode": "empty",
         "operation": "build",
-        "median_ns": 618614.0
+        "median_ns": 615331.5
       },
       {
         "columns": 16,
         "mode": "empty",
         "operation": "layout",
-        "median_ns": 571434.0
+        "median_ns": 565287.5
       },
       {
         "columns": 16,
         "mode": "merge",
         "operation": "build",
-        "median_ns": 633770.5
+        "median_ns": 629964.0
       },
       {
         "columns": 16,
         "mode": "merge",
         "operation": "layout",
-        "median_ns": 617217.0
+        "median_ns": 595077.0
       },
       {
         "columns": 16,
         "mode": "overhang",
         "operation": "build",
-        "median_ns": 636494.5
+        "median_ns": 624796.0
       },
       {
         "columns": 16,
         "mode": "overhang",
         "operation": "layout",
-        "median_ns": 591305.0
+        "median_ns": 574053.5
       },
       {
         "columns": 16,
         "mode": "rtl",
         "operation": "build",
-        "median_ns": 637995.5
+        "median_ns": 626471.5
       },
       {
         "columns": 16,
         "mode": "rtl",
         "operation": "layout",
-        "median_ns": 614633.0
+        "median_ns": 580164.5
       },
       {
         "columns": 16,
         "mode": "nested",
         "operation": "build",
-        "median_ns": 795356.0
+        "median_ns": 775241.0
       },
       {
         "columns": 16,
         "mode": "nested",
         "operation": "layout",
-        "median_ns": 1094256.0
+        "median_ns": 1080637.0
       },
       {
         "columns": 16,
         "mode": "resume",
         "operation": "build",
-        "median_ns": 626332.0
+        "median_ns": 618055.5
       },
       {
         "columns": 16,
         "mode": "resume",
         "operation": "layout",
-        "median_ns": 633317.0
+        "median_ns": 618265.0
       },
       {
         "columns": 64,
         "mode": "first-line",
         "operation": "build",
-        "median_ns": 2547095.0
+        "median_ns": 2546397.5
       },
       {
         "columns": 64,
         "mode": "first-line",
         "operation": "layout",
-        "median_ns": 2513918.5
+        "median_ns": 2460523.5
       },
       {
         "columns": 64,
         "mode": "spanning",
         "operation": "build",
-        "median_ns": 1548980.0
+        "median_ns": 1523382.0
       },
       {
         "columns": 64,
         "mode": "spanning",
         "operation": "layout",
-        "median_ns": 2317865.0
+        "median_ns": 2326177.5
       },
       {
         "columns": 64,
         "mode": "multilevel",
         "operation": "build",
-        "median_ns": 3861607.0
+        "median_ns": 3797805.0
       },
       {
         "columns": 64,
         "mode": "multilevel",
         "operation": "layout",
-        "median_ns": 3051967.0
+        "median_ns": 3012890.0
       },
       {
         "columns": 64,
         "mode": "empty",
         "operation": "build",
-        "median_ns": 2254062.0
+        "median_ns": 2226893.0
       },
       {
         "columns": 64,
         "mode": "empty",
         "operation": "layout",
-        "median_ns": 2379642.5
+        "median_ns": 2379818.0
       },
       {
         "columns": 64,
         "mode": "merge",
         "operation": "build",
-        "median_ns": 2297156.0
+        "median_ns": 2290381.0
       },
       {
         "columns": 64,
         "mode": "merge",
         "operation": "layout",
-        "median_ns": 2532392.5
+        "median_ns": 2496877.5
       },
       {
         "columns": 64,
         "mode": "overhang",
         "operation": "build",
-        "median_ns": 2302953.5
+        "median_ns": 2278229.5
       },
       {
         "columns": 64,
         "mode": "overhang",
         "operation": "layout",
-        "median_ns": 2475434.5
+        "median_ns": 2432970.0
       },
       {
         "columns": 64,
         "mode": "rtl",
         "operation": "build",
-        "median_ns": 2334907.0
+        "median_ns": 2268835.0
       },
       {
         "columns": 64,
         "mode": "rtl",
         "operation": "layout",
-        "median_ns": 2417044.5
+        "median_ns": 2394939.5
       },
       {
         "columns": 64,
         "mode": "nested",
         "operation": "build",
-        "median_ns": 2906516.0
+        "median_ns": 2887449.0
       },
       {
         "columns": 64,
         "mode": "nested",
         "operation": "layout",
-        "median_ns": 4662026.0
+        "median_ns": 4575421.0
       },
       {
         "columns": 64,
         "mode": "resume",
         "operation": "build",
-        "median_ns": 2311229.5
+        "median_ns": 2270581.0
       },
       {
         "columns": 64,
         "mode": "resume",
         "operation": "layout",
-        "median_ns": 3428674.5
+        "median_ns": 3394801.5
       },
       {
         "columns": 256,
         "mode": "first-line",
         "operation": "build",
-        "median_ns": 10991978.0
+        "median_ns": 10856309.0
       },
       {
         "columns": 256,
         "mode": "first-line",
         "operation": "layout",
-        "median_ns": 10497652.0
+        "median_ns": 10318435.0
       },
       {
         "columns": 512,
         "mode": "first-line",
         "operation": "build",
-        "median_ns": 25231872.0
+        "median_ns": 24908222.5
       },
       {
         "columns": 512,
         "mode": "first-line",
         "operation": "layout",
-        "median_ns": 22102482.5
+        "median_ns": 22026709.5
       },
       {
         "columns": 64,
         "mode": "full-1",
         "operation": "build",
-        "median_ns": 757081.5
+        "median_ns": 732880.0
       },
       {
         "columns": 64,
         "mode": "full-1",
         "operation": "layout",
-        "median_ns": 16023099.0
+        "median_ns": 17594191.5
       },
       {
         "columns": 512,
         "mode": "full-1",
         "operation": "build",
-        "median_ns": 5522373.0
+        "median_ns": 5633044.0
       },
       {
         "columns": 512,
         "mode": "full-1",
         "operation": "layout",
-        "median_ns": 1222391252.5
+        "median_ns": 1273912526.5
       },
       {
         "columns": 512,
         "mode": "full-4",
         "operation": "build",
-        "median_ns": 7053123.0
+        "median_ns": 7221172.5
       },
       {
         "columns": 512,
         "mode": "full-4",
         "operation": "layout",
-        "median_ns": 1182895841.5
+        "median_ns": 2403522814.5
       },
       {
         "columns": 64,
         "mode": "dense-1",
         "operation": "build",
-        "median_ns": 167138.5
+        "median_ns": 169163.5
       },
       {
         "columns": 64,
         "mode": "dense-1",
         "operation": "layout",
-        "median_ns": 406286.0
+        "median_ns": 382399.5
       },
       {
         "columns": 512,
         "mode": "dense-1",
         "operation": "build",
-        "median_ns": 703824.5
+        "median_ns": 712450.0
       },
       {
         "columns": 512,
         "mode": "dense-1",
         "operation": "layout",
-        "median_ns": 2925723.0
+        "median_ns": 2922651.0
       },
       {
         "columns": 512,
         "mode": "dense-4",
         "operation": "build",
-        "median_ns": 1713324.0
+        "median_ns": 1744615.0
       },
       {
         "columns": 512,
         "mode": "dense-4",
         "operation": "layout",
-        "median_ns": 5665380.0
+        "median_ns": 5789286.5
+      },
+      {
+        "columns": 7,
+        "mode": "dense-64",
+        "operation": "build",
+        "median_ns": 1858672.0
+      },
+      {
+        "columns": 7,
+        "mode": "dense-64",
+        "operation": "layout",
+        "median_ns": 1256680.5
+      },
+      {
+        "columns": 7,
+        "mode": "dense-first-64",
+        "operation": "build",
+        "median_ns": 1919646.5
+      },
+      {
+        "columns": 7,
+        "mode": "dense-first-64",
+        "operation": "layout",
+        "median_ns": 1415333.0
       }
     ],
     "balanced-3-before": [
@@ -3948,675 +4104,401 @@
         "columns": 16,
         "mode": "plain",
         "operation": "build",
-        "median_ns": 613969.5
+        "median_ns": 620500.5
       },
       {
         "columns": 16,
         "mode": "plain",
         "operation": "layout",
-        "median_ns": 577615.5
+        "median_ns": 569688.5
       },
       {
         "columns": 64,
         "mode": "plain",
         "operation": "build",
-        "median_ns": 2182331.5
+        "median_ns": 2254691.5
       },
       {
         "columns": 64,
         "mode": "plain",
         "operation": "layout",
-        "median_ns": 2411527.0
+        "median_ns": 2437440.0
       },
       {
         "columns": 256,
         "mode": "plain",
         "operation": "build",
-        "median_ns": 8769661.0
+        "median_ns": 9082673.0
       },
       {
         "columns": 256,
         "mode": "plain",
         "operation": "layout",
-        "median_ns": 10227284.0
+        "median_ns": 10473665.0
       },
       {
         "columns": 512,
         "mode": "plain",
         "operation": "build",
-        "median_ns": 18760799.5
+        "median_ns": 19354312.0
       },
       {
         "columns": 512,
         "mode": "plain",
         "operation": "layout",
-        "median_ns": 21671122.0
+        "median_ns": 21840503.5
       },
       {
         "columns": 16,
         "mode": "first-line",
         "operation": "build",
-        "median_ns": 683954.5
+        "median_ns": 690798.5
       },
       {
         "columns": 16,
         "mode": "first-line",
         "operation": "layout",
-        "median_ns": 589279.5
+        "median_ns": 576148.5
       },
       {
         "columns": 16,
         "mode": "spanning",
         "operation": "build",
-        "median_ns": 429335.0
+        "median_ns": 430837.0
       },
       {
         "columns": 16,
         "mode": "spanning",
         "operation": "layout",
-        "median_ns": 563192.5
+        "median_ns": 553449.5
       },
       {
         "columns": 16,
         "mode": "multilevel",
         "operation": "build",
-        "median_ns": 987848.0
+        "median_ns": 1000734.5
       },
       {
         "columns": 16,
         "mode": "multilevel",
         "operation": "layout",
-        "median_ns": 738118.5
+        "median_ns": 727747.0
       },
       {
         "columns": 16,
         "mode": "empty",
         "operation": "build",
-        "median_ns": 601781.5
+        "median_ns": 600874.0
       },
       {
         "columns": 16,
         "mode": "empty",
         "operation": "layout",
-        "median_ns": 565776.5
+        "median_ns": 566266.0
       },
       {
         "columns": 16,
         "mode": "merge",
         "operation": "build",
-        "median_ns": 612502.5
+        "median_ns": 618195.0
       },
       {
         "columns": 16,
         "mode": "merge",
         "operation": "layout",
-        "median_ns": 609045.5
+        "median_ns": 602934.5
       },
       {
         "columns": 16,
         "mode": "overhang",
         "operation": "build",
-        "median_ns": 612817.0
+        "median_ns": 620604.5
       },
       {
         "columns": 16,
         "mode": "overhang",
         "operation": "layout",
-        "median_ns": 575694.0
+        "median_ns": 579082.0
       },
       {
         "columns": 16,
         "mode": "rtl",
         "operation": "build",
-        "median_ns": 609429.5
+        "median_ns": 621443.5
       },
       {
         "columns": 16,
         "mode": "rtl",
         "operation": "layout",
-        "median_ns": 575974.0
+        "median_ns": 565323.0
       },
       {
         "columns": 16,
         "mode": "nested",
         "operation": "build",
-        "median_ns": 756802.0
+        "median_ns": 771330.0
       },
       {
         "columns": 16,
         "mode": "nested",
         "operation": "layout",
-        "median_ns": 1075363.5
+        "median_ns": 1072430.5
       },
       {
         "columns": 16,
         "mode": "resume",
         "operation": "build",
-        "median_ns": 607509.0
+        "median_ns": 613446.0
       },
       {
         "columns": 16,
         "mode": "resume",
         "operation": "layout",
-        "median_ns": 633945.5
+        "median_ns": 625110.5
       },
       {
         "columns": 64,
         "mode": "first-line",
         "operation": "build",
-        "median_ns": 2501591.0
+        "median_ns": 2501626.5
       },
       {
         "columns": 64,
         "mode": "first-line",
         "operation": "layout",
-        "median_ns": 2483362.0
+        "median_ns": 2475365.5
       },
       {
         "columns": 64,
         "mode": "spanning",
         "operation": "build",
-        "median_ns": 1496142.5
+        "median_ns": 1528481.0
       },
       {
         "columns": 64,
         "mode": "spanning",
         "operation": "layout",
-        "median_ns": 2313081.0
+        "median_ns": 2330717.0
       },
       {
         "columns": 64,
         "mode": "multilevel",
         "operation": "build",
-        "median_ns": 3682070.5
+        "median_ns": 3747516.5
       },
       {
         "columns": 64,
         "mode": "multilevel",
         "operation": "layout",
-        "median_ns": 3023505.0
+        "median_ns": 3007163.5
       },
       {
         "columns": 64,
         "mode": "empty",
         "operation": "build",
-        "median_ns": 2168012.5
+        "median_ns": 2196755.0
       },
       {
         "columns": 64,
         "mode": "empty",
         "operation": "layout",
-        "median_ns": 2386033.0
+        "median_ns": 2377582.5
       },
       {
         "columns": 64,
         "mode": "merge",
         "operation": "build",
-        "median_ns": 2217253.5
+        "median_ns": 2243656.0
       },
       {
         "columns": 64,
         "mode": "merge",
         "operation": "layout",
-        "median_ns": 2527224.0
+        "median_ns": 2515037.0
       },
       {
         "columns": 64,
         "mode": "overhang",
         "operation": "build",
-        "median_ns": 2209780.5
+        "median_ns": 2239919.0
       },
       {
         "columns": 64,
         "mode": "overhang",
         "operation": "layout",
-        "median_ns": 2445086.5
+        "median_ns": 2462374.5
       },
       {
         "columns": 64,
         "mode": "rtl",
         "operation": "build",
-        "median_ns": 2218546.0
+        "median_ns": 2249802.0
       },
       {
         "columns": 64,
         "mode": "rtl",
         "operation": "layout",
-        "median_ns": 2380690.5
+        "median_ns": 2391028.0
       },
       {
         "columns": 64,
         "mode": "nested",
         "operation": "build",
-        "median_ns": 2803390.0
+        "median_ns": 2850851.0
       },
       {
         "columns": 64,
         "mode": "nested",
         "operation": "layout",
-        "median_ns": 4539344.5
+        "median_ns": 4521396.0
       },
       {
         "columns": 64,
         "mode": "resume",
         "operation": "build",
-        "median_ns": 2204088.0
+        "median_ns": 2248230.5
       },
       {
         "columns": 64,
         "mode": "resume",
         "operation": "layout",
-        "median_ns": 3397733.0
+        "median_ns": 3405487.5
       },
       {
         "columns": 256,
         "mode": "first-line",
         "operation": "build",
-        "median_ns": 10479144.0
+        "median_ns": 10632736.0
       },
       {
         "columns": 256,
         "mode": "first-line",
         "operation": "layout",
-        "median_ns": 10466362.0
+        "median_ns": 10670801.5
       },
       {
         "columns": 512,
         "mode": "first-line",
         "operation": "build",
-        "median_ns": 23717990.0
+        "median_ns": 24122295.5
       },
       {
         "columns": 512,
         "mode": "first-line",
         "operation": "layout",
-        "median_ns": 22178962.5
+        "median_ns": 22498196.0
       },
       {
         "columns": 64,
         "mode": "full-1",
         "operation": "build",
-        "median_ns": 734800.5
+        "median_ns": 751773.0
       },
       {
         "columns": 64,
         "mode": "full-1",
         "operation": "layout",
-        "median_ns": 18648000.5
+        "median_ns": 16922006.0
       },
       {
         "columns": 512,
         "mode": "full-1",
         "operation": "build",
-        "median_ns": 5631540.0
+        "median_ns": 5544655.5
       },
       {
         "columns": 512,
         "mode": "full-1",
         "operation": "layout",
-        "median_ns": 1312522676.5
+        "median_ns": 1417615137.5
       },
       {
         "columns": 512,
         "mode": "full-4",
         "operation": "build",
-        "median_ns": 7289443.0
+        "median_ns": 7217819.5
       },
       {
         "columns": 512,
         "mode": "full-4",
         "operation": "layout",
-        "median_ns": 1222842375.0
+        "median_ns": 1223523348.5
       },
       {
         "columns": 64,
         "mode": "dense-1",
         "operation": "build",
-        "median_ns": 164170.0
+        "median_ns": 166964.0
       },
       {
         "columns": 64,
         "mode": "dense-1",
         "operation": "layout",
-        "median_ns": 377196.0
+        "median_ns": 376707.5
       },
       {
         "columns": 512,
         "mode": "dense-1",
         "operation": "build",
-        "median_ns": 707945.5
+        "median_ns": 713987.0
       },
       {
         "columns": 512,
         "mode": "dense-1",
         "operation": "layout",
-        "median_ns": 2899217.0
+        "median_ns": 2893526.0
       },
       {
         "columns": 512,
         "mode": "dense-4",
         "operation": "build",
-        "median_ns": 1706898.5
+        "median_ns": 1729424.0
       },
       {
         "columns": 512,
         "mode": "dense-4",
         "operation": "layout",
-        "median_ns": 5674215.0
+        "median_ns": 6053474.0
+      },
+      {
+        "columns": 7,
+        "mode": "dense-64",
+        "operation": "build",
+        "median_ns": 1843236.5
+      },
+      {
+        "columns": 7,
+        "mode": "dense-64",
+        "operation": "layout",
+        "median_ns": 1245435.5
+      },
+      {
+        "columns": 7,
+        "mode": "dense-first-64",
+        "operation": "build",
+        "median_ns": 1901137.5
+      },
+      {
+        "columns": 7,
+        "mode": "dense-first-64",
+        "operation": "layout",
+        "median_ns": 1427765.5
       }
     ]
   },
-  "isolated_timing": {
-    "isolated-dense-4-512-0-before": [
-      {
-        "columns": 512,
-        "mode": "dense-4",
-        "operation": "build",
-        "median_ns": 1768470.5
-      }
-    ],
-    "isolated-dense-4-512-1-after": [
-      {
-        "columns": 512,
-        "mode": "dense-4",
-        "operation": "build",
-        "median_ns": 1747238.0
-      }
-    ],
-    "isolated-dense-4-512-2-after": [
-      {
-        "columns": 512,
-        "mode": "dense-4",
-        "operation": "build",
-        "median_ns": 1715912.5
-      }
-    ],
-    "isolated-dense-4-512-3-before": [
-      {
-        "columns": 512,
-        "mode": "dense-4",
-        "operation": "build",
-        "median_ns": 1719265.5
-      }
-    ],
-    "isolated-first-line-512-0-before": [
-      {
-        "columns": 512,
-        "mode": "first-line",
-        "operation": "build",
-        "median_ns": 24458921.5
-      }
-    ],
-    "isolated-first-line-512-1-after": [
-      {
-        "columns": 512,
-        "mode": "first-line",
-        "operation": "build",
-        "median_ns": 25129047.0
-      }
-    ],
-    "isolated-first-line-512-2-after": [
-      {
-        "columns": 512,
-        "mode": "first-line",
-        "operation": "build",
-        "median_ns": 25209194.0
-      }
-    ],
-    "isolated-first-line-512-3-before": [
-      {
-        "columns": 512,
-        "mode": "first-line",
-        "operation": "build",
-        "median_ns": 24318847.0
-      }
-    ],
-    "isolated-plain-512-0-before": [
-      {
-        "columns": 512,
-        "mode": "plain",
-        "operation": "build",
-        "median_ns": 19511184.5
-      }
-    ],
-    "isolated-plain-512-1-after": [
-      {
-        "columns": 512,
-        "mode": "plain",
-        "operation": "build",
-        "median_ns": 19528890.0
-      }
-    ],
-    "isolated-plain-512-2-after": [
-      {
-        "columns": 512,
-        "mode": "plain",
-        "operation": "build",
-        "median_ns": 19471513.0
-      }
-    ],
-    "isolated-plain-512-3-before": [
-      {
-        "columns": 512,
-        "mode": "plain",
-        "operation": "build",
-        "median_ns": 19758435.0
-      }
-    ],
-    "isolated-plain-64-0-before": [
-      {
-        "columns": 64,
-        "mode": "plain",
-        "operation": "build",
-        "median_ns": 2269851.5
-      }
-    ],
-    "isolated-plain-64-1-after": [
-      {
-        "columns": 64,
-        "mode": "plain",
-        "operation": "build",
-        "median_ns": 2277605.0
-      }
-    ],
-    "isolated-plain-64-2-after": [
-      {
-        "columns": 64,
-        "mode": "plain",
-        "operation": "build",
-        "median_ns": 2262099.5
-      }
-    ],
-    "isolated-plain-64-3-before": [
-      {
-        "columns": 64,
-        "mode": "plain",
-        "operation": "build",
-        "median_ns": 2277814.0
-      }
-    ]
-  },
-  "isolated_binary_sha256": {
-    "before": "d21979da5b4882a196dfbc19faf75cd64038de26c14bf8ce99993b42645a68fc",
-    "after": "2426059a989c6c6ab7ce343f3011a4ebd963738787f3485af6aeee5d050bc3dd"
-  },
+  "review": "# Final review and focused resolution\n\nAstra reviewed b2ad3ba..9389cc9 read-only: Critical 0, Important 1, Minor 0. Per-lane Dense metadata could retain 6432 bytes plus Arc for an 8x64 table versus original4416. Existing semantics/budgets and disclosed prototype first-line CPU/memory tradeoff accepted.\n\nRoot reproduced both actual real-table6432 and builder-only6176 failures after cursor expectations passed (/tmp/shodo-sbp6-review-red-final.log). One fix pass committed0562e02a0a72d4a2b8195ad95533dd58d2ad05dc: total capacity/header comparison and global dense fallback, direct dense build for fully active nonempty normal lanes without mandatory overrides, upper-bound convenience capacity shrink; two independent regressions, Ruby91 GREEN.\n\nSame reviewer focused read-only resolution (not a second whole-branch review): Important resolved; no additional issue in fix scope. Independent two regression execution passed. Final real-table payload4384 plus Arc16=4400 below original4416. Per-row/column values copied unchanged; direct normal path uses original walker. Final collector outside focused review scope, root verification required.\n",
   "limitations": [
-    "Legality walk still examines all lanes per base cut; no improved CPU asymptotic complexity or proved build-time dominance.",
-    "Storage payload capacities exclude Arc control block/allocator overhead; actual scoped net/peak counters include requested allocation sizes. RSS not measured.",
-    "Gross and allocation calls do not uniformly decrease; all30 measured build net values decrease, all30 layout allocation metrics unchanged.",
-    "Dedicated digest covers text ranges, glyph geometry and ruby spans/transforms; exact DOM offset-map serialization was not collected by this probe. Existing real-font source/normal/first-line tests and9 original logical row fingerprints pin correspondence. Context warnings are asserted empty.",
-    "Before production is exactly base; cfg(test) diagnostics/RED regression do not participate in release binaries. Original source snapshot includes final ignored-fixture correction, recorded after capture; production remained unchanged.",
-    "One sequential after run was roughly2x slower; isolated C512 plain does not reproduce it, exact cause unestablished. Isolated first-line C512 build medians are about3% slower; adoption trades this time cost for36.5% less measured first-line build retention.",
-    "All normal balanced timing follows completed validation and collector builds, CPU10, immutable binaries. Results remain host/input/scope observations; no uniform speed guarantee.",
-    "Candidate and standard quick timings overlapped validation builds and are not causal speed evidence."
+    "Original all-lane legality walk and logical Items budget unchanged; no asymptotic CPU improvement or demonstrated build-time dominance.",
+    "Payload excludes Arc16/allocator overhead; actual scoped net/peak use requested sizes. RSS not measured.",
+    "Calls/gross/peak do not uniformly decrease. Dense64 retention gain16 bytes normal/32 bytes first-line accompanies gross/peak increases; all32 build net decreases and all32 layout alloc metrics equal.",
+    "Dedicated digest covers glyph geometry/text/ruby spans/transforms, not complete DOM offset-map serialization. Source correspondence pinned by9 original logical table fingerprints and existing source/first-line/transform/shared-cluster tests. Warnings asserted empty.",
+    "Original prototype anomaly (~2x one sequential after run) and isolated/perf results remain in prototype_evidence; final-source timing is separate. Cause of prototype anomaly not established.",
+    "Final balanced timings after all builds, CPU10, immutable binaries; host/input-specific observations, no universal speed claim. Capture/quick timings concurrent with validation are not causal speed evidence.",
+    "Final after capture records9389 head plus exact production diff yielding final source fingerprint, then committed unchanged as0562e02."
   ],
-  "isolated_process_usage": [
-    {
-      "run": "isolated-plain-64-0-before",
-      "scope": "whole fresh process includes fonts/output digest checking/layout outside measured build; not scoped build CPU",
-      "user_seconds": 0.051292,
-      "system_seconds": 0.0069039999999999995,
-      "minor_faults": 1128,
-      "major_faults": 0,
-      "voluntary_switches": 1,
-      "involuntary_switches": 1
-    },
-    {
-      "run": "isolated-plain-64-1-after",
-      "scope": "whole fresh process includes fonts/output digest checking/layout outside measured build; not scoped build CPU",
-      "user_seconds": 0.054590999999999994,
-      "system_seconds": 0.003971,
-      "minor_faults": 1111,
-      "major_faults": 0,
-      "voluntary_switches": 1,
-      "involuntary_switches": 2
-    },
-    {
-      "run": "isolated-plain-64-2-after",
-      "scope": "whole fresh process includes fonts/output digest checking/layout outside measured build; not scoped build CPU",
-      "user_seconds": 0.05397400000000001,
-      "system_seconds": 0.003998,
-      "minor_faults": 1112,
-      "major_faults": 0,
-      "voluntary_switches": 1,
-      "involuntary_switches": 4
-    },
-    {
-      "run": "isolated-plain-64-3-before",
-      "scope": "whole fresh process includes fonts/output digest checking/layout outside measured build; not scoped build CPU",
-      "user_seconds": 0.05454599999999998,
-      "system_seconds": 0.00404,
-      "minor_faults": 1132,
-      "major_faults": 0,
-      "voluntary_switches": 1,
-      "involuntary_switches": 5
-    },
-    {
-      "run": "isolated-plain-512-0-before",
-      "scope": "whole fresh process includes fonts/output digest checking/layout outside measured build; not scoped build CPU",
-      "user_seconds": 0.474275,
-      "system_seconds": 0.01997,
-      "minor_faults": 7392,
-      "major_faults": 0,
-      "voluntary_switches": 1,
-      "involuntary_switches": 4
-    },
-    {
-      "run": "isolated-plain-512-1-after",
-      "scope": "whole fresh process includes fonts/output digest checking/layout outside measured build; not scoped build CPU",
-      "user_seconds": 0.46952099999999997,
-      "system_seconds": 0.015982999999999997,
-      "minor_faults": 6370,
-      "major_faults": 0,
-      "voluntary_switches": 1,
-      "involuntary_switches": 7
-    },
-    {
-      "run": "isolated-plain-512-2-after",
-      "scope": "whole fresh process includes fonts/output digest checking/layout outside measured build; not scoped build CPU",
-      "user_seconds": 0.4696529999999999,
-      "system_seconds": 0.015988000000000002,
-      "minor_faults": 6368,
-      "major_faults": 0,
-      "voluntary_switches": 1,
-      "involuntary_switches": 7
-    },
-    {
-      "run": "isolated-plain-512-3-before",
-      "scope": "whole fresh process includes fonts/output digest checking/layout outside measured build; not scoped build CPU",
-      "user_seconds": 0.4823390000000001,
-      "system_seconds": 0.013980999999999993,
-      "minor_faults": 7388,
-      "major_faults": 0,
-      "voluntary_switches": 1,
-      "involuntary_switches": 5
-    },
-    {
-      "run": "isolated-first-line-512-0-before",
-      "scope": "whole fresh process includes fonts/output digest checking/layout outside measured build; not scoped build CPU",
-      "user_seconds": 0.5414699999999999,
-      "system_seconds": 0.022978,
-      "minor_faults": 9166,
-      "major_faults": 0,
-      "voluntary_switches": 1,
-      "involuntary_switches": 3
-    },
-    {
-      "run": "isolated-first-line-512-1-after",
-      "scope": "whole fresh process includes fonts/output digest checking/layout outside measured build; not scoped build CPU",
-      "user_seconds": 0.5384640000000003,
-      "system_seconds": 0.016982999999999998,
-      "minor_faults": 7125,
-      "major_faults": 0,
-      "voluntary_switches": 1,
-      "involuntary_switches": 5
-    },
-    {
-      "run": "isolated-first-line-512-2-after",
-      "scope": "whole fresh process includes fonts/output digest checking/layout outside measured build; not scoped build CPU",
-      "user_seconds": 0.544632,
-      "system_seconds": 0.012991000000000003,
-      "minor_faults": 7121,
-      "major_faults": 0,
-      "voluntary_switches": 1,
-      "involuntary_switches": 4
-    },
-    {
-      "run": "isolated-first-line-512-3-before",
-      "scope": "whole fresh process includes fonts/output digest checking/layout outside measured build; not scoped build CPU",
-      "user_seconds": 0.5400419999999997,
-      "system_seconds": 0.014001000000000013,
-      "minor_faults": 9159,
-      "major_faults": 0,
-      "voluntary_switches": 1,
-      "involuntary_switches": 4
-    },
-    {
-      "run": "isolated-dense-4-512-0-before",
-      "scope": "whole fresh process includes fonts/output digest checking/layout outside measured build; not scoped build CPU",
-      "user_seconds": 0.08895900000000001,
-      "system_seconds": 0.004997999999999975,
-      "minor_faults": 2617,
-      "major_faults": 0,
-      "voluntary_switches": 1,
-      "involuntary_switches": 3
-    },
-    {
-      "run": "isolated-dense-4-512-1-after",
-      "scope": "whole fresh process includes fonts/output digest checking/layout outside measured build; not scoped build CPU",
-      "user_seconds": 0.0860669999999999,
-      "system_seconds": 0.007914000000000004,
-      "minor_faults": 2602,
-      "major_faults": 0,
-      "voluntary_switches": 1,
-      "involuntary_switches": 4
-    },
-    {
-      "run": "isolated-dense-4-512-2-after",
-      "scope": "whole fresh process includes fonts/output digest checking/layout outside measured build; not scoped build CPU",
-      "user_seconds": 0.08571200000000001,
-      "system_seconds": 0.006977000000000011,
-      "minor_faults": 2600,
-      "major_faults": 0,
-      "voluntary_switches": 1,
-      "involuntary_switches": 2
-    },
-    {
-      "run": "isolated-dense-4-512-3-before",
-      "scope": "whole fresh process includes fonts/output digest checking/layout outside measured build; not scoped build CPU",
-      "user_seconds": 0.08504600000000018,
-      "system_seconds": 0.007003000000000009,
-      "minor_faults": 2614,
-      "major_faults": 0,
-      "voluntary_switches": 1,
-      "involuntary_switches": 2
-    }
-  ],
-  "first_line_process_perf": {
-    "perf-after.txt": "# started on Thu Oct  1 01:16:42 2026\n\n6384299440,,instructions:u,574748710,100.00,,\n2452862841,,cycles:u,574748710,100.00,,\n574.75,msec,task-clock:u,574748710,100.00,,\n0,,context-switches:u,574748710,100.00,,\n7036,,minor-faults:u,574748710,100.00,,\n",
-    "perf-after2.txt": "# started on Thu Oct  1 01:16:42 2026\n\n6384362598,,instructions:u,567197413,100.00,,\n2427393423,,cycles:u,567197413,100.00,,\n567.20,msec,task-clock:u,567197413,100.00,,\n0,,context-switches:u,567197413,100.00,,\n7032,,minor-faults:u,567197413,100.00,,\n",
-    "perf-before.txt": "# started on Thu Oct  1 01:15:54 2026\n\n6094683660,,instructions:u,564530881,100.00,,\n2388506968,,cycles:u,564530881,100.00,,\n564.53,msec,task-clock:u,564530881,100.00,,\n0,,context-switches:u,564530881,100.00,,\n9069,,minor-faults:u,564530881,100.00,,\n",
-    "perf-before2.txt": "# started on Thu Oct  1 01:16:43 2026\n\n6093618381,,instructions:u,556026146,100.00,,\n2366825803,,cycles:u,556026146,100.00,,\n556.03,msec,task-clock:u,556026146,100.00,,\n0,,context-switches:u,556026146,100.00,,\n9070,,minor-faults:u,556026146,100.00,,\n"
-  },
-  "raw_archive_sha256": "8dacfb63d1236ac343a572d9910eb443f13c5e97e22602c879fab52c683f989f"
+  "raw_archive_sha256": "6b1732bc5bf20ebdd383a7f374275f6db8090cc689e2b57d0d445857d8a6bf51",
+  "final_c512_build_time_ratio": {
+    "plain": 0.006914045643116706,
+    "first-line": 0.036229943825013544
+  }
 }

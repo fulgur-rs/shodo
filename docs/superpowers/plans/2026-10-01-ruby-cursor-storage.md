@@ -58,3 +58,9 @@ Preserve every row unit/class/cursor, paired-cut ordinal (including duplicate pa
   Expected: every claim auditable; no budget relaxation or universal speed claim.
 
 One fresh read-only Astra whole-branch review after all tasks; fix Critical/Important, PR/all CI/merge matching reviewed head, close issue, copy native ledger/review externally and remove only this tree/branch. Continue next eligible child.
+
+## One final-review fix pass
+
+- [x] Reproduce dense8x64 metadata increase after exact cursor checks, then compare all column capacities/headers with flat arena and add global fallback/direct normal dense construction.
+- [x] Verify raw-builder and real normal/first-line regression RED6176/6432→GREEN, Ruby91, required1071/618/621/fmt/clippy/docs/snapshots.
+- [x] Confirm focused resolution with same reviewer; freeze source48fa29dc, new same-body64 A/B and54 matrix, all9 old logical fingerprints/default refusal and final ABBA. Preserve prototype data separately and disclose dense64 gross/peak and first-line CPU tradeoff.
