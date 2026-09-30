@@ -1,5 +1,11 @@
 # Representative raikiri caller contracts
 
+> Historical supplied-input record. `shodo-7ff` replaced the ordinary CSS
+> supplier with actual `::first-line` resolution and updated all dependency
+> pins. See [the real CSS measurement](raikiri-first-line.md) for the current
+> API, supported scope and fixed WPT evidence. The old SHA below identifies
+> this record's original measurement.
+
 `dev/fixtures/examples/raikiri_contracts.rs` combines explicit first-line
 inputs, accepted-line offset mappings, source links, and retained glyph
 paint in one executable caller. Its support module is shared by the CLI

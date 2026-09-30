@@ -1,4 +1,5 @@
 //! Representative raikiri caller: resolved first-line inputs and source links.
+#[allow(dead_code)] // Shared caller has separate fixture and WPT entry points.
 #[path = "support/raikiri_contracts.rs"]
 mod caller;
 

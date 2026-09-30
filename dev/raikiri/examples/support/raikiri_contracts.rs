@@ -59,6 +59,18 @@ pub fn resolve_document(
     })
 }
 
+impl ResolvedInput {
+    pub fn has_first_line(&self) -> bool {
+        self.first.is_some()
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum FontPolicy {
+    FixtureLatin,
+    BundledWpt,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Link {
     pub element: NodeId,
@@ -103,6 +115,7 @@ fn rgba(c: raikiri_style::property::CssColor) -> [u8; 4] {
 fn style(
     cv: &ComputedValues,
     inherited_underline: Option<TextDecoration>,
+    policy: FontPolicy,
 ) -> Result<InlineStyle, String> {
     use raikiri_style::property as css;
     if cv.opacity != 1.0
@@ -116,8 +129,9 @@ fn style(
     {
         return Err("representative caller requires horizontal LTR input".into());
     }
-    if cv.font_family.len() != 1
-        || cv.font_family[0].as_str() != shodo_fixtures::FONTS[0].family
+    if (matches!(policy, FontPolicy::FixtureLatin)
+        && (cv.font_family.len() != 1
+            || cv.font_family[0].as_str() != shodo_fixtures::FONTS[0].family))
         || cv.font_weight != 400.0
         || cv.font_style != css::FontStyle::Normal
     {
@@ -170,7 +184,25 @@ fn style(
         inherited_underline
     };
     Ok(InlineStyle {
-        font_families: vec![FontFamily::Named(shodo_fixtures::FONTS[0].family.into())],
+        font_families: cv
+            .font_family
+            .iter()
+            .map(|f| {
+                if f.1 == css::FontFamilyKind::Named {
+                    return Ok(FontFamily::Named(f.as_str().into()));
+                }
+                let generic = match f.as_str() {
+                    "serif" => shodo::style::GenericFamily::Serif,
+                    "sans-serif" => shodo::style::GenericFamily::SansSerif,
+                    "monospace" => shodo::style::GenericFamily::Monospace,
+                    "cursive" => shodo::style::GenericFamily::Cursive,
+                    "fantasy" => shodo::style::GenericFamily::Fantasy,
+                    "system-ui" => shodo::style::GenericFamily::SystemUi,
+                    _ => return Err("font generic outside bundled registry".into()),
+                };
+                Ok(FontFamily::Generic(generic))
+            })
+            .collect::<Result<_, String>>()?,
         font_size: cv.font_size.0,
         font_weight: cv.font_weight,
         letter_spacing: spacing(cv.letter_spacing_computed)?,
@@ -210,6 +242,7 @@ struct Walker<'a> {
     input: &'a ResolvedInput,
     builder: ParagraphBuilder,
     sources: HashMap<NodeId, Option<Link>>,
+    policy: FontPolicy,
 }
 
 impl Walker<'_> {
@@ -251,7 +284,7 @@ impl Walker<'_> {
         if self.input.normal.computed[id].display != raikiri_style::property::DisplayValue::Inline {
             return Err("representative caller expects inline descendants".into());
         }
-        let normal = style(&self.input.normal.computed[id], underline)?;
+        let normal = style(&self.input.normal.computed[id], underline, self.policy)?;
         let link = if node.tag_name() == Some("a") {
             node.attribute("href")
                 .map(|href| Link {
@@ -270,7 +303,7 @@ impl Walker<'_> {
                 let cv = cascade.computed[id]
                     .as_ref()
                     .ok_or("missing first-line descendant")?;
-                style(cv, first_underline)
+                style(cv, first_underline, self.policy)
             })
             .transpose()?;
         if let Some(first) = &first {
@@ -298,6 +331,15 @@ impl Walker<'_> {
 }
 
 pub fn layout(input: &ResolvedInput, fonts: &FontCollection, width: f32) -> Result<Output, String> {
+    layout_with_font_policy(input, fonts, width, FontPolicy::FixtureLatin)
+}
+
+pub fn layout_with_font_policy(
+    input: &ResolvedInput,
+    fonts: &FontCollection,
+    width: f32,
+    policy: FontPolicy,
+) -> Result<Output, String> {
     let count = input.parsed.dom.node_count();
     if input.normal.computed.len() != count
         || input
@@ -311,7 +353,7 @@ pub fn layout(input: &ResolvedInput, fonts: &FontCollection, width: f32) -> Resu
     if input.normal.computed[root].display != raikiri_style::property::DisplayValue::Block {
         return Err("representative caller expects a block IFC root".into());
     }
-    let normal = style(&input.normal.computed[root], None)?;
+    let normal = style(&input.normal.computed[root], None, policy)?;
     let first = input
         .first
         .as_ref()
@@ -319,6 +361,7 @@ pub fn layout(input: &ResolvedInput, fonts: &FontCollection, width: f32) -> Resu
             style(
                 c.computed[root].as_ref().ok_or("missing first-line root")?,
                 normal.paint.underline,
+                policy,
             )
         })
         .transpose()?;
@@ -333,6 +376,7 @@ pub fn layout(input: &ResolvedInput, fonts: &FontCollection, width: f32) -> Resu
         input,
         builder,
         sources: HashMap::new(),
+        policy,
     };
     for child in input.parsed.dom.child_ids(DomId(root as u64)) {
         walker.walk(
