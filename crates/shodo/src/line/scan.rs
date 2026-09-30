@@ -18,6 +18,8 @@ pub(super) fn scan(
     flags: u8,
     options: &crate::style::LineOptions,
     atomics: &AtomicSizes,
+    max_graphemes: Option<usize>,
+    normal_cursors: Option<&[Option<u32>]>,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> Scan {
@@ -34,12 +36,16 @@ pub(super) fn scan(
     let mut spacing = super::spacing_summary::Cursor::default();
     let mut kept_spacing = LayoutUnit::ZERO;
     let mut i = start;
+    let mut graphemes_seen = 0usize;
+    let mut counted_through = units[start].text.start;
+    let max_graphemes = max_graphemes.map(|limit| limit.max(1));
+    let count_mode = max_graphemes.is_some();
     let reason = loop {
         let Some(unit) = units.get(i) else {
             break BreakReason::End;
         };
         match unit.kind {
-            UnitKind::ForcedBreak => {
+            UnitKind::ForcedBreak if !count_mode => {
                 widths.push(LayoutUnit::ZERO);
                 i += 1;
                 break BreakReason::Forced;
@@ -47,6 +53,39 @@ pub(super) fn scan(
             UnitKind::BlockInInline { .. } => break BreakReason::BlockInInline,
             _ => {}
         }
+        if max_graphemes.is_some() {
+            let count = match unit.kind {
+                UnitKind::Cluster { .. } => {
+                    let from = counted_through.max(unit.text.start);
+                    counted_through = counted_through.max(unit.text.end);
+                    data.breaks
+                        .graphemes
+                        .partition_point(|cut| *cut <= unit.text.end)
+                        .saturating_sub(data.breaks.graphemes.partition_point(|cut| *cut <= from))
+                }
+                UnitKind::Atomic { .. } | UnitKind::Tab | UnitKind::ForcedBreak => {
+                    counted_through = counted_through.max(unit.text.end);
+                    1
+                }
+                _ => 0,
+            };
+            graphemes_seen = graphemes_seen.saturating_add(count);
+        }
+        let cut = unit.text.end;
+        let combined = data
+            .combine_spans
+            .partition_point(|span| span.text.end <= cut);
+        let character_cut = max_graphemes.is_some()
+            && graphemes_seen > 0
+            && i + 1 < units.len()
+            && data.breaks.caret_cuts.binary_search(&cut).is_ok()
+            && normal_cursors.is_none_or(|cursors| cursors.get(i + 1).is_some_and(Option::is_some))
+            && data
+                .combine_spans
+                .get(combined)
+                .is_none_or(|span| span.text.start >= cut);
+        let limited_cut =
+            character_cut && max_graphemes.is_some_and(|limit| graphemes_seen >= limit);
         let w = unit_width_from(
             data,
             unit,
@@ -92,9 +131,13 @@ pub(super) fn scan(
         // under-count a window that turns out unshapeable within budget
         // (the edge falls back to wider un-sliced glyphs), so those always
         // get the real measurement.
-        let need_edge = unit.break_after != BreakClass::Prohibited
-            || unit.shared_cluster.is_some()
-            || (!hangs && !overflowing && shared_extent > available);
+        let need_edge = if count_mode {
+            limited_cut
+        } else {
+            unit.break_after != BreakClass::Prohibited
+                || unit.shared_cluster.is_some()
+                || (!hangs && !overflowing && shared_extent > available)
+        };
         let (edge_delta, viable) = if need_edge {
             super::windows::candidate(data, start, i + 1, cx, sat)
         } else {
@@ -103,7 +146,7 @@ pub(super) fn scan(
         let extent = shared_extent.add(edge_delta, sat);
         // Edge adjustments only ever remove width (see `EdgeAdjustment`), so a
         // candidate that already fits cannot start to overflow.
-        let extent = if !hangs && !overflowing && extent > available {
+        let extent = if !count_mode && !hangs && !overflowing && extent > available {
             let adjustment = super::punctuation::edges(
                 data,
                 spacing.summary(Some(data)),
@@ -118,7 +161,7 @@ pub(super) fn scan(
         } else {
             extent
         };
-        if !hangs && !overflowing && extent > available {
+        if !count_mode && !hangs && !overflowing && extent > available {
             if let Some((b, edge)) = last_break.take() {
                 taken_hyphen = edge.then_some(b);
                 widths.truncate(b - start);
@@ -153,6 +196,13 @@ pub(super) fn scan(
         if hanging == LayoutUnit::ZERO {
             kept_spacing = tracking;
         }
+        i += 1;
+        if count_mode {
+            if limited_cut && viable {
+                break BreakReason::Regular;
+            }
+            continue;
+        }
         let required = pos
             .add(kept_spacing, sat)
             .add(edge_delta, sat)
@@ -161,8 +211,7 @@ pub(super) fn scan(
             .add(suffix, sat);
         // Only break candidates compare `required` against the width, so the
         // edge adjustment is computed for those alone.
-        let last = super::punctuation::last_edge(data, i + 1);
-        i += 1;
+        let last = super::punctuation::last_edge(data, i);
         match unit.break_after {
             BreakClass::Mandatory => break BreakReason::Forced,
             BreakClass::Allowed if viable => {
