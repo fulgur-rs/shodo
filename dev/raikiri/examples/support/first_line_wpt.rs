@@ -9,7 +9,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const ENGINE: &str = "f8896bf12694dc3c9f5b1b3c35fbc80fd79596a9";
+const ENGINE: &str = "a62ea75b65a8547bcd0e7874addeeebee5b0beee";
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 pub fn hash(bytes: &[u8]) -> String {
@@ -85,8 +85,10 @@ pub fn classify(native: Result<bool, String>, candidate: Result<bool, CandidateE
 }
 fn diff(a: &[u8], b: &[u8]) -> Value {
     let mismatched = a
-        .chunks_exact(4)
-        .zip(b.chunks_exact(4))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(b.as_chunks::<4>().0.iter())
         .filter(|(x, y)| x != y)
         .count();
     let max = a

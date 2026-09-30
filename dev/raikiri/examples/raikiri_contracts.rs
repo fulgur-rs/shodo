@@ -339,4 +339,114 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn first_line_wrapping_changes_are_rejected() {
+        let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
+        let normal = input("a b c d e f g h", "#root{text-wrap-mode:nowrap}", None);
+        assert_eq!(
+            caller::layout(&normal, &fonts.collection, 40.0)
+                .unwrap()
+                .lines
+                .len(),
+            1
+        );
+        for css in [
+            "text-wrap-mode:nowrap",
+            "white-space:pre",
+            "white-space-collapse:preserve",
+        ] {
+            let input = input(
+                "a b c d e f g h",
+                "",
+                Some(&format!("#root::first-line{{{css}}}")),
+            );
+            assert!(
+                caller::layout(&input, &fonts.collection, 40.0).is_err(),
+                "{css}"
+            );
+        }
+    }
+
+    #[test]
+    fn unprojected_first_line_hanging_punctuation_is_rejected() {
+        let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
+        let input = input(
+            "a",
+            "",
+            Some("#root::first-line{hanging-punctuation:first}"),
+        );
+        assert!(caller::layout(&input, &fonts.collection, 400.0).is_err());
+    }
+
+    #[test]
+    fn unprojected_normal_and_first_line_values_are_rejected() {
+        let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
+        let declarations = [
+            "text-shadow:2px 2px red",
+            "font-variant-caps:small-caps",
+            "vertical-align:super",
+            "word-break:break-all",
+            "font-kerning:none",
+            "font-optical-sizing:none",
+            "font-variant-ligatures:none",
+            "text-emphasis-style:dot",
+            "ruby-position:under",
+            "tab-size:4",
+            "visibility:hidden",
+            "text-align:center",
+            "text-indent:10px",
+            "transform:translateX(5px)",
+        ];
+        let mut lost = Vec::new();
+        for css in declarations {
+            for first in [false, true] {
+                if first
+                    && [
+                        "visibility:hidden",
+                        "text-align:center",
+                        "text-indent:10px",
+                        "transform:translateX(5px)",
+                    ]
+                    .contains(&css)
+                {
+                    continue;
+                }
+                let rule = if first {
+                    format!("#root::first-line{{{css}}}")
+                } else {
+                    format!("#root{{{css}}}")
+                };
+                let input = input("<span>a</span>", &rule, None);
+                if caller::layout(&input, &fonts.collection, 400.0).is_ok() {
+                    lost.push((css, first));
+                }
+            }
+        }
+        assert!(
+            lost.is_empty(),
+            "silently dropped valid declarations: {lost:?}"
+        );
+    }
+
+    #[test]
+    fn positioned_and_generated_content_is_rejected() {
+        let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
+        for extra in [
+            "span{position:absolute;left:100px}",
+            "span{position:fixed}",
+            "span{position:relative;left:5px}",
+            "span{float:left}",
+            "#root::before{content:'BEFORE'}",
+            "span::after{content:'AFTER'}",
+        ] {
+            let result = caller::resolve_html(
+                &format!("<style>{CSS}{extra}</style><div id=root><span>a</span></div>"),
+                "root",
+            )
+            .and_then(|input| caller::layout(&input, &fonts.collection, 400.0));
+            assert!(result.is_err(), "{extra}");
+        }
+        let input = input("<span>a</span>", "#root::before{content:none}", None);
+        assert!(caller::layout(&input, &fonts.collection, 400.0).is_ok());
+    }
 }

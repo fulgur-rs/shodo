@@ -385,7 +385,7 @@
       "sha256": "83ed58f49435e518a3530bd0cc9cb5a62d96d60f481007a16c6f344043bf18aa"
     }
   ],
-  "cargo_lock_sha256": "d256c9310aff02efccc71eb04cf9a8c96d0b3cec6d043f907c5e17da75539a11",
+  "cargo_lock_sha256": "008d0be09f5c5061102d6c31ae25467e6020951ede20637df84f57cc8b9beaec",
   "exact_process_argv": [
     "target/debug/examples/first_line_wpt",
     "/home/mitz/.cache/raikiri/wpt",
@@ -1049,11 +1049,11 @@
     },
     {
       "path": "examples/support/first_line_wpt.rs",
-      "sha256": "896f56c18d02653448917fd2b835e23d1e0847321250c1d9564138328032f9f6"
+      "sha256": "b3b5d3a0db713b27ac97d91963354552dfd938f1cf4304c48abcbddaca395a60"
     },
     {
       "path": "examples/support/raikiri_contracts.rs",
-      "sha256": "d5bb130a8f0c3466748d61364055c319b42ece70141d25788a83c381a9a96cd2"
+      "sha256": "982be011abcffdf88fadae537e5765b907cdb968848c0437b3dfe0e93743fd2f"
     },
     {
       "path": "examples/support/source_fonts.rs",
@@ -1066,7 +1066,7 @@
   ],
   "measurement": "common ordinary block boundary; inline glyph comparison, not full-page WPT conformance",
   "media": "screen",
-  "raikiri_commit": "f8896bf12694dc3c9f5b1b3c35fbc80fd79596a9",
+  "raikiri_commit": "a62ea75b65a8547bcd0e7874addeeebee5b0beee",
   "rows": [
     {
       "candidate": {
@@ -5586,7 +5586,7 @@
         "candidate_reference_exact": null,
         "capability": "unclassified",
         "counted_as_pass": false,
-        "error": "caller does not paint opacity or backgrounds",
+        "error": "unsupported computed value: opacity",
         "native_reference_exact": false,
         "status": "unsupported"
       },
@@ -7170,7 +7170,7 @@
     }
   ],
   "rustc": "rustc 1.91.0 (f8297e351 2025-10-28)",
-  "shodo_checkout_head": "e69712c601875af38aceb59a735ed9bfc063a020",
+  "shodo_checkout_head": "09621b7f84f4bca0b3629a4c79c082072f22d16a",
   "system_fonts": false,
   "viewport": [
     800,

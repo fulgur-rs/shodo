@@ -1,7 +1,7 @@
 # 実 CSS `::first-line` の caller 接続
 
 `shodo-7ff` の実装・測定記録。`dev/raikiri` の全 git 依存は
-`f8896bf12694dc3c9f5b1b3c35fbc80fd79596a9` に更新した。旧 pin の結果資料は
+`a62ea75b65a8547bcd0e7874addeeebee5b0beee` に更新した。旧 pin の結果資料は
 履歴として保持している。
 
 ## API と範囲
@@ -19,7 +19,7 @@ HTML の書き換えや通常 CSS の根要素上書きは行わない。宣言�
 font-size に限る。他の CSS-wide 値の一般実装を意味しない。
 
 API は一つの block と inline/text の子孫を対象とする。存在しない・切り離された・
-非ブロックの根、可視の nested block / inline-block は理由付きで拒否する。
+非ブロックの根、可視の nested block / inline-block、float、absolute / fixed の子孫は理由付きで拒否する。
 display:none の部分木は省く。疑似要素規則がない場合は追加スタイルを返さない。
 
 代表 caller は `resolve_html` / `resolve_document` を使い、通常と先頭行の値を
@@ -27,7 +27,11 @@ display:none の部分木は省く。疑似要素規則がない場合は追加�
 を shodo が選び、空の先頭行や幅で折り返した後も次行は通常入力を使う。
 span / a / em / br、横書き LTR、静的 normal 400-weight font、絶対 spacing、
 対応する whitespace / case transform / solid underline を扱う開発用 caller。
-opacity、背景、非対応 font / transform、ブロック子孫等は拒否する。複数の
+通常・先頭行の computed 値を対応フィールドに照合し、opacity、背景、非対応 font / transform、text-shadow / vertical-align / word-break 等を拒否する。
+upstream は先頭行の text-wrap-mode と hanging-punctuation を解決する。
+既存 shodo API が通常値を保つ先頭行 wrapping / whitespace の変更と、未対応の
+hanging-punctuation は caller が拒否する。通常の nowrap は扱う。
+caller が配置できない position / float と ::before / ::after の生成文字列も拒否する。複数の
 装飾レイヤーや一般的な CSS レイアウトの完成を主張しない。
 
 ## 固定 WPT 比較
@@ -69,7 +73,7 @@ cargo +1.91.0 run --locked -p shodo-raikiri --example raikiri_contracts -- targe
 
 実 CSS の5つの子スタイル、glyph/font metrics、paint、DOM mapping、リンク、
 空行・折り返し後の通常スタイル、未対応値、入力変更拒否を検証した。
-raikiri style 2,640 unit tests、HTML 既存テスト、workspace 通常テスト、clippy、
+raikiri style 2,642 unit tests、HTML 既存テスト、workspace 通常テスト、clippy、
 公開・private・test cfg doc、patch coverage を実行。
 
 upstream 全体 gate の ignored flex-float WPT 1件は8,944 pixelsの画像不一致。
@@ -78,7 +82,7 @@ upstream 全体 gate の ignored flex-float WPT 1件は8,944 pixelsの画像不�
 Rust 1.96 での Unicode 分類テストの既存不一致を避け、upstream の指定通り
 1.91.0 を使った。
 
-shodo は stable と Rust 1.89.0 の通常/accesskit workspace tests、通常/accesskit
+最終レビュー前の `fd5107a` では、shodo の stable と Rust 1.89.0 の通常/accesskit workspace tests、通常/accesskit
 clippy、release cache、accessibility/emoji/ruby 実行、描画 snapshot、allocation、
 指定 benchmark、no-default/complex-scripts、doc、Python（69件、3 skip）、
 fixture 再生成、wasm 3構成、公開 package 内容検査が通過した。
@@ -86,3 +90,28 @@ fixture 再生成、wasm 3構成、公開 package 内容検査が通過した。
 両ブランチは draft PR として提出済み：
 [raikiri #463](https://github.com/fulgur-rs/raikiri/pull/463)、
 [shodo #104](https://github.com/fulgur-rs/shodo/pull/104)。
+
+## 最終レビューの修正
+
+fresh reviewer が両ブランチ全体を確認し、Critical 0 / Important 4 / Minor 0。
+4件を受け入れ、1回の TDD 修正工程で扱った。
+
+- `TextWrap` / `HangingPunctuation` の適用を直接宣言と deferred shorthand で確認し、通常スタイルを変えずに解決する。
+- caller の通常・先頭行の computed 値を対応フィールドへ照合し、未投影の font / typesetting / paint 値を黙って捨てない。
+- API は out-of-flow 子孫を拒否し、caller は位置指定・float・生成文字列を拒否する。
+- Rust 1.98 CI が指摘した RGBA 比較の `chunks_exact` を `as_chunks` に変更する。
+
+既存 shodo API は先頭行の wrapping / whitespace 設定を通常値に保つ。
+そのため alternate 値が異なる入力を caller で明示的に拒否する。
+通常の nowrap は維持する。新たな core 組版機能を追加したことは主張しない。
+caller の all-target テストは93件（代表 caller 15件）、upstream の通常
+workspace suite は5,120件成功、211件 ignored。最終差分 coverage は通過したが、
+567件のテスト/entry ファイル行はツールが報告せず、カバー済みとは扱わない。
+再測定で正の2件は元参照の両経路と差0、負の2件は unsupported のまま。
+
+最終ソースで通常 workspace 1,052件、Rust1.91 / MSRV1.89 の caller all-target
+各93件、通常/accesskit clippy、doc、fmt が成功した。accesskit workspace は
+等価な let-chain 整理前に1,067件成功。実行コマンド・最終ソース SHA と結果は
+上記 JSON の `final_review_fix` に区別して保存している。
+upstream 最終 HEAD の GitHub CI は fmt/test/clippy、coverage、codecov/patch 成功。
+shodo の最終 push 後の check / msrv / wasm を確認して完了する。
