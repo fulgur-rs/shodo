@@ -2035,7 +2035,7 @@ fn combine_all_reports_candidates_rejected_across_an_inherited_box_boundary() {
             .iter()
             .filter(|warning| warning.message.contains("text-combine-upright"))
             .collect();
-        // One diagnostic per rejected candidate, each naming its source bytes.
+        // One diagnostic per rejected candidate, each naming processed-text bytes.
         assert_eq!(messages.len(), 2, "{mode:?}: {:?}", rejected.warnings());
         assert!(
             messages

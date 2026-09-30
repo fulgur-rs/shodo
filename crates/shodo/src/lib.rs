@@ -32,6 +32,7 @@ mod shape;
 #[cfg(test)]
 mod test_support;
 
+pub use analysis::breaks::{LineBreakContext, LineBreakOverride, SoftBreakOpportunity};
 pub use builder::{ParagraphBuilder, RichText};
 pub use context::LayoutContext;
 pub use output::{
