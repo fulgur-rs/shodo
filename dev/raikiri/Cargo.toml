@@ -62,3 +62,7 @@ test = true
 [[example]]
 name = "first_line_wpt"
 test = true
+
+[[example]]
+name = "retained_caller"
+test = true
