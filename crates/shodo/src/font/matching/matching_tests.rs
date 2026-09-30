@@ -3,6 +3,7 @@ use crate::font::FontOptions;
 use std::cell::Cell;
 
 std::thread_local! {
+    static VARIATION_CLONES: Cell<usize> = const { Cell::new(0) };
     static INFO_READS: Cell<usize> = const { Cell::new(0) };
     static FONT_READS: Cell<usize> = const { Cell::new(0) };
     static KEY_COMPARISONS: Cell<usize> = const { Cell::new(0) };
@@ -70,8 +71,8 @@ fn scripted_match_equals_cloning_the_query_and_reuses_the_cache() {
         cloned.script = script;
         for cluster in ["a", "b"] {
             assert_eq!(
-                fonts.match_scripted(&base, script, cluster),
-                fonts.match_cluster(&cloned, cluster),
+                fonts.match_scripted(&base, script, cluster).as_deref(),
+                fonts.match_cluster(&cloned, cluster).as_ref(),
                 "{script:?} {cluster:?}"
             );
         }
@@ -227,5 +228,222 @@ fn check_uncached_reads(face_count: usize, expected_reads: usize) {
             (0, expected_reads),
             "metadata is reused and coverage/color share one real font read for {face_count} faces/{cluster}"
         );
+    }
+}
+
+pub(super) fn record_variation_clone() {
+    VARIATION_CLONES.with(|count| count.set(count.get() + 1));
+}
+
+fn multi_axis_font() -> Vec<u8> {
+    let bytes = super::super::browser_tests::test_font("Axes", &['a', 'b'], 400);
+    let font = FontRef::new(&bytes).unwrap();
+    let mut tables: Vec<_> = font
+        .table_directory()
+        .table_records()
+        .iter()
+        .map(|record| {
+            (
+                record.tag().to_be_bytes(),
+                font.table_data(record.tag()).unwrap().as_bytes().to_vec(),
+            )
+        })
+        .collect();
+    let mut fvar = Vec::new();
+    for field in [1u16, 0, 16, 2, 5, 20, 0, 24] {
+        fvar.extend_from_slice(&field.to_be_bytes());
+    }
+    for (tag, values) in [
+        (*b"wght", [100i32, 400, 900]),
+        (*b"wdth", [50, 100, 150]),
+        (*b"slnt", [-20, 0, 0]),
+        (*b"ital", [0, 0, 1]),
+        (*b"opsz", [8, 14, 144]),
+    ] {
+        fvar.extend_from_slice(&tag);
+        for value in values {
+            fvar.extend_from_slice(&(value << 16).to_be_bytes());
+        }
+        fvar.extend_from_slice(&[0, 0, 1, 0]);
+    }
+    tables.push((*b"fvar", fvar));
+    super::super::sfnt::build_sfnt(&tables)
+}
+
+fn axes_fonts(cap: usize, style: FontStyle) -> (FontCollection, FontQuery) {
+    let fonts = FontCollection::with_options(
+        &Limits::default(),
+        FontOptions {
+            system_fonts: false,
+            match_cache_entries: cap,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            multi_axis_font(),
+            0,
+            FontFaceDescriptor {
+                family: "Axes".into(),
+                weight: (100., 900.),
+                width: (50., 150.),
+                style,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let query = FontQuery {
+        families: vec![FontFamily::Named("Axes".into())],
+        weight: 650.,
+        width: 80.,
+        style,
+        ..Default::default()
+    }
+    .normalized();
+    (fonts, query)
+}
+
+#[test]
+fn scripted_variable_warm_hit_does_not_clone_variation_storage() {
+    let (fonts, query) = axes_fonts(8, FontStyle::Normal);
+    let first = fonts.match_scripted(&query, *b"Latn", "a").unwrap();
+    assert_eq!(
+        first.variations,
+        vec![
+            FontVariation {
+                tag: *b"wght",
+                value: 650.
+            },
+            FontVariation {
+                tag: *b"wdth",
+                value: 80.
+            },
+            FontVariation {
+                tag: *b"slnt",
+                value: 0.
+            },
+            FontVariation {
+                tag: *b"ital",
+                value: 0.
+            }
+        ]
+    );
+    VARIATION_CLONES.with(|count| count.set(0));
+    let second = fonts.match_scripted(&query, *b"Latn", "a").unwrap();
+    assert_eq!(second.id, first.id);
+    assert_eq!(second.variations[0].value, 650.);
+    assert_eq!(
+        VARIATION_CLONES.with(Cell::get),
+        0,
+        "warm internal hit cloned nonempty variations"
+    );
+}
+
+#[test]
+fn public_variable_match_owns_its_variations() {
+    let (fonts, query) = axes_fonts(8, FontStyle::Normal);
+    let mut owned = fonts.match_cluster(&query, "a").unwrap();
+    owned.variations[0].value = 100.;
+    owned.variations.clear();
+    let fresh = fonts.match_cluster(&query, "a").unwrap();
+    assert_eq!(
+        fresh.variations[0],
+        FontVariation {
+            tag: *b"wght",
+            value: 650.
+        }
+    );
+    assert_eq!(fresh.variations.len(), 4);
+}
+
+#[test]
+fn internal_variable_results_keep_clamps_style_and_cache_bounds() {
+    for cap in [0, 1, 8] {
+        for (style, slant, italic) in [
+            (FontStyle::Normal, 0., 0.),
+            (FontStyle::Oblique(30.), -20., 0.),
+            (FontStyle::Italic, 0., 1.),
+        ] {
+            let (fonts, mut query) = axes_fonts(cap, style);
+            query.weight = 1000.;
+            query.width = 200.;
+            for cluster in ["a", "b", "a", "\u{10ffff}", "\u{10ffff}"] {
+                let found = fonts.match_scripted(&query, *b"Latn", cluster);
+                if cluster == "\u{10ffff}" {
+                    assert!(found.is_none());
+                    continue;
+                }
+                let found = found.unwrap();
+                assert_eq!(
+                    found.variations,
+                    vec![
+                        FontVariation {
+                            tag: *b"wght",
+                            value: 900.
+                        },
+                        FontVariation {
+                            tag: *b"wdth",
+                            value: 150.
+                        },
+                        FontVariation {
+                            tag: *b"slnt",
+                            value: slant
+                        },
+                        FontVariation {
+                            tag: *b"ital",
+                            value: italic
+                        }
+                    ]
+                );
+                assert!(!found.embolden);
+                assert_eq!(found.skew, None);
+            }
+            assert!(fonts.state().matches.len() <= cap);
+        }
+    }
+}
+
+#[test]
+fn old_variable_matches_survive_generation_invalidation() {
+    for document in [false, true] {
+        let (root, _) = axes_fonts(8, FontStyle::Normal);
+        let second_id = root
+            .register_face(
+                multi_axis_font(),
+                0,
+                FontFaceDescriptor {
+                    family: "Second".into(),
+                    weight: (100., 900.),
+                    width: (50., 150.),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        root.set_generic_families(GenericFamily::SansSerif, vec!["Axes".into()]);
+        let fonts = if document {
+            FontCollection::for_document(&root, &Limits::default())
+        } else {
+            root.clone()
+        };
+        let query = FontQuery {
+            weight: 650.,
+            width: 80.,
+            ..Default::default()
+        }
+        .normalized();
+        let old = fonts.match_scripted(&query, *b"Latn", "a").unwrap();
+        root.set_generic_families(GenericFamily::SansSerif, vec!["Second".into()]);
+        let new = fonts.match_scripted(&query, *b"Latn", "a").unwrap();
+        assert_eq!(new.id, second_id);
+        assert_ne!(new.id, old.id);
+        assert_eq!(
+            old.variations[0],
+            FontVariation {
+                tag: *b"wght",
+                value: 650.
+            }
+        );
+        assert_eq!(new.variations[0].value, 650.);
+        assert_eq!(fonts.state().matches.len(), 1);
     }
 }
