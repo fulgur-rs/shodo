@@ -2317,3 +2317,163 @@ fn short_candidate_visits_only_intersecting_annotation_lanes() {
         );
     }
 }
+
+#[test]
+fn short_candidate_measures_only_selected_base_columns() {
+    for count in [64, 128] {
+        let p = build(many_column_pair(count));
+        let ruby = &p.data.ruby.containers[0];
+        let first = count / 2;
+        let mut cx = LayoutContext::new();
+        let measure = crate::ruby::measure::candidate(
+            &p.data,
+            ruby.columns[first].units.start,
+            ruby.columns[first + 3].units.end,
+            &AtomicSizes::EMPTY,
+            &mut cx,
+            &mut Saturation::default(),
+        );
+        assert_eq!(
+            cx.ruby_column_visits, 4,
+            "unselected columns must not be measured"
+        );
+        let fragment = &measure.fragments[0];
+        assert_eq!(
+            fragment.bases.len(),
+            4,
+            "candidate arrays must retain only the selected window"
+        );
+        assert_eq!(
+            fragment.bases,
+            ruby.columns[first..first + 4]
+                .iter()
+                .map(|c| c.units.clone())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            fragment
+                .columns
+                .iter()
+                .map(|w| w.to_f32())
+                .collect::<Vec<_>>(),
+            [24.0; 4]
+        );
+    }
+}
+
+#[test]
+fn boundary_only_candidate_keeps_empty_ruby_fallback_geometry() {
+    let p = build(many_column_pair(64));
+    let ruby = &p.data.ruby.containers[0];
+    let measure = crate::ruby::measure::candidate(
+        &p.data,
+        ruby.units.end - 1,
+        ruby.units.end,
+        &AtomicSizes::EMPTY,
+        &mut LayoutContext::new(),
+        &mut Saturation::default(),
+    );
+    assert_eq!(measure.fragments.len(), 1);
+    let fragment = &measure.fragments[0];
+    assert!(fragment.bases.iter().all(|b| b.is_empty()));
+    assert!(fragment.lanes.is_empty());
+    assert_eq!(fragment.adjustment, LayoutUnit::ZERO);
+    assert!(!fragment.has_content);
+    assert_eq!(fragment.contribution.top, LayoutUnit::ZERO);
+    assert_eq!(fragment.contribution.bottom, LayoutUnit::ZERO);
+}
+
+#[test]
+fn continued_columns_keep_their_own_alignment_nodes_and_source_ranges() {
+    let pair = Ruby::new(
+        [RubyAlign::Start, RubyAlign::Center, RubyAlign::SpaceAround]
+            .into_iter()
+            .enumerate()
+            .map(|(i, align)| {
+                let node = NodeId(100 + i as u64);
+                RubyBase {
+                    node,
+                    align,
+                    content: RubyContent::text(
+                        TextSource::Dom {
+                            node,
+                            offset: 40 + i as u32 * 10,
+                        },
+                        "日",
+                        &style(24.0),
+                        &Limits::default(),
+                    ),
+                }
+            })
+            .collect(),
+        vec![RubyLevel {
+            annotations: (0..3)
+                .map(|i| {
+                    let node = NodeId(200 + i);
+                    RubyAnnotation {
+                        node,
+                        content: RubyContent::text(
+                            TextSource::Dom { node, offset: 70 },
+                            "にほん",
+                            &style(12.0),
+                            &Limits::default(),
+                        ),
+                        span: RubySpan::Auto,
+                        visibility: RubyVisibility::Visible,
+                    }
+                })
+                .collect(),
+            style: RubyStyle {
+                overhang: RubyOverhang::None,
+                ..Default::default()
+            },
+        }],
+    )
+    .unwrap();
+    let p = build(pair);
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &Default::default(),
+        36.0,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(lines.len(), 3);
+    for (i, line) in lines.iter().enumerate() {
+        assert_eq!(glyph_positions(line), [if i == 0 { 0.0 } else { 6.0 }]);
+        let annotation = line.ruby_annotations().next().unwrap();
+        assert_eq!(annotation.base_nodes(), &[NodeId(100 + i as u64)]);
+        assert_eq!(annotation.node(), Some(NodeId(200 + i as u64)));
+        let text = &p.data.ruby.containers[0].columns[i].text;
+        assert_eq!(
+            annotation.base_text_range(),
+            text.start as usize..text.end as usize
+        );
+        let node = line.fragments().find_map(|f| match f {
+            crate::Fragment::GlyphRun(r) => r.node(),
+            _ => None,
+        });
+        assert_eq!(node, Some(NodeId(100 + i as u64)));
+        // Column boundaries can carry generated anchors at the same offset.
+        // Check the DOM-owned glyph range directly rather than assigning that
+        // ambiguous generated boundary a DOM affinity.
+        let glyph_range = line
+            .fragments()
+            .find_map(|f| match f {
+                crate::Fragment::GlyphRun(r) => Some(r.text_range()),
+                _ => None,
+            })
+            .unwrap();
+        let mapping = p
+            .offset_mapping()
+            .unwrap()
+            .units()
+            .iter()
+            .find(|u| u.node == NodeId(100 + i as u64))
+            .unwrap();
+        assert_eq!(mapping.dom, 40 + i as u32 * 10..43 + i as u32 * 10);
+        assert_eq!(
+            mapping.text,
+            glyph_range.start as u32..glyph_range.end as u32
+        );
+    }
+}

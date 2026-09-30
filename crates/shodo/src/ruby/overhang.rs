@@ -198,17 +198,18 @@ pub(crate) struct ColumnGeometry {
     pub(crate) area: Bounds,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn columns(
     data: &ParagraphData,
     ruby: &PreparedRuby,
+    column_start: usize,
     selected: &Range<usize>,
     bases: &[Range<usize>],
     atomics: &AtomicSizes,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> ColumnGeometry {
-    let boxes: Vec<_> = ruby
-        .columns
+    let boxes: Vec<_> = ruby.columns[column_start..column_start + bases.len()]
         .iter()
         .map(|c| c.box_index.or(ruby.box_index))
         .collect();

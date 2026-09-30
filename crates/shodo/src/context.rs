@@ -28,6 +28,8 @@ pub struct LayoutContext {
     pub(crate) ruby_measure_visits: usize,
     #[cfg(test)]
     pub(crate) ruby_lane_visits: usize,
+    #[cfg(test)]
+    pub(crate) ruby_column_visits: usize,
 }
 
 impl LayoutContext {

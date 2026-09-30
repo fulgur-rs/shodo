@@ -48,6 +48,8 @@ pub(crate) struct RubyMeasure {
 pub(crate) struct RubyFragmentMeasure {
     pub(crate) container: usize,
     pub(crate) units: Range<usize>,
+    /// Original index of the first column; column arrays and span keys are local.
+    pub(crate) column_start: usize,
     pub(crate) bases: Vec<Range<usize>>,
     pub(crate) base_widths: Vec<LayoutUnit>,
     pub(crate) base_columns: Vec<LayoutUnit>,
@@ -60,6 +62,17 @@ pub(crate) struct RubyFragmentMeasure {
     pub(crate) whole_area: super::geometry::Bounds,
     pub(crate) contribution: super::geometry::Bounds,
     pub(crate) has_content: bool,
+}
+
+impl RubyFragmentMeasure {
+    pub(crate) fn local_columns(&self, columns: &Range<usize>) -> Range<usize> {
+        local_columns(columns, self.column_start, self.bases.len())
+    }
+}
+
+/// Clip an original span to a compact candidate window and rebase its indices.
+pub(crate) fn local_columns(columns: &Range<usize>, start: usize, len: usize) -> Range<usize> {
+    columns.start.saturating_sub(start).min(len)..columns.end.saturating_sub(start).min(len)
 }
 
 #[derive(Clone, Debug)]
@@ -185,13 +198,19 @@ pub(crate) fn candidate_inner(
         }
         let begin = &ruby.cuts[cut_at_or_before(ruby, units.start)];
         let finish = &ruby.cuts[cut_at_or_after(ruby, units.end)];
-        let bases: Vec<_> = ruby
-            .columns
+        let source_columns = selected_columns(ruby, &units);
+        let column_start = source_columns.start;
+        let source_bases = &ruby.columns[source_columns.clone()];
+        let bases: Vec<_> = source_bases
             .iter()
             .map(|c| intersect(&units, &c.units))
             .collect();
         let mut base_widths = Vec::with_capacity(bases.len());
-        for (column, base) in ruby.columns.iter().zip(&bases) {
+        for (column, base) in source_bases.iter().zip(&bases) {
+            #[cfg(test)]
+            {
+                cx.ruby_column_visits += 1;
+            }
             let mut width = crate::line::ruby_base_width(
                 data,
                 column.units.clone(),
@@ -212,9 +231,9 @@ pub(crate) fn candidate_inner(
             }
             base_widths.push(width);
         }
-        let selected_columns = selected_columns(ruby, &units);
+        let selected_columns = 0..bases.len();
         let mut lanes = Vec::new();
-        for index in selected_lanes(ruby, &selected_columns) {
+        for index in selected_lanes(ruby, &source_columns) {
             let lane = &ruby.lanes[index];
             #[cfg(test)]
             {
@@ -249,8 +268,8 @@ pub(crate) fn candidate_inner(
             .iter()
             .any(|style| inter_character(data, *style))
         {
-            for columns in selected_lanes(ruby, &selected_columns)
-                .map(|index| intersect(&ruby.lanes[index].columns, &selected_columns))
+            for columns in selected_lanes(ruby, &source_columns)
+                .map(|index| local_columns(&ruby.lanes[index].columns, column_start, bases.len()))
                 .chain(std::iter::once(selected_columns.clone()))
             {
                 if !columns.is_empty() {
@@ -266,14 +285,24 @@ pub(crate) fn candidate_inner(
         let mut cross_columns = vec![LayoutUnit::ZERO; bases.len()];
         for lane in &lanes {
             if let Some(width) = lane.cross_width {
-                let columns = intersect(&ruby.lanes[lane.lane].columns, &selected_columns);
+                let columns =
+                    local_columns(&ruby.lanes[lane.lane].columns, column_start, bases.len());
                 if !columns.is_empty() {
                     let column = rightmost(&right_columns, &columns);
                     cross_columns[column] = cross_columns[column].add(width, sat);
                 }
             }
         }
-        let geometry = super::overhang::columns(data, ruby, &selected, &bases, atomics, cx, sat);
+        let geometry = super::overhang::columns(
+            data,
+            ruby,
+            column_start,
+            &selected,
+            &bases,
+            atomics,
+            cx,
+            sat,
+        );
         let mut area = geometry.area;
         for (_, &index) in completed.range((units.start, 0)..(units.end, 0)) {
             let nested = &measure.fragments[index];
@@ -298,6 +327,7 @@ pub(crate) fn candidate_inner(
         let tracks = super::geometry::tracks(
             data,
             ruby,
+            column_start,
             &bases,
             &lanes,
             area,
@@ -317,7 +347,7 @@ pub(crate) fn candidate_inner(
                 let width = merged[source.level].get_or_insert(LayoutUnit::ZERO);
                 *width = width.add(l.width, sat);
             } else {
-                let columns = intersect(&source.columns, &selected_columns);
+                let columns = local_columns(&source.columns, column_start, bases.len());
                 if !columns.is_empty() {
                     l.overhang = lane_overhang(
                         data,
@@ -357,12 +387,10 @@ pub(crate) fn candidate_inner(
             .enumerate()
             .filter_map(|(level, width)| width.map(|w| (level, w)))
         {
-            let child = ruby
-                .lanes
-                .iter()
-                .find(|l| l.level == level)
-                .map(|l| &*l.paragraph.data)
-                .unwrap();
+            // The cap belongs to the original first lane in this level,
+            // even when that lane is outside the candidate window.
+            let first_lane = ruby.lanes.partition_point(|lane| lane.level < level);
+            let child = &ruby.lanes[first_lane].paragraph.data;
             let allowance = lane_overhang(
                 data,
                 ruby,
@@ -410,6 +438,7 @@ pub(crate) fn candidate_inner(
         measure.fragments.push(RubyFragmentMeasure {
             container,
             units,
+            column_start,
             bases,
             base_widths,
             base_columns,
@@ -550,7 +579,7 @@ pub(crate) fn apply(
             let ruby = &data.ruby.containers[fragment.container];
             let cross = fragment.cross_columns[i];
             if cross != LayoutUnit::ZERO {
-                let base_box = ruby.columns[i].box_index;
+                let base_box = ruby.columns[fragment.column_start + i].box_index;
                 // Strong text may oppose the base's declared direction.
                 // Reserve on the edge that actually reorders to physical right.
                 let right_at_start = data.base_level % 2 == 1;
