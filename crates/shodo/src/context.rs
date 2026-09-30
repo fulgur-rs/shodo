@@ -15,7 +15,8 @@ pub struct LayoutContext {
     pub(crate) partial: Option<crate::line::cache::PartialLine>,
     pub(crate) ruby_ranges: crate::line::range::RangeCache,
     pub(crate) edge_shapes: crate::line::windows::EdgeShapeCache,
-    /// Bytes of line-edge reshape windows requested by the line being laid out.
+    /// Bytes of edge reshape windows requested by the current `next_line` or
+    /// `intrinsic_sizes` call. First-line intrinsic passes share one budget.
     pub(crate) edge_reshape_spent: u64,
     #[cfg(test)]
     pub(crate) cache_visits: usize,
