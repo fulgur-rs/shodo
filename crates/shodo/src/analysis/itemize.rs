@@ -50,7 +50,7 @@ pub(crate) struct ShapeItem {
     pub(crate) style: u32,
     pub(crate) level: u8,
     pub(crate) script: [u8; 4],
-    pub(crate) font: Option<FontMatch>,
+    pub(crate) font: Option<std::sync::Arc<FontMatch>>,
     pub(crate) orientation: crate::shape::orientation::RunOrientation,
     pub(crate) combine: Option<u32>,
     pub(crate) width_feature: Option<[u8; 4]>,

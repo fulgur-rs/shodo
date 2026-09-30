@@ -56,7 +56,8 @@ impl FontQuery {
 }
 
 /// The selected stable face and the adjustments needed by a shaper/renderer.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
+#[cfg_attr(not(test), derive(Clone))]
 pub struct FontMatch {
     pub id: FontId,
     pub variations: Vec<FontVariation>,
@@ -64,10 +65,25 @@ pub struct FontMatch {
     pub skew: Option<f32>,
 }
 
+#[cfg(test)]
+impl Clone for FontMatch {
+    fn clone(&self) -> Self {
+        if !self.variations.is_empty() {
+            matching_tests::record_variation_clone();
+        }
+        Self {
+            id: self.id,
+            variations: self.variations.clone(),
+            embolden: self.embolden,
+            skew: self.skew,
+        }
+    }
+}
+
 pub(super) struct CacheEntry {
     query: std::sync::Arc<FontQuery>,
     cluster: Box<str>,
-    result: Option<FontMatch>,
+    result: Option<std::sync::Arc<FontMatch>>,
     hash: u64,
     used: u64,
 }
@@ -182,7 +198,7 @@ impl MatchCache {
         query: &FontQuery,
         script: [u8; 4],
         cluster: &str,
-    ) -> Option<Option<FontMatch>> {
+    ) -> Option<Option<std::sync::Arc<FontMatch>>> {
         self.sync(generations);
         let slot = *self.index.get(&hash)? as usize;
         let entry = self.slots.get_mut(slot)?;
@@ -220,7 +236,7 @@ impl MatchCache {
         query: FontQuery,
         cluster: &str,
         hash: u64,
-        result: Option<FontMatch>,
+        result: Option<std::sync::Arc<FontMatch>>,
     ) {
         self.sync(generations);
         self.clock += 1;
@@ -334,17 +350,19 @@ impl FontCollection {
     fn cached_match(&self, query: &FontQuery, cluster: &str) -> Option<FontMatch> {
         let query = query.clone().normalized();
         self.cached_match_normalized(&query, query.script, cluster)
+            .map(std::sync::Arc::unwrap_or_clone)
     }
 
     /// Like [`Self::match_cluster`] for a query that is already normalized
     /// (see `FontQuery::normalized`), with only the script overridden. A
-    /// cache hit allocates nothing; the query is cloned only on a miss.
+    /// cache hit shares the immutable result without allocating; the query is
+    /// cloned only on a miss. Public callers still receive owned variations.
     pub(crate) fn match_scripted(
         &self,
         base: &FontQuery,
         script: [u8; 4],
         cluster: &str,
-    ) -> Option<FontMatch> {
+    ) -> Option<std::sync::Arc<FontMatch>> {
         if cluster.is_empty() {
             return None;
         }
@@ -356,7 +374,7 @@ impl FontCollection {
         base: &FontQuery,
         script: [u8; 4],
         cluster: &str,
-    ) -> Option<FontMatch> {
+    ) -> Option<std::sync::Arc<FontMatch>> {
         let generations = self.generations();
         let hash = key_hash(base, script, cluster);
         if let Some(result) = self
@@ -370,7 +388,7 @@ impl FontCollection {
             script,
             ..base.clone()
         };
-        let result = self.find_cluster(&query, cluster);
+        let result = self.find_cluster(&query, cluster).map(std::sync::Arc::new);
         let mut state = self.state();
         let cap = state.options.match_cache_entries;
         // Keep each retained key bounded even for direct, untrusted API calls.

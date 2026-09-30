@@ -777,7 +777,7 @@ pub(crate) fn shape_window_budget(
 pub(crate) struct Replacement {
     pub(crate) text: Range<u32>,
     pub(crate) c: char,
-    pub(crate) font: Option<crate::font::FontMatch>,
+    pub(crate) font: Option<std::sync::Arc<crate::font::FontMatch>>,
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -33,12 +33,13 @@ fn replacement(
         language: style.lang.clone(),
         synthesis: style.font_synthesis,
         ..Default::default()
-    };
+    }
+    .normalized();
     let (c, found) = ['\u{2010}', '-']
         .into_iter()
         .find_map(|c| {
             data.fonts
-                .match_cluster(&query, &c.to_string())
+                .match_scripted(&query, query.script, &c.to_string())
                 .map(|f| (c, Some(f)))
         })
         .unwrap_or(('-', None));
