@@ -141,7 +141,9 @@ pub(crate) fn resolve(
         skew: found.skew,
         script,
         language: style.lang.clone(),
-        features: super::features::features(style),
+        // Item orientation/width features are supplied by shape_items. Metric
+        // consumers only need the resolved coordinates and size.
+        features: Vec::new(),
     });
     (instance, result, size)
 }
@@ -156,6 +158,51 @@ fn set_variation(variations: &mut Vec<FontVariation>, value: FontVariation) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn metric_instance_does_not_build_shaping_features() {
+        let fonts = crate::font::FontCollection::with_options(
+            &crate::limits::Limits::default(),
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        let found = FontMatch {
+            id: fonts
+                .register(crate::test_support::fonts::LATIN.to_vec())
+                .unwrap(),
+            variations: Vec::new(),
+            embolden: false,
+            skew: None,
+        };
+        let style = InlineStyle {
+            font_kerning: crate::style::FontKerning::Normal,
+            font_features: vec![crate::style::FontFeature {
+                tag: *b"liga",
+                value: 0,
+            }],
+            ..Default::default()
+        };
+        super::super::features::STYLE_FEATURE_BUILDS.with(|count| count.set(0));
+        let (_, instance, size) = resolve(
+            crate::test_support::fonts::LATIN,
+            0,
+            &found,
+            &style,
+            *b"Latn",
+            &mut WarningSink::default(),
+        );
+        assert_eq!(size, style.font_size);
+        assert!(instance.coords.is_empty());
+        assert_eq!(instance.script, *b"Latn");
+        assert_eq!(
+            super::super::features::STYLE_FEATURE_BUILDS.with(|count| count.get()),
+            0,
+            "coordinate-only resolution must not construct shaping features"
+        );
+    }
+
     #[test]
     fn ic_height_adjust_uses_vertical_variation_delta() {
         let bytes = crate::test_support::fonts::CJK;

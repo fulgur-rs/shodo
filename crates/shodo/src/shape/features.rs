@@ -1,6 +1,11 @@
 //! CSS feature components followed by explicit author settings (last wins).
 use crate::style::*;
 
+#[cfg(test)]
+std::thread_local! {
+    pub(super) static STYLE_FEATURE_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 pub(super) fn for_item(
     style: &InlineStyle,
     item: &crate::analysis::itemize::ShapeItem,
@@ -44,12 +49,19 @@ pub(super) fn for_orientation(
         }
     }
     // Explicit settings come last, including an explicit vert/vrt2 choice.
-    result.extend(features(style));
+    append_features(style, &mut result);
     result
 }
 
 pub(super) fn features(s: &InlineStyle) -> Vec<harfrust::Feature> {
     let mut result = Vec::new();
+    append_features(s, &mut result);
+    result
+}
+
+fn append_features(s: &InlineStyle, result: &mut Vec<harfrust::Feature>) {
+    #[cfg(test)]
+    STYLE_FEATURE_BUILDS.with(|count| count.set(count.get() + 1));
     let mut push = |tag: &[u8; 4], value| {
         result.push(harfrust::Feature::new(harfrust::Tag::new(tag), value, ..))
     };
@@ -173,12 +185,150 @@ pub(super) fn features(s: &InlineStyle) -> Vec<harfrust::Feature> {
     for feature in &s.font_features {
         push(&feature.tag, feature.value);
     }
-    result
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn item_features(
+        style: &InlineStyle,
+        orientation: super::super::orientation::RunOrientation,
+        width_feature: Option<[u8; 4]>,
+    ) -> Vec<([u8; 4], u32)> {
+        let item = crate::analysis::itemize::ShapeItem {
+            segment: 0,
+            scalars: Vec::new(),
+            end: 0,
+            style: 0,
+            level: 0,
+            script: *b"Latn",
+            font: None,
+            orientation,
+            combine: None,
+            width_feature,
+            before: String::new(),
+            after: String::new(),
+        };
+        STYLE_FEATURE_BUILDS.with(|count| count.set(0));
+        let features = for_item(style, &item);
+        assert_eq!(STYLE_FEATURE_BUILDS.with(|count| count.get()), 1);
+        features
+            .iter()
+            .map(|f| {
+                assert_eq!(f.start, 0);
+                assert_eq!(f.end, u32::MAX);
+                (f.tag.to_be_bytes(), f.value)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn item_feature_order_preserves_orientation_width_and_author_overrides() {
+        use super::super::orientation::RunOrientation::*;
+        let style = InlineStyle {
+            font_kerning: FontKerning::None,
+            font_variant_ligatures: FontVariantLigatures {
+                common: Some(false),
+                ..Default::default()
+            },
+            letter_spacing: 1.0,
+            font_features: vec![
+                FontFeature {
+                    tag: *b"vert",
+                    value: 0,
+                },
+                FontFeature {
+                    tag: *b"vrt2",
+                    value: 1,
+                },
+                FontFeature {
+                    tag: *b"hwid",
+                    value: 0,
+                },
+                FontFeature {
+                    tag: *b"kern",
+                    value: 1,
+                },
+                FontFeature {
+                    tag: *b"liga",
+                    value: 1,
+                },
+                FontFeature {
+                    tag: *b"vert",
+                    value: 1,
+                },
+            ],
+            ..Default::default()
+        };
+        let tail = vec![
+            (*b"kern", 0),
+            (*b"liga", 0),
+            (*b"clig", 0),
+            (*b"liga", 0),
+            (*b"clig", 0),
+            (*b"dlig", 0),
+            (*b"hlig", 0),
+            (*b"vert", 0),
+            (*b"vrt2", 1),
+            (*b"hwid", 0),
+            (*b"kern", 1),
+            (*b"liga", 1),
+            (*b"vert", 1),
+        ];
+        for orientation in [
+            Horizontal,
+            Upright,
+            Combined,
+            SidewaysClockwise,
+            SidewaysCounterClockwise,
+        ] {
+            for width in [None, Some(*b"hwid"), Some(*b"twid"), Some(*b"qwid")] {
+                let mut expected = Vec::new();
+                if let Some(tag) = width {
+                    expected.push((tag, 1));
+                }
+                if orientation == Upright {
+                    expected.extend([(*b"vert", 1), (*b"vrt2", 0), (*b"vkrn", 0)]);
+                }
+                expected.extend_from_slice(&tail);
+                assert_eq!(
+                    item_features(&style, orientation, width),
+                    expected,
+                    "{orientation:?}/{width:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn upright_defaults_preserve_vrt2_and_vertical_kerning_choices() {
+        use super::super::orientation::RunOrientation::*;
+        assert!(item_features(&InlineStyle::default(), Horizontal, None).is_empty());
+        assert!(item_features(&InlineStyle::default(), Combined, None).is_empty());
+        assert_eq!(
+            item_features(&InlineStyle::default(), Upright, None),
+            [(*b"vert", 1), (*b"vrt2", 0)]
+        );
+        let style = InlineStyle {
+            font_kerning: FontKerning::Normal,
+            font_features: vec![FontFeature {
+                tag: *b"vrt2",
+                value: 1,
+            }],
+            ..Default::default()
+        };
+        assert_eq!(
+            item_features(&style, Upright, None),
+            [
+                (*b"vert", 0),
+                (*b"vrt2", 0),
+                (*b"vkrn", 1),
+                (*b"kern", 1),
+                (*b"vrt2", 1)
+            ]
+        );
+    }
 
     fn value(style: &InlineStyle, tag: &[u8; 4]) -> Option<u32> {
         features(style)
