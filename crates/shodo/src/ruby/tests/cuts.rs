@@ -338,3 +338,21 @@ fn dense_and_sparse_columns_preserve_values_and_bound_retention() {
         }
     }
 }
+
+#[test]
+fn many_dense_lane_builder_uses_row_major_fallback() {
+    use crate::ruby::cuts::PairedBuilder;
+    let mut builder = PairedBuilder::new(8, 64);
+    for row in 0..8 {
+        builder.push(row * 3, &[row; 64], BreakClass::Allowed);
+    }
+    let cuts = builder.finish();
+    for (row, cut) in cuts.iter().enumerate() {
+        assert_eq!(cut.lanes, [row; 64]);
+    }
+    assert!(
+        cuts[0].lanes.table_payload_bytes() <= 8 * 64 * std::mem::size_of::<usize>() + 64,
+        "dense64 must shed column metadata, actual {} bytes",
+        cuts[0].lanes.table_payload_bytes()
+    );
+}

@@ -177,6 +177,46 @@ fn short_spanned_lanes_retain_changes_instead_of_every_row() {
 }
 
 #[test]
+fn many_dense_lanes_do_not_retain_column_metadata() {
+    for first_line in [false, true] {
+        let paragraph = cursor_storage_fixture(7, 64, first_line)
+            .build(&mut LayoutContext::new(), &fonts())
+            .unwrap();
+        let tables = std::iter::once(&paragraph.data)
+            .chain(paragraph.data.first_line.iter().map(|first| &first.data));
+        for data in tables {
+            let ruby = &data.ruby.containers[0];
+            assert_eq!((ruby.cuts.len(), ruby.lanes.len()), (8, 64));
+            for (lane, prepared) in ruby.lanes.iter().enumerate() {
+                let child = &prepared.paragraph.data;
+                let cluster_ends: Vec<_> = child
+                    .units
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, unit)| matches!(unit.kind, UnitKind::Cluster { .. }))
+                    .map(|(index, _)| index + 1)
+                    .collect();
+                assert_eq!(cluster_ends.len(), 7);
+                for (row, cut) in ruby.cuts.iter().enumerate() {
+                    let expected = match row {
+                        0 => 0,
+                        7 => child.units.len(),
+                        _ => cluster_ends[row - 1],
+                    };
+                    assert_eq!(cut.lanes[lane], expected);
+                }
+            }
+            // Original 8 rows * (40-byte metadata + 64 full usize cursors).
+            assert!(
+                cursor_table_bytes(ruby) < 4_416,
+                "dense64 must fit the original table payload; actual {} bytes",
+                cursor_table_bytes(ruby)
+            );
+        }
+    }
+}
+
+#[test]
 #[ignore = "prints actual cursor storage diagnostics for the performance record"]
 fn cursor_storage_diagnostic() {
     use std::hash::{Hash, Hasher};

@@ -47,6 +47,28 @@ enum CursorColumn {
     Dense(Vec<usize>),
 }
 
+impl CursorTable {
+    fn data_bytes(&self) -> usize {
+        match self {
+            Self::Dense { values, .. } => values.capacity() * std::mem::size_of::<usize>(),
+            Self::Columns(columns) => {
+                columns.capacity() * std::mem::size_of::<CursorColumn>()
+                    + columns
+                        .iter()
+                        .map(|column| match column {
+                            CursorColumn::Dense(values) => {
+                                values.capacity() * std::mem::size_of::<usize>()
+                            }
+                            CursorColumn::Sparse { changes, .. } => {
+                                changes.capacity() * std::mem::size_of::<(usize, usize)>()
+                            }
+                        })
+                        .sum::<usize>()
+            }
+        }
+    }
+}
+
 impl CursorColumn {
     fn at(&self, row: usize) -> &usize {
         match self {
@@ -137,22 +159,29 @@ pub(crate) struct PairedBuilder {
 }
 
 impl PairedBuilder {
-    pub(crate) fn new(expected: usize, lanes: usize) -> Self {
-        let table = if expected < 8 || lanes == 0 {
-            CursorTable::Dense {
+    fn dense(expected: usize, lanes: usize) -> Self {
+        Self {
+            expected,
+            rows: Vec::new(),
+            table: CursorTable::Dense {
                 lanes,
                 values: Vec::with_capacity(expected.saturating_mul(lanes)),
-            }
-        } else {
-            CursorTable::Columns(
-                (0..lanes)
-                    .map(|_| CursorColumn::Sparse {
-                        initial: 0,
-                        changes: Vec::new(),
-                    })
-                    .collect(),
-            )
-        };
+            },
+        }
+    }
+
+    pub(crate) fn new(expected: usize, lanes: usize) -> Self {
+        if expected < 8 || lanes == 0 {
+            return Self::dense(expected, lanes);
+        }
+        let table = CursorTable::Columns(
+            (0..lanes)
+                .map(|_| CursorColumn::Sparse {
+                    initial: 0,
+                    changes: Vec::new(),
+                })
+                .collect(),
+        );
         Self {
             expected,
             rows: Vec::new(),
@@ -181,7 +210,7 @@ impl PairedBuilder {
     }
 
     pub(crate) fn finish(self) -> Vec<PairedCut> {
-        let table = match self.table {
+        let mut table = match self.table {
             CursorTable::Columns(columns) => CursorTable::Columns(
                 columns
                     .into_iter()
@@ -190,6 +219,25 @@ impl PairedBuilder {
             ),
             dense => dense,
         };
+        if let CursorTable::Columns(columns) = &table {
+            let lanes = columns.len();
+            let cells = self.rows.len().saturating_mul(lanes);
+            // Dense columns still retain one enum/Vec header per lane. Compare
+            // total actual capacities, including those headers, with one arena.
+            if table.data_bytes() > cells.saturating_mul(std::mem::size_of::<usize>()) {
+                let mut values = Vec::with_capacity(cells);
+                for row in 0..self.rows.len() {
+                    for column in columns {
+                        values.push(*column.at(row));
+                    }
+                }
+                table = CursorTable::Dense { lanes, values };
+            }
+        } else if let CursorTable::Dense { values, .. } = &mut table {
+            // Convenience tests may supply an upper bound rather than the
+            // already-counted production row count.
+            values.shrink_to_fit();
+        }
         let table = Arc::new(table);
         self.rows
             .into_iter()
@@ -223,24 +271,7 @@ impl LaneCursors {
     /// Heap payload capacities, including the shared table value, excluding
     /// Arc's control block/allocator overhead. Count the shared table only once.
     pub(crate) fn table_payload_bytes(&self) -> usize {
-        let payload = match &*self.table {
-            CursorTable::Dense { values, .. } => values.capacity() * std::mem::size_of::<usize>(),
-            CursorTable::Columns(columns) => {
-                columns.capacity() * std::mem::size_of::<CursorColumn>()
-                    + columns
-                        .iter()
-                        .map(|column| match column {
-                            CursorColumn::Dense(values) => {
-                                values.capacity() * std::mem::size_of::<usize>()
-                            }
-                            CursorColumn::Sparse { changes, .. } => {
-                                changes.capacity() * std::mem::size_of::<(usize, usize)>()
-                            }
-                        })
-                        .sum::<usize>()
-            }
-        };
-        std::mem::size_of::<CursorTable>() + payload
+        std::mem::size_of::<CursorTable>() + self.table.data_bytes()
     }
     pub(crate) fn dense_columns(&self) -> usize {
         match &*self.table {
@@ -332,7 +363,24 @@ pub(crate) fn build_counted(
         };
         lanes.len()
     ];
-    build_spanned_counted(base, lanes, &spans, count)
+    if lanes.iter().all(|lane| !lane.is_empty())
+        && base
+            .iter()
+            .skip(1)
+            .take(base.len().saturating_sub(2))
+            .all(|cut| cut.class != BreakClass::Mandatory)
+    {
+        // Every emitted interior cut in fully active nonempty lanes must
+        // advance each cursor. With no mandatory override, storage is dense;
+        // build that arena directly instead of transposing dense columns later.
+        let mut result = PairedBuilder::dense(count, lanes.len());
+        walk_spanned(base, lanes, &spans, |unit, lanes, class| {
+            result.push(unit, lanes, class)
+        });
+        result.finish()
+    } else {
+        build_spanned_counted(base, lanes, &spans, count)
+    }
 }
 
 /// A lane participates only in the interval of bases it actually annotates.
