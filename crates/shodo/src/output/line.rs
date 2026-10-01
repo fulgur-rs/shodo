@@ -104,11 +104,15 @@ impl Line {
             },
         }
     }
-    /// Leading hanging amount; punctuation hanging is reserved for Japanese
-    /// typography. Preserved trailing whitespace is exposed by `hang_end`.
+    /// Leading hanging punctuation advance.
     pub fn hang_start(&self) -> f32 {
         self.hanging_start.to_f32()
     }
+    /// Trailing hanging advance excluded from [`Self::inline_size`], including
+    /// eligible whitespace and punctuation. At paragraph ends and forced breaks,
+    /// preserved whitespace that fits remains in the line width; only its
+    /// overflowing part hangs. See [`Self::trailing_whitespace`] for the full
+    /// trailing space/tab advance, including retained whitespace.
     pub fn hang_end(&self) -> f32 {
         self.hanging_end.to_f32()
     }
@@ -286,6 +290,8 @@ impl Line {
             })
             .unwrap_or(0..0);
         let hanging_end = scan.hanging_end;
+        let trailing_whitespace =
+            crate::line::trailing_advance(data, token.unit as usize, scan.end, &scan.widths, sat);
         let hanging_start = scan.punctuation_edges.hang_start;
         let mut ruby_caret_gaps = scan.ruby_caret_gaps;
         ruby_caret_gaps.sort_by_key(|gap| gap.text.start);
@@ -304,6 +310,7 @@ impl Line {
             units: token.unit..scan.end as u32,
             text_range,
             inline_size: scan.content,
+            trailing_whitespace,
             hanging_end,
             hanging_start,
             visible_hyphen,
@@ -445,6 +452,18 @@ impl Line {
     /// and the inline-start offset.
     pub fn inline_size(&self) -> f32 {
         self.inline_size.to_f32()
+    }
+
+    /// Final advance of logically trailing ASCII spaces and tabs present on
+    /// this line, whether retained in [`Self::inline_size`] or hanging outside
+    /// it. Includes spacing and justification applied to those units.
+    ///
+    /// Trailing bidi controls, forced breaks, inline end edges and out-of-flow
+    /// anchors are ignored. Box edges and punctuation do not contribute;
+    /// text-combined typographic squares and in-flow objects end the sequence.
+    /// Whitespace removed during paragraph processing contributes no advance.
+    pub fn trailing_whitespace(&self) -> f32 {
+        self.trailing_whitespace.to_f32()
     }
 
     /// Line advance (distance to the next line).

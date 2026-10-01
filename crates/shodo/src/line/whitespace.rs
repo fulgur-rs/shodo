@@ -123,6 +123,32 @@ pub(super) fn trailing(
     (begin, sum)
 }
 
+/// Logical trailing spaces/tabs, including both retained and hanging advances.
+/// Inline end edges and transparent markers do not contribute to this measure.
+pub(crate) fn trailing_advance(
+    data: &ParagraphData,
+    start: usize,
+    end: usize,
+    widths: &[LayoutUnit],
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    let mut sum = LayoutUnit::ZERO;
+    for i in (start..end).rev() {
+        if data.units[i].combine.is_some() {
+            break;
+        }
+        if matches!(
+            data.units[i].kind,
+            UnitKind::Cluster { space: true, .. } | UnitKind::Tab
+        ) {
+            sum = sum.add(widths[i - start], sat);
+        } else if !transparent(data, i) {
+            break;
+        }
+    }
+    sum
+}
+
 /// UAX #9 L1 resets logical trailing whitespace regardless of CSS hanging.
 /// Inline edges and zero-width anchors do not end that whitespace sequence.
 pub(super) fn bidi_trailing(data: &ParagraphData, start: usize, end: usize) -> usize {

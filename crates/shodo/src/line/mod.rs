@@ -23,6 +23,7 @@ mod whitespace;
 pub(crate) mod windows;
 
 pub(crate) use scan::tab_advance;
+pub(crate) use whitespace::trailing_advance;
 
 /// Use the same bounded edge/spacing machinery as accepted selected fragments.
 /// This measures units, not a rebuilt paragraph or retained child Line.
