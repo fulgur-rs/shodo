@@ -566,4 +566,42 @@ mod tests {
             .is_err()
         );
     }
+
+    #[test]
+    fn source_replay_projects_word_space_transform_and_wbr_markers() {
+        let input = dom_input(
+            "<style>#root{word-space-transform:space}</style><div id='root'>a&#8203;b<wbr>c</div>",
+        );
+        let limits = Limits::default();
+        let fonts = shodo_fixtures::load_fonts(&limits).unwrap();
+        let prepared = super::replay::project(
+            &input,
+            element(&input, "root"),
+            500.0,
+            &mut LayoutContext::new(),
+            &fonts.collection,
+            &limits,
+        )
+        .unwrap();
+        assert_eq!(prepared.paragraph.text(), "a b c");
+    }
+
+    #[test]
+    fn source_replay_preserves_wbr_marker_when_its_computed_value_is_none() {
+        let input = dom_input(
+            "<style>#root{word-space-transform:space}wbr{word-space-transform:none}</style><div id='root'>a&#8203;b<wbr>c</div>",
+        );
+        let limits = Limits::default();
+        let fonts = shodo_fixtures::load_fonts(&limits).unwrap();
+        let prepared = super::replay::project(
+            &input,
+            element(&input, "root"),
+            500.0,
+            &mut LayoutContext::new(),
+            &fonts.collection,
+            &limits,
+        )
+        .unwrap();
+        assert_eq!(prepared.paragraph.text(), "a b\u{200b}c");
+    }
 }

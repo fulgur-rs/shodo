@@ -249,6 +249,22 @@ pub enum TextTransform {
     LowercaseFullWidthFullSizeKana,
 }
 
+/// CSS Text 4 `word-space-transform`.
+///
+/// The `auto-phrase` variants preserve the CSS value and transform explicit
+/// zero-width-space opportunities, but automatic phrase segmentation is not
+/// currently available and produces an [`Unsupported`](crate::limits::WarningKind::Unsupported)
+/// warning.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WordSpaceTransform {
+    #[default]
+    None,
+    Space,
+    IdeographicSpace,
+    SpaceAutoPhrase,
+    IdeographicSpaceAutoPhrase,
+}
+
 pub(crate) enum CaseTransform {
     None,
     Capitalize,
@@ -471,6 +487,7 @@ pub struct InlineStyle {
     pub hyphens: Hyphens,
     pub hyphenate_character: Option<String>,
     pub text_transform: TextTransform,
+    pub word_space_transform: WordSpaceTransform,
     pub tab_size: TabSize,
     pub text_autospace: TextAutospace,
     pub text_spacing_trim: TextSpacingTrim,
@@ -517,6 +534,7 @@ impl Default for InlineStyle {
             hyphens: Hyphens::default(),
             hyphenate_character: None,
             text_transform: TextTransform::default(),
+            word_space_transform: WordSpaceTransform::default(),
             tab_size: TabSize::default(),
             text_autospace: TextAutospace::default(),
             text_spacing_trim: TextSpacingTrim::default(),

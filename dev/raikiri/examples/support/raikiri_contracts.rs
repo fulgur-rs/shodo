@@ -138,7 +138,6 @@ fn validate_projection(cv: &ComputedValues, root: bool) -> Result<(), String> {
         text_align,
         hanging_punctuation,
         text_autospace,
-        word_space_transform,
         text_spacing_trim,
         text_justify,
         text_align_last,
@@ -438,6 +437,20 @@ fn style(
             css::TextTransform::Capitalize => TextTransform::Capitalize,
             _ => return Err("unsupported text transform".into()),
         },
+        word_space_transform: match cv.word_space_transform {
+            css::WordSpaceTransform::None => shodo::style::WordSpaceTransform::None,
+            css::WordSpaceTransform::Space => shodo::style::WordSpaceTransform::Space,
+            css::WordSpaceTransform::IdeographicSpace => {
+                shodo::style::WordSpaceTransform::IdeographicSpace
+            }
+            css::WordSpaceTransform::SpaceAutoPhrase => {
+                shodo::style::WordSpaceTransform::SpaceAutoPhrase
+            }
+            css::WordSpaceTransform::IdeographicSpaceAutoPhrase => {
+                shodo::style::WordSpaceTransform::IdeographicSpaceAutoPhrase
+            }
+            _ => return Err("unsupported word-space-transform".into()),
+        },
         ..Default::default()
     })
 }
@@ -482,6 +495,50 @@ impl Walker<'_> {
         validate_projection(&self.input.normal.computed[id], false)?;
         if node.tag_name() == Some("br") {
             self.builder.push_forced_break(NodeId(id as u64));
+            return Ok(());
+        }
+        if node.tag_name() == Some("wbr") {
+            if self.input.normal.computed[id].display
+                != raikiri_style::property::DisplayValue::Inline
+            {
+                return Err("representative caller expects inline wbr descendants".into());
+            }
+            let normal = style(
+                &self.input.normal.computed[id],
+                underline,
+                self.policy,
+                false,
+            )?;
+            let first = self
+                .input
+                .first
+                .as_ref()
+                .map(|cascade| {
+                    let cv = cascade.computed[id]
+                        .as_ref()
+                        .ok_or("missing first-line wbr style")?;
+                    style(cv, first_underline, self.policy, false)
+                })
+                .transpose()?;
+            if let Some(first) = &first {
+                validate_first_line_projection(&normal, first)?;
+                self.builder.open_inline_with_first_line(
+                    NodeId(id as u64),
+                    &normal,
+                    first,
+                    Default::default(),
+                );
+            } else {
+                self.builder
+                    .open_inline(NodeId(id as u64), &normal, Default::default());
+            }
+            self.builder.push_text(
+                TextSource::Generated {
+                    node: NodeId(id as u64),
+                },
+                "\u{200b}",
+            );
+            self.builder.close_inline();
             return Ok(());
         }
         if !matches!(node.tag_name(), Some("span" | "a" | "em")) {

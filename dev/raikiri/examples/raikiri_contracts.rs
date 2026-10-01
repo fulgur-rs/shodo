@@ -449,4 +449,26 @@ mod tests {
         let input = input("<span>a</span>", "#root::before{content:none}", None);
         assert!(caller::layout(&input, &fonts.collection, 400.0).is_ok());
     }
+
+    #[test]
+    fn word_space_transform_projects_zwsp_and_wbr_through_computed_styles() {
+        let input = input("a&#8203;b<wbr>c", "#root{word-space-transform:space}", None);
+        let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
+        let output = caller::layout(&input, &fonts.collection, 400.0).unwrap();
+        let line = &output.lines[0];
+        assert_eq!(&line.text()[line.text_range()], "a b c");
+    }
+
+    #[test]
+    fn word_space_transform_none_on_wbr_preserves_its_generated_marker() {
+        let input = input(
+            "a&#8203;b<wbr>c",
+            "#root{word-space-transform:space}wbr{word-space-transform:none}",
+            None,
+        );
+        let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
+        let output = caller::layout(&input, &fonts.collection, 400.0).unwrap();
+        let line = &output.lines[0];
+        assert_eq!(&line.text()[line.text_range()], "a b\u{200b}c");
+    }
 }

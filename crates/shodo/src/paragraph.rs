@@ -256,6 +256,7 @@ macro_rules! first_line_properties {
             letter_spacing,
             word_spacing,
             text_transform,
+            word_space_transform,
             text_emphasis
         );
     };
