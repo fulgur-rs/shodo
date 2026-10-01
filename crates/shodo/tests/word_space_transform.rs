@@ -68,8 +68,10 @@ fn inherited_transform_applies_to_inline_content_but_none_overrides_it() {
 #[test]
 fn inline_transform_applies_when_root_is_none() {
     let paragraph_style = style();
-    let mut inline = InlineStyle::default();
-    inline.word_space_transform = WordSpaceTransform::Space;
+    let inline = InlineStyle {
+        word_space_transform: WordSpaceTransform::Space,
+        ..InlineStyle::default()
+    };
     let paragraph = build(&paragraph_style, |builder| {
         builder
             .open_inline(NodeId(1), &inline, InlineEdges::default())
