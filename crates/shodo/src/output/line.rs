@@ -673,6 +673,7 @@ impl Line {
                     ),
                     has_start_edge: *start_edge,
                     has_end_edge: *end_edge,
+                    start_edge_is_reversed: *reversed,
                     parent: parent.map(|p| p as usize),
                     font,
                     font_size: resolved.size,

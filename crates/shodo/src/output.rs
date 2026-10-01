@@ -122,6 +122,9 @@ pub struct InlineBoxFragment {
     pub content_rect: LogicalRect,
     pub has_start_edge: bool,
     pub has_end_edge: bool,
+    /// Whether the box's own `direction` opposes the paragraph's, putting
+    /// its logical inline-start on the paragraph's inline-end side.
+    pub start_edge_is_reversed: bool,
     /// Index of the parent inline box fragment in [`Line::fragments`].
     pub parent: Option<usize>,
     /// Primary font of the box, for text-decoration metrics.
