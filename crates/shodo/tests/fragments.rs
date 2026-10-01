@@ -1,7 +1,7 @@
 use shodo::font::FontCollection;
 use shodo::limits::{Limits, WarningKind};
 use shodo::node::{InlineEdges, NodeId, OutOfFlowKind, Sides, TextSource};
-use shodo::style::{InlineStyle, LineOptions, ParagraphStyle, VerticalAlign};
+use shodo::style::{BoxDecorationBreak, InlineStyle, LineOptions, ParagraphStyle, VerticalAlign};
 use shodo::{
     AtomicSize, AtomicSizes, Fragment, InlineBoxFragment, LayoutContext, Line, LineConstraint,
     LineResult, Paragraph, ParagraphBuilder,
@@ -32,7 +32,12 @@ fn dom(node: u64) -> TextSource {
 }
 
 fn para(build: impl FnOnce(&mut ParagraphBuilder)) -> Paragraph {
-    let mut b = ParagraphBuilder::new(&style(), &Limits::default());
+    let style = style();
+    para_with_style(&style, build)
+}
+
+fn para_with_style(style: &ParagraphStyle, build: impl FnOnce(&mut ParagraphBuilder)) -> Paragraph {
+    let mut b = ParagraphBuilder::new(style, &Limits::default());
     build(&mut b);
     b.build(
         &mut LayoutContext::new(),
@@ -234,6 +239,121 @@ fn inline_box_baselines_match_their_child_runs_after_vertical_alignment() {
             .unwrap();
         assert_eq!(inline_box.baseline, child_baseline, "{vertical_align:?}");
     }
+}
+
+#[test]
+fn sliced_inline_box_offsets_follow_composite_fragment_order() {
+    let edges = InlineEdges {
+        margin: Sides {
+            inline_start: 0.1,
+            inline_end: 0.2,
+            ..Default::default()
+        },
+        padding: Sides {
+            inline_start: 5.0,
+            inline_end: 5.0,
+            ..Default::default()
+        },
+        ..InlineEdges::default()
+    };
+    let slice = InlineStyle {
+        box_decoration_break: BoxDecorationBreak::Slice,
+        ..span()
+    };
+    let p = para(|b| {
+        b.open_inline(NodeId(1), &slice, edges)
+            .push_text(dom(2), "aaa bbb")
+            .close_inline();
+    });
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        45.0,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(lines.len(), 2);
+    let parts: Vec<_> = lines.iter().map(|line| boxes(line)[0]).collect();
+    assert_eq!(parts[0].slice_offset, Some(0.0));
+    assert_eq!(parts[1].slice_offset, Some(parts[0].rect.inline_size));
+
+    for (paragraph_direction, text) in [
+        (shodo::geometry::Direction::Rtl, "אבג דהו"),
+        (shodo::geometry::Direction::Ltr, "אבג דהו"),
+    ] {
+        let mut paragraph_style = style();
+        paragraph_style.direction = paragraph_direction;
+        paragraph_style.root.direction = paragraph_direction;
+        let rtl_slice = InlineStyle {
+            direction: shodo::geometry::Direction::Rtl,
+            box_decoration_break: BoxDecorationBreak::Slice,
+            ..span()
+        };
+        let p = para_with_style(&paragraph_style, |b| {
+            b.open_inline(NodeId(5), &rtl_slice, edges)
+                .push_text(dom(6), text)
+                .close_inline();
+        });
+        let lines = p.break_all(
+            &mut LayoutContext::new(),
+            &LineOptions::default(),
+            45.0,
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(lines.len(), 2, "{paragraph_direction:?}");
+        let parts: Vec<_> = lines.iter().map(|line| boxes(line)[0]).collect();
+        assert_eq!(parts[0].slice_offset, Some(0.0), "{paragraph_direction:?}");
+        assert_eq!(
+            parts[1].slice_offset,
+            Some(parts[0].rect.inline_size),
+            "{paragraph_direction:?}"
+        );
+    }
+
+    let limited = p.break_all_with_grapheme_limit(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        45.0,
+        4,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(limited.len(), 2);
+    let limited_parts: Vec<_> = limited.iter().map(|line| boxes(line)[0]).collect();
+    assert_eq!(limited_parts[0].slice_offset, Some(0.0));
+    assert_eq!(
+        limited_parts[1].slice_offset,
+        Some(limited_parts[0].rect.inline_size)
+    );
+
+    let streamed = all_lines(&p, 45.0, &AtomicSizes::EMPTY, &mut LayoutContext::new());
+    assert!(
+        streamed
+            .iter()
+            .flat_map(boxes)
+            .all(|fragment| fragment.slice_offset.is_none())
+    );
+
+    let clone = InlineStyle {
+        box_decoration_break: BoxDecorationBreak::Clone,
+        ..span()
+    };
+    let p = para(|b| {
+        b.open_inline(NodeId(3), &clone, edges)
+            .push_text(dom(4), "aaa bbb")
+            .close_inline();
+    });
+    let cloned = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        55.0,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(cloned.len(), 2);
+    assert!(
+        cloned
+            .iter()
+            .flat_map(boxes)
+            .all(|fragment| fragment.slice_offset.is_none())
+    );
 }
 
 #[test]
