@@ -7,6 +7,7 @@ pub(super) struct Cost {
     text: u64,
     items: u64,
     styles: u64,
+    style_bytes: u64,
     glyphs: u64,
 }
 
@@ -16,6 +17,7 @@ impl Cost {
             LimitKind::TextBytes => self.text,
             LimitKind::Items => self.items,
             LimitKind::Styles => self.styles,
+            LimitKind::StyleBytes => self.style_bytes,
             LimitKind::ShapedGlyphs => self.glyphs,
             _ => 0,
         }
@@ -25,6 +27,7 @@ impl Cost {
             LimitKind::TextBytes => &mut self.text,
             LimitKind::Items => &mut self.items,
             LimitKind::Styles => &mut self.styles,
+            LimitKind::StyleBytes => &mut self.style_bytes,
             LimitKind::ShapedGlyphs => &mut self.glyphs,
             _ => return,
         };
@@ -59,6 +62,7 @@ pub(super) fn limit(limits: &Limits, kind: LimitKind) -> Option<u64> {
         LimitKind::TextBytes => limits.max_text_bytes,
         LimitKind::Items => limits.max_items,
         LimitKind::Styles => limits.max_styles,
+        LimitKind::StyleBytes => limits.max_style_bytes,
         LimitKind::ShapedGlyphs => limits.max_shaped_glyphs,
         _ => None,
     }
@@ -105,6 +109,7 @@ impl RubyBudget {
             LimitKind::TextBytes,
             LimitKind::Items,
             LimitKind::Styles,
+            LimitKind::StyleBytes,
             LimitKind::ShapedGlyphs,
         ] {
             used.add(kind, scope.used(self.spent, kind));
@@ -118,6 +123,7 @@ impl RubyBudget {
             (LimitKind::TextBytes, &mut remaining.max_text_bytes),
             (LimitKind::Items, &mut remaining.max_items),
             (LimitKind::Styles, &mut remaining.max_styles),
+            (LimitKind::StyleBytes, &mut remaining.max_style_bytes),
             (LimitKind::ShapedGlyphs, &mut remaining.max_shaped_glyphs),
         ] {
             for scope in &self.scopes {
@@ -168,6 +174,11 @@ impl RubyBudget {
             (LimitKind::TextBytes, data.text.len() as u64),
             (LimitKind::Items, data.items.len() as u64),
             (LimitKind::Styles, data.styles.len() as u64),
+            (
+                LimitKind::StyleBytes,
+                crate::style::memory::paragraph(&data.style)
+                    .saturating_add(crate::style::memory::styles(&data.styles)),
+            ),
             (LimitKind::ShapedGlyphs, data.glyphs.len() as u64),
         ] {
             self.charge(kind, amount)?;

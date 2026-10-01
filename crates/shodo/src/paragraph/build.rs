@@ -76,6 +76,32 @@ impl Paragraph {
                 styles.len() as u64 * 2,
             )?;
         }
+        let normal_bytes = crate::style::memory::paragraph(&style)
+            .saturating_add(crate::style::memory::styles(&styles));
+        let alternate_sizes = has_first_line.then(|| {
+            let first = style.first_line.as_ref().unwrap_or(&style.root);
+            styles
+                .iter()
+                .enumerate()
+                .map(|(i, original)| match first_line_styles.get(&(i as u32)) {
+                    Some(resolved) => {
+                        crate::style::memory::alternate(original, &style.root, resolved, false)
+                    }
+                    None => crate::style::memory::alternate(original, &style.root, first, true),
+                })
+                .collect::<Vec<_>>()
+        });
+        let alternate_bytes = alternate_sizes.as_ref().map_or(0, |sizes| {
+            sizes
+                .iter()
+                .copied()
+                .fold(0u64, u64::saturating_add)
+                .saturating_add(sizes[0]) // alternate ParagraphStyle root
+        });
+        let style_bytes = normal_bytes.saturating_add(alternate_bytes);
+        Limits::check(limits.max_style_bytes, LimitKind::StyleBytes, style_bytes)?;
+        budget.check(LimitKind::StyleBytes, style_bytes)?;
+        bases.check_style_bytes(&styles, alternate_sizes.as_deref())?;
         let alternate_styles = has_first_line.then(|| {
             let first = style.first_line.as_ref().unwrap_or(&style.root);
             styles
@@ -95,7 +121,7 @@ impl Paragraph {
         // retained output uses the remaining aggregate cap, as for first-line.
         let mut input_limits = run_limits.clone();
         input_limits.max_text_bytes = limits.max_text_bytes;
-        bases.start_pass()?;
+        bases.start_pass(false)?;
         let processed = crate::analysis::whitespace::process_with_base_scopes(
             &text,
             &items,
@@ -163,7 +189,7 @@ impl Paragraph {
             // its input is larger. Every output append uses the remaining cap.
             let mut input_limits = remaining.clone();
             input_limits.max_text_bytes = limits.max_text_bytes;
-            bases.start_pass()?;
+            bases.start_pass(true)?;
             let alternate = crate::analysis::whitespace::process_with_base_scopes(
                 &text,
                 &items,

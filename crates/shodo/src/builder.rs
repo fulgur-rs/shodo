@@ -11,6 +11,8 @@ use crate::node::{InlineEdges, NodeId, OutOfFlowKind, TextSource};
 use crate::paragraph::Paragraph;
 use crate::style::{InlineStyle, ParagraphStyle};
 
+mod style_key;
+
 /// Input as recorded, before white-space processing.
 #[derive(Clone, Debug)]
 pub(crate) enum RawItem {
@@ -67,7 +69,9 @@ pub struct ParagraphBuilder {
     /// Explicit alternatives, keyed by the normal/alternate pair's index.
     /// Sparse storage adds no alternate style allocations to legacy inputs.
     pub(crate) first_line_styles: HashMap<u32, InlineStyle>,
-    style_index: HashMap<String, u32>,
+    style_index: HashMap<u64, Vec<(String, u32)>>,
+    /// Data and keys already retained by this builder, excluding ruby inputs.
+    pub(crate) style_bytes: u64,
     /// Index of the most recently interned or reused style.
     last_interned: u32,
     /// Style indices of the currently open inline boxes.
@@ -83,14 +87,23 @@ pub struct ParagraphBuilder {
 
 impl ParagraphBuilder {
     pub fn new(style: &ParagraphStyle, limits: &Limits) -> Self {
+        Self::with_root(&style.root, Some(style), limits)
+    }
+
+    pub(crate) fn from_inline_style(style: &InlineStyle, limits: &Limits) -> Self {
+        Self::with_root(style, None, limits)
+    }
+
+    fn with_root(root: &InlineStyle, style: Option<&ParagraphStyle>, limits: &Limits) -> Self {
         let mut builder = Self {
-            style: style.clone(),
+            style: ParagraphStyle::default(),
             limits: limits.clone(),
             text: String::new(),
             items: Vec::new(),
             styles: Vec::new(),
             first_line_styles: HashMap::new(),
             style_index: HashMap::new(),
+            style_bytes: 0,
             last_interned: 0,
             stack: Vec::new(),
             error: None,
@@ -101,10 +114,44 @@ impl ParagraphBuilder {
             ruby_cost: Default::default(),
             ruby_annotation: false,
         };
-        builder.styles.push(style.root.clone());
+        let data = style
+            .map_or_else(
+                || crate::style::memory::inline(root),
+                crate::style::memory::paragraph,
+            )
+            .saturating_add(crate::style::memory::inline(root));
+        if !builder.check(limits.max_style_bytes, LimitKind::StyleBytes, data) {
+            return builder;
+        }
+        let pair = (root, None);
+        let (hash, bytes) = match style_key::fingerprint(
+            pair,
+            builder.style_index.hasher(),
+            limits.max_style_bytes,
+        ) {
+            Ok(key) => key,
+            Err(error) => {
+                builder.error = Some(error);
+                return builder;
+            }
+        };
+        if !builder.check(
+            limits.max_style_bytes,
+            LimitKind::StyleBytes,
+            data.saturating_add(bytes),
+        ) {
+            return builder;
+        }
+        if let Some(style) = style {
+            builder.style = style.clone();
+        } else {
+            builder.style.root = root.clone();
+        }
+        builder.styles.push(root.clone());
         builder
             .style_index
-            .insert(format!("{:?}", (&style.root, None::<&InlineStyle>)), 0);
+            .insert(hash, vec![(style_key::allocate(pair, bytes), 0)]);
+        builder.style_bytes = data.saturating_add(bytes);
         builder
     }
 
@@ -307,6 +354,9 @@ impl ParagraphBuilder {
         style: &InlineStyle,
         first_line: Option<&InlineStyle>,
     ) -> Option<u32> {
+        if self.error.is_some() {
+            return None;
+        }
         // Consecutive and nested elements usually share a style; compare
         // with the enclosing box's style and the last interned one before
         // building the map key, whose cost grows with the style's size.
@@ -318,10 +368,38 @@ impl ParagraphBuilder {
                 return Some(index);
             }
         }
-        let key = format!("{:?}", (style, first_line));
-        if let Some(&index) = self.style_index.get(&key) {
-            self.last_interned = index;
-            return Some(index);
+        let data = crate::style::memory::inline(style)
+            .saturating_add(first_line.map_or(0, crate::style::memory::inline));
+        if !self.check(self.limits.max_style_bytes, LimitKind::StyleBytes, data) {
+            return None;
+        }
+        let pair = (style, first_line);
+        let (hash, key_bytes) = match style_key::fingerprint(
+            pair,
+            self.style_index.hasher(),
+            self.limits.max_style_bytes,
+        ) {
+            Ok(key) => key,
+            Err(error) => {
+                self.error = Some(error);
+                return None;
+            }
+        };
+        if let Some(bucket) = self.style_index.get(&hash) {
+            for (key, index) in bucket {
+                if style_key::matches(pair, key) {
+                    self.last_interned = *index;
+                    return Some(*index);
+                }
+            }
+        }
+        let bytes = self
+            .style_bytes
+            .saturating_add(self.ruby_cost.style_bytes)
+            .saturating_add(data)
+            .saturating_add(key_bytes);
+        if !self.check(self.limits.max_style_bytes, LimitKind::StyleBytes, bytes) {
+            return None;
         }
         let count = self.styles.len() as u64
             + self.first_line_styles.len() as u64
@@ -336,7 +414,14 @@ impl ParagraphBuilder {
         if let Some(first_line) = first_line {
             self.first_line_styles.insert(index, first_line.clone());
         }
-        self.style_index.insert(key, index);
+        self.style_index
+            .entry(hash)
+            .or_default()
+            .push((style_key::allocate(pair, key_bytes), index));
+        self.style_bytes = self
+            .style_bytes
+            .saturating_add(data)
+            .saturating_add(key_bytes);
         self.last_interned = index;
         Some(index)
     }
@@ -403,7 +488,30 @@ impl ParagraphBuilder {
                 .depth
                 .saturating_add(1),
         )?;
+        let cost = crate::ruby::builder::InputCost::content(input);
+        Limits::check(
+            input.limits.max_style_bytes,
+            LimitKind::StyleBytes,
+            cost.style_bytes,
+        )?;
         let mut builder = Self::new(&input.style, &input.limits);
+        if let Some(error) = builder.error {
+            return Err(error);
+        }
+        let array_bytes = crate::style::memory::styles(&input.styles).saturating_add(
+            crate::style::memory::styles(input.first_line_styles.values()),
+        );
+        builder.style_bytes = builder
+            .style_bytes
+            .saturating_sub(crate::style::memory::inline(&input.style.root))
+            .saturating_add(array_bytes);
+        Limits::check(
+            input.limits.max_style_bytes,
+            LimitKind::StyleBytes,
+            builder
+                .style_bytes
+                .saturating_add(input.ruby_cost.style_bytes),
+        )?;
         builder.text = input.text.clone();
         builder.items = input.items.clone();
         builder.styles = input.styles.clone();
@@ -691,3 +799,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "builder/style_memory_tests.rs"]
+mod style_memory_tests;

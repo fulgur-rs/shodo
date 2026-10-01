@@ -114,6 +114,17 @@ conversion and keep their source datasets separate. See the [ruby contract](ruby
 
 Read build warnings through `Paragraph::warnings()` and line layout warnings through `LayoutContext::take_warnings()`. Resource limit violations are returned as `LimitExceeded`.
 
+`Limits::max_style_bytes` bounds logical owned style data and builder interning
+keys to 64 MiB by default. Checks precede caller-data cloning and key allocation;
+normal/first-line output and ruby input occurrences share their respective
+budgets. The count covers style slots, all String/Vec payloads, and escaped Debug
+keys. It excludes allocator overhead, spare capacity, and bounded temporary
+copies, so it is not an RSS limit. Exceeding it returns `LimitKind::StyleBytes`
+and stops further builder input. `None` disables this budget, as does
+`Limits::unlimited()` for trusted input. Existing `InlineStyle` field types and
+font/paint behavior are preserved. Code that enumerates every field in a `Limits`
+struct literal must add the new field; `..Limits::default()` remains supported.
+
 ## Shaping data and budgets
 
 A `GlyphRunView` exposes the actual font ID and retained `FontData`, effective size,
