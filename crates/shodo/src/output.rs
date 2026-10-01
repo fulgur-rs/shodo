@@ -120,6 +120,8 @@ pub struct InlineBoxFragment {
     /// border, which do not affect the line height (CSS 2.1 §10.8.1).
     pub rect: LogicalRect,
     pub content_rect: LogicalRect,
+    /// Dominant baseline in logical block coordinates from block-start of the line box.
+    pub baseline: f32,
     pub has_start_edge: bool,
     pub has_end_edge: bool,
     /// Whether the box's own `direction` opposes the paragraph's, putting

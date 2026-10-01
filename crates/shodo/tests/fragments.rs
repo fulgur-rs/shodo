@@ -1,7 +1,7 @@
 use shodo::font::FontCollection;
 use shodo::limits::{Limits, WarningKind};
 use shodo::node::{InlineEdges, NodeId, OutOfFlowKind, Sides, TextSource};
-use shodo::style::{InlineStyle, LineOptions, ParagraphStyle};
+use shodo::style::{InlineStyle, LineOptions, ParagraphStyle, VerticalAlign};
 use shodo::{
     AtomicSize, AtomicSizes, Fragment, InlineBoxFragment, LayoutContext, Line, LineConstraint,
     LineResult, Paragraph, ParagraphBuilder,
@@ -197,6 +197,43 @@ fn inline_boxes_carry_edges_only_where_they_start_and_end() {
         ),
         (0.0, 10.0)
     );
+}
+
+#[test]
+fn inline_box_baselines_match_their_child_runs_after_vertical_alignment() {
+    for vertical_align in [
+        VerticalAlign::Baseline,
+        VerticalAlign::Top,
+        VerticalAlign::Bottom,
+        VerticalAlign::Middle,
+        VerticalAlign::TextTop,
+        VerticalAlign::TextBottom,
+    ] {
+        let child = InlineStyle {
+            font_size: 6.0,
+            vertical_align,
+            ..span()
+        };
+        let p = para(|b| {
+            b.push_text(dom(1), "x")
+                .open_inline(NodeId(2), &child, InlineEdges::default())
+                .push_text(dom(3), "y")
+                .close_inline();
+        });
+        let line = &all_lines(&p, 100.0, &AtomicSizes::EMPTY, &mut LayoutContext::new())[0];
+        let inline_box = boxes(line)
+            .into_iter()
+            .find(|b| b.node == NodeId(2))
+            .unwrap();
+        let child_baseline = line
+            .fragments()
+            .find_map(|fragment| match fragment {
+                Fragment::GlyphRun(run) if run.node() == Some(NodeId(3)) => Some(run.baseline()),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(inline_box.baseline, child_baseline, "{vertical_align:?}");
+    }
 }
 
 #[test]
