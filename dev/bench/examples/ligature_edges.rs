@@ -212,7 +212,7 @@ fn run(c: &Case, fonts: &shodo_fixtures::FixtureFonts, inspect: bool) -> Value {
             .builder()
             .build(&mut other_build, &fonts.collection)
             .unwrap();
-        assert_eq!(format!("{:?}", other_build.take_warnings()), build_warnings);
+        assert_eq!(format!("{:?}", other.warnings()), build_warnings);
         assert_eq!(
             format!("{:?}", other_build.take_warnings()),
             build_context_warnings
