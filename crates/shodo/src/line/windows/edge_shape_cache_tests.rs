@@ -157,3 +157,57 @@ fn retained_window_trims_every_vector_and_empty_run_capacity() {
     assert_eq!(store.id, vec![1; 8]);
     assert_eq!(store.spacing.as_ref().unwrap(), &vec![LayoutUnit::ZERO; 8]);
 }
+
+#[test]
+fn glyph_budget_remains_part_of_the_cache_key() {
+    let mut cache = EdgeShapeCache::default();
+    let ordinary = window(16);
+    let limited = window(1);
+    assert!(cache.insert((0, 1, None), &ordinary));
+    assert!(cache.insert((0, 1, Some(0)), &limited));
+    assert_eq!(cache.get(&(0, 1, None)).unwrap().0.len(), 16);
+    assert_eq!(cache.get(&(0, 1, Some(0))).unwrap().0.len(), 1);
+    assert!(cache.get(&(0, 1, Some(1))).is_none());
+    assert_eq!(cache.cost, 17);
+}
+
+#[test]
+fn changing_paragraph_owner_releases_previous_shared_cache() {
+    fn paragraph() -> crate::Paragraph {
+        let style = crate::style::ParagraphStyle::default();
+        let limits = crate::limits::Limits::default();
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        builder.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            "owner",
+        );
+        builder
+            .build(
+                &mut LayoutContext::new(),
+                &crate::font::FontCollection::new(&limits),
+            )
+            .unwrap()
+    }
+    let first = paragraph();
+    let second = paragraph();
+    let mut cache = EdgeShapeCache::default();
+    cache.begin(&first.data);
+    let original = window(16);
+    let weak = std::sync::Arc::downgrade(&original);
+    assert!(cache.insert((0, 1, None), &original));
+    drop(original);
+    cache.begin(&first.data);
+    assert_eq!(cache.len(), 1);
+    cache.begin(&second.data);
+    assert_eq!((cache.len(), cache.cost), (0, 0));
+    assert!(weak.upgrade().is_none());
+    assert_eq!(
+        cache.owner,
+        Some((
+            second.data.id,
+            std::sync::Arc::as_ptr(&second.data) as usize
+        ))
+    );
+}
