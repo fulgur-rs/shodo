@@ -117,6 +117,15 @@ for line in &lines {
 `lines` handles `FloatEncountered` and `BlockSizeExceeded` through its constraint callback. The callback must change the constraint to make progress; retry an over-tall first-page line with `max_block_size: None`. `LayoutContext::shrink_to(0)` releases the retained partial line, shaping scratch, and plans.
 
 For DOM integration, pass `NodeId` and `TextSource` values to `ParagraphBuilder`. The caller computes sizes and baselines for images and other atomic inlines and supplies them through `AtomicSizes`. Rendering is also the caller's responsibility; use `Line::fragments()` to read the layout output.
+For physical float insets, use
+`LineConstraint::from_physical_insets(container_inline_size, left_or_top, right_or_bottom, writing_mode, direction)`.
+It subtracts both insets and sets the logical start offset, including RTL and
+`sideways-lr` progression. Pass left/right insets for horizontal writing and
+top/bottom insets otherwise, with the effective inline direction (LTR for
+upright vertical text). Set `block_offset` and float cursors on the returned
+constraint as needed. A constraint built with `LineConstraint::new` still takes
+the available size after insets have been subtracted by the caller.
+
 Ruby readings are retained child Lines; compose their transforms before physical
 conversion and keep their source datasets separate. See the [ruby contract](ruby.md).
 

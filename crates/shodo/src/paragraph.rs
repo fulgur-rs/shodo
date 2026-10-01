@@ -441,6 +441,45 @@ impl LineConstraint<'_> {
             break_plan: None,
         }
     }
+
+    /// Build a line's available inline strip from physical float insets.
+    ///
+    /// `container_inline_size` is the container width in horizontal writing,
+    /// or height in vertical/sideways writing. The two insets are left/right
+    /// for horizontal writing and top/bottom otherwise. Both are subtracted
+    /// from the available size; the inset on the logical inline-start side
+    /// becomes [`Self::inline_start_offset`]. This also handles the reversed
+    /// inline progression of `sideways-lr`.
+    ///
+    /// Supply the effective inline direction used for physical conversion
+    /// (the direction reported by [`Line::used_direction`]); upright vertical
+    /// text uses LTR. Negative or NaN insets are treated as zero, and the
+    /// available size is clamped to zero when the insets overlap.
+    /// Other fields have the same defaults as [`Self::new`].
+    pub fn from_physical_insets(
+        container_inline_size: f32,
+        left_or_top: f32,
+        right_or_bottom: f32,
+        writing_mode: WritingMode,
+        direction: Direction,
+    ) -> Self {
+        let left_or_top = left_or_top.max(0.0);
+        let right_or_bottom = right_or_bottom.max(0.0);
+        let (x, y) = crate::geometry::PhysicalConverter::new(
+            writing_mode,
+            direction,
+            crate::geometry::PhysicalSize::default(),
+        )
+        .vector(1.0, 0.0);
+        Self {
+            inline_start_offset: if x < 0.0 || y < 0.0 {
+                right_or_bottom
+            } else {
+                left_or_top
+            },
+            ..Self::new((container_inline_size - left_or_top - right_or_bottom).max(0.0))
+        }
+    }
 }
 
 /// Outcome of [`Paragraph::next_line`].
