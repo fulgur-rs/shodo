@@ -69,6 +69,8 @@ pub(crate) const RUN_PEN_LIMIT: i32 = 1 << 30;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct GlyphStore {
+    #[cfg(test)]
+    pub(crate) _cache_clone_probe: cache_clone_probe::CloneProbe,
     pub(crate) id: Vec<u32>,
     pub(crate) advance: Vec<LayoutUnit>,
     /// Pen position before the glyph, relative to the start of its run.
@@ -925,3 +927,24 @@ pub(crate) fn shape_window_edit(
 
 #[cfg(test)]
 mod tests;
+
+// Observe the real derived GlyphStore clone without a shipping field or counter.
+#[cfg(test)]
+pub(crate) mod cache_clone_probe {
+    use std::cell::Cell;
+    thread_local! { static COUNT: Cell<usize> = const { Cell::new(0) }; }
+    #[derive(Debug, Default)]
+    pub(crate) struct CloneProbe;
+    impl Clone for CloneProbe {
+        fn clone(&self) -> Self {
+            COUNT.with(|count| count.set(count.get() + 1));
+            Self
+        }
+    }
+    pub(crate) fn reset() {
+        COUNT.with(|count| count.set(0));
+    }
+    pub(crate) fn count() -> usize {
+        COUNT.with(Cell::get)
+    }
+}
