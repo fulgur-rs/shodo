@@ -37,6 +37,8 @@ pub enum BreakReason {
 /// outlive the `Paragraph` handle and be sent between threads.
 #[derive(Clone)]
 pub struct Line {
+    #[cfg(test)]
+    pub(crate) _clone_probe: clone_probe::CloneProbe,
     pub(crate) ruby: Vec<ruby::RubyAnnotationRecord>,
     pub(crate) ruby_caret_gaps: Vec<crate::ruby::align::CaretGap>,
     pub(crate) data: Arc<ParagraphData>,
@@ -223,5 +225,25 @@ impl<'a> GlyphRunView<'a> {
     }
     fn data(&self) -> &'a ParagraphData {
         &self.line.data
+    }
+}
+
+// Test-only, zero-sized observation of the real derived Line::clone path.
+#[cfg(test)]
+pub(crate) mod clone_probe {
+    use std::cell::Cell;
+    thread_local! { static COUNT: Cell<usize> = const { Cell::new(0) }; }
+    pub(crate) struct CloneProbe;
+    impl Clone for CloneProbe {
+        fn clone(&self) -> Self {
+            COUNT.with(|c| c.set(c.get() + 1));
+            Self
+        }
+    }
+    pub(crate) fn reset() {
+        COUNT.with(|c| c.set(0));
+    }
+    pub(crate) fn count() -> usize {
+        COUNT.with(Cell::get)
     }
 }

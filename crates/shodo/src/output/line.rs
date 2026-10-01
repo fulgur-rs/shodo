@@ -286,6 +286,8 @@ impl Line {
         let mut ruby_caret_gaps = scan.ruby_caret_gaps;
         ruby_caret_gaps.sort_by_key(|gap| gap.text.start);
         Line {
+            #[cfg(test)]
+            _clone_probe: super::clone_probe::CloneProbe,
             ruby: Vec::new(),
             ruby_caret_gaps,
             data: Arc::clone(&para.data),

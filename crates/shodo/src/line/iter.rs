@@ -47,7 +47,7 @@ impl Paragraph {
         atomics: &AtomicSizes,
     ) -> Vec<Line> {
         let mut cursor = None;
-        self.lines(
+        self.lines_with_previous::<false, _>(
             cx,
             self.start_token(),
             options,
@@ -91,7 +91,24 @@ impl Paragraph {
         'p: 'cx,
         F: FnMut(Option<&LineResult>, f32) -> LineConstraint<'p> + 'cx,
     {
-        Lines {
+        self.lines_with_previous::<true, _>(cx, token, options, constraint_fn, atomics)
+    }
+
+    // Internal fixed-width drivers only inspect float results and the block
+    // offset. Keep their state machine identical without copying accepted Lines.
+    fn lines_with_previous<'p, 'cx, const KEEP_PREVIOUS_LINE: bool, F>(
+        &'p self,
+        cx: &'cx mut LayoutContext,
+        token: BreakToken,
+        options: &LineOptions,
+        constraint_fn: F,
+        atomics: &'p AtomicSizes,
+    ) -> impl Iterator<Item = LineResult> + 'cx
+    where
+        'p: 'cx,
+        F: FnMut(Option<&LineResult>, f32) -> LineConstraint<'p> + 'cx,
+    {
+        Lines::<_, KEEP_PREVIOUS_LINE> {
             para: self,
             cx,
             token,
@@ -105,7 +122,7 @@ impl Paragraph {
     }
 }
 
-struct Lines<'p, 'cx, F> {
+struct Lines<'p, 'cx, F, const KEEP_PREVIOUS_LINE: bool> {
     para: &'p Paragraph,
     cx: &'cx mut LayoutContext,
     token: BreakToken,
@@ -117,7 +134,9 @@ struct Lines<'p, 'cx, F> {
     done: bool,
 }
 
-impl<'p, F: FnMut(Option<&LineResult>, f32) -> LineConstraint<'p>> Iterator for Lines<'p, '_, F> {
+impl<'p, F: FnMut(Option<&LineResult>, f32) -> LineConstraint<'p>, const KEEP_PREVIOUS_LINE: bool>
+    Iterator for Lines<'p, '_, F, KEEP_PREVIOUS_LINE>
+{
     type Item = LineResult;
     fn next(&mut self) -> Option<Self::Item> {
         if self.done {
@@ -147,7 +166,7 @@ impl<'p, F: FnMut(Option<&LineResult>, f32) -> LineConstraint<'p>> Iterator for 
                             )
                             .to_f32();
                     self.cx.warnings.record_saturation(&sat);
-                    self.previous = Some(LineResult::Line(l.clone()));
+                    self.previous = KEEP_PREVIOUS_LINE.then(|| LineResult::Line(l.clone()));
                 }
                 LineResult::BlockInInline { node, token_after } => {
                     self.token = *token_after;

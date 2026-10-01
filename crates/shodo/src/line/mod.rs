@@ -476,6 +476,8 @@ fn text_indent(options: &LineOptions, flags: u8, sat: &mut Saturation) -> Layout
 }
 
 #[cfg(test)]
+mod iter_tests;
+#[cfg(test)]
 mod tests;
 
 pub(super) fn soft_break_reason(
