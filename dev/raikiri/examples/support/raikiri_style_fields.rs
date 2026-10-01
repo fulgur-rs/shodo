@@ -48,6 +48,7 @@ fn reset_mapped(values: &mut ComputedValues, initial: &ComputedValues) {
     values.hyphenate_character = clone_value(&initial.hyphenate_character);
     values.tab_size = clone_value(&initial.tab_size);
     values.text_autospace = clone_value(&initial.text_autospace);
+    values.word_space_transform = clone_value(&initial.word_space_transform);
     values.text_spacing_trim = clone_value(&initial.text_spacing_trim);
     values.margin = clone_value(&initial.margin);
     values.padding = clone_value(&initial.padding);

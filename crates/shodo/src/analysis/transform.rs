@@ -4,7 +4,7 @@ use super::whitespace::Processed;
 use crate::analysis::ItemKind;
 use crate::limits::{LimitExceeded, LimitKind, Limits, WarningKind, WarningSink};
 use crate::mapping::{MappingKind, TransformSpan};
-use crate::style::{CaseTransform, InlineStyle, TextTransform};
+use crate::style::{CaseTransform, InlineStyle, TextTransform, WordSpaceTransform};
 use icu_casemap::CaseMapper;
 use icu_locale_core::{LanguageIdentifier, Locale};
 use icu_normalizer::ComposingNormalizer;
@@ -51,6 +51,9 @@ fn transform_inner(
     if styles
         .iter()
         .all(|s| s.text_transform == TextTransform::None)
+        && styles
+            .iter()
+            .all(|s| s.word_space_transform == WordSpaceTransform::None)
         && omissions.is_empty()
     {
         Limits::check(
@@ -85,6 +88,17 @@ fn transform_inner(
             },
         )
         .collect();
+    for style in styles {
+        if matches!(
+            style.word_space_transform,
+            WordSpaceTransform::SpaceAutoPhrase | WordSpaceTransform::IdeographicSpaceAutoPhrase
+        ) {
+            warnings.push(
+                WarningKind::Unsupported,
+                "automatic phrase segmentation unavailable; transforming explicit zero-width spaces only",
+            );
+        }
+    }
     // OOF and generated bidi controls must not split words/casing context.
     // WJ is a same-byte-length Format character ignored by UAX29.
     let mut logical = input.text.clone();
@@ -245,6 +259,17 @@ fn transform_inner(
                     consumed_mark = Some(mark_at);
                 }
             }
+            let width_changed = before_width
+                .as_deref()
+                .is_some_and(|before| before != mapped);
+            if matches!(item.kind, ItemKind::Text) && !omit && c == '\u{200b}' {
+                mapped = match style.word_space_transform {
+                    WordSpaceTransform::None => mapped,
+                    WordSpaceTransform::Space | WordSpaceTransform::SpaceAutoPhrase => " ".into(),
+                    WordSpaceTransform::IdeographicSpace
+                    | WordSpaceTransform::IdeographicSpaceAutoPhrase => "\u{3000}".into(),
+                };
+            }
             let next_len = output.len() as u64 + mapped.len() as u64;
             Limits::check(Some(u64::from(u32::MAX)), LimitKind::TextBytes, next_len)?;
             Limits::check(limits.max_text_bytes, LimitKind::TextBytes, next_len)?;
@@ -253,8 +278,10 @@ fn transform_inner(
             }
             let start_new = output.len() as u32;
             output.push_str(&mapped);
+            // Width reversion applies only to text-transform's width change;
+            // a later word-space substitution must not be reverted to ZWSP.
             if let Some(before_width) = before_width
-                && before_width != mapped
+                && width_changed
                 && !mapped.is_empty()
             {
                 width_origins.push(WidthOrigin {

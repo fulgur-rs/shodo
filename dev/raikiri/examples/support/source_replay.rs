@@ -34,6 +34,7 @@ fn text_style(
     remaining.direction = initial.direction;
     remaining.text_align = initial.text_align;
     remaining.text_autospace = initial.text_autospace;
+    remaining.word_space_transform = initial.word_space_transform;
     remaining.word_break = initial.word_break;
     // Block-container property; the IFC root's value is mapped into
     // `LineOptions` by `project`, so descendants' inherited copies are not
@@ -82,6 +83,16 @@ fn text_style(
         css::WordBreak::Manual => s::WordBreak::Manual,
         _ => return Err("word-break outside the verified source input footprint".into()),
     };
+    let word_space_transform = match cv.word_space_transform {
+        css::WordSpaceTransform::None => s::WordSpaceTransform::None,
+        css::WordSpaceTransform::Space => s::WordSpaceTransform::Space,
+        css::WordSpaceTransform::IdeographicSpace => s::WordSpaceTransform::IdeographicSpace,
+        css::WordSpaceTransform::SpaceAutoPhrase => s::WordSpaceTransform::SpaceAutoPhrase,
+        css::WordSpaceTransform::IdeographicSpaceAutoPhrase => {
+            s::WordSpaceTransform::IdeographicSpaceAutoPhrase
+        }
+        _ => return Err("word-space-transform outside the verified source input footprint".into()),
+    };
     Ok(s::InlineStyle {
         font_families,
         font_size: cv.font_size.0,
@@ -90,6 +101,7 @@ fn text_style(
         direction,
         text_autospace,
         word_break,
+        word_space_transform,
         ..Default::default()
     })
 }
@@ -214,6 +226,14 @@ pub fn project(
                 if node.tag_name() == Some("br") {
                     builder.push_forced_break(NodeId(id as u64));
                     builder.close_inline();
+                } else if node.tag_name() == Some("wbr") {
+                    builder.push_text(
+                        TextSource::Generated {
+                            node: NodeId(id as u64),
+                        },
+                        "\u{200b}",
+                    );
+                    builder.close_inline();
                 } else {
                     stack.push(None);
                     let children: Vec<_> = dom.child_ids(DomId(id as u64)).collect();
@@ -252,5 +272,16 @@ mod tests {
         values.word_break = css::WordBreak::Manual;
         let projected = text_style(&values, diagnostic::InputProfile::Plain).unwrap();
         assert_eq!(projected.word_break, s::WordBreak::Manual);
+    }
+
+    #[test]
+    fn word_space_transform_projects_from_pinned_raikiri_style() {
+        let mut values = ComputedValues::initial();
+        values.word_space_transform = css::WordSpaceTransform::IdeographicSpaceAutoPhrase;
+        let projected = text_style(&values, diagnostic::InputProfile::Plain).unwrap();
+        assert_eq!(
+            projected.word_space_transform,
+            s::WordSpaceTransform::IdeographicSpaceAutoPhrase
+        );
     }
 }
