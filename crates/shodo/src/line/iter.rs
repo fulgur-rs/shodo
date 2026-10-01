@@ -20,10 +20,11 @@ impl Paragraph {
 
     /// Maximum advance of the lines produced by greedy layout at `width`.
     ///
-    /// A line's advance is [`Line::inline_size`] plus [`Line::hang_end`], so
-    /// trailing hanging whitespace and punctuation are included. Text indent,
-    /// inline-start offsets, and leading hanging punctuation are not included.
-    /// Floats are treated as zero-width anchors, as in [`Self::break_all`].
+    /// A line's advance is [`Line::inline_size`] minus [`Line::hang_start`]
+    /// plus [`Line::hang_end`], so trailing hanging whitespace and punctuation
+    /// are included. Text indent, inline-start offsets, and leading hanging
+    /// punctuation are not included. Floats are treated as zero-width anchors,
+    /// as in [`Self::break_all`].
     /// Returns zero when layout produces no lines. Unlike [`Self::break_all`],
     /// this method does not collect the lines into a `Vec`.
     pub fn max_inline_size(
@@ -34,17 +35,18 @@ impl Paragraph {
         atomics: &AtomicSizes,
     ) -> f32 {
         self.fixed_width_lines(cx, options, width, None, atomics)
-            .map(|line| line.inline_size() + line.hang_end())
+            .map(|line| line.inline_size() - line.hang_start() + line.hang_end())
             .reduce(f32::max)
             .unwrap_or(0.0)
     }
 
     /// Advance of the first line produced by greedy layout at `width`.
     ///
-    /// The returned value is [`Line::inline_size`] plus [`Line::hang_end`];
-    /// text indent, inline-start offsets, and leading hanging punctuation are
-    /// not included. Returns zero when layout produces no lines. Only the
-    /// first line is laid out; later lines and their warnings are not observed.
+    /// The returned value is [`Line::inline_size`] minus [`Line::hang_start`]
+    /// plus [`Line::hang_end`]; text indent, inline-start offsets, and leading
+    /// hanging punctuation are not included. Returns zero when layout produces
+    /// no lines. Only the first line is laid out; later lines and their warnings
+    /// are not observed.
     pub fn first_line_advance(
         &self,
         cx: &mut LayoutContext,
@@ -54,7 +56,7 @@ impl Paragraph {
     ) -> f32 {
         self.fixed_width_lines(cx, options, width, None, atomics)
             .next()
-            .map(|line| line.inline_size() + line.hang_end())
+            .map(|line| line.inline_size() - line.hang_start() + line.hang_end())
             .unwrap_or(0.0)
     }
 

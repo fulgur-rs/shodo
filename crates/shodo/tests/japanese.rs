@@ -240,7 +240,7 @@ fn rtl_hanging_uses_the_inline_start_and_end_after_mirroring() {
     };
     let line = first_line(&para, 32., &options, &AtomicSizes::EMPTY);
     assert_eq!(line.text_range(), 0..12);
-    assert_eq!(line.inline_size(), 32.);
+    assert_eq!(line.inline_size(), 40.);
     assert_eq!((line.hang_start(), line.hang_end()), (8., 8.));
     assert_eq!(
         glyphs(&line)
@@ -385,7 +385,7 @@ fn trim_start_moves_opening_ink_and_reduces_line_measure() {
 }
 
 #[test]
-fn first_hanging_excludes_advance_but_keeps_the_source_and_ink() {
+fn first_hanging_includes_advance_and_keeps_the_source_and_ink() {
     let line = first_line(
         &japanese("「日本", TextSpacingTrim::SpaceAll),
         100.0,
@@ -398,12 +398,50 @@ fn first_hanging_excludes_advance_but_keeps_the_source_and_ink() {
         },
         &AtomicSizes::EMPTY,
     );
-    assert_eq!(line.inline_size(), 32.0);
+    assert_eq!(line.inline_size(), 48.0);
     assert_eq!(line.hang_start(), 16.0);
     assert_eq!(glyphs(&line)[0].inline_position, -16.0);
     assert_eq!(glyphs(&line)[1].inline_position, 0.0);
     assert_eq!(line.text_range(), 0..9);
     assert!(line.overflow_rect().inline_start < 0.0);
+}
+
+#[test]
+fn first_hung_opening_advance_is_included_in_inline_size() {
+    let mut style = japanese_style(TextSpacingTrim::SpaceAll);
+    style.root.font_size = 10.0;
+    let para = japanese_with(style, Limits::default(), |builder| {
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, "「日本");
+    });
+    let options = LineOptions {
+        hanging_punctuation: HangingPunctuation {
+            first: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let line = first_line(&para, 100.0, &options, &AtomicSizes::EMPTY);
+
+    assert_eq!(line.hang_start(), 10.0);
+    assert_eq!(line.inline_size(), 30.0);
+    assert_eq!(
+        para.max_inline_size(
+            &mut LayoutContext::new(),
+            &options,
+            100.0,
+            &AtomicSizes::EMPTY
+        ),
+        20.0
+    );
+    assert_eq!(
+        para.first_line_advance(
+            &mut LayoutContext::new(),
+            &options,
+            100.0,
+            &AtomicSizes::EMPTY
+        ),
+        20.0
+    );
 }
 
 #[test]
@@ -458,7 +496,7 @@ fn ideographic_space_and_ascii_quotes_hang_by_their_actual_advances() {
     );
     assert_eq!(
         (space.inline_size(), space.hang_start(), space.hang_end()),
-        (16., 16., 0.)
+        (32., 16., 0.)
     );
     assert_eq!(space.text_range(), 0..6);
     let para = japanese("\"日\"", TextSpacingTrim::SpaceAll);
@@ -469,7 +507,7 @@ fn ideographic_space_and_ascii_quotes_hang_by_their_actual_advances() {
     let line = first_line(&para, 16., &options, &AtomicSizes::EMPTY);
     assert_eq!(
         (line.inline_size(), line.hang_start(), line.hang_end()),
-        (16., opening, closing)
+        (16. + opening, opening, closing)
     );
     assert_eq!(line.text_range(), 0..5);
     assert_eq!(glyphs(&line)[0].inline_position, -opening);
@@ -884,7 +922,7 @@ fn borders_and_padding_block_hanging_but_margin_does_not() {
                 ..Default::default()
             },
             16.0,
-            36.0,
+            52.0,
         ),
     ] {
         let style = japanese_style(TextSpacingTrim::SpaceAll);
@@ -1146,7 +1184,7 @@ fn first_and_last_hanging_share_one_typographic_advance() {
                 ..Default::default()
             };
             let line = first_line(&para, 100.0, &options, &AtomicSizes::EMPTY);
-            assert_eq!(line.inline_size(), 0.0, "{text:?} {trim:?}");
+            assert_eq!(line.inline_size(), line.hang_start(), "{text:?} {trim:?}");
             assert_eq!(line.hang_end(), 0.0, "already hung at the start");
             assert!(line.hang_start() > 0.0);
             assert_eq!(line.text_range(), 0..text.len());
@@ -1432,6 +1470,6 @@ fn rtl_slice_padding_blocks_the_actual_logical_hanging_edge() {
             (line.hang_start(), line.hang_end()),
             (expected_start, expected_end)
         );
-        assert_eq!(line.inline_size(), 52.0);
+        assert_eq!(line.inline_size(), 52.0 + expected_start);
     }
 }
