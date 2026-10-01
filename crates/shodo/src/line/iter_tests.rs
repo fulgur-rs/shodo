@@ -149,3 +149,115 @@ fn public_iterator_keeps_previous_line() {
     assert_eq!(clone_probe::count(), lines.len() + 1);
     assert_eq!(signature(&copied), signature(&lines[0]));
 }
+
+#[test]
+fn internal_driver_preserves_float_block_forced_and_saturated_offsets() {
+    for kind in ["float", "block", "forced", "plain"] {
+        for size in [16., 30_000_000.] {
+            let mut limits = Limits::default();
+            limits.max_warnings = Some(1);
+            let fonts = FontCollection::with_options(
+                &limits,
+                FontOptions {
+                    system_fonts: false,
+                    ..Default::default()
+                },
+            );
+            fonts
+                .register(crate::test_support::fonts::LATIN.to_vec())
+                .unwrap();
+            let mut style = ParagraphStyle::default();
+            style.root.font_size = size;
+            if size > 1_000_000. {
+                // Font size is clamped at 1e6; explicit legal line-height
+                // guarantees accumulated block offsets exceed Q26 bounds.
+                style.root.line_height = crate::style::LineHeight::Px(10_000_000.);
+            }
+            style.root.font_families = vec![FontFamily::Named("Noto Sans".into())];
+            style.root.word_break = crate::style::WordBreak::BreakAll;
+            let mut builder = ParagraphBuilder::new(&style, &limits);
+            for i in 0..4 {
+                builder.push_text(
+                    TextSource::Dom {
+                        node: NodeId(i * 2),
+                        offset: 7,
+                    },
+                    "abc def ",
+                );
+                match kind {
+                    "float" => {
+                        builder
+                            .push_out_of_flow(NodeId(i * 2 + 1), crate::node::OutOfFlowKind::Float);
+                    }
+                    "block" => {
+                        builder.push_block_in_inline(NodeId(i * 2 + 1));
+                    }
+                    "forced" => {
+                        builder.push_forced_break(NodeId(i * 2 + 1));
+                    }
+                    _ => {}
+                }
+            }
+            let p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+            let options = LineOptions::default();
+            let mut actual_cx = LayoutContext::new();
+            let actual = p.break_all(&mut actual_cx, &options, 1., &AtomicSizes::EMPTY);
+            let mut cx = LayoutContext::new();
+            let mut token = p.start_token();
+            let mut cursor = None;
+            let mut offset = 0.;
+            let mut manual = Vec::new();
+            let mut done = false;
+            let mut saturations = 0;
+            for _ in 0..128 {
+                let mut con = LineConstraint::new(1.);
+                con.block_offset = offset;
+                con.floats_placed_through = cursor;
+                match p.next_line(&mut cx, token, &options, &con, &AtomicSizes::EMPTY) {
+                    LineResult::Line(l) => {
+                        assert_ne!(l.break_token(), token);
+                        token = l.break_token();
+                        let mut sat = crate::geometry::Saturation::default();
+                        offset = crate::geometry::LayoutUnit::from_f32_round(offset, &mut sat)
+                            .add(
+                                crate::geometry::LayoutUnit::from_f32_round(
+                                    l.block_size(),
+                                    &mut sat,
+                                ),
+                                &mut sat,
+                            )
+                            .to_f32();
+                        saturations += sat.saturated;
+                        cx.warnings.record_saturation(&sat);
+                        manual.push(l);
+                    }
+                    LineResult::FloatEncountered { float_cursor, .. } => {
+                        assert_ne!(cursor, Some(float_cursor));
+                        cursor = Some(float_cursor);
+                    }
+                    LineResult::BlockInInline { token_after, .. } => {
+                        assert_ne!(token, token_after);
+                        token = token_after;
+                    }
+                    LineResult::Done => {
+                        done = true;
+                        break;
+                    }
+                    r => panic!("unexpected manual result {r:?}"),
+                }
+            }
+            assert!(done);
+            assert_eq!(
+                actual.iter().map(signature).collect::<Vec<_>>(),
+                manual.iter().map(signature).collect::<Vec<_>>()
+            );
+            assert_eq!(actual_cx.take_warnings(), cx.take_warnings());
+            if size > 1_000_000. {
+                assert!(
+                    saturations > 0,
+                    "large controls must hit actual offset saturation"
+                );
+            }
+        }
+    }
+}
