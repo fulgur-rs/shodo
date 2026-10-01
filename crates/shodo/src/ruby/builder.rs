@@ -85,6 +85,7 @@ fn append_checked(
     first_line: Option<&InlineStyle>,
     ruby: Ruby,
 ) -> Result<(), LimitExceeded> {
+    let mut text = (b.text.len() as u64).saturating_add(b.ruby_cost.text);
     // A failed snapshot never turns into valid empty input, even when hidden.
     for content in ruby.bases.iter().map(|base| &base.content).chain(
         ruby.levels
@@ -94,7 +95,13 @@ fn append_checked(
         if let Some(error) = content.0.error {
             return Err(error);
         }
+        // Count every occurrence, including hidden and nested annotation text,
+        // before normalization can compare the original source streams.
+        text = text
+            .saturating_add(content.0.text.len() as u64)
+            .saturating_add(content.0.ruby_cost.text);
     }
+    Limits::check(b.limits.max_text_bytes, LimitKind::TextBytes, text)?;
     let mut remaining = b.limits.clone();
     remaining.max_items = remaining.max_items.map(|n| {
         n.saturating_sub(b.items.len() as u64)
@@ -142,16 +149,6 @@ fn append_checked(
         }
     }
     extra.depth = extra.depth.max(parent_depth.saturating_add(1));
-    let text = (b.text.len() as u64)
-        .saturating_add(b.ruby_cost.text)
-        .saturating_add(extra.text)
-        .saturating_add(
-            ruby.bases
-                .iter()
-                .map(|base| base.content.0.text.len() as u64)
-                .sum::<u64>(),
-        );
-    Limits::check(b.limits.max_text_bytes, LimitKind::TextBytes, text)?;
     Limits::check(
         b.limits.max_items,
         LimitKind::Items,

@@ -4,6 +4,12 @@ use super::input::{Ruby, RubyAlign, RubyContent, RubyMerge, RubyStyle, RubyVisib
 use crate::limits::{LimitExceeded, LimitKind, Limits};
 use crate::node::NodeId;
 
+#[cfg(test)]
+thread_local! {
+    pub(super) static COMPARED_BYTES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    pub(super) static COMPARED_BASES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct NormalizedBase {
     pub(crate) node: Option<NodeId>,
@@ -56,6 +62,14 @@ pub(crate) fn normalize(ruby: &Ruby, limits: &Limits) -> Result<NormalizedRuby, 
             .saturating_add((ruby.columns as u64).saturating_sub(occupied));
     }
     Limits::check(limits.max_items, LimitKind::Items, metadata_items)?;
+    // Empty columns contribute no bytes. Index nonempty bases once so each
+    // comparison visits only bases whose bytes it actually needs to consume.
+    let text_bases: Vec<_> = ruby
+        .bases
+        .iter()
+        .enumerate()
+        .filter(|(_, base)| !base.content.0.text.is_empty())
+        .collect();
     let mut bases = Vec::with_capacity(ruby.columns);
     for column in 0..ruby.columns {
         bases.push(match ruby.bases.get(column) {
@@ -82,11 +96,23 @@ pub(crate) fn normalize(ruby: &Ruby, limits: &Limits) -> Result<NormalizedRuby, 
             let columns = span(&annotation.span, ordinal, ruby.columns);
             // text is the original source stream, before collapse/transform,
             // including nested bases but excluding their annotation lanes.
-            let same_text = ruby.bases
-                [columns.start.min(ruby.bases.len())..columns.end.min(ruby.bases.len())]
+            let text = annotation.content.0.text.bytes();
+            #[cfg(test)]
+            let mut compared = 0;
+            #[cfg(test)]
+            let text = text.inspect(|_| compared += 1);
+            let start = text_bases.partition_point(|(column, _)| *column < columns.start);
+            let same_text = text_bases[start..]
                 .iter()
-                .flat_map(|b| b.content.0.text.bytes())
-                .eq(annotation.content.0.text.bytes());
+                .take_while(|(column, _)| *column < columns.end)
+                .flat_map(|(_, b)| {
+                    #[cfg(test)]
+                    COMPARED_BASES.with(|count| count.set(count.get() + 1));
+                    b.content.0.text.bytes()
+                })
+                .eq(text);
+            #[cfg(test)]
+            COMPARED_BYTES.with(|count| count.set(count.get() + compared));
             annotations.push(NormalizedAnnotation {
                 node: Some(annotation.node),
                 content: Some(annotation.content.clone()),
