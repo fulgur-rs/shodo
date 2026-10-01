@@ -104,7 +104,7 @@ impl Line {
             },
         }
     }
-    /// Leading hanging punctuation advance.
+    /// Leading hanging punctuation advance included in [`Self::inline_size`].
     pub fn hang_start(&self) -> f32 {
         self.hanging_start.to_f32()
     }
@@ -309,7 +309,7 @@ impl Line {
             reason: scan.reason,
             units: token.unit..scan.end as u32,
             text_range,
-            inline_size: scan.content,
+            inline_size: scan.content.add(scan.punctuation_edges.hang_start, sat),
             trailing_whitespace,
             hanging_end,
             hanging_start,
@@ -448,8 +448,9 @@ impl Line {
         )
     }
 
-    /// Width of the content, excluding hanging trailing spaces, text-indent
-    /// and the inline-start offset.
+    /// Width of the content, including leading hanging punctuation but
+    /// excluding hanging trailing spaces, text-indent and the inline-start
+    /// offset.
     pub fn inline_size(&self) -> f32 {
         self.inline_size.to_f32()
     }
