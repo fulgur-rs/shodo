@@ -823,6 +823,138 @@ fn justification_does_not_open_indivisible_transforms_or_empty_lines() {
     assert_eq!(lines.len(), 1);
     assert!(glyphs(&lines[0]).is_empty());
 }
+
+#[test]
+fn word_separator_justification_matches_real_font_wpt_space_runs() {
+    use shodo::style::{LineOptions, TextAlign, TextJustify};
+    let limits = Default::default();
+    let fonts = load_fonts(&limits).unwrap();
+    let font = FontRef::from_index(FONTS[0].bytes, 0).unwrap();
+    let gm = font.glyph_metrics(Size::new(20.0), LocationRef::default());
+    let advance = |c| gm.advance_width(font.charmap().map(c).unwrap()).unwrap();
+    close(advance(' '), advance('\u{a0}'));
+    let width = 22.0 * advance('0');
+    let options = LineOptions {
+        text_align: TextAlign::Justify,
+        text_justify: TextJustify::InterWord,
+        ..Default::default()
+    };
+    for split_sources in [false, true] {
+        let mut layouts = Vec::new();
+        for (text, collapse) in [
+            (
+                "one two  three   four five six seven eight nine   ten",
+                WhiteSpaceCollapse::Preserve,
+            ),
+            (
+                "one two\u{a0} three \u{a0} four five six seven eight nine \u{a0} ten",
+                WhiteSpaceCollapse::Collapse,
+            ),
+        ] {
+            let mut style = fixed_style();
+            style.root.white_space_collapse = collapse;
+            let mut b = ParagraphBuilder::new(&style, &limits);
+            if split_sources {
+                for (node, part) in text.split_inclusive(' ').enumerate() {
+                    b.push_text(
+                        TextSource::Dom {
+                            node: NodeId(node as u64 + 1),
+                            offset: 0,
+                        },
+                        part,
+                    );
+                }
+            } else {
+                b.push_text(TextSource::Generated { node: NodeId(1) }, text);
+            }
+            let p = b
+                .build(&mut LayoutContext::new(), &fonts.collection)
+                .unwrap();
+            layouts.push(p.break_all(
+                &mut LayoutContext::new(),
+                &options,
+                width,
+                &AtomicSizes::EMPTY,
+            ));
+        }
+        let [preserved, reference] = layouts.as_slice() else {
+            panic!()
+        };
+        assert!(preserved.len() > 1);
+        assert_eq!(preserved.len(), reference.len());
+        for (a, b) in preserved.iter().zip(reference) {
+            close(a.inline_size(), b.inline_size());
+            let (a, b) = (glyphs(a), glyphs(b));
+            assert_eq!(a.len(), b.len());
+            for (a, b) in a.iter().zip(b) {
+                close(a.inline_position, b.inline_position);
+                close(a.advance, b.advance);
+            }
+        }
+    }
+}
+
+#[test]
+fn word_separator_justification_updates_owned_ligature_windows() {
+    use shodo::style::{FontFeature, LineOptions, OverflowWrap, TextAlign, TextJustify};
+    let limits = Default::default();
+    let fonts = load_fonts(&limits).unwrap();
+    let mut style = fixed_style();
+    style.root.font_features.push(FontFeature {
+        tag: *b"liga",
+        value: 1,
+    });
+    style.root.overflow_wrap = OverflowWrap::Anywhere;
+    let make = |text: &str| {
+        let mut b = ParagraphBuilder::new(&style, &limits);
+        b.push_text(
+            TextSource::Dom {
+                node: NodeId(1),
+                offset: 0,
+            },
+            "a\u{a0}",
+        );
+        b.push_text(
+            TextSource::Dom {
+                node: NodeId(2),
+                offset: 0,
+            },
+            text,
+        );
+        b.build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap()
+    };
+    let plain = make("ff").break_all(
+        &mut LayoutContext::new(),
+        &Default::default(),
+        100.0,
+        &AtomicSizes::EMPTY,
+    );
+    let width = plain[0].inline_size() + 0.5;
+    let p = make("ffi");
+    let options = LineOptions {
+        text_align: TextAlign::Justify,
+        text_justify: TextJustify::InterWord,
+        ..Default::default()
+    };
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &options,
+        width,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(
+        lines[0].text_range(),
+        0..5,
+        "the selected line cuts inside the original ffi ligature"
+    );
+    close(lines[0].inline_size(), width);
+    let (before, after) = (glyphs(&plain[0]), glyphs(&lines[0]));
+    assert_eq!(before.len(), after.len());
+    close(after[1].inline_position - before[1].inline_position, 0.25);
+    close(after[1].advance - before[1].advance, 0.5);
+    close(after[2].inline_position - before[2].inline_position, 0.5);
+}
 #[test]
 fn final_line_metrics_and_ink_overflow_are_explicit() {
     let limits = Default::default();

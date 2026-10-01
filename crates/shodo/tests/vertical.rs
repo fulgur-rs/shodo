@@ -3474,6 +3474,7 @@ fn combine_all_is_one_external_justification_character() {
         for (text, justify) in [
             ("1234", TextJustify::InterCharacter),
             ("1 2", TextJustify::InterWord),
+            ("1\u{a0}2", TextJustify::InterWord),
         ] {
             let mut combined = style(mode, TextOrientation::Mixed);
             combined.root.text_combine_upright = TextCombineUpright::All;

@@ -150,11 +150,11 @@ pub(super) fn apply(
         if let Some(index) = data.units[i].combine {
             let span = &data.combine_spans[index as usize];
             if i + 1 == span.units.end {
-                clusters.push((i, false, None, span.text.clone()));
+                clusters.push((i, None, span.text.clone()));
             }
             continue;
         }
-        let UnitKind::Cluster { glyphs, space, .. } = &data.units[i].kind else {
+        let UnitKind::Cluster { glyphs, .. } = &data.units[i].kind else {
             continue;
         };
         if data
@@ -199,14 +199,13 @@ pub(super) fn apply(
                     && (!data.text[cluster as usize..].starts_with('\u{ad}')
                         || visible_hyphen == Some(cluster))
                 {
-                    let space = data.text[cluster as usize..].starts_with(' ');
                     let text_end = window
                         .store
                         .cluster
                         .get(end)
                         .copied()
                         .unwrap_or(window.text.end);
-                    clusters.push((unit, space, Some((w, end - 1)), cluster..text_end));
+                    clusters.push((unit, Some((w, end - 1)), cluster..text_end));
                 }
                 g = end;
             }
@@ -214,7 +213,7 @@ pub(super) fn apply(
             let end = c.slices.partition_point(|i| *i < scan.hang_start);
             end > 0 && c.slices[end - 1] == i
         }) {
-            clusters.push((i, *space, None, data.units[i].shaping_text().clone()));
+            clusters.push((i, None, data.units[i].shaping_text().clone()));
         }
     }
     let mut opportunities = Vec::new();
@@ -222,10 +221,10 @@ pub(super) fn apply(
         result.shift = fallback(sat);
         return result;
     }
+    let content_end = data.units[scan.hang_start - 1].text.end;
     if options.text_justify == TextJustify::InterCharacter {
         let mut previous = None;
-        let content_end = data.units[scan.hang_start - 1].text.end;
-        for (unit, _, owned, text) in &clusters {
+        for (unit, owned, text) in &clusters {
             let text = text.start.max(data.units[start].text.start)..text.end.min(content_end);
             let point = Point {
                 unit: *unit,
@@ -254,17 +253,29 @@ pub(super) fn apply(
             }
         }
     } else {
-        for (unit, space, owned, _) in &clusters {
-            if *space {
-                add_opportunity(
-                    &mut opportunities,
-                    Point {
-                        unit: *unit,
-                        owned: *owned,
-                    },
-                    1,
-                );
+        for (unit, owned, text) in &clusters {
+            // Word separators include NBSP and other Unicode separators;
+            // the unit's ASCII-space flag instead controls wrapping/hanging.
+            // A combined square has no internal justification opportunities.
+            if data.combine_at_text(text.start).is_some() {
+                continue;
             }
+            let text = text.start.max(data.units[start].text.start)..text.end.min(content_end);
+            if text.start >= text.end {
+                continue;
+            }
+            let count = data.text[text.start as usize..text.end as usize]
+                .chars()
+                .filter(|ch| super::spacing::word_separator(*ch))
+                .count();
+            add_opportunity(
+                &mut opportunities,
+                Point {
+                    unit: *unit,
+                    owned: *owned,
+                },
+                count,
+            );
         }
     }
     if opportunities.is_empty() {
@@ -291,6 +302,27 @@ pub(super) fn apply(
         remainder -= residual;
         let extra = LayoutUnit::from_raw((per_boundary * opportunity.count + residual) as i32);
         scan.widths[i - start] = scan.widths[i - start].add(extra, sat);
+        // Word justification follows word-spacing: half precedes the
+        // separator's ink, with the other half following it.
+        if options.text_justify != TextJustify::InterCharacter {
+            let before = extra.div_i32(2);
+            if let Some((window, g)) = owned {
+                let store = &mut scan.overlays[window].store;
+                let cluster = store.cluster[g];
+                let first = store.cluster[..=g].partition_point(|c| *c < cluster);
+                let leading = store
+                    .leading
+                    .get_or_insert_with(|| vec![LayoutUnit::ZERO; store.id.len()]);
+                for value in &mut leading[first..=g] {
+                    *value = value.add(before, sat);
+                }
+            } else {
+                let leading = scan
+                    .leading
+                    .get_or_insert_with(|| vec![LayoutUnit::ZERO; scan.widths.len()]);
+                leading[i - start] = leading[i - start].add(before, sat);
+            }
+        }
         if data.combine_at_text(data.units[i].text.start).is_some()
             && data.units[i].level % 2 != data.base_level % 2
         {

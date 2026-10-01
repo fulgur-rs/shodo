@@ -683,7 +683,13 @@ pub(super) fn positions(
             .spacing
             .clone()
             .unwrap_or_else(|| vec![LayoutUnit::ZERO; window.store.len()]);
-        let mut before = vec![LayoutUnit::ZERO; window.store.len()];
+        // Justification can attach leading space to an exact owned cluster;
+        // retain it when adding the original units' tracking/word spacing.
+        let mut before = window
+            .store
+            .leading
+            .take()
+            .unwrap_or_else(|| vec![LayoutUnit::ZERO; window.store.len()]);
         let mut previous = None;
         for (owner, gs) in by_unit.iter().enumerate() {
             let index = owners[owner];

@@ -317,3 +317,62 @@ fn enabled_unexpandable_justification_and_explicit_alignment_keep_their_fallback
         assert_eq!(line.inline_size(), 20.0);
     }
 }
+
+#[test]
+fn inter_word_justification_expands_unicode_word_separators() {
+    for separator in [
+        '\u{a0}',
+        '\u{1361}',
+        '\u{10100}',
+        '\u{10101}',
+        '\u{1039f}',
+        '\u{1091f}',
+    ] {
+        let text = format!("a{separator}b");
+        for justify in [TextJustify::Auto, TextJustify::InterWord] {
+            let options = LineOptions {
+                text_align: TextAlign::JustifyAll,
+                text_justify: justify,
+                ..Default::default()
+            };
+            let line = first_line(&paragraph(&text), 100.0, &options, &AtomicSizes::EMPTY);
+            assert_eq!(line.inline_size(), 100.0, "{separator:?}/{justify:?}");
+            let glyphs = glyphs(&line);
+            assert_eq!(glyphs[0].inline_position, 0.0);
+            assert_eq!(
+                glyphs[1].inline_position, 45.0,
+                "half the 70px spare precedes the separator"
+            );
+            assert_eq!(
+                glyphs[1].advance, 80.0,
+                "the separator absorbs the 70px spare width"
+            );
+            assert_eq!(glyphs[2].inline_position, 90.0);
+        }
+    }
+}
+
+#[test]
+fn nbsp_keeps_its_nonbreaking_and_nonhanging_behavior() {
+    let line = first_line(
+        &paragraph("a\u{a0}b"),
+        25.0,
+        &LineOptions::default(),
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(
+        line.text_range(),
+        0..4,
+        "NBSP does not create a wrap opportunity"
+    );
+    assert_eq!(line.inline_size(), 30.0);
+    let line = first_line(
+        &paragraph("a\u{a0}"),
+        15.0,
+        &LineOptions::default(),
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(line.inline_size(), 20.0);
+    assert_eq!(line.hang_end(), 0.0);
+    assert_eq!(line.trailing_whitespace(), 0.0);
+}
