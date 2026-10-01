@@ -443,13 +443,27 @@ impl FontCollection {
         }
     }
 
-    /// Incremented by every successful registration in this layer.
+    /// Incremented by every successful font registration in this layer.
+    /// The shared layer also increments when [`Self::set_generic_families`]
+    /// or [`Self::set_fallback_families`] is called, including through a
+    /// document collection. Those calls leave the document counter unchanged.
+    /// Use [`Self::generations`] to key reuse that depends on both layers.
     pub fn generation(&self) -> u64 {
         self.layer.generation.load(Ordering::SeqCst)
     }
 
-    /// (shared layer generation, document layer generation).
-    pub(crate) fn generations(&self) -> (u64, Option<u64>) {
+    /// Current `(shared generation, document generation)` counters.
+    /// Shared collections return `(generation, None)`; document collections
+    /// return `(shared.generation(), Some(document.generation()))`.
+    ///
+    /// Use both counters to invalidate retained font selections or paragraph
+    /// reuse: shared generic/fallback changes affect a document even when its
+    /// own [`Self::generation`] has not changed. Reading these counters does
+    /// not enumerate fonts or acquire the font catalog lock.
+    /// Compare these counters within the same collection or its clones. Reuse
+    /// across different collections also needs collection identity, available
+    /// via [`Self::layer_handle`] and [`WeakFontLayer::id`].
+    pub fn generations(&self) -> (u64, Option<u64>) {
         match &self.layer.parent {
             Some(shared) => (shared.generation(), Some(self.generation())),
             None => (self.generation(), None),
