@@ -220,6 +220,10 @@ impl Paragraph {
     }
 
     /// The processed text (after white-space collapsing).
+    ///
+    /// Each atomic inline and out-of-flow anchor is represented by U+FFFC
+    /// OBJECT REPLACEMENT CHARACTER. Out-of-flow anchors are transparent to
+    /// white-space collapsing; atomics stop a collapsing run.
     pub fn text(&self) -> &str {
         &self.data.text
     }
