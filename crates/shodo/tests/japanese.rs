@@ -413,21 +413,35 @@ fn first_hung_opening_advance_is_included_in_inline_size() {
     let para = japanese_with(style, Limits::default(), |builder| {
         builder.push_text(TextSource::Generated { node: NodeId(1) }, "「日本");
     });
-    let line = first_line(
-        &para,
-        100.0,
-        &LineOptions {
-            hanging_punctuation: HangingPunctuation {
-                first: true,
-                ..Default::default()
-            },
+    let options = LineOptions {
+        hanging_punctuation: HangingPunctuation {
+            first: true,
             ..Default::default()
         },
-        &AtomicSizes::EMPTY,
-    );
+        ..Default::default()
+    };
+    let line = first_line(&para, 100.0, &options, &AtomicSizes::EMPTY);
 
     assert_eq!(line.hang_start(), 10.0);
     assert_eq!(line.inline_size(), 30.0);
+    assert_eq!(
+        para.max_inline_size(
+            &mut LayoutContext::new(),
+            &options,
+            100.0,
+            &AtomicSizes::EMPTY
+        ),
+        20.0
+    );
+    assert_eq!(
+        para.first_line_advance(
+            &mut LayoutContext::new(),
+            &options,
+            100.0,
+            &AtomicSizes::EMPTY
+        ),
+        20.0
+    );
 }
 
 #[test]
