@@ -428,6 +428,10 @@ fn custom_layout(
 }
 fn custom(c: &Case, retry: usize, fonts: &shodo_fixtures::FixtureFonts, inspect: bool) -> Value {
     let limits = c.limits();
+    // Font-layer resource limits belong to the collection, not just paragraph data.
+    let limited_fonts =
+        (c.budget == "shape-cache-zero").then(|| shodo_fixtures::load_fonts(&limits).unwrap());
+    let fonts = limited_fonts.as_ref().unwrap_or(fonts);
     let mut build = LayoutContext::new();
     let p = c
         .builder(&limits)
@@ -600,7 +604,7 @@ fn main() {
             let values = (0..samples)
                 .map(|_| custom(&c, retry, &fonts, false))
                 .collect::<Vec<_>>();
-            rows.push(json!({"key":format!("rich/{}/{retry}",c.key("height")),"kind":c.kind,"repeats":c.repeats,"width":c.width,"budget":c.budget,"retry_count":retry,"limits":format!("{:#?}",c.limits()),"oracle":oracle,"samples":values}));
+            rows.push(json!({"key":format!("rich/{}/{retry}",c.key("height")),"kind":c.kind,"repeats":c.repeats,"width":c.width,"budget":c.budget,"retry_count":retry,"font_layer_max_shaper_cache_entries":if c.budget == "shape-cache-zero" {0}else{64},"limits":format!("{:#?}",c.limits()),"oracle":oracle,"samples":values}));
         }
     }
     println!(

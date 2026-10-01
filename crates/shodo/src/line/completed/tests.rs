@@ -462,3 +462,58 @@ fn resource_and_saturating_retries_keep_fresh_warning_order_and_budget_reset() {
         }
     }
 }
+
+#[test]
+fn intervening_context_operations_invalidate_completed_trial_dependencies() {
+    let (p, fonts) = paragraph("alpha beta gamma", &Limits::default(), false, false);
+    for operation in 0..2 {
+        let mut cx = LayoutContext::new();
+        let mut c = LineConstraint::new(1000.);
+        c.max_block_size = Some(0.);
+        reject(
+            &p,
+            &mut cx,
+            p.start_token(),
+            &Default::default(),
+            &c,
+            &AtomicSizes::EMPTY,
+        );
+        assert!(cx.completed.is_some());
+        if operation == 0 {
+            p.intrinsic_sizes(&mut cx, &Default::default(), &Default::default());
+        } else {
+            let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+            b.push_text(
+                TextSource::Generated { node: NodeId(8) },
+                "different input ffi",
+            );
+            b.build(&mut cx, &fonts).unwrap();
+        }
+        crate::output::construction_probe::reset();
+        c.max_block_size = None;
+        let LineResult::Line(actual) = p.next_line(
+            &mut cx,
+            p.start_token(),
+            &Default::default(),
+            &c,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("accept")
+        };
+        assert_eq!(
+            crate::output::construction_probe::count(),
+            1,
+            "intervening operation{operation} changed context cache/budget dependencies"
+        );
+        let LineResult::Line(fresh) = p.next_line(
+            &mut LayoutContext::new(),
+            p.start_token(),
+            &Default::default(),
+            &c,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("fresh")
+        };
+        assert_eq!(signature(&actual), signature(&fresh));
+    }
+}

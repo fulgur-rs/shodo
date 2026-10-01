@@ -461,6 +461,8 @@ impl ParagraphBuilder {
         cx: &mut LayoutContext,
         fonts: &FontCollection,
     ) -> Result<Paragraph, LimitExceeded> {
+        // Building can replace shaping/edge caches used by a retained trial.
+        cx.completed = None;
         self.close_unbalanced();
         if let Some(e) = self.error {
             return Err(e);
