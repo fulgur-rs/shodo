@@ -599,6 +599,17 @@ impl FontCollection {
         cluster: &str,
         select_style: bool,
     ) -> Option<FontMatch> {
+        // Platform metadata may precede the current source bytes. Validate
+        // it independently before ranking descriptors or clamping axes.
+        candidates.retain(|candidate| {
+            candidate.info.axes().iter().all(|axis| {
+                axis.min.is_finite()
+                    && axis.default.is_finite()
+                    && axis.max.is_finite()
+                    && axis.min <= axis.default
+                    && axis.default <= axis.max
+            })
+        });
         let property_rank = |c: &Candidate| {
             (
                 range_rank(query.width, c.descriptor.width, 100.),

@@ -99,11 +99,32 @@ fn check_face(data: &[u8], face: usize, limits: &Limits) -> Result<(), FontError
             b"morx" | b"kern" | b"kerx" => {
                 super::structure::check_aat(table, tag, &mut subtables, &mut work, limits)?
             }
-            b"fvar" => {
-                let axes = read_u16(table, 8)?;
-                Limits::check(limits.max_font_axes, LimitKind::FontAxes, u64::from(axes))?;
-            }
+            b"fvar" => check_variation_axes(table, limits)?,
             _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn check_variation_axes(table: &[u8], limits: &Limits) -> Result<(), FontError> {
+    use skrifa::raw::{FontData, FontRead, tables::fvar::Fvar};
+
+    let count = read_u16(table, 8)?;
+    Limits::check(limits.max_font_axes, LimitKind::FontAxes, u64::from(count))?;
+    // Match the record interpretation used by matching and shaping. The
+    // parser can return an empty slice for a truncated, nonempty axis array.
+    let fvar = Fvar::read(FontData::new(table)).map_err(|_| TRUNCATED)?;
+    let axes = fvar.axes().map_err(|_| TRUNCATED)?;
+    if axes.len() != usize::from(count) {
+        return Err(TRUNCATED);
+    }
+    for axis in axes {
+        // Compare signed 16.16 values before f32 rounding can erase disorder.
+        let min = axis.min_value().to_bits();
+        let default = axis.default_value().to_bits();
+        let max = axis.max_value().to_bits();
+        if min > default || default > max {
+            return Err(FontError::Malformed("invalid variation axis range"));
         }
     }
     Ok(())
@@ -259,6 +280,71 @@ mod tests {
         ttc.extend_from_slice(&face);
         ttc.extend_from_slice(&face);
         assert_eq!(check_font(&ttc, &limits()), Ok(2));
+    }
+
+    #[test]
+    fn incomplete_variation_axes_are_rejected_instead_of_becoming_static() {
+        let font = crate::font::browser_tests::font_with_axes(&[(*b"wght", [100, 400, 900])]);
+        let font = skrifa::FontRef::new(&font).unwrap();
+        let fvar = font
+            .table_data(skrifa::raw::types::Tag::new(b"fvar"))
+            .unwrap()
+            .as_bytes();
+        for len in [10, 15, 16, 35] {
+            let bytes = build_sfnt(&[(*b"fvar", fvar[..len].to_vec())]);
+            assert!(
+                matches!(check_font(&bytes, &limits()), Err(FontError::Malformed(_))),
+                "length {len}"
+            );
+        }
+        for start in [0u16, u16::MAX] {
+            let mut table = fvar.to_vec();
+            table[4..6].copy_from_slice(&start.to_be_bytes());
+            let bytes = build_sfnt(&[(*b"fvar", table)]);
+            assert!(
+                matches!(check_font(&bytes, &limits()), Err(FontError::Malformed(_))),
+                "offset {start}"
+            );
+        }
+    }
+
+    #[test]
+    fn variation_axis_order_is_checked_before_fixed_values_round_to_floats() {
+        let mut fvar = vec![0, 1, 0, 0, 0, 16, 0, 2, 0, 1, 0, 20, 0, 0, 0, 4];
+        fvar.extend(*b"TEST");
+        for value in [i32::MAX - 1, i32::MAX, i32::MAX - 1] {
+            fvar.extend(value.to_be_bytes());
+        }
+        fvar.extend([0, 0, 1, 0]);
+        let font = build_sfnt(&[(*b"fvar", fvar)]);
+        assert!(matches!(
+            check_font(&font, &limits()),
+            Err(FontError::Malformed(_))
+        ));
+    }
+
+    #[test]
+    fn a_collection_with_invalid_axes_in_a_later_face_is_rejected() {
+        let mut ttc = b"ttcf\0\x01\0\0\0\0\0\x02".to_vec();
+        let good = crate::font::browser_tests::font_with_axes(&[(*b"wght", [100, 400, 900])]);
+        let bad = crate::font::browser_tests::font_with_axes(&[(*b"opsz", [72, 12, 8])]);
+        let offsets = [20usize, 20 + good.len()];
+        for at in offsets {
+            ttc.extend((at as u32).to_be_bytes());
+        }
+        for (mut face, at) in [(good, offsets[0]), (bad, offsets[1])] {
+            let count = u16::from_be_bytes(face[4..6].try_into().unwrap()) as usize;
+            for index in 0..count {
+                let field = 12 + index * 16 + 8;
+                let start = read_u32(&face, field).unwrap();
+                face[field..field + 4].copy_from_slice(&(start + at as u32).to_be_bytes());
+            }
+            ttc.extend(face);
+        }
+        assert!(matches!(
+            check_font(&ttc, &limits()),
+            Err(FontError::Malformed(_))
+        ));
     }
 }
 

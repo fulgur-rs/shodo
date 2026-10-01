@@ -73,6 +73,143 @@ fn descriptor(family: &str) -> FontFaceDescriptor {
     }
 }
 
+pub(super) fn font_with_axes(axes: &[([u8; 4], [i32; 3])]) -> Vec<u8> {
+    let bytes = test_font("Axes", &['a'], 600);
+    let font = skrifa::FontRef::new(&bytes).unwrap();
+    let mut tables: Vec<_> = font
+        .table_directory()
+        .table_records()
+        .iter()
+        .map(|record| {
+            (
+                record.tag().to_be_bytes(),
+                font.table_data(record.tag()).unwrap().as_bytes().to_vec(),
+            )
+        })
+        .collect();
+    let mut fvar = Vec::new();
+    for field in [1u16, 0, 16, 2, axes.len() as u16, 20, 0, 4] {
+        fvar.extend(field.to_be_bytes());
+    }
+    for (tag, values) in axes {
+        fvar.extend(tag);
+        for value in values {
+            fvar.extend((value * 65536).to_be_bytes());
+        }
+        fvar.extend([0, 0, 1, 0]);
+    }
+    tables.push((*b"fvar", fvar));
+    sfnt::build_sfnt(&tables)
+}
+
+#[test]
+fn invalid_variation_axes_are_rejected_before_registration_changes_the_layer() {
+    let limits = Limits::default();
+    let shared = no_system();
+    for tag in [*b"wght", *b"wdth", *b"slnt", *b"ital", *b"opsz", *b"TEST"] {
+        for values in [[900, 400, 100], [100, 99, 900], [100, 901, 900]] {
+            let bytes = font_with_axes(&[(*b"GOOD", [-10, 0, 10]), (tag, values)]);
+            let fonts = FontCollection::for_document(&shared, &limits);
+            for result in [
+                fonts.register(bytes.clone()),
+                fonts.register_face(bytes.clone(), 0, descriptor("Axes")),
+                fonts.register_sources(descriptor("Axes"), vec![FontSource::Data(bytes, 0)]),
+            ] {
+                assert!(
+                    matches!(result, Err(FontError::Malformed(_))),
+                    "{tag:?}: {values:?}: {result:?}"
+                );
+            }
+            assert_eq!(fonts.generation(), 0);
+            assert_eq!(fonts.state().blob_bytes, 0);
+            assert!(fonts.state().faces.is_empty());
+            assert_eq!(
+                fonts
+                    .register_face(test_font("Valid", &['a'], 600), 0, descriptor("Valid"))
+                    .unwrap()
+                    .index(),
+                0
+            );
+        }
+    }
+}
+
+#[test]
+fn constant_axes_and_endpoint_defaults_keep_matching_and_shaping() {
+    use crate::style::{FontFamily, FontVariation, InlineStyle, ParagraphStyle};
+
+    for values in [[100, 100, 900], [100, 900, 900], [400, 400, 400]] {
+        let fonts = no_system();
+        let id = fonts
+            .register_face(
+                font_with_axes(&[
+                    (*b"wght", values),
+                    (*b"slnt", [-10, -10, -10]),
+                    (*b"opsz", [12, 12, 12]),
+                ]),
+                0,
+                descriptor("Axes"),
+            )
+            .unwrap();
+        let query = FontQuery {
+            families: vec![FontFamily::Named("Axes".into())],
+            ..Default::default()
+        };
+        let found = fonts.match_cluster(&query, "a").unwrap();
+        assert_eq!(found.id, id);
+        assert!(found.variations.contains(&FontVariation {
+            tag: *b"wght",
+            value: 400.
+        }));
+        assert!(found.variations.contains(&FontVariation {
+            tag: *b"slnt",
+            value: -10.
+        }));
+
+        let style = ParagraphStyle {
+            root: InlineStyle {
+                font_families: query.families,
+                font_variations: vec![FontVariation {
+                    tag: *b"opsz",
+                    value: 999.,
+                }],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&style, &Limits::default());
+        builder.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            "a",
+        );
+        let mut context = crate::LayoutContext::new();
+        let paragraph = builder.build(&mut context, &fonts).unwrap();
+        let crate::LineResult::Line(line) = paragraph.next_line(
+            &mut context,
+            paragraph.start_token(),
+            &Default::default(),
+            &crate::LineConstraint::new(100.),
+            &crate::AtomicSizes::EMPTY,
+        ) else {
+            panic!("expected line")
+        };
+        let run = line
+            .fragments()
+            .find_map(|fragment| match fragment {
+                crate::Fragment::GlyphRun(run) => Some(run),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(run.glyphs().count(), 1);
+        assert!(run.variations().contains(&FontVariation {
+            tag: *b"opsz",
+            value: 12.
+        }));
+    }
+}
+
 #[test]
 fn css_face_registration_preserves_ranges_and_selected_face() {
     let fonts = FontCollection::new(&Limits::default());
