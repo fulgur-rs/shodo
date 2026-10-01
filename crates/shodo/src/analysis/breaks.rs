@@ -268,7 +268,7 @@ impl Profile {
                 LineBreak::Anywhere => 3,
             },
             word: match s.word_break {
-                WordBreak::Normal | WordBreak::AutoPhrase => 0,
+                WordBreak::Normal | WordBreak::AutoPhrase | WordBreak::BreakWord => 0,
                 WordBreak::BreakAll => 1,
                 WordBreak::KeepAll => 2,
                 WordBreak::Manual => 3,
@@ -548,9 +548,12 @@ pub(crate) fn analyze_breaks(
                 o.class = BreakClass::Allowed;
                 o.min_content = true;
             }
-            if o.class == BreakClass::Prohibited && s.overflow_wrap != OverflowWrap::Normal {
+            if o.class == BreakClass::Prohibited
+                && (s.overflow_wrap != OverflowWrap::Normal || s.word_break == WordBreak::BreakWord)
+            {
                 o.class = BreakClass::Emergency;
-                o.min_content = s.overflow_wrap == OverflowWrap::Anywhere;
+                o.min_content = s.overflow_wrap == OverflowWrap::Anywhere
+                    || s.word_break == WordBreak::BreakWord;
             }
         }
         // Expanded transform scalars remain a single typographic unit even
@@ -1075,6 +1078,37 @@ mod tests {
         );
         assert_eq!(p.at(1).class, BreakClass::Emergency);
         assert!(p.at(1).min_content);
+    }
+
+    #[test]
+    fn word_break_break_word_uses_anywhere_breaks_for_min_content() {
+        for overflow_wrap in [
+            OverflowWrap::Normal,
+            OverflowWrap::BreakWord,
+            OverflowWrap::Anywhere,
+        ] {
+            let p = analyze(
+                "abc",
+                InlineStyle {
+                    word_break: WordBreak::BreakWord,
+                    overflow_wrap,
+                    ..InlineStyle::default()
+                },
+                true,
+            );
+            for offset in [1, 2] {
+                let opportunity = p.at(offset);
+                assert_eq!(
+                    opportunity.class,
+                    BreakClass::Emergency,
+                    "overflow-wrap={overflow_wrap:?}, offset={offset}"
+                );
+                assert!(
+                    opportunity.min_content,
+                    "overflow-wrap={overflow_wrap:?}, offset={offset}"
+                );
+            }
+        }
     }
 
     #[test]

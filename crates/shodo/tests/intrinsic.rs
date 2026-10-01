@@ -30,7 +30,7 @@ fn forced_break_preserves_cloned_start_and_end_edges() {
 }
 use common::*;
 use shodo::node::{InlineEdges, NodeId, OutOfFlowKind, TextSource};
-use shodo::style::LineOptions;
+use shodo::style::{LineOptions, OverflowWrap, WordBreak};
 use shodo::{
     AtomicIntrinsic, AtomicIntrinsics, FloatClear, FloatIntrinsic, FloatSide, LayoutContext,
 };
@@ -58,6 +58,44 @@ fn words_and_forced_sections_measure_intrinsics() {
         .max_content,
         30.0
     );
+}
+
+#[test]
+fn word_break_break_word_uses_anywhere_min_content_regardless_of_overflow_wrap() {
+    for overflow_wrap in [
+        OverflowWrap::Normal,
+        OverflowWrap::BreakWord,
+        OverflowWrap::Anywhere,
+    ] {
+        let mut root = style();
+        root.root.word_break = WordBreak::BreakWord;
+        root.root.overflow_wrap = overflow_wrap;
+        let p = build(&root, |b| {
+            b.push_text(TextSource::Generated { node: NodeId(1) }, "abcd");
+        });
+        let sizes = p.intrinsic_sizes(
+            &mut LayoutContext::new(),
+            &LineOptions::default(),
+            &AtomicIntrinsics::EMPTY,
+        );
+        assert_eq!(
+            (sizes.min_content, sizes.max_content),
+            (10.0, 40.0),
+            "overflow-wrap={overflow_wrap:?}"
+        );
+    }
+
+    let mut root = style();
+    root.root.overflow_wrap = OverflowWrap::BreakWord;
+    let p = build(&root, |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "abcd");
+    });
+    let sizes = p.intrinsic_sizes(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        &AtomicIntrinsics::EMPTY,
+    );
+    assert_eq!((sizes.min_content, sizes.max_content), (40.0, 40.0));
 }
 
 #[test]
