@@ -841,3 +841,93 @@ fn retained_bidi_space_tracking_follows_visual_order() {
     positions.sort_by_key(|g| g.0);
     assert_eq!(positions, vec![(0, 24.0), (2, 12.0), (4, 0.0), (6, 36.0)]);
 }
+
+#[test]
+fn paragraph_max_inline_size_matches_the_widest_line_advance() {
+    let p = preserved(
+        "a aaaaaaa",
+        WhiteSpaceCollapse::Collapse,
+        TextWrapMode::Wrap,
+    );
+    let width = 30.0;
+    let options = LineOptions::default();
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &options,
+        width,
+        &AtomicSizes::EMPTY,
+    );
+    let first = lines[0].inline_size() + lines[0].hang_end();
+    let expected = lines
+        .iter()
+        .map(|line| line.inline_size() + line.hang_end())
+        .reduce(f32::max)
+        .unwrap_or(0.0);
+    assert!(expected > first, "fixture must have a wider later line");
+
+    assert_eq!(
+        p.max_inline_size(
+            &mut LayoutContext::new(),
+            &options,
+            width,
+            &AtomicSizes::EMPTY,
+        ),
+        expected
+    );
+    assert_eq!(
+        p.first_line_advance(
+            &mut LayoutContext::new(),
+            &options,
+            width,
+            &AtomicSizes::EMPTY,
+        ),
+        first,
+        "first-line advance must not use a wider later line"
+    );
+}
+
+#[test]
+fn paragraph_first_line_advance_includes_hanging_whitespace() {
+    let p = preserved("a\tbbbb", WhiteSpaceCollapse::Preserve, TextWrapMode::Wrap);
+    let options = LineOptions::default();
+    let line = first_line(&p, 30.0, &options, &AtomicSizes::EMPTY);
+    assert_eq!((line.inline_size(), line.hang_end()), (10.0, 30.0));
+
+    assert_eq!(
+        p.first_line_advance(
+            &mut LayoutContext::new(),
+            &options,
+            30.0,
+            &AtomicSizes::EMPTY,
+        ),
+        40.0
+    );
+}
+
+#[test]
+fn paragraph_measurements_return_zero_without_accepted_lines() {
+    let empty = paragraph("");
+    let block_only = build(&style(), |builder| {
+        builder.push_block_in_inline(NodeId(9));
+    });
+    for p in [&empty, &block_only] {
+        assert_eq!(
+            p.max_inline_size(
+                &mut LayoutContext::new(),
+                &LineOptions::default(),
+                100.0,
+                &AtomicSizes::EMPTY,
+            ),
+            0.0
+        );
+        assert_eq!(
+            p.first_line_advance(
+                &mut LayoutContext::new(),
+                &LineOptions::default(),
+                100.0,
+                &AtomicSizes::EMPTY,
+            ),
+            0.0
+        );
+    }
+}
