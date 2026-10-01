@@ -6,6 +6,7 @@
 
 pub(crate) mod cache;
 mod features;
+mod input;
 mod instance;
 pub(crate) mod orientation;
 use instance::RunInstance;
@@ -229,12 +230,38 @@ pub(crate) fn shape_items_with_base_scopes(
     limits: &Limits,
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
+    bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
+) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
+    shape_inputs(
+        cx,
+        items.iter().map(input::ShapeInput::whole),
+        styles,
+        fonts,
+        mode,
+        limits,
+        warnings,
+        sat,
+        bases,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn shape_inputs<'a>(
+    cx: &mut crate::LayoutContext,
+    items: impl IntoIterator<Item = input::ShapeInput<'a>>,
+    styles: &[crate::style::InlineStyle],
+    fonts: &crate::font::FontCollection,
+    mode: WritingMode,
+    limits: &Limits,
+    warnings: &mut crate::limits::WarningSink,
+    sat: &mut Saturation,
     mut bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
     cx.bound_shaping_scratch(limits);
     let mut store = GlyphStore::default();
     let mut runs: Vec<ShapedRun> = Vec::new();
-    for original in items {
+    for input in items {
+        let original = input.original;
         let style = &styles[original.style as usize];
         let font_data = original.font.as_ref().map(|found| {
             fonts
@@ -276,19 +303,19 @@ pub(crate) fn shape_items_with_base_scopes(
             None
         };
         let mut cursor = 0;
-        while cursor < original.scalars.len() {
+        while cursor < input.scalars.len() {
             let start = cursor;
             let budget = limits.max_shaping_run_bytes.unwrap_or(u64::MAX);
             let budget = bases.as_ref().map_or(budget, |bases| {
-                bases.shaping_run_bytes(original.scalars[start].item as usize, budget)
+                bases.shaping_run_bytes(input.scalars[start].item as usize, budget)
             });
             let mut bytes = 0;
             let mut boundary = start;
-            while cursor < original.scalars.len() {
-                if original.scalars[cursor].grapheme_start && cursor > start {
+            while cursor < input.scalars.len() {
+                if input.scalars[cursor].grapheme_start && cursor > start {
                     boundary = cursor;
                 }
-                let next = original.scalars[cursor].c.len_utf8() as u64;
+                let next = input.scalars[cursor].c.len_utf8() as u64;
                 if bytes + next > budget && cursor > start {
                     if boundary > start {
                         cursor = boundary;
@@ -307,8 +334,8 @@ pub(crate) fn shape_items_with_base_scopes(
                     break;
                 }
             }
-            let last = &original.scalars[cursor - 1];
-            let scalars = &original.scalars[start..cursor];
+            let last = &input.scalars[cursor - 1];
+            let scalars = &input.scalars[start..cursor];
             let window_end = last.end;
             let window_run_start = runs.len();
             let Some(found) = &original.font else {
@@ -386,17 +413,21 @@ pub(crate) fn shape_items_with_base_scopes(
             for scalar in scalars {
                 buffer.add(scalar.c, scalar.offset);
             }
-            let pre: String = original.scalars[start.saturating_sub(5)..start]
+            let pre: String = input.scalars[start.saturating_sub(5)..start]
                 .iter()
                 .map(|s| s.c)
                 .collect();
-            let post: String = original.scalars[cursor..(cursor + 5).min(original.scalars.len())]
+            let post: String = input.scalars[cursor..(cursor + 5).min(input.scalars.len())]
                 .iter()
                 .map(|s| s.c)
                 .collect();
-            buffer.set_pre_context(if start == 0 { &original.before } else { &pre });
-            buffer.set_post_context(if cursor == original.scalars.len() {
-                &original.after
+            buffer.set_pre_context(if start == 0 {
+                input.before.as_str()
+            } else {
+                &pre
+            });
+            buffer.set_post_context(if cursor == input.scalars.len() {
+                input.after.as_str()
             } else {
                 &post
             });
@@ -811,100 +842,111 @@ pub(crate) fn shape_window_edit(
     let index = data
         .shape_items
         .partition_point(|item| item.end <= unit.text.start);
-    let mut items: Vec<crate::analysis::itemize::ShapeItem> = Vec::new();
-    for original in data.shape_items[index..]
-        .iter()
-        .take_while(|i| i.scalars.first().is_some_and(|s| s.offset < unit.text.end))
-    {
-        let begin = original
-            .scalars
-            .partition_point(|s| s.offset < unit.text.start);
-        let end = original
-            .scalars
-            .partition_point(|s| s.offset < unit.text.end);
-        if begin == end {
-            continue;
-        }
-        // Font substitution can split an original item; newly identical
-        // adjacent segments join before shaping so GPOS sees the hyphen.
-        let mut at = begin;
-        while at < end {
-            let edited = replacement
-                .filter(|r| contains_replacement && original.scalars[at].offset == r.text.start);
-            let font = edited.map_or_else(|| original.font.clone(), |r| r.font.clone());
-            let mut finish = at + 1;
-            if edited.is_none() {
-                while finish < end
-                    && !replacement.is_some_and(|r| {
-                        contains_replacement && original.scalars[finish].offset == r.text.start
-                    })
-                {
-                    finish += 1;
-                }
-            }
-            let mut before: Vec<_> = original
-                .before
-                .chars()
-                .chain(original.scalars[..at].iter().map(|s| s.c))
-                .rev()
-                .take(5)
-                .collect();
-            before.reverse();
-            let mut scalars = original.scalars[at..finish].to_vec();
-            if let Some(r) = edited {
-                scalars[0].c = r.c;
-                scalars[0].end = r.text.end;
-            }
-            let part = crate::analysis::itemize::ShapeItem {
-                segment: original.segment,
-                end: edited.map_or_else(|| scalars.last().unwrap().end, |r| r.text.end),
-                scalars,
-                style: original.style,
-                level: original.level,
-                script: original.script,
-                font,
-                orientation: original.orientation,
-                combine: original.combine,
-                width_feature: original.width_feature,
-                before: before.into_iter().collect(),
-                after: original.scalars[finish..]
-                    .iter()
-                    .map(|s| s.c)
-                    .chain(original.after.chars())
-                    .take(5)
-                    .collect(),
-            };
-            if let Some(previous) = items.last_mut()
-                && previous.segment == part.segment
-                && previous.style == part.style
-                && previous.level == part.level
-                && previous.script == part.script
-                && previous.font == part.font
-                && previous.orientation == part.orientation
-                && previous.combine == part.combine
-                && previous.width_feature == part.width_feature
-            {
-                previous.scalars.extend(part.scalars);
-                previous.end = part.end;
-                previous.after = part.after;
-            } else {
-                items.push(part);
-            }
-            at = finish;
-        }
-    }
     let mut limits = data.limits.clone();
     limits.max_shaped_glyphs = glyph_budget;
-    match shape_items(
-        cx,
-        &items,
-        &data.styles,
-        &data.fonts,
-        data.style.writing_mode,
-        &limits,
-        warnings,
-        sat,
-    ) {
+    let result = if !contains_replacement
+        && input::can_borrow(&data.shape_items[index..], &unit.text)
+    {
+        shape_inputs(
+            cx,
+            input::clipped_items(&data.shape_items[index..], unit.text.clone()),
+            &data.styles,
+            &data.fonts,
+            data.style.writing_mode,
+            &limits,
+            warnings,
+            sat,
+            None,
+        )
+    } else {
+        let mut items: Vec<crate::analysis::itemize::ShapeItem> = Vec::new();
+        for original in data.shape_items[index..]
+            .iter()
+            .take_while(|i| i.scalars.first().is_some_and(|s| s.offset < unit.text.end))
+        {
+            let begin = original
+                .scalars
+                .partition_point(|s| s.offset < unit.text.start);
+            let end = original
+                .scalars
+                .partition_point(|s| s.offset < unit.text.end);
+            if begin == end {
+                continue;
+            }
+            // Font substitution can split an original item; newly identical
+            // adjacent segments join before shaping so GPOS sees the hyphen.
+            let mut at = begin;
+            while at < end {
+                let edited = replacement.filter(|r| {
+                    contains_replacement && original.scalars[at].offset == r.text.start
+                });
+                let font = edited.map_or_else(|| original.font.clone(), |r| r.font.clone());
+                let mut finish = at + 1;
+                if edited.is_none() {
+                    while finish < end
+                        && !replacement.is_some_and(|r| {
+                            contains_replacement && original.scalars[finish].offset == r.text.start
+                        })
+                    {
+                        finish += 1;
+                    }
+                }
+                let mut before: Vec<_> = original
+                    .before
+                    .chars()
+                    .chain(original.scalars[..at].iter().map(|s| s.c))
+                    .rev()
+                    .take(5)
+                    .collect();
+                before.reverse();
+                let mut scalars = original.scalars[at..finish].to_vec();
+                if let Some(r) = edited {
+                    scalars[0].c = r.c;
+                    scalars[0].end = r.text.end;
+                }
+                let part = crate::analysis::itemize::ShapeItem {
+                    segment: original.segment,
+                    end: edited.map_or_else(|| scalars.last().unwrap().end, |r| r.text.end),
+                    scalars,
+                    style: original.style,
+                    level: original.level,
+                    script: original.script,
+                    font,
+                    orientation: original.orientation,
+                    combine: original.combine,
+                    width_feature: original.width_feature,
+                    before: before.into_iter().collect(),
+                    after: original.scalars[finish..]
+                        .iter()
+                        .map(|s| s.c)
+                        .chain(original.after.chars())
+                        .take(5)
+                        .collect(),
+                };
+                if let Some(previous) = items.last_mut()
+                    && input::compatible(previous, &part)
+                {
+                    previous.scalars.extend(part.scalars);
+                    previous.end = part.end;
+                    previous.after = part.after;
+                } else {
+                    items.push(part);
+                }
+                at = finish;
+            }
+        }
+        shape_items(
+            cx,
+            &items,
+            &data.styles,
+            &data.fonts,
+            data.style.writing_mode,
+            &limits,
+            warnings,
+            sat,
+        )
+    };
+    match result {
         Ok((store, mut runs)) => {
             if let Some(r) = replacement.filter(|_| contains_replacement) {
                 for run in &mut runs {

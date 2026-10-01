@@ -745,3 +745,195 @@ fn shaping_windows_borrow_source_scalars() {
         }
     }
 }
+
+#[test]
+fn unedited_edge_windows_borrow_source_scalars() {
+    // Reintroducing a clipped scalar Vec must fail the actual Clone check;
+    // changing the clip/budget must fail offsets and warning/progress checks.
+    for real in [false, true] {
+        for budget in [1, 1024] {
+            let p = edge_input_paragraph(real, budget);
+            let ownership: Vec<_> = p
+                .data
+                .shape_items
+                .iter()
+                .map(|item| (item.scalars.as_ptr(), item.scalars.len(), item.end))
+                .collect();
+            let mut unit = p.data.units[5].clone();
+            unit.text = 5..31;
+            crate::analysis::itemize::SCALAR_CLONES.with(|count| count.set(0));
+            let mut warnings = crate::limits::WarningSink::default();
+            let (glyphs, runs) = shape_window_budget(
+                &p.data,
+                &unit,
+                None,
+                &mut crate::LayoutContext::new(),
+                &mut warnings,
+                &mut Saturation::default(),
+            )
+            .unwrap();
+            assert_eq!(glyphs.cluster, (5..31).collect::<Vec<_>>());
+            assert_eq!(glyphs.id, p.data.glyphs.id[5..31]);
+            let expected_runs: Vec<_> = if budget == 1 {
+                (5..31).map(|at| at..at + 1).collect()
+            } else {
+                std::iter::once(5..31).collect()
+            };
+            assert_eq!(
+                runs.iter().map(|run| run.text.clone()).collect::<Vec<_>>(),
+                expected_runs
+            );
+            assert_eq!(
+                warnings.take().len(),
+                if real {
+                    0
+                } else if budget == 1 {
+                    26
+                } else {
+                    1
+                }
+            );
+            assert_eq!(
+                p.data
+                    .shape_items
+                    .iter()
+                    .map(|item| (item.scalars.as_ptr(), item.scalars.len(), item.end))
+                    .collect::<Vec<_>>(),
+                ownership
+            );
+            assert_eq!(
+                crate::analysis::itemize::SCALAR_CLONES.with(|count| count.get()),
+                0,
+                "real={real}, budget={budget}: unedited edge input must borrow the26 source scalars"
+            );
+        }
+    }
+}
+
+fn edge_input_paragraph(real: bool, budget: u64) -> crate::Paragraph {
+    let limits = Limits {
+        max_shaping_run_bytes: Some(budget),
+        ..Default::default()
+    };
+    let fonts = FontCollection::with_options(
+        &limits,
+        crate::font::FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    if real {
+        fonts
+            .register_face(
+                crate::test_support::fonts::LATIN.to_vec(),
+                0,
+                crate::font::FontFaceDescriptor {
+                    family: "Latin".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+    let style = crate::style::ParagraphStyle {
+        root: crate::style::InlineStyle {
+            font_families: vec![crate::style::FontFamily::Named("Latin".into())],
+            font_kerning: crate::style::FontKerning::None,
+            font_features: vec![crate::style::FontFeature {
+                tag: *b"liga",
+                value: 0,
+            }],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+    builder.push_text(
+        crate::node::TextSource::Dom {
+            node: crate::node::NodeId(1),
+            offset: 7,
+        },
+        "abcdefghijklmnopqrstuvwxyz0123456789",
+    );
+    builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap()
+}
+
+#[test]
+fn compatible_unedited_edge_keeps_owned_merge_and_same_full_shaping() {
+    let mut p = edge_input_paragraph(true, 1024);
+    let mut unit = p.data.units[5].clone();
+    unit.text = 5..31;
+    let mut warnings = crate::limits::WarningSink::default();
+    let expected = shape_window_budget(
+        &p.data,
+        &unit,
+        None,
+        &mut crate::LayoutContext::new(),
+        &mut warnings,
+        &mut Saturation::default(),
+    )
+    .unwrap();
+    assert!(warnings.take().is_empty());
+    let data = Arc::get_mut(&mut p.data).unwrap();
+    let first = &mut data.shape_items[0];
+    let mut second = first.clone();
+    second.scalars = first.scalars.split_off(18);
+    second.before = first.scalars[13..].iter().map(|s| s.c).collect();
+    first.after = second.scalars[..5].iter().map(|s| s.c).collect();
+    first.end = 18;
+    data.shape_items.push(second);
+    crate::analysis::itemize::SCALAR_CLONES.with(|count| count.set(0));
+    let actual = shape_window_budget(
+        &p.data,
+        &unit,
+        None,
+        &mut crate::LayoutContext::new(),
+        &mut warnings,
+        &mut Saturation::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        crate::analysis::itemize::SCALAR_CLONES.with(|count| count.get()),
+        26
+    );
+    assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+    assert!(warnings.take().is_empty());
+}
+
+#[test]
+fn font_substitution_edge_keeps_owned_scalars_and_source_end() {
+    let p = edge_input_paragraph(true, 1024);
+    let mut unit = p.data.units[5].clone();
+    unit.text = 5..31;
+    let replacement = Replacement {
+        text: 5..6,
+        c: '‑',
+        font: None,
+    };
+    let mut warnings = crate::limits::WarningSink::default();
+    crate::analysis::itemize::SCALAR_CLONES.with(|count| count.set(0));
+    let (glyphs, runs) = shape_window_edit(
+        &p.data,
+        &unit,
+        None,
+        Some(&replacement),
+        &mut crate::LayoutContext::new(),
+        &mut warnings,
+        &mut Saturation::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        crate::analysis::itemize::SCALAR_CLONES.with(|count| count.get()),
+        26
+    );
+    assert_eq!(glyphs.cluster, (5..31).collect::<Vec<_>>());
+    assert_eq!(glyphs.id[0], 0);
+    assert_eq!(
+        runs.iter().map(|r| r.text.clone()).collect::<Vec<_>>(),
+        [5..6, 6..31]
+    );
+    assert_eq!(p.data.shape_items[0].scalars[5].c, 'f');
+    assert_eq!(p.data.shape_items[0].scalars[5].end, 6);
+    assert_eq!(warnings.take().len(), 1);
+}
