@@ -324,6 +324,70 @@ impl OffsetMapping {
         &self.units
     }
 
+    /// DOM ownership in processed source order. Producer records and scalar
+    /// remapping keep both text endpoints nondecreasing, including collapsed
+    /// gaps. Binary searches restrict each line query to its local records.
+    pub(crate) fn dom_owners(
+        &self,
+        text: Range<u32>,
+    ) -> impl Iterator<Item = (NodeId, Range<u32>)> + '_ {
+        let begin = self
+            .units
+            .partition_point(|unit| unit.text.end < text.start);
+        let end = self
+            .units
+            .partition_point(|unit| unit.text.start <= text.end);
+        let mut sources = self.units[begin..end]
+            .iter()
+            .filter_map(move |unit| {
+                let dom = match unit.kind {
+                    MappingKind::Collapsed => {
+                        let at = unit.text.start;
+                        // Gaps belong upstream, except at the paragraph start.
+                        if !(text.start < at && at <= text.end || text.start == 0 && at == 0) {
+                            return None;
+                        }
+                        unit.dom.clone()
+                    }
+                    MappingKind::Identity | MappingKind::Expanded => {
+                        let start = unit.text.start.max(text.start);
+                        let end = unit.text.end.min(text.end);
+                        if start >= end {
+                            return None;
+                        }
+                        if unit.kind == MappingKind::Identity {
+                            unit.dom
+                                .start
+                                .saturating_add(start - unit.text.start)
+                                .min(unit.dom.end)
+                                ..unit
+                                    .dom
+                                    .start
+                                    .saturating_add(end - unit.text.start)
+                                    .min(unit.dom.end)
+                        } else {
+                            unit.dom.clone()
+                        }
+                    }
+                };
+                (!dom.is_empty()).then_some((unit.node, dom))
+            })
+            .peekable();
+        std::iter::from_fn(move || {
+            let (node, mut dom) = sources.next()?;
+            while let Some((next_node, next_dom)) = sources.peek()
+                && *next_node == node
+                && next_dom.start <= dom.end
+                && dom.start <= next_dom.end
+            {
+                let (_, next) = sources.next().unwrap();
+                dom.start = dom.start.min(next.start);
+                dom.end = dom.end.max(next.end);
+            }
+            Some((node, dom))
+        })
+    }
+
     /// Processed-text offset of a caller offset. Offsets inside a collapsed
     /// run map to the end of the gap; offsets inside an expanded run round to
     /// its start.

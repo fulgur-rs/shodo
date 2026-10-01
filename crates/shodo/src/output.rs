@@ -102,6 +102,7 @@ pub struct TextCombination {
 #[derive(Clone, Copy, Debug)]
 pub enum Fragment<'a> {
     RubyAnnotation(RubyAnnotationView<'a>),
+    /// A glyph run with at least one glyph; nonpainting controls do not yield empty runs.
     GlyphRun(GlyphRunView<'a>),
     Atomic(AtomicFragment),
     InlineBox(InlineBoxFragment),

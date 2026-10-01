@@ -74,6 +74,8 @@ std::thread_local! { pub(crate) static SHAPER_SEARCH_COMPARISONS:std::cell::Cell
 
 static NEXT_LAYER_ID: AtomicU32 = AtomicU32::new(0);
 
+// `try_update` requires Rust 1.95; retain the alias for our Rust 1.89 MSRV.
+#[allow(deprecated)]
 fn allocate_layer_id(counter: &AtomicU32) -> Option<u32> {
     counter
         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
