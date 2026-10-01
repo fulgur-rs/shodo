@@ -84,6 +84,14 @@ pub(super) fn compatible(a: &ShapeItem, b: &ShapeItem) -> bool {
 }
 
 pub(super) fn can_borrow(items: &[ShapeItem], text: &Range<u32>) -> bool {
+    // No second item before the same stop boundary means no possible merge.
+    // Avoid repeating the scalar binary searches for the ordinary one-item cut.
+    if items
+        .get(1)
+        .is_none_or(|item| item.scalars.first().is_none_or(|s| s.offset >= text.end))
+    {
+        return true;
+    }
     let mut previous = None;
     for item in items
         .iter()

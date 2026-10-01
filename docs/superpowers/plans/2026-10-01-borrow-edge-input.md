@@ -8,7 +8,7 @@
 **Spec:** docs/superpowers/specs/2026-10-01-borrow-edge-input.md
 
 ## Global Constraints
-Public APIs/default limits/warnings/source/glyph/geometry unchanged. Edge context exactly5 scalars and at most20 UTF8 bytes; no retained borrowing. Existing owned replacement/font/merge behavior, budgets/base scopes/scratch/pen/cursor unchanged. User-authorized native sequential worktree/PR/CI/merge/cleanup; no switch blockers; protect originals and saved trees.
+Public APIs/default limits/warnings/source/glyph/geometry unchanged. Edge context uses the same available up-to-5 scalars and at most20 UTF8 bytes; no retained borrowing. Existing owned replacement/font/merge behavior, budgets/base scopes/scratch/pen/cursor unchanged. User-authorized native sequential worktree/PR/CI/merge/cleanup; no switch blockers; protect originals and saved trees.
 
 ## Review Focus
 - Mid-item UTF8/combining cuts keep scalar offsets/end/item/grapheme flags and5-scalar pre/post context.
