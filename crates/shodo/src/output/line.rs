@@ -228,6 +228,8 @@ impl Line {
         atomics: &AtomicSizes,
         sat: &mut Saturation,
     ) -> Line {
+        #[cfg(test)]
+        super::construction_probe::record();
         let data = &para.data;
         let m = data.style_metrics[0].metrics;
         let flags = match scan.reason {

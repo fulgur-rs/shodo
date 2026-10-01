@@ -19,6 +19,8 @@ impl Paragraph {
         options: &LineOptions,
         inputs: &AtomicIntrinsics,
     ) -> IntrinsicSizes {
+        // Intrinsic work can replace the caches used by a retained trial.
+        cx.completed = None;
         cx.edge_reshape_spent = 0;
         if self.data.first_line.is_some() {
             let min = self

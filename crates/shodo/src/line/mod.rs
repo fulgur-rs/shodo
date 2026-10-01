@@ -3,6 +3,7 @@
 mod align;
 pub(crate) mod autospace;
 pub(crate) mod cache;
+pub(crate) mod completed;
 mod decoration;
 pub(crate) mod font_metrics;
 pub(crate) mod fragments;
@@ -145,12 +146,20 @@ impl Paragraph {
     ) -> LineResult {
         let data = &*self.data;
         cx.warnings.set_max(data.limits.max_warnings);
+        if cx
+            .completed
+            .as_ref()
+            .is_some_and(|entry| !entry.same_start(self, token))
+        {
+            cx.completed = None;
+        }
         if token.para != data.id || token.unit as usize > data.units.len() {
             return LineResult::InvalidToken;
         }
         if token.flags & BreakToken::FIRST_LINE != 0
             && let Some(first) = &data.first_line
         {
+            cx.completed = None;
             let mut sat = Saturation::default();
             let constraint = crate::sanitize::constraint(*constraint, &mut cx.warnings, &mut sat);
             let mut options = *options;
@@ -227,9 +236,11 @@ impl Paragraph {
         let data = &*self.data;
         let start = token.unit as usize;
         if start == data.units.len() {
+            cx.completed = None;
             return LineResult::Done;
         }
         if let UnitKind::BlockInInline { node } = data.units[start].kind {
+            cx.completed = None;
             let token_after = BreakToken {
                 para: data.id,
                 unit: token.unit + 1,
@@ -238,6 +249,7 @@ impl Paragraph {
             return LineResult::BlockInInline { node, token_after };
         }
         cx.edge_reshape_spent = 0;
+        let warning_checkpoint = cx.warnings.checkpoint();
         let mut sat = Saturation::default();
         let constraint = crate::sanitize::constraint(*constraint, &mut cx.warnings, &mut sat);
         let available = non_negative(
@@ -282,6 +294,30 @@ impl Paragraph {
                 }
             })
         });
+        let eligible = planned_end_override.is_none()
+            && annotation_align.is_none()
+            && normal_cursors.is_none()
+            && constraint.break_plan.is_none()
+            && constraint.max_graphemes.is_none()
+            && data.warnings.is_empty()
+            && sat.is_clean()
+            && warning_checkpoint.is_some()
+            && cx.warnings.checkpoint() == warning_checkpoint;
+        // Ordinary acceptance with no retained trial does not construct a key.
+        let key = (eligible && (cx.completed.is_some() || constraint.max_block_size.is_some()))
+            .then(|| completed::Key::new(self, token, options, &constraint, atomics));
+        if let Some(entry) = cx.completed.take()
+            && key.as_ref() == Some(&entry.key)
+        {
+            let needed = entry.line.block_size();
+            if constraint.max_block_size.is_some_and(|max| needed > max) {
+                cx.completed = Some(entry);
+                return LineResult::BlockSizeExceeded {
+                    needed_block_size: needed,
+                };
+            }
+            return LineResult::Line(entry.line);
+        }
         let mut scan = if let Some(end) = planned_end {
             plan::selected(
                 data,
@@ -403,9 +439,19 @@ impl Paragraph {
             .max_block_size
             .is_some_and(|max| line.block_size() > max)
         {
-            return LineResult::BlockSizeExceeded {
-                needed_block_size: line.block_size(),
-            };
+            let needed_block_size = line.block_size();
+            if sat.is_clean()
+                && cx.warnings.checkpoint() == warning_checkpoint
+                && cx
+                    .partial
+                    .as_ref()
+                    .is_some_and(|p| p.retains_trial(self, token))
+                && let Some(key) = key
+                && key == completed::Key::new(self, token, options, &constraint, atomics)
+            {
+                cx.completed = completed::CompletedLine::retain(key, line);
+            }
+            return LineResult::BlockSizeExceeded { needed_block_size };
         }
         LineResult::Line(line)
     }
