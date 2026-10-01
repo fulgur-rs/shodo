@@ -21,6 +21,10 @@ pub use input::*;
 mod input_tests;
 
 #[cfg(test)]
+#[path = "tests/preflight.rs"]
+mod preflight_tests;
+
+#[cfg(test)]
 #[path = "tests/cuts.rs"]
 mod cut_tests;
 
