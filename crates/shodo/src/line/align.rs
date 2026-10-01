@@ -120,7 +120,12 @@ pub(super) fn apply(
         ),
         justified: false,
     };
-    if !matches!(align, TextAlign::Justify | TextAlign::JustifyAll) || spare == LayoutUnit::ZERO {
+    // Disabled justification keeps start alignment; the unexpandable-text
+    // fallback below applies only when justification is enabled.
+    if !matches!(align, TextAlign::Justify | TextAlign::JustifyAll)
+        || spare == LayoutUnit::ZERO
+        || options.text_justify == TextJustify::None
+    {
         return result;
     }
     let fallback = |sat: &mut Saturation| {
@@ -133,10 +138,6 @@ pub(super) fn apply(
             sat,
         )
     };
-    if options.text_justify == TextJustify::None {
-        result.shift = fallback(sat);
-        return result;
-    }
     // Owned windows may have a different number of clusters from their
     // shared source. Enumerate the glyph source that will actually render.
     let mut clusters = Vec::new();

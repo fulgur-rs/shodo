@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep `text-justify: none` at line start when alignment requests justification,
+  including `text-align-last: justify`, while retaining explicit end/center alignment.
+
 - Allow concurrent font-cache hits across shared collection clones, retaining
   bounded LRU caches without waiting for font catalog access.
 

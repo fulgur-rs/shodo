@@ -128,9 +128,8 @@ fn rtl_physical_alignment_and_no_justification() {
     };
     assert_eq!(
         glyphs(&first_line(&p, 100.0, &o, &AtomicSizes::EMPTY))[2].inline_position,
-        // justify-all implies last-line justification; with expansion
-        // disabled, CSS Text3's unexpandable-text fallback centers the line.
-        55.0
+        // Disabling justification keeps the natural advances at line start.
+        20.0
     );
     let o = LineOptions {
         text_align_last: TextAlignLast::Start,
@@ -140,4 +139,181 @@ fn rtl_physical_alignment_and_no_justification() {
         glyphs(&first_line(&p, 100.0, &o, &AtomicSizes::EMPTY))[2].inline_position,
         20.0
     );
+}
+
+#[test]
+fn disabled_justification_matches_wpt_start_alignment() {
+    // WPT text-justify-none-001 compares these three scripts against plain
+    // start alignment even though text-align-last requests justification.
+    for text in ["Latin text", "日本 文字", "อักษรไทย อักษรไทย"]
+    {
+        let p = paragraph(text);
+        let options = LineOptions {
+            text_align_last: TextAlignLast::Justify,
+            text_justify: TextJustify::None,
+            ..Default::default()
+        };
+        let line = first_line(&p, 1000.0, &options, &AtomicSizes::EMPTY);
+        let start = glyphs(&line)
+            .iter()
+            .map(|g| g.inline_position)
+            .fold(f32::INFINITY, f32::min);
+        assert_eq!(start, 0.0, "{text:?} must stay at line start");
+    }
+}
+
+#[test]
+fn disabled_justification_preserves_logical_start_and_indent_in_all_flows() {
+    use shodo::geometry::{Direction, WritingMode};
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+        WritingMode::SidewaysRl,
+        WritingMode::SidewaysLr,
+    ] {
+        for direction in [Direction::Ltr, Direction::Rtl] {
+            let mut s = style();
+            s.writing_mode = mode;
+            s.direction = direction;
+            s.root.direction = direction;
+            let text = if direction == Direction::Rtl {
+                "אב"
+            } else {
+                "ab"
+            };
+            let p = build(&s, |b| {
+                b.push_text(
+                    shodo::node::TextSource::Generated {
+                        node: shodo::node::NodeId(1),
+                    },
+                    text,
+                );
+            });
+            for (align, last) in [
+                (TextAlign::Start, TextAlignLast::Justify),
+                (TextAlign::JustifyAll, TextAlignLast::Auto),
+            ] {
+                let mut options = LineOptions {
+                    text_align: align,
+                    text_align_last: last,
+                    text_justify: TextJustify::None,
+                    ..Default::default()
+                };
+                options.text_indent.length = 12.0;
+                let line = first_line(&p, 100.0, &options, &AtomicSizes::EMPTY);
+                let start = line
+                    .fragments()
+                    .filter_map(|f| match f {
+                        Fragment::GlyphRun(r) => Some(r.inline_start()),
+                        _ => None,
+                    })
+                    .fold(f32::INFINITY, f32::min);
+                assert_eq!(start, 12.0, "{mode:?}/{direction:?}/{align:?}");
+                assert_eq!(line.inline_size(), 20.0);
+            }
+        }
+    }
+
+    // A plaintext RTL paragraph in an LTR block has its start at the other
+    // edge. Two 10px glyphs end at 100 - 12 = 88px, hence start at 68px.
+    let mut s = style();
+    s.unicode_bidi_plaintext = true;
+    let p = build(&s, |b| {
+        b.push_text(
+            shodo::node::TextSource::Generated {
+                node: shodo::node::NodeId(1),
+            },
+            "אב",
+        );
+    });
+    let mut options = LineOptions {
+        text_align_last: TextAlignLast::Justify,
+        text_justify: TextJustify::None,
+        ..Default::default()
+    };
+    options.text_indent.length = 12.0;
+    let line = first_line(&p, 100.0, &options, &AtomicSizes::EMPTY);
+    let Fragment::GlyphRun(run) = line.fragment(0).unwrap() else {
+        panic!()
+    };
+    assert_eq!(run.inline_start(), 68.0);
+    assert_eq!(run.inline_start() + run.inline_size(), 88.0);
+}
+
+#[test]
+fn disabled_justification_keeps_wrapped_start_and_explicit_last_end() {
+    let p = paragraph("a b c");
+    let options = LineOptions {
+        text_align: TextAlign::Justify,
+        text_align_last: TextAlignLast::End,
+        text_justify: TextJustify::None,
+        ..Default::default()
+    };
+    let first = first_line(&p, 40.0, &options, &AtomicSizes::EMPTY);
+    assert_eq!(first.break_reason(), shodo::BreakReason::Regular);
+    assert_eq!(glyphs(&first)[0].inline_position, 0.0);
+    assert_eq!(glyphs(&first)[2].inline_position, 20.0);
+    let LineResult::Line(last) = p.next_line(
+        &mut LayoutContext::new(),
+        first.break_token(),
+        &options,
+        &LineConstraint::new(40.0),
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!()
+    };
+    assert_eq!(glyphs(&last)[0].inline_position, 30.0);
+
+    let mut s = style();
+    s.root.white_space_collapse = shodo::style::WhiteSpaceCollapse::Preserve;
+    let p = build(&s, |b| {
+        b.push_text(
+            shodo::node::TextSource::Generated {
+                node: shodo::node::NodeId(1),
+            },
+            "a b\nc",
+        );
+    });
+    let options = LineOptions {
+        text_align_last: TextAlignLast::Justify,
+        text_justify: TextJustify::None,
+        ..Default::default()
+    };
+    let first = first_line(&p, 100.0, &options, &AtomicSizes::EMPTY);
+    assert_eq!(first.break_reason(), shodo::BreakReason::Forced);
+    assert_eq!(glyphs(&first)[0].inline_position, 0.0);
+    let LineResult::Line(last) = p.next_line(
+        &mut LayoutContext::new(),
+        first.break_token(),
+        &options,
+        &LineConstraint::new(100.0),
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!()
+    };
+    assert_eq!(glyphs(&last)[0].inline_position, 0.0);
+}
+
+#[test]
+fn enabled_unexpandable_justification_and_explicit_alignment_keep_their_fallbacks() {
+    let p = paragraph("ab");
+    for (last, justify, expected) in [
+        (TextAlignLast::Justify, TextJustify::InterWord, 40.0),
+        (TextAlignLast::Center, TextJustify::None, 40.0),
+        (TextAlignLast::End, TextJustify::None, 80.0),
+    ] {
+        let options = LineOptions {
+            text_align_last: last,
+            text_justify: justify,
+            ..Default::default()
+        };
+        let line = first_line(&p, 100.0, &options, &AtomicSizes::EMPTY);
+        assert_eq!(
+            glyphs(&line)[0].inline_position,
+            expected,
+            "{last:?}/{justify:?}"
+        );
+        assert_eq!(line.inline_size(), 20.0);
+    }
 }
