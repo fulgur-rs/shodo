@@ -8,6 +8,7 @@
 //!     system_fonts: false, ..Default::default()
 //! });
 //! let document = FontCollection::for_document(&shared, &Limits::default());
+//! assert!(document.is_bundled_only());
 //! // Without a zero glyph, CSS defines ch as half an em.
 //! assert_eq!(document.resolve_ch(&FontQuery::default(), 16.0).advance, 8.0);
 //! ```
@@ -205,6 +206,20 @@ impl FontCollection {
     pub fn with_options(limits: &Limits, options: FontOptions) -> Self {
         let stub = FontData::new(Blob::from(sfnt::build_sfnt(&[])), 0);
         Self::with_faces(limits, vec![stub], None, options)
+    }
+
+    /// Whether automatic system-font discovery is disabled for this collection.
+    ///
+    /// Reports the configured [`FontOptions::system_fonts`] policy without
+    /// triggering enumeration or font loading. Document layers inherit this
+    /// policy from their shared root. A collection with discovery enabled
+    /// returns `false` even before any system fonts have been loaded.
+    ///
+    /// This does not report font provenance: explicitly registered data or
+    /// [`FontSource::Local`] sources may come from installed fonts. It also
+    /// does not guarantee deterministic matching during concurrent registration.
+    pub fn is_bundled_only(&self) -> bool {
+        !self.state().options.system_fonts
     }
 
     /// Creates an empty document layer on top of the root shared layer.

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `FontCollection::is_bundled_only()` exposes the system-font discovery policy,
+  including the shared-root policy inherited by document layers.
+
 ## [0.0.6](https://github.com/fulgur-rs/shodo/compare/v0.0.5...v0.0.6) - 2026-10-01
 
 ### Fixed
