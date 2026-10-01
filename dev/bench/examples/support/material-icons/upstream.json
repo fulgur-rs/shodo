@@ -1,0 +1,23 @@
+{
+  "commit": "bd8cb85bd4bad964fe6918f79665bb40c3a8efef",
+  "files": {
+    "MaterialIcons-Regular.ttf": {
+      "upstream_path": "font/MaterialIcons-Regular.ttf",
+      "url": "https://raw.githubusercontent.com/google/material-design-icons/bd8cb85bd4bad964fe6918f79665bb40c3a8efef/font/MaterialIcons-Regular.ttf",
+      "sha256": "ef149f08bdd2ff09a4e2c8573476b7b0f3fbb15b623954ade59899e7175bedda",
+      "bytes": 356840
+    },
+    "LICENSE": {
+      "upstream_path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/google/material-design-icons/bd8cb85bd4bad964fe6918f79665bb40c3a8efef/LICENSE",
+      "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd",
+      "bytes": 11357
+    },
+    "codepoints": {
+      "upstream_path": "font/MaterialIcons-Regular.codepoints",
+      "url": "https://raw.githubusercontent.com/google/material-design-icons/bd8cb85bd4bad964fe6918f79665bb40c3a8efef/font/MaterialIcons-Regular.codepoints",
+      "sha256": "530f25bf7b2d71c8e1da9476d53f9a9bb6b7e187bff69bb7128bb679b8194894",
+      "bytes": 39522
+    }
+  }
+}
