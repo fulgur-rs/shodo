@@ -653,7 +653,8 @@ impl Line {
                 };
                 let border_start = record.inline_start.to_f32() + lead_margin;
                 let border_size = record.inline_size.to_f32() - lead_margin - trail_margin;
-                let content_top = (self.baseline + self.block_shifts[index]).to_f32() - m.ascent;
+                let baseline = (self.baseline + self.block_shifts[index]).to_f32();
+                let content_top = baseline - m.ascent;
                 let content_height = m.ascent + m.descent;
                 let above = e.padding.block_start + e.border.block_start;
                 let below = e.padding.block_end + e.border.block_end;
@@ -673,6 +674,7 @@ impl Line {
                     ),
                     has_start_edge: *start_edge,
                     has_end_edge: *end_edge,
+                    baseline,
                     start_edge_is_reversed: *reversed,
                     parent: parent.map(|p| p as usize),
                     font,
