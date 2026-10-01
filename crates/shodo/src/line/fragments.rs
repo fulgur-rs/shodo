@@ -82,10 +82,28 @@ pub(crate) struct TabSlot {
 }
 type Built = (Vec<FragmentRecord>, Vec<TabSlot>);
 
+/// Collapsible terminal spaces retain their source/glyph advance, but are
+/// removed from inline background and border geometry (CSS Text 3 §4.1.2).
+fn trims_box(data: &ParagraphData, i: usize, hang_start: usize) -> bool {
+    let unit = &data.units[i];
+    i >= hang_start
+        && unit.combine.is_none()
+        && matches!(
+            unit.kind,
+            UnitKind::Cluster { space: true, .. } | UnitKind::Tab
+        )
+        && matches!(
+            data.styles[data.items[unit.item as usize].style as usize].white_space_collapse,
+            crate::style::WhiteSpaceCollapse::Collapse
+                | crate::style::WhiteSpaceCollapse::PreserveBreaks
+        )
+}
+
 /// Builds the records of one line in logical order.
 fn build_logical(
     data: &ParagraphData,
     units: Range<usize>,
+    hang_start: usize,
     widths: &[LayoutUnit],
     origin: LayoutUnit,
     atomics: &AtomicSizes,
@@ -99,9 +117,10 @@ fn build_logical(
     };
     let mut out: Vec<FragmentRecord> = Vec::new();
     let mut tabs = Vec::new();
-    let mut open: Vec<usize> = Vec::new();
+    let mut open: Vec<(usize, LayoutUnit)> = Vec::new();
     let mut shared_record: Option<(usize, usize)> = None;
     let mut pos = origin;
+    let mut trimmed = LayoutUnit::ZERO;
     let level_at_start = data
         .units
         .get(units.start)
@@ -123,7 +142,7 @@ fn build_logical(
     }
     for &box_index in chain.iter().rev() {
         let cloned = super::decoration::cloned(data, box_index);
-        let parent = open.last().map(|&r| r as u32);
+        let parent = open.last().map(|&(r, _)| r as u32);
         out.push(FragmentRecord {
             kind: RecordKind::InlineBox {
                 box_index,
@@ -136,7 +155,7 @@ fn build_logical(
             inline_size: LayoutUnit::ZERO,
             level: level_at_start,
         });
-        open.push(out.len() - 1);
+        open.push((out.len() - 1, trimmed));
         if cloned {
             pos = pos
                 + LayoutUnit::from_f32_round(
@@ -149,9 +168,12 @@ fn build_logical(
     for (k, i) in units.enumerate() {
         let unit = &data.units[i];
         let w = widths[k];
+        if trims_box(data, i, hang_start) {
+            trimmed = trimmed + w;
+        }
         match &unit.kind {
             UnitKind::Open { box_index } => {
-                let parent = open.last().map(|&r| r as u32);
+                let parent = open.last().map(|&(r, _)| r as u32);
                 out.push(FragmentRecord {
                     kind: RecordKind::InlineBox {
                         box_index: *box_index,
@@ -164,13 +186,13 @@ fn build_logical(
                     inline_size: LayoutUnit::ZERO,
                     level: unit.level,
                 });
-                open.push(out.len() - 1);
+                open.push((out.len() - 1, trimmed));
                 pos = pos + w;
             }
             UnitKind::Close { .. } => {
                 pos = pos + w;
-                if let Some(r) = open.pop() {
-                    out[r].inline_size = pos - out[r].inline_start;
+                if let Some((r, before)) = open.pop() {
+                    out[r].inline_size = pos - out[r].inline_start - (trimmed - before);
                     if let RecordKind::InlineBox { end_edge, .. } = &mut out[r].kind {
                         *end_edge = true;
                     }
@@ -268,7 +290,7 @@ fn build_logical(
         }
     }
     // Boxes that continue on the next line end here without their end edge.
-    for r in open.into_iter().rev() {
+    for (r, before) in open.into_iter().rev() {
         if let RecordKind::InlineBox {
             box_index,
             end_edge,
@@ -283,7 +305,7 @@ fn build_logical(
                     &mut Default::default(),
                 );
         }
-        out[r].inline_size = pos - out[r].inline_start;
+        out[r].inline_size = pos - out[r].inline_start - (trimmed - before);
     }
     (out, tabs)
 }
@@ -304,7 +326,15 @@ pub(crate) fn build(
 ) -> Built {
     let base = data.base_level;
     let (mut records, mut tabs) = if data.units[units.clone()].iter().all(|u| u.level == base) {
-        build_logical(data, units.clone(), widths, origin, atomics, visible_hyphen)
+        build_logical(
+            data,
+            units.clone(),
+            hang_start,
+            widths,
+            origin,
+            atomics,
+            visible_hyphen,
+        )
     } else {
         build_bidi(
             data,
@@ -421,7 +451,8 @@ fn inside(data: &ParagraphData, mut b: Option<u32>, target: u32) -> bool {
 }
 
 /// Appends a cluster to `list`, extending the last glyph piece when it
-/// continues the same run, item, level and owner.
+/// continues the same run, item, level and owner. Returns the piece receiving
+/// this unit's advance (a shared cluster continuation can be a separate piece).
 fn push_cluster(
     list: &mut Vec<Piece>,
     unit: &Unit,
@@ -430,9 +461,9 @@ fn push_cluster(
     owner: Option<u32>,
     shared_record: &mut Option<(std::sync::Arc<crate::analysis::units::SharedCluster>, usize)>,
     continuations: &mut Vec<(usize, usize)>,
-) {
+) -> usize {
     let UnitKind::Cluster { run, glyphs, .. } = &unit.kind else {
-        return;
+        unreachable!("cluster piece requires a cluster unit");
     };
     let (run, item, text) = (*run, unit.item, &unit.text);
     if let Some(shared) = &unit.shared_cluster
@@ -455,7 +486,7 @@ fn push_cluster(
             edge: None,
             tab: None,
         });
-        return;
+        return list.len() - 1;
     }
     if let Some(last) = list.last_mut()
         && last.level == level
@@ -488,7 +519,7 @@ fn push_cluster(
             .shared_cluster
             .as_ref()
             .map(|c| (std::sync::Arc::clone(c), list.len() - 1));
-        return;
+        return list.len() - 1;
     }
     list.push(Piece {
         record: Some(FragmentRecord {
@@ -513,6 +544,7 @@ fn push_cluster(
         .shared_cluster
         .as_ref()
         .map(|c| (std::sync::Arc::clone(c), list.len() - 1));
+    list.len() - 1
 }
 
 fn build_bidi(
@@ -529,6 +561,8 @@ fn build_bidi(
         .map_or(data.base_level, |p| p.base_level);
     let bidi_start = super::whitespace::bidi_trailing(data, units.start, units.end);
     let mut pieces: Vec<Piece> = Vec::new();
+    let mut box_trims: crate::hashing::FastMap<usize, LayoutUnit> =
+        crate::hashing::FastMap::default();
     // Hanging trailing spaces, placed after everything else on the line.
     let mut hanging: Vec<Piece> = Vec::new();
     // Level and owner of the last piece that is neither a hanging space nor
@@ -607,23 +641,25 @@ fn build_bidi(
                     continue;
                 }
                 if trailing && *space && unit.level != base {
-                    // L1 moves a hanging space out of an embedding to the
-                    // paragraph level. Kept inside its box, it would split
-                    // the box around it, so it is placed after everything
-                    // else instead. A space already at the paragraph level
-                    // is unaffected by L1 and stays in its box, exactly as
-                    // on lines without reordering.
+                    // L1 moves hanging spaces to the paragraph level.
+                    // Collapsible spaces no longer paint their box and can
+                    // leave its owner to avoid splitting it around the space.
+                    // Preserved spaces still belong to the painted box.
                     push_cluster(
                         &mut hanging,
                         unit,
                         w,
                         level,
-                        None,
+                        if trims_box(data, i, hang_start) {
+                            None
+                        } else {
+                            unit.parent_box
+                        },
                         &mut hanging_shared,
                         &mut hanging_continuations,
                     );
                 } else {
-                    push_cluster(
+                    let piece = push_cluster(
                         &mut pieces,
                         unit,
                         w,
@@ -632,6 +668,10 @@ fn build_bidi(
                         &mut shared_record,
                         &mut continuations,
                     );
+                    if trims_box(data, i, hang_start) {
+                        let amount = box_trims.entry(piece).or_insert(LayoutUnit::ZERO);
+                        *amount = *amount + w;
+                    }
                     last_kept = Some((level, unit.parent_box));
                 }
                 continue;
@@ -746,6 +786,7 @@ fn build_bidi(
     let mut open: Vec<usize> = Vec::new();
     let mut chain: Vec<u32> = Vec::new();
     let mut end = origin;
+    let mut trimmed = LayoutUnit::ZERO;
     for &p in &order {
         let piece = &pieces[p];
         let top = open.last().map(|&g| groups[g].box_index);
@@ -763,12 +804,13 @@ fn build_bidi(
                 .take_while(|&(&g, &b)| groups[g].box_index == b)
                 .count();
             for g in open.drain(keep..) {
-                groups[g].size = end - groups[g].start;
+                groups[g].size = end - groups[g].start - (trimmed - groups[g].trimmed_before);
             }
             for &b in &chain[keep..] {
                 groups.push(Group {
                     box_index: b,
                     start: starts[p],
+                    trimmed_before: trimmed,
                     size: LayoutUnit::ZERO,
                     start_edge: false,
                     end_edge: false,
@@ -789,10 +831,11 @@ fn build_bidi(
                 groups[g].end_edge = true;
             }
         }
+        trimmed = trimmed + box_trims.get(&p).copied().unwrap_or(LayoutUnit::ZERO);
         end = starts[p] + piece.width;
     }
     for g in open.drain(..) {
-        groups[g].size = end - groups[g].start;
+        groups[g].size = end - groups[g].start - (trimmed - groups[g].trimmed_before);
     }
 
     // Output: boxes and content sorted by position; a box precedes the
@@ -859,6 +902,7 @@ fn build_bidi(
 struct Group {
     box_index: u32,
     start: LayoutUnit,
+    trimmed_before: LayoutUnit,
     size: LayoutUnit,
     start_edge: bool,
     end_edge: bool,

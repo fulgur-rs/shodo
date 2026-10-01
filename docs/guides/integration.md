@@ -208,6 +208,10 @@ convert with the parent line's physical converter.
 coordinates as shaping. `Line::metrics()` separates the final line-box extents
 from the root font's text-over/text-under edges. Every participating run can
 contribute to line height; block padding/borders remain paint geometry.
+`InlineBoxFragment::rect` and `content_rect` exclude collapsible line-end spaces
+from background and border widths. Preserved spaces remain inside their boxes,
+including when they hang. Text source ranges and glyph advances still retain the
+space for selection; do not subtract `Line::hang_end()` from these box widths.
 `Line::overflow_rect()` returns nominal glyph ink and painted box bounds in
 line-local coordinates. Add `block_offset` before physical conversion. Renderer
 strokes, antialiasing and decoration effects can extend those nominal bounds.

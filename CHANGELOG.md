@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Exclude collapsible line-end spaces from inline background and border widths;
+  keep preserved hanging spaces inside their boxes, including after bidi resets.
+
 - Complete `text-transform: full-width` Unicode mappings for halfwidth Hangul,
   currency symbols, white parentheses, arrows and shapes.
 

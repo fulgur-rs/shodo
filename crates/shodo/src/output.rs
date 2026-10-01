@@ -110,7 +110,8 @@ pub enum Fragment<'a> {
 
 /// The part of an inline box on one line. With `box-decoration-break:
 /// slice`, only the first fragment has the start edge and only the last has
-/// the end edge.
+/// the end edge. Border and content widths exclude collapsible spaces hanging
+/// at the line end; preserved spaces remain inside the box even when hanging.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct InlineBoxFragment {
     pub node: NodeId,
