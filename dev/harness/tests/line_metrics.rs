@@ -68,6 +68,63 @@ fn normal_line_height_uses_selected_font() {
 }
 
 #[test]
+fn segment_break_ignorables_preserve_fallback_line_metrics() {
+    // Reproduce WPT css/css-text/line-breaking/segment-break-transformation-ignorable-1.
+    let segmented = "\n  水\u{fe00}\n  日\u{fe00}\n  本\u{e0100}\n  語\u{e0100}\n  水\u{00ad}\n  日\u{200e}\n  本\n  \u{200e}語\n";
+    let reference = "\n  水\u{fe00}日\u{fe00}本\u{e0100}語\u{e0100}水日本語\n";
+    let mut root = self::style(0, 24.0);
+    root.lang = Some("zh".into());
+    let style = ParagraphStyle {
+        root,
+        ..Default::default()
+    };
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let layout = |text, node| {
+        let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+        builder.push_text(TextSource::Generated { node: NodeId(node) }, text);
+        builder
+            .build(&mut LayoutContext::new(), &fonts.collection)
+            .unwrap()
+            .break_all(
+                &mut LayoutContext::new(),
+                &Default::default(),
+                10000.0,
+                &AtomicSizes::EMPTY,
+            )
+            .remove(0)
+    };
+    let segmented = layout(segmented, 1);
+    let reference = layout(reference, 2);
+    assert!(
+        segmented
+            .fragments()
+            .filter_map(|fragment| match fragment {
+                Fragment::GlyphRun(run) if run.font() == fonts.ids[1] => {
+                    Some(
+                        run.glyphs()
+                            .any(|glyph| glyph.id != 0 && glyph.advance > 0.0),
+                    )
+                }
+                _ => None,
+            })
+            .any(|has_visible_glyph| has_visible_glyph),
+        "CJK fallback must shape visible glyphs"
+    );
+    assert_eq!(segmented.inline_size(), reference.inline_size());
+    assert_eq!(
+        segmented.block_size(),
+        reference.block_size(),
+        "segmented={:?}, reference={:?}",
+        segmented.metrics(),
+        reference.metrics()
+    );
+    assert_eq!(
+        segmented.baseline(BaselineKind::Alphabetic),
+        reference.baseline(BaselineKind::Alphabetic)
+    );
+}
+
+#[test]
 fn mixed_face_and_adjusted_run_metrics_drive_line_box() {
     let mut child = style(0, 40.0);
     child.font_size_adjust = Some(FontSizeAdjust {
