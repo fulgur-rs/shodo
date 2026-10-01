@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.7](https://github.com/fulgur-rs/shodo/compare/v0.0.6...v0.0.7) - 2026-10-01
+
+### Added
+
+- *(style)* add word-break break-word
+- *(output)* expose inline box start edge direction
+- add paragraph width measurement methods
+- *(font)* expose shared and document generations for reuse
+- expose glyph sources and line DOM owners
+- *(output)* expose physical glyph outline origins
+- *(line)* construct constraints from physical insets
+- *(line)* expose complete trailing whitespace advance
+- *(font)* expose bundled-only discovery policy
+
+### Fixed
+
+- *(line)* apply each-line indent after block-in-inline
+- *(line)* justify Unicode word separators consistently
+- *(line)* keep disabled justification at line start
+- retain MSRV-compatible atomic update on Rust 1.99
+- *(output)* trim collapsible spaces from inline box widths
+- *(text)* complete Unicode full-width mappings
+- *(font)* keep native discovery outside registration budgets
+- *(font)* stabilize native fallback across lazy materialization
+
+### Other
+
+- allow concurrent font cache hits
+
 ### Fixed
 
 - Honor `text-indent: each-line` after block-in-inline boundaries in line
