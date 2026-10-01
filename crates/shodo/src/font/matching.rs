@@ -281,10 +281,29 @@ pub(super) struct FallbackEntry {
 }
 struct Candidate {
     id: FontId,
+    /// Explicit registration order, or in-memory catalog source/face identity.
+    /// File sources use their paths below, never lazy SourceId/slot order.
+    order_key: (u64, u32),
     data: FontData,
     descriptor: FontFaceDescriptor,
     info: FontInfo,
     color: bool,
+}
+
+impl Candidate {
+    fn order_cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        match (&self.info.source().kind, &other.info.source().kind) {
+            (SourceKind::Path(a), SourceKind::Path(b)) => b
+                .cmp(a)
+                .then_with(|| other.info.index().cmp(&self.info.index())),
+            // Caller-supplied memory sources take precedence over files at
+            // equal CSS rank. Their order is fixed when registered.
+            (SourceKind::Memory(_), SourceKind::Path(_)) => Ordering::Less,
+            (SourceKind::Path(_), SourceKind::Memory(_)) => Ordering::Greater,
+            (SourceKind::Memory(_), SourceKind::Memory(_)) => other.order_key.cmp(&self.order_key),
+        }
+    }
 }
 
 pub(super) fn face_info(data: &FontData) -> Option<FontInfo> {
@@ -548,6 +567,11 @@ impl FontCollection {
             .iter()
             .enumerate()
             .filter_map(|(index, data)| {
+                // Platform fallback is selected through the catalog's script
+                // families. Prior queries must not add new last-resort faces.
+                if state.native_faces.contains(&index) {
+                    return None;
+                }
                 let info = state.face_infos[index].as_ref()?.clone();
                 let descriptor = match &state.descriptors[index] {
                     Some(desc)
@@ -560,6 +584,7 @@ impl FontCollection {
                     None => return None, // Named intrinsic families come from fontique.
                 };
                 Some(Candidate {
+                    order_key: (index as u64, 0),
                     id: FontId {
                         layer: self.layer.id,
                         index: index as u32,
@@ -603,6 +628,7 @@ impl FontCollection {
                 }
             };
             result.push(Candidate {
+                order_key: (info.source().id().to_u64(), info.index()),
                 id: FontId {
                     layer: self.layer.id,
                     index: if index == usize::MAX {
@@ -682,7 +708,7 @@ impl FontCollection {
             rank(a)
                 .partial_cmp(&rank(b))
                 .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| b.id.index.cmp(&a.id.index))
+                .then_with(|| a.order_cmp(b))
         });
         let mut selected = candidates.into_iter().next()?;
         if selected.id.index == u32::MAX {
@@ -725,6 +751,7 @@ impl FontCollection {
                 // platform source changed after its family metadata was read.
                 state.face_infos.push(face_info(&selected.data));
                 state.faces.push(selected.data.clone());
+                state.native_faces.insert(index);
                 state.descriptors.push(None);
                 state.blob_bytes = bytes;
                 index

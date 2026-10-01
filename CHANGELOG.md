@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep font fallback independent of lazy platform-face materialization order;
+  platform faces no longer enter the explicitly registered last-resort list,
+  and equal-ranked native sources retain their catalog identity ordering.
+
 ### Added
 
 - `FontCollection::is_bundled_only()` exposes the system-font discovery policy,

@@ -163,6 +163,8 @@ struct Layer {
 
 struct LayerState {
     faces: Vec<FontData>,
+    /// Slots loaded from the platform catalog, rather than supplied by callers.
+    native_faces: std::collections::HashSet<usize>,
     face_infos: Vec<Option<fontique::FontInfo>>,
     blob_bytes: u64,
     descriptors: Vec<Option<FontFaceDescriptor>>,
@@ -249,6 +251,7 @@ impl FontCollection {
                 limits: limits.clone(),
                 generation: AtomicU64::new(0),
                 state: Mutex::new(LayerState {
+                    native_faces: Default::default(),
                     descriptors: vec![None; faces.len()],
                     face_infos: faces.iter().map(matching::face_info).collect(),
                     native: fontique::Collection::new(fontique::CollectionOptions {
