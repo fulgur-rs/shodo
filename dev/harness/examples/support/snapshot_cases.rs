@@ -2,9 +2,7 @@
 #[path = "float_flow.rs"]
 mod flow;
 use serde_json::{Value, json};
-use shodo::geometry::{
-    BaselineKind, Direction, LogicalRect, PhysicalConverter, PhysicalSize, WritingMode,
-};
+use shodo::geometry::{BaselineKind, Direction, LogicalRect, PhysicalSize, WritingMode};
 use shodo::hit::{LineLayout, TextPosition};
 use shodo::mapping::Affinity;
 use shodo::node::{InlineEdges, NodeId, OutOfFlowKind, TextSource};
@@ -653,18 +651,15 @@ pub fn render(id: &str) -> Result<Rendered, String> {
                         for (glyph_index, g) in run.glyphs().enumerate() {
                             glyphs_json.push(json!({"line":index,"owner":run.node().map(|n|n.0),"font":font,"size":run.font_size(),"coords":run.normalized_coords().iter().map(|c|c.to_bits()).collect::<Vec<_>>(),"embolden":run.embolden(),"skew":run.skew(),"id":g.id,"cluster":g.cluster,"inline_position":g.inline_position,"block_offset":g.block_offset,"advance":g.advance,"baseline":run.baseline()}));
                             if line.writing_mode() != WritingMode::HorizontalTb {
-                                let converter = PhysicalConverter::new(
-                                    line.writing_mode(),
-                                    line.used_direction(),
-                                    PhysicalSize {
-                                        width: 492.0,
-                                        height: 1004.0,
-                                    },
-                                );
-                                let (inline, block) = run
-                                    .glyph_origin(glyph_index)
+                                let (x, y) = run
+                                    .physical_origin(
+                                        glyph_index,
+                                        PhysicalSize {
+                                            width: 492.0,
+                                            height: 1004.0,
+                                        },
+                                    )
                                     .ok_or("missing glyph origin")?;
-                                let (x, y) = converter.point(inline, block + line.block_offset());
                                 let m = run.glyph_transform();
                                 let record = glyphs_json.last_mut().unwrap();
                                 record["orientation"] = json!(format!("{:?}", run.orientation()));

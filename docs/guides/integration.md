@@ -193,6 +193,17 @@ scratch exceeding the current run budget's conservative storage bound. See the
 
 ## Horizontal output and hit testing
 
+`GlyphRunView::physical_origin(index, container_size)` returns a glyph outline's
+physical `(x, y)` in the line's layout container, including `Line::block_offset()`.
+Pass the full physical container size: RTL origins are measured from its inline
+end, and vertical-rl block positions from its right edge. It uses the effective
+inline direction and natural shaping advance, so letter spacing and justification
+do not shift RTL outlines within their cells. `glyph_origin()` remains line-local
+and logical. Apply `glyph_transform()` and `PhysicalConverter::vector()` to
+outline vectors. Retained ruby child lines need their annotation transform
+composed with the logical origin; then add the parent line's block offset and
+convert with the parent line's physical converter.
+
 `GlyphRunView::metrics()` uses the same face, effective size and variation
 coordinates as shaping. `Line::metrics()` separates the final line-box extents
 from the root font's text-over/text-under edges. Every participating run can

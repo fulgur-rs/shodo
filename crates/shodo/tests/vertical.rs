@@ -337,6 +337,133 @@ fn physical_converter_maps_points_and_vectors_without_mirroring_outline() {
 }
 
 #[test]
+fn physical_origin_places_outline_in_container_for_every_inline_flow() {
+    let container = PhysicalSize {
+        width: 100.0,
+        height: 80.0,
+    };
+    for (mode, direction, expected_inline_axis) in [
+        (WritingMode::HorizontalTb, Direction::Ltr, 7.0),
+        (WritingMode::HorizontalTb, Direction::Rtl, 77.0),
+        (WritingMode::VerticalRl, Direction::Ltr, 7.0),
+        (WritingMode::VerticalRl, Direction::Rtl, 57.0),
+        (WritingMode::VerticalLr, Direction::Ltr, 7.0),
+        (WritingMode::VerticalLr, Direction::Rtl, 57.0),
+        (WritingMode::SidewaysRl, Direction::Ltr, 7.0),
+        (WritingMode::SidewaysRl, Direction::Rtl, 57.0),
+        (WritingMode::SidewaysLr, Direction::Ltr, 73.0),
+        (WritingMode::SidewaysLr, Direction::Rtl, 23.0),
+    ] {
+        let mut input = style(mode, TextOrientation::Sideways);
+        input.direction = direction;
+        input.root.direction = direction;
+        let p = paragraph(&input, "水");
+        let mut constraint = LineConstraint::new(60.0);
+        constraint.inline_start_offset = 7.0;
+        constraint.block_offset = 20.0;
+        let LineResult::Line(line) = p.next_line(
+            &mut LayoutContext::new(),
+            p.start_token(),
+            &LineOptions::default(),
+            &constraint,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("expected line")
+        };
+        let run = line
+            .fragments()
+            .find_map(|f| match f {
+                Fragment::GlyphRun(run) => Some(run),
+                _ => None,
+            })
+            .unwrap();
+        let glyph = run.glyphs().next().unwrap();
+        assert_eq!(glyph.inline_position, 7.0);
+        let block = 20.0 + run.baseline() + glyph.block_offset;
+        let expected = match mode {
+            WritingMode::HorizontalTb => (expected_inline_axis, block),
+            WritingMode::VerticalRl | WritingMode::SidewaysRl => {
+                (100.0 - block, expected_inline_axis)
+            }
+            WritingMode::VerticalLr | WritingMode::SidewaysLr => (block, expected_inline_axis),
+        };
+        assert_eq!(
+            run.physical_origin(0, container),
+            Some(expected),
+            "{mode:?}/{direction:?}"
+        );
+        assert_eq!(run.physical_origin(run.glyphs().len(), container), None);
+        assert_eq!(run.physical_origin(usize::MAX, container), None);
+    }
+}
+
+#[test]
+fn physical_origin_uses_upright_vertical_used_direction() {
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let mut input = style(mode, TextOrientation::Upright);
+        input.direction = Direction::Rtl;
+        input.root.direction = Direction::Rtl;
+        let p = paragraph(&input, "水");
+        let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(line.used_direction(), Direction::Ltr);
+        let run = line
+            .fragments()
+            .find_map(|f| match f {
+                Fragment::GlyphRun(run) => Some(run),
+                _ => None,
+            })
+            .unwrap();
+        let glyph = run.glyphs().next().unwrap();
+        let origin = run
+            .physical_origin(
+                0,
+                PhysicalSize {
+                    width: 100.0,
+                    height: 80.0,
+                },
+            )
+            .unwrap();
+        assert_eq!(origin.1, glyph.inline_position, "{mode:?}");
+    }
+}
+
+#[test]
+fn physical_origin_keeps_rtl_tracking_outside_the_natural_advance_cell() {
+    let mut input = style(WritingMode::HorizontalTb, TextOrientation::Mixed);
+    input.direction = Direction::Rtl;
+    input.root.direction = Direction::Rtl;
+    input.root.letter_spacing = 6.0;
+    let p = paragraph(&input, "水水");
+    let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    let run = line
+        .fragments()
+        .find_map(|f| match f {
+            Fragment::GlyphRun(run) => Some(run),
+            _ => None,
+        })
+        .unwrap();
+    // The fixture's water glyph has a 16px natural advance. Tracking affects
+    // layout cells, but moving the outline origin by that extra space shifts ink.
+    assert!(run.glyphs().any(|g| g.advance > 16.0));
+    for (index, glyph) in run.glyphs().enumerate() {
+        let expected = (
+            100.0 - glyph.inline_position - 16.0,
+            run.baseline() + glyph.block_offset,
+        );
+        assert_eq!(
+            run.physical_origin(
+                index,
+                PhysicalSize {
+                    width: 100.0,
+                    height: 80.0
+                }
+            ),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
 fn sideways_lr_outline_origin_stays_inside_its_advance_cell() {
     for direction in [Direction::Ltr, Direction::Rtl] {
         let mut style = style(WritingMode::SidewaysLr, TextOrientation::Mixed);
