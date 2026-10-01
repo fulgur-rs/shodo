@@ -31,7 +31,7 @@ Actual root/annotation constructors, metrics, Ruby placement, raw scan, both sha
 
 Core422 passed, two ignored; allocator/probe, fmt, all-target Clippy and docs pass. Strict default54 matches all seven operation digests against the byte-exact previously verified main baseline. Checks, six-build verification and independent ownership probes finish before final timing.
 
-Counter-free release binaries run on CPU10 in four fresh ABBA processes with forward/reverse case order, seven samples and two warmups. Eight preselected cases have four additional processes each, filtering unrelated paragraph construction. Each operation starts a fresh context. Paragraph/font construction, oracle snapshots and validation are outside cost; warning drain and rejected-result disposal are inside. Output release and context release have separate allocator windows.
+Counter-free release binaries run on CPU10 in four fresh ABBA processes with forward/reverse case order, seven samples and two warmups. Eight preselected cases have four additional processes each, filtering unrelated paragraph construction. Each operation starts a fresh context. Paragraph/font construction, oracle snapshots and validation are outside cost. Rich cases drain warnings and dispose rejected results inside cost; standard cases drain warnings after cost. Output release and context release have separate allocator windows.
 
 | Case | Root constructions before→after | Annotation constructions before→after | Calls | Gross B | Net B | Peak-extra B | Before/after ms | Ratio |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -72,6 +72,6 @@ Constructor, intervening intrinsic/build, owner-lifetime and real child-warning 
 
 Original 7d771b4ed5c954150300f62a314a4f14098879ab → measured candidate d6994b24c873f2ebade9826927c40e5628466002. Engine hashes 2980ab083449c4ab8c0fcae9f6565248b7d9a959d8a0b4f700e84d166cd9ee6f → dce9c8a8e721b0a4f0d1028793c6b7eb8020e0fa5c3a1a4d32d42232be8bdec4; harness 7c139740f9da6bc5ab72420426c81ad5456569e36a99b18b2266fe392b18f80b. Later documentation commits do not substitute measured engine bytes.
 
-Raw completed-height-retry-raw.json.gz: 17169148 bytes; SHA256 883b64b1c3caa698915ccd524035f88f171acb2acbc628c1d8d0f58c0cfa70ee. Codec restores 54 original report streams totaling 5345481802 bytes exactly, without numeric reserialization. Includes source/fixtures/fonts/licenses, binary profiles/identities, both rejected proposals, frozen producers, verifier rulings, all checks and default54 reference proof.
+Raw completed-height-retry-raw.json.gz: 17170784 bytes; SHA256 716a8d8ac0399bcceca029b438cde38440c96d1bca6a9016495ee0306c0c7178. Codec restores 54 original report streams totaling 5345481802 bytes exactly, without numeric reserialization. Includes source/fixtures/fonts/licenses, binary profiles/identities, both rejected proposals, frozen producers, verifier rulings, all checks and default54 reference proof.
 
 Reproduce: cargo run --release -p shodo-bench --example completed_height_retry; allocation-counting separately. SHODO_COMPLETED_SAMPLES, SHODO_COMPLETED_REVERSE and exact SHODO_COMPLETED_CASE control samples/order/pre-build filtering. Archived capture, verify-final, ownership_probe, standard54, timing, package and final_proof recipes require explicit absolute-path adjustment. One fresh Astra whole-branch review and latest-head CI gate integration.
