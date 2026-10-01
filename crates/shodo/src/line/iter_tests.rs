@@ -154,8 +154,10 @@ fn public_iterator_keeps_previous_line() {
 fn internal_driver_preserves_float_block_forced_and_saturated_offsets() {
     for kind in ["float", "block", "forced", "plain"] {
         for size in [16., 30_000_000.] {
-            let mut limits = Limits::default();
-            limits.max_warnings = Some(1);
+            let limits = Limits {
+                max_warnings: Some(1),
+                ..Default::default()
+            };
             let fonts = FontCollection::with_options(
                 &limits,
                 FontOptions {
