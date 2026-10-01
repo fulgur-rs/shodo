@@ -592,7 +592,28 @@ fn unexpandable_justification_uses_last_alignment_and_direction() {
                 };
                 close(
                     first_run(&actual[0]),
-                    first_run(&plain[0]) + (60.0 - actual[0].inline_size()) * factor * sign,
+                    // Disabling justification leaves a wrapped line at start;
+                    // enabled but unexpandable text uses the last-line fallback.
+                    first_run(&plain[0])
+                        + (60.0 - actual[0].inline_size())
+                            * if justify == TextJustify::None {
+                                0.0
+                            } else {
+                                factor
+                            }
+                            * sign,
+                );
+                let last_factor = if last == TextAlignLast::Justify && justify == TextJustify::None
+                {
+                    0.0
+                } else {
+                    factor
+                };
+                let actual_last = actual.last().unwrap();
+                close(
+                    first_run(actual_last),
+                    first_run(plain.last().unwrap())
+                        + (60.0 - actual_last.inline_size()) * last_factor * sign,
                 );
             }
         }
