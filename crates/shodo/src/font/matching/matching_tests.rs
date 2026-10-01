@@ -36,7 +36,7 @@ fn cache_hit_compares_few_keys_regardless_of_cache_size() {
     for c in &clusters {
         fonts.match_cluster(&query, c);
     }
-    assert_eq!(fonts.state().matches.len(), 64);
+    assert_eq!(fonts.caches().matches.len(), 64);
     // The newest entry is the worst case for a front-to-back scan.
     KEY_COMPARISONS.with(|n| n.set(0));
     fonts.match_cluster(&query, clusters.last().unwrap());
@@ -45,7 +45,7 @@ fn cache_hit_compares_few_keys_regardless_of_cache_size() {
         compared <= 2,
         "{compared} key comparisons for one cache hit"
     );
-    assert_eq!(fonts.state().matches.len(), 64);
+    assert_eq!(fonts.caches().matches.len(), 64);
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn scripted_match_equals_cloning_the_query_and_reuses_the_cache() {
     }
     // Six distinct (script, cluster) keys are cached once each, and the
     // equivalent cloned-query lookups above hit the same entries.
-    assert_eq!(fonts.state().matches.len(), 6);
+    assert_eq!(fonts.caches().matches.len(), 6);
 }
 
 #[test]
@@ -114,11 +114,11 @@ fn cache_evicts_least_recently_used_entry_first() {
     );
     // A miss on B compares no cached key against an equal entry; re-inserting
     // it must not have kept a stale copy.
-    assert_eq!(fonts.state().matches.len(), 2);
+    assert_eq!(fonts.caches().matches.len(), 2);
     fonts.match_cluster(&query, "B"); // evicts C (A was just touched)
     let a_after = hit_cost("A");
     assert!(a_after > 0);
-    assert_eq!(fonts.state().matches.len(), 2);
+    assert_eq!(fonts.caches().matches.len(), 2);
 }
 
 pub(super) fn record_info_read() {
@@ -398,7 +398,7 @@ fn internal_variable_results_keep_clamps_style_and_cache_bounds() {
                 assert!(!found.embolden);
                 assert_eq!(found.skew, None);
             }
-            assert!(fonts.state().matches.len() <= cap);
+            assert!(fonts.caches().matches.len() <= cap);
         }
     }
 }
@@ -444,6 +444,6 @@ fn old_variable_matches_survive_generation_invalidation() {
             }
         );
         assert_eq!(new.variations[0].value, 650.);
-        assert_eq!(fonts.state().matches.len(), 1);
+        assert_eq!(fonts.caches().matches.len(), 1);
     }
 }

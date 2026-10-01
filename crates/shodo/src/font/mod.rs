@@ -41,6 +41,7 @@ mod check;
 mod descriptor;
 mod matching;
 mod metrics;
+mod shapers;
 mod source;
 mod web_font;
 pub use web_font::decode_web_font;
@@ -58,7 +59,7 @@ pub use check::FontError;
 
 use std::fmt;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use peniko::{Blob, FontData};
 
@@ -160,6 +161,8 @@ struct Layer {
     limits: Limits,
     generation: AtomicU64,
     state: Mutex<LayerState>,
+    match_cache_entries: usize,
+    caches: RwLock<LayerCaches>,
     parent: Option<FontCollection>,
 }
 
@@ -178,15 +181,24 @@ struct LayerState {
     options: FontOptions,
     generics: std::collections::HashMap<crate::style::GenericFamily, Vec<String>>,
     fallbacks: Vec<matching::FallbackEntry>,
+}
+
+// Platform catalog access is Send but need not be Sync. Keep it in the
+// separate Mutex; cache hits share the dedicated RwLock and only touch atomic
+// recency stamps. Never hold a cache guard while querying the catalog.
+#[derive(Default)]
+struct LayerCaches {
     matches: matching::MatchCache,
     units: metrics::UnitCache,
-    shapers: std::collections::VecDeque<(u32, Arc<harfrust::ShaperData>)>,
+    shapers: shapers::ShaperCache,
 }
 
 /// A layer of fonts. The shared layer (created with [`FontCollection::new`])
 /// holds application fonts; document layers (created with
 /// [`FontCollection::for_document`]) hold `@font-face` fonts and see the
 /// shared layer, but not each other. Cheap to clone.
+/// Cached matches, CSS units and shaping data can be read concurrently across
+/// clones. Cache insertion and font catalog access remain synchronized.
 #[derive(Clone)]
 pub struct FontCollection {
     layer: Arc<Layer>,
@@ -253,6 +265,8 @@ impl FontCollection {
                 id: allocate_layer_id(&NEXT_LAYER_ID).expect("font layer identity space exhausted"),
                 limits: limits.clone(),
                 generation: AtomicU64::new(0),
+                match_cache_entries: options.match_cache_entries,
+                caches: RwLock::new(LayerCaches::default()),
                 state: Mutex::new(LayerState {
                     native_faces: Default::default(),
                     descriptors: vec![None; faces.len()],
@@ -269,9 +283,6 @@ impl FontCollection {
                     options,
                     generics: Default::default(),
                     fallbacks: Vec::new(),
-                    matches: Default::default(),
-                    units: Default::default(),
-                    shapers: Default::default(),
                 }),
                 parent,
             }),
@@ -282,6 +293,14 @@ impl FontCollection {
         // A panic while holding the lock cannot leave the state inconsistent
         // (every update is a single push), so a poisoned lock is recovered.
         self.layer.state.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn caches(&self) -> RwLockReadGuard<'_, LayerCaches> {
+        self.layer.caches.read().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn write_caches(&self) -> RwLockWriteGuard<'_, LayerCaches> {
+        self.layer.caches.write().unwrap_or_else(|e| e.into_inner())
     }
 
     /// Checks and registers a font file or collection. Returns the id of its
@@ -464,18 +483,12 @@ impl FontCollection {
         if id.layer != self.layer.id {
             return self.layer.parent.as_ref()?.shaper_data(id);
         }
-        let mut state = self.state();
-        if let Some(index) = state.shapers.iter().rposition(|(index, _)| {
-            #[cfg(test)]
-            SHAPER_SEARCH_COMPARISONS.with(|count| count.set(count.get() + 1));
-            *index == id.index
-        }) {
-            let entry = state.shapers.remove(index)?;
-            let result = entry.1.clone();
-            state.shapers.push_back(entry);
-            return Some(result);
+        if let Some(shaper) = self.caches().shapers.get(id.index) {
+            return Some(shaper);
         }
-        let data = state.faces.get(id.index as usize)?;
+        // Clone the face under the catalog lock, then build without either
+        // lock. Concurrent misses can build redundantly but retain one handle.
+        let data = self.state().faces.get(id.index as usize)?.clone();
         let font = harfrust::FontRef::from_index(data.data.as_ref(), data.index).ok()?;
         let shaper = Arc::new(harfrust::ShaperData::new(&font));
         let cap = self
@@ -483,12 +496,11 @@ impl FontCollection {
             .limits
             .max_shaper_cache_entries
             .unwrap_or(u64::MAX);
-        if cap > 0 {
-            while state.shapers.len() as u64 >= cap {
-                state.shapers.pop_front();
-            }
-            state.shapers.push_back((id.index, shaper.clone()));
+        let mut caches = self.write_caches();
+        if let Some(existing) = caches.shapers.get(id.index) {
+            return Some(existing);
         }
+        caches.shapers.insert(id.index, shaper.clone(), cap);
         Some(shaper)
     }
 }
@@ -599,3 +611,5 @@ mod tests {
 
 #[cfg(test)]
 mod browser_tests;
+#[cfg(test)]
+mod cache_tests;

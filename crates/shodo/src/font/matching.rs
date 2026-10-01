@@ -91,7 +91,7 @@ pub(super) struct CacheEntry {
     cluster: Box<str>,
     result: Option<std::sync::Arc<FontMatch>>,
     hash: u64,
-    used: u64,
+    used: std::sync::atomic::AtomicU64,
 }
 impl CacheEntry {
     /// Compares against `query` as if its script were `script`, so callers
@@ -128,7 +128,7 @@ impl CacheEntry {
 pub(super) struct MatchCache {
     slots: Vec<CacheEntry>,
     index: std::collections::HashMap<u64, u32, std::hash::BuildHasherDefault<PreHashed>>,
-    clock: u64,
+    clock: std::sync::atomic::AtomicU64,
     generations: Option<(u64, Option<u64>)>,
     queries: Vec<std::sync::Weak<FontQuery>>,
 }
@@ -200,21 +200,29 @@ impl MatchCache {
         }
     }
     fn get(
-        &mut self,
+        &self,
         generations: (u64, Option<u64>),
         hash: u64,
         query: &FontQuery,
         script: [u8; 4],
         cluster: &str,
     ) -> Option<Option<std::sync::Arc<FontMatch>>> {
-        self.sync(generations);
+        if self.generations != Some(generations) {
+            return None;
+        }
         let slot = *self.index.get(&hash)? as usize;
-        let entry = self.slots.get_mut(slot)?;
+        let entry = self.slots.get(slot)?;
         if !entry.matches_key(query, script, cluster) {
             return None;
         }
-        self.clock += 1;
-        entry.used = self.clock;
+        let stamp = self
+            .clock
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            .wrapping_add(1);
+        // Readers can finish out of order; never move an entry's stamp back.
+        entry
+            .used
+            .fetch_max(stamp, std::sync::atomic::Ordering::Relaxed);
         Some(entry.result.clone())
     }
     /// Reuse the shared query when an equal one is already retained by a live
@@ -247,13 +255,16 @@ impl MatchCache {
         result: Option<std::sync::Arc<FontMatch>>,
     ) {
         self.sync(generations);
-        self.clock += 1;
+        let stamp = self
+            .clock
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            .wrapping_add(1);
         let entry = CacheEntry {
             query: self.intern(query),
             cluster: cluster.into(),
             result,
             hash,
-            used: self.clock,
+            used: std::sync::atomic::AtomicU64::new(stamp),
         };
         if let Some(&slot) = self.index.get(&entry.hash) {
             // Same hash: an equal key was concurrently inserted, or a
@@ -262,7 +273,11 @@ impl MatchCache {
             return;
         }
         if self.slots.len() >= cap {
-            let Some((victim, _)) = self.slots.iter().enumerate().min_by_key(|(_, e)| e.used)
+            let Some((victim, _)) = self
+                .slots
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, e)| e.used.load(std::sync::atomic::Ordering::Relaxed))
             else {
                 return;
             };
@@ -412,7 +427,7 @@ impl FontCollection {
         cluster: &mut FontCluster<'_>,
     ) -> Option<std::sync::Arc<FontMatch>> {
         let generations = self.generations();
-        let cap = self.state().options.match_cache_entries;
+        let cap = self.layer.match_cache_entries;
         // Unretainable keys cannot hit the cache. Reject them before hashing
         // the cluster, including when caching is disabled by the caller.
         let key_bytes = base.families.iter().fold(
@@ -431,7 +446,7 @@ impl FontCollection {
             .then(|| key_hash(base, script, cluster.as_str()));
         if let Some(hash) = hash
             && let Some(result) =
-                self.state()
+                self.caches()
                     .matches
                     .get(generations, hash, base, script, cluster.as_str())
         {
@@ -443,7 +458,7 @@ impl FontCollection {
         };
         let result = self.find_cluster(&query, cluster).map(std::sync::Arc::new);
         if let Some(hash) = hash {
-            self.state().matches.insert(
+            self.write_caches().matches.insert(
                 cap,
                 generations,
                 query,

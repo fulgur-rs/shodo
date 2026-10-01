@@ -593,7 +593,7 @@ fn later_css_faces_win_identical_descriptors_and_cache_is_bounded() {
     let q = query(&["Web"], 400.);
     assert_eq!(fonts.match_cluster(&q, "a").unwrap().id, last);
     assert_eq!(fonts.match_cluster(&q, "b").unwrap().id, last);
-    assert_eq!(fonts.state().matches.len(), 1);
+    assert_eq!(fonts.caches().matches.len(), 1);
     let unbounded = FontCollection::with_options(
         &Limits::default(),
         FontOptions {
@@ -604,7 +604,7 @@ fn later_css_faces_win_identical_descriptors_and_cache_is_bounded() {
     );
     add_face(&unbounded, "Web", (400., 400.), &['a']);
     assert!(unbounded.match_cluster(&q, "a").is_some());
-    assert!(unbounded.state().matches.is_empty());
+    assert!(unbounded.caches().matches.is_empty());
 }
 
 #[test]
@@ -1034,7 +1034,7 @@ fn recent_shaper_hit_inspects_one_actual_entry() {
     let id = ids[31];
     let data = fonts.font_data(id).unwrap();
     let last = fonts.shaper_data(id).unwrap();
-    assert_eq!(fonts.state().shapers.len(), 32);
+    assert_eq!(fonts.caches().shapers.len(), 32);
     SHAPER_SEARCH_COMPARISONS.with(|count| count.set(0));
     let hit = fonts.shaper_data(id).unwrap();
     let inspected = SHAPER_SEARCH_COMPARISONS.with(|count| count.get());
@@ -1071,7 +1071,7 @@ fn shaper_hit_promotes_lru_and_retained_handles_survive_layer_drop() {
     assert!(victim.upgrade().is_none());
     assert_eq!(
         fonts
-            .state()
+            .caches()
             .shapers
             .iter()
             .map(|(index, _)| *index)
@@ -1119,7 +1119,7 @@ fn shaper_cache_qualifies_shared_and_document_indices_and_zero_retention() {
     let a = zero.shaper_data(id).unwrap();
     let b = zero.shaper_data(id).unwrap();
     assert!(!Arc::ptr_eq(&a, &b));
-    assert!(zero.state().shapers.is_empty());
+    assert!(zero.caches().shapers.is_empty());
     assert_eq!(shaper_test_advance(&zero.font_data(id).unwrap(), &a), 550);
 }
 
@@ -1143,7 +1143,7 @@ fn shaper_cache_is_shared_bounded_and_zero_capacity_still_returns_data() {
     let doc = FontCollection::for_document(&fonts, &Limits::default());
     assert!(Arc::ptr_eq(&a, &doc.shaper_data(first).unwrap()));
     let _b = fonts.shaper_data(second).unwrap();
-    assert_eq!(fonts.state().shapers.len(), 1);
+    assert_eq!(fonts.caches().shapers.len(), 1);
     assert!(!Arc::ptr_eq(&a, &fonts.shaper_data(first).unwrap()));
     let limits = Limits {
         max_shaper_cache_entries: Some(0),
@@ -1158,7 +1158,7 @@ fn shaper_cache_is_shared_bounded_and_zero_capacity_still_returns_data() {
     );
     let id = add_face(&empty, "Zero", (400., 400.), &['a']);
     assert!(empty.shaper_data(id).is_some());
-    assert!(empty.state().shapers.is_empty());
+    assert!(empty.caches().shapers.is_empty());
 }
 
 #[test]

@@ -22,7 +22,7 @@ struct UnitEntry {
     size: f32,
     ch: char,
     result: FontUnit,
-    used: u64,
+    used: std::sync::atomic::AtomicU64,
 }
 
 /// Per-layer LRU of final CSS unit values. Each result includes the selected
@@ -32,7 +32,7 @@ struct UnitEntry {
 #[derive(Default)]
 pub(super) struct UnitCache {
     slots: Vec<UnitEntry>,
-    clock: u64,
+    clock: std::sync::atomic::AtomicU64,
     generations: Option<(u64, Option<u64>)>,
 }
 
@@ -50,19 +50,26 @@ impl UnitCache {
     }
 
     fn get(
-        &mut self,
+        &self,
         generations: (u64, Option<u64>),
         query: &FontQuery,
         size: f32,
         ch: char,
     ) -> Option<FontUnit> {
-        self.sync(generations);
+        if self.generations != Some(generations) {
+            return None;
+        }
         let entry = self
             .slots
-            .iter_mut()
+            .iter()
             .find(|entry| entry.size == size && entry.ch == ch && entry.query == *query)?;
-        self.clock = self.clock.wrapping_add(1);
-        entry.used = self.clock;
+        let stamp = self
+            .clock
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            .wrapping_add(1);
+        entry
+            .used
+            .fetch_max(stamp, std::sync::atomic::Ordering::Relaxed);
         Some(entry.result)
     }
 
@@ -91,13 +98,16 @@ impl UnitCache {
         if key_bytes > 4096 {
             return;
         }
-        self.clock = self.clock.wrapping_add(1);
+        let stamp = self
+            .clock
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            .wrapping_add(1);
         let entry = UnitEntry {
             query: query.clone(),
             size,
             ch,
             result,
-            used: self.clock,
+            used: std::sync::atomic::AtomicU64::new(stamp),
         };
         if let Some(existing) = self
             .slots
@@ -107,7 +117,11 @@ impl UnitCache {
             *existing = entry;
         } else if self.slots.len() < cap {
             self.slots.push(entry);
-        } else if let Some((oldest, _)) = self.slots.iter().enumerate().min_by_key(|(_, e)| e.used)
+        } else if let Some((oldest, _)) = self
+            .slots
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, e)| e.used.load(std::sync::atomic::Ordering::Relaxed))
         {
             self.slots[oldest] = entry;
         }
@@ -197,16 +211,16 @@ impl FontCollection {
     fn resolve_unit(&self, query: &FontQuery, size: f32, ch: char, fallback: f32) -> FontUnit {
         let size = valid_size(size).unwrap_or(0.);
         let generations = self.generations();
-        if let Some(unit) = self.state().units.get(generations, query, size, ch) {
+        if let Some(unit) = self.caches().units.get(generations, query, size, ch) {
             return unit;
         }
         let unit = self.resolve_unit_uncached(query, size, ch, fallback);
         // A registration or fallback change during shaping must not make an
         // old value available to calls that observe the new generation.
         if self.generations() == generations {
-            let mut state = self.state();
-            let cap = state.options.match_cache_entries.min(64);
-            state.units.insert(generations, query, size, ch, unit, cap);
+            let mut caches = self.write_caches();
+            let cap = self.layer.match_cache_entries.min(64);
+            caches.units.insert(generations, query, size, ch, unit, cap);
         }
         unit
     }
@@ -425,7 +439,7 @@ mod tests {
                 }
             }
         }
-        assert!(fonts.state().units.len() > 0);
+        assert!(fonts.caches().units.len() > 0);
     }
 
     #[test]
@@ -472,7 +486,7 @@ mod tests {
                 document.resolve_ch(&query, size),
                 document.resolve_unit_uncached(&query, size, '0', 0.5)
             );
-            assert!(document.state().units.len() <= 2);
+            assert!(document.caches().units.len() <= 2);
         }
         let disabled = FontCollection::with_options(
             &limits,
@@ -483,7 +497,7 @@ mod tests {
             },
         );
         disabled.resolve_ch(&query, 10.);
-        assert_eq!(disabled.state().units.len(), 0);
+        assert_eq!(disabled.caches().units.len(), 0);
     }
 
     #[test]
