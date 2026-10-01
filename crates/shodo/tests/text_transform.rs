@@ -143,6 +143,44 @@ fn halfwidth_kana_voicing() {
 }
 
 #[test]
+fn full_width_maps_symbols_and_hangul_without_compatibility_normalization() {
+    let input = "\u{2985}\u{2986}¢£¬¯¦¥₩\u{ffe8}\u{ffe9}\u{ffea}\u{ffeb}\u{ffec}\u{ffed}\u{ffee}\u{ffa0}\u{ffa1}\u{ffc2}\u{ffca}\u{ffd2}\u{ffda}①ﬀ";
+    let expected = "\u{ff5f}\u{ff60}\u{ffe0}\u{ffe1}\u{ffe2}\u{ffe3}\u{ffe4}\u{ffe5}\u{ffe6}│←↑→↓■○\u{3164}\u{3131}\u{314f}\u{3155}\u{315b}\u{3161}①ﬀ";
+    assert_eq!(
+        build(input, TextTransform::FullWidth, None).text(),
+        expected
+    );
+}
+
+#[test]
+fn full_width_expansion_keeps_dom_byte_origins_across_inline_boundaries() {
+    let p = split("¢", "\u{ffa1}¥", TextTransform::FullWidth, "ko", true);
+    assert_eq!(p.text(), "\u{ffe0}\u{3131}\u{ffe5}");
+    let m = p.offset_mapping().unwrap();
+    for (node, dom, text, affinity) in [
+        (NodeId(1), 0, 0, Affinity::Downstream),
+        (NodeId(1), 1, 0, Affinity::Downstream),
+        (NodeId(1), 2, 3, Affinity::Upstream),
+        (NodeId(3), 0, 3, Affinity::Downstream),
+        (NodeId(3), 3, 6, Affinity::Downstream),
+        (NodeId(3), 5, 9, Affinity::Upstream),
+    ] {
+        assert_eq!(m.dom_to_text(node, dom), Some((text, affinity)));
+    }
+    for (text, node, offset) in [
+        (0, NodeId(1), 0),
+        (1, NodeId(1), 0),
+        (3, NodeId(3), 0),
+        (6, NodeId(3), 3),
+    ] {
+        assert_eq!(
+            m.text_to_dom(text, Affinity::Downstream),
+            Some(TextOrigin::Dom { node, offset })
+        );
+    }
+}
+
+#[test]
 fn full_size_kana_supplementary_mapping() {
     assert_eq!(
         build("ぁㇰｧ\u{1B132}", TextTransform::FullSizeKana, Some("ja")).text(),

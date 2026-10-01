@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Complete `text-transform: full-width` Unicode mappings for halfwidth Hangul,
+  currency symbols, white parentheses, arrows and shapes.
+
 - Exempt lazily materialized platform faces from per-layer registration budgets,
   while preserving individual font validation and explicit CSS source limits.
 

@@ -349,11 +349,36 @@ fn remove_tonos(c: char) -> char {
     }
 }
 
+// CSS Text 3 reverses Unicode <wide> decompositions and follows <narrow>
+// decompositions. Compatibility normalization would change unrelated symbols
+// and map halfwidth Hangul past its required compatibility-jamo target.
 fn full_width(c: char) -> char {
     match c {
         ' ' => '\u{3000}',
         '!'..='~' => char::from_u32(c as u32 + 0xFEE0).unwrap_or(c),
+        '\u{2985}' => '\u{FF5F}',
+        '\u{2986}' => '\u{FF60}',
+        '¢' => '\u{FFE0}',
+        '£' => '\u{FFE1}',
+        '¬' => '\u{FFE2}',
+        '¯' => '\u{FFE3}',
+        '¦' => '\u{FFE4}',
+        '¥' => '\u{FFE5}',
+        '₩' => '\u{FFE6}',
         '\u{FF61}'..='\u{FF9F}' => "。「」、・ヲァィゥェォャュョッーアイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワン\u{3099}\u{309A}".chars().nth(c as usize - 0xFF61).unwrap_or(c),
+        '\u{FFA0}' => '\u{3164}',
+        '\u{FFA1}'..='\u{FFBE}' => char::from_u32(c as u32 - 0xFFA1 + 0x3131).unwrap_or(c),
+        '\u{FFC2}'..='\u{FFC7}' => char::from_u32(c as u32 - 0xFFC2 + 0x314F).unwrap_or(c),
+        '\u{FFCA}'..='\u{FFCF}' => char::from_u32(c as u32 - 0xFFCA + 0x3155).unwrap_or(c),
+        '\u{FFD2}'..='\u{FFD7}' => char::from_u32(c as u32 - 0xFFD2 + 0x315B).unwrap_or(c),
+        '\u{FFDA}'..='\u{FFDC}' => char::from_u32(c as u32 - 0xFFDA + 0x3161).unwrap_or(c),
+        '\u{FFE8}' => '│',
+        '\u{FFE9}' => '←',
+        '\u{FFEA}' => '↑',
+        '\u{FFEB}' => '→',
+        '\u{FFEC}' => '↓',
+        '\u{FFED}' => '■',
+        '\u{FFEE}' => '○',
         _ => c,
     }
 }
@@ -419,5 +444,43 @@ fn full_size_kana(c: char) -> char {
         '\u{1B166}' => 'ヲ',
         '\u{1B167}' => 'ン',
         _ => c,
+    }
+}
+
+#[cfg(test)]
+mod width_tests {
+    use super::full_width;
+
+    #[test]
+    fn full_width_matches_all_unicode_width_decompositions() {
+        let mut count = 0;
+        for line in include_str!("../../tests/data/FullWidth-17.0.0.txt").lines() {
+            if line.starts_with('#') || line.is_empty() {
+                continue;
+            }
+            let (source, target) = line.split_once(';').unwrap();
+            let scalar =
+                |s: &str| char::from_u32(u32::from_str_radix(s.trim(), 16).unwrap()).unwrap();
+            let source = scalar(source);
+            assert_eq!(
+                full_width(source),
+                scalar(target),
+                "U+{:04X}",
+                source as u32
+            );
+            count += 1;
+        }
+        assert_eq!(count, 226);
+    }
+
+    #[test]
+    fn full_width_preserves_unmapped_characters_and_reserved_hangul_holes() {
+        for c in [
+            '\u{ffbf}', '\u{ffc0}', '\u{ffc1}', '\u{ffc8}', '\u{ffc9}', '\u{ffd0}', '\u{ffd1}',
+            '\u{ffd8}', '\u{ffd9}', '\u{ffdd}', 'ﬀ', '①', '㎏', 'é', '😀', '\u{3000}', '\u{3131}',
+            '\u{ff5f}',
+        ] {
+            assert_eq!(full_width(c), c, "U+{:04X}", c as u32);
+        }
     }
 }
