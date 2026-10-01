@@ -16,6 +16,11 @@ pub struct Limits {
     pub max_items: Option<u64>,
     /// Interned inline styles per builder (2^16).
     pub max_styles: Option<u64>,
+    /// Logical owned inline-style data and builder interning keys (64 MiB). Includes
+    /// normal/first-line styles and every retained ruby input occurrence.
+    /// Counts cloned payload lengths and style slots, excluding allocator
+    /// overhead, spare capacity and bounded transient copies.
+    pub max_style_bytes: Option<u64>,
     /// Simultaneously open inline boxes at build time (512).
     pub max_nesting_depth: Option<u64>,
     /// Glyphs per paragraph build and reshape output (2^22).
@@ -60,6 +65,7 @@ impl Default for Limits {
             max_text_bytes: Some(16 * MIB),
             max_items: Some(1 << 20),
             max_styles: Some(1 << 16),
+            max_style_bytes: Some(64 * MIB),
             max_nesting_depth: Some(512),
             max_shaped_glyphs: Some(1 << 22),
             max_reshape_window_bytes: Some(4096),
@@ -87,6 +93,7 @@ impl Limits {
             max_text_bytes: None,
             max_items: None,
             max_styles: None,
+            max_style_bytes: None,
             max_nesting_depth: None,
             max_shaped_glyphs: None,
             max_reshape_window_bytes: None,
@@ -129,6 +136,7 @@ pub enum LimitKind {
     TextBytes,
     Items,
     Styles,
+    StyleBytes,
     NestingDepth,
     ShapedGlyphs,
     FontBlobBytes,

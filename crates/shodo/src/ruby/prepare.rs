@@ -233,6 +233,10 @@ pub(crate) fn prepare(
                 let Some(node) = annotation.node else {
                     continue;
                 };
+                let scopes = bases.enter_container(index, budget);
+                // Check ancestor remaining bytes before cloning a lane snapshot.
+                let bytes = super::builder::InputCost::content(&content.0).style_bytes;
+                budget.check(LimitKind::StyleBytes, bytes)?;
                 let mut builder = ParagraphBuilder::from_ruby_content(&content.0, node)?;
                 // Annotation line-height does not apply (CSS Ruby §3.3).
                 for style in &mut builder.styles {
@@ -258,7 +262,6 @@ pub(crate) fn prepare(
                 } else {
                     builder.style.writing_mode = data.style.writing_mode;
                 }
-                let scopes = bases.enter_container(index, budget);
                 let paragraph =
                     Paragraph::from_builder_with_ruby_budget(builder, cx, fonts, budget);
                 bases.leave_container(scopes, budget);

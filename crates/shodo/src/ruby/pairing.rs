@@ -17,6 +17,7 @@ pub(crate) struct NormalizedBase {
     pub(crate) content: Option<RubyContent>,
     pub(crate) limits: Option<Limits>,
     pub(crate) retained_styles: u64,
+    pub(crate) retained_style_indices: Vec<u32>,
     pub(crate) align: RubyAlign,
 }
 
@@ -78,6 +79,7 @@ pub(crate) fn normalize(ruby: &Ruby, limits: &Limits) -> Result<NormalizedRuby, 
                 content: Some(base.content.clone()),
                 limits: Some(base.content.0.limits.clone()),
                 retained_styles: 0,
+                retained_style_indices: Vec::new(),
                 align: base.align,
             },
             None => NormalizedBase {
@@ -85,6 +87,7 @@ pub(crate) fn normalize(ruby: &Ruby, limits: &Limits) -> Result<NormalizedRuby, 
                 content: None,
                 limits: None,
                 retained_styles: 0,
+                retained_style_indices: Vec::new(),
                 align: RubyAlign::default(),
             },
         });

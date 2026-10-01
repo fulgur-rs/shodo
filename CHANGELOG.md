@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Bound owned style data and interning keys before cloning, including first-line
+  and ruby inputs, with `Limits::max_style_bytes` (64 MiB by default).
+
 ## [0.0.5](https://github.com/fulgur-rs/shodo/compare/v0.0.4...v0.0.5) - 2026-10-01
 
 ### Fixed

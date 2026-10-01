@@ -9,6 +9,8 @@ struct BaseScope {
     spent: Cost,
     parent: Option<usize>,
     styles: u64,
+    style_indices: Vec<u32>,
+    style_bytes: [u64; 2],
     transient_text: u64,
 }
 
@@ -42,6 +44,8 @@ impl BaseScopes {
                         spent: Cost::default(),
                         parent: None,
                         styles: base.retained_styles,
+                        style_indices: base.retained_style_indices.clone(),
+                        style_bytes: [0; 2],
                         transient_text: 0,
                     });
                     index
@@ -57,7 +61,7 @@ impl BaseScopes {
         !self.scopes.is_empty()
     }
 
-    pub(crate) fn start_pass(&mut self) -> Result<(), LimitExceeded> {
+    pub(crate) fn start_pass(&mut self, alternate: bool) -> Result<(), LimitExceeded> {
         self.items.clear();
         self.stack.clear();
         self.current = None;
@@ -74,6 +78,13 @@ impl BaseScopes {
                     .saturating_add(scope.styles),
             )?;
             scope.spent.add(LimitKind::Styles, scope.styles);
+            let bytes = scope.style_bytes[usize::from(alternate)];
+            Limits::check(
+                scope.limits.max_style_bytes,
+                LimitKind::StyleBytes,
+                scope.spent.get(LimitKind::StyleBytes).saturating_add(bytes),
+            )?;
+            scope.spent.add(LimitKind::StyleBytes, bytes);
             scope.transient_text = 0;
         }
         Ok(())
@@ -121,6 +132,30 @@ impl BaseScopes {
         }
         Ok(())
     }
+    pub(crate) fn check_style_bytes(
+        &mut self,
+        normal: &[crate::style::InlineStyle],
+        alternate_sizes: Option<&[u64]>,
+    ) -> Result<(), LimitExceeded> {
+        for scope in &mut self.scopes {
+            let mut bytes = [0u64; 2];
+            for &i in &scope.style_indices {
+                bytes[0] =
+                    bytes[0].saturating_add(crate::style::memory::inline(&normal[i as usize]));
+                if let Some(sizes) = alternate_sizes {
+                    bytes[1] = bytes[1].saturating_add(sizes[i as usize]);
+                }
+            }
+            Limits::check(
+                scope.limits.max_style_bytes,
+                LimitKind::StyleBytes,
+                bytes[0].saturating_add(bytes[1]),
+            )?;
+            scope.style_bytes = bytes;
+        }
+        Ok(())
+    }
+
     pub(crate) fn check_current_item(&mut self) -> Result<(), LimitExceeded> {
         let mut cursor = self.current;
         while let Some(i) = cursor {

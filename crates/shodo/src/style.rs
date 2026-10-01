@@ -4,6 +4,8 @@
 
 use crate::geometry::{Direction, WritingMode};
 
+pub(crate) mod memory;
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum FontFamily {
     Named(String),

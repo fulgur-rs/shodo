@@ -19,13 +19,7 @@ impl RubyContent {
 
     /// Snapshot one text span with the supplied source and resolved style.
     pub fn text(source: TextSource, text: &str, style: &InlineStyle, limits: &Limits) -> Self {
-        let mut builder = ParagraphBuilder::new(
-            &ParagraphStyle {
-                root: style.clone(),
-                ..Default::default()
-            },
-            limits,
-        );
+        let mut builder = ParagraphBuilder::from_inline_style(style, limits);
         builder.push_text(source, text);
         Self::from_builder(builder)
     }
