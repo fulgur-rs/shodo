@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5](https://github.com/fulgur-rs/shodo/compare/v0.0.4...v0.0.5) - 2026-10-01
+
+### Fixed
+
+- *(perf)* bound dense ruby cursor table metadata
+- reset intrinsic edge reshape budget per call (shodo-sbp.1)
+
+### Other
+
+- search recent shaping data from the MRU end
+- search recent shape plans from the MRU end
+- construct preliminary font coordinates only for size adjust
+- *(font)* reuse acquired face for run metrics
+- *(shape)* construct final run features once
+- *(font)* share cached matches for internal shaping
+- *(selection)* bypass interval traversal for covered ranges
+- *(selection)* prune candidates with a source interval index
+- *(ruby)* share cursor rows and retain sparse lane changes
+- borrow finalized caret cuts during line index construction
+- borrow shaping window scalars and original metadata
+- compact ruby candidate column measurement arrays
+- restrict ruby candidate annotation lane visits
+- *(line)* avoid ancestor vectors in decoration widths
+- *(itemize)* finalize following context once per run
+
 ### Fixed
 
 - Reset the edge reshape budget for each intrinsic size measurement so reusing a layout context preserves min/max-content widths.
