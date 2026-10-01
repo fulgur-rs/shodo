@@ -120,6 +120,12 @@ pub struct InlineBoxFragment {
     /// border, which do not affect the line height (CSS 2.1 §10.8.1).
     pub rect: LogicalRect,
     pub content_rect: LogicalRect,
+    /// Cumulative logical inline offset from the start of the slice-composite
+    /// box, excluding margins. Populated by
+    /// [`crate::Paragraph::break_all`] and
+    /// [`crate::Paragraph::break_all_with_grapheme_limit`]
+    /// for `box-decoration-break: slice`; `None` for clone and streaming lines.
+    pub slice_offset: Option<f32>,
     /// Dominant baseline in logical block coordinates from block-start of the line box.
     pub baseline: f32,
     pub has_start_edge: bool,

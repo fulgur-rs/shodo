@@ -1,4 +1,5 @@
-use crate::style::LineOptions;
+use crate::line::fragments::RecordKind;
+use crate::style::{BoxDecorationBreak, LineOptions};
 use crate::{AtomicSizes, BreakToken, LayoutContext, Line, LineConstraint, LineResult, Paragraph};
 
 #[cfg(test)]
@@ -89,8 +90,11 @@ impl Paragraph {
         max_graphemes: Option<usize>,
         atomics: &AtomicSizes,
     ) -> Vec<Line> {
-        self.fixed_width_lines(cx, options, width, max_graphemes, atomics)
-            .collect()
+        let mut lines: Vec<_> = self
+            .fixed_width_lines(cx, options, width, max_graphemes, atomics)
+            .collect();
+        add_slice_offsets(&mut lines);
+        lines
     }
 
     // Balance needs count and mapped ends, while all post-scan effects remain
@@ -189,6 +193,56 @@ impl Paragraph {
             previous: None,
             offset: 0.0,
             done: false,
+        }
+    }
+}
+
+/// Assigns the visual-order inline coordinates that slice backgrounds use
+/// after the full set of lines has been laid out.
+fn add_slice_offsets(lines: &mut [Line]) {
+    if lines.is_empty() {
+        return;
+    }
+    let mut offsets: Option<Vec<f32>> = None;
+    for line in lines {
+        for record in &mut line.fragments {
+            let RecordKind::InlineBox {
+                box_index,
+                start_edge,
+                end_edge,
+                slice_offset,
+                reversed,
+                ..
+            } = &mut record.kind
+            else {
+                continue;
+            };
+            let index = *box_index as usize;
+            let info = &line.data.boxes[index];
+            if line.data.styles[info.style as usize].box_decoration_break
+                != BoxDecorationBreak::Slice
+            {
+                continue;
+            }
+            let offsets = offsets.get_or_insert_with(|| vec![0.0; line.data.boxes.len()]);
+            *slice_offset = Some(offsets[index]);
+            let margin_start = if *start_edge {
+                info.edges.margin.inline_start
+            } else {
+                0.0
+            };
+            let margin_end = if *end_edge {
+                info.edges.margin.inline_end
+            } else {
+                0.0
+            };
+            let (lead_margin, trail_margin) = if *reversed {
+                (margin_end, margin_start)
+            } else {
+                (margin_start, margin_end)
+            };
+            let border_size = record.inline_size.to_f32() - lead_margin - trail_margin;
+            offsets[index] += border_size;
         }
     }
 }

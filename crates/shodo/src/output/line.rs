@@ -631,6 +631,7 @@ impl Line {
                 box_index,
                 start_edge,
                 end_edge,
+                slice_offset,
                 parent,
                 reversed,
             } => {
@@ -672,6 +673,7 @@ impl Line {
                         border_start + lead_inner,
                         border_size - lead_inner - trail_inner,
                     ),
+                    slice_offset: *slice_offset,
                     has_start_edge: *start_edge,
                     has_end_edge: *end_edge,
                     baseline,

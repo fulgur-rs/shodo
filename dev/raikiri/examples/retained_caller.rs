@@ -28,6 +28,13 @@ mod tests {
         )
         .unwrap()
     }
+    fn ignore_slice_offsets(lines: &mut [serde_json::Value]) {
+        for line in lines {
+            for fragment in line["fragments"].as_array_mut().unwrap() {
+                fragment.as_object_mut().unwrap().remove("slice_offset");
+            }
+        }
+    }
     #[test]
     fn unchanged_inputs_retain_prepared_paragraph_after_literal_glyph_and_link_guards() {
         let fonts = shodo_fixtures::load_fonts(&Default::default()).unwrap();
@@ -221,8 +228,11 @@ mod tests {
             })
             .collect::<Vec<_>>();
         for l in expected.iter_mut().chain(actual.iter_mut()) {
-            l.as_object_mut().unwrap().remove("offset");
+            let line = l.as_object_mut().unwrap();
+            line.remove("offset");
         }
+        ignore_slice_offsets(&mut expected);
+        ignore_slice_offsets(&mut actual);
         assert_eq!(
             actual, expected,
             "accepted lines match independent fresh-width content/geometry"
@@ -236,9 +246,13 @@ mod tests {
         let tall = s.layout_height(400.0, 100.0).unwrap();
         assert_eq!(tall.pages.len(), 1);
         assert_eq!(tall.oversize_lines, 0);
+        let mut tall_output = super::snapshot::output(&tall.pages[0]);
+        let mut flat_output = super::snapshot::output(&flat);
+        ignore_slice_offsets(tall_output["lines"].as_array_mut().unwrap());
+        ignore_slice_offsets(flat_output["lines"].as_array_mut().unwrap());
         assert_eq!(
-            super::snapshot::output(&tall.pages[0]),
-            super::snapshot::output(&flat)
+            tall_output, flat_output,
+            "streamed page lines intentionally omit the break_all slice coordinates"
         );
         let zero = s.layout_height(400.0, 0.0).unwrap();
         assert_eq!(zero.pages.len(), 3);

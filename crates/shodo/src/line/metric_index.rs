@@ -71,6 +71,7 @@ pub(super) fn unit_record(
             box_index: *box_index,
             start_edge: matches!(u.kind, UnitKind::Open { .. }),
             end_edge: matches!(u.kind, UnitKind::Close { .. }),
+            slice_offset: None,
             parent: None,
             reversed: false,
         },

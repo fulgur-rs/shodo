@@ -43,6 +43,7 @@ pub(crate) enum RecordKind {
         box_index: u32,
         start_edge: bool,
         end_edge: bool,
+        slice_offset: Option<f32>,
         parent: Option<u32>,
         /// Whether the box's own `direction` opposes the paragraph's, so
         /// its start edge is on the inline-end side.
@@ -148,6 +149,7 @@ fn build_logical(
                 box_index,
                 start_edge: cloned,
                 end_edge: false,
+                slice_offset: None,
                 parent,
                 reversed: box_reversed(data, box_index),
             },
@@ -179,6 +181,7 @@ fn build_logical(
                         box_index: *box_index,
                         start_edge: true,
                         end_edge: false,
+                        slice_offset: None,
                         parent,
                         reversed: box_reversed(data, *box_index),
                     },
@@ -851,6 +854,7 @@ fn build_bidi(
             box_index: group.box_index,
             start_edge: group.start_edge,
             end_edge: group.end_edge,
+            slice_offset: None,
             parent: None,
             reversed: box_reversed(data, group.box_index),
         };
