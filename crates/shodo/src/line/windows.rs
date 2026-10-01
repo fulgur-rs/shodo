@@ -239,15 +239,19 @@ impl EdgeShapeCache {
         if cost > EDGE_SHAPE_ENTRY_COST_MAX {
             return false;
         }
-        if self.entries.len() >= EDGE_SHAPE_CACHE_ENTRIES
-            || self.cost + cost > EDGE_SHAPE_CACHE_COST
-        {
-            self.entries.clear();
-            self.cost = 0;
-        }
-        if let Some(previous) = self.entries.insert(key, window.clone()) {
+        if let Some(previous) = self.entries.remove(&key) {
             self.cost -= window_cost(&previous);
         }
+        // Admit the new clean window while retaining as much bounded state as
+        // possible. Hash order needs no recency metadata or per-hit mutation.
+        while self.entries.len() >= EDGE_SHAPE_CACHE_ENTRIES
+            || self.cost + cost > EDGE_SHAPE_CACHE_COST
+        {
+            let victim = *self.entries.keys().next().unwrap();
+            let removed = self.entries.remove(&victim).unwrap();
+            self.cost -= window_cost(&removed);
+        }
+        self.entries.insert(key, window.clone());
         self.cost += cost;
         true
     }
