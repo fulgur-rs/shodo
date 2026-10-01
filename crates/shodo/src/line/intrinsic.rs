@@ -170,21 +170,9 @@ impl Paragraph {
                     false,
                     &mut sat,
                 ));
-                word_flags = if matches!(u.kind, UnitKind::ForcedBreak) {
-                    BreakToken::AFTER_FORCED
-                } else {
-                    0
-                };
+                word_flags = BreakToken::AFTER_FORCED;
                 total_flags = word_flags;
-                indent = super::text_indent(
-                    &options,
-                    if matches!(u.kind, UnitKind::ForcedBreak) {
-                        BreakToken::AFTER_FORCED
-                    } else {
-                        0
-                    },
-                    &mut sat,
-                );
+                indent = super::text_indent(&options, BreakToken::AFTER_FORCED, &mut sat);
                 let next = i + 1;
                 i = if alternate {
                     if let Some(normal) = first.unwrap().normal_cursors[next] {

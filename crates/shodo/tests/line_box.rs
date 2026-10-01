@@ -120,26 +120,32 @@ fn height_limit_is_pure_and_can_be_retried() {
 }
 
 #[test]
-fn block_boundary_does_not_trigger_each_line_indent() {
+fn block_boundary_respects_each_line_indent() {
     let p = build(&style(), |b| {
         b.push_block_in_inline(NodeId(2))
             .push_text(TextSource::Generated { node: NodeId(3) }, "a");
     });
     let mut cx = shodo::LayoutContext::new();
-    let mut o = LineOptions::default();
-    o.text_indent.length = 5.0;
-    o.text_indent.each_line = true;
     let c = shodo::LineConstraint::new(100.0);
-    let shodo::LineResult::BlockInInline { token_after, .. } =
-        p.next_line(&mut cx, p.start_token(), &o, &c, &AtomicSizes::EMPTY)
-    else {
-        panic!()
-    };
-    let shodo::LineResult::Line(l) = p.next_line(&mut cx, token_after, &o, &c, &AtomicSizes::EMPTY)
-    else {
-        panic!()
-    };
-    assert_eq!(glyphs(&l)[0].inline_position, 0.0);
+    for (each_line, hanging, expected) in
+        [(false, false, 0.0), (true, false, 5.0), (true, true, 0.0)]
+    {
+        let mut o = LineOptions::default();
+        o.text_indent.length = 5.0;
+        o.text_indent.each_line = each_line;
+        o.text_indent.hanging = hanging;
+        let shodo::LineResult::BlockInInline { token_after, .. } =
+            p.next_line(&mut cx, p.start_token(), &o, &c, &AtomicSizes::EMPTY)
+        else {
+            panic!()
+        };
+        let shodo::LineResult::Line(l) =
+            p.next_line(&mut cx, token_after, &o, &c, &AtomicSizes::EMPTY)
+        else {
+            panic!()
+        };
+        assert_eq!(glyphs(&l)[0].inline_position, expected);
+    }
 }
 
 #[test]

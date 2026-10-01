@@ -160,6 +160,21 @@ fn line_start(para: &Paragraph, line: &crate::Line) -> usize {
     }
 }
 
+fn line_start_flags(para: &Paragraph, begin: usize) -> u8 {
+    if begin == 0 {
+        BreakToken::FIRST_LINE
+    } else if para.data.units.get(begin - 1).is_some_and(|previous| {
+        matches!(
+            &previous.kind,
+            &UnitKind::ForcedBreak | &UnitKind::BlockInInline { .. }
+        )
+    }) {
+        BreakToken::AFTER_FORCED
+    } else {
+        0
+    }
+}
+
 fn span_data(para: &Paragraph, begin: usize, end: usize) -> Option<(&ParagraphData, usize, usize)> {
     if begin == 0
         && let Some(first) = &para.data.first_line
@@ -335,11 +350,7 @@ impl Paragraph {
                                     if !viable {
                                         continue;
                                     }
-                                    let flags = if begin == 0 {
-                                        BreakToken::FIRST_LINE
-                                    } else {
-                                        0
-                                    };
+                                    let flags = line_start_flags(self, begin);
                                     let indent = super::text_indent(&options, flags, &mut sat);
                                     let scan = selected(
                                         data,
