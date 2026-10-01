@@ -856,6 +856,35 @@ mod tests {
     }
 
     #[test]
+    fn word_space_transform_is_not_reverted_inside_text_combine_upright() {
+        use crate::style::{TextCombineUpright, TextTransform, WordSpaceTransform};
+
+        for (word_space_transform, expected_text, expected_shaped) in [
+            (WordSpaceTransform::Space, "ａ ｂ", "a b"),
+            (WordSpaceTransform::IdeographicSpace, "ａ\u{3000}ｂ", "a b"),
+        ] {
+            let mut style = ParagraphStyle {
+                writing_mode: WritingMode::VerticalRl,
+                ..Default::default()
+            };
+            style.root.text_transform = TextTransform::FullWidth;
+            style.root.word_space_transform = word_space_transform;
+            style.root.text_combine_upright = TextCombineUpright::All;
+            let paragraph = build(&style, |builder| {
+                builder.push_text(TextSource::Generated { node: NodeId(1) }, "a\u{200b}b");
+            });
+            assert_eq!(paragraph.text(), expected_text, "{word_space_transform:?}");
+            let shaped: String = paragraph
+                .data
+                .shape_items
+                .iter()
+                .flat_map(|item| item.scalars.iter().map(|scalar| scalar.c))
+                .collect();
+            assert_eq!(shaped, expected_shaped, "{word_space_transform:?}");
+        }
+    }
+
+    #[test]
     fn mixed_vertical_orientation_cuts_shaping_items() {
         // UAX50: section sign is upright, both Latin letters are rotated.
         // Their script and missing-font identity are equal, so only the

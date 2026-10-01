@@ -259,6 +259,9 @@ fn transform_inner(
                     consumed_mark = Some(mark_at);
                 }
             }
+            let width_changed = before_width
+                .as_deref()
+                .is_some_and(|before| before != mapped);
             if matches!(item.kind, ItemKind::Text) && !omit && c == '\u{200b}' {
                 mapped = match style.word_space_transform {
                     WordSpaceTransform::None => mapped,
@@ -275,8 +278,10 @@ fn transform_inner(
             }
             let start_new = output.len() as u32;
             output.push_str(&mapped);
+            // Width reversion applies only to text-transform's width change;
+            // a later word-space substitution must not be reverted to ZWSP.
             if let Some(before_width) = before_width
-                && before_width != mapped
+                && width_changed
                 && !mapped.is_empty()
             {
                 width_origins.push(WidthOrigin {
