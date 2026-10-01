@@ -73,6 +73,147 @@ fn forced_and_final_pre_wrap_whitespace_only_hangs_its_overflowing_part() {
 }
 
 #[test]
+fn trailing_whitespace_includes_retained_and_hanging_advances() {
+    for (text, advance) in [
+        ("a ", 10.0),
+        ("a \nb", 10.0),
+        ("a\t", 30.0),
+        ("a\t\nb", 30.0),
+    ] {
+        let p = preserved(text, WhiteSpaceCollapse::Preserve, TextWrapMode::Wrap);
+        for width in [100.0, 15.0, 5.0] {
+            let line = first_line(&p, width, &LineOptions::default(), &AtomicSizes::EMPTY);
+            assert_eq!(line.trailing_whitespace(), advance, "{text:?} at {width}");
+            assert_eq!(line.inline_size() + line.hang_end(), 10.0 + advance);
+        }
+    }
+    for (text, advance) in [("a  bbbb", 20.0), ("a\tbbbb", 30.0)] {
+        let p = preserved(text, WhiteSpaceCollapse::Preserve, TextWrapMode::Wrap);
+        let line = first_line(&p, 30.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(line.break_reason(), shodo::BreakReason::Regular);
+        assert_eq!(line.trailing_whitespace(), advance);
+        assert_eq!(line.inline_size(), 10.0);
+    }
+}
+
+#[test]
+fn trailing_whitespace_is_independent_of_hanging_policy() {
+    for (collapse, wrap) in [
+        (WhiteSpaceCollapse::Preserve, TextWrapMode::NoWrap),
+        (WhiteSpaceCollapse::BreakSpaces, TextWrapMode::Wrap),
+    ] {
+        let p = preserved("a \t", collapse, wrap);
+        let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(line.trailing_whitespace(), 30.0);
+        assert_eq!(line.hang_end(), 0.0);
+        assert_eq!(line.inline_size(), 40.0);
+    }
+    let p = preserved(" \t", WhiteSpaceCollapse::Preserve, TextWrapMode::Wrap);
+    let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(line.trailing_whitespace(), 40.0);
+    for text in ["a", "a b", "a\u{a0}"] {
+        let p = preserved(text, WhiteSpaceCollapse::Preserve, TextWrapMode::Wrap);
+        let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(line.trailing_whitespace(), 0.0, "{text:?}");
+    }
+}
+
+#[test]
+fn trailing_whitespace_ignores_bidi_controls_and_inline_end_edges() {
+    let p = preserved(
+        "\u{202e}abc \u{202c}",
+        WhiteSpaceCollapse::Preserve,
+        TextWrapMode::Wrap,
+    );
+    let line = first_line(&p, 35.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(line.trailing_whitespace(), 10.0);
+    assert_eq!(line.hang_end(), 5.0);
+
+    let mut s = style();
+    s.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
+    let p = build(&s, |b| {
+        b.open_inline(
+            NodeId(2),
+            &s.root,
+            InlineEdges {
+                padding: Sides {
+                    inline_end: 5.0,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .push_text(TextSource::Generated { node: NodeId(1) }, "a ")
+        .push_out_of_flow(NodeId(3), shodo::node::OutOfFlowKind::Absolute)
+        .close_inline();
+    });
+    let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(line.trailing_whitespace(), 10.0);
+    assert_eq!(line.inline_size(), 25.0);
+    assert_eq!(line.hang_end(), 0.0);
+}
+
+#[test]
+fn trailing_whitespace_uses_final_justified_advances() {
+    let p = preserved("a b ", WhiteSpaceCollapse::BreakSpaces, TextWrapMode::Wrap);
+    let options = LineOptions {
+        text_align: TextAlign::JustifyAll,
+        ..Default::default()
+    };
+    let line = first_line(&p, 100.0, &options, &AtomicSizes::EMPTY);
+    assert_eq!(line.inline_size(), 100.0);
+    assert_eq!(line.trailing_whitespace(), 40.0);
+}
+
+#[test]
+fn in_flow_objects_and_combined_squares_end_trailing_whitespace() {
+    let mut s = style();
+    s.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
+    let p = build(&s, |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "a ")
+            .push_atomic(NodeId(2), &s.root, InlineEdges::default());
+    });
+    let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(line.trailing_whitespace(), 0.0);
+
+    s.writing_mode = shodo::geometry::WritingMode::VerticalRl;
+    s.root.text_combine_upright = shodo::style::TextCombineUpright::All;
+    let p = build(&s, |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "a ");
+    });
+    let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(line.text_combinations().len(), 1);
+    assert_eq!(line.trailing_whitespace(), 0.0);
+}
+
+#[test]
+fn a_close_marker_before_the_next_combined_square_is_transparent() {
+    let mut s = style();
+    s.writing_mode = shodo::geometry::WritingMode::VerticalRl;
+    s.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
+    s.root.text_combine_upright = shodo::style::TextCombineUpright::All;
+    let mut child = s.root.clone();
+    child.text_combine_upright = shodo::style::TextCombineUpright::None;
+    let p = build(&s, |b| {
+        b.open_inline(NodeId(1), &child, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(2) }, "a ")
+            .close_inline()
+            .push_text(TextSource::Generated { node: NodeId(3) }, "12");
+    });
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        15.0,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(lines.len(), 2);
+    assert_eq!(lines[0].text_range(), 0..2);
+    assert_eq!(lines[1].text_combinations().len(), 1);
+    assert_eq!(lines[0].hang_end(), 10.0);
+    assert_eq!(lines[0].trailing_whitespace(), 10.0);
+}
+
+#[test]
 fn nowrap_retains_preserved_spaces_and_tabs_but_keeps_forced_breaks() {
     for (text, width) in [("a ", 20.0), ("a\t", 40.0), ("a \nb", 20.0)] {
         let p = preserved(text, WhiteSpaceCollapse::Preserve, TextWrapMode::NoWrap);
@@ -149,7 +290,9 @@ fn cached_and_planned_preserved_space_lines_match_direct_geometry() {
         );
         if width == 100.0 {
             assert_eq!(cached.inline_size(), 60.0);
+            assert_eq!(cached.trailing_whitespace(), 20.0);
         }
+        assert_eq!(cached.trailing_whitespace(), direct.trailing_whitespace());
     }
     for wrap in [TextWrapStyle::Balance, TextWrapStyle::Pretty] {
         let options = LineOptions {
@@ -169,6 +312,7 @@ fn cached_and_planned_preserved_space_lines_match_direct_geometry() {
             panic!("line")
         };
         assert_eq!((line.text_range(), line.inline_size()), (0..6, 60.0));
+        assert_eq!(line.trailing_whitespace(), 20.0);
     }
 }
 
@@ -254,6 +398,7 @@ fn preserved_trailing_tracking_is_included_in_max_content() {
     assert_eq!((sizes.min_content, sizes.max_content), (10.0, 22.0));
     let line = first_line(&p, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
     assert_eq!(line.inline_size(), 22.0);
+    assert_eq!(line.trailing_whitespace(), 12.0);
 }
 
 #[test]

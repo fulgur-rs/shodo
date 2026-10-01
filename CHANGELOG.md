@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Line::trailing_whitespace()` exposes trailing space and tab advances,
+  including both retained and hanging whitespace; clarify `hang_end()` docs.
+
 - `FontCollection::is_bundled_only()` exposes the system-font discovery policy,
   including the shared-root policy inherited by document layers.
 

@@ -50,6 +50,7 @@ pub struct Line {
     pub(crate) units: Range<u32>,
     text_range: Range<u32>,
     pub(crate) inline_size: LayoutUnit,
+    pub(crate) trailing_whitespace: LayoutUnit,
     pub(crate) hanging_end: LayoutUnit,
     pub(crate) hanging_start: LayoutUnit,
     visible_hyphen: Option<u32>,
