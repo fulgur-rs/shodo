@@ -1,0 +1,7 @@
+# Internal break_all previous-line ownership
+
+Implement shodo-c91.1 against main8f3482b. The user authorized all six implementation/PR/CI/merge/cleanup cycles; execute inline with one fresh whole-branch reviewer at each issue end. This bounded change uses the existing iterator driver with a private compile-time choice for retaining accepted previous Lines. Public lines always retains the exact previous result; internal break_all (including grapheme limit) retains float/height/block state but avoids the unused accepted Line clone. Token, block-offset Q26 rounding/saturation warnings, float cursor and progress are unchanged.
+
+Prove actual Line clones with a test-only zero-sized Clone marker invoked by the derived Line clone, plus isolated observer clones/allocation deltas. Compare full source/font/glyph/cluster/geometry/warnings/continuations against original and independent next_line controls on fixed fonts, plain/Ruby/first-line/shared ligature/float/block/forced/grapheme/resource/saturation controls. Time/memory/observer are separate immutable binaries; no counters in adopted timing. Preserve public API, limits, dependencies, saved trees and protected diagnostics. No S4 switch gate.
+
+Use original and candidate counter-free A/B after all builds/checks, requested gross/freed/net/peak and release scopes separately. Actual clone allocation is a scope observation, not RSS. Archive pinned source/font/binary/recipes/full outputs/raw samples; report benefits and adverse cases without claiming universal improvement.
