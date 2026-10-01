@@ -31,7 +31,7 @@
 
 271条件合計のmissは116,850→237,256、layout実shaperは240,550→360,956。hash-order退避は再利用するwindowも除き、個別sequenceで退避後の再missを確認した。短い無圧力の対照や一部幅では小さな改善もあり、普遍的な悪化率には外挿しない。
 
-独立1-key probeは100回の同じ実shape要求後に1 entry／cost5。2048 glyphの実Arabic windowは2回とも非保持。churn終了時は32 entries／cost183→256 entries／cost1494で、map capacity448とmap解放21,008 bytesは同じ。windowおよび依存RunInstance・保持用Vecの実解放は17,503→140,774 bytes。これはglyph-vectorだけの量ではない。edge cacheと分離したwindowを解放した後、single/oversizeでは段落をdropするとrootは解放され、通常churnでは別のgeometry cacheがrootをcontext dropまで保持する。両状態でcontext解放後にrootは消える。
+独立1-key probeは100回の同じ実shape要求後に1 entry／cost5。2048 glyphの実Arabic windowは2回とも非保持。churn終了時は32 entries／cost183→256 entries／cost1494で、HashMap::capacity()は448→318、mapの実解放量は両状態で21,008 bytes。windowおよび依存RunInstance・保持用Vecの実解放は17,503→140,774 bytes。これはglyph-vectorだけの量ではない。edge cacheと分離したwindowを解放した後、single/oversizeでは段落をdropするとrootは解放され、通常churnでは別のgeometry cacheがrootをcontext dropまで保持する。両状態でcontext解放後にrootは消える。
 
 ## 判断と公開範囲
 
