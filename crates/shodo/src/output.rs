@@ -3,6 +3,8 @@
 mod glyphs;
 mod line;
 mod owned_bytes;
+#[cfg(test)]
+pub(crate) mod owner_probe;
 mod paint;
 pub(crate) mod ruby;
 pub use paint::{DecorationRect, PaintSpan};

@@ -193,10 +193,16 @@ impl Paragraph {
             &mut cx.warnings,
             &mut sat,
         );
-        let greedy = self.break_all(cx, &options, width, atomics);
-        let mut ends: Vec<_> = greedy.iter().map(|l| l.break_token().unit).collect();
+        let (greedy, mut ends) = if options.text_wrap_style == TextWrapStyle::Balance {
+            (Vec::new(), self.break_ends(cx, &options, width, atomics))
+        } else {
+            let greedy = self.break_all(cx, &options, width, atomics);
+            let ends = greedy.iter().map(|l| l.break_token().unit).collect();
+            (greedy, ends)
+        };
         match options.text_wrap_style {
             TextWrapStyle::Balance => {
+                let greedy_count = ends.len();
                 let limit = self.data.limits.max_balance_iterations.unwrap_or(32);
                 if limit == 0 {
                     cx.warnings.push(
@@ -211,15 +217,15 @@ impl Paragraph {
                             break;
                         }
                         let mid = lo + (hi - lo) / 2;
-                        let lines = self.break_all(
+                        let trial_ends = self.break_ends(
                             cx,
                             &options,
                             LayoutUnit::from_raw(mid).to_f32(),
                             atomics,
                         );
-                        if lines.len() <= greedy.len() {
+                        if trial_ends.len() <= greedy_count {
                             hi = mid;
-                            ends = lines.iter().map(|l| l.break_token().unit).collect();
+                            ends = trial_ends;
                         } else {
                             lo = mid + 1;
                         }

@@ -1,6 +1,9 @@
 use crate::style::LineOptions;
 use crate::{AtomicSizes, BreakToken, LayoutContext, Line, LineConstraint, LineResult, Paragraph};
 
+#[cfg(test)]
+mod summary_tests;
+
 impl Paragraph {
     /// Greedy layout at a fixed width, treating floats as zero-width anchors.
     /// Blocks split lines but do not contribute a block extent here.
@@ -46,12 +49,41 @@ impl Paragraph {
         max_graphemes: Option<usize>,
         atomics: &AtomicSizes,
     ) -> Vec<Line> {
+        self.fixed_width_lines(cx, options, width, max_graphemes, atomics)
+            .collect()
+    }
+
+    // Balance needs count and mapped ends, while all post-scan effects remain
+    // necessary. Drop each owned Line instead of retaining trial geometry.
+    pub(super) fn break_ends(
+        &self,
+        cx: &mut LayoutContext,
+        options: &LineOptions,
+        width: f32,
+        atomics: &AtomicSizes,
+    ) -> Vec<u32> {
+        self.fixed_width_lines(cx, options, width, None, atomics)
+            .map(|line| line.break_token().unit)
+            .collect()
+    }
+
+    fn fixed_width_lines<'p, 'cx>(
+        &'p self,
+        cx: &'cx mut LayoutContext,
+        options: &LineOptions,
+        width: f32,
+        max_graphemes: Option<usize>,
+        atomics: &'p AtomicSizes,
+    ) -> impl Iterator<Item = Line> + 'cx
+    where
+        'p: 'cx,
+    {
         let mut cursor = None;
         self.lines_with_previous::<false, _>(
             cx,
             self.start_token(),
             options,
-            |previous, offset| {
+            move |previous, offset| {
                 if let Some(LineResult::FloatEncountered { float_cursor, .. }) = previous {
                     cursor = Some(*float_cursor);
                 }
@@ -67,7 +99,6 @@ impl Paragraph {
             LineResult::Line(l) => Some(l),
             _ => None,
         })
-        .collect()
     }
 
     /// Iterates accepted lines and block boundaries, ending with `Done` (or
