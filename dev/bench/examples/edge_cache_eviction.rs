@@ -151,7 +151,7 @@ impl Case {
             word_break: if self.budget == "edge-zero"
                 || matches!(
                     self.kind,
-                    "edge" | "variable" | "missing" | "giant" | "links" | "one-entry"
+                    "edge" | "variable" | "missing" | "giant" | "links" | "small-set"
                 ) {
                 WordBreak::BreakAll
             } else {
@@ -217,7 +217,7 @@ impl Case {
                     },
                     " 読み ",
                 );
-            } else if matches!(self.kind, "links" | "one-entry") {
+            } else if matches!(self.kind, "links" | "small-set") {
                 for (n, text) in ["f", "f", "i "].into_iter().enumerate() {
                     b.push_text(
                         TextSource::Dom {
@@ -229,7 +229,7 @@ impl Case {
                 }
             } else if matches!(
                 self.kind,
-                "hyphen" | "missing" | "giant" | "links" | "one-entry"
+                "hyphen" | "missing" | "giant" | "links" | "small-set"
             ) {
                 let text = match self.kind {
                     "hyphen" => "of\u{ad}fice ab\u{ad}cd ef\u{ad}gh ".to_owned(),
@@ -397,7 +397,7 @@ fn layout(
 }
 fn run(q: &Query<'_>, mode: &str, inspect: bool, history: &str) -> Value {
     let (ps, options, width, max, atomics) = (
-        if q.key.contains("links/") || q.key.contains("one-entry/") {
+        if q.key.contains("links/") || q.key.contains("small-set/") {
             &q.ps[..1]
         } else {
             q.ps
@@ -461,7 +461,7 @@ struct Query<'a> {
 }
 fn capture(q: Query<'_>, samples: usize, reverse: bool, rows: &mut Vec<Value>) {
     let mut histories = vec!["cold", "warm"];
-    if q.key.contains("links/") || q.key.contains("one-entry/") {
+    if q.key.contains("links/") || q.key.contains("small-set/") {
         histories.extend(["width-cycle", "owner-switch", "locality"]);
     }
     if reverse {
@@ -621,7 +621,7 @@ fn main() {
         width: 8.,
         budget: "run-eight",
     });
-    for kind in ["links", "one-entry"] {
+    for kind in ["links", "small-set"] {
         for repeats in if kind == "links" {
             vec![128, 512]
         } else {
@@ -669,7 +669,7 @@ fn main() {
         {
             Ok(paragraph) => {
                 let mut ps = vec![paragraph];
-                if matches!(c.kind, "links" | "one-entry") {
+                if matches!(c.kind, "links" | "small-set") {
                     ps.push(
                         c.builder(&limits)
                             .build(&mut LayoutContext::new(), &fonts.collection)
