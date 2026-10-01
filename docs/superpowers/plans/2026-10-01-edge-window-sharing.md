@@ -22,7 +22,7 @@ User-authorized inline six-issue worktree/PR/latestCI/merge/cleanup. No public A
 **Interfaces:** Unchanged public layout APIs; new private immutable cache handle and test-only actual clone marker.
 - [ ] Confirm main178dd07 core baseline383passed2ignored (fresh merged check archived).
 - [ ] Add pointer identity and actual derived GlyphStore clone insert/hit tests; watch real original fail.
-- [ ] Implement owned/shared handle, preserve dirty/edited/oversized no-extra-allocation ownership, trim retained capacities and final owned independence; watch tests pass.
+- [ ] Implement owned/shared handle, preserve dirty/edited/oversized no-extra-allocation ownership, keep len-sized cache snapshots and original owned miss output, plus final owned independence; watch tests pass.
 - [ ] Test caps/replace/owner/release, selected output mutation and budget controls. Commit verified change.
 - [ ] Gate: cargo test -p shodo --lib.
 

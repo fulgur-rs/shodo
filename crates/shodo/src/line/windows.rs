@@ -184,24 +184,17 @@ impl WindowHandle {
     }
 }
 
-fn trim_retained_window(window: &mut OwnedShapedWindow) {
-    // The former cache clone retained len-sized vectors. Moving the original
-    // must not keep its geometric growth slack alive for the cache lifetime.
-    let store = &mut window.0;
-    store.id.shrink_to_fit();
-    store.advance.shrink_to_fit();
-    store.pen.shrink_to_fit();
-    store.offset_inline.shrink_to_fit();
-    store.offset_block.shrink_to_fit();
-    store.cluster.shrink_to_fit();
-    store.flags.shrink_to_fit();
-    if let Some(spacing) = &mut store.spacing {
-        spacing.shrink_to_fit();
-    }
-    if let Some(leading) = &mut store.leading {
-        leading.shrink_to_fit();
-    }
-    window.1.shrink_to_fit();
+fn cache_owned_window(
+    shaped: OwnedShapedWindow,
+    key: (usize, usize, Option<u64>),
+    cache: &mut EdgeShapeCache,
+) -> WindowHandle {
+    // A miss keeps its original output vectors. Clone exactly one len-sized
+    // cache snapshot, as before, instead of shrinking every growing vector and
+    // then cloning again if this newly shaped window is selected.
+    let shared = std::sync::Arc::new(shaped.clone());
+    cache.insert(key, &shared);
+    WindowHandle::Owned(shaped)
 }
 
 const EDGE_SHAPE_CACHE_ENTRIES: usize = 256;
@@ -330,12 +323,9 @@ fn shape(
         crate::shape::shape_window_edit(data, &unit, budget, replacement, cx, &mut warnings, sat);
     let warned = warnings.take();
     let clean = warned.is_empty() && *sat == saturation_before;
-    let result = result.map(|mut shaped| {
+    let result = result.map(|shaped| {
         if replacement.is_none() && clean && window_cost(&shaped) <= EDGE_SHAPE_ENTRY_COST_MAX {
-            trim_retained_window(&mut shaped);
-            let shared = std::sync::Arc::new(shaped);
-            cx.edge_shapes.insert(key, &shared);
-            WindowHandle::Shared(shared)
+            cache_owned_window(shaped, key, &mut cx.edge_shapes)
         } else {
             WindowHandle::Owned(shaped)
         }

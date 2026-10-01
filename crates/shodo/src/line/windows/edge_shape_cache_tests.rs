@@ -118,7 +118,7 @@ fn uncacheable_owned_handle_moves_without_copy() {
 }
 
 #[test]
-fn retained_window_trims_every_vector_and_empty_run_capacity() {
+fn retained_snapshot_has_len_sized_vectors_and_empty_run_capacity() {
     fn slack<T: Clone>(value: T) -> Vec<T> {
         let mut vector = Vec::with_capacity(64);
         vector.resize(8, value);
@@ -136,9 +136,11 @@ fn retained_window_trims_every_vector_and_empty_run_capacity() {
         leading: Some(slack(LayoutUnit::ZERO)),
         ..Default::default()
     };
-    let mut owned = (store, Vec::with_capacity(8));
-    trim_retained_window(&mut owned);
-    let store = &owned.0;
+    let owned = (store, Vec::with_capacity(8));
+    let mut cache = EdgeShapeCache::default();
+    let handle = cache_owned_window(owned, (0, 1, None), &mut cache);
+    let stored = cache.get(&(0, 1, None)).unwrap();
+    let store = &stored.0;
     assert_eq!(
         [
             store.id.capacity(),
@@ -153,7 +155,8 @@ fn retained_window_trims_every_vector_and_empty_run_capacity() {
         ],
         [8; 9]
     );
-    assert_eq!(owned.1.capacity(), 0);
+    assert_eq!(stored.1.capacity(), 0);
+    assert_eq!(handle.0.id.capacity(), 64);
     assert_eq!(store.id, vec![1; 8]);
     assert_eq!(store.spacing.as_ref().unwrap(), &vec![LayoutUnit::ZERO; 8]);
 }
@@ -210,4 +213,29 @@ fn changing_paragraph_owner_releases_previous_shared_cache() {
             std::sync::Arc::as_ptr(&second.data) as usize
         ))
     );
+}
+
+#[test]
+fn cached_miss_returns_original_owned_vectors() {
+    let mut cache = EdgeShapeCache::default();
+    let mut store = GlyphStore {
+        id: Vec::with_capacity(64),
+        ..Default::default()
+    };
+    store.id.resize(8, 1);
+    let pointer = store.id.as_ptr();
+    crate::shape::cache_clone_probe::reset();
+    let handle = cache_owned_window((store, Vec::new()), (0, 1, None), &mut cache);
+    assert_eq!(
+        crate::shape::cache_clone_probe::count(),
+        1,
+        "one narrow cache snapshot on miss"
+    );
+    assert!(
+        matches!(handle, WindowHandle::Owned(_)),
+        "miss must keep its original owned output"
+    );
+    let (output, _) = handle.into_owned();
+    assert_eq!(output.id.as_ptr(), pointer);
+    assert_eq!(output.id.capacity(), 64);
 }
