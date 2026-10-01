@@ -6,6 +6,11 @@ use crate::style::{FontFamily, FontStyle, FontSynthesis, FontVariation, GenericF
 use fontique::{FontInfo, SourceId, SourceInfo, SourceKind};
 use skrifa::{FontRef, MetadataProvider};
 
+mod cluster;
+pub(crate) use cluster::FontCluster;
+
+const MAX_CACHE_KEY_BYTES: usize = 4096;
+
 /// Requested glyph presentation. Auto honors VS15/VS16 and UTS #51 defaults.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum FontPresentation {
@@ -146,6 +151,8 @@ impl std::hash::Hasher for PreHashed {
 
 fn key_hash(query: &FontQuery, script: [u8; 4], cluster: &str) -> u64 {
     use std::hash::{Hash, Hasher};
+    #[cfg(test)]
+    work_tests::record_hash(cluster.len());
     // f32 equality treats -0.0 == 0.0; hash them identically.
     let bits = |x: f32| if x == 0.0 { 0 } else { x.to_bits() };
     // Deterministic seed: keys are hashed only to index a bounded, self-
@@ -349,7 +356,7 @@ impl FontCollection {
 
     fn cached_match(&self, query: &FontQuery, cluster: &str) -> Option<FontMatch> {
         let query = query.clone().normalized();
-        self.cached_match_normalized(&query, query.script, cluster)
+        self.cached_match_normalized(&query, query.script, &mut FontCluster::new(cluster))
             .map(std::sync::Arc::unwrap_or_clone)
     }
 
@@ -363,7 +370,16 @@ impl FontCollection {
         script: [u8; 4],
         cluster: &str,
     ) -> Option<std::sync::Arc<FontMatch>> {
-        if cluster.is_empty() {
+        self.match_prepared(base, script, &mut FontCluster::new(cluster))
+    }
+
+    pub(crate) fn match_prepared(
+        &self,
+        base: &FontQuery,
+        script: [u8; 4],
+        cluster: &mut FontCluster<'_>,
+    ) -> Option<std::sync::Arc<FontMatch>> {
+        if cluster.as_str().is_empty() {
             return None;
         }
         self.cached_match_normalized(base, script, cluster)
@@ -373,14 +389,31 @@ impl FontCollection {
         &self,
         base: &FontQuery,
         script: [u8; 4],
-        cluster: &str,
+        cluster: &mut FontCluster<'_>,
     ) -> Option<std::sync::Arc<FontMatch>> {
         let generations = self.generations();
-        let hash = key_hash(base, script, cluster);
-        if let Some(result) = self
-            .state()
-            .matches
-            .get(generations, hash, base, script, cluster)
+        let cap = self.state().options.match_cache_entries;
+        // Unretainable keys cannot hit the cache. Reject them before hashing
+        // the cluster, including when caching is disabled by the caller.
+        let key_bytes = base.families.iter().fold(
+            cluster
+                .as_str()
+                .len()
+                .saturating_add(base.language.as_ref().map_or(0, String::len)),
+            |bytes, family| {
+                bytes.saturating_add(match family {
+                    FontFamily::Named(name) => name.len(),
+                    _ => 0,
+                })
+            },
+        );
+        let hash = (cap > 0 && key_bytes <= MAX_CACHE_KEY_BYTES && base.families.len() <= 128)
+            .then(|| key_hash(base, script, cluster.as_str()));
+        if let Some(hash) = hash
+            && let Some(result) =
+                self.state()
+                    .matches
+                    .get(generations, hash, base, script, cluster.as_str())
         {
             return result;
         }
@@ -389,28 +422,20 @@ impl FontCollection {
             ..base.clone()
         };
         let result = self.find_cluster(&query, cluster).map(std::sync::Arc::new);
-        let mut state = self.state();
-        let cap = state.options.match_cache_entries;
-        // Keep each retained key bounded even for direct, untrusted API calls.
-        let key_bytes = cluster.len()
-            + query
-                .families
-                .iter()
-                .map(|f| match f {
-                    FontFamily::Named(n) => n.len(),
-                    _ => 0,
-                })
-                .sum::<usize>()
-            + query.language.as_ref().map_or(0, String::len);
-        if cap > 0 && key_bytes <= 4096 && query.families.len() <= 128 {
-            state
-                .matches
-                .insert(cap, generations, query, cluster, hash, result.clone());
+        if let Some(hash) = hash {
+            self.state().matches.insert(
+                cap,
+                generations,
+                query,
+                cluster.as_str(),
+                hash,
+                result.clone(),
+            );
         }
         result
     }
 
-    fn find_cluster(&self, query: &FontQuery, cluster: &str) -> Option<FontMatch> {
+    fn find_cluster(&self, query: &FontQuery, cluster: &mut FontCluster<'_>) -> Option<FontMatch> {
         for family in &query.families {
             let names = match family {
                 FontFamily::Named(name) => vec![name.clone()],
@@ -472,7 +497,12 @@ impl FontCollection {
             })
     }
 
-    fn named_match(&self, name: &str, query: &FontQuery, cluster: &str) -> Option<FontMatch> {
+    fn named_match(
+        &self,
+        name: &str,
+        query: &FontQuery,
+        cluster: &mut FontCluster<'_>,
+    ) -> Option<FontMatch> {
         self.best_match(self.registered_candidates(Some(name)), query, cluster, true)
             .or_else(|| self.best_match(self.native_candidates(name), query, cluster, true))
             .or_else(|| {
@@ -596,7 +626,7 @@ impl FontCollection {
         &self,
         mut candidates: Vec<Candidate>,
         query: &FontQuery,
-        cluster: &str,
+        cluster: &mut FontCluster<'_>,
         select_style: bool,
     ) -> Option<FontMatch> {
         // Platform metadata may precede the current source bytes. Validate
@@ -626,7 +656,7 @@ impl FontCollection {
             // Equal-ranked faces can still form a unicode-range composite.
             candidates.retain(|c| property_rank(c) == best);
         }
-        let color = prefer_color(query.presentation, cluster);
+        let color = cluster.prefer_color(query.presentation);
         candidates.retain_mut(|candidate| {
             #[cfg(test)]
             matching_tests::record_font_read();
@@ -634,7 +664,7 @@ impl FontCollection {
             else {
                 return false;
             };
-            if !covers(candidate, &font, cluster) {
+            if !cluster.covers(candidate, &font) {
                 return false;
             }
             candidate.color = is_color(&font);
@@ -827,15 +857,40 @@ fn intrinsic_descriptor(info: &FontInfo, family: String) -> FontFaceDescriptor {
 fn ignored(ch: char) -> bool {
     matches!(ch,'\u{200c}'|'\u{200d}'|'\u{fe00}'..='\u{fe0f}'|'\u{e0100}'..='\u{e01ef}')
 }
+fn cluster_chars(cluster: &str) -> impl DoubleEndedIterator<Item = char> {
+    let chars = cluster.chars();
+    #[cfg(test)]
+    let chars = chars.inspect(|_| work_tests::record_scalar(cluster.len()));
+    chars
+}
+
 fn covers(candidate: &Candidate, font: &FontRef<'_>, cluster: &str) -> bool {
+    covers_chars(
+        candidate,
+        font,
+        cluster_chars(cluster).filter(|&ch| !ignored(ch)),
+        cluster.len(),
+    )
+}
+
+fn covers_chars(
+    candidate: &Candidate,
+    font: &FontRef<'_>,
+    mut chars: impl Iterator<Item = char>,
+    _cluster_bytes: usize,
+) -> bool {
     let map = font.charmap();
-    cluster.chars().filter(|&ch| !ignored(ch)).all(|ch| {
+    chars.all(|ch| {
         let ranges = &candidate.descriptor.unicode_ranges;
         (ranges.is_empty()
             || ranges
                 .iter()
                 .any(|&(min, max)| (min..=max).contains(&(ch as u32))))
-            && map.map(ch).is_some_and(|id| id.to_u32() != 0)
+            && {
+                #[cfg(test)]
+                work_tests::record_cmap(_cluster_bytes);
+                map.map(ch).is_some_and(|id| id.to_u32() != 0)
+            }
     })
 }
 fn is_color(font: &FontRef<'_>) -> bool {
@@ -848,14 +903,13 @@ fn prefer_color(presentation: FontPresentation, cluster: &str) -> bool {
         FontPresentation::Emoji => true,
         FontPresentation::Text => false,
         FontPresentation::Auto => {
-            if let Some(selector) = cluster
-                .chars()
+            if let Some(selector) = cluster_chars(cluster)
                 .rev()
                 .find(|&c| c == '\u{fe0e}' || c == '\u{fe0f}')
             {
                 return selector == '\u{fe0f}';
             }
-            cluster.chars().any(|ch|icu_properties::CodePointSetData::new::<icu_properties::props::EmojiPresentation>().contains(ch))
+            cluster_chars(cluster).any(|ch|icu_properties::CodePointSetData::new::<icu_properties::props::EmojiPresentation>().contains(ch))
         }
     }
 }
@@ -933,3 +987,6 @@ mod matching_tests;
 
 #[cfg(test)]
 mod retention_tests;
+
+#[cfg(test)]
+mod work_tests;

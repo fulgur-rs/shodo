@@ -46,6 +46,7 @@ pub use web_font::decode_web_font;
 mod structure;
 pub use ch::ChLength;
 pub use descriptor::FontFaceDescriptor;
+pub(crate) use matching::FontCluster;
 pub use matching::{FontMatch, FontPresentation, FontQuery};
 pub use metrics::{FontUnit, VerticalFontMetrics};
 pub use skrifa::instance::NormalizedCoord;

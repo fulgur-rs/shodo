@@ -1,7 +1,7 @@
 //! Script, style, bidi and grapheme font selection across transparent nodes.
 use super::bidi::BidiAnalysis;
 use super::{ItemKind, whitespace::Processed};
-use crate::font::{FontCollection, FontMatch, FontQuery};
+use crate::font::{FontCluster, FontCollection, FontMatch, FontQuery};
 use crate::style::{FontFamily, FontStyle, InlineStyle};
 use std::collections::HashMap;
 
@@ -228,6 +228,7 @@ pub(crate) fn itemize(
             let scalar_end = window[1];
             let cluster = &text
                 [offsets[scalar_start]..offsets.get(scalar_end).copied().unwrap_or(text.len())];
+            let mut prepared = FontCluster::new(cluster);
             let mut matched = HashMap::new();
             scalars[scalar_start].grapheme_start = breaks
                 .graphemes
@@ -272,12 +273,12 @@ pub(crate) fn itemize(
                     },
                 );
                 let query_id = style_queries[style as usize];
-                let select = || {
+                let mut select = || {
                     #[cfg(test)]
                     MATCH_CALLS.with(|calls| calls.set(calls.get() + 1));
                     #[cfg(test)]
                     tests::record_cluster(cluster);
-                    fonts.match_scripted(&queries[query_id], script, cluster)
+                    fonts.match_prepared(&queries[query_id], script, &mut prepared)
                 };
                 let font = if part_start == scalar_start && part_end == scalar_end {
                     // Ordinary one-style graphemes need no local cache allocation.

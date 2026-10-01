@@ -23,12 +23,22 @@ fn reloaded_platform_face_keeps_identity_and_blob() {
     let fonts = FontCollection::new(&crate::limits::Limits::default());
     let source = SourceId::new();
     let first = fonts
-        .best_match(vec![reloaded(source)], &FontQuery::default(), "a", true)
+        .best_match(
+            vec![reloaded(source)],
+            &FontQuery::default(),
+            &mut FontCluster::new("a"),
+            true,
+        )
         .unwrap();
     let blob = fonts.state().faces[1].data.id();
     for _ in 0..3 {
         let next = fonts
-            .best_match(vec![reloaded(source)], &FontQuery::default(), "a", true)
+            .best_match(
+                vec![reloaded(source)],
+                &FontQuery::default(),
+                &mut FontCluster::new("a"),
+                true,
+            )
             .unwrap();
         assert_eq!(next.id, first.id);
         assert_eq!(fonts.state().faces.len(), 2);
@@ -54,7 +64,7 @@ fn platform_retention_obeys_face_and_blob_limits() {
                 .best_match(
                     vec![reloaded(SourceId::new())],
                     &FontQuery::default(),
-                    "a",
+                    &mut FontCluster::new("a"),
                     true
                 )
                 .is_none()
@@ -79,7 +89,12 @@ fn stale_invalid_platform_axes_are_rejected_even_when_loaded_bytes_are_valid() {
             FontInfo::from_source(SourceInfo::new(source, SourceKind::Memory(stale)), 0).unwrap();
         assert!(
             fonts
-                .best_match(vec![candidate], &FontQuery::default(), "a", true)
+                .best_match(
+                    vec![candidate],
+                    &FontQuery::default(),
+                    &mut FontCluster::new("a"),
+                    true
+                )
                 .is_none()
         );
         assert_eq!(fonts.state().faces.len(), 1);
