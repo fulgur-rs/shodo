@@ -152,7 +152,50 @@ impl std::fmt::Debug for EdgeShapeCache {
     }
 }
 
-type ShapedWindow = (crate::shape::GlyphStore, Vec<crate::shape::ShapedRun>);
+type OwnedShapedWindow = (crate::shape::GlyphStore, Vec<crate::shape::ShapedRun>);
+type ShapedWindow = std::sync::Arc<OwnedShapedWindow>;
+
+// Keep uncacheable results on the same allocation-free owned path. Boxing the
+// larger variant would add an allocation to every edited/oversized window.
+#[allow(clippy::large_enum_variant)]
+enum WindowHandle {
+    Owned(OwnedShapedWindow),
+    Shared(ShapedWindow),
+}
+
+impl std::ops::Deref for WindowHandle {
+    type Target = OwnedShapedWindow;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Owned(window) => window,
+            Self::Shared(window) => window,
+        }
+    }
+}
+
+impl WindowHandle {
+    fn into_owned(self) -> OwnedShapedWindow {
+        match self {
+            Self::Owned(window) => window,
+            Self::Shared(window) => {
+                std::sync::Arc::try_unwrap(window).unwrap_or_else(|shared| (*shared).clone())
+            }
+        }
+    }
+}
+
+fn cache_owned_window(
+    shaped: OwnedShapedWindow,
+    key: (usize, usize, Option<u64>),
+    cache: &mut EdgeShapeCache,
+) -> WindowHandle {
+    // A miss keeps its original output vectors. Clone exactly one len-sized
+    // cache snapshot, as before, instead of shrinking every growing vector and
+    // then cloning again if this newly shaped window is selected.
+    let shared = std::sync::Arc::new(shaped.clone());
+    cache.insert(key, &shared);
+    WindowHandle::Owned(shaped)
+}
 
 const EDGE_SHAPE_CACHE_ENTRIES: usize = 256;
 /// Total retained cost in glyph-equivalents (about 26 bytes each): roughly
@@ -161,7 +204,7 @@ const EDGE_SHAPE_CACHE_COST: usize = 1 << 15;
 /// A single window costing more than this is shaped every time instead.
 const EDGE_SHAPE_ENTRY_COST_MAX: usize = 1 << 10;
 
-fn window_cost(window: &ShapedWindow) -> usize {
+fn window_cost(window: &OwnedShapedWindow) -> usize {
     // A run holds an `Arc` and a few scalars; count it as a few glyphs.
     window.0.len() + window.1.len() * 4
 }
@@ -252,7 +295,7 @@ fn shape(
     sat: &mut Saturation,
     budget: Option<u64>,
     replacement: Option<&crate::shape::Replacement>,
-) -> Option<ShapedWindow> {
+) -> Option<WindowHandle> {
     if !within_line_reshape_budget(data, range, cx) {
         return None;
     }
@@ -260,7 +303,7 @@ fn shape(
     if replacement.is_none() {
         cx.edge_shapes.begin(data);
         if let Some(hit) = cx.edge_shapes.get(&key) {
-            return Some(hit.clone());
+            return Some(WindowHandle::Shared(std::sync::Arc::clone(hit)));
         }
     }
     let mut unit = data.units[range.start].clone();
@@ -280,12 +323,13 @@ fn shape(
         crate::shape::shape_window_edit(data, &unit, budget, replacement, cx, &mut warnings, sat);
     let warned = warnings.take();
     let clean = warned.is_empty() && *sat == saturation_before;
-    if replacement.is_none()
-        && clean
-        && let Some(shaped) = &result
-    {
-        cx.edge_shapes.insert(key, shaped);
-    }
+    let result = result.map(|shaped| {
+        if replacement.is_none() && clean && window_cost(&shaped) <= EDGE_SHAPE_ENTRY_COST_MAX {
+            cache_owned_window(shaped, key, &mut cx.edge_shapes)
+        } else {
+            WindowHandle::Owned(shaped)
+        }
+    });
     for w in warned {
         cx.warnings.push(w.kind, w.message);
     }
@@ -359,8 +403,8 @@ fn materialize(
             );
             return None;
         }
-        let (mut store, mut runs) = shape(data, &range, cx, sat, budget, replacement)?;
-        if store.flags.first().is_some_and(|f| f & 2 != 0)
+        let mut shaped = shape(data, &range, cx, sat, budget, replacement)?;
+        if shaped.0.flags.first().is_some_and(|f| f & 2 != 0)
             && let Some(previous) = last(data, line.start, range.start)
             && compatible(data, previous, range.start)
         {
@@ -376,15 +420,15 @@ fn materialize(
         {
             let probe = range.start..clipped_group(data, next, line).end;
             // Keep only one temporary SoA at a time during validation.
-            drop(store);
-            drop(runs);
-            let (tested, _) = shape(data, &probe, cx, sat, budget, replacement)?;
+            drop(shaped);
+            let tested = shape(data, &probe, cx, sat, budget, replacement)?;
             let boundary = data.units[next].text.start;
             let unsafe_probe = tested
+                .0
                 .cluster
                 .iter()
                 .position(|c| *c >= boundary)
-                .is_none_or(|i| tested.flags[i] & 3 != 0);
+                .is_none_or(|i| tested.0.flags[i] & 3 != 0);
             drop(tested);
             if unsafe_probe {
                 range.end = probe.end;
@@ -394,7 +438,7 @@ fn materialize(
                 }
                 continue;
             }
-            (store, runs) = shape(data, &range, cx, sat, budget, replacement)?;
+            shaped = shape(data, &range, cx, sat, budget, replacement)?;
         }
         let mut changes = Vec::new();
         let mut at = range.start;
@@ -426,7 +470,7 @@ fn materialize(
             at = end;
         }
         let mut unit = 0;
-        for (cluster, advance) in store.cluster.iter().zip(&store.advance) {
+        for (cluster, advance) in shaped.0.cluster.iter().zip(&shaped.0.advance) {
             while unit + 1 < changes.len() && data.units[changes[unit + 1].0].text.start <= *cluster
             {
                 unit += 1;
@@ -439,6 +483,7 @@ fn materialize(
         let UnitKind::Cluster { glyphs: end, .. } = &data.units[range.end - 1].kind else {
             unreachable!()
         };
+        let (store, runs) = shaped.into_owned();
         return Some(Window {
             overlay: EdgeOverlay {
                 glyphs: begin.start..end.end,
