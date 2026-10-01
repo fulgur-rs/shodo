@@ -1,4 +1,6 @@
 //! Fixed-font before/after probe for internal iterator ownership.
+// Other probes also use the shared LineResult snapshot helper.
+#[allow(dead_code)]
 #[path = "support/ligature_snapshot.rs"]
 mod snapshot;
 use serde_json::{Value, json};
