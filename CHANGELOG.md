@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6](https://github.com/fulgur-rs/shodo/compare/v0.0.5...v0.0.6) - 2026-10-01
+
+### Fixed
+
+- invalidate completed trials before intervening context work
+- *(ruby)* check aggregate text budget before normalization
+- *(font)* reject malformed variation axis ranges
+
+### Other
+
+- Merge pull request #134 from fulgur-rs/perf/c91-5-balance-summary
+- stream Balance endpoints and publish aggregate results
+- Merge pull request #132 from fulgur-rs/perf/c91-4-height-retry
+- bound retry ownership and exclude warned ruby owners
+- reuse bounded completed lines on clean height retries
+- Merge pull request #130 from fulgur-rs/perf/c91-3-borrow-edge-input
+- Merge pull request #128 from fulgur-rs/fix/font-axis-validation
+- Merge pull request #125 from fulgur-rs/perf/c91-1-line-clone
+- initialize bounded warnings in iterator controls
+- compare internal line ownership across fixed font drivers
+- avoid unused previous Line clones in break_all
+
 ### Fixed
 
 - Bound owned style data and interning keys before cloning, including first-line
