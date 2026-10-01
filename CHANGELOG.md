@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `FontCollection::generations()` exposes shared/document counters for reuse
+  keys, including shared generic and fallback configuration changes.
+
 - `GlyphRunView::source()` reports caller text origins and `Line::owners()`
   lists DOM source ranges without scanning fragments separately for each node.
 

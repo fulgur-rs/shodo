@@ -338,6 +338,9 @@ impl FontCollection {
 
     /// Sets a deterministic generic family list in the shared layer. Applies
     /// to existing document collections and invalidates their cached matches.
+    /// Increments the shared [`Self::generation`], including when called
+    /// through a document layer; that document's own counter stays unchanged.
+    /// Observe [`Self::generations`] for reuse involving both layers.
     pub fn set_generic_families(&self, generic: GenericFamily, families: Vec<String>) {
         let root = self.root();
         root.state().generics.insert(generic, families);
@@ -348,6 +351,9 @@ impl FontCollection {
 
     /// Sets fallback families for a script and optional language. The longest
     /// matching language prefix wins (e.g. ja matches ja-JP). None is default.
+    /// Increments the shared [`Self::generation`], including when called
+    /// through a document layer; that document's own counter stays unchanged.
+    /// Observe [`Self::generations`] for reuse involving both layers.
     pub fn set_fallback_families(
         &self,
         script: [u8; 4],

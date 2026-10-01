@@ -23,6 +23,16 @@ waiting for the font catalog lock. Hits preserve LRU recency; misses update the
 bounded caches under exclusive access, and font registration still invalidates
 matching and unit values through the shared/document generations.
 
+Use `FontCollection::generations()` as the font dependency in a paragraph reuse
+key. It returns `(shared_generation, None)` for a shared collection and
+`(shared_generation, Some(document_generation))` for a document. Successful
+registration increments the owning layer. `set_generic_families` and
+`set_fallback_families` increment the shared counter, even when called through
+a document; its local `generation()` stays unchanged. Comparing the full pair
+therefore catches shared policy changes as well as document font registration.
+Compare counters within the same collection or its clones. A reuse key spanning
+different collections also needs collection identity from `layer_handle().id()`.
+
 If no registered or fallback face covers a grapheme, layout warns and emits
 deterministic glyph 0 with a 1em base advance and zero advance for combining
 marks/default ignorables. This fallback is not a drawable substitute for font data.
