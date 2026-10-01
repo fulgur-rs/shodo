@@ -61,6 +61,34 @@ fn words_and_forced_sections_measure_intrinsics() {
 }
 
 #[test]
+fn block_boundary_each_line_indent_is_included_in_intrinsic_sizes() {
+    let p = build(&style(), |b| {
+        b.push_block_in_inline(NodeId(2))
+            .push_text(TextSource::Generated { node: NodeId(3) }, "a");
+    });
+    for (hanging, expected) in [(false, 22.0), (true, 10.0)] {
+        let options = LineOptions {
+            text_indent: shodo::style::TextIndent {
+                length: 12.0,
+                each_line: true,
+                hanging,
+            },
+            ..Default::default()
+        };
+        let sizes = p.intrinsic_sizes(
+            &mut LayoutContext::new(),
+            &options,
+            &AtomicIntrinsics::EMPTY,
+        );
+        assert_eq!(
+            (sizes.min_content, sizes.max_content),
+            (expected, expected),
+            "hanging={hanging}"
+        );
+    }
+}
+
+#[test]
 fn atomic_widths_are_already_margin_box_widths() {
     let root = style();
     let p = build(&root, |b| {

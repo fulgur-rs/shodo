@@ -527,6 +527,66 @@ fn real_font_empty_block_prefix_and_missing_atomic_keep_output_contracts() {
 }
 
 #[test]
+fn block_in_inline_carries_forced_break_state_for_text_indent() {
+    use shodo::style::{LineOptions, TextIndent};
+    use shodo::{LineConstraint, LineResult};
+    let limits = Default::default();
+    let fonts = load_fonts(&limits).unwrap();
+    let mut style = fixed_style();
+    style.first_line = Some(InlineStyle {
+        font_size: 40.0,
+        ..style.root.clone()
+    });
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_block_in_inline(NodeId(1))
+        .push_text(TextSource::Generated { node: NodeId(2) }, "b");
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let constraint = LineConstraint::new(100.0);
+    for (each_line, hanging, expected_after) in
+        [(false, false, 0.0), (true, false, 12.0), (true, true, 0.0)]
+    {
+        let options = LineOptions {
+            text_indent: TextIndent {
+                length: 12.0,
+                each_line,
+                hanging,
+            },
+            ..Default::default()
+        };
+        let mut context = LayoutContext::new();
+        let LineResult::BlockInInline {
+            node: NodeId(1),
+            token_after,
+        } = p.next_line(
+            &mut context,
+            p.start_token(),
+            &options,
+            &constraint,
+            &AtomicSizes::EMPTY,
+        )
+        else {
+            panic!("leading block boundary")
+        };
+        let LineResult::Line(after) = p.next_line(
+            &mut context,
+            token_after,
+            &options,
+            &constraint,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("line after block")
+        };
+        close(glyphs(&after)[0].inline_position, expected_after);
+        assert!(after.fragments().any(|fragment| matches!(
+            fragment,
+            Fragment::GlyphRun(run) if (run.font_size() - 20.0).abs() < 1.0 / 32.0
+        )));
+    }
+}
+
+#[test]
 fn unexpandable_justification_uses_last_alignment_and_direction() {
     use shodo::geometry::Direction;
     use shodo::style::{LineOptions, TextAlign, TextAlignLast, TextJustify};

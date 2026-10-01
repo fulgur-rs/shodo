@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Honor `text-indent: each-line` after block-in-inline boundaries in line
+  layout, intrinsic sizing and Pretty wrap planning.
+
 - Include NBSP and other Unicode word separators in word justification so
   preserved space runs align like their nonbreaking-space equivalents.
 

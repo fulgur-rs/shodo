@@ -245,7 +245,7 @@ impl Paragraph {
             let token_after = BreakToken {
                 para: data.id,
                 unit: token.unit + 1,
-                flags: 0,
+                flags: BreakToken::AFTER_FORCED,
             };
             return LineResult::BlockInInline { node, token_after };
         }

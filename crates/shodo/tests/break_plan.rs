@@ -1,6 +1,6 @@
 mod common;
 use common::*;
-use shodo::style::{LineOptions, TextAlign, TextWrapStyle};
+use shodo::style::{LineOptions, TextAlign, TextIndent, TextWrapStyle};
 use shodo::{AtomicSizes, LayoutContext, LineConstraint, LineResult};
 
 fn planned(
@@ -21,6 +21,7 @@ fn planned(
                 token = l.break_token();
                 ranges.push(l.text_range());
             }
+            LineResult::BlockInInline { token_after, .. } => token = token_after,
             LineResult::Done => break,
             other => panic!("{other:?}"),
         }
@@ -165,6 +166,43 @@ fn pretty_reduces_raggedness_and_atomic_instances_do_not_match() {
             .iter()
             .map(|l| l.text_range())
             .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn pretty_accounts_for_each_line_indent_after_block() {
+    let mut root = style();
+    root.root.font_size = 5.0;
+    let p = build(&root, |b| {
+        b.push_text(
+            shodo::node::TextSource::Generated {
+                node: shodo::node::NodeId(1),
+            },
+            "a",
+        )
+        .push_block_in_inline(shodo::node::NodeId(2))
+        .push_text(
+            shodo::node::TextSource::Generated {
+                node: shodo::node::NodeId(3),
+            },
+            "aaa aaa aaa aaa aaa aaaa",
+        );
+    });
+    let o = LineOptions {
+        text_indent: TextIndent {
+            length: 40.0,
+            each_line: true,
+            ..Default::default()
+        },
+        text_wrap_style: TextWrapStyle::Pretty,
+        ..LineOptions::default()
+    };
+    let plan = p.plan_breaks(&mut LayoutContext::new(), &o, 100.0, &AtomicSizes::EMPTY);
+    let ranges = planned(&p, &o, 100.0, &AtomicSizes::EMPTY, &plan);
+    let text_start = p.text().find("aaa").unwrap();
+    assert_eq!(
+        &ranges[ranges.len() - 2..],
+        &[text_start..text_start + 8, text_start + 8..p.text().len()]
     );
 }
 
