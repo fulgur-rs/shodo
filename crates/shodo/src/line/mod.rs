@@ -298,6 +298,7 @@ impl Paragraph {
             && annotation_align.is_none()
             && normal_cursors.is_none()
             && constraint.break_plan.is_none()
+            && constraint.max_graphemes.is_none()
             && data.warnings.is_empty()
             && sat.is_clean()
             && warning_checkpoint.is_some()
@@ -441,6 +442,10 @@ impl Paragraph {
             let needed_block_size = line.block_size();
             if sat.is_clean()
                 && cx.warnings.checkpoint() == warning_checkpoint
+                && cx
+                    .partial
+                    .as_ref()
+                    .is_some_and(|p| p.retains_trial(self, token))
                 && let Some(key) = key
                 && key == completed::Key::new(self, token, options, &constraint, atomics)
             {

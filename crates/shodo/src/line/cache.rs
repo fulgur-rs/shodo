@@ -122,6 +122,11 @@ impl std::fmt::Debug for PartialLine {
 }
 
 impl PartialLine {
+    /// A completed retry must not prolong a paragraph beyond this existing owner.
+    pub(super) fn retains_trial(&self, paragraph: &Paragraph, token: BreakToken) -> bool {
+        Arc::ptr_eq(&self.data, &paragraph.data) && self.token == token
+    }
+
     /// A fresh narrow scan can stop near its first break, while indexing a
     /// retained wide scan visits every unit. Use the already-measured raw
     /// advances only to select the cheaper strategy; the fresh scan still

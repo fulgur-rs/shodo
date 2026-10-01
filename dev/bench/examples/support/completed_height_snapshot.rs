@@ -25,7 +25,7 @@ pub fn line(l: &Line) -> Value {
         Fragment::RubyAnnotation(_) => json!({"kind":"ruby"}),
         _ => json!({"kind":"other","debug":format!("{f:?}")}),
     }).collect::<Vec<_>>();
-    let ruby = l.ruby_annotations().map(|a|json!({"container":a.container().0,"nodes":a.base_nodes().iter().map(|n|n.0).collect::<Vec<_>>(),"node":a.node().map(|n|n.0),"level":a.level(),"base_range":a.base_text_range(),"range":a.text_range(),"visibility":format!("{:?}",a.visibility()),"origin":a.origin(),"transform":format!("{:?}",a.transform()),"line":line(a.line())})).collect::<Vec<_>>();
+    let ruby = l.ruby_annotations().map(|a|json!({"container":a.container().0,"nodes":a.base_nodes().iter().map(|n|n.0).collect::<Vec<_>>(),"node":a.node().map(|n|n.0),"level":a.level(),"base_range":a.base_text_range(),"range":a.text_range(),"visibility":format!("{:?}",a.visibility()),"build_warnings":format!("{:?}",a.paragraph().warnings()),"origin":a.origin(),"transform":format!("{:?}",a.transform()),"line":line(a.line())})).collect::<Vec<_>>();
     json!({"text":l.text(),"range":l.text_range(),"mapping":l.offset_mapping().map(|m|format!("{m:?}")),"token":token(l.break_token()),"reason":format!("{:?}",l.break_reason()),"last":l.is_last(),"geometry_bits":[l.inline_size().to_bits(),l.block_size().to_bits(),l.block_offset().to_bits(),l.hang_start().to_bits(),l.hang_end().to_bits()],"metrics":format!("{:?}",l.metrics()),"overflow":format!("{:?}",l.overflow_rect()),"writing":format!("{:?}",l.writing_mode()),"direction":format!("{:?}",l.used_direction()),"displaced":format!("{:?}",l.displaced_floats()),"combinations":format!("{:?}",l.text_combinations().collect::<Vec<_>>()),"fragments":fragments,"ruby":ruby})
 }
 pub fn results(results: &[LineResult]) -> Value {

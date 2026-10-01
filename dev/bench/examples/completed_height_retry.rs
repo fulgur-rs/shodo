@@ -83,7 +83,7 @@ impl Case {
                     l.max_warnings = Some(0);
                 }
             }
-            "default" => {}
+            "default" | "height-accept" => {}
             _ => unreachable!(),
         }
         l
@@ -124,6 +124,14 @@ impl Case {
                     font_size: 8.,
                     ..inline.clone()
                 };
+                let child_limits = Limits {
+                    max_shaping_run_bytes: if self.kind == "ruby-child-run-one" {
+                        Some(1)
+                    } else {
+                        l.max_shaping_run_bytes
+                    },
+                    ..l.clone()
+                };
                 let content = |node, text, s| {
                     RubyContent::text(
                         TextSource::Dom {
@@ -132,7 +140,7 @@ impl Case {
                         },
                         text,
                         s,
-                        l,
+                        if node == id + 2 { &child_limits } else { l },
                     )
                 };
                 let r = Ruby::new(
@@ -363,7 +371,11 @@ fn custom_layout(
                 }
             }
         }
-        con.max_block_size = None;
+        con.max_block_size = if c.budget == "height-accept" {
+            Some(10000.)
+        } else {
+            None
+        };
         let (r, call_warnings) = if let Some(pair) = early {
             pair
         } else {
@@ -585,6 +597,20 @@ fn main() {
                 budget,
             });
         }
+    }
+    for width in [80., 240.] {
+        cases.push(Case {
+            kind: "ruby-child-run-one",
+            repeats: 1,
+            width,
+            budget: "default",
+        });
+        cases.push(Case {
+            kind: "plain",
+            repeats: 32,
+            width,
+            budget: "height-accept",
+        });
     }
     let mut retries = [0, 1, 4];
     if reverse {

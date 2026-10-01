@@ -53,11 +53,25 @@ impl CompletedLine {
         // Includes the entry/key/Line header and context's entry pointer.
         let header = std::mem::size_of::<Self>() + std::mem::size_of::<Option<Box<Self>>>();
         line.owned_heap_bytes(MAX_BYTES.checked_sub(header)?)?;
+        // Check the bounded owner tree after the capacity guard, including
+        // child-only build warnings not forwarded to the parent paragraph.
+        if !clean_owners(&line, 0) {
+            return None;
+        }
         Some(Box::new(Self { key, line }))
     }
     pub(crate) fn same_start(&self, p: &Paragraph, token: BreakToken) -> bool {
         self.key.owner == std::sync::Arc::as_ptr(&p.data) as usize && self.key.token == token
     }
+}
+
+fn clean_owners(line: &Line, depth: usize) -> bool {
+    depth < 64
+        && line.data.warnings.is_empty()
+        && line
+            .ruby
+            .iter()
+            .all(|ruby| ruby.paragraph.warnings().is_empty() && clean_owners(&ruby.line, depth + 1))
 }
 
 #[cfg(test)]

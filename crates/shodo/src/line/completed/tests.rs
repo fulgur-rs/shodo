@@ -517,3 +517,127 @@ fn intervening_context_operations_invalidate_completed_trial_dependencies() {
         assert_eq!(signature(&actual), signature(&fresh));
     }
 }
+
+#[test]
+fn grapheme_limited_trial_does_not_prolong_an_uncached_paragraph() {
+    let (p, _) = paragraph(&"alpha beta ".repeat(100), &Limits::default(), false, false);
+    let weak = std::sync::Arc::downgrade(&p.data);
+    let mut cx = LayoutContext::new();
+    let mut c = LineConstraint::new(80.);
+    c.max_graphemes = Some(3);
+    c.max_block_size = Some(0.);
+    reject(
+        &p,
+        &mut cx,
+        p.start_token(),
+        &Default::default(),
+        &c,
+        &AtomicSizes::EMPTY,
+    );
+    assert!(cx.partial.is_none());
+    drop(p);
+    assert!(
+        weak.upgrade().is_none(),
+        "a short rejected line must not newly prolong the large shared paragraph"
+    );
+}
+
+#[test]
+fn child_only_build_warnings_disqualify_completed_ruby_trial() {
+    use crate::font::FontFaceDescriptor;
+    use crate::ruby::*;
+    use crate::style::{FontFamily, InlineStyle};
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            crate::test_support::fonts::CJK.to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let inline = InlineStyle {
+        font_families: vec![FontFamily::Named("Shodo Fixture CJK".into())],
+        ..Default::default()
+    };
+    let child_limits = Limits {
+        max_shaping_run_bytes: Some(1),
+        ..Default::default()
+    };
+    let reading = InlineStyle {
+        font_size: 8.,
+        ..inline.clone()
+    };
+    let ruby = Ruby::new(
+        vec![RubyBase {
+            node: NodeId(1),
+            content: RubyContent::text(
+                TextSource::Generated { node: NodeId(1) },
+                "日本語",
+                &inline,
+                &limits,
+            ),
+            align: RubyAlign::default(),
+        }],
+        vec![RubyLevel {
+            annotations: vec![RubyAnnotation {
+                node: NodeId(2),
+                content: RubyContent::text(
+                    TextSource::Generated { node: NodeId(2) },
+                    "にほんご",
+                    &reading,
+                    &child_limits,
+                ),
+                span: RubySpan::All,
+                visibility: RubyVisibility::Visible,
+            }],
+            style: RubyStyle::default(),
+        }],
+    )
+    .unwrap();
+    let style = ParagraphStyle {
+        root: inline.clone(),
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_ruby(NodeId(0), &inline, ruby);
+    let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+    assert!(p.warnings().is_empty(), "root build is clean");
+    assert!(
+        !p.data.ruby.containers[0].lanes[0]
+            .paragraph
+            .warnings()
+            .is_empty(),
+        "real child-only run budget fallback"
+    );
+    let mut cx = LayoutContext::new();
+    let mut c = LineConstraint::new(80.);
+    c.max_block_size = Some(0.);
+    for _ in 0..2 {
+        reject(
+            &p,
+            &mut cx,
+            p.start_token(),
+            &Default::default(),
+            &c,
+            &AtomicSizes::EMPTY,
+        );
+        assert!(
+            cx.take_warnings().is_empty(),
+            "build warnings are retained on the child rather than emitted at layout"
+        );
+        assert!(
+            cx.completed.is_none(),
+            "selected child resource fallbacks are excluded by conservative policy"
+        );
+    }
+}
