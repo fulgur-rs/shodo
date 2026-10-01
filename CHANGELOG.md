@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Include NBSP and other Unicode word separators in word justification so
+  preserved space runs align like their nonbreaking-space equivalents.
+
 - Keep `text-justify: none` at line start when alignment requests justification,
   including `text-align-last: justify`, while retaining explicit end/center alignment.
 

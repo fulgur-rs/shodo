@@ -23,6 +23,44 @@ fn preserved(text: &str, collapse: WhiteSpaceCollapse, wrap: TextWrapMode) -> sh
 }
 
 #[test]
+fn pre_wrap_justification_matches_normal_nbsp_reference_at_fractional_gaps() {
+    // WPT white-space-pre-wrap-justify-002: 21 cells in a 22ch line.
+    // Six separators share 10px = 640 ticks: four receive 107 ticks and
+    // two receive 106. Word starts below are independently summed from that.
+    let options = LineOptions {
+        text_align: TextAlign::Justify,
+        text_justify: shodo::style::TextJustify::InterWord,
+        ..Default::default()
+    };
+    for (text, collapse) in [
+        (
+            "one two  three   four five six seven eight nine   ten",
+            WhiteSpaceCollapse::Preserve,
+        ),
+        (
+            "one two\u{a0} three \u{a0} four five six seven eight nine \u{a0} ten",
+            WhiteSpaceCollapse::Collapse,
+        ),
+    ] {
+        let p = preserved(text, collapse, TextWrapMode::Wrap);
+        let line = first_line(&p, 220.0, &options, &AtomicSizes::EMPTY);
+        assert_eq!(line.break_reason(), shodo::BreakReason::Regular);
+        assert_eq!(line.inline_size(), 220.0);
+        let glyphs = glyphs(&line);
+        for (word, position) in [
+            ("one", 0.0),
+            ("two", 41.671875),
+            ("three", 95.015625),
+            ("four", 180.0),
+        ] {
+            let offset = text.find(word).unwrap() as u32;
+            let glyph = glyphs.iter().find(|g| g.cluster == offset).unwrap();
+            assert_eq!(glyph.inline_position, position, "{collapse:?}/{word}");
+        }
+    }
+}
+
+#[test]
 fn pre_wrap_consumes_hanging_tab_without_losing_its_source_or_advance() {
     let p = preserved("a\tbbbb", WhiteSpaceCollapse::Preserve, TextWrapMode::Wrap);
     let line = first_line(&p, 30.0, &LineOptions::default(), &AtomicSizes::EMPTY);
