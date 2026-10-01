@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `GlyphRunView::source()` reports caller text origins and `Line::owners()`
+  lists DOM source ranges without scanning fragments separately for each node.
+
 - `GlyphRunView::physical_origin()` returns container-relative outline positions
   with line offsets, RTL shaping advances and vertical writing modes resolved.
 

@@ -88,6 +88,34 @@ impl<'a> GlyphRunView<'a> {
         self.data().items[self.item as usize].node
     }
 
+    /// Caller source of this run's first processed scalar. A DOM source's
+    /// offset is a UTF-8 byte offset within its text node, with collapsing and
+    /// text transformation resolved. Shared clusters have one paint owner;
+    /// use [`crate::Line::owners`] for every contributing DOM node and range.
+    ///
+    /// Returns `None` if offset mapping was disabled when building the
+    /// paragraph, or this run has no caller-owned source. [`Self::node`] is
+    /// available independently of offset mapping.
+    pub fn source(&self) -> Option<crate::node::TextSource> {
+        use crate::mapping::{Affinity, TextOrigin};
+        use crate::node::TextSource;
+        let node = self.node()?;
+        match self
+            .line
+            .offset_mapping()?
+            .text_to_dom(self.text.0, Affinity::Downstream)?
+        {
+            TextOrigin::Dom {
+                node: owner,
+                offset,
+            } if owner == node => Some(TextSource::Dom { node, offset }),
+            TextOrigin::Generated { node: owner } if owner == node => {
+                Some(TextSource::Generated { node })
+            }
+            _ => None,
+        }
+    }
+
     fn run_data(&self) -> &'a crate::shape::ShapedRun {
         match self.source {
             GlyphSource::Overlay { run: Some(run), .. } => &self.line.overlay_runs[run as usize],

@@ -193,6 +193,19 @@ scratch exceeding the current run budget's conservative storage bound. See the
 
 ## Horizontal output and hit testing
 
+`GlyphRunView::source()` returns the caller source of the run's first scalar,
+including its DOM byte offset after collapsing and transformation. Every
+`Fragment::GlyphRun` contains at least one glyph, but a shared cluster can cover
+several source nodes with one paint owner. For pagination, iterate `Line::owners()`
+once per line to index all contributing DOM text nodes and their original byte
+ranges. Adjacent or overlapping ranges of one node coalesce; disjoint ranges
+remain separate. Collapsed gaps at a wrap belong to the preceding line, and
+leading collapsed bytes to the first line. Each accepted line uses its own
+mapping dataset, including `::first-line` transformations. Generated content and
+object anchors have no DOM ranges. Ruby child lines expose their own owners.
+These source queries require offset mapping (enabled by default); if disabled,
+`source()` returns `None` and `owners()` is empty, while `node()` still works.
+
 `GlyphRunView::physical_origin(index, container_size)` returns a glyph outline's
 physical `(x, y)` in the line's layout container, including `Line::block_offset()`.
 Pass the full physical container size: RTL origins are measured from its inline

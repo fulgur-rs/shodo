@@ -506,6 +506,27 @@ impl Line {
         self.data.mapping.as_ref()
     }
 
+    /// DOM text owners and their UTF-8 byte ranges within each source node.
+    /// Uses this line's selected text/mapping dataset, including first-line
+    /// transforms and every source node in a shared shaping cluster.
+    ///
+    /// Entries follow logical source order, coalescing adjacent or overlapping
+    /// ranges of the same node. Disjoint ranges can yield that node more than
+    /// once. Collapsed gaps at a line boundary belong to the preceding line;
+    /// leading gaps belong to the first line. Indivisible transforms retain
+    /// their complete original DOM range.
+    ///
+    /// Generated content, object anchors and inline-box IDs have no DOM text
+    /// range and are omitted. Retained ruby children have their own owners.
+    /// The iterator is empty when offset mapping was disabled at build time.
+    /// Queries allocate no owner list and visit only this line's mapping units
+    /// after binary searches over the retained source records.
+    pub fn owners(&self) -> impl Iterator<Item = (NodeId, Range<u32>)> + '_ {
+        self.offset_mapping()
+            .into_iter()
+            .flat_map(move |mapping| mapping.dom_owners(self.text_range.clone()))
+    }
+
     /// Range of [`Self::text`] covered by this line.
     pub fn text_range(&self) -> Range<usize> {
         self.text_range.start as usize..self.text_range.end as usize
