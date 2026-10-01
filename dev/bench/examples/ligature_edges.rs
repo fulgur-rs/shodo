@@ -193,7 +193,8 @@ fn run(c: &Case, fonts: &shodo_fixtures::FixtureFonts, inspect: bool) -> Value {
     let b = c.builder();
     let mut build_cx = LayoutContext::new();
     let (p, build) = measured(|| b.build(&mut build_cx, &fonts.collection).unwrap());
-    let build_warnings = format!("{:?}", build_cx.take_warnings());
+    let build_warnings = format!("{:?}", p.warnings());
+    let build_context_warnings = format!("{:?}", build_cx.take_warnings());
     let mut cx = LayoutContext::new();
     let (out, cost) = measured(|| layout(&p, c.width, &mut cx, false));
     let lines = out
@@ -212,6 +213,13 @@ fn run(c: &Case, fonts: &shodo_fixtures::FixtureFonts, inspect: bool) -> Value {
             .build(&mut other_build, &fonts.collection)
             .unwrap();
         assert_eq!(format!("{:?}", other_build.take_warnings()), build_warnings);
+        assert_eq!(
+            format!("{:?}", other_build.take_warnings()),
+            build_context_warnings
+        );
+        if c.budget == "window-zero" || (c.budget == "glyph-one" && c.kind.starts_with("icon")) {
+            assert!(!p.warnings().is_empty(), "actual build fallback warning");
+        }
         let mut other_cx = LayoutContext::new();
         let (other_out, other_warnings) = layout(&other, c.width, &mut other_cx, true);
         assert_eq!(output, snapshot::results(&other_out));
@@ -251,7 +259,7 @@ fn run(c: &Case, fonts: &shodo_fixtures::FixtureFonts, inspect: bool) -> Value {
             assert_eq!(glyphs.len(), 1, "actual whole-word real ligature");
             assert_eq!(glyphs[0].1, 0);
         }
-        json!({"output":output,"warnings_per_call":warnings,"build_warnings":build_warnings,"height_and_fresh_controls":true})
+        json!({"output":output,"warnings_per_call":warnings,"build_warnings":build_warnings,"build_context_warnings":build_context_warnings,"height_and_fresh_controls":true})
     } else {
         Value::Null
     };
