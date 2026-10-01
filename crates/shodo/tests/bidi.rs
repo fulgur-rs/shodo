@@ -271,6 +271,40 @@ fn an_rtl_box_in_an_ltr_paragraph_has_its_start_edge_on_the_right() {
 }
 
 #[test]
+fn inline_box_reports_when_its_direction_differs_from_the_paragraph() {
+    for (paragraph_direction, inline_direction, expected_reversed) in [
+        (Direction::Ltr, Direction::Ltr, false),
+        (Direction::Ltr, Direction::Rtl, true),
+        (Direction::Rtl, Direction::Ltr, true),
+        (Direction::Rtl, Direction::Rtl, false),
+    ] {
+        let text = if inline_direction == Direction::Rtl {
+            "\u{5D0}\u{5D1}"
+        } else {
+            "ab"
+        };
+        let line = one_line(paragraph_direction, |b| {
+            b.open_inline(
+                NodeId(1),
+                &InlineStyle {
+                    direction: inline_direction,
+                    unicode_bidi: UnicodeBidi::Isolate,
+                    font_size: 10.0,
+                    ..InlineStyle::default()
+                },
+                InlineEdges::default(),
+            )
+            .push_text(dom(2), text)
+            .close_inline();
+        });
+        let boxes = boxes(&line);
+        assert_eq!(boxes.len(), 1);
+        assert!(boxes[0].has_start_edge);
+        assert_eq!(boxes[0].start_edge_is_reversed, expected_reversed);
+    }
+}
+
+#[test]
 fn an_isolate_closing_after_a_soft_break_keeps_its_end_edge_on_the_line() {
     let lines = all_lines(Direction::Ltr, 55.0, |b| {
         b.open_inline(NodeId(1), &rtl_isolate(), padded_3_7())
