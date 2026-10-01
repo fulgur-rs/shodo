@@ -134,6 +134,38 @@ mod tests {
     }
 
     #[test]
+    fn invalid_web_font_axes_are_rejected_and_sources_fall_through() {
+        let invalid = crate::font::browser_tests::font_with_axes(&[(*b"opsz", [72, 12, 8])]);
+        for bytes in [invalid.clone(), woff1(&invalid), woff2(&invalid)] {
+            assert!(matches!(
+                decode_web_font(&bytes, &Limits::default()),
+                Err(FontError::Malformed(_))
+            ));
+            let fonts = FontCollection::with_options(
+                &Limits::default(),
+                FontOptions {
+                    system_fonts: false,
+                    ..Default::default()
+                },
+            );
+            let id = fonts
+                .register_sources(
+                    FontFaceDescriptor {
+                        family: "Alias".into(),
+                        ..Default::default()
+                    },
+                    vec![FontSource::Data(bytes, 0), FontSource::Data(font(), 0)],
+                )
+                .unwrap();
+            assert_eq!(fonts.generation(), 1);
+            assert_eq!(
+                fonts.font_data(id).unwrap().data.as_ref(),
+                font().as_slice()
+            );
+        }
+    }
+
+    #[test]
     fn table_directory_sizes_are_budgeted_independently_of_sfnt_header_size() {
         let mut data = woff2(&font());
         data[16..20].copy_from_slice(&1u32.to_be_bytes());

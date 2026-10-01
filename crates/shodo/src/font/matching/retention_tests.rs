@@ -63,3 +63,26 @@ fn platform_retention_obeys_face_and_blob_limits() {
         assert_eq!(fonts.state().blob_bytes, 0);
     }
 }
+
+#[test]
+fn stale_invalid_platform_axes_are_rejected_even_when_loaded_bytes_are_valid() {
+    for values in [[900, 400, 100], [100, 99, 900], [100, 901, 900]] {
+        let fonts = FontCollection::new(&Limits::default());
+        let source = SourceId::new();
+        let mut candidate = reloaded(source);
+        // Platform metadata can outlive the file from which it was read.
+        // The newly loaded bytes in candidate.data are a valid static font.
+        let stale = super::super::Blob::from(super::super::browser_tests::font_with_axes(&[(
+            *b"wght", values,
+        )]));
+        candidate.info =
+            FontInfo::from_source(SourceInfo::new(source, SourceKind::Memory(stale)), 0).unwrap();
+        assert!(
+            fonts
+                .best_match(vec![candidate], &FontQuery::default(), "a", true)
+                .is_none()
+        );
+        assert_eq!(fonts.state().faces.len(), 1);
+        assert_eq!(fonts.state().blob_bytes, 0);
+    }
+}
