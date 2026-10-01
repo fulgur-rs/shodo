@@ -208,6 +208,8 @@ pub enum WordBreak {
     KeepAll,
     Manual,
     AutoPhrase,
+    /// Legacy keyword equivalent to `Normal` plus `OverflowWrap::Anywhere`.
+    BreakWord,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
