@@ -46,8 +46,8 @@
   "scope": "Requested allocation and counter-free layout. Cold/warm preparation, output and context releases measured separately. Paragraph/fonts/full-output validation outside operation windows; no RSS/whole-process retention claim.",
   "raw": {
     "file": "borrowed-edge-input-raw.json.gz",
-    "bytes": 8021543,
-    "sha256": "8c8029a2e62e047f507717c4b75eaf60a3a7b2602403e4b26709d4a611e8faf0",
+    "bytes": 8032660,
+    "sha256": "19892866c6fa846efe6354dd142e9e3e01b878f5f54f340b7b235f16e30f7355",
     "shared_raw_output_count": 105,
     "report_count": 42,
     "codec": "raw-output-text-pieces-v1",
