@@ -230,6 +230,8 @@ impl Line {
     ) -> Line {
         #[cfg(test)]
         super::construction_probe::record();
+        #[cfg(test)]
+        super::owner_probe::record(&para.data);
         let data = &para.data;
         let m = data.style_metrics[0].metrics;
         let flags = match scan.reason {
