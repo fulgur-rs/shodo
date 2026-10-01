@@ -27,6 +27,14 @@ names and downloaded font data in order. WOFF/WOFF2 decoding is also exposed as
 `decode_web_font`. URL fetching belongs to the caller. See the executable and
 file-based examples in the `shodo::font` module documentation.
 
+`Limits::max_faces_per_layer` and `max_layer_blob_bytes` bound explicit
+registrations, including CSS `local()` sources. The shared built-in stub counts
+as one face. Native faces loaded lazily from the platform catalog do not consume
+these cumulative registration budgets, so a long-lived collection can keep
+discovering installed fonts. Individual font validation limits still apply to
+native files. Registering a previously loaded native blob explicitly charges
+its bytes once in that layer; subsequent local aliases share that charge.
+
 Default features are `system-fonts`, `web-fonts`, and `complex-scripts`. Disable default features for
 bundled sfnt-only applications; font matching, metrics, and shaping still work. Add `features = ["complex-scripts"]` to retain dictionary segmentation without system/web font support. The
 system backend is available only on supported native platforms, while wasm builds

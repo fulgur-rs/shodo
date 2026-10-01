@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Exempt lazily materialized platform faces from per-layer registration budgets,
+  while preserving individual font validation and explicit CSS source limits.
+
 - Keep font fallback independent of lazy platform-face materialization order;
   platform faces no longer enter the explicitly registered last-resort list,
   and equal-ranked native sources retain their catalog identity ordering.
