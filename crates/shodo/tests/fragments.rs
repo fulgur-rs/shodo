@@ -175,7 +175,7 @@ fn inline_boxes_carry_edges_only_where_they_start_and_end() {
     );
     assert_eq!(
         (first[0].rect.inline_start, first[0].rect.inline_size),
-        (0.0, 45.0)
+        (0.0, 35.0)
     );
     assert_eq!(first[0].content_rect.inline_start, 5.0);
     assert_eq!(
@@ -197,6 +197,110 @@ fn inline_boxes_carry_edges_only_where_they_start_and_end() {
         ),
         (0.0, 10.0)
     );
+}
+
+#[test]
+fn wrapped_inline_box_excludes_collapsible_space_but_keeps_preserved_space() {
+    use shodo::style::WhiteSpaceCollapse;
+    for (collapse, expected_width) in [
+        (WhiteSpaceCollapse::Collapse, 35.0),
+        (WhiteSpaceCollapse::PreserveBreaks, 35.0),
+        (WhiteSpaceCollapse::Preserve, 45.0),
+        (WhiteSpaceCollapse::PreserveSpaces, 45.0),
+        (WhiteSpaceCollapse::BreakSpaces, 45.0),
+    ] {
+        let mut inline = span();
+        inline.white_space_collapse = collapse;
+        let p = para(|b| {
+            b.open_inline(
+                NodeId(1),
+                &inline,
+                InlineEdges {
+                    padding: Sides {
+                        inline_start: 5.0,
+                        inline_end: 5.0,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .push_text(dom(2), "aaa bbb")
+            .close_inline();
+        });
+        let lines = all_lines(&p, 45.0, &AtomicSizes::EMPTY, &mut LayoutContext::new());
+        assert_eq!(lines.len(), 2, "{collapse:?}");
+        let b = boxes(&lines[0])[0];
+        assert_eq!(b.rect.inline_size, expected_width, "{collapse:?}");
+        assert_eq!(
+            b.content_rect.inline_size,
+            expected_width - 5.0,
+            "{collapse:?}"
+        );
+        assert_eq!(lines[0].text_range(), 0..4);
+        let glyphs: Vec<_> = lines[0]
+            .fragments()
+            .filter_map(|f| match f {
+                Fragment::GlyphRun(run) => Some(run.glyphs()),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        // The source space and its advance remain available for selection;
+        // excluding it from background geometry must not move the glyphs.
+        assert_eq!(
+            glyphs.iter().map(|g| g.inline_position).collect::<Vec<_>>(),
+            [5.0, 15.0, 25.0, 35.0]
+        );
+        assert_eq!(glyphs.last().unwrap().advance, 10.0);
+        assert_eq!(boxes(&lines[1])[0].rect.inline_size, 35.0);
+    }
+}
+
+#[test]
+fn terminal_collapsible_space_trims_its_ancestors_without_trimming_an_earlier_sibling() {
+    let edges = |padding| InlineEdges {
+        padding: Sides {
+            inline_start: padding,
+            inline_end: padding,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let p = para(|b| {
+        b.open_inline(NodeId(1), &span(), InlineEdges::default())
+            .open_inline(NodeId(2), &span(), edges(2.0))
+            .push_text(dom(3), "x")
+            .close_inline()
+            .open_inline(NodeId(4), &span(), edges(3.0))
+            .push_text(dom(5), "aa ")
+            .close_inline()
+            .close_inline()
+            .push_text(dom(6), "bbb");
+    });
+    let lines = all_lines(&p, 45.0, &AtomicSizes::EMPTY, &mut LayoutContext::new());
+    assert_eq!(lines.len(), 2);
+    let first = boxes(&lines[0]);
+    let rects: Vec<_> = first
+        .iter()
+        .map(|b| {
+            (
+                b.node,
+                b.rect.inline_start,
+                b.rect.inline_size,
+                b.content_rect.inline_size,
+            )
+        })
+        .collect();
+    assert_eq!(
+        rects,
+        [
+            (NodeId(1), 0.0, 40.0, 40.0),
+            (NodeId(2), 0.0, 14.0, 10.0),
+            (NodeId(4), 14.0, 26.0, 20.0)
+        ]
+    );
+    assert!(first.iter().all(|b| b.has_start_edge && b.has_end_edge));
+    assert!(boxes(&lines[1]).is_empty());
 }
 
 #[test]

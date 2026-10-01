@@ -548,7 +548,7 @@ fn first_line_box_rects(
 }
 
 #[test]
-fn a_hanging_space_stays_in_a_same_direction_box_whatever_else_is_on_the_line() {
+fn a_collapsible_hanging_space_is_excluded_from_same_direction_boxes() {
     let span = InlineStyle {
         font_size: 10.0,
         ..InlineStyle::default()
@@ -557,7 +557,7 @@ fn a_hanging_space_stays_in_a_same_direction_box_whatever_else_is_on_the_line() 
     // geometry of a left-to-right box whose trailing space hangs.
     let latin = first_line_box_rects(Direction::Ltr, "x", span.clone(), "abc ");
     let hebrew = first_line_box_rects(Direction::Ltr, "\u{5D0}", span, "abc ");
-    assert_eq!(latin, [(10.0, 50.0, 15.0, 40.0)]);
+    assert_eq!(latin, [(10.0, 40.0, 15.0, 30.0)]);
     assert_eq!(hebrew, latin);
 }
 
@@ -589,7 +589,7 @@ fn an_anchor_between_hanging_spaces_keeps_its_position() {
 }
 
 #[test]
-fn a_hanging_space_stays_in_a_same_direction_box_in_a_right_to_left_paragraph() {
+fn a_collapsible_hanging_space_is_excluded_from_same_direction_rtl_boxes() {
     let span = InlineStyle {
         font_size: 10.0,
         direction: Direction::Rtl,
@@ -598,6 +598,88 @@ fn a_hanging_space_stays_in_a_same_direction_box_in_a_right_to_left_paragraph() 
     let text = "\u{5D0}\u{5D1}\u{5D2} ";
     let hebrew = first_line_box_rects(Direction::Rtl, "\u{5D3}", span.clone(), text);
     let latin = first_line_box_rects(Direction::Rtl, "x", span, text);
-    assert_eq!(hebrew, [(10.0, 50.0, 15.0, 40.0)]);
+    assert_eq!(hebrew, [(10.0, 40.0, 15.0, 30.0)]);
     assert_eq!(latin, hebrew);
+}
+
+#[test]
+fn reordered_wrapped_boxes_keep_preserved_space_and_trim_collapsible_space() {
+    use shodo::style::WhiteSpaceCollapse;
+    for (direction, lead, text) in [
+        (Direction::Ltr, "x", "abc def"),
+        (Direction::Ltr, "א", "abc def"),
+        (Direction::Rtl, "א", "אבג דהו"),
+        (Direction::Rtl, "x", "אבג דהו"),
+    ] {
+        for (collapse, expected) in [
+            (WhiteSpaceCollapse::Collapse, 35.0),
+            (WhiteSpaceCollapse::PreserveBreaks, 35.0),
+            (WhiteSpaceCollapse::Preserve, 45.0),
+            (WhiteSpaceCollapse::PreserveSpaces, 45.0),
+            (WhiteSpaceCollapse::BreakSpaces, 45.0),
+        ] {
+            let inline = InlineStyle {
+                font_size: 10.0,
+                direction,
+                white_space_collapse: collapse,
+                ..Default::default()
+            };
+            let lines = all_lines(direction, 55.0, |b| {
+                b.push_text(dom(1), lead)
+                    .open_inline(NodeId(2), &inline, padded_5_5())
+                    .push_text(dom(3), text)
+                    .close_inline();
+            });
+            assert_eq!(lines.len(), 2, "{direction:?}/{lead}/{collapse:?}");
+            let first = boxes(&lines[0]);
+            assert_eq!(first.len(), 1);
+            assert_eq!(
+                first[0].rect.inline_size, expected,
+                "{direction:?}/{lead}/{collapse:?}"
+            );
+            assert_eq!(
+                first[0].content_rect.inline_size,
+                expected - 5.0,
+                "{direction:?}/{lead}/{collapse:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn preserved_hanging_space_keeps_its_box_owner_after_bidi_level_reset() {
+    use shodo::style::WhiteSpaceCollapse;
+    for (collapse, expected) in [
+        (WhiteSpaceCollapse::Collapse, 30.0),
+        (WhiteSpaceCollapse::PreserveBreaks, 30.0),
+        (WhiteSpaceCollapse::Preserve, 40.0),
+        (WhiteSpaceCollapse::PreserveSpaces, 40.0),
+    ] {
+        let mut inline = rtl_isolate();
+        inline.white_space_collapse = collapse;
+        let lines = all_lines(Direction::Ltr, 35.0, |b| {
+            b.open_inline(NodeId(1), &inline, InlineEdges::default())
+                .push_text(dom(2), "אבג דהו")
+                .close_inline();
+        });
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].hang_end(), 10.0);
+        let first = boxes(&lines[0]);
+        assert_eq!(
+            first.iter().map(|b| b.rect.inline_size).sum::<f32>(),
+            expected,
+            "{collapse:?}"
+        );
+        assert_eq!(
+            first
+                .iter()
+                .map(|b| b.content_rect.inline_size)
+                .sum::<f32>(),
+            expected,
+            "{collapse:?}"
+        );
+        let runs = runs(&lines[0]);
+        assert_eq!(runs.last().unwrap().inline_start(), 30.0);
+        assert_eq!(runs.last().unwrap().glyphs().next().unwrap().advance, 10.0);
+    }
 }
