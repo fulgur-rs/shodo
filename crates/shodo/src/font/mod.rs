@@ -166,6 +166,7 @@ struct LayerState {
     /// Slots loaded from the platform catalog, rather than supplied by callers.
     native_faces: std::collections::HashSet<usize>,
     face_infos: Vec<Option<fontique::FontInfo>>,
+    /// Caller-registered blob bytes; native-only retention is exempt.
     blob_bytes: u64,
     descriptors: Vec<Option<FontFaceDescriptor>>,
     native: fontique::Collection,
@@ -290,7 +291,7 @@ impl FontCollection {
         Limits::check(
             limits.max_faces_per_layer,
             LimitKind::FacesPerLayer,
-            state.faces.len() as u64 + u64::from(faces),
+            (state.faces.len() - state.native_faces.len()) as u64 + u64::from(faces),
         )?;
         let bytes = state.blob_bytes + data.len() as u64;
         Limits::check(
@@ -370,9 +371,11 @@ impl FontCollection {
         Limits::check(
             limits.max_faces_per_layer,
             LimitKind::FacesPerLayer,
-            state.faces.len() as u64 + 1,
+            (state.faces.len() - state.native_faces.len()) as u64 + 1,
         )?;
-        let additional = if state.faces.iter().any(|face| face.data.id() == blob.id()) {
+        let additional = if state.faces.iter().enumerate().any(|(index, face)| {
+            !state.native_faces.contains(&index) && face.data.id() == blob.id()
+        }) {
             0
         } else {
             blob.len() as u64
