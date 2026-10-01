@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `GlyphRunView::physical_origin()` returns container-relative outline positions
+  with line offsets, RTL shaping advances and vertical writing modes resolved.
+
 - `LineConstraint::from_physical_insets()` converts physical float insets
   into the available inline size and logical start offset in all writing modes.
 

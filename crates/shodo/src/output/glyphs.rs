@@ -191,6 +191,36 @@ impl<'a> GlyphRunView<'a> {
         Some((inline, self.baseline() + glyph.block_offset))
     }
 
+    /// Font outline origin `(x, y)` in this line's physical layout container.
+    /// `container` is the full physical size, including the extent from which
+    /// RTL inline positions and right-to-left block positions are measured.
+    /// The result includes [`crate::Line::block_offset`] and uses the line's
+    /// effective inline direction, including upright vertical flow.
+    ///
+    /// Like [`Self::glyph_origin`], this uses the natural shaping advance for
+    /// an RTL outline origin; letter spacing and justification stay outside
+    /// the advance cell. Apply [`Self::glyph_transform`] to outline vectors
+    /// and convert those vectors with [`crate::geometry::PhysicalConverter`].
+    /// Returns `None` when `index` is outside this run.
+    ///
+    /// Retained ruby child lines use their own layout container. To paint them
+    /// in the parent, compose [`crate::RubyAnnotationView::transform`] with
+    /// [`Self::glyph_origin`], then add the parent line's block offset and
+    /// convert with the parent line's physical converter.
+    pub fn physical_origin(
+        &self,
+        index: usize,
+        container: crate::geometry::PhysicalSize,
+    ) -> Option<(f32, f32)> {
+        let (inline, block) = self.glyph_origin(index)?;
+        let converter = crate::geometry::PhysicalConverter::new(
+            self.line.writing_mode(),
+            self.line.used_direction(),
+            container,
+        );
+        Some(converter.point(inline, block + self.line.block_offset()))
+    }
+
     /// Metrics at this run's actual size and normalized variation location.
     pub fn metrics(&self) -> crate::font::FontMetrics {
         self.run_data()
