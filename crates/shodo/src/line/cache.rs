@@ -749,6 +749,66 @@ mod tests {
     }
 
     #[test]
+    fn four_height_rejections_materialize_once_and_move_without_cloning() {
+        use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult};
+        let p = plain_paragraph("alpha beta gamma");
+        let mut cx = LayoutContext::new();
+        let mut c = LineConstraint::new(1000.);
+        c.max_block_size = Some(0.);
+        crate::output::construction_probe::reset();
+        crate::output::clone_probe::reset();
+        let mut needed = None;
+        for _ in 0..4 {
+            let LineResult::BlockSizeExceeded { needed_block_size } = p.next_line(
+                &mut cx,
+                p.start_token(),
+                &Default::default(),
+                &c,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!("height0 must reject")
+            };
+            assert!(needed_block_size > 0.);
+            assert_eq!(needed.get_or_insert(needed_block_size), &needed_block_size);
+            assert!(cx.take_warnings().is_empty());
+        }
+        c.max_block_size = None;
+        let LineResult::Line(actual) = p.next_line(
+            &mut cx,
+            p.start_token(),
+            &Default::default(),
+            &c,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("unbounded height must accept")
+        };
+        assert_eq!(actual.text_range(), 0..16);
+        assert_eq!(actual.break_reason(), crate::BreakReason::End);
+        assert_eq!(Some(actual.block_size()), needed);
+        assert_eq!(
+            crate::output::construction_probe::count(),
+            1,
+            "four rejected trials and accepted output share one actual materialization"
+        );
+        assert_eq!(
+            crate::output::clone_probe::count(),
+            0,
+            "accepted cached output is transferred, including recursive children"
+        );
+        let LineResult::Line(fresh) = p.next_line(
+            &mut LayoutContext::new(),
+            p.start_token(),
+            &Default::default(),
+            &c,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("fresh")
+        };
+        assert_eq!(line_signature(&actual), line_signature(&fresh));
+        assert!(!line_signature(&actual).1.is_empty());
+    }
+
+    #[test]
     fn plain_height_rejection_retry_reuses_scan_without_a_float() {
         use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult};
         let text = "ab ".repeat(63) + "ab";

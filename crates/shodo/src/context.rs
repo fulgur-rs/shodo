@@ -13,6 +13,7 @@ pub struct LayoutContext {
     // A context is moved between threads, never concurrently shared.
     _not_sync: std::marker::PhantomData<std::cell::Cell<()>>,
     pub(crate) partial: Option<crate::line::cache::PartialLine>,
+    pub(crate) completed: Option<Box<crate::line::completed::CompletedLine>>,
     pub(crate) ruby_ranges: crate::line::range::RangeCache,
     pub(crate) edge_shapes: crate::line::windows::EdgeShapeCache,
     /// Bytes of edge reshape windows requested by the current `next_line` or
@@ -60,11 +61,15 @@ impl LayoutContext {
     /// shaping scratch and partial-line buffers by `bytes`. Ruby range indexes
     /// are released conservatively on every explicit shrink, as is the cache of
     /// reshaped line-edge windows.
+    /// Completed rejected lines are also released on every explicit shrink.
     /// `shrink_to(0)` also releases any partial line's paragraph reference.
     pub fn shrink_to(&mut self, bytes: usize) {
         // Harfrust does not expose a plan's heap size; dropping the bounded
         // cache conservatively releases all of it on an explicit shrink.
         self.plans.clear();
+        // A rejected completed line can prolong shared paragraph/font owners.
+        // Release it conservatively on any explicit shrink.
+        self.completed = None;
         self.ruby_ranges = Default::default();
         self.edge_shapes.clear();
         if bytes == 0 || self.scratch_bytes > bytes {

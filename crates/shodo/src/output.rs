@@ -2,6 +2,7 @@
 
 mod glyphs;
 mod line;
+mod owned_bytes;
 mod paint;
 pub(crate) mod ruby;
 pub use paint::{DecorationRect, PaintSpan};
@@ -239,6 +240,22 @@ pub(crate) mod clone_probe {
             COUNT.with(|c| c.set(c.get() + 1));
             Self
         }
+    }
+    pub(crate) fn reset() {
+        COUNT.with(|c| c.set(0));
+    }
+    pub(crate) fn count() -> usize {
+        COUNT.with(Cell::get)
+    }
+}
+
+// Counts actual materialization, independently of the retry implementation.
+#[cfg(test)]
+pub(crate) mod construction_probe {
+    use std::cell::Cell;
+    thread_local! { static COUNT: Cell<usize> = const { Cell::new(0) }; }
+    pub(crate) fn record() {
+        COUNT.with(|c| c.set(c.get() + 1));
     }
     pub(crate) fn reset() {
         COUNT.with(|c| c.set(0));
