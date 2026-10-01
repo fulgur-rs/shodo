@@ -148,6 +148,7 @@ fn long_grapheme_coverage_is_shared_across_queries_and_first_line() {
 fn temporary(data: FontData, ranges: Vec<(u32, u32)>) -> Candidate {
     let info = face_info(&data).unwrap();
     Candidate {
+        order_key: (info.source().id().to_u64(), info.index()),
         id: FontId {
             layer: 0,
             index: u32::MAX,

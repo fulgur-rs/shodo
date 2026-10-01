@@ -115,6 +115,7 @@ mod tests {
             let data = FontData::new(Blob::from(bytes.clone()), 0);
             let info = super::super::face_info(&data).unwrap();
             let candidate = Candidate {
+                order_key: (info.source().id().to_u64(), info.index()),
                 id: FontId {
                     layer: 0,
                     index: u32::MAX,
