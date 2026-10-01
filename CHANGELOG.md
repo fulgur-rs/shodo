@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Allow concurrent font-cache hits across shared collection clones, retaining
+  bounded LRU caches without waiting for font catalog access.
+
 - Exclude collapsible line-end spaces from inline background and border widths;
   keep preserved hanging spaces inside their boxes, including after bidi resets.
 

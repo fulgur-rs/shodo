@@ -17,6 +17,12 @@ one font for a supplied grapheme. `set_generic_families` and
 `set_fallback_families` configure shared deterministic family and script/locale
 mappings. `resolve_ch` and `resolve_ic` return the selected face and pixel advance.
 
+Collection clones share caches across workers. Cached cluster matches (including
+missing matches), `ch`/`ic` values and shaping data use shared read access without
+waiting for the font catalog lock. Hits preserve LRU recency; misses update the
+bounded caches under exclusive access, and font registration still invalidates
+matching and unit values through the shared/document generations.
+
 If no registered or fallback face covers a grapheme, layout warns and emits
 deterministic glyph 0 with a 1em base advance and zero advance for combining
 marks/default ignorables. This fallback is not a drawable substitute for font data.
