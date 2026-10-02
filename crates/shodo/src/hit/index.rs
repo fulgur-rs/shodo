@@ -45,18 +45,22 @@ pub(super) fn visual_key(caret: &Caret) -> (f32, f32) {
         },
     )
 }
-impl LineIndex {
-    pub(super) fn new(number: usize, line: &Line) -> Self {
-        let range = line.text_range();
+// Shared source geometry. Paint needs segments; navigation additionally keeps
+// caret stops and builds its indexes after the geometry is complete.
+struct LineGeometry {
+    stops: Option<Vec<Caret>>,
+    segments: Vec<Segment>,
+}
+
+pub(super) fn paint_segments(line: &Line) -> Vec<Segment> {
+    LineGeometry::new(0, line, false).segments
+}
+
+impl LineGeometry {
+    fn new(number: usize, line: &Line, retain_carets: bool) -> Self {
         let mut result = Self {
-            stops: Vec::new(),
-            visual: Vec::new(),
+            stops: retain_carets.then(Vec::new),
             segments: Vec::new(),
-            source: super::source::SourceIndex::Ordered,
-            range: range.start as u32..range.end as u32,
-            spatial: super::spatial::Tree::new(std::iter::empty(), false),
-            combined: Vec::new(),
-            combined_spatial: super::spatial::Tree::new(std::iter::empty(), false),
         };
         let mut raw = Vec::<RawCluster>::new();
         for (record_index, fragment) in line.fragments().enumerate() {
@@ -86,7 +90,7 @@ impl LineIndex {
                             let origin = line.block_offset() + run.baseline() - sign * em / 2.0;
                             let text =
                                 cluster.text_range.start as u32..cluster.text_range.end as u32;
-                            let cuts = result.cuts(line, &text);
+                            let cuts = caret_cuts(line, &text);
                             let gs = &glyphs[glyphs.partition_point(|g| g.cluster < text.start)
                                 ..glyphs.partition_point(|g| g.cluster < text.end)];
                             let scale = line.data.combine_geometry.scales[paint.span];
@@ -164,7 +168,7 @@ impl LineIndex {
                         let sign = if reversed { -1.0 } else { 1.0 };
                         let from = from + sign * before;
                         let to = to - sign * after;
-                        let cuts = result.cuts(line, &text);
+                        let cuts = caret_cuts(line, &text);
                         let gs = &glyphs[glyphs.partition_point(|g| g.cluster < text.start)
                             ..glyphs.partition_point(|g| g.cluster < text.end)];
                         let carets = if gs.len() == 1 && cuts.len() > 2 {
@@ -293,7 +297,7 @@ impl LineIndex {
             }
         }
         for cluster in combined {
-            let cuts = result.cuts(line, &cluster.text);
+            let cuts = caret_cuts(line, &cluster.text);
             result.add(
                 number,
                 cluster.text,
@@ -306,6 +310,132 @@ impl LineIndex {
                 cluster.block_axis,
             );
         }
+        result
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn add(
+        &mut self,
+        line: usize,
+        text: Range<u32>,
+        cuts: &[u32],
+        from: f32,
+        to: f32,
+        rect: LogicalRect,
+        gdef: Option<&[f32]>,
+        natural: f32,
+        block_axis: bool,
+    ) {
+        if cuts.len() < 2 {
+            return;
+        }
+        let n = cuts.len() - 1;
+        let mut previous = None;
+        for (i, offset) in cuts.iter().copied().enumerate() {
+            let ratio = if i == 0 {
+                0.0
+            } else if i == n {
+                1.0
+            } else {
+                gdef.and_then(|g| g.get(i - 1))
+                    .filter(|_| natural > 0.0)
+                    .map_or(i as f32 / n as f32, |v| *v / natural)
+            };
+            // Distribute layout expansion over the grapheme intervals while
+            // retaining the font's natural caret coordinate when provided.
+            let distance = if i > 0 && i < n {
+                gdef.and_then(|g| g.get(i - 1))
+                    .map_or((to - from) * ratio, |v| {
+                        (to - from).signum()
+                            * (*v + ((to - from).abs() - natural) * i as f32 / n as f32)
+                    })
+            } else {
+                (to - from) * ratio
+            };
+            let x = from + distance;
+            let caret_rect = if block_axis {
+                LogicalRect {
+                    block_start: x,
+                    block_size: 0.0,
+                    ..rect
+                }
+            } else {
+                LogicalRect {
+                    inline_start: x,
+                    inline_size: 0.0,
+                    ..rect
+                }
+            };
+            if let Some(stops) = &mut self.stops {
+                if i < n {
+                    stops.push(Caret {
+                        position: TextPosition {
+                            line,
+                            offset,
+                            affinity: Affinity::Downstream,
+                        },
+                        rect: caret_rect,
+                    });
+                }
+                if i > 0 {
+                    stops.push(Caret {
+                        position: TextPosition {
+                            line,
+                            offset,
+                            affinity: Affinity::Upstream,
+                        },
+                        rect: caret_rect,
+                    });
+                }
+            }
+            if let Some((before, bx)) = previous {
+                self.segments.push(Segment {
+                    text: before..offset,
+                    from: bx,
+                    to: x,
+                    rect: if block_axis {
+                        LogicalRect {
+                            block_start: bx.min(x),
+                            block_size: (x - bx).abs(),
+                            ..rect
+                        }
+                    } else {
+                        LogicalRect {
+                            inline_start: bx.min(x),
+                            inline_size: (x - bx).abs(),
+                            ..rect
+                        }
+                    },
+                });
+            }
+            previous = Some((offset, x));
+        }
+        let _ = text;
+    }
+}
+
+fn caret_cuts<'a>(line: &'a Line, text: &Range<u32>) -> &'a [u32] {
+    let all = &line.data.breaks.caret_cuts;
+    let start = all.partition_point(|c| *c < text.start);
+    let end = all.partition_point(|c| *c <= text.end);
+    &all[start..end]
+}
+
+impl LineIndex {
+    pub(super) fn new(number: usize, line: &Line) -> Self {
+        #[cfg(test)]
+        tests::INDEX_BUILDS.with(|count| count.set(count.get() + 1));
+        let geometry = LineGeometry::new(number, line, true);
+        let range = line.text_range();
+        let mut result = Self {
+            stops: geometry.stops.expect("hit geometry retains carets"),
+            visual: Vec::new(),
+            segments: geometry.segments,
+            source: super::source::SourceIndex::Ordered,
+            range: range.start as u32..range.end as u32,
+            spatial: super::spatial::Tree::new(std::iter::empty(), false),
+            combined: Vec::new(),
+            combined_spatial: super::spatial::Tree::new(std::iter::empty(), false),
+        };
         let mut fallback_positions = Vec::new();
         // Empty lines and nonpainting source at their ends still have stops.
         for (offset, affinity) in [
@@ -452,109 +582,6 @@ impl LineIndex {
             false,
         );
         result
-    }
-    fn cuts<'a>(&self, line: &'a Line, text: &Range<u32>) -> &'a [u32] {
-        let all = &line.data.breaks.caret_cuts;
-        let start = all.partition_point(|c| *c < text.start);
-        let end = all.partition_point(|c| *c <= text.end);
-        &all[start..end]
-    }
-    #[allow(clippy::too_many_arguments)]
-    fn add(
-        &mut self,
-        line: usize,
-        text: Range<u32>,
-        cuts: &[u32],
-        from: f32,
-        to: f32,
-        rect: LogicalRect,
-        gdef: Option<&[f32]>,
-        natural: f32,
-        block_axis: bool,
-    ) {
-        if cuts.len() < 2 {
-            return;
-        }
-        let n = cuts.len() - 1;
-        let mut previous = None;
-        for (i, offset) in cuts.iter().copied().enumerate() {
-            let ratio = if i == 0 {
-                0.0
-            } else if i == n {
-                1.0
-            } else {
-                gdef.and_then(|g| g.get(i - 1))
-                    .filter(|_| natural > 0.0)
-                    .map_or(i as f32 / n as f32, |v| *v / natural)
-            };
-            // Distribute layout expansion over the grapheme intervals while
-            // retaining the font's natural caret coordinate when provided.
-            let distance = if i > 0 && i < n {
-                gdef.and_then(|g| g.get(i - 1))
-                    .map_or((to - from) * ratio, |v| {
-                        (to - from).signum()
-                            * (*v + ((to - from).abs() - natural) * i as f32 / n as f32)
-                    })
-            } else {
-                (to - from) * ratio
-            };
-            let x = from + distance;
-            let caret_rect = if block_axis {
-                LogicalRect {
-                    block_start: x,
-                    block_size: 0.0,
-                    ..rect
-                }
-            } else {
-                LogicalRect {
-                    inline_start: x,
-                    inline_size: 0.0,
-                    ..rect
-                }
-            };
-            if i < n {
-                self.stops.push(Caret {
-                    position: TextPosition {
-                        line,
-                        offset,
-                        affinity: Affinity::Downstream,
-                    },
-                    rect: caret_rect,
-                });
-            }
-            if i > 0 {
-                self.stops.push(Caret {
-                    position: TextPosition {
-                        line,
-                        offset,
-                        affinity: Affinity::Upstream,
-                    },
-                    rect: caret_rect,
-                });
-            }
-            if let Some((before, bx)) = previous {
-                self.segments.push(Segment {
-                    text: before..offset,
-                    from: bx,
-                    to: x,
-                    rect: if block_axis {
-                        LogicalRect {
-                            block_start: bx.min(x),
-                            block_size: (x - bx).abs(),
-                            ..rect
-                        }
-                    } else {
-                        LogicalRect {
-                            inline_start: bx.min(x),
-                            inline_size: (x - bx).abs(),
-                            ..rect
-                        }
-                    },
-                });
-            }
-            previous = Some((offset, x));
-        }
-        let _ = text;
     }
     pub(super) fn caret(&self, position: TextPosition) -> Option<Caret> {
         if position.offset < self.range.start || position.offset > self.range.end {
@@ -712,6 +739,7 @@ mod tests {
     use crate::style::{FontFamily, FontVariation, InlineStyle, ParagraphStyle};
     use crate::{AtomicSizes, LayoutContext, ParagraphBuilder};
     std::thread_local! {
+        pub(super) static INDEX_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
         static COMBINE_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
     }
     pub(super) fn span_visit() {
@@ -796,13 +824,39 @@ mod tests {
         lines
     }
     #[test]
+    fn paint_geometry_matches_hit_without_building_navigation_indexes() {
+        use crate::geometry::{Direction, WritingMode};
+        for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+            for direction in [Direction::Ltr, Direction::Rtl] {
+                for line in tcy_lines(3, mode, direction) {
+                    INDEX_BUILDS.with(|count| count.set(0));
+                    let index = LineIndex::new(0, &line);
+                    assert_eq!(INDEX_BUILDS.with(|count| count.get()), 1);
+                    let expected: Vec<_> = index
+                        .segments
+                        .into_iter()
+                        .map(|s| (s.text, s.rect))
+                        .collect();
+                    INDEX_BUILDS.with(|count| count.set(0));
+                    let actual = crate::hit::paint_segments(&line);
+                    assert_eq!(actual, expected);
+                    assert!(!actual.is_empty());
+                    assert_eq!(
+                        INDEX_BUILDS.with(|count| count.get()),
+                        0,
+                        "paint constructed a navigation index only to discard it"
+                    );
+                }
+            }
+        }
+    }
+    #[test]
     fn cuts_borrow_finalized_line_data() {
         use crate::geometry::{Direction, WritingMode};
         for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
             for direction in [Direction::Ltr, Direction::Rtl] {
                 let lines = tcy_lines(3, mode, direction);
                 let line = &lines[1];
-                let index = LineIndex::new(1, line);
                 let all = &line.data.breaks.caret_cuts;
                 let original = (all.as_ptr(), all.len());
                 for (text, expected) in [
@@ -811,7 +865,7 @@ mod tests {
                     (3..3, vec![3]),
                     (u32::MAX..u32::MAX, vec![]),
                 ] {
-                    let cuts = index.cuts(line, &text);
+                    let cuts = caret_cuts(line, &text);
                     assert_eq!(cuts, expected);
                     let begin = all.partition_point(|c| *c < text.start);
                     assert_eq!(

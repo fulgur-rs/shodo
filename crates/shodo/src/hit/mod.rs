@@ -44,8 +44,7 @@ pub enum NavigationOrder {
 
 /// Crate-private shared source geometry; paint must not duplicate GDEF logic.
 pub(crate) fn paint_segments(line: &Line) -> Vec<(std::ops::Range<u32>, LogicalRect)> {
-    index::LineIndex::new(0, line)
-        .segments
+    index::paint_segments(line)
         .into_iter()
         .map(|s| (s.text, s.rect))
         .collect()
