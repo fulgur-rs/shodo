@@ -156,6 +156,15 @@ impl<'a> LineLayout<'a> {
                 });
             }
         }
+        self.hit_test_body(inline, block)
+    }
+
+    /// Query only main text after this layout's annotations have been searched.
+    pub(crate) fn hit_test_body(&self, inline: f32, block: f32) -> Option<HitResult> {
+        // An annotation's inverse transform can produce NaN from infinities.
+        if inline.is_nan() || block.is_nan() {
+            return None;
+        }
         let line = self.block_tree.nearest_y(block)?;
         let index = &self.index[line];
         let stop = index.hit(inline, block)?;

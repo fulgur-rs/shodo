@@ -1,0 +1,1205 @@
+{
+  "base": "a62458009af2f3b3cc83441eb735b70ef8175807",
+  "states": [
+    "baseline",
+    "strings",
+    "context",
+    "combined"
+  ],
+  "fonts": [
+    [
+      "latin",
+      "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25"
+    ],
+    [
+      "cjk",
+      "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b"
+    ],
+    [
+      "arabic",
+      "e9885fbcf3bdbddea94d1679d636a80f7421c6b63632a35c6f884a9ee74067d9"
+    ]
+  ],
+  "scope": "build consumes prebuilt builder; paragraph/context retained at scope end; serialization/line layout excluded",
+  "warmup": 4,
+  "first_time_samples": 9,
+  "allocation_samples": 3,
+  "equal_contracts": 8,
+  "rows": [
+    {
+      "case": "none",
+      "bytes": 256,
+      "contract_sha256": "ad12b889f5e4721dd96faab7cc43230d61a95a062a500a405a7af622a684d859",
+      "states": {
+        "baseline": {
+          "first_time_median_ns": 179990,
+          "allocator_median": {
+            "allocated_bytes": 255708,
+            "calls": 799,
+            "deallocated_bytes": 157244,
+            "live_bytes": 561244,
+            "net_bytes": 98464,
+            "peak_extra_bytes": 113615,
+            "start_live_bytes": 462780
+          },
+          "balanced_time_median_ns": 183342.5,
+          "balanced_time_min_max_ns": [
+            177405,
+            194727
+          ]
+        },
+        "strings": {
+          "first_time_median_ns": 179361,
+          "allocator_median": {
+            "allocated_bytes": 255708,
+            "calls": 799,
+            "deallocated_bytes": 157244,
+            "live_bytes": 561244,
+            "net_bytes": 98464,
+            "peak_extra_bytes": 113615,
+            "start_live_bytes": 462780
+          },
+          "balanced_time_median_ns": 179606.0,
+          "balanced_time_min_max_ns": [
+            175101,
+            191584
+          ]
+        },
+        "context": {
+          "first_time_median_ns": 180968,
+          "allocator_median": {
+            "allocated_bytes": 255708,
+            "calls": 799,
+            "deallocated_bytes": 157244,
+            "live_bytes": 561244,
+            "net_bytes": 98464,
+            "peak_extra_bytes": 113615,
+            "start_live_bytes": 462780
+          },
+          "balanced_time_median_ns": 179256.5,
+          "balanced_time_min_max_ns": [
+            174333,
+            194657
+          ]
+        },
+        "combined": {
+          "first_time_median_ns": 191794,
+          "allocator_median": {
+            "allocated_bytes": 255708,
+            "calls": 799,
+            "deallocated_bytes": 157244,
+            "live_bytes": 561244,
+            "net_bytes": 98464,
+            "peak_extra_bytes": 113615,
+            "start_live_bytes": 462780
+          },
+          "balanced_time_median_ns": 180409.0,
+          "balanced_time_min_max_ns": [
+            173983,
+            226646
+          ]
+        }
+      }
+    },
+    {
+      "case": "partial",
+      "bytes": 256,
+      "contract_sha256": "313a6e297ddc63d6e259d4a98c73d06403b9141df2ed72b8309be451c3fe01d7",
+      "states": {
+        "baseline": {
+          "first_time_median_ns": 217427,
+          "allocator_median": {
+            "allocated_bytes": 264283,
+            "calls": 1138,
+            "deallocated_bytes": 167489,
+            "live_bytes": 783553,
+            "net_bytes": 96794,
+            "peak_extra_bytes": 111945,
+            "start_live_bytes": 686759
+          },
+          "balanced_time_median_ns": 218439.5,
+          "balanced_time_min_max_ns": [
+            214843,
+            230907
+          ]
+        },
+        "strings": {
+          "first_time_median_ns": 210861,
+          "allocator_median": {
+            "allocated_bytes": 264028,
+            "calls": 979,
+            "deallocated_bytes": 167234,
+            "live_bytes": 783553,
+            "net_bytes": 96794,
+            "peak_extra_bytes": 111945,
+            "start_live_bytes": 686759
+          },
+          "balanced_time_median_ns": 213794.5,
+          "balanced_time_min_max_ns": [
+            208207,
+            227554
+          ]
+        },
+        "context": {
+          "first_time_median_ns": 217007,
+          "allocator_median": {
+            "allocated_bytes": 264283,
+            "calls": 1138,
+            "deallocated_bytes": 167489,
+            "live_bytes": 783553,
+            "net_bytes": 96794,
+            "peak_extra_bytes": 111945,
+            "start_live_bytes": 686759
+          },
+          "balanced_time_median_ns": 214039.0,
+          "balanced_time_min_max_ns": [
+            209744,
+            229510
+          ]
+        },
+        "combined": {
+          "first_time_median_ns": 213585,
+          "allocator_median": {
+            "allocated_bytes": 264028,
+            "calls": 979,
+            "deallocated_bytes": 167234,
+            "live_bytes": 783553,
+            "net_bytes": 96794,
+            "peak_extra_bytes": 111945,
+            "start_live_bytes": 686759
+          },
+          "balanced_time_median_ns": 219731.5,
+          "balanced_time_min_max_ns": [
+            210162,
+            356976
+          ]
+        }
+      }
+    },
+    {
+      "case": "width",
+      "bytes": 256,
+      "contract_sha256": "88bd64938cdd3a6187b22546ddc7676dbb4f69410055f27422fbae48e9424e8b",
+      "states": {
+        "baseline": {
+          "first_time_median_ns": 218544,
+          "allocator_median": {
+            "allocated_bytes": 276536,
+            "calls": 1245,
+            "deallocated_bytes": 176531,
+            "live_bytes": 1007571,
+            "net_bytes": 100005,
+            "peak_extra_bytes": 114900,
+            "start_live_bytes": 907566
+          },
+          "balanced_time_median_ns": 221337.5,
+          "balanced_time_min_max_ns": [
+            218404,
+            239567
+          ]
+        },
+        "strings": {
+          "first_time_median_ns": 218754,
+          "allocator_median": {
+            "allocated_bytes": 275176,
+            "calls": 957,
+            "deallocated_bytes": 175171,
+            "live_bytes": 1007571,
+            "net_bytes": 100005,
+            "peak_extra_bytes": 114900,
+            "start_live_bytes": 907566
+          },
+          "balanced_time_median_ns": 214423.5,
+          "balanced_time_min_max_ns": [
+            210232,
+            302078
+          ]
+        },
+        "context": {
+          "first_time_median_ns": 201432,
+          "allocator_median": {
+            "allocated_bytes": 275768,
+            "calls": 1243,
+            "deallocated_bytes": 175763,
+            "live_bytes": 1007571,
+            "net_bytes": 100005,
+            "peak_extra_bytes": 114900,
+            "start_live_bytes": 907566
+          },
+          "balanced_time_median_ns": 200035.5,
+          "balanced_time_min_max_ns": [
+            195006,
+            214773
+          ]
+        },
+        "combined": {
+          "first_time_median_ns": 199756,
+          "allocator_median": {
+            "allocated_bytes": 274408,
+            "calls": 955,
+            "deallocated_bytes": 174403,
+            "live_bytes": 1007571,
+            "net_bytes": 100005,
+            "peak_extra_bytes": 114900,
+            "start_live_bytes": 907566
+          },
+          "balanced_time_median_ns": 196368.0,
+          "balanced_time_min_max_ns": [
+            188441,
+            212119
+          ]
+        }
+      }
+    },
+    {
+      "case": "kana",
+      "bytes": 608,
+      "contract_sha256": "9630ed89bea8d987b18ecb8085a798e83d54f2c875b184a2fb66831e932dbcd1",
+      "states": {
+        "baseline": {
+          "first_time_median_ns": 265340,
+          "allocator_median": {
+            "allocated_bytes": 266408,
+            "calls": 1824,
+            "deallocated_bytes": 164678,
+            "live_bytes": 1204584,
+            "net_bytes": 101730,
+            "peak_extra_bytes": 109233,
+            "start_live_bytes": 1102854
+          },
+          "balanced_time_median_ns": 265479.5,
+          "balanced_time_min_max_ns": [
+            261498,
+            292929
+          ]
+        },
+        "strings": {
+          "first_time_median_ns": 255981,
+          "allocator_median": {
+            "allocated_bytes": 264008,
+            "calls": 1376,
+            "deallocated_bytes": 162278,
+            "live_bytes": 1204584,
+            "net_bytes": 101730,
+            "peak_extra_bytes": 109233,
+            "start_live_bytes": 1102854
+          },
+          "balanced_time_median_ns": 262406.5,
+          "balanced_time_min_max_ns": [
+            252488,
+            380165
+          ]
+        },
+        "context": {
+          "first_time_median_ns": 230278,
+          "allocator_median": {
+            "allocated_bytes": 260232,
+            "calls": 1662,
+            "deallocated_bytes": 158502,
+            "live_bytes": 1204584,
+            "net_bytes": 101730,
+            "peak_extra_bytes": 109233,
+            "start_live_bytes": 1102854
+          },
+          "balanced_time_median_ns": 229195.0,
+          "balanced_time_min_max_ns": [
+            222944,
+            249345
+          ]
+        },
+        "combined": {
+          "first_time_median_ns": 221687,
+          "allocator_median": {
+            "allocated_bytes": 257832,
+            "calls": 1214,
+            "deallocated_bytes": 156102,
+            "live_bytes": 1204584,
+            "net_bytes": 101730,
+            "peak_extra_bytes": 109233,
+            "start_live_bytes": 1102854
+          },
+          "balanced_time_median_ns": 222594.5,
+          "balanced_time_min_max_ns": [
+            219103,
+            234329
+          ]
+        }
+      }
+    },
+    {
+      "case": "width-kana",
+      "bytes": 256,
+      "contract_sha256": "9fdba2163bf154080dd6b1084ef0b1770f548cbc67cdfa40006852874f94f322",
+      "states": {
+        "baseline": {
+          "first_time_median_ns": 222386,
+          "allocator_median": {
+            "allocated_bytes": 277688,
+            "calls": 1389,
+            "deallocated_bytes": 177695,
+            "live_bytes": 1429039,
+            "net_bytes": 99993,
+            "peak_extra_bytes": 114888,
+            "start_live_bytes": 1329046
+          },
+          "balanced_time_median_ns": 223887.5,
+          "balanced_time_min_max_ns": [
+            220919,
+            242292
+          ]
+        },
+        "strings": {
+          "first_time_median_ns": 213935,
+          "allocator_median": {
+            "allocated_bytes": 275176,
+            "calls": 957,
+            "deallocated_bytes": 175183,
+            "live_bytes": 1429039,
+            "net_bytes": 99993,
+            "peak_extra_bytes": 114888,
+            "start_live_bytes": 1329046
+          },
+          "balanced_time_median_ns": 216588.5,
+          "balanced_time_min_max_ns": [
+            214842,
+            229440
+          ]
+        },
+        "context": {
+          "first_time_median_ns": 206600,
+          "allocator_median": {
+            "allocated_bytes": 276920,
+            "calls": 1387,
+            "deallocated_bytes": 176927,
+            "live_bytes": 1429039,
+            "net_bytes": 99993,
+            "peak_extra_bytes": 114888,
+            "start_live_bytes": 1329046
+          },
+          "balanced_time_median_ns": 201711.5,
+          "balanced_time_min_max_ns": [
+            194657,
+            214912
+          ]
+        },
+        "combined": {
+          "first_time_median_ns": 195356,
+          "allocator_median": {
+            "allocated_bytes": 274408,
+            "calls": 955,
+            "deallocated_bytes": 174415,
+            "live_bytes": 1429039,
+            "net_bytes": 99993,
+            "peak_extra_bytes": 114888,
+            "start_live_bytes": 1329046
+          },
+          "balanced_time_median_ns": 197346.5,
+          "balanced_time_min_max_ns": [
+            195425,
+            289017
+          ]
+        }
+      }
+    },
+    {
+      "case": "word-space",
+      "bytes": 256,
+      "contract_sha256": "61ba8015b0bdb46b19bd5b1f64cabbdea216e3ab25469935787ae4605a5af126",
+      "states": {
+        "baseline": {
+          "first_time_median_ns": 166998,
+          "allocator_median": {
+            "allocated_bytes": 180020,
+            "calls": 917,
+            "deallocated_bytes": 109109,
+            "live_bytes": 1603226,
+            "net_bytes": 70911,
+            "peak_extra_bytes": 77902,
+            "start_live_bytes": 1532315
+          },
+          "balanced_time_median_ns": 171259.0,
+          "balanced_time_min_max_ns": [
+            163925,
+            202479
+          ]
+        },
+        "strings": {
+          "first_time_median_ns": 209814,
+          "allocator_median": {
+            "allocated_bytes": 179748,
+            "calls": 773,
+            "deallocated_bytes": 108837,
+            "live_bytes": 1603226,
+            "net_bytes": 70911,
+            "peak_extra_bytes": 77902,
+            "start_live_bytes": 1532315
+          },
+          "balanced_time_median_ns": 167103.0,
+          "balanced_time_min_max_ns": [
+            162458,
+            181526
+          ]
+        },
+        "context": {
+          "first_time_median_ns": 151842,
+          "allocator_median": {
+            "allocated_bytes": 178356,
+            "calls": 867,
+            "deallocated_bytes": 107445,
+            "live_bytes": 1603226,
+            "net_bytes": 70911,
+            "peak_extra_bytes": 77902,
+            "start_live_bytes": 1532315
+          },
+          "balanced_time_median_ns": 148944.0,
+          "balanced_time_min_max_ns": [
+            148000,
+            164205
+          ]
+        },
+        "combined": {
+          "first_time_median_ns": 147302,
+          "allocator_median": {
+            "allocated_bytes": 178084,
+            "calls": 723,
+            "deallocated_bytes": 107173,
+            "live_bytes": 1603226,
+            "net_bytes": 70911,
+            "peak_extra_bytes": 77902,
+            "start_live_bytes": 1532315
+          },
+          "balanced_time_median_ns": 149048.5,
+          "balanced_time_min_max_ns": [
+            142553,
+            161271
+          ]
+        }
+      }
+    },
+    {
+      "case": "word-warning",
+      "bytes": 96,
+      "contract_sha256": "2b075eb5735d0f995f07764f816b694bd19c6ceff81c3c0652a1592122a771dd",
+      "states": {
+        "baseline": {
+          "first_time_median_ns": 59159,
+          "allocator_median": {
+            "allocated_bytes": 81707,
+            "calls": 373,
+            "deallocated_bytes": 53639,
+            "live_bytes": 1709430,
+            "net_bytes": 28068,
+            "peak_extra_bytes": 30211,
+            "start_live_bytes": 1681362
+          },
+          "balanced_time_median_ns": 60031.0,
+          "balanced_time_min_max_ns": [
+            59158,
+            72359
+          ]
+        },
+        "strings": {
+          "first_time_median_ns": 99249,
+          "allocator_median": {
+            "allocated_bytes": 81595,
+            "calls": 293,
+            "deallocated_bytes": 53527,
+            "live_bytes": 1709430,
+            "net_bytes": 28068,
+            "peak_extra_bytes": 30211,
+            "start_live_bytes": 1681362
+          },
+          "balanced_time_median_ns": 58495.0,
+          "balanced_time_min_max_ns": [
+            57971,
+            59159
+          ]
+        },
+        "context": {
+          "first_time_median_ns": 52244,
+          "allocator_median": {
+            "allocated_bytes": 81419,
+            "calls": 371,
+            "deallocated_bytes": 53351,
+            "live_bytes": 1709430,
+            "net_bytes": 28068,
+            "peak_extra_bytes": 30211,
+            "start_live_bytes": 1681362
+          },
+          "balanced_time_median_ns": 52383.5,
+          "balanced_time_min_max_ns": [
+            51476,
+            89191
+          ]
+        },
+        "combined": {
+          "first_time_median_ns": 51056,
+          "allocator_median": {
+            "allocated_bytes": 81307,
+            "calls": 291,
+            "deallocated_bytes": 53239,
+            "live_bytes": 1709430,
+            "net_bytes": 28068,
+            "peak_extra_bytes": 30211,
+            "start_live_bytes": 1681362
+          },
+          "balanced_time_median_ns": 51126.0,
+          "balanced_time_min_max_ns": [
+            50358,
+            63907
+          ]
+        }
+      }
+    },
+    {
+      "case": "greek",
+      "bytes": 368,
+      "contract_sha256": "2ad0f9fe615603be8d434362eefd91879d0ba491ee95adbecd22fd4c24e2bff2",
+      "states": {
+        "baseline": {
+          "first_time_median_ns": 299564,
+          "allocator_median": {
+            "allocated_bytes": 405096,
+            "calls": 1951,
+            "deallocated_bytes": 241411,
+            "live_bytes": 1926519,
+            "net_bytes": 163685,
+            "peak_extra_bytes": 191108,
+            "start_live_bytes": 1762834
+          },
+          "balanced_time_median_ns": 302742.0,
+          "balanced_time_min_max_ns": [
+            296211,
+            319190
+          ]
+        },
+        "strings": {
+          "first_time_median_ns": 318212,
+          "allocator_median": {
+            "allocated_bytes": 404856,
+            "calls": 1791,
+            "deallocated_bytes": 241171,
+            "live_bytes": 1926519,
+            "net_bytes": 163685,
+            "peak_extra_bytes": 191108,
+            "start_live_bytes": 1762834
+          },
+          "balanced_time_median_ns": 311717.0,
+          "balanced_time_min_max_ns": [
+            306339,
+            426891
+          ]
+        },
+        "context": {
+          "first_time_median_ns": 303685,
+          "allocator_median": {
+            "allocated_bytes": 405096,
+            "calls": 1951,
+            "deallocated_bytes": 241411,
+            "live_bytes": 1926519,
+            "net_bytes": 163685,
+            "peak_extra_bytes": 191108,
+            "start_live_bytes": 1762834
+          },
+          "balanced_time_median_ns": 299913.0,
+          "balanced_time_min_max_ns": [
+            297049,
+            315768
+          ]
+        },
+        "combined": {
+          "first_time_median_ns": 296840,
+          "allocator_median": {
+            "allocated_bytes": 404856,
+            "calls": 1791,
+            "deallocated_bytes": 241171,
+            "live_bytes": 1926519,
+            "net_bytes": 163685,
+            "peak_extra_bytes": 191108,
+            "start_live_bytes": 1762834
+          },
+          "balanced_time_median_ns": 296002.0,
+          "balanced_time_min_max_ns": [
+            291462,
+            314860
+          ]
+        }
+      }
+    },
+    {
+      "case": "sigma",
+      "bytes": 192,
+      "contract_sha256": "fb37334d45c7e11f93dc2a8ec5e23fbcee241af945fd261c76453348426c2ae6",
+      "states": {
+        "baseline": {
+          "first_time_median_ns": 145905,
+          "allocator_median": {
+            "allocated_bytes": 176504,
+            "calls": 1086,
+            "deallocated_bytes": 104851,
+            "live_bytes": 2199863,
+            "net_bytes": 71653,
+            "peak_extra_bytes": 78388,
+            "start_live_bytes": 2128210
+          },
+          "balanced_time_median_ns": 148280.0,
+          "balanced_time_min_max_ns": [
+            141994,
+            159176
+          ]
+        },
+        "strings": {
+          "first_time_median_ns": 141156,
+          "allocator_median": {
+            "allocated_bytes": 176440,
+            "calls": 1038,
+            "deallocated_bytes": 104787,
+            "live_bytes": 2199863,
+            "net_bytes": 71653,
+            "peak_extra_bytes": 78388,
+            "start_live_bytes": 2128210
+          },
+          "balanced_time_median_ns": 146813.5,
+          "balanced_time_min_max_ns": [
+            142972,
+            160433
+          ]
+        },
+        "context": {
+          "first_time_median_ns": 146534,
+          "allocator_median": {
+            "allocated_bytes": 176504,
+            "calls": 1086,
+            "deallocated_bytes": 104851,
+            "live_bytes": 2199863,
+            "net_bytes": 71653,
+            "peak_extra_bytes": 78388,
+            "start_live_bytes": 2128210
+          },
+          "balanced_time_median_ns": 147268.0,
+          "balanced_time_min_max_ns": [
+            145487,
+            165462
+          ]
+        },
+        "combined": {
+          "first_time_median_ns": 145975,
+          "allocator_median": {
+            "allocated_bytes": 176440,
+            "calls": 1038,
+            "deallocated_bytes": 104787,
+            "live_bytes": 2199863,
+            "net_bytes": 71653,
+            "peak_extra_bytes": 78388,
+            "start_live_bytes": 2128210
+          },
+          "balanced_time_median_ns": 143985.0,
+          "balanced_time_min_max_ns": [
+            142344,
+            157988
+          ]
+        }
+      }
+    },
+    {
+      "case": "turkic",
+      "bytes": 128,
+      "contract_sha256": "3b6e4f8c6840b8426274c689fc12dbb3c5a0c84cd63006ad8d0a9409589f8aec",
+      "states": {
+        "baseline": {
+          "first_time_median_ns": 86398,
+          "allocator_median": {
+            "allocated_bytes": 124190,
+            "calls": 438,
+            "deallocated_bytes": 82639,
+            "live_bytes": 2341132,
+            "net_bytes": 41551,
+            "peak_extra_bytes": 47774,
+            "start_live_bytes": 2299581
+          },
+          "balanced_time_median_ns": 88318.5,
+          "balanced_time_min_max_ns": [
+            86188,
+            97783
+          ]
+        },
+        "strings": {
+          "first_time_median_ns": 86328,
+          "allocator_median": {
+            "allocated_bytes": 124094,
+            "calls": 358,
+            "deallocated_bytes": 82543,
+            "live_bytes": 2341132,
+            "net_bytes": 41551,
+            "peak_extra_bytes": 47774,
+            "start_live_bytes": 2299581
+          },
+          "balanced_time_median_ns": 85420.0,
+          "balanced_time_min_max_ns": [
+            84792,
+            99179
+          ]
+        },
+        "context": {
+          "first_time_median_ns": 87515,
+          "allocator_median": {
+            "allocated_bytes": 124190,
+            "calls": 438,
+            "deallocated_bytes": 82639,
+            "live_bytes": 2341132,
+            "net_bytes": 41551,
+            "peak_extra_bytes": 47774,
+            "start_live_bytes": 2299581
+          },
+          "balanced_time_median_ns": 87689.5,
+          "balanced_time_min_max_ns": [
+            87166,
+            97643
+          ]
+        },
+        "combined": {
+          "first_time_median_ns": 86188,
+          "allocator_median": {
+            "allocated_bytes": 124094,
+            "calls": 358,
+            "deallocated_bytes": 82543,
+            "live_bytes": 2341132,
+            "net_bytes": 41551,
+            "peak_extra_bytes": 47774,
+            "start_live_bytes": 2299581
+          },
+          "balanced_time_median_ns": 85839.0,
+          "balanced_time_min_max_ns": [
+            84442,
+            100087
+          ]
+        }
+      }
+    },
+    {
+      "case": "lithuanian",
+      "bytes": 128,
+      "contract_sha256": "b0f2d6c08ee9f017ecd466c53cfe9ddb1f82c4df03ac2f3d1f1999c06eb2c586",
+      "states": {
+        "baseline": {
+          "first_time_median_ns": 119365,
+          "allocator_median": {
+            "allocated_bytes": 126990,
+            "calls": 475,
+            "deallocated_bytes": 87487,
+            "live_bytes": 2436940,
+            "net_bytes": 39503,
+            "peak_extra_bytes": 49822,
+            "start_live_bytes": 2397437
+          },
+          "balanced_time_median_ns": 120481.5,
+          "balanced_time_min_max_ns": [
+            113637,
+            144509
+          ]
+        },
+        "strings": {
+          "first_time_median_ns": 126418,
+          "allocator_median": {
+            "allocated_bytes": 126894,
+            "calls": 411,
+            "deallocated_bytes": 87391,
+            "live_bytes": 2436940,
+            "net_bytes": 39503,
+            "peak_extra_bytes": 49822,
+            "start_live_bytes": 2397437
+          },
+          "balanced_time_median_ns": 117583.5,
+          "balanced_time_min_max_ns": [
+            116431,
+            127885
+          ]
+        },
+        "context": {
+          "first_time_median_ns": 119225,
+          "allocator_median": {
+            "allocated_bytes": 126990,
+            "calls": 475,
+            "deallocated_bytes": 87487,
+            "live_bytes": 2436940,
+            "net_bytes": 39503,
+            "peak_extra_bytes": 49822,
+            "start_live_bytes": 2397437
+          },
+          "balanced_time_median_ns": 119225.0,
+          "balanced_time_min_max_ns": [
+            114336,
+            144718
+          ]
+        },
+        "combined": {
+          "first_time_median_ns": 113288,
+          "allocator_median": {
+            "allocated_bytes": 126894,
+            "calls": 411,
+            "deallocated_bytes": 87391,
+            "live_bytes": 2436940,
+            "net_bytes": 39503,
+            "peak_extra_bytes": 49822,
+            "start_live_bytes": 2397437
+          },
+          "balanced_time_median_ns": 118840.5,
+          "balanced_time_min_max_ns": [
+            114406,
+            210372
+          ]
+        }
+      }
+    },
+    {
+      "case": "dutch",
+      "bytes": 224,
+      "contract_sha256": "865ddd457020fbf8caa42998188184fddc88371bf1e49196d2dff0a589511800",
+      "states": {
+        "baseline": {
+          "first_time_median_ns": 160573,
+          "allocator_median": {
+            "allocated_bytes": 211790,
+            "calls": 739,
+            "deallocated_bytes": 134656,
+            "live_bytes": 2581962,
+            "net_bytes": 77134,
+            "peak_extra_bytes": 84637,
+            "start_live_bytes": 2504828
+          },
+          "balanced_time_median_ns": 160852.5,
+          "balanced_time_min_max_ns": [
+            156661,
+            171818
+          ]
+        },
+        "strings": {
+          "first_time_median_ns": 158897,
+          "allocator_median": {
+            "allocated_bytes": 211630,
+            "calls": 579,
+            "deallocated_bytes": 134496,
+            "live_bytes": 2581962,
+            "net_bytes": 77134,
+            "peak_extra_bytes": 84637,
+            "start_live_bytes": 2504828
+          },
+          "balanced_time_median_ns": 160294.0,
+          "balanced_time_min_max_ns": [
+            155195,
+            172098
+          ]
+        },
+        "context": {
+          "first_time_median_ns": 161411,
+          "allocator_median": {
+            "allocated_bytes": 211790,
+            "calls": 739,
+            "deallocated_bytes": 134656,
+            "live_bytes": 2581962,
+            "net_bytes": 77134,
+            "peak_extra_bytes": 84637,
+            "start_live_bytes": 2504828
+          },
+          "balanced_time_median_ns": 162598.5,
+          "balanced_time_min_max_ns": [
+            157290,
+            175939
+          ]
+        },
+        "combined": {
+          "first_time_median_ns": 158059,
+          "allocator_median": {
+            "allocated_bytes": 211630,
+            "calls": 579,
+            "deallocated_bytes": 134496,
+            "live_bytes": 2581962,
+            "net_bytes": 77134,
+            "peak_extra_bytes": 84637,
+            "start_live_bytes": 2504828
+          },
+          "balanced_time_median_ns": 159001.5,
+          "balanced_time_min_max_ns": [
+            153519,
+            172307
+          ]
+        }
+      }
+    },
+    {
+      "case": "first-line",
+      "bytes": 256,
+      "contract_sha256": "5b04c6fe8db66d352e1aa41f8467418501045b79f033b0749ac2b02ed72c1b19",
+      "states": {
+        "baseline": {
+          "first_time_median_ns": 514126,
+          "allocator_median": {
+            "allocated_bytes": 578164,
+            "calls": 2561,
+            "deallocated_bytes": 337865,
+            "live_bytes": 2891481,
+            "net_bytes": 240299,
+            "peak_extra_bytes": 252334,
+            "start_live_bytes": 2651182
+          },
+          "balanced_time_median_ns": 451790.5,
+          "balanced_time_min_max_ns": [
+            443724,
+            470893
+          ]
+        },
+        "strings": {
+          "first_time_median_ns": 509377,
+          "allocator_median": {
+            "allocated_bytes": 575652,
+            "calls": 2129,
+            "deallocated_bytes": 335353,
+            "live_bytes": 2891481,
+            "net_bytes": 240299,
+            "peak_extra_bytes": 252334,
+            "start_live_bytes": 2651182
+          },
+          "balanced_time_median_ns": 445574.5,
+          "balanced_time_min_max_ns": [
+            434853,
+            529423
+          ]
+        },
+        "context": {
+          "first_time_median_ns": 431920,
+          "allocator_median": {
+            "allocated_bytes": 577396,
+            "calls": 2559,
+            "deallocated_bytes": 337097,
+            "live_bytes": 2891481,
+            "net_bytes": 240299,
+            "peak_extra_bytes": 252334,
+            "start_live_bytes": 2651182
+          },
+          "balanced_time_median_ns": 423259.0,
+          "balanced_time_min_max_ns": [
+            420814,
+            443654
+          ]
+        },
+        "combined": {
+          "first_time_median_ns": 421443,
+          "allocator_median": {
+            "allocated_bytes": 574884,
+            "calls": 2127,
+            "deallocated_bytes": 334585,
+            "live_bytes": 2891481,
+            "net_bytes": 240299,
+            "peak_extra_bytes": 252334,
+            "start_live_bytes": 2651182
+          },
+          "balanced_time_median_ns": 421792.0,
+          "balanced_time_min_max_ns": [
+            412503,
+            434784
+          ]
+        }
+      }
+    },
+    {
+      "case": "width-origin",
+      "bytes": 144,
+      "contract_sha256": "a547ff6df9fdf0f6cdde9efbbcbbe69a7b200dde4298bbfca89fadc5bb805d59",
+      "states": {
+        "baseline": {
+          "first_time_median_ns": 127885,
+          "allocator_median": {
+            "allocated_bytes": 122616,
+            "calls": 923,
+            "deallocated_bytes": 72954,
+            "live_bytes": 2898953,
+            "net_bytes": 49662,
+            "peak_extra_bytes": 51805,
+            "start_live_bytes": 2849291
+          },
+          "balanced_time_median_ns": 127920.5,
+          "balanced_time_min_max_ns": [
+            123974,
+            145207
+          ]
+        },
+        "strings": {
+          "first_time_median_ns": 124463,
+          "allocator_median": {
+            "allocated_bytes": 122008,
+            "calls": 795,
+            "deallocated_bytes": 72346,
+            "live_bytes": 2898953,
+            "net_bytes": 49662,
+            "peak_extra_bytes": 51805,
+            "start_live_bytes": 2849291
+          },
+          "balanced_time_median_ns": 126663.5,
+          "balanced_time_min_max_ns": [
+            124883,
+            162389
+          ]
+        },
+        "context": {
+          "first_time_median_ns": 118037,
+          "allocator_median": {
+            "allocated_bytes": 122184,
+            "calls": 921,
+            "deallocated_bytes": 72522,
+            "live_bytes": 2898953,
+            "net_bytes": 49662,
+            "peak_extra_bytes": 51805,
+            "start_live_bytes": 2849291
+          },
+          "balanced_time_median_ns": 117339.0,
+          "balanced_time_min_max_ns": [
+            116501,
+            129911
+          ]
+        },
+        "combined": {
+          "first_time_median_ns": 116501,
+          "allocator_median": {
+            "allocated_bytes": 121576,
+            "calls": 793,
+            "deallocated_bytes": 71914,
+            "live_bytes": 2898953,
+            "net_bytes": 49662,
+            "peak_extra_bytes": 51805,
+            "start_live_bytes": 2849291
+          },
+          "balanced_time_median_ns": 115313.5,
+          "balanced_time_min_max_ns": [
+            110425,
+            125232
+          ]
+        }
+      }
+    },
+    {
+      "case": "case-width",
+      "bytes": 352,
+      "contract_sha256": "d7b3bd77193488120aebbb90c8c710ebddc37e42f3363ea579092c9753a3e39e",
+      "states": {
+        "baseline": {
+          "first_time_median_ns": 295164,
+          "allocator_median": {
+            "allocated_bytes": 335096,
+            "calls": 1745,
+            "deallocated_bytes": 213096,
+            "live_bytes": 3092663,
+            "net_bytes": 122000,
+            "peak_extra_bytes": 138431,
+            "start_live_bytes": 2970663
+          },
+          "balanced_time_median_ns": 295128.5,
+          "balanced_time_min_max_ns": [
+            288179,
+            306758
+          ]
+        },
+        "strings": {
+          "first_time_median_ns": 283290,
+          "allocator_median": {
+            "allocated_bytes": 331608,
+            "calls": 1233,
+            "deallocated_bytes": 209608,
+            "live_bytes": 3092663,
+            "net_bytes": 122000,
+            "peak_extra_bytes": 138431,
+            "start_live_bytes": 2970663
+          },
+          "balanced_time_median_ns": 287202.0,
+          "balanced_time_min_max_ns": [
+            283360,
+            309273
+          ]
+        },
+        "context": {
+          "first_time_median_ns": 292160,
+          "allocator_median": {
+            "allocated_bytes": 335096,
+            "calls": 1745,
+            "deallocated_bytes": 213096,
+            "live_bytes": 3092663,
+            "net_bytes": 122000,
+            "peak_extra_bytes": 138431,
+            "start_live_bytes": 2970663
+          },
+          "balanced_time_median_ns": 292335.0,
+          "balanced_time_min_max_ns": [
+            288109,
+            317724
+          ]
+        },
+        "combined": {
+          "first_time_median_ns": 284757,
+          "allocator_median": {
+            "allocated_bytes": 331608,
+            "calls": 1233,
+            "deallocated_bytes": 209608,
+            "live_bytes": 3092663,
+            "net_bytes": 122000,
+            "peak_extra_bytes": 138431,
+            "start_live_bytes": 2970663
+          },
+          "balanced_time_median_ns": 284617.0,
+          "balanced_time_min_max_ns": [
+            277703,
+            301799
+          ]
+        }
+      }
+    }
+  ],
+  "proof": {
+    "baseline": {
+      "fingerprint": "e259e0ffa450917a788a7d65852ed15a74b62f137af8745bbb818ed7f010dda6",
+      "file_count": 152,
+      "probe_sha256": "b34f1802280c4dd91666f06bd049daaf5d0caed7d2171890c74fbf4ef1d2d187",
+      "transform_sha256": "431db0f0be26dbba8a51653e6e3ae34814dd2ccddea2965a419dd6b57304384f",
+      "executable_hashes": "8ed53976b8af66dcc670e4fcd38a1b1f2ae51c20183e4fede8ec2a1947bb4dcf  target/performance-artifacts/t6q-3/baseline-time\nfbecdc3330e1832340bd24520d8fec86a0d8822cebe36304d45ec59dca657453  target/performance-artifacts/t6q-3/baseline-alloc\n431db0f0be26dbba8a51653e6e3ae34814dd2ccddea2965a419dd6b57304384f  crates/shodo/src/analysis/transform.rs\nb34f1802280c4dd91666f06bd049daaf5d0caed7d2171890c74fbf4ef1d2d187  dev/bench/examples/transform_cost.rs\n",
+      "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+      "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)\n"
+    },
+    "strings": {
+      "fingerprint": "bfd518be281e24c584280e4e06f946060396f70f4404812254929c760deaebcd",
+      "file_count": 152,
+      "probe_sha256": "b34f1802280c4dd91666f06bd049daaf5d0caed7d2171890c74fbf4ef1d2d187",
+      "transform_sha256": "47c4df9a81c0d6598f2ed75b501cba8aa24b19f6ad37e848ef6435056c613a1e",
+      "executable_hashes": "2ba0879ff2d0f65d672ca3ed6c70874034aca581168d8f38ee4c541ca09533e0  target/performance-artifacts/t6q-3/strings-time\nc149149d1211f4e6b962b4e03180ce62a2395a600bfb30bbf7c8f2dc66b7a631  target/performance-artifacts/t6q-3/strings-alloc\n47c4df9a81c0d6598f2ed75b501cba8aa24b19f6ad37e848ef6435056c613a1e  crates/shodo/src/analysis/transform.rs\nb34f1802280c4dd91666f06bd049daaf5d0caed7d2171890c74fbf4ef1d2d187  dev/bench/examples/transform_cost.rs\n",
+      "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+      "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)\n"
+    },
+    "context": {
+      "fingerprint": "411ed0d9bd836c32feb13d4958fc70e3b276514e86a0fd6278a9f1bf5ba4679e",
+      "file_count": 152,
+      "probe_sha256": "b34f1802280c4dd91666f06bd049daaf5d0caed7d2171890c74fbf4ef1d2d187",
+      "transform_sha256": "2029b14212a76e1c1b0f71fa24dd0d5124edd0e5bef49f761d561dc57702439f",
+      "executable_hashes": "9d4761cea8158cd1d768b74f1d7a557234422916d0d054b7284d340a28b09a17  target/performance-artifacts/t6q-3/context-time\n1ba19f28a1c671b25af7f7fa3977c835fe75c9e9ab6903bba9aeb7a681148387  target/performance-artifacts/t6q-3/context-alloc\n2029b14212a76e1c1b0f71fa24dd0d5124edd0e5bef49f761d561dc57702439f  crates/shodo/src/analysis/transform.rs\nb34f1802280c4dd91666f06bd049daaf5d0caed7d2171890c74fbf4ef1d2d187  dev/bench/examples/transform_cost.rs\n",
+      "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+      "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)\n"
+    },
+    "combined": {
+      "fingerprint": "81e3cce161881e3f9b7216f8090043777c5e5592e63e4e0de5bac7977b8f6cd2",
+      "file_count": 152,
+      "probe_sha256": "b34f1802280c4dd91666f06bd049daaf5d0caed7d2171890c74fbf4ef1d2d187",
+      "transform_sha256": "2cbe0fcf54efd2dfa260a10bcecba036b354e58970ba5a3204f408fda4b7cabb",
+      "executable_hashes": "80890d2a0a060b64c87731f3908badf1a7aac370afee45eb2107b64bf5cc64f1  target/performance-artifacts/t6q-3/combined-time\n5b8afc713c44590d82844d098cad699bef784b67da1f4d18e19f9f04658c6d67  target/performance-artifacts/t6q-3/combined-alloc\n2cbe0fcf54efd2dfa260a10bcecba036b354e58970ba5a3204f408fda4b7cabb  crates/shodo/src/analysis/transform.rs\nb34f1802280c4dd91666f06bd049daaf5d0caed7d2171890c74fbf4ef1d2d187  dev/bench/examples/transform_cost.rs\n",
+      "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+      "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)\n"
+    }
+  },
+  "balanced_time_order": [
+    "baseline",
+    "strings",
+    "context",
+    "combined",
+    "combined",
+    "context",
+    "strings",
+    "baseline"
+  ],
+  "balanced_time_samples_per_state": 18,
+  "equal_contracts_with_balanced": 16
+}
