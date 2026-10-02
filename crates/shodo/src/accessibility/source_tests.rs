@@ -55,6 +55,27 @@ fn finish(builder: ParagraphBuilder, fonts: &FontCollection, width: f32) -> Vec<
         )
 }
 
+#[test]
+fn preserved_tabs_have_linear_glyph_owner_work() {
+    for count in [128, 512] {
+        let limits = Limits::default();
+        let fonts = fonts(&limits);
+        let mut style = style();
+        style.root.text_wrap_mode = crate::style::TextWrapMode::NoWrap;
+        let text = "a\t".repeat(count);
+        let mut builder = ParagraphBuilder::new(&style, &limits);
+        builder.push_text(dom(1, 0), &text);
+        let lines = finish(builder, &fonts, 1000000.0);
+        assert_eq!(lines.len(), 1);
+        output::GLYPH_OWNER_VISITS.with(|visits| visits.set(0));
+        let layout = AccessibleLayout::new(&lines);
+        assert_eq!(layout.lines[0].text, text);
+        assert_eq!(layout.lines[0].characters.len(), text.len());
+        assert!(layout.lines[0].runs.iter().all(|run| run.font.is_some()));
+        assert!(output::GLYPH_OWNER_VISITS.with(|visits| visits.get()) <= 4 * text.len());
+    }
+}
+
 // Independent copy of the original linear source inverse, including dataset-wide
 // preferred affinity, line-local caret normalization, stable ordering and dedup.
 fn linear(layout: &AccessibleLayout<'_>, source: SourcePosition) -> Vec<AccessiblePosition> {
