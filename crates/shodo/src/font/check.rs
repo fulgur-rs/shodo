@@ -375,10 +375,38 @@ mod browser_structure_tests {
             matches!(check_font(&data,&limits),Err(FontError::Limit(e)) if e.kind==LimitKind::FontCacheItems)
         );
         let limits = Limits {
-            max_font_cache_items: Some(200),
+            max_font_cache_items: Some(202),
             ..Default::default()
         };
         assert_eq!(check_font(&data, &limits), Ok(1));
+    }
+
+    #[test]
+    fn empty_mark_sets_share_the_work_budget_across_table_references() {
+        for format in [1u16, 2] {
+            let mut gdef = vec![0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14];
+            // Two mark sets reference the same empty coverage.
+            gdef.extend_from_slice(&[0, 1, 0, 2, 0, 0, 0, 12, 0, 0, 0, 12]);
+            gdef.extend_from_slice(&format.to_be_bytes());
+            gdef.extend_from_slice(&0u16.to_be_bytes());
+            let single = build_sfnt(&[(*b"GDEF", gdef.clone())]);
+            let mut duplicated = build_sfnt(&[(*b"GDEF", gdef.clone()), (*b"GDEF", gdef)]);
+            // Alias both directory entries to the same table bytes.
+            let first_offset = duplicated[20..24].to_vec();
+            duplicated[36..40].copy_from_slice(&first_offset);
+            let mut limits = Limits {
+                max_font_cache_items: Some(2),
+                ..Default::default()
+            };
+            assert_eq!(check_font(&single, &limits), Ok(1));
+            limits.max_font_cache_items = Some(3);
+            assert!(matches!(
+                check_font(&duplicated, &limits),
+                Err(FontError::Limit(e)) if e.kind == LimitKind::FontCacheItems
+            ));
+            limits.max_font_cache_items = Some(4);
+            assert_eq!(check_font(&duplicated, &limits), Ok(1));
+        }
     }
 
     #[test]
