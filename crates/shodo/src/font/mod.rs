@@ -62,6 +62,7 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use peniko::{Blob, FontData};
+use skrifa::MetadataProvider;
 
 use crate::limits::{LimitKind, Limits};
 
@@ -430,6 +431,23 @@ impl FontCollection {
         } else {
             self.layer.parent.as_ref()?.face_descriptor(id)
         }
+    }
+
+    /// Intrinsic OpenType family name for a face in this layer or its shared layer.
+    ///
+    /// The typographic family name is preferred when present, matching the
+    /// platform catalog; otherwise the legacy family name is returned.
+    pub fn family_name(&self, id: FontId) -> Option<String> {
+        let data = self.font_data(id)?;
+        let font = skrifa::FontRef::from_index(data.data.as_ref(), data.index).ok()?;
+        let family = font
+            .localized_strings(skrifa::string::StringId::TYPOGRAPHIC_FAMILY_NAME)
+            .english_or_first()
+            .or_else(|| {
+                font.localized_strings(skrifa::string::StringId::FAMILY_NAME)
+                    .english_or_first()
+            })?;
+        Some(family.to_string())
     }
 
     /// Font data of a face in this layer or its shared layer.
