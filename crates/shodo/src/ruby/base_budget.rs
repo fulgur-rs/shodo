@@ -240,9 +240,17 @@ impl BaseScopes {
         self.charge(self.items.get(item).copied().flatten(), kind, amount)
     }
     pub(crate) fn container(&mut self, container: usize, amount: u64) -> Result<(), LimitExceeded> {
+        self.container_cost(container, LimitKind::Items, amount)
+    }
+    pub(crate) fn container_cost(
+        &mut self,
+        container: usize,
+        kind: LimitKind,
+        amount: u64,
+    ) -> Result<(), LimitExceeded> {
         self.charge(
             self.containers.get(container).copied().flatten(),
-            LimitKind::Items,
+            kind,
             amount,
         )
     }

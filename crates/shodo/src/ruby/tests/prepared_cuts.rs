@@ -86,6 +86,114 @@ fn build(ruby: Ruby) -> Paragraph {
     b.build(&mut LayoutContext::new(), &fonts()).unwrap()
 }
 
+fn cut_work_ruby() -> Ruby {
+    let s = style("Shodo Fixture CJK");
+    let base = RubyBase {
+        node: NodeId(10),
+        content: content(10, &"日".repeat(128), &s),
+        align: RubyAlign::default(),
+    };
+    let levels = (0..32)
+        .map(|i| RubyLevel {
+            annotations: vec![RubyAnnotation {
+                node: NodeId(20 + i),
+                content: content(20 + i, "に", &s),
+                span: RubySpan::Auto,
+                visibility: RubyVisibility::Visible,
+            }],
+            style: RubyStyle::default(),
+        })
+        .collect();
+    Ruby::new(vec![base], levels).unwrap()
+}
+
+fn cut_work_input(limits: &Limits, first_line: bool) -> ParagraphBuilder {
+    let s = style("Shodo Fixture CJK");
+    let mut builder = ParagraphBuilder::new(
+        &ParagraphStyle {
+            first_line: first_line.then_some(s.clone()),
+            ..Default::default()
+        },
+        limits,
+    );
+    builder.push_ruby(NodeId(8), &s, cut_work_ruby());
+    builder
+}
+
+#[test]
+fn rejected_ruby_cuts_are_bounded_before_search() {
+    let fonts = fonts();
+    let limits = Limits {
+        max_ruby_cut_work: Some(1000),
+        ..Default::default()
+    };
+    crate::ruby::cuts::take_visits();
+    let result = cut_work_input(&limits, false).build(&mut LayoutContext::new(), &fonts);
+    let Err(error) = result else {
+        panic!("cut search must exceed the work limit")
+    };
+    assert_eq!(error.kind, crate::limits::LimitKind::RubyCutWork);
+    assert_eq!(crate::ruby::cuts::take_visits(), 0);
+    let cost = error.actual;
+    let limits = Limits {
+        max_ruby_cut_work: Some(cost - 1),
+        ..Default::default()
+    };
+    assert!(
+        matches!(cut_work_input(&limits, false).build(&mut LayoutContext::new(), &fonts),
+        Err(e) if e.kind == crate::limits::LimitKind::RubyCutWork)
+    );
+    for limit in [Some(cost), None] {
+        let limits = Limits {
+            max_ruby_cut_work: limit,
+            ..Default::default()
+        };
+        let p = cut_work_input(&limits, false)
+            .build(&mut LayoutContext::new(), &fonts)
+            .unwrap();
+        assert_eq!(p.data.ruby.containers[0].cuts.len(), 2);
+    }
+    // One normal pass fits exactly; another container or the first-line pass
+    // must share what is already spent, even though almost all cuts are rejected.
+    let limits = Limits {
+        max_ruby_cut_work: Some(cost),
+        ..Default::default()
+    };
+    let mut two = cut_work_input(&limits, false);
+    two.push_ruby(NodeId(9), &style("Shodo Fixture CJK"), cut_work_ruby());
+    for builder in [two, cut_work_input(&limits, true)] {
+        assert!(matches!(builder.build(&mut LayoutContext::new(), &fonts),
+            Err(e) if e.kind == crate::limits::LimitKind::RubyCutWork && e.actual > cost));
+    }
+    let p = cut_work_input(&Limits::default(), false)
+        .build(&mut LayoutContext::new(), &fonts)
+        .unwrap();
+    assert_eq!(p.data.ruby.containers[0].cuts.len(), 2);
+}
+
+#[test]
+fn nested_ruby_keeps_local_cut_work_limits_in_bases_and_annotations() {
+    let fonts = fonts();
+    let s = style("Shodo Fixture CJK");
+    for as_base in [false, true] {
+        let limits = Limits {
+            max_ruby_cut_work: Some(1000),
+            ..Default::default()
+        };
+        let nested = RubyContent::from_builder(cut_work_input(&limits, false));
+        let plain = content(99, "に", &s);
+        let ruby = if as_base {
+            pair(nested, plain)
+        } else {
+            pair(plain, nested)
+        };
+        let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::unlimited());
+        parent.push_ruby(NodeId(100), &s, ruby);
+        assert!(matches!(parent.build(&mut LayoutContext::new(), &fonts),
+            Err(e) if e.kind == crate::limits::LimitKind::RubyCutWork && e.limit == 1000));
+    }
+}
+
 fn cursor_storage_fixture(count: usize, full_lanes: usize, first_line: bool) -> ParagraphBuilder {
     let limits = Limits::default();
     let mut root = style("Shodo Fixture CJK");

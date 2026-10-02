@@ -1,4 +1,4 @@
-//! Aggregate retained resources across normal, first-line and nested paragraphs.
+//! Aggregate retained resources and work across normal, first-line and nested paragraphs.
 use crate::limits::{LimitExceeded, LimitKind, Limits};
 
 #[derive(Clone, Copy, Default)]
@@ -8,6 +8,7 @@ pub(super) struct Cost {
     styles: u64,
     style_bytes: u64,
     glyphs: u64,
+    cut_work: u64,
 }
 
 impl Cost {
@@ -18,6 +19,7 @@ impl Cost {
             LimitKind::Styles => self.styles,
             LimitKind::StyleBytes => self.style_bytes,
             LimitKind::ShapedGlyphs => self.glyphs,
+            LimitKind::RubyCutWork => self.cut_work,
             _ => 0,
         }
     }
@@ -28,6 +30,7 @@ impl Cost {
             LimitKind::Styles => &mut self.styles,
             LimitKind::StyleBytes => &mut self.style_bytes,
             LimitKind::ShapedGlyphs => &mut self.glyphs,
+            LimitKind::RubyCutWork => &mut self.cut_work,
             _ => return,
         };
         *value = value.saturating_add(amount);
@@ -63,6 +66,7 @@ pub(super) fn limit(limits: &Limits, kind: LimitKind) -> Option<u64> {
         LimitKind::Styles => limits.max_styles,
         LimitKind::StyleBytes => limits.max_style_bytes,
         LimitKind::ShapedGlyphs => limits.max_shaped_glyphs,
+        LimitKind::RubyCutWork => limits.max_ruby_cut_work,
         _ => None,
     }
 }
@@ -110,6 +114,7 @@ impl RubyBudget {
             LimitKind::Styles,
             LimitKind::StyleBytes,
             LimitKind::ShapedGlyphs,
+            LimitKind::RubyCutWork,
         ] {
             used.add(kind, scope.used(self.spent, kind));
         }
@@ -124,6 +129,7 @@ impl RubyBudget {
             (LimitKind::Styles, &mut remaining.max_styles),
             (LimitKind::StyleBytes, &mut remaining.max_style_bytes),
             (LimitKind::ShapedGlyphs, &mut remaining.max_shaped_glyphs),
+            (LimitKind::RubyCutWork, &mut remaining.max_ruby_cut_work),
         ] {
             for scope in &self.scopes {
                 if let Some(cap) = limit(&scope.limits, kind) {
