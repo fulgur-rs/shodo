@@ -547,7 +547,14 @@ fn shape_inputs<'a>(
                     }
                     part_advance += advance;
                 }
-                parts.push((part_start..end, part_advance));
+                // The usual unsplit cluster keeps its sole part on the stack.
+                // Only a pen-budget split above allocates the fallback Vec.
+                let single = if parts.is_empty() {
+                    Some((part_start..end, part_advance))
+                } else {
+                    parts.push((part_start..end, part_advance));
+                    None
+                };
                 if parts.len() > 1 || part_advance.abs() > i64::from(RUN_PEN_LIMIT) {
                     warnings.push(crate::limits::WarningKind::Unsupported,
                         "glyph cluster exceeds run pen budget; splitting storage without introducing a break");
@@ -558,7 +565,7 @@ fn shape_inputs<'a>(
                 if original.level % 2 == 1 {
                     parts.reverse();
                 }
-                for (part, part_advance) in parts {
+                for (part, part_advance) in single.into_iter().chain(parts) {
                     let run_start = store.len() as u32;
                     let mut pen = LayoutUnit::ZERO;
                     for index in &order[part.clone()] {

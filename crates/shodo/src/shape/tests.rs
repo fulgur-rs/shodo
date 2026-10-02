@@ -362,8 +362,8 @@ fn expanded_single_cluster_pen_splits_without_new_breaks() {
     for value in [8u16, 0, 1, 0, 1, 4, 2, 0, 1, 8, 1, 74, 1, 8, 32] {
         gsub.extend(value.to_be_bytes());
     }
-    for _ in 0..32 {
-        gsub.extend(w.to_be_bytes());
+    for at in 0..32 {
+        gsub.extend(if at % 3 == 0 { a } else { w }.to_be_bytes());
     }
     for value in [1u16, 1, a] {
         gsub.extend(value.to_be_bytes());
@@ -437,6 +437,76 @@ fn expanded_single_cluster_pen_splits_without_new_breaks() {
             .iter()
             .all(|u| u.break_after == crate::analysis::units::BreakClass::Prohibited)
     );
+    // Distinct glyphs and advances expose a missing RTL part reversal, which a
+    // uniform expansion cannot catch. Force the retained item's bidi level so
+    // the same pinned Latin substitution exercises both shaping directions.
+    for rtl in [false, true] {
+        let mut items = p.data.shape_items.clone();
+        for item in &mut items {
+            item.level = u8::from(rtl);
+        }
+        let mut buffer = harfrust::UnicodeBuffer::new();
+        buffer.push_str("a");
+        buffer.set_script(harfrust::script::LATIN);
+        buffer.set_direction(if rtl {
+            harfrust::Direction::RightToLeft
+        } else {
+            harfrust::Direction::LeftToRight
+        });
+        let expected = shaper.shape(buffer, harfrust::ShapeOptions::default());
+        let mut warnings = crate::limits::WarningSink::default();
+        let mut sat = Saturation::default();
+        let (glyphs, runs) = shape_items(
+            &mut crate::LayoutContext::new(),
+            &items,
+            &p.data.styles,
+            &fonts,
+            style.writing_mode,
+            &limits,
+            &mut warnings,
+            &mut sat,
+        )
+        .unwrap();
+        assert!(runs.len() > 1);
+        assert!(sat.is_clean(), "storage splits must avoid pen saturation");
+        assert!(runs.iter().all(|run| run.text == (0..1)));
+        assert!(glyphs.cluster.iter().all(|cluster| *cluster == 0));
+        let mut visual_runs: Vec<_> = runs.iter().collect();
+        if rtl {
+            visual_runs.reverse();
+        }
+        let actual: Vec<_> = visual_runs
+            .into_iter()
+            .flat_map(|run| {
+                glyphs.id[run.glyphs.start as usize..run.glyphs.end as usize]
+                    .iter()
+                    .copied()
+            })
+            .collect();
+        assert_eq!(
+            actual,
+            expected
+                .glyph_infos()
+                .iter()
+                .map(|g| g.glyph_id)
+                .collect::<Vec<_>>(),
+            "rtl={rtl}: splitting must preserve intra-cluster visual order"
+        );
+        assert!(
+            glyphs
+                .pen
+                .iter()
+                .all(|pen| pen.raw().abs() <= RUN_PEN_LIMIT)
+        );
+        let warnings = warnings.take();
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].kind, crate::limits::WarningKind::Unsupported);
+        assert!(
+            warnings[0]
+                .message
+                .contains("glyph cluster exceeds run pen budget")
+        );
+    }
 }
 
 #[test]

@@ -10,6 +10,13 @@ use crate::{RubyAlign, RubyPosition};
 use std::collections::HashMap;
 use std::ops::Range;
 
+#[path = "geometry_index.rs"]
+mod index;
+
+#[cfg(test)]
+#[path = "tests/bounds.rs"]
+mod bounds_tests;
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Bounds {
     pub(crate) top: LayoutUnit,
@@ -111,32 +118,6 @@ impl<'a> Frame<'a> {
         }
     }
 
-    fn belongs(
-        &self,
-        record: &FragmentRecord,
-        box_index: Option<u32>,
-        units: &Range<usize>,
-    ) -> bool {
-        if let Some(box_index) = box_index {
-            let mut owner = self.owner(record);
-            while let Some(index) = owner {
-                if index == box_index {
-                    return true;
-                }
-                owner = self.data.boxes[index as usize].parent;
-            }
-            false
-        } else {
-            match &record.kind {
-                RecordKind::Glyphs { text, .. } => self.data.units[units.clone()]
-                    .iter()
-                    .any(|u| u.text.start < text.end && text.start < u.text.end),
-                RecordKind::Atomic { unit, .. } => units.contains(&(*unit as usize)),
-                _ => false,
-            }
-        }
-    }
-
     pub(crate) fn record_bounds(&self, index: usize, sat: &mut Saturation) -> Option<Bounds> {
         let center = self.baseline.add(self.shifts[index], sat);
         let (above, below) = record_extents(self.data, &self.records[index], self.runs, sat)?;
@@ -144,27 +125,6 @@ impl<'a> Frame<'a> {
             top: center.sub(above, sat),
             bottom: center.add(below, sat),
         })
-    }
-
-    fn column_area(
-        &self,
-        fragment: &RubyFragmentMeasure,
-        column: usize,
-        sat: &mut Saturation,
-    ) -> Bounds {
-        let ruby = &self.data.ruby.containers[fragment.container];
-        let mut bounds = self.column_content(fragment, column, sat);
-        for (i, record) in self.records.iter().enumerate() {
-            if self.belongs(
-                record,
-                ruby.columns[fragment.column_start + column].box_index,
-                &fragment.bases[column],
-            ) && let Some(other) = self.record_bounds(i, sat)
-            {
-                bounds = bounds.union(other);
-            }
-        }
-        bounds
     }
 }
 
@@ -402,22 +362,31 @@ pub(crate) fn tracks(
     }
     let mut over = LayoutUnit::ZERO;
     let mut under = LayoutUnit::ZERO;
+    // Keep each side's prefix separate: empty levels still affect the side
+    // alternation, and inter-character lanes have already expanded `base`.
+    let mut offsets = Vec::with_capacity(levels.len());
     for (level, height) in levels.iter().enumerate() {
-        for (i, (lane, child_height)) in lanes.iter().zip(heights).enumerate() {
-            if ruby.lanes[lane.lane].level != level || selected[i].inline_size.is_some() {
-                continue;
-            }
-            selected[i].block = if before[level] {
-                base.top.sub(over, sat).sub(*child_height, sat)
-            } else {
-                base.bottom.add(under, sat)
-            };
-        }
+        #[cfg(test)]
+        track_tests::visit();
+        offsets.push(if before[level] { over } else { under });
         if before[level] {
             over = over.add(*height, sat);
         } else {
             under = under.add(*height, sat);
         }
+    }
+    for (i, (lane, child_height)) in lanes.iter().zip(heights).enumerate() {
+        #[cfg(test)]
+        track_tests::visit();
+        if selected[i].inline_size.is_some() {
+            continue;
+        }
+        let level = ruby.lanes[lane.lane].level;
+        selected[i].block = if before[level] {
+            base.top.sub(offsets[level], sat).sub(*child_height, sat)
+        } else {
+            base.bottom.add(offsets[level], sat)
+        };
     }
     let whole = Bounds {
         top: base.top.sub(over, sat),
@@ -461,7 +430,8 @@ pub(crate) fn layout(
 ) -> BlockLayout {
     let data = frame.data;
     let mut lanes = Vec::with_capacity(measure.fragments.len());
-    let mut whole: Vec<(Range<usize>, Bounds)> = Vec::new();
+    let bounds = index::RecordBounds::new(frame, sat);
+    let mut whole = index::CompletedBounds::default();
     let mut contribution = Bounds {
         top: LayoutUnit::ZERO,
         bottom: frame.block_size,
@@ -473,14 +443,19 @@ pub(crate) fn layout(
             if units.is_empty() {
                 continue;
             }
-            let area = frame.column_area(fragment, i, sat);
+            let mut area = frame.column_content(fragment, i, sat);
+            if let Some(other) = bounds.column(
+                frame,
+                ruby.columns[fragment.column_start + i].box_index,
+                units,
+            ) {
+                area = area.union(other);
+            }
             base = Some(base.map_or(area, |b| b.union(area)));
         }
         let mut base = base.unwrap_or_else(|| frame.box_content(ruby.box_index, sat));
-        for (units, area) in &whole {
-            if fragment.units.start <= units.start && units.end <= fragment.units.end {
-                base = base.union(*area);
-            }
+        if fragment.has_content {
+            base = whole.include_children(&fragment.units, base);
         }
         let contents: Vec<_> = (0..fragment.bases.len())
             .map(|i| frame.column_content(fragment, i, sat))
@@ -499,7 +474,7 @@ pub(crate) fn layout(
             sat,
         );
         if fragment.has_content {
-            whole.push((fragment.units.clone(), result.whole));
+            whole.insert(fragment.units.clone(), fragment.container, result.whole);
             contribution = contribution.union(result.contribution);
         }
         lanes.push(result.lanes);
@@ -510,3 +485,7 @@ pub(crate) fn layout(
         advance: contribution.height(sat),
     }
 }
+
+#[cfg(test)]
+#[path = "tests/tracks.rs"]
+mod track_tests;
