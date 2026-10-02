@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.10](https://github.com/fulgur-rs/shodo/compare/v0.0.9...v0.0.10) - 2026-10-02
+
+### Fixed
+
+- keep default-ignorable characters invisible
+- budget ruby cut search before traversing candidates
+- resolve accessible glyph owners with a monotone cursor
+- index variation settings without quadratic scans
+- share shaping features across paragraph and line edges
+- charge GDEF mark sets to cumulative work budget
+
 ### Fixed
 
 - Keep default-ignorable characters invisible through font fallback and shaping, while preserving their logical text, source clusters, and discretionary hyphens.
