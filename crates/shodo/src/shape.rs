@@ -6,6 +6,7 @@
 
 pub(crate) mod cache;
 mod features;
+pub(crate) use features::FeatureSets;
 mod input;
 mod instance;
 pub(crate) mod orientation;
@@ -217,7 +218,18 @@ pub(crate) fn shape_items(
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
-    shape_items_with_base_scopes(cx, items, styles, fonts, mode, limits, warnings, sat, None)
+    shape_items_with_base_scopes(
+        cx,
+        items,
+        styles,
+        fonts,
+        mode,
+        limits,
+        warnings,
+        sat,
+        None,
+        &FeatureSets::new(items, styles),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -231,6 +243,7 @@ pub(crate) fn shape_items_with_base_scopes(
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
     bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
+    feature_sets: &FeatureSets,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
     shape_inputs(
         cx,
@@ -242,6 +255,7 @@ pub(crate) fn shape_items_with_base_scopes(
         warnings,
         sat,
         bases,
+        feature_sets,
     )
 }
 
@@ -256,6 +270,7 @@ fn shape_inputs<'a>(
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
     mut bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
+    feature_sets: &FeatureSets,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
     cx.bound_shaping_scratch(limits);
     let mut store = GlyphStore::default();
@@ -263,6 +278,7 @@ fn shape_inputs<'a>(
     for input in items {
         let original = input.original;
         let style = &styles[original.style as usize];
+        let features = feature_sets.get(original);
         let font_data = original.font.as_ref().map(|found| {
             fonts
                 .font_data(found.id)
@@ -287,15 +303,14 @@ fn shape_inputs<'a>(
                 Arc::get_mut(&mut instance)
                     .expect("new instance")
                     .vertical_metrics = vertical_metrics;
-                Arc::get_mut(&mut instance).expect("new instance").features =
-                    features::for_item(style, original);
+                Arc::get_mut(&mut instance).expect("new instance").features = features.clone();
                 (shaper, instance, size)
             });
         let missing_instance = if resolved.is_none() {
             Some(Arc::new(RunInstance {
                 script: original.script,
                 language: style.lang.clone(),
-                features: features::for_item(style, original),
+                features,
                 metrics: Some(fonts.metrics(fonts.primary_font(), style.font_size)),
                 ..Default::default()
             }))
@@ -864,6 +879,7 @@ pub(crate) fn shape_window_edit(
             warnings,
             sat,
             None,
+            &data.shape_features,
         )
     } else {
         let mut items: Vec<crate::analysis::itemize::ShapeItem> = Vec::new();
@@ -942,7 +958,7 @@ pub(crate) fn shape_window_edit(
                 at = finish;
             }
         }
-        shape_items(
+        shape_items_with_base_scopes(
             cx,
             &items,
             &data.styles,
@@ -951,6 +967,8 @@ pub(crate) fn shape_window_edit(
             &limits,
             warnings,
             sat,
+            None,
+            &data.shape_features,
         )
     };
     match result {

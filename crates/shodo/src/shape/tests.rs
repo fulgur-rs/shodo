@@ -6,6 +6,146 @@ use skrifa::MetadataProvider;
 use skrifa::raw::TableProvider;
 
 #[test]
+fn split_items_share_retained_author_features() {
+    for real in [false, true] {
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        if real {
+            fonts
+                .register_face(
+                    crate::test_support::fonts::LATIN.to_vec(),
+                    0,
+                    crate::font::FontFaceDescriptor {
+                        family: "Latin".into(),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+        }
+        let style = crate::style::ParagraphStyle {
+            root: crate::style::InlineStyle {
+                font_families: vec![crate::style::FontFamily::Named("Latin".into())],
+                font_features: vec![
+                    crate::style::FontFeature {
+                        tag: *b"liga",
+                        value: 0
+                    };
+                    256
+                ],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        for _ in 0..32 {
+            builder.push_text(
+                crate::node::TextSource::Generated {
+                    node: crate::node::NodeId(1),
+                },
+                "a",
+            );
+            builder.push_forced_break(crate::node::NodeId(1));
+        }
+        features::STYLE_FEATURE_BUILDS.with(|count| count.set(0));
+        let p = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        assert_eq!(p.data.runs.len(), 32);
+        let first = &p.data.runs[0].instance.features;
+        assert_eq!(first.len(), 256);
+        for run in &p.data.runs {
+            assert_eq!(
+                run.instance.features.as_ptr(),
+                first.as_ptr(),
+                "real={real}"
+            );
+        }
+        assert_eq!(features::STYLE_FEATURE_BUILDS.with(|count| count.get()), 1);
+        for _ in 0..2 {
+            let (_, edge) = shape_window(
+                &p.data,
+                &p.data.units[0],
+                &mut crate::LayoutContext::new(),
+                &mut crate::limits::WarningSink::default(),
+                &mut Saturation::default(),
+            )
+            .unwrap();
+            assert_eq!(edge[0].instance.features.as_ptr(), first.as_ptr());
+        }
+        let replacement = Replacement {
+            text: 0..1,
+            c: 'b',
+            font: None,
+        };
+        let (_, edited) = shape_window_edit(
+            &p.data,
+            &p.data.units[0],
+            None,
+            Some(&replacement),
+            &mut crate::LayoutContext::new(),
+            &mut crate::limits::WarningSink::default(),
+            &mut Saturation::default(),
+        )
+        .unwrap();
+        assert_eq!(edited[0].instance.features.as_ptr(), first.as_ptr());
+    }
+}
+
+#[test]
+fn shared_features_preserve_style_orientation_and_width_settings() {
+    let p = edge_input_paragraph(false, 1024);
+    let mut styles = vec![p.data.styles[p.data.shape_items[0].style as usize].clone(); 2];
+    styles[1].font_features.push(crate::style::FontFeature {
+        tag: *b"liga",
+        value: 1,
+    });
+    let mut items = Vec::new();
+    for _ in 0..2 {
+        for (orientation, width, style) in [
+            (orientation::RunOrientation::Horizontal, None, 0),
+            (orientation::RunOrientation::Upright, None, 0),
+            (orientation::RunOrientation::Horizontal, Some(*b"hwid"), 0),
+            (orientation::RunOrientation::Horizontal, None, 1),
+        ] {
+            let mut item = p.data.shape_items[0].clone();
+            item.orientation = orientation;
+            item.width_feature = width;
+            item.style = style;
+            items.push(item);
+        }
+    }
+    let (_, runs) = shape_items(
+        &mut crate::LayoutContext::new(),
+        &items,
+        &styles,
+        &p.data.fonts,
+        WritingMode::HorizontalTb,
+        &Limits::default(),
+        &mut crate::limits::WarningSink::default(),
+        &mut Saturation::default(),
+    )
+    .unwrap();
+    assert_eq!(runs.len(), 8);
+    for (i, run) in runs.iter().enumerate() {
+        let expected = features::for_item(&styles[items[i].style as usize], &items[i]);
+        assert_eq!(
+            format!("{:?}", run.instance.features),
+            format!("{expected:?}")
+        );
+        assert_eq!(
+            run.instance.features.as_ptr(),
+            runs[i % 4].instance.features.as_ptr()
+        );
+    }
+}
+
+#[test]
 fn missing_vorg_uses_vmtx_top_bearing_for_vertical_origin() {
     // CJK 水 has yMax=838 in this pinned outline and vmtx TSB=42.
     // Remove VORG and change only its TSB to 142: origin becomes 980.

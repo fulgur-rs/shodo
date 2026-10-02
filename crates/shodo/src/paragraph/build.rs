@@ -602,6 +602,7 @@ fn build_data(
         style.writing_mode,
         &shape_limits,
     );
+    let shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
     let (glyphs, runs) = shape_items_with_base_scopes(
         cx,
         &shape_items_input,
@@ -612,6 +613,7 @@ fn build_data(
         warnings,
         sat,
         if bases.enabled() { Some(bases) } else { None },
+        &shape_features,
     )?;
     let base_level = u8::from(used_direction == Direction::Rtl);
     let style_metrics: Vec<_> = styles
@@ -740,6 +742,7 @@ fn build_data(
         floats: Vec::new(),
         runs,
         shape_items: shape_items_input,
+        shape_features,
         breaks,
         units,
         boxes,

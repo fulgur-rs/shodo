@@ -113,6 +113,7 @@ pub(crate) struct ParagraphData {
     pub(crate) floats: Vec<(u32, NodeId)>,
     pub(crate) runs: Vec<ShapedRun>,
     pub(crate) shape_items: Vec<crate::analysis::itemize::ShapeItem>,
+    pub(crate) shape_features: crate::shape::FeatureSets,
     pub(crate) breaks: crate::analysis::breaks::BreakAnalysis,
     pub(crate) units: Vec<Unit>,
     pub(crate) boxes: Vec<InlineBoxInfo>,
