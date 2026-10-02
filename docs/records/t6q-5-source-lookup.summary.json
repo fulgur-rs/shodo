@@ -1,0 +1,980 @@
+{
+  "base": "6c660693fcc5816db426201af195de596e3ccd81",
+  "scope": "new layout; cold one source query; warm three source queries; result vectors retained; source/to_source/oracles/JSON outside measured scopes",
+  "time": "counter-free release, 9 interleaved samples per state",
+  "allocation": "counting release, 3 interleaved samples per state",
+  "output_equal": true,
+  "output_cases": 11,
+  "samples": {
+    "time_per_state": 9,
+    "allocation_per_state": 3
+  },
+  "rows": [
+    {
+      "kind": "unique",
+      "count": 32,
+      "budget": "default",
+      "lines": 32,
+      "results": 1,
+      "oracle_sha256": "bfd3aa7164dc2378bfdb67192bb815fc26f338e89e71e3bb746f6ab752b469fb",
+      "digest": {
+        "float_reports": 0,
+        "glyphs": 64,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 32,
+        "runs": 32,
+        "sha256": "109e364fc64da98d07df0a2a1d15c2cee1c972d052cd208299be033c8be0f587",
+        "synthetic_glyphs": 0
+      },
+      "source_sha256": "34eedfb1963b6cc63f557f67cdd49a7e4a05d3155c45d1e3cf4b8a1d0296f397",
+      "query_sha256": "b760cb3193b1d45a382d6b4655e4ead29845abf5e00ffe61f2813306b854d46e",
+      "before": {
+        "new_cost": {
+          "median_ns": 102392,
+          "min_ns": 64327,
+          "max_ns": 124463,
+          "allocation": {
+            "calls": 523,
+            "allocated_bytes": 95756,
+            "deallocated_bytes": 40852,
+            "net_bytes": 54904,
+            "peak_extra_bytes": 55288
+          }
+        },
+        "cold_cost": {
+          "median_ns": 3283,
+          "min_ns": 2793,
+          "max_ns": 4261,
+          "allocation": {
+            "calls": 1,
+            "allocated_bytes": 128,
+            "deallocated_bytes": 0,
+            "net_bytes": 128,
+            "peak_extra_bytes": 128
+          }
+        },
+        "warm_cost": {
+          "median_ns": 5727,
+          "min_ns": 2794,
+          "max_ns": 6775,
+          "allocation": {
+            "calls": 3,
+            "allocated_bytes": 384,
+            "deallocated_bytes": 0,
+            "net_bytes": 384,
+            "peak_extra_bytes": 384
+          }
+        }
+      },
+      "after": {
+        "new_cost": {
+          "median_ns": 94919,
+          "min_ns": 65793,
+          "max_ns": 118736,
+          "allocation": {
+            "calls": 523,
+            "allocated_bytes": 95756,
+            "deallocated_bytes": 40852,
+            "net_bytes": 54904,
+            "peak_extra_bytes": 55288
+          }
+        },
+        "cold_cost": {
+          "median_ns": 22420,
+          "min_ns": 15645,
+          "max_ns": 25703,
+          "allocation": {
+            "calls": 119,
+            "allocated_bytes": 15312,
+            "deallocated_bytes": 7968,
+            "net_bytes": 7344,
+            "peak_extra_bytes": 7744
+          }
+        },
+        "warm_cost": {
+          "median_ns": 2864,
+          "min_ns": 2374,
+          "max_ns": 3422,
+          "allocation": {
+            "calls": 9,
+            "allocated_bytes": 1584,
+            "deallocated_bytes": 1200,
+            "net_bytes": 384,
+            "peak_extra_bytes": 784
+          }
+        }
+      }
+    },
+    {
+      "kind": "unique",
+      "count": 128,
+      "budget": "default",
+      "lines": 128,
+      "results": 1,
+      "oracle_sha256": "584165aca0ecf0a34c03d68ea9f1ad0eeba58a3d03bc26e3a3741be54d7d374e",
+      "digest": {
+        "float_reports": 0,
+        "glyphs": 256,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 128,
+        "runs": 128,
+        "sha256": "5fbc5a13013c38f1b6badfa33848bd96cb3072e362d6d9e5d3bde68bbe4ac571",
+        "synthetic_glyphs": 0
+      },
+      "source_sha256": "2a281354987320e9b3d612c026f0e0d4bde30c3ebeb7ab7ffa1b4df750ca6864",
+      "query_sha256": "dc490467791fe2307946631ef54106cc43455d892d5c80eafd7cb4349fa7be2c",
+      "before": {
+        "new_cost": {
+          "median_ns": 409009,
+          "min_ns": 216099,
+          "max_ns": 895477,
+          "allocation": {
+            "calls": 2063,
+            "allocated_bytes": 384140,
+            "deallocated_bytes": 164116,
+            "net_bytes": 220024,
+            "peak_extra_bytes": 221560
+          }
+        },
+        "cold_cost": {
+          "median_ns": 20534,
+          "min_ns": 11106,
+          "max_ns": 30313,
+          "allocation": {
+            "calls": 1,
+            "allocated_bytes": 128,
+            "deallocated_bytes": 0,
+            "net_bytes": 128,
+            "peak_extra_bytes": 128
+          }
+        },
+        "warm_cost": {
+          "median_ns": 55247,
+          "min_ns": 30732,
+          "max_ns": 72499,
+          "allocation": {
+            "calls": 3,
+            "allocated_bytes": 384,
+            "deallocated_bytes": 0,
+            "net_bytes": 384,
+            "peak_extra_bytes": 384
+          }
+        }
+      },
+      "after": {
+        "new_cost": {
+          "median_ns": 331901,
+          "min_ns": 215680,
+          "max_ns": 420394,
+          "allocation": {
+            "calls": 2063,
+            "allocated_bytes": 384140,
+            "deallocated_bytes": 164116,
+            "net_bytes": 220024,
+            "peak_extra_bytes": 221560
+          }
+        },
+        "cold_cost": {
+          "median_ns": 55177,
+          "min_ns": 37088,
+          "max_ns": 70753,
+          "allocation": {
+            "calls": 436,
+            "allocated_bytes": 65104,
+            "deallocated_bytes": 38880,
+            "net_bytes": 26224,
+            "peak_extra_bytes": 26624
+          }
+        },
+        "warm_cost": {
+          "median_ns": 5238,
+          "min_ns": 3771,
+          "max_ns": 6286,
+          "allocation": {
+            "calls": 9,
+            "allocated_bytes": 1584,
+            "deallocated_bytes": 1200,
+            "net_bytes": 384,
+            "peak_extra_bytes": 784
+          }
+        }
+      }
+    },
+    {
+      "kind": "unique",
+      "count": 512,
+      "budget": "default",
+      "lines": 512,
+      "results": 1,
+      "oracle_sha256": "dcf26605c425d41568ebf09c5fc9ca3ab6fd4e3c909ed67a3ef39454ef86503c",
+      "digest": {
+        "float_reports": 0,
+        "glyphs": 1024,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 512,
+        "runs": 512,
+        "sha256": "762f5347421b79df2da0a2b2f5ae96bf449a227efa6ba17eb9d2515fd78a7d4e",
+        "synthetic_glyphs": 0
+      },
+      "source_sha256": "cd6b57fa894db079fc1df34674fa0993f8fb75e9030dc579ed69a5930a243dfd",
+      "query_sha256": "2de80b970f6ea84a5790ee52e3568810199a69404abed185699e6969c061e373",
+      "before": {
+        "new_cost": {
+          "median_ns": 1620952,
+          "min_ns": 923833,
+          "max_ns": 1900539,
+          "allocation": {
+            "calls": 8212,
+            "allocated_bytes": 1549964,
+            "deallocated_bytes": 669460,
+            "net_bytes": 880504,
+            "peak_extra_bytes": 886648
+          }
+        },
+        "cold_cost": {
+          "median_ns": 249904,
+          "min_ns": 131098,
+          "max_ns": 284128,
+          "allocation": {
+            "calls": 1,
+            "allocated_bytes": 128,
+            "deallocated_bytes": 0,
+            "net_bytes": 128,
+            "peak_extra_bytes": 128
+          }
+        },
+        "warm_cost": {
+          "median_ns": 730155,
+          "min_ns": 405866,
+          "max_ns": 1191618,
+          "allocation": {
+            "calls": 3,
+            "allocated_bytes": 384,
+            "deallocated_bytes": 0,
+            "net_bytes": 384,
+            "peak_extra_bytes": 384
+          }
+        }
+      },
+      "after": {
+        "new_cost": {
+          "median_ns": 1493416,
+          "min_ns": 930749,
+          "max_ns": 2239495,
+          "allocation": {
+            "calls": 8212,
+            "allocated_bytes": 1549964,
+            "deallocated_bytes": 669460,
+            "net_bytes": 880504,
+            "peak_extra_bytes": 886648
+          }
+        },
+        "cold_cost": {
+          "median_ns": 143251,
+          "min_ns": 128724,
+          "max_ns": 234189,
+          "allocation": {
+            "calls": 1691,
+            "allocated_bytes": 259648,
+            "deallocated_bytes": 154992,
+            "net_bytes": 104656,
+            "peak_extra_bytes": 105056
+          }
+        },
+        "warm_cost": {
+          "median_ns": 9010,
+          "min_ns": 8451,
+          "max_ns": 17252,
+          "allocation": {
+            "calls": 9,
+            "allocated_bytes": 1584,
+            "deallocated_bytes": 1200,
+            "net_bytes": 384,
+            "peak_extra_bytes": 784
+          }
+        }
+      }
+    },
+    {
+      "kind": "repeated",
+      "count": 32,
+      "budget": "default",
+      "lines": 32,
+      "results": 32,
+      "oracle_sha256": "1cd8208e87fd46beb1b322763c9c5752eed4a4ff9b0250ca201c63ac64094104",
+      "digest": {
+        "float_reports": 0,
+        "glyphs": 64,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 32,
+        "runs": 32,
+        "sha256": "109e364fc64da98d07df0a2a1d15c2cee1c972d052cd208299be033c8be0f587",
+        "synthetic_glyphs": 0
+      },
+      "source_sha256": "d1a36495ea328b95fa9b2e9e91d0c496feb773578eaeeaaa3cb5cf70ed7e9633",
+      "query_sha256": "ae6e5d8f2a45f82dce7becbd27ac4a6d81ded3bd0d578413b87b4e443104aa30",
+      "before": {
+        "new_cost": {
+          "median_ns": 67191,
+          "min_ns": 35691,
+          "max_ns": 113567,
+          "allocation": {
+            "calls": 523,
+            "allocated_bytes": 95756,
+            "deallocated_bytes": 40852,
+            "net_bytes": 54904,
+            "peak_extra_bytes": 55288
+          }
+        },
+        "cold_cost": {
+          "median_ns": 8591,
+          "min_ns": 5867,
+          "max_ns": 10058,
+          "allocation": {
+            "calls": 4,
+            "allocated_bytes": 1920,
+            "deallocated_bytes": 896,
+            "net_bytes": 1024,
+            "peak_extra_bytes": 1024
+          }
+        },
+        "warm_cost": {
+          "median_ns": 20395,
+          "min_ns": 12083,
+          "max_ns": 73477,
+          "allocation": {
+            "calls": 12,
+            "allocated_bytes": 5760,
+            "deallocated_bytes": 2688,
+            "net_bytes": 3072,
+            "peak_extra_bytes": 3072
+          }
+        }
+      },
+      "after": {
+        "new_cost": {
+          "median_ns": 64607,
+          "min_ns": 36668,
+          "max_ns": 85420,
+          "allocation": {
+            "calls": 523,
+            "allocated_bytes": 95756,
+            "deallocated_bytes": 40852,
+            "net_bytes": 54904,
+            "peak_extra_bytes": 55288
+          }
+        },
+        "cold_cost": {
+          "median_ns": 12223,
+          "min_ns": 8102,
+          "max_ns": 17740,
+          "allocation": {
+            "calls": 28,
+            "allocated_bytes": 11168,
+            "deallocated_bytes": 4920,
+            "net_bytes": 6248,
+            "peak_extra_bytes": 6872
+          }
+        },
+        "warm_cost": {
+          "median_ns": 9499,
+          "min_ns": 6775,
+          "max_ns": 10616,
+          "allocation": {
+            "calls": 27,
+            "allocated_bytes": 8304,
+            "deallocated_bytes": 5232,
+            "net_bytes": 3072,
+            "peak_extra_bytes": 3696
+          }
+        }
+      }
+    },
+    {
+      "kind": "repeated",
+      "count": 128,
+      "budget": "default",
+      "lines": 128,
+      "results": 128,
+      "oracle_sha256": "173ce3f98ff4062bc0b20bdc17790d1a5cb90cc043799fa4d57f9ebad7fdb0da",
+      "digest": {
+        "float_reports": 0,
+        "glyphs": 256,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 128,
+        "runs": 128,
+        "sha256": "5fbc5a13013c38f1b6badfa33848bd96cb3072e362d6d9e5d3bde68bbe4ac571",
+        "synthetic_glyphs": 0
+      },
+      "source_sha256": "516bb87112cba5915d2048decff73a463f45c73e03d53d65faba3269e189f3c5",
+      "query_sha256": "23599059d813787487401b0e99452bc13dcf9ac6dec64c53a029191a6cfaa37c",
+      "before": {
+        "new_cost": {
+          "median_ns": 219382,
+          "min_ns": 116500,
+          "max_ns": 320587,
+          "allocation": {
+            "calls": 2063,
+            "allocated_bytes": 384140,
+            "deallocated_bytes": 164116,
+            "net_bytes": 220024,
+            "peak_extra_bytes": 221560
+          }
+        },
+        "cold_cost": {
+          "median_ns": 90519,
+          "min_ns": 49241,
+          "max_ns": 108678,
+          "allocation": {
+            "calls": 6,
+            "allocated_bytes": 8064,
+            "deallocated_bytes": 3968,
+            "net_bytes": 4096,
+            "peak_extra_bytes": 4096
+          }
+        },
+        "warm_cost": {
+          "median_ns": 253535,
+          "min_ns": 146883,
+          "max_ns": 275327,
+          "allocation": {
+            "calls": 18,
+            "allocated_bytes": 24192,
+            "deallocated_bytes": 11904,
+            "net_bytes": 12288,
+            "peak_extra_bytes": 12288
+          }
+        }
+      },
+      "after": {
+        "new_cost": {
+          "median_ns": 207718,
+          "min_ns": 118386,
+          "max_ns": 287550,
+          "allocation": {
+            "calls": 2063,
+            "allocated_bytes": 384140,
+            "deallocated_bytes": 164116,
+            "net_bytes": 220024,
+            "peak_extra_bytes": 221560
+          }
+        },
+        "cold_cost": {
+          "median_ns": 26332,
+          "min_ns": 15156,
+          "max_ns": 47145,
+          "allocation": {
+            "calls": 38,
+            "allocated_bytes": 41888,
+            "deallocated_bytes": 18744,
+            "net_bytes": 23144,
+            "peak_extra_bytes": 24536
+          }
+        },
+        "warm_cost": {
+          "median_ns": 30801,
+          "min_ns": 21512,
+          "max_ns": 36180,
+          "allocation": {
+            "calls": 39,
+            "allocated_bytes": 31344,
+            "deallocated_bytes": 19056,
+            "net_bytes": 12288,
+            "peak_extra_bytes": 13680
+          }
+        }
+      }
+    },
+    {
+      "kind": "repeated",
+      "count": 512,
+      "budget": "default",
+      "lines": 512,
+      "results": 512,
+      "oracle_sha256": "5c6e8eaa5bb1cd09c5df846cee2755b63acbdf16cbe5c470a4c18caddcfe0784",
+      "digest": {
+        "float_reports": 0,
+        "glyphs": 1024,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 512,
+        "runs": 512,
+        "sha256": "762f5347421b79df2da0a2b2f5ae96bf449a227efa6ba17eb9d2515fd78a7d4e",
+        "synthetic_glyphs": 0
+      },
+      "source_sha256": "a88da9577812be86522fa702590301faa52b02220a87f48ded5e54fe5f959c37",
+      "query_sha256": "ab02795d5cc9f603bfe004dbfc852fad072ce589c908f2e27ad411253f1ea899",
+      "before": {
+        "new_cost": {
+          "median_ns": 1025318,
+          "min_ns": 468377,
+          "max_ns": 1331377,
+          "allocation": {
+            "calls": 8212,
+            "allocated_bytes": 1549964,
+            "deallocated_bytes": 669460,
+            "net_bytes": 880504,
+            "peak_extra_bytes": 886648
+          }
+        },
+        "cold_cost": {
+          "median_ns": 1369442,
+          "min_ns": 753693,
+          "max_ns": 1492019,
+          "allocation": {
+            "calls": 8,
+            "allocated_bytes": 32640,
+            "deallocated_bytes": 16256,
+            "net_bytes": 16384,
+            "peak_extra_bytes": 16384
+          }
+        },
+        "warm_cost": {
+          "median_ns": 4321631,
+          "min_ns": 2161060,
+          "max_ns": 4721212,
+          "allocation": {
+            "calls": 24,
+            "allocated_bytes": 97920,
+            "deallocated_bytes": 48768,
+            "net_bytes": 49152,
+            "peak_extra_bytes": 49152
+          }
+        }
+      },
+      "after": {
+        "new_cost": {
+          "median_ns": 695302,
+          "min_ns": 490868,
+          "max_ns": 1893974,
+          "allocation": {
+            "calls": 8212,
+            "allocated_bytes": 1549964,
+            "deallocated_bytes": 669460,
+            "net_bytes": 880504,
+            "peak_extra_bytes": 886648
+          }
+        },
+        "cold_cost": {
+          "median_ns": 90589,
+          "min_ns": 57621,
+          "max_ns": 181945,
+          "allocation": {
+            "calls": 48,
+            "allocated_bytes": 164768,
+            "deallocated_bytes": 74040,
+            "net_bytes": 90728,
+            "peak_extra_bytes": 95192
+          }
+        },
+        "warm_cost": {
+          "median_ns": 150865,
+          "min_ns": 97153,
+          "max_ns": 293836,
+          "allocation": {
+            "calls": 51,
+            "allocated_bytes": 123504,
+            "deallocated_bytes": 74352,
+            "net_bytes": 49152,
+            "peak_extra_bytes": 53616
+          }
+        }
+      }
+    },
+    {
+      "kind": "mixed",
+      "count": 4,
+      "budget": "default",
+      "lines": 4,
+      "results": 2,
+      "oracle_sha256": "cef32d799201863234cc7045db68baf972b7bee156046f6e9006e51806ee73d2",
+      "digest": {
+        "float_reports": 0,
+        "glyphs": 12,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 4,
+        "runs": 6,
+        "sha256": "702030ab790f082573b32ccb9c7f0be1e5cdd82992862c443ac1c304df24aec3",
+        "synthetic_glyphs": 0
+      },
+      "source_sha256": "b33121ba028949481404ed2fd047109bbdeab643dd0df615cf16848dd1eac000",
+      "query_sha256": "c535823f49fa6ce545b10da561fefcdd9d551e3d4a02037983ab98b2f3b11daf",
+      "before": {
+        "new_cost": {
+          "median_ns": 26611,
+          "min_ns": 17880,
+          "max_ns": 31011,
+          "allocation": {
+            "calls": 69,
+            "allocated_bytes": 12084,
+            "deallocated_bytes": 5020,
+            "net_bytes": 7064,
+            "peak_extra_bytes": 7320
+          }
+        },
+        "cold_cost": {
+          "median_ns": 2793,
+          "min_ns": 1886,
+          "max_ns": 3353,
+          "allocation": {
+            "calls": 1,
+            "allocated_bytes": 128,
+            "deallocated_bytes": 0,
+            "net_bytes": 128,
+            "peak_extra_bytes": 128
+          }
+        },
+        "warm_cost": {
+          "median_ns": 1956,
+          "min_ns": 1467,
+          "max_ns": 2375,
+          "allocation": {
+            "calls": 3,
+            "allocated_bytes": 384,
+            "deallocated_bytes": 0,
+            "net_bytes": 384,
+            "peak_extra_bytes": 384
+          }
+        }
+      },
+      "after": {
+        "new_cost": {
+          "median_ns": 21512,
+          "min_ns": 14178,
+          "max_ns": 31011,
+          "allocation": {
+            "calls": 69,
+            "allocated_bytes": 12084,
+            "deallocated_bytes": 5020,
+            "net_bytes": 7064,
+            "peak_extra_bytes": 7320
+          }
+        },
+        "cold_cost": {
+          "median_ns": 11873,
+          "min_ns": 7614,
+          "max_ns": 25284,
+          "allocation": {
+            "calls": 34,
+            "allocated_bytes": 5344,
+            "deallocated_bytes": 2160,
+            "net_bytes": 3184,
+            "peak_extra_bytes": 3616
+          }
+        },
+        "warm_cost": {
+          "median_ns": 2444,
+          "min_ns": 1397,
+          "max_ns": 3352,
+          "allocation": {
+            "calls": 12,
+            "allocated_bytes": 1680,
+            "deallocated_bytes": 1296,
+            "net_bytes": 384,
+            "peak_extra_bytes": 816
+          }
+        }
+      }
+    },
+    {
+      "kind": "mixed",
+      "count": 4,
+      "budget": "shape-zero",
+      "lines": 4,
+      "results": 2,
+      "oracle_sha256": "7bcba6116c1df483481b1468c281c478e8ef608f2e09a4969a6cf76b1cc729ee",
+      "digest": {
+        "float_reports": 0,
+        "glyphs": 12,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 4,
+        "runs": 12,
+        "sha256": "4f866b21bccc5d5477ce6153419e5b32aedd054f0d077df77dd2487eee0ea9b7",
+        "synthetic_glyphs": 0
+      },
+      "source_sha256": "b33121ba028949481404ed2fd047109bbdeab643dd0df615cf16848dd1eac000",
+      "query_sha256": "c535823f49fa6ce545b10da561fefcdd9d551e3d4a02037983ab98b2f3b11daf",
+      "before": {
+        "new_cost": {
+          "median_ns": 18719,
+          "min_ns": 12292,
+          "max_ns": 25353,
+          "allocation": {
+            "calls": 75,
+            "allocated_bytes": 12564,
+            "deallocated_bytes": 5500,
+            "net_bytes": 7064,
+            "peak_extra_bytes": 7320
+          }
+        },
+        "cold_cost": {
+          "median_ns": 2374,
+          "min_ns": 1955,
+          "max_ns": 3353,
+          "allocation": {
+            "calls": 1,
+            "allocated_bytes": 128,
+            "deallocated_bytes": 0,
+            "net_bytes": 128,
+            "peak_extra_bytes": 128
+          }
+        },
+        "warm_cost": {
+          "median_ns": 1956,
+          "min_ns": 1886,
+          "max_ns": 2375,
+          "allocation": {
+            "calls": 3,
+            "allocated_bytes": 384,
+            "deallocated_bytes": 0,
+            "net_bytes": 384,
+            "peak_extra_bytes": 384
+          }
+        }
+      },
+      "after": {
+        "new_cost": {
+          "median_ns": 18160,
+          "min_ns": 11943,
+          "max_ns": 25283,
+          "allocation": {
+            "calls": 75,
+            "allocated_bytes": 12564,
+            "deallocated_bytes": 5500,
+            "net_bytes": 7064,
+            "peak_extra_bytes": 7320
+          }
+        },
+        "cold_cost": {
+          "median_ns": 6984,
+          "min_ns": 5168,
+          "max_ns": 10477,
+          "allocation": {
+            "calls": 34,
+            "allocated_bytes": 5344,
+            "deallocated_bytes": 2160,
+            "net_bytes": 3184,
+            "peak_extra_bytes": 3616
+          }
+        },
+        "warm_cost": {
+          "median_ns": 2794,
+          "min_ns": 2305,
+          "max_ns": 3352,
+          "allocation": {
+            "calls": 12,
+            "allocated_bytes": 1680,
+            "deallocated_bytes": 1296,
+            "net_bytes": 384,
+            "peak_extra_bytes": 816
+          }
+        }
+      }
+    },
+    {
+      "kind": "mixed",
+      "count": 4,
+      "budget": "warning-zero",
+      "lines": 4,
+      "results": 2,
+      "oracle_sha256": "0d5e49dfc0c336812be382815dd9b6200d0f77dcb0669326596ba6600d63211e",
+      "digest": {
+        "float_reports": 0,
+        "glyphs": 12,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 4,
+        "runs": 12,
+        "sha256": "4f866b21bccc5d5477ce6153419e5b32aedd054f0d077df77dd2487eee0ea9b7",
+        "synthetic_glyphs": 0
+      },
+      "source_sha256": "b33121ba028949481404ed2fd047109bbdeab643dd0df615cf16848dd1eac000",
+      "query_sha256": "c535823f49fa6ce545b10da561fefcdd9d551e3d4a02037983ab98b2f3b11daf",
+      "before": {
+        "new_cost": {
+          "median_ns": 17321,
+          "min_ns": 11035,
+          "max_ns": 25284,
+          "allocation": {
+            "calls": 75,
+            "allocated_bytes": 12564,
+            "deallocated_bytes": 5500,
+            "net_bytes": 7064,
+            "peak_extra_bytes": 7320
+          }
+        },
+        "cold_cost": {
+          "median_ns": 2374,
+          "min_ns": 1885,
+          "max_ns": 2794,
+          "allocation": {
+            "calls": 1,
+            "allocated_bytes": 128,
+            "deallocated_bytes": 0,
+            "net_bytes": 128,
+            "peak_extra_bytes": 128
+          }
+        },
+        "warm_cost": {
+          "median_ns": 1956,
+          "min_ns": 1467,
+          "max_ns": 2375,
+          "allocation": {
+            "calls": 3,
+            "allocated_bytes": 384,
+            "deallocated_bytes": 0,
+            "net_bytes": 384,
+            "peak_extra_bytes": 384
+          }
+        }
+      },
+      "after": {
+        "new_cost": {
+          "median_ns": 15784,
+          "min_ns": 11385,
+          "max_ns": 22351,
+          "allocation": {
+            "calls": 75,
+            "allocated_bytes": 12564,
+            "deallocated_bytes": 5500,
+            "net_bytes": 7064,
+            "peak_extra_bytes": 7320
+          }
+        },
+        "cold_cost": {
+          "median_ns": 7264,
+          "min_ns": 4819,
+          "max_ns": 9499,
+          "allocation": {
+            "calls": 34,
+            "allocated_bytes": 5344,
+            "deallocated_bytes": 2160,
+            "net_bytes": 3184,
+            "peak_extra_bytes": 3616
+          }
+        },
+        "warm_cost": {
+          "median_ns": 2794,
+          "min_ns": 1955,
+          "max_ns": 3352,
+          "allocation": {
+            "calls": 12,
+            "allocated_bytes": 1680,
+            "deallocated_bytes": 1296,
+            "net_bytes": 384,
+            "peak_extra_bytes": 816
+          }
+        }
+      }
+    },
+    {
+      "kind": "mixed",
+      "count": 4,
+      "budget": "glyph-zero",
+      "error": "LimitExceeded { kind: ShapedGlyphs, limit: 0, actual: 6 }"
+    },
+    {
+      "kind": "mixed",
+      "count": 4,
+      "budget": "no-mapping",
+      "lines": 4,
+      "results": 0,
+      "oracle_sha256": "1cf897705b5b7045708eda6dedee04eed0b8e833a730d313ff6a2f612cddb526",
+      "digest": {
+        "float_reports": 0,
+        "glyphs": 12,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 4,
+        "runs": 6,
+        "sha256": "702030ab790f082573b32ccb9c7f0be1e5cdd82992862c443ac1c304df24aec3",
+        "synthetic_glyphs": 0
+      },
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "query_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "before": {
+        "new_cost": {
+          "median_ns": 18300,
+          "min_ns": 11315,
+          "max_ns": 24725,
+          "allocation": {
+            "calls": 69,
+            "allocated_bytes": 12084,
+            "deallocated_bytes": 5020,
+            "net_bytes": 7064,
+            "peak_extra_bytes": 7320
+          }
+        },
+        "cold_cost": {
+          "median_ns": 1885,
+          "min_ns": 1397,
+          "max_ns": 1956,
+          "allocation": {
+            "calls": 0,
+            "allocated_bytes": 0,
+            "deallocated_bytes": 0,
+            "net_bytes": 0,
+            "peak_extra_bytes": 0
+          }
+        },
+        "warm_cost": {
+          "median_ns": 1467,
+          "min_ns": 1397,
+          "max_ns": 1955,
+          "allocation": {
+            "calls": 0,
+            "allocated_bytes": 0,
+            "deallocated_bytes": 0,
+            "net_bytes": 0,
+            "peak_extra_bytes": 0
+          }
+        }
+      },
+      "after": {
+        "new_cost": {
+          "median_ns": 15366,
+          "min_ns": 11524,
+          "max_ns": 27449,
+          "allocation": {
+            "calls": 69,
+            "allocated_bytes": 12084,
+            "deallocated_bytes": 5020,
+            "net_bytes": 7064,
+            "peak_extra_bytes": 7320
+          }
+        },
+        "cold_cost": {
+          "median_ns": 1886,
+          "min_ns": 1397,
+          "max_ns": 3352,
+          "allocation": {
+            "calls": 0,
+            "allocated_bytes": 0,
+            "deallocated_bytes": 0,
+            "net_bytes": 0,
+            "peak_extra_bytes": 0
+          }
+        },
+        "warm_cost": {
+          "median_ns": 1467,
+          "min_ns": 1396,
+          "max_ns": 1956,
+          "allocation": {
+            "calls": 0,
+            "allocated_bytes": 0,
+            "deallocated_bytes": 0,
+            "net_bytes": 0,
+            "peak_extra_bytes": 0
+          }
+        }
+      }
+    }
+  ]
+}
