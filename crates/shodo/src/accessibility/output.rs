@@ -5,6 +5,46 @@ use crate::hit::{Caret, LineLayout, TextPosition};
 use crate::mapping::Affinity;
 use crate::{Fragment, GlyphOrientation, Line};
 
+#[cfg(test)]
+std::thread_local! {
+    pub(super) static GLYPH_OWNER_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Query offsets and run starts are monotone. Keep the latest containing run,
+/// including overlapping ranges. Each candidate is pushed and removed once,
+/// so total work is linear in the number of runs plus query offsets.
+#[derive(Default)]
+struct OwnerCursor {
+    next: usize,
+    candidates: Vec<usize>,
+}
+
+impl OwnerCursor {
+    fn find(
+        &mut self,
+        offset: usize,
+        len: usize,
+        range: impl Fn(usize) -> std::ops::Range<usize>,
+    ) -> Option<usize> {
+        let observed = |index| {
+            #[cfg(test)]
+            GLYPH_OWNER_VISITS.with(|visits| visits.set(visits.get() + 1));
+            range(index)
+        };
+        while self.next < len && observed(self.next).start <= offset {
+            self.candidates.push(self.next);
+            self.next += 1;
+        }
+        while let Some(&index) = self.candidates.last() {
+            if observed(index).end > offset {
+                return Some(index);
+            }
+            self.candidates.pop();
+        }
+        None
+    }
+}
+
 pub(super) fn union(a: LogicalRect, b: LogicalRect) -> LogicalRect {
     let inline_start = a.inline_start.min(b.inline_start);
     let block_start = a.block_start.min(b.block_start);
@@ -51,6 +91,7 @@ fn build_line<'a>(index: usize, line: &'a Line, hit: &LineLayout<'_>) -> Accessi
         })
         .collect();
     glyph_runs.sort_by_key(|r| r.text_range().start);
+    let mut glyph_owner = OwnerCursor::default();
     let mut characters = Vec::new();
     let mut runs: Vec<AccessibleRun<'a>> = Vec::new();
     for pair in offsets.windows(2) {
@@ -128,12 +169,12 @@ fn build_line<'a>(index: usize, line: &'a Line, hit: &LineLayout<'_>) -> Accessi
         let style_index = item.map_or(0, |i| i.style) as usize;
         let style = &line.data.styles[style_index];
         let owner_offset = item.map_or(span.start, |i| i.text.start.max(span.start));
-        let glyph_end =
-            glyph_runs.partition_point(|r| r.text_range().start <= owner_offset as usize);
-        let glyph = glyph_runs[..glyph_end]
-            .iter()
-            .rev()
-            .find(|r| r.text_range().end > owner_offset as usize);
+        // owner_offset is inside the current, increasing character span.
+        let glyph = glyph_owner
+            .find(owner_offset as usize, glyph_runs.len(), |i| {
+                glyph_runs[i].text_range()
+            })
+            .map(|i| &glyph_runs[i]);
         let tab = items
             .iter()
             .take_while(|i| i.text.start < span.end)
@@ -275,5 +316,32 @@ fn word_starts(lines: &mut [AccessibleLine<'_>]) {
         line.word_starts.sort_unstable();
         line.word_starts.dedup();
         prefix += line.text.len();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OwnerCursor;
+
+    #[test]
+    fn owner_cursor_preserves_last_containing_range() {
+        for seed in 0..32 {
+            let mut ranges: Vec<_> = (0..32)
+                .map(|i| {
+                    let start = (i * 7 + seed) % 13;
+                    start..start + (i * 3 + seed) % 11
+                })
+                .collect();
+            // Includes empty, equal-start, nested and crossing ranges.
+            ranges.sort_by_key(|r| r.start);
+            let mut cursor = OwnerCursor::default();
+            for offset in (0..25).flat_map(|i| [i, i]) {
+                let expected = ranges.iter().rposition(|r| r.contains(&offset));
+                assert_eq!(
+                    cursor.find(offset, ranges.len(), |i| ranges[i].clone()),
+                    expected
+                );
+            }
+        }
     }
 }
