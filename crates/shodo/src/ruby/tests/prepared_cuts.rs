@@ -1019,3 +1019,27 @@ fn nested_ruby_preserves_the_normal_break_after_its_outer_container() {
         "restricting the nested base must not erase the outer normal-CSS boundary"
     );
 }
+
+#[test]
+fn consuming_ruby_builder_prepares_both_sets_without_metadata_clones() {
+    // Restoring the whole-input clone in paragraph construction fails the
+    // actual Clone count, even if source and geometry happen to stay equal.
+    for first_line in [false, true] {
+        let builder = cursor_storage_fixture(16, 2, first_line);
+        let fonts = fonts();
+        crate::ruby::builder::input_clone_probe::reset();
+        let p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        assert_eq!(
+            crate::ruby::builder::input_clone_probe::count(),
+            0,
+            "consuming owned input must not duplicate ruby metadata"
+        );
+        assert_eq!(p.data.ruby.containers.len(), 1);
+        assert_eq!(p.data.ruby.containers[0].lanes.len(), 2);
+        if first_line {
+            let alternate = &p.data.first_line.as_ref().unwrap().data;
+            assert_eq!(alternate.ruby.containers.len(), 1);
+            assert_eq!(alternate.ruby.containers[0].lanes.len(), 2);
+        }
+    }
+}
