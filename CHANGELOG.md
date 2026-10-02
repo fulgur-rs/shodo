@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.8](https://github.com/fulgur-rs/shodo/compare/v0.0.7...v0.0.8) - 2026-10-02
+
+### Added
+
+- *(font)* expose family name for FontId (shodo-9se)
+- support word-space-transform in inline styles
+- expose inline box baseline
+
+### Fixed
+
+- *(font)* ignore empty preferred family names
+- preserve paragraph advance contract for hanging punctuation
+- include leading hanging punctuation in inline size
+- preserve word-space transforms in text combine
+
+### Other
+
+- Preserve warning order after context-free analysis
+- Analyze first-line data before shaping
+- Split paragraph analysis from shaping
+- clarify object replacement text contracts
+- satisfy clippy in word-space-transform cases
+- Test slice offsets with RTL inline boxes
+- Expose slice coordinates for inline box fragments
+- Merge pull request #155 from fulgur-rs/feat/20v-inline-box-baseline
+
 ## [0.0.7](https://github.com/fulgur-rs/shodo/compare/v0.0.6...v0.0.7) - 2026-10-01
 
 ### Added
