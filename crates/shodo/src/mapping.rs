@@ -159,6 +159,41 @@ impl RangeIndex {
         self.find(middle + 1, end, through, offset, found);
     }
 
+    /// All closed intervals, including source endpoints and empty ranges.
+    fn for_each_closed(&self, offset: u32, mut visit: impl FnMut(usize)) {
+        let through = self.ranges.partition_point(|r| {
+            #[cfg(test)]
+            tests::visit();
+            r.start <= offset
+        });
+        self.visit_closed(0, self.ranges.len(), through, offset, &mut visit);
+    }
+
+    fn visit_closed(
+        &self,
+        begin: usize,
+        end: usize,
+        through: usize,
+        offset: u32,
+        visit: &mut impl FnMut(usize),
+    ) {
+        if begin >= end || begin >= through {
+            return;
+        }
+        #[cfg(test)]
+        tests::visit();
+        let middle = begin + (end - begin) / 2;
+        let root = &self.ranges[middle];
+        if root.subtree_end < offset {
+            return;
+        }
+        if middle < through && offset <= root.end {
+            visit(root.ordinal);
+        }
+        self.visit_closed(begin, middle, through, offset, visit);
+        self.visit_closed(middle + 1, end, through, offset, visit);
+    }
+
     fn last_end(&self, offset: u32) -> Option<usize> {
         let through = self.ends.partition_point(|(end, _)| {
             #[cfg(test)]
@@ -247,6 +282,54 @@ impl OffsetMapping {
                 ),
             }
         })
+    }
+
+    /// Every inverse candidate in this dataset, normalized to the requested
+    /// source side before a caller restricts candidates to accepted lines.
+    pub(crate) fn source_candidates(
+        &self,
+        node: NodeId,
+        offset: u32,
+        requested: Affinity,
+    ) -> Vec<(u32, Affinity)> {
+        let mut candidates = Vec::new();
+        let Some(ranges) = self.index().dom.get(&node) else {
+            return candidates;
+        };
+        let candidate = |ordinal: usize| {
+            let unit = &self.units[ordinal];
+            let interior = unit.dom.start < offset && offset < unit.dom.end;
+            let (text, affinity) = if offset == unit.dom.end {
+                (unit.text.end, Affinity::Upstream)
+            } else {
+                match unit.kind {
+                    MappingKind::Identity => (
+                        unit.text.start.saturating_add(offset - unit.dom.start),
+                        if interior {
+                            requested
+                        } else {
+                            Affinity::Downstream
+                        },
+                    ),
+                    MappingKind::Collapsed => (unit.text.end, Affinity::Downstream),
+                    MappingKind::Expanded => (unit.text.start, Affinity::Downstream),
+                }
+            };
+            (text, affinity, interior)
+        };
+        let mut preferred = false;
+        ranges.for_each_closed(offset, |ordinal| {
+            let (_, affinity, interior) = candidate(ordinal);
+            preferred |= interior || affinity == requested;
+        });
+        ranges.for_each_closed(offset, |ordinal| {
+            let (text, affinity, interior) = candidate(ordinal);
+            if interior || affinity == requested || !preferred {
+                candidates.push((text, affinity));
+            }
+        });
+        candidates.sort_unstable_by_key(|&(text, _)| text);
+        candidates
     }
 
     pub(crate) fn remap_text(&mut self, spans: &[TransformSpan]) {

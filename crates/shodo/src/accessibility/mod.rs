@@ -5,6 +5,8 @@
 //! characters. DOM semantics, atomic alternatives and platform events belong
 //! to the caller. See `docs/accessibility.md` for the integration contract.
 mod output;
+#[cfg(test)]
+mod source_tests;
 
 #[cfg(feature = "accesskit")]
 pub mod accesskit;
@@ -12,10 +14,11 @@ pub mod accesskit;
 use crate::font::FontId;
 use crate::geometry::{Direction, LogicalRect, WritingMode};
 use crate::hit::{LineLayout, TextPosition};
-use crate::mapping::{Affinity, MappingKind, TextOrigin};
+use crate::mapping::{Affinity, OffsetMapping, TextOrigin};
 use crate::node::NodeId;
 use crate::style::InlineStyle;
 use crate::{BreakReason, GlyphOrientation, Line};
+use std::collections::BTreeMap;
 use std::ops::Range;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -199,50 +202,30 @@ impl<'a> AccessibleLayout<'a> {
     /// content and repeated sources. Collapsed/expanded DOM offsets normalize.
     pub fn from_source(&self, source: SourcePosition) -> Vec<AccessiblePosition> {
         let mut result = Vec::new();
+        // First-line styling can give equal data ids distinct source mappings.
+        // Cache by the actual shared dataset, preserving repeated accepted lines.
+        let mut datasets: BTreeMap<*const OffsetMapping, Vec<(u32, Affinity)>> = BTreeMap::new();
         for (line, accepted) in self.accepted.iter().enumerate() {
             let Some(mapping) = accepted.offset_mapping() else {
                 continue;
             };
             match source.origin {
                 TextOrigin::Dom { node, offset } => {
-                    let candidates = mapping.units().iter().filter_map(|u| {
-                        if u.node != node || offset < u.dom.start || offset > u.dom.end {
-                            return None;
-                        }
-                        let interior = u.dom.start < offset && offset < u.dom.end;
-                        let (text, affinity) = if offset == u.dom.end {
-                            (u.text.end, Affinity::Upstream)
-                        } else {
-                            match u.kind {
-                                MappingKind::Identity => (
-                                    u.text.start.saturating_add(offset - u.dom.start),
-                                    if interior {
-                                        source.affinity
-                                    } else {
-                                        Affinity::Downstream
-                                    },
-                                ),
-                                MappingKind::Collapsed => (u.text.end, Affinity::Downstream),
-                                MappingKind::Expanded => (u.text.start, Affinity::Downstream),
-                            }
-                        };
-                        Some((text, affinity, interior))
-                    });
-                    // At a shared source boundary, prefer the requested side.
-                    // Interior offsets and every repeated occurrence survive;
-                    // a one-sided source edge normalizes to its available side.
-                    let preferred = candidates
-                        .clone()
-                        .any(|(_, affinity, interior)| interior || affinity == source.affinity);
+                    let candidates = datasets
+                        .entry(mapping as *const OffsetMapping)
+                        .or_insert_with(|| {
+                            mapping.source_candidates(node, offset, source.affinity)
+                        });
+                    let range = &self.lines[line].text_range;
+                    let first = candidates.partition_point(|&(text, _)| text < range.start);
+                    let last = candidates.partition_point(|&(text, _)| text <= range.end);
                     let begin = result.len();
-                    for (offset, affinity, interior) in candidates {
-                        if (interior || affinity == source.affinity || !preferred)
-                            && let Some(p) = self.from_text_position(TextPosition {
-                                line,
-                                offset,
-                                affinity,
-                            })
-                        {
+                    for &(offset, affinity) in &candidates[first..last] {
+                        if let Some(p) = self.from_text_position(TextPosition {
+                            line,
+                            offset,
+                            affinity,
+                        }) {
                             result.push(p);
                         }
                     }
