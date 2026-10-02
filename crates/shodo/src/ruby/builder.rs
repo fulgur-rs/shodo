@@ -65,6 +65,8 @@ impl InputCost {
 
 #[derive(Clone, Debug)]
 pub(crate) struct RubyInput {
+    #[cfg(test)]
+    pub(crate) _clone_probe: input_clone_probe::CloneProbe,
     pub(crate) node: NodeId,
     pub(crate) style: u32,
     pub(crate) normalized: NormalizedRuby,
@@ -225,6 +227,8 @@ fn append_checked(
     let style = b.current_style();
     // Reserve the outer index before importing nested ruby indices.
     b.rubies.push(RubyInput {
+        #[cfg(test)]
+        _clone_probe: Default::default(),
         node,
         style,
         normalized: NormalizedRuby {
@@ -439,4 +443,25 @@ fn import(b: &mut ParagraphBuilder, input: &ContentInput) -> Vec<u32> {
         b.items.push(item);
     }
     styles
+}
+
+// Observe real metadata clones without a shipping field or counter.
+#[cfg(test)]
+pub(crate) mod input_clone_probe {
+    use std::cell::Cell;
+    thread_local! { static COUNT: Cell<usize> = const { Cell::new(0) }; }
+    #[derive(Debug, Default)]
+    pub(crate) struct CloneProbe;
+    impl Clone for CloneProbe {
+        fn clone(&self) -> Self {
+            COUNT.with(|count| count.set(count.get() + 1));
+            Self
+        }
+    }
+    pub(crate) fn reset() {
+        COUNT.with(|count| count.set(0));
+    }
+    pub(crate) fn count() -> usize {
+        COUNT.with(Cell::get)
+    }
 }

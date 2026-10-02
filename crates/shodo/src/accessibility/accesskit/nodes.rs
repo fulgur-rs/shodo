@@ -459,11 +459,26 @@ fn text_node(
     node.set_character_positions(positions);
     node.set_character_widths(widths);
     node.set_text_direction(direction);
+    // Output construction sorts and deduplicates word starts. Locate this
+    // chunk's interval without scanning the other chunks' boundaries.
+    let first_word = line.word_starts.partition_point(|&i| {
+        #[cfg(test)]
+        word_work::visit();
+        i < range.start
+    });
+    let last_word = line.word_starts.partition_point(|&i| {
+        #[cfg(test)]
+        word_work::visit();
+        i < range.end
+    });
     node.set_word_starts(
-        line.word_starts
+        line.word_starts[first_word..last_word]
             .iter()
-            .filter(|&&i| range.contains(&i))
-            .map(|i| (i - range.start) as u8)
+            .map(|i| {
+                #[cfg(test)]
+                word_work::visit();
+                (i - range.start) as u8
+            })
             .collect::<Vec<_>>(),
     );
     node.set_font_size(run.font_size);
@@ -499,5 +514,21 @@ fn layout_base_level(line: &AccessibleLine<'_>) -> u8 {
         0
     } else {
         1
+    }
+}
+
+#[cfg(test)]
+pub(super) mod word_work {
+    std::thread_local! {
+        static VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+    pub(super) fn visit() {
+        VISITS.with(|v| v.set(v.get() + 1));
+    }
+    pub(crate) fn reset() {
+        VISITS.with(|v| v.set(0));
+    }
+    pub(crate) fn visits() -> usize {
+        VISITS.with(std::cell::Cell::get)
     }
 }

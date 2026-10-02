@@ -361,7 +361,6 @@ impl Paragraph {
         .map_err(|error| normal_bases.translate(error, budget))?;
         budget.paragraph_shaping(data.glyphs.len() as u64)?;
         let limits = data.limits.clone();
-        data.ruby_inputs = rubies.clone();
         let mut bases = if let Some(mut alternate) = alternate {
             let mut alternate_bases = alternate_bases.expect("first-line analysis has base scopes");
             alternate_bases.merge_shaped_glyphs_from(&normal_bases)?;
@@ -394,7 +393,6 @@ impl Paragraph {
                 error
             })?;
             budget.paragraph_shaping(alternate.glyphs.len() as u64)?;
-            alternate.ruby_inputs = rubies;
             finalize_data(&mut data, cx, &mut warnings, &mut sat);
             finalize_data(&mut alternate, cx, &mut warnings, &mut sat);
             let mut normal_search = 0;
@@ -468,15 +466,13 @@ impl Paragraph {
             finalize_data(&mut data, cx, &mut warnings, &mut sat);
             normal_bases
         };
-        let inputs = std::mem::take(&mut data.ruby_inputs);
-        crate::ruby::prepare::prepare(&mut data, &inputs, cx, fonts, budget, &mut bases)?;
+        crate::ruby::prepare::prepare(&mut data, &rubies, cx, fonts, budget, &mut bases)?;
         if let Some(first) = &mut data.first_line {
             let alternate = Arc::get_mut(&mut first.data)
                 .expect("new first-line data has one owner before publication");
-            alternate.ruby_inputs.clear();
             crate::ruby::prepare::prepare_alternate(
                 alternate,
-                &inputs,
+                &rubies,
                 &data.ruby,
                 budget,
                 &first.normal_cursors,
@@ -705,7 +701,6 @@ fn build_data(
     }
     let data = ParagraphData {
         ruby: Default::default(),
-        ruby_inputs: Vec::new(),
         #[cfg(test)]
         spacing_setup_visits: Default::default(),
         #[cfg(test)]
