@@ -48,7 +48,8 @@ pub struct Limits {
     pub max_layout_lookups: Option<u64>,
     /// Layout subtables in each registered GSUB/GPOS table (65536).
     pub max_layout_subtables: Option<u64>,
-    /// Expanded coverage/class glyph visits and AAT cache items per face (2^23).
+    /// Expanded coverage/class glyph visits, GDEF mark sets, and AAT cache
+    /// items per face (2^23).
     pub max_font_cache_items: Option<u64>,
     /// Explicitly registered faces in a font layer (256), including the shared
     /// built-in stub. Lazily materialized platform faces are exempt.

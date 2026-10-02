@@ -174,17 +174,14 @@ pub(super) fn check_gdef(data: &[u8], work: &mut u64, limits: &Limits) -> Result
         if base != 0 {
             let count = read_u16(data, offset(base, 2)?)? as usize;
             // Harfrust reserves one digest per declared mark set, even when
-            // the coverage itself is malformed.
+            // the coverage itself is malformed or empty. Charge the references
+            // cumulatively so repeated GDEF tables cannot restart this work.
             Limits::check(
                 limits.max_layout_subtables,
                 LimitKind::LayoutSubtables,
                 count as u64,
             )?;
-            Limits::check(
-                limits.max_font_cache_items,
-                LimitKind::FontCacheItems,
-                *work + count as u64,
-            )?;
+            charge(work, count as u64, limits)?;
             for i in 0..count {
                 let at = offset(base, read_u32(data, offset(base, 4 + 4 * i)?)? as usize)?;
                 coverage(data, at, work, limits)?;
