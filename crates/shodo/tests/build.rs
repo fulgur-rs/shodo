@@ -2,7 +2,7 @@ use shodo::font::FontCollection;
 use shodo::geometry::{BaselineKind, WritingMode};
 use shodo::limits::{LimitKind, Limits, WarningKind};
 use shodo::node::{InlineEdges, NodeId, TextSource};
-use shodo::style::{InlineStyle, ParagraphStyle, TextOrientation};
+use shodo::style::{GenericFamily, InlineStyle, ParagraphStyle, TextOrientation};
 use shodo::{LayoutContext, Paragraph, ParagraphBuilder, RichText};
 
 fn fonts() -> FontCollection {
@@ -42,6 +42,18 @@ fn builds_and_keeps_identity_across_clones() {
         "identical content still gets a new id"
     );
     assert_ne!(rebuilt.start_token(), para.start_token());
+}
+
+#[test]
+fn paragraph_analysis_can_be_shaped_later_without_a_layout_context() {
+    fn assert_send<T: Send>() {}
+    assert_send::<shodo::ParagraphAnalysis>();
+
+    let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+    b.push_text(dom(1), "analysis first");
+    let analysis = b.analyze().unwrap();
+    let para = analysis.shape(&mut LayoutContext::new(), &fonts()).unwrap();
+    assert_eq!(para.text(), "analysis first");
 }
 
 #[test]
@@ -195,6 +207,20 @@ fn font_generations_record_both_layers() {
         .build(&mut LayoutContext::new(), &doc)
         .unwrap();
     assert_eq!(para.font_generations(), (0, Some(0)));
+}
+
+#[test]
+fn paragraph_reports_its_font_layer_and_staleness() {
+    let shared = fonts();
+    let doc = FontCollection::for_document(&shared, &Limits::default());
+    let para = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default())
+        .build(&mut LayoutContext::new(), &doc)
+        .unwrap();
+    assert_eq!(para.font_layer_handle().id(), doc.layer_handle().id());
+    assert!(!para.font_is_stale());
+
+    shared.set_generic_families(GenericFamily::Serif, vec!["Changed".into()]);
+    assert!(para.font_is_stale());
 }
 
 #[test]

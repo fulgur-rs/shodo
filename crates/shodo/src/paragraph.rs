@@ -11,7 +11,7 @@ use crate::analysis::bidi::{BidiParagraph, analyze_bidi};
 use crate::analysis::units::{InlineBoxInfo, Unit, UnitList, build_units};
 use crate::analysis::{Item, ItemKind, transform_with_base_scopes};
 use crate::builder::ParagraphBuilder;
-use crate::font::FontCollection;
+use crate::font::{FontCollection, WeakFontLayer};
 use crate::geometry::{BaselineKind, Direction, Saturation, WritingMode};
 use crate::limits::{LimitExceeded, LimitKind, Limits, Warning, WarningKind, WarningSink};
 use crate::mapping::OffsetMapping;
@@ -124,6 +124,7 @@ pub(crate) struct ParagraphData {
     pub(crate) mapping: Option<OffsetMapping>,
     pub(crate) fonts: FontCollection,
     pub(crate) generations: (u64, Option<u64>),
+    pub(crate) font_layer: WeakFontLayer,
     pub(crate) warnings: Vec<Warning>,
     pub(crate) baselines: HashMap<NodeId, BaselineKind>,
 }
@@ -183,6 +184,17 @@ pub struct Paragraph {
     pub(crate) data: Arc<ParagraphData>,
 }
 
+/// Context-free analysis of a paragraph, ready to be shaped with a
+/// [`crate::LayoutContext`] and a [`FontCollection`].
+///
+/// Create one with [`ParagraphBuilder::analyze`], then call [`Self::shape`]
+/// when a shaping context is available. The analysis owns its input and can be
+/// moved between threads before shaping.
+pub struct ParagraphAnalysis {
+    pub(crate) state: build::BuildAnalysis,
+    pub(crate) budget: crate::ruby::prepare::RubyBudget,
+}
+
 impl fmt::Debug for Paragraph {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Paragraph")
@@ -209,6 +221,18 @@ impl Paragraph {
     /// the collection's current generations differ, rebuild the paragraph.
     pub fn font_generations(&self) -> (u64, Option<u64>) {
         self.data.generations
+    }
+
+    /// The font layer this paragraph was built with. Compare its ID with a
+    /// collection's [`FontCollection::layer_handle`] when checking whether a
+    /// paragraph belongs to that collection.
+    pub fn font_layer_handle(&self) -> WeakFontLayer {
+        self.data.font_layer.clone()
+    }
+
+    /// Whether either font layer has changed since this paragraph was built.
+    pub fn font_is_stale(&self) -> bool {
+        self.data.fonts.generations() != self.data.generations
     }
 
     pub fn warnings(&self) -> &[Warning] {

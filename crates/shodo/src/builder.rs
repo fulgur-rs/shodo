@@ -562,20 +562,29 @@ impl ParagraphBuilder {
             self.close_inline();
         }
     }
+
+    /// Analyze and retain the paragraph's context-free layout data.
+    ///
+    /// This stage does not use a [`crate::LayoutContext`], so callers can prepare
+    /// multiple paragraphs before scheduling their shaping work.
+    pub fn analyze(mut self) -> Result<crate::ParagraphAnalysis, LimitExceeded> {
+        self.close_unbalanced();
+        if let Some(error) = self.error {
+            return Err(error);
+        }
+        crate::ParagraphAnalysis::from_builder(self)
+    }
+
     /// Analyzes and shapes the content. Fails only when a resource limit was
     /// exceeded; inline boxes left open are closed with a warning.
     pub fn build(
-        mut self,
+        self,
         cx: &mut LayoutContext,
         fonts: &FontCollection,
     ) -> Result<Paragraph, LimitExceeded> {
         // Building can replace shaping/edge caches used by a retained trial.
         cx.completed = None;
-        self.close_unbalanced();
-        if let Some(e) = self.error {
-            return Err(e);
-        }
-        Paragraph::from_builder(self, cx, fonts)
+        self.analyze()?.shape(cx, fonts)
     }
 }
 

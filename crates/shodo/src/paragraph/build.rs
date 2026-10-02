@@ -2,16 +2,67 @@
 
 use super::*;
 
-impl Paragraph {
-    pub(crate) fn from_builder(
-        b: ParagraphBuilder,
+/// Context-free work that can be completed before a shaping context is
+/// available.
+pub(crate) struct BuildAnalysis {
+    normal: PreparedBuild,
+    text: String,
+    items: Vec<crate::builder::RawItem>,
+    alternate_styles: Option<Vec<InlineStyle>>,
+    source_cuts: Option<Vec<std::ops::RangeInclusive<u32>>>,
+    rubies: Vec<crate::ruby::builder::RubyInput>,
+    offset_mapping: bool,
+    ruby_annotation: bool,
+    line_break_override: Option<Arc<crate::analysis::breaks::OverrideCallback>>,
+    bases: crate::ruby::base_budget::BaseScopes,
+    warnings: WarningSink,
+}
+
+struct PreparedBuild {
+    style: ParagraphStyle,
+    limits: Limits,
+    glyph_budget: Option<u64>,
+    processed: crate::analysis::whitespace::Processed,
+    styles: Vec<InlineStyle>,
+    id: u64,
+    combine_spans: Vec<crate::analysis::combine::CombineSpan>,
+    breaks: crate::analysis::breaks::BreakAnalysis,
+    bidi: crate::analysis::bidi::BidiAnalysis,
+    used_direction: Direction,
+}
+
+impl ParagraphAnalysis {
+    pub(crate) fn from_builder(b: ParagraphBuilder) -> Result<Self, LimitExceeded> {
+        if let Some(error) = b.error {
+            return Err(error);
+        }
+        let mut budget = crate::ruby::prepare::RubyBudget::new(!b.rubies.is_empty());
+        budget.enter(&b.limits);
+        match Paragraph::analyze_builder_with_ruby_budget(b, &mut budget) {
+            Ok(state) => Ok(Self { state, budget }),
+            Err(error) => {
+                budget.leave();
+                Err(error)
+            }
+        }
+    }
+
+    /// Shape this analysis using the supplied scratch context and font layers.
+    pub fn shape(
+        self,
         cx: &mut crate::LayoutContext,
         fonts: &FontCollection,
     ) -> Result<Paragraph, LimitExceeded> {
-        let mut budget = crate::ruby::prepare::RubyBudget::new(!b.rubies.is_empty());
-        Self::from_builder_with_ruby_budget(b, cx, fonts, &mut budget)
+        // A build can replace shaping/edge caches used by a retained trial.
+        cx.completed = None;
+        let Self { state, mut budget } = self;
+        let result = Paragraph::shape_analysis(state, cx, fonts, &mut budget);
+        budget.leave();
+        result
     }
+}
 
+impl Paragraph {
     pub(crate) fn from_builder_with_ruby_budget(
         b: ParagraphBuilder,
         cx: &mut crate::LayoutContext,
@@ -22,17 +73,16 @@ impl Paragraph {
             return Err(error);
         }
         budget.enter(&b.limits);
-        let result = Self::build_in_ruby_scope(b, cx, fonts, budget);
+        let result = Self::analyze_builder_with_ruby_budget(b, budget)
+            .and_then(|state| Self::shape_analysis(state, cx, fonts, budget));
         budget.leave();
         result
     }
 
-    fn build_in_ruby_scope(
+    fn analyze_builder_with_ruby_budget(
         b: ParagraphBuilder,
-        cx: &mut crate::LayoutContext,
-        fonts: &FontCollection,
         budget: &mut crate::ruby::prepare::RubyBudget,
-    ) -> Result<Paragraph, LimitExceeded> {
+    ) -> Result<BuildAnalysis, LimitExceeded> {
         let ruby_first_line = b.has_ruby_first_line();
         let mut bases = crate::ruby::base_budget::BaseScopes::new(&b.rubies);
         let ParagraphBuilder {
@@ -151,24 +201,58 @@ impl Paragraph {
         if alternate_styles.is_none() {
             processed.source_spans = Vec::new();
         }
-        let mut sat = Saturation::default();
-        let mut data = build_data(
+        let normal = analyze_data(
             style.clone(),
-            &limits,
+            limits.clone(),
             run_limits.max_shaped_glyphs,
             processed,
             styles,
             id,
-            cx,
-            fonts,
             &mut warnings,
-            &mut sat,
-            &mut bases,
             true,
             line_break_override.as_deref(),
-        )
-        .map_err(|error| bases.translate(error, budget))?;
+        );
+        Ok(BuildAnalysis {
+            normal,
+            text,
+            items,
+            alternate_styles,
+            source_cuts,
+            rubies,
+            offset_mapping,
+            ruby_annotation,
+            line_break_override,
+            bases,
+            warnings,
+        })
+    }
+
+    fn shape_analysis(
+        analysis: BuildAnalysis,
+        cx: &mut crate::LayoutContext,
+        fonts: &FontCollection,
+        budget: &mut crate::ruby::prepare::RubyBudget,
+    ) -> Result<Paragraph, LimitExceeded> {
+        let BuildAnalysis {
+            normal,
+            text,
+            items,
+            alternate_styles,
+            source_cuts,
+            rubies,
+            offset_mapping,
+            ruby_annotation,
+            line_break_override,
+            mut bases,
+            mut warnings,
+        } = analysis;
+        let mut sat = Saturation::default();
+        let mut data = build_data(normal, cx, fonts, &mut warnings, &mut sat, &mut bases)
+            .map_err(|error| bases.translate(error, budget))?;
         budget.paragraph(&data)?;
+        let style = data.style.clone();
+        let limits = data.limits.clone();
+        let id = data.id;
         data.ruby_inputs = rubies.clone();
         if let Some(mut alternate_styles) = alternate_styles {
             for s in &mut alternate_styles {
@@ -241,33 +325,32 @@ impl Paragraph {
                     .max_shaped_glyphs
                     .map(|max| max.saturating_sub(data.glyphs.len() as u64))
             };
-            let mut alternate = build_data(
+            let alternate = analyze_data(
                 alternate_style,
-                &limits,
+                limits.clone(),
                 remaining_glyphs,
                 alternate,
                 alternate_styles,
                 id,
-                cx,
-                fonts,
                 &mut warnings,
-                &mut sat,
-                &mut bases,
                 false,
                 line_break_override.as_deref(),
-            )
-            .map_err(|mut e| {
-                if budget.enabled() {
-                    return bases.translate(e, budget);
-                }
-                if e.kind == LimitKind::ShapedGlyphs
-                    && let Some(limit) = limits.max_shaped_glyphs
-                {
-                    e.actual += data.glyphs.len() as u64;
-                    e.limit = limit;
-                }
-                e
-            })?;
+            );
+            let mut alternate =
+                build_data(alternate, cx, fonts, &mut warnings, &mut sat, &mut bases).map_err(
+                    |mut e| {
+                        if budget.enabled() {
+                            return bases.translate(e, budget);
+                        }
+                        if e.kind == LimitKind::ShapedGlyphs
+                            && let Some(limit) = limits.max_shaped_glyphs
+                        {
+                            e.actual += data.glyphs.len() as u64;
+                            e.limit = limit;
+                        }
+                        e
+                    },
+                )?;
             budget.paragraph(&alternate)?;
             alternate.ruby_inputs = rubies;
             finalize_data(&mut data, cx, &mut warnings, &mut sat);
@@ -365,24 +448,18 @@ impl Paragraph {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn build_data(
+fn analyze_data(
     style: ParagraphStyle,
-    limits: &Limits,
+    limits: Limits,
     glyph_budget: Option<u64>,
     processed: crate::analysis::whitespace::Processed,
     styles: Vec<InlineStyle>,
     id: u64,
-    cx: &mut crate::LayoutContext,
-    fonts: &FontCollection,
     warnings: &mut WarningSink,
-    sat: &mut Saturation,
-    bases: &mut crate::ruby::base_budget::BaseScopes,
     report_combine_rejections: bool,
     line_break_override: Option<&crate::analysis::breaks::OverrideCallback>,
-) -> Result<ParagraphData, LimitExceeded> {
-    let mut shape_limits = limits.clone();
-    shape_limits.max_shaped_glyphs = glyph_budget;
-    let (mut combine_spans, combine_rejected) = crate::analysis::combine::prepare_with_rejections(
+) -> PreparedBuild {
+    let (combine_spans, combine_rejected) = crate::analysis::combine::prepare_with_rejections(
         &processed.text,
         &processed.items,
         &styles,
@@ -430,6 +507,44 @@ fn build_data(
         &styles,
         used_direction,
     );
+
+    PreparedBuild {
+        style,
+        limits,
+        glyph_budget,
+        processed,
+        styles,
+        id,
+        combine_spans,
+        breaks,
+        bidi,
+        used_direction,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_data(
+    prepared: PreparedBuild,
+    cx: &mut crate::LayoutContext,
+    fonts: &FontCollection,
+    warnings: &mut WarningSink,
+    sat: &mut Saturation,
+    bases: &mut crate::ruby::base_budget::BaseScopes,
+) -> Result<ParagraphData, LimitExceeded> {
+    let PreparedBuild {
+        style,
+        limits,
+        glyph_budget,
+        processed,
+        styles,
+        id,
+        mut combine_spans,
+        breaks,
+        bidi,
+        used_direction,
+    } = prepared;
+    let mut shape_limits = limits.clone();
+    shape_limits.max_shaped_glyphs = glyph_budget;
     let mut shape_items_input = crate::analysis::itemize::itemize(
         &processed,
         &styles,
@@ -582,6 +697,7 @@ fn build_data(
         mapping: processed.mapping,
         fonts: fonts.clone(),
         generations: fonts.generations(),
+        font_layer: fonts.layer_handle(),
         warnings: Vec::new(),
         baselines,
     };
