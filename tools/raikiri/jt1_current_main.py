@@ -167,6 +167,16 @@ def validate_provenance(args, saved_builds, current_provenance):
         "rustflags": "-D warnings",
     }:
         raise ValueError("current build release profile differs from the measurement profile")
+    if current_provenance.get("build_environment") != {
+        "rustup_toolchain": "1.96.0",
+        "rustflags": "-D warnings",
+        "cleared_environment_variables": [
+            "CARGO_BUILD_TARGET",
+            "CARGO_ENCODED_RUSTFLAGS",
+            "CARGO_PROFILE_*",
+        ],
+    }:
+        raise ValueError("current build environment differs from the pinned measurement environment")
     expected_measurement_features = {
         "time": ["complex-scripts"],
         "memory": ["complex-scripts", "allocation-counting"],

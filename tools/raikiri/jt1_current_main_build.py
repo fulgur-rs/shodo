@@ -150,6 +150,10 @@ def main():
         raise SystemExit(f"candidate lock uses raikiri {locked_revision}, expected {args.raikiri_revision}")
 
     env = os.environ.copy()
+    cleared_environment = {"CARGO_BUILD_TARGET", "CARGO_ENCODED_RUSTFLAGS"}
+    for key in list(env):
+        if key.startswith("CARGO_PROFILE_") or key in cleared_environment:
+            env.pop(key)
     env.update(
         {
             "CARGO_TARGET_DIR": str(target_dir),
@@ -187,8 +191,8 @@ def main():
     shutil.copy2(candidate_lock, output_dir / "current-main-Cargo.lock")
 
     versions = {
-        "cargo": subprocess.run([args.cargo, f"+{args.toolchain}", "--version"], check=True, capture_output=True, text=True).stdout.strip(),
-        "rustc": subprocess.run([env["RUSTC"], "--version"], check=True, capture_output=True, text=True).stdout.strip(),
+        "cargo": subprocess.run([args.cargo, f"+{args.toolchain}", "--version"], check=True, capture_output=True, text=True, env=env).stdout.strip(),
+        "rustc": subprocess.run([env["RUSTC"], "--version"], check=True, capture_output=True, text=True, env=env).stdout.strip(),
     }
     source_hashes = {
         path.relative_to(worktree).as_posix(): sha256(path)
@@ -224,6 +228,15 @@ def main():
             "opt_level": "3",
             "debug": "0",
             "rustflags": "-D warnings",
+        },
+        "build_environment": {
+            "rustup_toolchain": args.toolchain,
+            "rustflags": "-D warnings",
+            "cleared_environment_variables": [
+                "CARGO_BUILD_TARGET",
+                "CARGO_ENCODED_RUSTFLAGS",
+                "CARGO_PROFILE_*",
+            ],
         },
         "measurement_features": {
             "time": ["complex-scripts"],

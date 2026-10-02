@@ -4,7 +4,7 @@
   "saved_s4_source_lock_sha256": "d41af8a11a1799cd990fd256b9f11e3592ecd07a787ed50e529d4f52374c1d71",
   "saved_s4_shodo_revision": "fe67a281210fbc52d22032911ac3584405aa8198",
   "current_shodo_revision": "bb2e87ee3f75fdf4c9cf24e459db0323274ed5ed",
-  "current_shodo_head_at_build": "e24e87c8ee2232125b9e223ab632cc454a3ea556",
+  "current_shodo_head_at_build": "6ef5accd61013f6e57367d2883fde241e0b81cf5",
   "current_shodo_feature": "default-features=false,complex-scripts",
   "raikiri_revision": "ab7e619a8f321f03de8b8c8b9342954868e044c8",
   "current_shodo_workspace_lock_sha256": "00c1b4f8cc5b2d9fff3ffbb6cb8a86bfc69ea776e24269a8e7674d5c874fbac2",
@@ -38,6 +38,15 @@
     "opt_level": "3",
     "debug": "0",
     "rustflags": "-D warnings"
+  },
+  "build_environment": {
+    "rustup_toolchain": "1.96.0",
+    "rustflags": "-D warnings",
+    "cleared_environment_variables": [
+      "CARGO_BUILD_TARGET",
+      "CARGO_ENCODED_RUSTFLAGS",
+      "CARGO_PROFILE_*"
+    ]
   },
   "measurement_features": {
     "time": [
