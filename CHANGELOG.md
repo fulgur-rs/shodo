@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.9](https://github.com/fulgur-rs/shodo/compare/v0.0.8...v0.0.9) - 2026-10-02
+
+### Other
+
+- Merge remote-tracking branch 'origin/main' into perf/t6q-6-decoration-ancestors
+- Merge pull request #175 from fulgur-rs/perf/t6q-9-cluster-ends
+- Merge pull request #174 from fulgur-rs/perf/t6q-4-paint-geometry
+- Merge remote-tracking branch 'origin/main' into perf/t6q-4-paint-geometry
+- *(paint)* build shared geometry without navigation indexes
+- Merge pull request #169 from fulgur-rs/perf/t6q-1-ruby-hit
+- Merge remote-tracking branch 'origin/main' into perf/t6q-1-ruby-hit
+- avoid repeated nested ruby hit searches
+
 ## [0.0.8](https://github.com/fulgur-rs/shodo/compare/v0.0.7...v0.0.8) - 2026-10-02
 
 ### Added
