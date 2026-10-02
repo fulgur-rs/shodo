@@ -13,7 +13,14 @@ pub(super) const DUTCH_J: u16 = 128;
 pub(super) const MULTI_LETTER: u16 = 256;
 pub(super) const AFTER_TONOS: u16 = 512;
 
+#[cfg(test)]
+std::thread_local! {
+    pub(super) static CONTEXT_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 pub(super) fn context(text: &str) -> Vec<u16> {
+    #[cfg(test)]
+    CONTEXT_CALLS.with(|count| count.set(count.get() + 1));
     let mut flags = vec![0; text.len()];
     let cased = CodePointSetData::new::<props::Cased>();
     let case_ignore = CodePointSetData::new::<props::CaseIgnorable>();
