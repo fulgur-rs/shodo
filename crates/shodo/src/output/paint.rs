@@ -136,7 +136,7 @@ impl Line {
     /// style's primary font. Atomics and zero-width collapsed regions are absent;
     /// surviving hanging whitespace retains its selection advance.
     ///
-    /// Builds a caret index once per call; retain the spans for repeated paint.
+    /// Builds shared source geometry once per call; retain the spans for repeated paint.
     /// Glyphs must still be drawn once from `fragments()`/`paint_style()`.
     /// This does not implement CSS decorating-box propagation or skip-ink.
     pub fn paint_spans(&self) -> Vec<PaintSpan<'_>> {

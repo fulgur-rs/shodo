@@ -170,56 +170,61 @@ pub(crate) fn build_units(
             ItemKind::Text => {
                 while run_index < runs.len() && runs[run_index].item == index {
                     let run = &runs[run_index];
-                    let mut cluster_ends =
-                        vec![run.text.end; (run.glyphs.end - run.glyphs.start) as usize];
-                    let mut end = run.text.end;
-                    for g in run.glyphs.clone().rev() {
-                        if g + 1 < run.glyphs.end
-                            && glyphs.cluster[(g + 1) as usize] > glyphs.cluster[g as usize]
+                    // All shaping paths store clusters in logical ascending order,
+                    // including RTL storage splits (whose glyphs share a cluster).
+                    let mut begin = run.glyphs.start;
+                    while begin < run.glyphs.end {
+                        let cluster = glyphs.cluster[begin as usize];
+                        let mut group_end = begin + 1;
+                        while group_end < run.glyphs.end
+                            && glyphs.cluster[group_end as usize] == cluster
                         {
-                            end = glyphs.cluster[(g + 1) as usize];
+                            group_end += 1;
                         }
-                        cluster_ends[(g - run.glyphs.start) as usize] = end;
-                    }
-                    for g in run.glyphs.clone() {
-                        let cluster = glyphs.cluster[g as usize];
+                        let end = if group_end < run.glyphs.end {
+                            glyphs.cluster[group_end as usize]
+                        } else {
+                            run.text.end
+                        };
                         let c = text[cluster as usize..].chars().next().unwrap_or(' ');
-                        let end = cluster_ends[(g - run.glyphs.start) as usize];
-                        if (breaks.graphemes.binary_search(&cluster).is_err()
-                            || units.last().is_some_and(|u| u.text.start == cluster))
-                            && let Some(last) = units.last_mut()
-                            && let UnitKind::Cluster {
-                                run: r,
-                                glyphs: range,
-                                ..
-                            } = &mut last.kind
-                            && *r == run_index as u32
-                        {
-                            range.end = g + 1;
-                            last.text.end = end;
-                            last.break_after = breaks.at(end).class;
-                            last.emergency_min_content = breaks.at(end).min_content;
-                            continue;
+                        for g in begin..group_end {
+                            if (breaks.graphemes.binary_search(&cluster).is_err()
+                                || units.last().is_some_and(|u| u.text.start == cluster))
+                                && let Some(last) = units.last_mut()
+                                && let UnitKind::Cluster {
+                                    run: r,
+                                    glyphs: range,
+                                    ..
+                                } = &mut last.kind
+                                && *r == run_index as u32
+                            {
+                                range.end = g + 1;
+                                last.text.end = end;
+                                last.break_after = breaks.at(end).class;
+                                last.emergency_min_content = breaks.at(end).min_content;
+                                continue;
+                            }
+                            let space = c == ' ';
+                            units.push(Unit {
+                                combine: None,
+                                shared_cluster: None,
+                                slice_advance: crate::geometry::LayoutUnit::ZERO,
+                                unsafe_to_break: false,
+                                unsafe_to_concat: false,
+                                kind: UnitKind::Cluster {
+                                    run: run_index as u32,
+                                    glyphs: g..g + 1,
+                                    space,
+                                },
+                                item: index,
+                                text: cluster..end,
+                                break_after: breaks.at(end).class,
+                                emergency_min_content: breaks.at(end).min_content,
+                                level: base_level,
+                                parent_box,
+                            });
                         }
-                        let space = c == ' ';
-                        units.push(Unit {
-                            combine: None,
-                            shared_cluster: None,
-                            slice_advance: crate::geometry::LayoutUnit::ZERO,
-                            unsafe_to_break: false,
-                            unsafe_to_concat: false,
-                            kind: UnitKind::Cluster {
-                                run: run_index as u32,
-                                glyphs: g..g + 1,
-                                space,
-                            },
-                            item: index,
-                            text: cluster..end,
-                            break_after: breaks.at(end).class,
-                            emergency_min_content: breaks.at(end).min_content,
-                            level: base_level,
-                            parent_box,
-                        });
+                        begin = group_end;
                     }
                     run_index += 1;
                 }
@@ -388,5 +393,87 @@ pub(crate) fn build_units(
         units,
         boxes,
         float_count,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use crate::limits::Limits;
+    use crate::node::TextSource;
+    use crate::style::{FontFamily, InlineStyle, ParagraphStyle};
+
+    #[test]
+    fn cluster_end_lookahead_preserves_matched_and_missing_font_graphemes() {
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        for (family, bytes) in [
+            ("Latin", crate::test_support::fonts::LATIN),
+            ("Arabic", crate::test_support::fonts::ARABIC),
+        ] {
+            fonts
+                .register_face(
+                    bytes.to_vec(),
+                    0,
+                    FontFaceDescriptor {
+                        family: family.into(),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+        }
+        let missing = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        for (text, family, want) in [
+            ("ab", "Latin", vec![(0, 1), (1, 2)]),
+            ("a\u{301}b", "Latin", vec![(0, 3), (3, 4)]),
+            ("\u{644}\u{627}", "Arabic", vec![(0, 4)]),
+            ("a\u{301}b", "Missing", vec![(0, 3), (3, 4)]),
+        ] {
+            let ps = ParagraphStyle {
+                root: InlineStyle {
+                    font_families: vec![FontFamily::Named(family.into())],
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let mut builder = crate::ParagraphBuilder::new(&ps, &limits);
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
+            let p = builder
+                .build(
+                    &mut crate::LayoutContext::new(),
+                    if family == "Missing" {
+                        &missing
+                    } else {
+                        &fonts
+                    },
+                )
+                .unwrap();
+            let ranges = p
+                .data
+                .units
+                .iter()
+                .filter(|u| matches!(u.kind, UnitKind::Cluster { .. }))
+                .map(|u| (u.text.start, u.text.end))
+                .collect::<Vec<_>>();
+            assert_eq!(ranges, want, "{family}: {text:?}");
+            assert!(p.data.runs.iter().all(|r| {
+                p.data.glyphs.cluster[r.glyphs.start as usize..r.glyphs.end as usize]
+                    .windows(2)
+                    .all(|w| w[0] <= w[1])
+            }));
+        }
     }
 }
