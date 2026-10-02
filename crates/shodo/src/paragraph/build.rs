@@ -11,6 +11,7 @@ pub(crate) struct BuildAnalysis {
     rubies: Vec<crate::ruby::builder::RubyInput>,
     bases: crate::ruby::base_budget::BaseScopes,
     alternate_bases: Option<crate::ruby::base_budget::BaseScopes>,
+    alternate_warnings: Option<WarningSink>,
     warnings: WarningSink,
 }
 
@@ -216,10 +217,12 @@ impl Paragraph {
                 .saturating_add(crate::style::memory::styles(&normal.styles)),
         )?;
 
+        let mut alternate_warnings = None;
         let (alternate, alternate_bases) = if let Some(mut alternate_styles) = alternate_styles {
+            let mut deferred_warnings = WarningSink::new(warnings.remaining_limit());
             for s in &mut alternate_styles {
-                s.font_size = sanitize_font_size(s.font_size, &mut warnings);
-                sanitize::style(s, &mut warnings);
+                s.font_size = sanitize_font_size(s.font_size, &mut deferred_warnings);
+                sanitize::style(s, &mut deferred_warnings);
             }
             let mut alternate_style = style.clone();
             alternate_style.root = alternate_styles[0].clone();
@@ -269,7 +272,7 @@ impl Paragraph {
                     processed,
                     &alternate_styles,
                     &remaining,
-                    &mut warnings,
+                    &mut deferred_warnings,
                     style.writing_mode,
                     if alternate_bases.enabled() {
                         Some(&mut alternate_bases)
@@ -303,7 +306,7 @@ impl Paragraph {
                 alternate,
                 alternate_styles,
                 id,
-                &mut warnings,
+                &mut deferred_warnings,
                 false,
                 line_break_override.as_deref(),
             );
@@ -313,6 +316,7 @@ impl Paragraph {
                 0,
                 0,
             )?;
+            alternate_warnings = Some(deferred_warnings);
             (Some(alternate), Some(alternate_bases))
         } else {
             (None, None)
@@ -324,6 +328,7 @@ impl Paragraph {
             rubies,
             bases,
             alternate_bases,
+            alternate_warnings,
             warnings,
         })
     }
@@ -341,6 +346,7 @@ impl Paragraph {
             rubies,
             bases: mut normal_bases,
             alternate_bases,
+            alternate_warnings,
             mut warnings,
         } = analysis;
         let mut sat = Saturation::default();
@@ -366,6 +372,7 @@ impl Paragraph {
                     .map(|max| max.saturating_sub(data.glyphs.len() as u64));
             }
             alternate.glyph_budget = remaining.max_shaped_glyphs;
+            warnings.append(alternate_warnings.expect("first-line analysis has deferred warnings"));
             let mut alternate = build_data(
                 alternate,
                 cx,

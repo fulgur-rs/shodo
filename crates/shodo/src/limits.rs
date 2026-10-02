@@ -219,6 +219,11 @@ impl WarningSink {
         self.suppressed
     }
 
+    pub(crate) fn remaining_limit(&self) -> Option<u64> {
+        self.max
+            .map(|max| max.saturating_sub(self.warnings.len() as u64))
+    }
+
     /// A suppressed sink cannot distinguish a clean operation from dropped
     /// warnings, so its checkpoint must not qualify a result for caching.
     pub(crate) fn checkpoint(&self) -> Option<usize> {
@@ -258,6 +263,14 @@ impl WarningSink {
                 format!("{} values saturated", sat.saturated),
             );
         }
+    }
+
+    pub(crate) fn append(&mut self, other: Self) {
+        let was_suppressed = other.suppressed;
+        for warning in other.warnings {
+            self.push(warning.kind, warning.message);
+        }
+        self.suppressed |= was_suppressed;
     }
 
     #[cfg(test)]

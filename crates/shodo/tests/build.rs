@@ -146,6 +146,33 @@ fn first_line_style_applies_without_a_font() {
 }
 
 #[test]
+fn first_line_analysis_warnings_follow_normal_shaping_warnings() {
+    let style = ParagraphStyle {
+        first_line: Some(InlineStyle {
+            font_size: f32::NAN,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+    builder.push_text(dom(1), "a b");
+    let paragraph = builder.build(&mut LayoutContext::new(), &fonts()).unwrap();
+
+    let warnings = paragraph.warnings();
+    let missing_font = warnings
+        .iter()
+        .position(|warning| warning.message.contains("missing font"))
+        .unwrap();
+    let first_line_analysis = warnings
+        .iter()
+        .position(|warning| {
+            warning.kind == WarningKind::NonFiniteInput && warning.message.contains("font-size")
+        })
+        .unwrap();
+    assert!(missing_font < first_line_analysis);
+}
+
+#[test]
 fn negative_and_non_finite_font_sizes_are_neutralized() {
     let bad = InlineStyle {
         font_size: f32::NAN,
