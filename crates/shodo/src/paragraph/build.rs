@@ -635,7 +635,7 @@ fn build_data(
     );
     let UnitList {
         mut units,
-        boxes,
+        mut boxes,
         float_count,
     } = build_units(
         &processed.text,
@@ -646,6 +646,19 @@ fn build_data(
         base_level,
         &breaks,
     );
+    // Boxes are emitted in parent-before-child order. Keep only the jump to
+    // the nearest Clone; width still rounds and adds each edge inside-out.
+    for i in 0..boxes.len() {
+        boxes[i].nearest_clone = if styles[boxes[i].style as usize].box_decoration_break
+            == crate::style::BoxDecorationBreak::Clone
+        {
+            Some(i as u32)
+        } else {
+            boxes[i]
+                .parent
+                .and_then(|parent| boxes[parent as usize].nearest_clone)
+        };
+    }
     for (i, unit) in units.iter_mut().enumerate() {
         let index = combine_spans.partition_point(|span| span.text.end <= unit.text.start);
         if let Some(span) = combine_spans.get_mut(index)

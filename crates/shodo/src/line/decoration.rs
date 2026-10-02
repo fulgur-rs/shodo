@@ -6,6 +6,7 @@ use crate::style::BoxDecorationBreak;
 #[cfg(test)]
 std::thread_local! {
     static CHAIN_VECS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static WIDTH_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 fn ancestors(data: &ParagraphData, boundary: usize) -> impl Iterator<Item = u32> + '_ {
@@ -37,22 +38,39 @@ pub(super) fn width(
     start: bool,
     sat: &mut Saturation,
 ) -> LayoutUnit {
-    ancestors(data, boundary)
-        .filter(|b| cloned(data, *b))
-        .fold(LayoutUnit::ZERO, |w, b| {
-            let e = data.boxes[b as usize].edges;
-            w.add(
-                LayoutUnit::from_f32_round(
-                    if start {
-                        e.inline_start_total()
-                    } else {
-                        e.inline_end_total()
-                    },
-                    sat,
-                ),
-                sat,
-            )
+    let mut next = data
+        .units
+        .get(boundary)
+        .and_then(|unit| match unit.kind {
+            UnitKind::Close { box_index } => Some(box_index),
+            _ => unit.parent_box,
         })
+        .and_then(|b| data.boxes[b as usize].nearest_clone);
+    std::iter::from_fn(move || {
+        let b = next?;
+        next = data.boxes[b as usize]
+            .parent
+            .and_then(|parent| data.boxes[parent as usize].nearest_clone);
+        Some(b)
+    })
+    .inspect(|_| {
+        #[cfg(test)]
+        WIDTH_VISITS.with(|count| count.set(count.get() + 1));
+    })
+    .fold(LayoutUnit::ZERO, |w, b| {
+        let e = data.boxes[b as usize].edges;
+        w.add(
+            LayoutUnit::from_f32_round(
+                if start {
+                    e.inline_start_total()
+                } else {
+                    e.inline_end_total()
+                },
+                sat,
+            ),
+            sat,
+        )
+    })
 }
 
 #[cfg(test)]
@@ -65,7 +83,24 @@ mod tests {
     use crate::{LayoutContext, Paragraph, ParagraphBuilder};
 
     fn nested(depth: usize) -> Paragraph {
-        let style = ParagraphStyle::default();
+        nested_with(depth, Some(2))
+    }
+
+    fn nested_with(depth: usize, clone_every: Option<usize>) -> Paragraph {
+        nested_first_line(depth, clone_every, None)
+    }
+
+    fn nested_first_line(
+        depth: usize,
+        clone_every: Option<usize>,
+        first_break: Option<BoxDecorationBreak>,
+    ) -> Paragraph {
+        let mut style = ParagraphStyle::default();
+        style.first_line = first_break.map(|decoration| crate::style::InlineStyle {
+            font_size: 20.0,
+            box_decoration_break: decoration,
+            ..style.root.clone()
+        });
         let limits = Limits::default();
         let fonts = FontCollection::with_options(
             &limits,
@@ -77,7 +112,7 @@ mod tests {
         let mut builder = ParagraphBuilder::new(&style, &limits);
         for i in 0..depth {
             let mut inline = style.root.clone();
-            inline.box_decoration_break = if i % 2 == 0 {
+            inline.box_decoration_break = if clone_every.is_some_and(|every| i % every == 0) {
                 BoxDecorationBreak::Clone
             } else {
                 BoxDecorationBreak::Slice
@@ -87,13 +122,140 @@ mod tests {
             edges.padding.inline_start = 0.2;
             edges.margin.inline_end = -0.2;
             edges.padding.inline_end = 0.3;
-            builder.open_inline(NodeId(i as u64 + 1), &inline, edges);
+            if let Some(decoration) = first_break {
+                let alternate = crate::style::InlineStyle {
+                    font_size: 20.0,
+                    box_decoration_break: decoration,
+                    ..inline.clone()
+                };
+                builder.open_inline_with_first_line(
+                    NodeId(i as u64 + 1),
+                    &inline,
+                    &alternate,
+                    edges,
+                );
+            } else {
+                builder.open_inline(NodeId(i as u64 + 1), &inline, edges);
+            }
         }
         builder.push_text(TextSource::Generated { node: NodeId(1000) }, "abc");
         for _ in 0..depth {
             builder.close_inline();
         }
         builder.build(&mut LayoutContext::new(), &fonts).unwrap()
+    }
+
+    #[test]
+    fn width_visits_only_clone_ancestors_in_deep_slice_and_mixed_inputs() {
+        // Reverting to filtering the full parent chain makes Slice and mixed
+        // inputs pay for every enclosing box, even when only one contributes.
+        for (depth, every, visits) in [
+            (16, None, 0),
+            (64, None, 0),
+            (16, Some(1), 16),
+            (64, Some(1), 64),
+            (16, Some(2), 8),
+            (64, Some(2), 32),
+            (64, Some(64), 1),
+        ] {
+            let p = nested_with(depth, every);
+            let text = p
+                .data
+                .units
+                .iter()
+                .position(|u| matches!(u.kind, UnitKind::Cluster { .. }))
+                .unwrap();
+            let close = p
+                .data
+                .units
+                .iter()
+                .position(|u| matches!(u.kind, UnitKind::Close { .. }))
+                .unwrap();
+            for boundary in [text, close] {
+                for start in [true, false] {
+                    WIDTH_VISITS.with(|count| count.set(0));
+                    let mut sat = Saturation::default();
+                    assert_eq!(width(&p.data, boundary, start, &mut sat).raw(), visits * 6);
+                    assert!(sat.is_clean());
+                    WIDTH_VISITS.with(|count| {
+                        assert_eq!(
+                            count.get(),
+                            visits as usize,
+                            "depth={depth} every={every:?} boundary={boundary}"
+                        )
+                    });
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn first_line_clone_queries_use_the_resolved_decoration_styles() {
+        // box-decoration-break is outside the first-line property subset:
+        // caller-supplied alternate values must not change either width.
+        for (normal, alternate, raw, visits) in [
+            (None, BoxDecorationBreak::Clone, 0, 0),
+            (Some(1), BoxDecorationBreak::Slice, 12, 2),
+        ] {
+            let p = nested_first_line(2, normal, Some(alternate));
+            for data in [&*p.data, &*p.data.first_line.as_ref().unwrap().data] {
+                let boundary = data
+                    .units
+                    .iter()
+                    .position(|u| matches!(u.kind, UnitKind::Cluster { .. }))
+                    .unwrap();
+                WIDTH_VISITS.with(|count| count.set(0));
+                assert_eq!(
+                    width(data, boundary, true, &mut Saturation::default()).raw(),
+                    raw
+                );
+                WIDTH_VISITS.with(|count| assert_eq!(count.get(), visits));
+            }
+        }
+    }
+
+    #[test]
+    fn clone_ancestor_queries_do_not_leak_across_sibling_boxes() {
+        let seed = nested(0);
+        let style = ParagraphStyle::default();
+        let limits = Limits::default();
+        let mut builder = ParagraphBuilder::new(&style, &limits);
+        for (id, decoration, text) in [
+            (1, BoxDecorationBreak::Clone, "a"),
+            (2, BoxDecorationBreak::Slice, "b"),
+        ] {
+            let inline = crate::style::InlineStyle {
+                box_decoration_break: decoration,
+                ..style.root.clone()
+            };
+            let mut edges = InlineEdges::default();
+            edges.padding.inline_start = 0.1;
+            builder.open_inline(NodeId(id), &inline, edges);
+            builder.push_text(
+                TextSource::Generated {
+                    node: NodeId(id + 10),
+                },
+                text,
+            );
+            builder.close_inline();
+        }
+        let p = builder
+            .build(&mut LayoutContext::new(), &seed.data.fonts)
+            .unwrap();
+        for (boundary, unit) in p
+            .data
+            .units
+            .iter()
+            .enumerate()
+            .filter(|(_, u)| matches!(u.kind, UnitKind::Cluster { .. }))
+        {
+            let mut sat = Saturation::default();
+            assert_eq!(
+                width(&p.data, boundary, true, &mut sat).raw(),
+                if unit.text.start == 0 { 6 } else { 0 }
+            );
+            assert!(sat.is_clean());
+        }
     }
 
     #[test]
