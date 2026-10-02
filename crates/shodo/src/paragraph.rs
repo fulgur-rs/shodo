@@ -72,7 +72,6 @@ impl FirstLineData {
 
 pub(crate) struct ParagraphData {
     pub(crate) ruby: crate::ruby::prepare::RubyData,
-    pub(crate) ruby_inputs: Vec<crate::ruby::builder::RubyInput>,
     #[cfg(test)]
     pub(crate) spacing_setup_visits: std::sync::atomic::AtomicUsize,
     #[cfg(test)]

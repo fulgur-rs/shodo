@@ -34,3 +34,6 @@ criterion = { version = "=0.7.0", default-features = false, features = ["cargo_b
 [[bench]]
 name = "layout"
 harness = false
+
+[[example]]
+name = "ruby_inputs"
