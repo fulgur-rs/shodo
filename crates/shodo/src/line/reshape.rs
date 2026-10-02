@@ -620,6 +620,8 @@ mod tests {
             tag: *b"liga",
             value: 0,
         });
+        // This fixture mutates otherwise immutable paragraph styles.
+        data.shape_features = crate::shape::FeatureSets::new(&data.shape_items, &data.styles);
         data.units[0].unsafe_to_break = true;
         let LineResult::Line(line) = p.next_line(
             &mut LayoutContext::new(),
@@ -763,6 +765,7 @@ mod tests {
         drop(first);
         let data = std::sync::Arc::get_mut(&mut p.data).unwrap();
         data.styles[0].font_kerning = crate::style::FontKerning::None;
+        data.shape_features = crate::shape::FeatureSets::new(&data.shape_items, &data.styles);
         data.units
             .iter_mut()
             .find(|u| u.text.start == 2)

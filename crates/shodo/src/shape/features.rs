@@ -1,5 +1,38 @@
 //! CSS feature components followed by explicit author settings (last wins).
+use crate::analysis::itemize::ShapeItem;
 use crate::style::*;
+use std::{collections::HashMap, sync::Arc};
+
+type Key = (u32, bool, Option<[u8; 4]>);
+
+/// Immutable paragraph-owned arrays, also used by every line-edge reshape.
+pub(crate) struct FeatureSets(HashMap<Key, Arc<[harfrust::Feature]>>);
+
+fn key(item: &ShapeItem) -> Key {
+    (
+        item.style,
+        item.orientation == super::orientation::RunOrientation::Upright,
+        item.width_feature,
+    )
+}
+
+impl FeatureSets {
+    pub(crate) fn new(items: &[ShapeItem], styles: &[InlineStyle]) -> Self {
+        let mut sets = HashMap::new();
+        for item in items {
+            sets.entry(key(item))
+                .or_insert_with(|| Arc::from(for_item(&styles[item.style as usize], item)));
+        }
+        Self(sets)
+    }
+
+    pub(super) fn get(&self, item: &ShapeItem) -> Arc<[harfrust::Feature]> {
+        self.0
+            .get(&key(item))
+            .expect("prepared shaping features")
+            .clone()
+    }
+}
 
 #[cfg(test)]
 std::thread_local! {

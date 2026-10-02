@@ -24,7 +24,7 @@ pub(crate) struct RunInstance {
     pub(crate) skew: Option<f32>,
     pub(crate) script: [u8; 4],
     pub(crate) language: Option<String>,
-    pub(crate) features: Vec<harfrust::Feature>,
+    pub(crate) features: Arc<[harfrust::Feature]>,
 }
 
 pub(crate) fn resolve(
@@ -152,7 +152,7 @@ pub(crate) fn resolve(
         language: style.lang.clone(),
         // Item orientation/width features are supplied by shape_items. Metric
         // consumers only need the resolved coordinates and size.
-        features: Vec::new(),
+        features: Arc::default(),
     });
     (instance, result, size)
 }
