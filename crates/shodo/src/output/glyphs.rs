@@ -332,7 +332,7 @@ impl<'a> GlyphRunView<'a> {
                 let end = data.glyph_clusters[(self.glyphs.1 - 1) as usize] as usize;
                 (begin, end + 1 - begin)
             }
-            GlyphSource::Shared => (0, 0),
+            GlyphSource::Shared => (0, 1),
             GlyphSource::Overlay { clusters, .. } => {
                 (clusters.0 as usize, (clusters.1 - clusters.0) as usize)
             }
@@ -342,6 +342,11 @@ impl<'a> GlyphRunView<'a> {
             data.cluster_queries
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let (glyphs, text, store) = match self.source {
+                GlyphSource::Shared if self.glyphs.0 == self.glyphs.1 => (
+                    self.glyphs.0..self.glyphs.1,
+                    self.text.0..self.text.1,
+                    &data.glyphs,
+                ),
                 GlyphSource::Shared => {
                     let u = &data.units[data.clusters[begin + i] as usize];
                     let crate::analysis::units::UnitKind::Cluster { glyphs, .. } = &u.kind else {

@@ -251,10 +251,12 @@ pub(super) fn width(
     let hyphen_end = super::plan::hyphen_end(data, range.end).filter(|end| *end > range.start);
     let hyphen_windows =
         hyphen_end.and_then(|end| super::hyphen::line(data, range.start, end, cx, sat));
-    let hyphen_leaf = hyphen_windows
-        .as_ref()
-        .and(hyphen_end)
-        .map(|end| (end - 1, super::spacing::hyphen_leaf(data, end - 1, sat)));
+    let hyphen_leaf = hyphen_windows.as_ref().and(hyphen_end).map(|end| {
+        (
+            end - 1,
+            super::spacing::hyphen_unit_summary(data, end - 1, sat),
+        )
+    });
     if cx
         .ruby_ranges
         .root

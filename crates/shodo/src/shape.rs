@@ -461,7 +461,10 @@ fn shape_inputs<'a>(
             if let Some(language) = style.lang.as_ref().and_then(|l| l.parse().ok()) {
                 buffer.set_language(language);
             }
-            let mut flags = harfrust::BufferFlags::PRODUCE_UNSAFE_TO_CONCAT;
+            // Keep controls in the shaping input for joining/substitutions, but
+            // remove their residual glyphs: even a zero-width space can have ink.
+            let mut flags = harfrust::BufferFlags::PRODUCE_UNSAFE_TO_CONCAT
+                | harfrust::BufferFlags::REMOVE_DEFAULT_IGNORABLES;
             if !scalars[0].grapheme_start {
                 flags |= harfrust::BufferFlags::DO_NOT_INSERT_DOTTED_CIRCLE;
             }
@@ -493,8 +496,47 @@ fn shape_inputs<'a>(
             let scale = font_size / shaper.units_per_em() as f32;
             // Sort clusters into logical order while preserving the shaper's
             // intra-cluster order. Public output positions handle RTL groups.
+            // Harfrust may merge a removed leading control into the next
+            // glyph's cluster. Keep its source owner separate from the ink.
+            let ignorables = icu_properties::CodePointSetData::new::<
+                icu_properties::props::DefaultIgnorableCodePoint,
+            >();
+            let leading_end = scalars
+                .iter()
+                .find(|scalar| !ignorables.contains(scalar.c))
+                .filter(|scalar| scalar.grapheme_start)
+                .map_or(scalars[0].offset, |scalar| scalar.offset);
+            let output_cluster =
+                |index: usize| shaped.glyph_infos()[index].cluster.max(leading_end);
             let mut order: Vec<_> = (0..shaped.len()).collect();
-            order.sort_by_key(|i| shaped.glyph_infos()[*i].cluster);
+            order.sort_by_key(|i| output_cluster(*i));
+            // A glyph-free prefix still owns text, grapheme limits and break
+            // opportunities (including a standalone discretionary hyphen).
+            let first_cluster = order
+                .first()
+                .map_or(window_end, |index| output_cluster(*index));
+            let mut absent = 0;
+            while absent < scalars.len() && scalars[absent].offset < first_cluster {
+                let first = &scalars[absent];
+                let mut finish = absent + 1;
+                while finish < scalars.len()
+                    && scalars[finish].offset < first_cluster
+                    && !scalars[finish].grapheme_start
+                    && scalars[finish].item == first.item
+                {
+                    finish += 1;
+                }
+                runs.push(ShapedRun {
+                    glyphs: store.len() as u32..store.len() as u32,
+                    text: first.offset..scalars[finish - 1].end,
+                    item: first.item,
+                    orientation: original.orientation,
+                    font: found.id,
+                    font_size,
+                    instance: Arc::clone(run_instance),
+                });
+                absent = finish;
+            }
             let mut begin = 0;
             // `order` is cluster-ascending, so the cluster value examined each
             // iteration only grows; `scalar_cursor` tracks the matching position
@@ -502,9 +544,9 @@ fn shape_inputs<'a>(
             // whole slice with `partition_point` on every cluster.
             let mut scalar_cursor = 0usize;
             while begin < order.len() {
-                let cluster = shaped.glyph_infos()[order[begin]].cluster;
+                let cluster = output_cluster(order[begin]);
                 let mut end = begin + 1;
-                while end < order.len() && shaped.glyph_infos()[order[end]].cluster == cluster {
+                while end < order.len() && output_cluster(order[end]) == cluster {
                     end += 1;
                 }
                 while scalar_cursor < scalars.len() && scalars[scalar_cursor].offset <= cluster {
@@ -519,7 +561,7 @@ fn shape_inputs<'a>(
                 );
                 let owner = scalars[scalar_index].item;
                 let next_cluster = if end < order.len() {
-                    shaped.glyph_infos()[order[end]].cluster
+                    output_cluster(order[end])
                 } else {
                     window_end
                 };
@@ -656,12 +698,14 @@ fn shape_inputs<'a>(
                         (part_advance.min(0), part_advance.max(0)),
                         |(min, max), p| (min.min(i64::from(p.raw())), max.max(i64::from(p.raw()))),
                     );
-                    let previous_end_pen = runs.last().map_or(0, |r| {
-                        i64::from(store.pen[r.glyphs.end as usize - 1].raw())
-                            + i64::from(store.advance[r.glyphs.end as usize - 1].raw())
-                    });
+                    let previous_end_pen =
+                        runs.last().filter(|r| !r.glyphs.is_empty()).map_or(0, |r| {
+                            i64::from(store.pen[r.glyphs.end as usize - 1].raw())
+                                + i64::from(store.advance[r.glyphs.end as usize - 1].raw())
+                        });
                     if runs.len() > window_run_start
                         && let Some(run) = runs.last_mut()
+                        && !run.glyphs.is_empty()
                         && run.item == owner
                         && run.font == found.id
                         && run.text.end == cluster

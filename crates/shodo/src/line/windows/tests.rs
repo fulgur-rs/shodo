@@ -337,7 +337,8 @@ fn generated_hyphen_and_opposite_partial_edge_share_one_glyph_budget() {
             .push_text(TextSource::Generated { node: NodeId(4) }, "ZZZZ")
             .close_inline();
         let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
-        assert_eq!(p.data.glyphs.len(), 10);
+        // The unbroken soft hyphen has no output glyph.
+        assert_eq!(p.data.glyphs.len(), 9);
         let prefixes = p.break_all(
             &mut LayoutContext::new(),
             &Default::default(),
@@ -412,7 +413,10 @@ fn generated_hyphen_and_opposite_partial_edge_share_one_glyph_budget() {
                 &mut crate::geometry::Saturation::default(),
             )
             .unwrap();
-            assert_eq!(windows.len(), 2, "both distinct font edges retained");
+            // Removing the residual SHY can coalesce edge windows. Both
+            // source edges and their combined glyph budget must still survive.
+            assert!(windows.iter().any(|w| w.overlay.text.start == 3));
+            assert!(windows.iter().any(|w| w.overlay.text.end == 12));
             assert_eq!(
                 windows.iter().map(|w| w.overlay.store.len()).sum::<usize>(),
                 12,

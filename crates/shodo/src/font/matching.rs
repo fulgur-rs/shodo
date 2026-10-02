@@ -377,7 +377,7 @@ impl FontCollection {
     }
 
     /// Matches the entire caller-supplied grapheme, never a partial face.
-    /// Nominal cmap checks ignore joiners and variation selectors; shaping
+    /// Nominal cmap checks ignore default-ignorable code points; shaping
     /// resolves sequence substitutions in the selected face. Cmap coverage does
     /// not guarantee a composed emoji: unsupported sequences can retain visible
     /// component glyphs from that face. Matching does not rescan candidates based
@@ -884,7 +884,8 @@ fn intrinsic_descriptor(info: &FontInfo, family: String) -> FontFaceDescriptor {
     descriptor
 }
 fn ignored(ch: char) -> bool {
-    matches!(ch,'\u{200c}'|'\u{200d}'|'\u{fe00}'..='\u{fe0f}'|'\u{e0100}'..='\u{e01ef}')
+    icu_properties::CodePointSetData::new::<icu_properties::props::DefaultIgnorableCodePoint>()
+        .contains(ch)
 }
 fn cluster_chars(cluster: &str) -> impl DoubleEndedIterator<Item = char> {
     let chars = cluster.chars();
