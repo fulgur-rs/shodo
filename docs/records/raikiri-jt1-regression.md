@@ -168,18 +168,19 @@ workloads, not of a pure layout algorithm.
 
 - Whether switching is necessary. No acceptable budget has been defined, so the
   size of the increase cannot yet be judged against one.
-- Attribution to current main. The candidate measured is the saved S4 candidate
-  `fe67a281`; the latest candidate on current main was not evaluated, so the
-  split between old-S4-only causes and differences that exist today is unknown.
+- Attribution to current main. Follow-up issue `shodo-7dt` measured the saved
+  S4 candidate and a caller built from current main; see
+  [the current-main comparison](raikiri-jt1-current-main.md). The remaining
+  current-main gap is not a switching decision or a function-level attribution.
 - Behavior outside this profile: cold startup, page paint and WPT results.
 - Isolated text pipeline cost (not measured, see above).
 - Finer attribution inside the layout window than the module level.
 
-Follow-ups (not done here; no `shodo-p2m.6` dependency is added):
+Follow-ups:
 
-- A candidate caller built on current main, to separate old-S4-only from current
-  differences (acceptance 3 of `shodo-jt1`).
-- A budget-based switching-necessity decision (acceptance 4).
+- The current-main caller comparison (acceptance 3 of `shodo-jt1`) is recorded
+  in [the follow-up report](raikiri-jt1-current-main.md).
+- A budget-based switching-necessity decision remains open (acceptance 4).
 - Optional: a quiet re-recording of the perf attribution; and, if the layout
   window needs finer attribution, a frame-pointer rebuild in a disposable
   archive, or the `isolated` operation with the separate isolated-release binary.
