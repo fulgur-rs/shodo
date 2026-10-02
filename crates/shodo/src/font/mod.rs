@@ -440,14 +440,14 @@ impl FontCollection {
     pub fn family_name(&self, id: FontId) -> Option<String> {
         let data = self.font_data(id)?;
         let font = skrifa::FontRef::from_index(data.data.as_ref(), data.index).ok()?;
-        let family = font
-            .localized_strings(skrifa::string::StringId::TYPOGRAPHIC_FAMILY_NAME)
-            .english_or_first()
-            .or_else(|| {
-                font.localized_strings(skrifa::string::StringId::FAMILY_NAME)
-                    .english_or_first()
-            })?;
-        Some(family.to_string())
+        let family_name = |id| {
+            font.localized_strings(id)
+                .english_or_first()
+                .map(|family| family.to_string())
+                .filter(|family| !family.is_empty())
+        };
+        family_name(skrifa::string::StringId::TYPOGRAPHIC_FAMILY_NAME)
+            .or_else(|| family_name(skrifa::string::StringId::FAMILY_NAME))
     }
 
     /// Font data of a face in this layer or its shared layer.

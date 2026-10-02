@@ -3,6 +3,15 @@ use crate::style::FontStyle;
 
 /// Repository-owned synthetic font, deliberately independent of installed fonts.
 pub(super) fn test_font(family: &str, chars: &[char], width: u16) -> Vec<u8> {
+    test_font_with_typographic_name(family, None, chars, width)
+}
+
+pub(super) fn test_font_with_typographic_name(
+    family: &str,
+    typographic_family: Option<&str>,
+    chars: &[char],
+    width: u16,
+) -> Vec<u8> {
     let mut head = vec![0; 54];
     head[0..4].copy_from_slice(&0x0001_0000u32.to_be_bytes());
     head[18..20].copy_from_slice(&1000u16.to_be_bytes());
@@ -33,13 +42,18 @@ pub(super) fn test_font(family: &str, chars: &[char], width: u16) -> Vec<u8> {
         cmap.extend_from_slice(&(*ch as u32).to_be_bytes());
         cmap.extend_from_slice(&(index as u32 + 1).to_be_bytes());
     }
-    let names = [
+    let mut names = vec![
         (1, family.to_owned()),
         (2, "Regular".into()),
         (4, format!("{family} Regular")),
         (6, format!("{family}-Regular")),
     ];
-    let mut name = vec![0, 0, 0, 4, 0, 54];
+    if let Some(typographic_family) = typographic_family {
+        names.push((16, typographic_family.to_owned()));
+    }
+    let mut name = vec![0, 0];
+    name.extend_from_slice(&(names.len() as u16).to_be_bytes());
+    name.extend_from_slice(&((6 + 12 * names.len()) as u16).to_be_bytes());
     let mut strings = Vec::new();
     for (id, value) in names {
         let encoded: Vec<_> = value.encode_utf16().flat_map(u16::to_be_bytes).collect();

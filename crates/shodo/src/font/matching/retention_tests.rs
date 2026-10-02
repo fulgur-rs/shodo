@@ -91,6 +91,23 @@ fn native_font_family_name_is_available_without_a_face_descriptor() {
 }
 
 #[test]
+fn empty_typographic_family_name_falls_back_to_legacy_family_name() {
+    let fonts = controlled_catalog();
+    let id = fonts
+        .register(
+            super::super::browser_tests::test_font_with_typographic_name(
+                "Legacy Family",
+                Some(""),
+                &['a'],
+                600,
+            ),
+        )
+        .unwrap();
+
+    assert_eq!(fonts.family_name(id).as_deref(), Some("Legacy Family"));
+}
+
+#[test]
 fn native_file_choice_does_not_depend_on_lazy_source_id_assignment() {
     let dir = std::env::temp_dir().join(format!(
         "shodo-native-order-{}-{}",
