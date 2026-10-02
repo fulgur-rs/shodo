@@ -1,0 +1,667 @@
+{
+  "base_commit": "a62458009af2f3b3cc83441eb735b70ef8175807",
+  "queries_per_scope": 3,
+  "outputs_equal_across_all_six_runs": true,
+  "rows": [
+    {
+      "budget": "default",
+      "depth": 4,
+      "oracle_sha256": "a5d3104a361cd178f3a2ef8207d5a7ab562b3f4bee95bc11fd68a48e1b97d800",
+      "warnings": "[]/[]",
+      "actual_depth": 4,
+      "time_ns_per_query": {
+        "before-debug": {
+          "ruby_cost": 6379.0,
+          "main_cost": 6472.333333333333,
+          "ruby_hit_cost": 1932.3333333333333,
+          "main_hit_cost": 2072.0
+        },
+        "after-debug": {
+          "ruby_cost": 2514.6666666666665,
+          "main_cost": 2514.6666666666665,
+          "ruby_hit_cost": 1932.3333333333333,
+          "main_hit_cost": 2211.6666666666665
+        },
+        "before-release": {
+          "ruby_cost": 1094.3333333333333,
+          "main_cost": 1117.3333333333333,
+          "ruby_hit_cost": 652.0,
+          "main_hit_cost": 651.6666666666666
+        },
+        "after-release": {
+          "ruby_cost": 815.0,
+          "main_cost": 814.6666666666666,
+          "ruby_hit_cost": 791.6666666666666,
+          "main_hit_cost": 628.3333333333334
+        }
+      },
+      "before-alloc": {
+        "ruby_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "main_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "ruby_hit_cost": {
+          "allocated_bytes": 120,
+          "calls": 6,
+          "deallocated_bytes": 120,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32
+        },
+        "main_hit_cost": {
+          "allocated_bytes": 120,
+          "calls": 6,
+          "deallocated_bytes": 120,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32
+        }
+      },
+      "after-alloc": {
+        "ruby_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "main_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "ruby_hit_cost": {
+          "allocated_bytes": 120,
+          "calls": 6,
+          "deallocated_bytes": 120,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32
+        },
+        "main_hit_cost": {
+          "allocated_bytes": 120,
+          "calls": 6,
+          "deallocated_bytes": 120,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32
+        }
+      }
+    },
+    {
+      "budget": "default",
+      "depth": 8,
+      "oracle_sha256": "2b07e8d321b27a11754e1ee8f11087d5dbf50e898b5482b54bc576ad934fe2a2",
+      "warnings": "[]/[]",
+      "actual_depth": 8,
+      "time_ns_per_query": {
+        "before-debug": {
+          "ruby_cost": 106233.66666666667,
+          "main_cost": 93778.0,
+          "ruby_hit_cost": 2537.6666666666665,
+          "main_hit_cost": 2840.3333333333335
+        },
+        "after-debug": {
+          "ruby_cost": 4144.0,
+          "main_cost": 4120.666666666667,
+          "ruby_hit_cost": 2351.3333333333335,
+          "main_hit_cost": 2747.3333333333335
+        },
+        "before-release": {
+          "ruby_cost": 9848.333333333334,
+          "main_cost": 9522.333333333334,
+          "ruby_hit_cost": 651.6666666666666,
+          "main_hit_cost": 815.0
+        },
+        "after-release": {
+          "ruby_cost": 1233.6666666666667,
+          "main_cost": 1257.3333333333333,
+          "ruby_hit_cost": 931.0,
+          "main_hit_cost": 978.0
+        }
+      },
+      "before-alloc": {
+        "ruby_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "main_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "ruby_hit_cost": {
+          "allocated_bytes": 312,
+          "calls": 9,
+          "deallocated_bytes": 312,
+          "net_bytes": 0,
+          "peak_extra_bytes": 64
+        },
+        "main_hit_cost": {
+          "allocated_bytes": 312,
+          "calls": 9,
+          "deallocated_bytes": 312,
+          "net_bytes": 0,
+          "peak_extra_bytes": 64
+        }
+      },
+      "after-alloc": {
+        "ruby_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "main_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "ruby_hit_cost": {
+          "allocated_bytes": 312,
+          "calls": 9,
+          "deallocated_bytes": 312,
+          "net_bytes": 0,
+          "peak_extra_bytes": 64
+        },
+        "main_hit_cost": {
+          "allocated_bytes": 312,
+          "calls": 9,
+          "deallocated_bytes": 312,
+          "net_bytes": 0,
+          "peak_extra_bytes": 64
+        }
+      }
+    },
+    {
+      "budget": "default",
+      "depth": 12,
+      "oracle_sha256": "e2e51d4aec065c441bfd416faa887f62aff56dda24bd9882687a07609228fd17",
+      "warnings": "[]/[]",
+      "actual_depth": 12,
+      "time_ns_per_query": {
+        "before-debug": {
+          "ruby_cost": 1508831.6666666667,
+          "main_cost": 1503803.0,
+          "ruby_hit_cost": 3329.0,
+          "main_hit_cost": 3469.0
+        },
+        "after-debug": {
+          "ruby_cost": 5704.0,
+          "main_cost": 5610.666666666667,
+          "ruby_hit_cost": 4726.333333333333,
+          "main_hit_cost": 3050.0
+        },
+        "before-release": {
+          "ruby_cost": 156405.33333333334,
+          "main_cost": 148210.33333333334,
+          "ruby_hit_cost": 978.0,
+          "main_hit_cost": 954.3333333333334
+        },
+        "after-release": {
+          "ruby_cost": 1094.3333333333333,
+          "main_cost": 791.6666666666666,
+          "ruby_hit_cost": 954.3333333333334,
+          "main_hit_cost": 978.0
+        }
+      },
+      "before-alloc": {
+        "ruby_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "main_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "ruby_hit_cost": {
+          "allocated_bytes": 696,
+          "calls": 12,
+          "deallocated_bytes": 696,
+          "net_bytes": 0,
+          "peak_extra_bytes": 128
+        },
+        "main_hit_cost": {
+          "allocated_bytes": 696,
+          "calls": 12,
+          "deallocated_bytes": 696,
+          "net_bytes": 0,
+          "peak_extra_bytes": 128
+        }
+      },
+      "after-alloc": {
+        "ruby_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "main_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "ruby_hit_cost": {
+          "allocated_bytes": 696,
+          "calls": 12,
+          "deallocated_bytes": 696,
+          "net_bytes": 0,
+          "peak_extra_bytes": 128
+        },
+        "main_hit_cost": {
+          "allocated_bytes": 696,
+          "calls": 12,
+          "deallocated_bytes": 696,
+          "net_bytes": 0,
+          "peak_extra_bytes": 128
+        }
+      }
+    },
+    {
+      "budget": "default",
+      "depth": 16,
+      "oracle_sha256": "765729ebaae9bbf1d1266dc64ad9b9b47897be5db0b07e4f865e7555823eb9fa",
+      "warnings": "[]/[]",
+      "actual_depth": 16,
+      "time_ns_per_query": {
+        "before-debug": {
+          "ruby_cost": 24120538.666666668,
+          "main_cost": 24008461.0,
+          "ruby_hit_cost": 5285.0,
+          "main_hit_cost": 4912.333333333333
+        },
+        "after-debug": {
+          "ruby_cost": 7380.333333333333,
+          "main_cost": 12525.333333333334,
+          "ruby_hit_cost": 3632.0,
+          "main_hit_cost": 3864.6666666666665
+        },
+        "before-release": {
+          "ruby_cost": 2591820.0,
+          "main_cost": 2703082.6666666665,
+          "ruby_hit_cost": 1257.0,
+          "main_hit_cost": 1094.3333333333333
+        },
+        "after-release": {
+          "ruby_cost": 1443.3333333333333,
+          "main_cost": 1420.3333333333333,
+          "ruby_hit_cost": 1094.0,
+          "main_hit_cost": 931.3333333333334
+        }
+      },
+      "before-alloc": {
+        "ruby_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "main_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "ruby_hit_cost": {
+          "allocated_bytes": 696,
+          "calls": 12,
+          "deallocated_bytes": 696,
+          "net_bytes": 0,
+          "peak_extra_bytes": 128
+        },
+        "main_hit_cost": {
+          "allocated_bytes": 696,
+          "calls": 12,
+          "deallocated_bytes": 696,
+          "net_bytes": 0,
+          "peak_extra_bytes": 128
+        }
+      },
+      "after-alloc": {
+        "ruby_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "main_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "ruby_hit_cost": {
+          "allocated_bytes": 696,
+          "calls": 12,
+          "deallocated_bytes": 696,
+          "net_bytes": 0,
+          "peak_extra_bytes": 128
+        },
+        "main_hit_cost": {
+          "allocated_bytes": 696,
+          "calls": 12,
+          "deallocated_bytes": 696,
+          "net_bytes": 0,
+          "peak_extra_bytes": 128
+        }
+      }
+    },
+    {
+      "budget": "shape-zero",
+      "depth": 4,
+      "oracle_sha256": "9dad6e53ad4734efbfd81c997b02a63cdccc227b988f5ff3de5475cf0bbb6b54",
+      "warnings": {
+        "count": 111,
+        "sha256": "56f321111ad006e5af02b41dc40aa68bcc4ec9774d9312e174a023921fe5d112"
+      },
+      "actual_depth": 4,
+      "time_ns_per_query": {
+        "before-debug": {
+          "ruby_cost": 6332.666666666667,
+          "main_cost": 6286.0,
+          "ruby_hit_cost": 1909.0,
+          "main_hit_cost": 2095.3333333333335
+        },
+        "after-debug": {
+          "ruby_cost": 2374.6666666666665,
+          "main_cost": 2561.0,
+          "ruby_hit_cost": 1862.6666666666667,
+          "main_hit_cost": 2188.3333333333335
+        },
+        "before-release": {
+          "ruby_cost": 1094.3333333333333,
+          "main_cost": 1094.3333333333333,
+          "ruby_hit_cost": 628.3333333333334,
+          "main_hit_cost": 628.6666666666666
+        },
+        "after-release": {
+          "ruby_cost": 791.3333333333334,
+          "main_cost": 791.6666666666666,
+          "ruby_hit_cost": 791.6666666666666,
+          "main_hit_cost": 652.0
+        }
+      },
+      "before-alloc": {
+        "ruby_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "main_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "ruby_hit_cost": {
+          "allocated_bytes": 120,
+          "calls": 6,
+          "deallocated_bytes": 120,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32
+        },
+        "main_hit_cost": {
+          "allocated_bytes": 120,
+          "calls": 6,
+          "deallocated_bytes": 120,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32
+        }
+      },
+      "after-alloc": {
+        "ruby_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "main_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "ruby_hit_cost": {
+          "allocated_bytes": 120,
+          "calls": 6,
+          "deallocated_bytes": 120,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32
+        },
+        "main_hit_cost": {
+          "allocated_bytes": 120,
+          "calls": 6,
+          "deallocated_bytes": 120,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32
+        }
+      }
+    },
+    {
+      "budget": "warning-zero",
+      "depth": 4,
+      "oracle_sha256": "c8b36ce5309bca63eca34c574eb0c2b0b678fd9f9a1054b7ad18773dd609d080",
+      "warnings": "[Warning { kind: Suppressed, message: \"further warnings suppressed\" }]/[Warning { kind: Suppressed, message: \"further warnings suppressed\" }]",
+      "actual_depth": 4,
+      "time_ns_per_query": {
+        "before-debug": {
+          "ruby_cost": 6239.333333333333,
+          "main_cost": 6332.666666666667,
+          "ruby_hit_cost": 1769.3333333333333,
+          "main_hit_cost": 2188.3333333333335
+        },
+        "after-debug": {
+          "ruby_cost": 2398.0,
+          "main_cost": 2491.0,
+          "ruby_hit_cost": 5564.333333333333,
+          "main_hit_cost": 2095.3333333333335
+        },
+        "before-release": {
+          "ruby_cost": 1141.0,
+          "main_cost": 1117.3333333333333,
+          "ruby_hit_cost": 768.3333333333334,
+          "main_hit_cost": 768.0
+        },
+        "after-release": {
+          "ruby_cost": 791.6666666666666,
+          "main_cost": 651.6666666666666,
+          "ruby_hit_cost": 791.6666666666666,
+          "main_hit_cost": 628.6666666666666
+        }
+      },
+      "before-alloc": {
+        "ruby_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "main_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "ruby_hit_cost": {
+          "allocated_bytes": 120,
+          "calls": 6,
+          "deallocated_bytes": 120,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32
+        },
+        "main_hit_cost": {
+          "allocated_bytes": 120,
+          "calls": 6,
+          "deallocated_bytes": 120,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32
+        }
+      },
+      "after-alloc": {
+        "ruby_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "main_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "ruby_hit_cost": {
+          "allocated_bytes": 120,
+          "calls": 6,
+          "deallocated_bytes": 120,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32
+        },
+        "main_hit_cost": {
+          "allocated_bytes": 120,
+          "calls": 6,
+          "deallocated_bytes": 120,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32
+        }
+      }
+    },
+    {
+      "budget": "cache-zero",
+      "depth": 4,
+      "oracle_sha256": "27f7d780de7bae691759d0d97cb8ed291907283917057ec79d3965bacca3d57c",
+      "warnings": "[]/[]",
+      "actual_depth": 4,
+      "time_ns_per_query": {
+        "before-debug": {
+          "ruby_cost": 6262.666666666667,
+          "main_cost": 6402.333333333333,
+          "ruby_hit_cost": 1909.0,
+          "main_hit_cost": 2235.0
+        },
+        "after-debug": {
+          "ruby_cost": 2398.0,
+          "main_cost": 2561.0,
+          "ruby_hit_cost": 3143.0,
+          "main_hit_cost": 2072.0
+        },
+        "before-release": {
+          "ruby_cost": 1117.3333333333333,
+          "main_cost": 1094.3333333333333,
+          "ruby_hit_cost": 628.3333333333334,
+          "main_hit_cost": 768.3333333333334
+        },
+        "after-release": {
+          "ruby_cost": 791.6666666666666,
+          "main_cost": 791.3333333333334,
+          "ruby_hit_cost": 652.0,
+          "main_hit_cost": 651.6666666666666
+        }
+      },
+      "before-alloc": {
+        "ruby_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "main_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "ruby_hit_cost": {
+          "allocated_bytes": 120,
+          "calls": 6,
+          "deallocated_bytes": 120,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32
+        },
+        "main_hit_cost": {
+          "allocated_bytes": 120,
+          "calls": 6,
+          "deallocated_bytes": 120,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32
+        }
+      },
+      "after-alloc": {
+        "ruby_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "main_cost": {
+          "allocated_bytes": 0,
+          "calls": 0,
+          "deallocated_bytes": 0,
+          "net_bytes": 0,
+          "peak_extra_bytes": 0
+        },
+        "ruby_hit_cost": {
+          "allocated_bytes": 120,
+          "calls": 6,
+          "deallocated_bytes": 120,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32
+        },
+        "main_hit_cost": {
+          "allocated_bytes": 120,
+          "calls": 6,
+          "deallocated_bytes": 120,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32
+        }
+      }
+    },
+    {
+      "budget": "glyph-zero",
+      "depth": 4,
+      "oracle_sha256": "d3aa4a1f4d7751b8f1d97b540206d6ab6f8717465336d2425e373c81fb53c537",
+      "error": "LimitExceeded { kind: ShapedGlyphs, limit: 0, actual: 1 }"
+    }
+  ]
+}
