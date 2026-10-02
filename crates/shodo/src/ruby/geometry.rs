@@ -402,22 +402,31 @@ pub(crate) fn tracks(
     }
     let mut over = LayoutUnit::ZERO;
     let mut under = LayoutUnit::ZERO;
+    // Keep each side's prefix separate: empty levels still affect the side
+    // alternation, and inter-character lanes have already expanded `base`.
+    let mut offsets = Vec::with_capacity(levels.len());
     for (level, height) in levels.iter().enumerate() {
-        for (i, (lane, child_height)) in lanes.iter().zip(heights).enumerate() {
-            if ruby.lanes[lane.lane].level != level || selected[i].inline_size.is_some() {
-                continue;
-            }
-            selected[i].block = if before[level] {
-                base.top.sub(over, sat).sub(*child_height, sat)
-            } else {
-                base.bottom.add(under, sat)
-            };
-        }
+        #[cfg(test)]
+        track_tests::visit();
+        offsets.push(if before[level] { over } else { under });
         if before[level] {
             over = over.add(*height, sat);
         } else {
             under = under.add(*height, sat);
         }
+    }
+    for (i, (lane, child_height)) in lanes.iter().zip(heights).enumerate() {
+        #[cfg(test)]
+        track_tests::visit();
+        if selected[i].inline_size.is_some() {
+            continue;
+        }
+        let level = ruby.lanes[lane.lane].level;
+        selected[i].block = if before[level] {
+            base.top.sub(offsets[level], sat).sub(*child_height, sat)
+        } else {
+            base.bottom.add(offsets[level], sat)
+        };
     }
     let whole = Bounds {
         top: base.top.sub(over, sat),
@@ -510,3 +519,7 @@ pub(crate) fn layout(
         advance: contribution.height(sat),
     }
 }
+
+#[cfg(test)]
+#[path = "tests/tracks.rs"]
+mod track_tests;
