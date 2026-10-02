@@ -37,3 +37,7 @@ harness = false
 
 [[example]]
 name = "ruby_inputs"
+
+[[example]]
+name = "accesskit_word_starts"
+required-features = ["shodo/accesskit"]

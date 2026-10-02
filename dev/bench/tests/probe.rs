@@ -124,3 +124,35 @@ fn justify_workload_measures_plain_and_justified_ownership_separately() {
             > 0
     );
 }
+
+#[cfg(feature = "allocation-counting")]
+#[test]
+fn ordinary_clusters_do_not_allocate_one_temporary_block_per_cluster() {
+    // A per-cluster parts Vec makes build allocations scale with glyph count.
+    // These pinned, predominantly single-glyph clusters leave a generous budget
+    // for retained stores, shaping buffers, itemization and run windows.
+    // The pinned CJK workload also has unrelated per-glyph allocations, so its budget is
+    // separate: restoring parts Vec pushes it above five calls per glyph.
+    for (id, numerator, denominator) in [
+        ("latin-long", 1, 2),
+        ("japanese-long", 5, 1),
+        ("arabic-long", 1, 2),
+    ] {
+        let r = probe("--memory", id, "8");
+        assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+        let v: serde_json::Value = serde_json::from_slice(&r.stdout).unwrap();
+        let build = v["scopes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["name"] == "build")
+            .unwrap();
+        let calls = build["counts"]["calls"].as_u64().unwrap();
+        let glyphs = v["digests"]["plain"]["glyphs"].as_u64().unwrap();
+        assert!(glyphs > 1000, "{id} must exercise many clusters");
+        assert!(
+            calls < glyphs * numerator / denominator,
+            "{id}: {calls} build allocations for {glyphs} glyphs; temporary cluster blocks must not dominate"
+        );
+    }
+}
