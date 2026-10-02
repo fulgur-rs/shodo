@@ -170,6 +170,28 @@ pub(crate) fn build_units(
             ItemKind::Text => {
                 while run_index < runs.len() && runs[run_index].item == index {
                     let run = &runs[run_index];
+                    if run.glyphs.is_empty() {
+                        units.push(Unit {
+                            combine: None,
+                            shared_cluster: None,
+                            slice_advance: crate::geometry::LayoutUnit::ZERO,
+                            unsafe_to_break: false,
+                            unsafe_to_concat: false,
+                            kind: UnitKind::Cluster {
+                                run: run_index as u32,
+                                glyphs: run.glyphs.clone(),
+                                space: false,
+                            },
+                            item: index,
+                            text: run.text.clone(),
+                            break_after: breaks.at(run.text.end).class,
+                            emergency_min_content: breaks.at(run.text.end).min_content,
+                            level: base_level,
+                            parent_box,
+                        });
+                        run_index += 1;
+                        continue;
+                    }
                     // All shaping paths store clusters in logical ascending order,
                     // including RTL storage splits (whose glyphs share a cluster).
                     let mut begin = run.glyphs.start;

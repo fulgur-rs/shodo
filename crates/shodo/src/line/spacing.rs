@@ -281,6 +281,10 @@ pub(crate) fn last_content(data: &ParagraphData) -> Option<usize> {
 }
 
 pub(super) fn push(data: &ParagraphData, cursor: &mut Cursor, index: usize) {
+    push_summary(data, cursor, index, data.unit_spacing[index].summary);
+}
+
+fn push_summary(data: &ParagraphData, cursor: &mut Cursor, index: usize, summary: Summary) {
     let unit = &data.units[index];
     let level =
         if matches!(unit.kind, UnitKind::Tab) && data.combine_at_text(unit.text.start).is_none() {
@@ -288,7 +292,7 @@ pub(super) fn push(data: &ParagraphData, cursor: &mut Cursor, index: usize) {
         } else {
             unit.level
         };
-    cursor.push(level, data.unit_spacing[index].summary, Some(data));
+    cursor.push(level, summary, Some(data));
 }
 
 /// A typographic edge's kind and source offset.
@@ -368,7 +372,20 @@ pub(super) fn hyphen_summary<'a>(
 
 pub(super) fn hyphen_leaf(data: &ParagraphData, index: usize, sat: &mut Saturation) -> Summary {
     let unit = &data.units[index];
-    let style = &data.styles[data.items[unit.item as usize].style as usize];
+    let offset = data.text[unit.text.start as usize..unit.text.end as usize]
+        .char_indices()
+        .next_back()
+        .filter(|(_, ch)| *ch == '\u{ad}')
+        .map_or(unit.text.start, |(relative, _)| {
+            unit.text.start + relative as u32
+        });
+    let end = data.items.partition_point(|item| item.text.start <= offset);
+    let source = data.items[..end]
+        .iter()
+        .rev()
+        .find(|item| item.text.contains(&offset))
+        .unwrap_or(&data.items[unit.item as usize]);
+    let style = &data.styles[source.style as usize];
     Summary::leaf(
         Edge {
             tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
@@ -380,6 +397,35 @@ pub(super) fn hyphen_leaf(data: &ParagraphData, index: usize, sat: &mut Saturati
     )
 }
 
+// Removal can leave SHY inside its preceding cluster. Its visible edge
+// contributes tracking in addition to that cluster's ordinary text edges.
+pub(super) fn hyphen_unit_summary(
+    data: &ParagraphData,
+    index: usize,
+    sat: &mut Saturation,
+) -> Summary {
+    data.unit_spacing[index]
+        .summary
+        .join(hyphen_leaf(data, index, sat), Some(data))
+}
+
+fn visible_summary(
+    data: &ParagraphData,
+    index: usize,
+    visible_hyphen: Option<u32>,
+    sat: &mut Saturation,
+) -> Summary {
+    let unit = &data.units[index];
+    let summary = data.unit_spacing[index].summary;
+    if visible_hyphen.is_some_and(|offset| {
+        unit.text.contains(&offset) && data.text[offset as usize..].starts_with('\u{ad}')
+    }) {
+        hyphen_unit_summary(data, index, sat)
+    } else {
+        summary
+    }
+}
+
 pub(super) fn width(
     data: &ParagraphData,
     start: usize,
@@ -389,23 +435,12 @@ pub(super) fn width(
 ) -> LayoutUnit {
     let mut cursor = Cursor::default();
     for i in start..end {
-        if visible_hyphen == Some(data.units[i].text.start)
-            && data.text[data.units[i].text.start as usize..].starts_with('\u{ad}')
-        {
-            let unit = &data.units[i];
-            let style = &data.styles[data.items[unit.item as usize].style as usize];
-            cursor.push(
-                unit.level,
-                Summary::leaf(
-                    Edge {
-                        tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
-                        kind: Kind::Text,
-                        unit: i as u32,
-                        ..Default::default()
-                    },
-                    Some(data),
-                ),
-                Some(data),
+        if visible_hyphen.is_some() {
+            push_summary(
+                data,
+                &mut cursor,
+                i,
+                visible_summary(data, i, visible_hyphen, sat),
             );
         } else {
             push(data, &mut cursor, i);
@@ -449,20 +484,7 @@ pub(super) fn apply(
             scan.widths[k] = scan.widths[k].sub(after, sat);
             scan.widths[tail - start] = scan.widths[tail - start].add(after, sat);
         }
-        if visible == Some(unit.text.start)
-            && data.text[unit.text.start as usize..].starts_with('\u{ad}')
-        {
-            let style = &data.styles[data.items[unit.item as usize].style as usize];
-            metadata[k] = Summary::leaf(
-                Edge {
-                    tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
-                    kind: Kind::Text,
-                    unit: (start + k) as u32,
-                    ..Default::default()
-                },
-                Some(data),
-            );
-        }
+        metadata[k] = visible_summary(data, start + k, visible, sat);
         scan.widths[k] =
             scan.widths[k].add(super::spacing_summary::raw(metadata[k].cost, sat), sat);
         if let Some(first) = metadata[k].first {
@@ -654,7 +676,9 @@ pub(super) fn positions(
             );
             adjustments[index].leading = before;
         }
-        adjustments[(glyphs.end - 1 - range.start) as usize].extra = width.sub(natural, sat);
+        if !glyphs.is_empty() {
+            adjustments[(glyphs.end - 1 - range.start) as usize].extra = width.sub(natural, sat);
+        }
         cursor = end;
     }
     // Reconcile each owned cluster against the unit contributions produced by

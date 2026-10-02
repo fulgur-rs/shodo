@@ -174,8 +174,6 @@ pub(super) fn apply(
             if std::mem::replace(&mut seen[w], true) {
                 continue;
             }
-            let original =
-                &data.glyphs.cluster[window.glyphs.start as usize..window.glyphs.end as usize];
             let mut g = 0;
             while g < window.store.len() {
                 let cluster = window.store.cluster[g];
@@ -183,11 +181,12 @@ pub(super) fn apply(
                 while end < window.store.len() && window.store.cluster[end] == cluster {
                     end += 1;
                 }
-                let old = window.glyphs.start as usize
-                    + original
-                        .partition_point(|c| *c <= cluster)
-                        .saturating_sub(1);
-                let mut unit = data.clusters[data.glyph_clusters[old] as usize] as usize;
+                // Generated glyphs can replace a glyph-free source cluster.
+                let at = data
+                    .selectable_clusters
+                    .partition_point(|i| data.units[*i as usize].text.start <= cluster)
+                    .saturating_sub(1);
+                let mut unit = data.selectable_clusters[at] as usize;
                 if let Some(shared) = &data.units[unit].shared_cluster {
                     unit = shared.slices[shared
                         .slices

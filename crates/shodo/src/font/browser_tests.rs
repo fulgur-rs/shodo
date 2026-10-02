@@ -409,6 +409,47 @@ fn css_weight_ranges_and_400_to_500_search_order() {
 }
 
 #[test]
+fn default_ignorables_do_not_require_cmap_or_unicode_range_coverage() {
+    let fonts = no_system();
+    let mut desc = descriptor("Primary");
+    desc.unicode_ranges = vec![(0x20, 0x7e)];
+    let primary = fonts
+        .register_face(test_font("Primary", &[' ', 'a'], 600), 0, desc)
+        .unwrap();
+    add_face(
+        &fonts,
+        "Fallback",
+        (400., 400.),
+        &[' ', 'a', '\u{301}', '\u{34f}', '\u{180e}', '\u{2060}'],
+    );
+    let q = query(&["Primary", "Fallback"], 400.);
+    for ch in [
+        '\u{34f}',
+        '\u{180e}',
+        '\u{2060}',
+        '\u{200c}',
+        '\u{fe0f}',
+        '\u{e0100}',
+    ] {
+        for text in [
+            ch.to_string(),
+            format!("a{ch}"),
+            format!(" {ch}"),
+            format!("a{}", ch.to_string().repeat(2048)),
+        ] {
+            for _ in 0..2 {
+                assert_eq!(
+                    fonts.match_cluster(&q, &text).unwrap().id,
+                    primary,
+                    "{ch:?}"
+                );
+            }
+        }
+    }
+    assert_ne!(fonts.match_cluster(&q, "a\u{301}").unwrap().id, primary);
+}
+
+#[test]
 fn unicode_ranges_and_whole_cluster_cmap_are_required() {
     let fonts = no_system();
     let mut desc = descriptor("Web");
@@ -1323,4 +1364,372 @@ fn local_aliases_share_reloaded_source_bytes_within_layer() {
         doc.font_data(second).unwrap().data.id()
     );
     assert_eq!(doc.state().retained_sources.len(), 1);
+}
+
+#[test]
+fn default_ignorables_emit_no_glyphs_without_losing_base_or_space() {
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        crate::font::FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    let chars = [' ', 'X', '\u{34f}', '\u{180e}', '\u{2060}'];
+    let id = fonts
+        .register_face(
+            test_font("Primary", &chars, 600),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Primary".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let style = crate::style::ParagraphStyle {
+        root: crate::style::InlineStyle {
+            font_size: 10.0,
+            font_families: vec![crate::style::FontFamily::Named("Primary".into())],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    for ch in ['\u{34f}', '\u{180e}', '\u{2060}'] {
+        for text in [
+            format!("XX{ch}XX"),
+            format!("XX {ch}XX"),
+            format!("{ch}XX{ch}"),
+            ch.to_string(),
+        ] {
+            let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+            builder.push_text(
+                crate::node::TextSource::Generated {
+                    node: crate::node::NodeId(1),
+                },
+                &text,
+            );
+            let p = builder
+                .build(&mut crate::LayoutContext::new(), &fonts)
+                .unwrap();
+            assert_eq!(p.text(), text);
+            let expected: Vec<_> = text
+                .chars()
+                .filter_map(|c| match c {
+                    ' ' => Some(1),
+                    'X' => Some(2),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(p.data.glyphs.id, expected, "{text:?}");
+            assert!(p.data.glyphs.advance.iter().all(|a| a.to_f32() == 6.0));
+            assert!(p.data.runs.iter().all(|run| run.font == id));
+        }
+    }
+}
+
+#[test]
+fn default_ignorables_retain_line_break_and_grapheme_semantics() {
+    let fonts = no_system();
+    fonts
+        .register_face(
+            test_font("Primary", &[' ', 'X'], 600),
+            0,
+            descriptor("Primary"),
+        )
+        .unwrap();
+    let style = crate::style::ParagraphStyle {
+        root: crate::style::InlineStyle {
+            font_size: 10.0,
+            font_families: vec![crate::style::FontFamily::Named("Primary".into())],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    for (text, width, cut) in [
+        ("XX\u{2060}XX", 12.0, 5),
+        ("XX \u{180e}XX", 18.0, 6),
+        ("XX \u{34f}XX", 18.0, 5),
+    ] {
+        let unspaced = text.replace(' ', "");
+        let mut normal = crate::ParagraphBuilder::new(&style, &Limits::default());
+        normal.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            &unspaced,
+        );
+        let p = normal
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        assert_eq!(p.text(), unspaced);
+        let lines = p.break_all(
+            &mut crate::LayoutContext::new(),
+            &Default::default(),
+            width,
+            &crate::AtomicSizes::EMPTY,
+        );
+        assert_eq!(
+            lines.len(),
+            1,
+            "{text:?}: controls must retain standard no-break behavior"
+        );
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let observed = seen.clone();
+        let mut anywhere = crate::ParagraphBuilder::new(&style, &Limits::default());
+        anywhere.with_line_break_override(move |context| {
+            observed
+                .lock()
+                .unwrap()
+                .push((context.text.to_owned(), context.offset));
+            crate::LineBreakOverride::Allow
+        });
+        anywhere.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            text,
+        );
+        let p = anywhere
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        let lines = p.break_all(
+            &mut crate::LayoutContext::new(),
+            &Default::default(),
+            width,
+            &crate::AtomicSizes::EMPTY,
+        );
+        assert_eq!(
+            lines
+                .iter()
+                .map(|line| line.text_range())
+                .collect::<Vec<_>>(),
+            vec![0..cut, cut..text.len()],
+            "{text:?}"
+        );
+        let seen = seen.lock().unwrap();
+        assert!(seen.iter().all(|(logical, _)| logical == text));
+        if text.contains('\u{34f}') {
+            assert!(
+                seen.iter().all(|(_, at)| *at != 3),
+                "space + CGJ is a single grapheme"
+            );
+        }
+    }
+}
+
+#[test]
+fn default_ignorables_keep_glyph_free_dom_items_and_grapheme_limits() {
+    let fonts = no_system();
+    fonts
+        .register_face(test_font("Primary", &['X'], 600), 0, descriptor("Primary"))
+        .unwrap();
+    let style = crate::style::ParagraphStyle {
+        root: crate::style::InlineStyle {
+            font_size: 10.0,
+            font_families: vec![crate::style::FontFamily::Named("Primary".into())],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    for text in ["\u{2060}\u{180e}", "\u{2060}XX", "XX\u{180e}"] {
+        let mut builder = crate::ParagraphBuilder::new(&style, &Limits::default());
+        for (offset, ch) in text.char_indices() {
+            builder.push_text(
+                crate::node::TextSource::Dom {
+                    node: crate::node::NodeId(offset as u64 + 1),
+                    offset: 0,
+                },
+                &ch.to_string(),
+            );
+        }
+        let p = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        let lines = p.break_all(
+            &mut crate::LayoutContext::new(),
+            &Default::default(),
+            1000.0,
+            &crate::AtomicSizes::EMPTY,
+        );
+        assert_eq!(lines.len(), 1, "{text:?}");
+        assert_eq!(lines[0].text_range(), 0..text.len());
+        let clusters = lines[0]
+            .fragments()
+            .filter_map(|fragment| match fragment {
+                crate::Fragment::GlyphRun(run) => Some(
+                    run.clusters()
+                        .map(|cluster| cluster.text_range)
+                        .collect::<Vec<_>>(),
+                ),
+                _ => None,
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        assert_eq!(
+            clusters
+                .iter()
+                .map(|range| range.end - range.start)
+                .sum::<usize>(),
+            text.len()
+        );
+        if text.starts_with('\u{2060}') && text.contains('X') {
+            let visible = lines[0]
+                .fragments()
+                .filter_map(|fragment| match fragment {
+                    crate::Fragment::GlyphRun(run) if run.glyphs().len() != 0 => Some(run.node()),
+                    _ => None,
+                })
+                .next()
+                .unwrap();
+            assert_eq!(visible, Some(crate::node::NodeId(4)));
+        }
+        let mut constraint = crate::LineConstraint::new(1000.0);
+        constraint.max_graphemes = Some(1);
+        let crate::LineResult::Line(first) = p.next_line(
+            &mut crate::LayoutContext::new(),
+            p.start_token(),
+            &Default::default(),
+            &constraint,
+            &crate::AtomicSizes::EMPTY,
+        ) else {
+            panic!("expected first grapheme");
+        };
+        assert_eq!(
+            first.text_range(),
+            0..text.chars().next().unwrap().len_utf8()
+        );
+    }
+}
+
+#[test]
+fn default_ignorables_keep_standalone_soft_hyphen_shaping() {
+    for budget in [None, Some(2)] {
+        let limits = Limits {
+            max_shaping_run_bytes: budget,
+            ..Default::default()
+        };
+        let fonts = no_system();
+        fonts
+            .register_face(
+                test_font("Primary", &['-', 'X'], 600),
+                0,
+                descriptor("Primary"),
+            )
+            .unwrap();
+        let style = crate::style::ParagraphStyle {
+            root: crate::style::InlineStyle {
+                font_size: 10.0,
+                font_families: vec![crate::style::FontFamily::Named("Primary".into())],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut shy_style = style.root.clone();
+        shy_style.font_size = 11.0;
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        builder.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            "XX",
+        );
+        builder
+            .open_inline(crate::node::NodeId(2), &shy_style, Default::default())
+            .push_text(
+                crate::node::TextSource::Generated {
+                    node: crate::node::NodeId(2),
+                },
+                "\u{ad}",
+            )
+            .close_inline();
+        builder.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(3),
+            },
+            "XX",
+        );
+        let p = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        assert_eq!(p.text(), "XX\u{ad}XX");
+        assert_eq!(p.data.glyphs.len(), 4);
+        let lines = p.break_all(
+            &mut crate::LayoutContext::new(),
+            &Default::default(),
+            20.0,
+            &crate::AtomicSizes::EMPTY,
+        );
+        assert_eq!(
+            lines
+                .iter()
+                .map(|line| line.text_range())
+                .collect::<Vec<_>>(),
+            vec![0..4, 4..6]
+        );
+        let ids = lines[0]
+            .fragments()
+            .filter_map(|fragment| match fragment {
+                crate::Fragment::GlyphRun(run) => Some(run.glyphs()),
+                _ => None,
+            })
+            .flatten()
+            .map(|glyph| glyph.id)
+            .collect::<Vec<_>>();
+        assert_eq!(ids, [2, 2, 1], "budget={budget:?}: generated hyphen");
+    }
+}
+
+#[test]
+fn default_ignorables_allow_justified_hyphens_without_shared_glyphs() {
+    let fonts = no_system();
+    fonts
+        .register_face(test_font("Primary", &['-'], 600), 0, descriptor("Primary"))
+        .unwrap();
+    let style = crate::style::ParagraphStyle {
+        root: crate::style::InlineStyle {
+            font_size: 10.0,
+            font_families: vec![crate::style::FontFamily::Named("Primary".into())],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut builder = crate::ParagraphBuilder::new(&style, &Limits::default());
+    builder
+        .push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            "\u{ad}",
+        )
+        .push_atomic(crate::node::NodeId(2), &style.root, Default::default());
+    let p = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    assert_eq!(p.data.glyphs.len(), 0);
+    let mut atomics = crate::AtomicSizes::new();
+    atomics.insert(
+        crate::node::NodeId(2),
+        crate::AtomicSize {
+            inline_size: 20.0,
+            block_size: 10.0,
+            ..Default::default()
+        },
+    );
+    let options = crate::style::LineOptions {
+        text_align: crate::style::TextAlign::Justify,
+        ..Default::default()
+    };
+    let lines = p.break_all(&mut crate::LayoutContext::new(), &options, 6.0, &atomics);
+    let glyphs = lines[0]
+        .fragments()
+        .filter_map(|fragment| match fragment {
+            crate::Fragment::GlyphRun(run) => Some(run.glyphs()),
+            _ => None,
+        })
+        .flatten()
+        .collect::<Vec<_>>();
+    assert_eq!(glyphs.len(), 1);
+    assert_eq!(glyphs[0].id, 1);
+    assert_eq!(glyphs[0].advance, 6.0);
 }

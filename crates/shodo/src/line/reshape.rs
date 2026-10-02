@@ -435,6 +435,74 @@ pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturati
             shifts.push(line.block_shifts[index]);
             continue;
         };
+        if glyphs.is_empty() {
+            // A standalone soft hyphen has no shared glyph index to replace.
+            // Select generated glyphs by its retained source text instead.
+            let mut selected = Vec::new();
+            for window in &sources {
+                if window.text.end <= text.start || text.end <= window.text.start {
+                    continue;
+                }
+                for owner in &window.parts {
+                    let clusters =
+                        &overlay.cluster[owner.glyphs.start as usize..owner.glyphs.end as usize];
+                    let a =
+                        owner.glyphs.start + clusters.partition_point(|c| *c < text.start) as u32;
+                    let b = owner.glyphs.start + clusters.partition_point(|c| *c < text.end) as u32;
+                    if a < b {
+                        selected.push((owner, a..b));
+                    }
+                }
+            }
+            if selected.is_empty() {
+                records.push(record.clone());
+                shifts.push(line.block_shifts[index]);
+                continue;
+            }
+            let mut consumed = LayoutUnit::ZERO;
+            for (position, (owner, actual)) in selected.iter().enumerate() {
+                let natural = actual.clone().fold(LayoutUnit::ZERO, |width, g| {
+                    width.add(overlay.advance[g as usize], sat).add(
+                        overlay
+                            .spacing
+                            .as_ref()
+                            .map_or(LayoutUnit::ZERO, |spacing| spacing[g as usize]),
+                        sat,
+                    )
+                });
+                let advance = if position + 1 == selected.len() {
+                    record.inline_size.sub(consumed, sat)
+                } else {
+                    natural
+                };
+                let mut part = record.clone();
+                part.inline_start = record.inline_start
+                    + if record.level % 2 != line.data.base_level % 2 {
+                        record.inline_size - consumed - advance
+                    } else {
+                        consumed
+                    };
+                part.inline_size = advance;
+                let c =
+                    &overlay_clusters[owner.clusters.start as usize..owner.clusters.end as usize];
+                let ca = owner.clusters.start
+                    + c.partition_point(|c| c.glyphs.end <= actual.start) as u32;
+                let cb = owner.clusters.start
+                    + c.partition_point(|c| c.glyphs.start < actual.end) as u32;
+                if let RecordKind::Glyphs { source, item, .. } = &mut part.kind {
+                    *item = overlay_runs[owner.run as usize].item;
+                    *source = GlyphSource::Overlay {
+                        glyphs: (actual.start, actual.end),
+                        clusters: (ca, cb),
+                        run: Some(owner.run),
+                    };
+                }
+                records.push(part);
+                shifts.push(line.block_shifts[index]);
+                consumed = consumed.add(advance, sat);
+            }
+            continue;
+        }
         let mut cuts = vec![glyphs.start, glyphs.end];
         for window in &sources {
             if window.shared.start < glyphs.end && glyphs.start < window.shared.end {
