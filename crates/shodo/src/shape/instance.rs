@@ -7,11 +7,12 @@ use skrifa::{
     instance::{LocationRef, Size},
     raw::TableProvider,
 };
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 #[cfg(test)]
 std::thread_local! {
     static COORDINATE_INSTANCE_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static VARIATION_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[derive(Clone, Debug, Default)]
@@ -45,9 +46,15 @@ pub(crate) fn resolve(
             .copied()
     };
     let mut variations = found.variations.clone();
+    // Preserve first-occurrence order and last-setting values without scanning
+    // the growing vector for every author-controlled tag.
+    let mut variation_indices = HashMap::new();
+    for (i, variation) in variations.iter().enumerate() {
+        variation_indices.entry(variation.tag).or_insert(i);
+    }
     // Explicit coordinates must be included while determining size-adjust.
     for v in &style.font_variations {
-        set_variation(&mut variations, *v);
+        set_variation(&mut variations, &mut variation_indices, *v);
     }
     let mut size = style.font_size;
     if let Some(adjust) = style.font_size_adjust {
@@ -112,6 +119,7 @@ pub(crate) fn resolve(
     {
         set_variation(
             &mut variations,
+            &mut variation_indices,
             FontVariation {
                 tag: *b"opsz",
                 value: size,
@@ -120,7 +128,7 @@ pub(crate) fn resolve(
     }
     // Explicit settings are last; axes() and harfrust clamp to supported ranges.
     for v in &style.font_variations {
-        set_variation(&mut variations, *v);
+        set_variation(&mut variations, &mut variation_indices, *v);
     }
     #[cfg(test)]
     COORDINATE_INSTANCE_BUILDS.with(|count| count.set(count.get() + 1));
@@ -156,17 +164,96 @@ pub(crate) fn resolve(
     });
     (instance, result, size)
 }
-fn set_variation(variations: &mut Vec<FontVariation>, value: FontVariation) {
-    if let Some(old) = variations.iter_mut().find(|v| v.tag == value.tag) {
-        *old = value;
-    } else {
-        variations.push(value);
+fn set_variation(
+    variations: &mut Vec<FontVariation>,
+    indices: &mut HashMap<[u8; 4], usize>,
+    value: FontVariation,
+) {
+    #[cfg(test)]
+    VARIATION_LOOKUPS.with(|count| count.set(count.get() + 1));
+    match indices.entry(value.tag) {
+        std::collections::hash_map::Entry::Occupied(entry) => variations[*entry.get()] = value,
+        std::collections::hash_map::Entry::Vacant(entry) => {
+            entry.insert(variations.len());
+            variations.push(value);
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn distinct_variations_have_bounded_lookup_work_and_last_wins() {
+        let fonts = crate::font::FontCollection::with_options(
+            &crate::limits::Limits::default(),
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        let found = FontMatch {
+            id: fonts
+                .register(crate::test_support::fonts::LATIN.to_vec())
+                .unwrap(),
+            variations: vec![FontVariation {
+                tag: *b"TEST",
+                value: 1.0,
+            }],
+            embolden: false,
+            skew: None,
+        };
+        for count in [128u32, 512] {
+            let mut settings: Vec<_> = (0..count)
+                .map(|i| FontVariation {
+                    tag: [
+                        b'T',
+                        b'A' + (i / 26 / 26) as u8,
+                        b'A' + ((i / 26) % 26) as u8,
+                        b'A' + (i % 26) as u8,
+                    ],
+                    value: i as f32,
+                })
+                .collect();
+            settings.push(FontVariation {
+                tag: *b"TEST",
+                value: 2.0,
+            });
+            settings.push(FontVariation {
+                tag: settings[0].tag,
+                value: -1.0,
+            });
+            let style = InlineStyle {
+                font_variations: settings,
+                ..Default::default()
+            };
+            VARIATION_LOOKUPS.with(|visits| visits.set(0));
+            let (_, run, _) = resolve(
+                crate::test_support::fonts::LATIN,
+                0,
+                &found,
+                &style,
+                *b"Latn",
+                &mut WarningSink::default(),
+            );
+            assert_eq!(run.variations.len(), count as usize + 1);
+            assert_eq!(
+                run.variations[0],
+                FontVariation {
+                    tag: *b"TEST",
+                    value: 2.0
+                }
+            );
+            assert_eq!(run.variations[1].value, -1.0);
+            for (i, value) in run.variations[2..].iter().enumerate() {
+                assert_eq!(value.value, (i + 1) as f32);
+            }
+            assert!(
+                VARIATION_LOOKUPS.with(|visits| visits.get()) <= 4 * style.font_variations.len()
+            );
+        }
+    }
 
     #[test]
     fn no_size_adjust_uses_only_final_coordinate_instance() {
