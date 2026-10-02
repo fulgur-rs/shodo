@@ -271,6 +271,19 @@ pub(super) fn prepare_cuts(
                 Index::new(data).paragraph_cuts(data)
             })
             .collect();
+        // Reserve candidate cells and monotone lane walks for both count and
+        // build, even when most candidate rows will be rejected. The first-line
+        // source-matching path shares this same budget. Its binary searches are
+        // additionally bounded by the existing input-array limits.
+        let lane_cuts = lanes
+            .iter()
+            .fold(0u64, |sum, lane| sum.saturating_add(lane.len() as u64));
+        let work = (base.len() as u64)
+            .saturating_mul((lanes.len() as u64).saturating_add(1))
+            .saturating_add(lane_cuts)
+            .saturating_mul(2);
+        bases.container_cost(container, LimitKind::RubyCutWork, work)?;
+        budget.charge(LimitKind::RubyCutWork, work)?;
         // Count the exact retained table before allocating its lane-cell product.
         let count = if let Some((normal, cursors)) = normal {
             let mut count = 0;

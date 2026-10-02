@@ -25,6 +25,12 @@ pub struct Limits {
     pub max_nesting_depth: Option<u64>,
     /// Glyphs per paragraph build and reshape output (2^22).
     pub max_shaped_glyphs: Option<u64>,
+    /// Ruby cut-search work reserved before counting and building candidate
+    /// correspondences (2^23). Shared by normal/first-line and nested ruby.
+    /// Reserves twice (base cuts * (lanes + 1) + total lane cuts), including
+    /// rejected candidates. These are work units, not CPU instructions;
+    /// `None` disables this work limit.
+    pub max_ruby_cut_work: Option<u64>,
     /// UTF-8 bytes per line-edge reshape window (4096); exceeding it warns
     /// and preserves shared glyphs rather than failing line layout.
     pub max_reshape_window_bytes: Option<u64>,
@@ -72,6 +78,7 @@ impl Default for Limits {
             max_style_bytes: Some(64 * MIB),
             max_nesting_depth: Some(512),
             max_shaped_glyphs: Some(1 << 22),
+            max_ruby_cut_work: Some(1 << 23),
             max_reshape_window_bytes: Some(4096),
             max_shaping_run_bytes: Some(64 * 1024),
             max_balance_iterations: Some(16),
@@ -100,6 +107,7 @@ impl Limits {
             max_style_bytes: None,
             max_nesting_depth: None,
             max_shaped_glyphs: None,
+            max_ruby_cut_work: None,
             max_reshape_window_bytes: None,
             max_shaping_run_bytes: None,
             max_balance_iterations: None,
@@ -143,6 +151,7 @@ pub enum LimitKind {
     StyleBytes,
     NestingDepth,
     ShapedGlyphs,
+    RubyCutWork,
     FontBlobBytes,
     TtcFaces,
     FontAxes,
