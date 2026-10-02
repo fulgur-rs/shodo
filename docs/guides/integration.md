@@ -233,6 +233,65 @@ outline vectors. Retained ruby child lines need their annotation transform
 composed with the logical origin; then add the parent line's block offset and
 convert with the parent line's physical converter.
 
+### Standalone text and draw origins
+
+For a standalone painter following this convention, `(draw_x, draw_y)` is the
+physical top-left of the layout container. Convert each glyph's origin relative
+to that container, then apply the painter's translation. For horizontal RTL,
+inline-start is at the container's right edge.
+
+Construct the converter from each accepted line's `writing_mode()` and
+`used_direction()`. Use the full physical layout container, including the inline
+constraint used for alignment. The content's ink width or `Line::inline_size()`
+does not substitute for that constraint. Upright vertical text can use LTR even
+when its inherited CSS direction is RTL.
+
+For an ordinary glyph run and a caller-owned logical alignment correction:
+
+```rust,ignore
+let converter = PhysicalConverter::new(
+    line.writing_mode(), line.used_direction(), container_size,
+);
+let (inline, block) = run.glyph_origin(glyph_index).unwrap();
+let local = converter.point(
+    inline + hang_shift, block + line.block_offset(),
+);
+let origin = (draw_x + local.0, draw_y + local.1);
+```
+
+Here `hang_shift` moves content along the logical inline axis. For horizontal
+flow, with container width `W`, glyph origin `(i, b)` and shift `s`:
+
+| Used direction | Physical glyph origin |
+| --- | --- |
+| LTR | `(draw_x + i + s, draw_y + b + line.block_offset())` |
+| RTL | `(draw_x + W - (i + s), draw_y + b + line.block_offset())` |
+
+A positive shift therefore moves RTL content left. For example, with `W = 100`,
+`draw_x = 20`, `i = 10` and `s = 5`, the physical x is 35 for LTR and 105 for RTL.
+With no correction, `run.physical_origin(glyph_index, container_size)` performs
+the conversion and includes `block_offset()`; add only the painter's physical
+translation to its result. `glyph_origin()` already includes the natural shaping
+advance needed by RTL: do not add an advance or subtract tracking again.
+
+Convert outline vectors separately with `run.glyph_transform()` and
+`converter.vector()`, as in the [vertical output guide](vertical-layout.md).
+This preserves the glyph's physical orientation while positions follow the
+inline direction. Do not mirror font outlines to implement RTL. Retained ruby
+child lines follow the annotation-transform composition described above.
+
+In raikiri [commit `ca5e5477`](https://github.com/fulgur-rs/raikiri/commit/ca5e547700951fa3b8b757d4ca04904424bcc3ef),
+`StandaloneText::container()` retains the constrained layout extent and
+`standalone_text::draw` follows this conversion with `hang_shift(index)`.
+These helpers belong to that upstream implementation; the shodo development
+dependency is pinned to the earlier `a62ea75b`, which predates the standalone
+helpers. With no inline constraint, raikiri uses its measured line width excluding
+trailing blanks. Its
+`rtl_start_and_end_align_to_opposite_physical_edges_without_mirroring` and
+`hebrew_run_stays_at_the_rtl_start_edge_without_mirroring` tests cover alignment
+and unchanged outline orientation. RTL standalone origins are supported by that
+version.
+
 `GlyphRunView::metrics()` uses the same face, effective size and variation
 coordinates as shaping. `Line::metrics()` separates the final line-box extents
 from the root font's text-over/text-under edges. Every participating run can

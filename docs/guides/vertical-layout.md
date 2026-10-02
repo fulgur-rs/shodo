@@ -33,6 +33,12 @@ CSS tracking or justification must not be added again. The fixture renderer in
 Use `PhysicalConverter::rect` for boxes and selections, and `logical_point` for
 incoming physical hit coordinates.
 
+For standalone drawing, use the physical container's top-left as the painter's
+translation and retain its full layout size for conversion. Logical alignment
+corrections move along the line's used inline direction. See the
+[standalone origin convention](integration.md#standalone-text-and-draw-origins)
+for the horizontal LTR/RTL formulas and the one-time `block_offset()` addition.
+
 `text-orientation: upright` changes the used direction to LTR. Computed RTL
 remains available to inherited horizontal content; use `Line::used_direction`
 when constructing the converter. The line-over side is the physical right for
