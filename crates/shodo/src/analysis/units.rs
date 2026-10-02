@@ -104,6 +104,9 @@ pub(crate) struct InlineBoxInfo {
     pub(crate) style: u32,
     pub(crate) edges: InlineEdges,
     pub(crate) parent: Option<u32>,
+    /// Innermost Clone box in this box's inclusive ancestor chain.
+    /// Finalized independently for each paragraph style set at build time.
+    pub(crate) nearest_clone: Option<u32>,
 }
 
 pub(crate) struct UnitList {
@@ -233,6 +236,7 @@ pub(crate) fn build_units(
                     style: item.style,
                     edges: *edges,
                     parent: parent_box,
+                    nearest_clone: None,
                 });
                 push(
                     UnitKind::Open { box_index },
