@@ -8,6 +8,7 @@ use crate::style::{CaseTransform, InlineStyle, TextTransform, WordSpaceTransform
 use icu_casemap::CaseMapper;
 use icu_locale_core::{LanguageIdentifier, Locale};
 use icu_normalizer::ComposingNormalizer;
+use std::borrow::Cow;
 
 pub(crate) struct WidthOrigin {
     pub(crate) text: std::ops::Range<u32>,
@@ -99,22 +100,27 @@ fn transform_inner(
             );
         }
     }
-    // OOF and generated bidi controls must not split words/casing context.
-    // WJ is a same-byte-length Format character ignored by UAX29.
-    let mut logical = input.text.clone();
-    for item in &input.items {
-        if matches!(
-            item.kind,
-            ItemKind::OutOfFlow { .. } | ItemKind::BidiControl
-        ) {
-            let start = item.text.start as usize;
-            let end = item.text.end as usize;
-            if end - start == 3 {
-                logical.replace_range(start..end, "\u{2060}");
+    let needs_case = styles
+        .iter()
+        .any(|s| !matches!(s.text_transform.components().0, CaseTransform::None));
+    let flags = needs_case.then(|| {
+        // OOF and generated bidi controls must not split words/casing context.
+        // WJ is a same-byte-length Format character ignored by UAX29.
+        let mut logical = input.text.clone();
+        for item in &input.items {
+            if matches!(
+                item.kind,
+                ItemKind::OutOfFlow { .. } | ItemKind::BidiControl
+            ) {
+                let start = item.text.start as usize;
+                let end = item.text.end as usize;
+                if end - start == 3 {
+                    logical.replace_range(start..end, "\u{2060}");
+                }
             }
         }
-    }
-    let flags = context(&logical);
+        context(&logical)
+    });
     let cm = CaseMapper::new();
     let root_locale = LanguageIdentifier::UNKNOWN;
     let mut output = String::new();
@@ -128,98 +134,98 @@ fn transform_inner(
         {
             let at = item.text.start as usize + offset;
             let end = at + c.len_utf8();
+            let flags_at = flags.as_ref().map_or(0, |flags| flags[at]);
             let style = &styles[item.style as usize];
             let (case, width, kana) = style.text_transform.components();
             let locale = &locales[item.style as usize];
             let omit = omissions
                 .get(omissions.partition_point(|range| range.end <= at as u32))
                 .is_some_and(|range| range.start <= at as u32);
-            if flags[at] & HEAD != 0 {
+            if flags_at & HEAD != 0 {
                 dutch_title_head = matches!(item.kind, ItemKind::Text)
                     && matches!(case, CaseTransform::Capitalize)
                     && locale.language.as_str() == "nl"
                     && matches!(c, 'i' | 'I');
             }
-            let mut mapped = if omit || consumed_mark == Some(at) {
-                String::new()
+            let mut scalar_buf = [0; 4];
+            let scalar = c.encode_utf8(&mut scalar_buf);
+            let mut mapped: Cow<'_, str> = if omit || consumed_mark == Some(at) {
+                Cow::Borrowed("")
             } else if matches!(item.kind, ItemKind::Text) {
-                let mut buf = [0; 4];
-                let scalar = c.encode_utf8(&mut buf);
                 match case {
-                    CaseTransform::None => scalar.to_owned(),
+                    CaseTransform::None => Cow::Borrowed(scalar),
                     CaseTransform::Lowercase => {
-                        if c == 'Σ' && flags[at] & BEFORE_CASED != 0 && flags[at] & AFTER_CASED == 0
+                        if c == 'Σ' && flags_at & BEFORE_CASED != 0 && flags_at & AFTER_CASED == 0
                         {
-                            "ς".to_owned()
+                            Cow::Borrowed("ς")
                         } else if matches!(locale.language.as_str(), "tr" | "az")
                             && c == 'I'
-                            && flags[at] & BEFORE_DOT != 0
+                            && flags_at & BEFORE_DOT != 0
                         {
-                            "i".to_owned()
+                            Cow::Borrowed("i")
                         } else if matches!(locale.language.as_str(), "tr" | "az")
                             && c == '\u{0307}'
-                            && flags[at] & AFTER_I != 0
+                            && flags_at & AFTER_I != 0
                         {
-                            String::new()
+                            Cow::Borrowed("")
                         } else if locale.language.as_str() == "lt"
                             && matches!(c, 'I' | 'J' | '\u{012E}')
-                            && flags[at] & MORE_ABOVE != 0
+                            && flags_at & MORE_ABOVE != 0
                         {
-                            format!("{}\u{0307}", cm.lowercase_to_string(scalar, locale))
+                            format!("{}\u{0307}", cm.lowercase_to_string(scalar, locale)).into()
                         } else {
-                            cm.lowercase_to_string(scalar, locale).into_owned()
+                            cm.lowercase_to_string(scalar, locale)
                         }
                     }
                     CaseTransform::Uppercase => {
                         if locale.language.as_str() == "lt"
                             && c == '\u{0307}'
-                            && flags[at] & AFTER_SOFT != 0
+                            && flags_at & AFTER_SOFT != 0
                         {
-                            String::new()
+                            Cow::Borrowed("")
                         } else {
                             cm.uppercase_to_string(
                                 scalar,
-                                if locale.language.as_str() == "el" && flags[at] & MULTI_LETTER == 0
+                                if locale.language.as_str() == "el" && flags_at & MULTI_LETTER == 0
                                 {
                                     &root_locale
                                 } else {
                                     locale
                                 },
                             )
-                            .into_owned()
                         }
                     }
                     CaseTransform::Capitalize => {
-                        if flags[at] & HEAD != 0
+                        if flags_at & HEAD != 0
                             || locale.language.as_str() == "nl"
                                 && dutch_title_head
-                                && flags[at] & DUTCH_J != 0
+                                && flags_at & DUTCH_J != 0
                         {
                             cm.titlecase_segment_with_only_case_data_to_string(
                                 scalar,
                                 locale,
                                 Default::default(),
                             )
-                            .into_owned()
                         } else {
-                            scalar.to_owned()
+                            Cow::Borrowed(scalar)
                         }
                     }
                 }
             } else {
-                c.to_string()
+                Cow::Borrowed(scalar)
             };
             if matches!(item.kind, ItemKind::Text)
                 && matches!(case, CaseTransform::Uppercase)
                 && locale.language.as_str() == "el"
-                && flags[at] & MULTI_LETTER != 0
+                && flags_at & MULTI_LETTER != 0
             {
                 mapped = mapped
                     .chars()
                     .filter(|c| *c != '\u{0301}')
                     .map(remove_tonos)
-                    .collect();
-                if flags[at] & AFTER_TONOS != 0 {
+                    .collect::<String>()
+                    .into();
+                if flags_at & AFTER_TONOS != 0 {
                     mapped = mapped
                         .chars()
                         .map(|c| match c {
@@ -227,19 +233,22 @@ fn transform_inner(
                             'Υ' => 'Ϋ',
                             _ => c,
                         })
-                        .collect();
+                        .collect::<String>()
+                        .into();
                 }
             }
             let mut before_width = None;
+            let mut kana_buf = [0; 4];
+            let mut width_buf = [0; 4];
             if matches!(item.kind, ItemKind::Text) {
                 if kana {
-                    mapped = mapped.chars().map(full_size_kana).collect();
+                    mapped = map_chars(&mapped, &mut kana_buf, full_size_kana);
                 }
                 if width {
                     if style.text_combine_upright == crate::style::TextCombineUpright::All {
-                        before_width = Some(mapped.clone());
+                        before_width = Some(mapped.to_string());
                     }
-                    mapped = mapped.chars().map(full_width).collect();
+                    mapped = map_chars(&mapped, &mut width_buf, full_width);
                 }
             }
             if matches!(item.kind, ItemKind::Text)
@@ -255,13 +264,13 @@ fn transform_inner(
                     if let Some(original) = &mut before_width {
                         original.push(mark);
                     }
-                    mapped = composed.into_owned();
+                    mapped = composed.into_owned().into();
                     consumed_mark = Some(mark_at);
                 }
             }
             let width_changed = before_width
                 .as_deref()
-                .is_some_and(|before| before != mapped);
+                .is_some_and(|before| before != mapped.as_ref());
             if matches!(item.kind, ItemKind::Text) && !omit && c == '\u{200b}' {
                 mapped = match style.word_space_transform {
                     WordSpaceTransform::None => mapped,
@@ -333,6 +342,17 @@ fn transform_inner(
     input.source_spans = spans;
     input.width_origins = width_origins;
     Ok(input)
+}
+
+// Width/kana maps preserve scalar count. A single scalar fits in the caller's
+// UTF-8 buffer; casing expansions still use an owned string when needed.
+fn map_chars<'a>(text: &str, buf: &'a mut [u8; 4], map: fn(char) -> char) -> Cow<'a, str> {
+    let mut chars = text.chars();
+    match chars.next() {
+        None => Cow::Borrowed(""),
+        Some(c) if chars.next().is_none() => Cow::Borrowed(map(c).encode_utf8(buf)),
+        Some(_) => Cow::Owned(text.chars().map(map).collect()),
+    }
 }
 
 fn next_scalar(input: &Processed, item_index: usize, end: usize) -> Option<(usize, char, u32)> {
@@ -471,6 +491,141 @@ fn full_size_kana(c: char) -> char {
         '\u{1B166}' => 'ヲ',
         '\u{1B167}' => 'ン',
         _ => c,
+    }
+}
+
+#[cfg(test)]
+mod work_tests {
+    use super::*;
+    use crate::analysis::Item;
+    use crate::geometry::WritingMode;
+
+    fn input(text: &str) -> Processed {
+        Processed {
+            text: text.into(),
+            items: vec![Item {
+                kind: ItemKind::Text,
+                text: 0..text.len() as u32,
+                style: 0,
+                node: None,
+            }],
+            mapping: None,
+            indivisible: Vec::new(),
+            source_spans: Vec::new(),
+            width_origins: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn non_case_transforms_skip_context_without_skipping_locale_warnings_or_limits() {
+        for (text, transform, word, expected) in [
+            (
+                "a ｶﾞ",
+                TextTransform::FullWidth,
+                WordSpaceTransform::None,
+                "ａ　ガ",
+            ),
+            (
+                "ぁｧ",
+                TextTransform::FullSizeKana,
+                WordSpaceTransform::None,
+                "あｱ",
+            ),
+            (
+                "ぁｧ",
+                TextTransform::FullWidthFullSizeKana,
+                WordSpaceTransform::None,
+                "あア",
+            ),
+            (
+                "a\u{200b}b",
+                TextTransform::None,
+                WordSpaceTransform::Space,
+                "a b",
+            ),
+        ] {
+            let style = InlineStyle {
+                text_transform: transform,
+                word_space_transform: word,
+                ..Default::default()
+            };
+            CONTEXT_CALLS.with(|count| count.set(0));
+            let p = transform_inner(
+                input(text),
+                &[style],
+                &Limits::default(),
+                &mut WarningSink::default(),
+                WritingMode::HorizontalTb,
+                None,
+            )
+            .unwrap();
+            assert_eq!(p.text, expected);
+            assert_eq!(
+                CONTEXT_CALLS.with(|count| count.get()),
+                0,
+                "non-case transform performed casing analysis"
+            );
+        }
+        let style = InlineStyle {
+            lang: Some("!invalid".into()),
+            word_space_transform: WordSpaceTransform::SpaceAutoPhrase,
+            ..Default::default()
+        };
+        let mut warnings = WarningSink::new(Some(1));
+        let limits = Limits {
+            max_text_bytes: Some(2),
+            ..Limits::default()
+        };
+        let error = transform_inner(
+            input("a\u{200b}b"),
+            &[style],
+            &limits,
+            &mut warnings,
+            WritingMode::HorizontalTb,
+            None,
+        )
+        .err()
+        .unwrap();
+        assert_eq!(error.kind, LimitKind::TextBytes);
+        assert_eq!(error.actual, 3);
+        let warnings = warnings.take();
+        assert_eq!(warnings.len(), 2);
+        assert_eq!(warnings[0].kind, WarningKind::Unsupported);
+        assert!(
+            warnings[0]
+                .message
+                .starts_with("invalid transform language")
+        );
+        assert_eq!(warnings[1].kind, WarningKind::Suppressed);
+    }
+
+    #[test]
+    fn case_context_still_crosses_non_case_items() {
+        let mut p = input("ΟΣ");
+        p.items[0].text.end = 2;
+        p.items.push(Item {
+            kind: ItemKind::Text,
+            text: 2..4,
+            style: 1,
+            node: None,
+        });
+        let styles = [
+            InlineStyle::default(),
+            InlineStyle {
+                text_transform: TextTransform::Lowercase,
+                ..Default::default()
+            },
+        ];
+        let p = transform_inner(
+            p,
+            &styles,
+            &Limits::default(),
+            &mut WarningSink::default(),
+            WritingMode::HorizontalTb,
+            None,
+        )
+        .unwrap();
+        assert_eq!(p.text, "Ος");
     }
 }
 
