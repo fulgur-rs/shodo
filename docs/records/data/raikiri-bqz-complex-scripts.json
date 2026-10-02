@@ -1,0 +1,178 @@
+{
+  "schema": 1,
+  "issue": "shodo-bqz",
+  "created_at": "2026-10-02",
+  "experiment": {
+    "purpose": "Compare Parley native complex-script behavior with the feature disabled and enabled on the same selected WPT documents.",
+    "scope": "Isolated retained-layout width and height retry protocols; not browser reftests, initial-shaping correctness, complete-page pagination, or performance.",
+    "cases": 23,
+    "selection_sha256": "ddaf75e75f9025ed0c813d90228aa5f8824b38092cd79d4880a11e0d90a75c48",
+    "wpt_revision": "97ea26e26a2aac3eec7e770650b25e7049ed4a4e",
+    "wpt_tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "wpt_untracked_cache_artifacts_observed": true,
+    "wpt_artifact_note": "No WPT files were changed by this experiment; local untracked cache artifacts were left in place.",
+    "font_files": 205,
+    "font_tree_sha256": "b210fa9e1a72dc45dc6eb6384069d2a86821e56f3ebe6ded626ea4f3ce852d8c",
+    "font_tree_hash_method": "SHA256 over sorted relative-path, NUL, raw-file-SHA256-digest, newline records."
+  },
+  "revisions": {
+    "raikiri": "ab7e619a8f321f03de8b8c8b9342954868e044c8",
+    "s4": "fe67a281210fbc52d22032911ac3584405aa8198",
+    "s4_archive_sha256": "8b3a4fd770e0648da6ff577aa70ad5705d3d719f5865ae5b50ca99c9be8183e7",
+    "s4_saved_lock_sha256": "d41af8a11a1799cd990fd256b9f11e3592ecd07a787ed50e529d4f52374c1d71",
+    "measurement_overlay_lock_sha256": "57b9c6423e1a04e63f1bbfa71cfb3c26f6a0ef75f78d32c396e96000ed49155d",
+    "measurement_manifest_sha256": "a2f88fb2fbaa79ee3c84eb1e86328a813c5b44a4a58c3e2f9bcff90eb3ed9479",
+    "overlay_helper_sha256": "4924662e013c14fd851260aaf9632e1208fe9eb84d598cd6b4e7fecf2ffdfaeb",
+    "archive_provenance_sha256": "a7347d0ad05c9940a4311051563d2e1931577a68fa1b3b4408fed341711ccc87",
+    "original_page_sha256": "a7c1c4b8a0d1f4b11b28cf8e69cee23e11b29abdb5c7cd9605b3fd7e7ab29707",
+    "generated_page_sha256": "c9bd1b0ac69d1608a6a85a991d2627e3d30b4756c12948bd30c40e617ef0bd23",
+    "recipe_sha256": "4924662e013c14fd851260aaf9632e1208fe9eb84d598cd6b4e7fecf2ffdfaeb",
+    "acceptance_cli_sha256": "90a0ce905adda7289698c302b791c198da87cf7454d7a1eb4529d106dca62f0b",
+    "allocator_source_sha256": "62e936c22ea9ecf14e8c61a667e35843b4c587bdac56e919ad645ddaa3f05c40",
+    "probe_sources_sha256": {
+      "dev/raikiri/probe/caller.rs": "36c50df31633dece5dd9f438f74ae0b3c6c55413ce4b32621831095778fb8e7d",
+      "dev/raikiri/probe/core.rs": "0936792ac5798786966eea9a1dea0ffa5071057cfea668f481127db6e097d4b7",
+      "dev/raikiri/probe/core_contract_check.rs": "030928bccfe5b9cb461b0d6b68226a7b4e1082f208f25608ce4d9946392fa107",
+      "dev/raikiri/probe/isolated.rs": "5cb337b5d9d19108c105d001006808892445aeb1d2e05ea548eeac2f858a5782",
+      "dev/raikiri/probe/layout_check.rs": "90a0ce905adda7289698c302b791c198da87cf7454d7a1eb4529d106dca62f0b",
+      "dev/raikiri/probe/library.rs": "85f2ffea2be9060fff0cd00f3bee387e8535e7f2619815cea385e712dcb704f9",
+      "dev/raikiri/probe/main.rs": "8e41f8a7edb07b0a7d9b69c11774d4b98cbbf0e72c396a1a1f5454bdbe5b6dd2",
+      "dev/raikiri/probe/observer.rs": "d1589f5270cc8eedc290f154d39524e23468a3dc8cd5c14da1fa140607947402",
+      "dev/raikiri/probe/paged.rs": "b230770761c8c53c24d04ec65056266f55ee8feb31b2bc1acc710aaf2412c9ab",
+      "dev/raikiri/probe/scope.rs": "d1df87e827beff736333d32bb1e9214a85be30f9103679b65ab73a6af06084bc"
+    }
+  },
+  "build": {
+    "cargo": "1.96.0 (30a34c682 2026-05-25)",
+    "rustc": "1.96.0 (ac68faa20 2026-05-25)",
+    "rustc_llvm": "22.1.2",
+    "target": "x86_64-unknown-linux-gnu",
+    "profile": "dev, unoptimized, debug assertions enabled",
+    "common_environment": {
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_INCREMENTAL": "0",
+      "RUSTFLAGS": "-D warnings",
+      "CARGO_ENCODED_RUSTFLAGS": null,
+      "CARGO_PROFILE_DEV_DEBUG": null,
+      "CARGO_PROFILE_DEV_OPT_LEVEL": null,
+      "CARGO_BUILD_TARGET": null
+    },
+    "offline": true,
+    "locked": true,
+    "separate_target_directories": true,
+    "commands": {
+      "off": "cargo build --offline --locked --bin core-contract-check",
+      "on": "cargo build --offline --locked --features parley/complex-scripts --bin core-contract-check",
+      "run": "core-contract-check <WPT> <selection-bqz.json> <output.json>"
+    },
+    "parley_version": "0.11.1",
+    "shodo_complex_scripts_enabled_in_both_builds": true
+  },
+  "runs": {
+    "off": {
+      "parley_features": ["std", "system"],
+      "binary_sha256": "21e59d1db8765f18d340ef9252394b5d791127dc5b5fd4b40ef40a1ac2714287",
+      "report_sha256": "bcea879e6f78405b9a14384005b9bb93746d68c4bc541c4f27f7ec6c23eb4844",
+      "log_sha256": "894518cf967fd255adc58498abb0e413ce3642e6a8e93fbd0bf5b1c2b2839eda",
+      "documents": 23,
+      "operation_rows": 375,
+      "candidate_height_rejections": 374,
+      "native_height_rejections": 363,
+      "diagnostics": {
+        "total": 75,
+        "documents": 23,
+        "by_script": {
+          "Chinese/Japanese": 47,
+          "Thai": 28
+        }
+      },
+      "diagnostics_by_document": {
+        "css/css-text/text-align/text-align-justify-bidi-control.html": {"Chinese/Japanese": 2},
+        "css/css-text/text-justify/text-justify-none-001.html": {"Chinese/Japanese": 2, "Thai": 4},
+        "css/css-text/white-space/trailing-ideographic-space-break-spaces-001.html": {"Chinese/Japanese": 2},
+        "css/css-text/white-space/trailing-ideographic-space-break-spaces-003.html": {"Chinese/Japanese": 2},
+        "css/css-text/word-break/auto-phrase/word-break-auto-phrase-003.html": {"Chinese/Japanese": 4},
+        "css/css-text/word-break/auto-phrase/word-break-auto-phrase-004.html": {"Chinese/Japanese": 4},
+        "css/css-text/word-break/auto-phrase/word-break-auto-phrase-005.html": {"Chinese/Japanese": 4},
+        "css/css-text/word-break/auto-phrase/word-break-auto-phrase-009.html": {"Chinese/Japanese": 2},
+        "css/css-text/word-break/auto-phrase/word-break-auto-phrase-fallback-001.html": {"Thai": 4},
+        "css/css-text/word-break/auto-phrase/word-break-auto-phrase-fallback-002.html": {"Thai": 4},
+        "css/css-text/word-break/auto-phrase/word-break-auto-phrase-fallback-003.html": {"Chinese/Japanese": 2},
+        "css/css-text/hanging-punctuation/reference/hanging-punctuation-inline-001-ref.html": {"Chinese/Japanese": 2},
+        "css/css-text/text-align/text-align-justify-bidi-control-ref.html": {"Chinese/Japanese": 1},
+        "css/css-text/text-justify/text-justify-none-001-ref.html": {"Chinese/Japanese": 2, "Thai": 4},
+        "css/css-text/white-space/reference/trailing-ideographic-space-break-spaces-001-ref.html": {"Chinese/Japanese": 2},
+        "css/css-text/word-break/auto-phrase/reference/word-break-auto-phrase-003-ref.html": {"Chinese/Japanese": 4},
+        "css/css-text/word-break/auto-phrase/reference/word-break-auto-phrase-004-ref.html": {"Chinese/Japanese": 4},
+        "css/css-text/word-break/auto-phrase/reference/word-break-auto-phrase-005-ref.html": {"Chinese/Japanese": 4},
+        "css/css-text/word-break/auto-phrase/reference/word-break-auto-phrase-009-ref.html": {"Chinese/Japanese": 2},
+        "css/css-text/word-break/auto-phrase/reference/word-break-auto-phrase-fallback-001-ref.html": {"Thai": 4},
+        "css/css-text/word-break/auto-phrase/reference/word-break-auto-phrase-fallback-002-ref.html": {"Thai": 4},
+        "css/css-text/word-break/auto-phrase/reference/word-break-auto-phrase-fallback-003-ref.html": {"Chinese/Japanese": 2},
+        "css/css-text/word-break/reference/word-break-manual-001-ref.html": {"Thai": 4}
+      }
+    },
+    "on": {
+      "parley_features": ["std", "system", "complex-scripts"],
+      "binary_sha256": "e1bdfc16ed446ede8cad46a5ca3a7ba0f30ba7a578682a6178e44d674427ce34",
+      "report_sha256": "ca043bae68c3f54ce0232d9c4fa60cf7a7d0b51362b6f57667c89d14d4a6e49e",
+      "log_sha256": "501060ef4b18ae83af7a8e25e0818af62a095a1c3bd3a84a5882e025a18cd8db",
+      "documents": 23,
+      "operation_rows": 375,
+      "candidate_height_rejections": 374,
+      "native_height_rejections": 371,
+      "diagnostics": {
+        "total": 0,
+        "documents": 0,
+        "by_script": {}
+      }
+    }
+  },
+  "comparison": {
+    "keyed_operation_sets_equal": true,
+    "candidate_rows": 186,
+    "candidate_changed_rows": 0,
+    "native_rows": 189,
+    "native_unchanged_rows": 181,
+    "native_changed_rows": 8,
+    "unsupported_adapter_diagnostic_count_off_and_on": 46,
+    "unsupported_adapter_diagnostics_identical": true,
+    "changed_rows": [
+      {"id": "css/css-text/word-break/auto-phrase/word-break-auto-phrase-fallback-001.html", "root": 22, "text_node": 23, "width": 384.0, "accepted_lines_off": 1, "accepted_lines_on": 2, "output_sha256_off": "b5dbad05c5a5e5a7cfccbbd0ecd12e613ddd5fc2c2e42a656cf1a18653dd9ceb", "output_sha256_on": "a8115d7e2b63616534eb9fd15969f82e431430a348f1fbc9662510dcbf56cce8"},
+      {"id": "css/css-text/word-break/auto-phrase/word-break-auto-phrase-fallback-001.html", "root": 27, "text_node": 28, "width": 384.0, "accepted_lines_off": 1, "accepted_lines_on": 2, "output_sha256_off": "b5dbad05c5a5e5a7cfccbbd0ecd12e613ddd5fc2c2e42a656cf1a18653dd9ceb", "output_sha256_on": "a8115d7e2b63616534eb9fd15969f82e431430a348f1fbc9662510dcbf56cce8"},
+      {"id": "css/css-text/word-break/auto-phrase/word-break-auto-phrase-fallback-002.html", "root": 22, "text_node": 23, "width": 384.0, "accepted_lines_off": 1, "accepted_lines_on": 2, "output_sha256_off": "b5dbad05c5a5e5a7cfccbbd0ecd12e613ddd5fc2c2e42a656cf1a18653dd9ceb", "output_sha256_on": "a8115d7e2b63616534eb9fd15969f82e431430a348f1fbc9662510dcbf56cce8"},
+      {"id": "css/css-text/word-break/auto-phrase/word-break-auto-phrase-fallback-002.html", "root": 25, "text_node": 26, "width": 384.0, "accepted_lines_off": 1, "accepted_lines_on": 2, "output_sha256_off": "b5dbad05c5a5e5a7cfccbbd0ecd12e613ddd5fc2c2e42a656cf1a18653dd9ceb", "output_sha256_on": "a8115d7e2b63616534eb9fd15969f82e431430a348f1fbc9662510dcbf56cce8"},
+      {"id": "css/css-text/word-break/auto-phrase/reference/word-break-auto-phrase-fallback-001-ref.html", "root": 16, "text_node": 17, "width": 384.0, "accepted_lines_off": 1, "accepted_lines_on": 2, "output_sha256_off": "b5dbad05c5a5e5a7cfccbbd0ecd12e613ddd5fc2c2e42a656cf1a18653dd9ceb", "output_sha256_on": "a8115d7e2b63616534eb9fd15969f82e431430a348f1fbc9662510dcbf56cce8"},
+      {"id": "css/css-text/word-break/auto-phrase/reference/word-break-auto-phrase-fallback-001-ref.html", "root": 21, "text_node": 22, "width": 384.0, "accepted_lines_off": 1, "accepted_lines_on": 2, "output_sha256_off": "b5dbad05c5a5e5a7cfccbbd0ecd12e613ddd5fc2c2e42a656cf1a18653dd9ceb", "output_sha256_on": "a8115d7e2b63616534eb9fd15969f82e431430a348f1fbc9662510dcbf56cce8"},
+      {"id": "css/css-text/word-break/auto-phrase/reference/word-break-auto-phrase-fallback-002-ref.html", "root": 16, "text_node": 17, "width": 384.0, "accepted_lines_off": 1, "accepted_lines_on": 2, "output_sha256_off": "b5dbad05c5a5e5a7cfccbbd0ecd12e613ddd5fc2c2e42a656cf1a18653dd9ceb", "output_sha256_on": "a8115d7e2b63616534eb9fd15969f82e431430a348f1fbc9662510dcbf56cce8"},
+      {"id": "css/css-text/word-break/auto-phrase/reference/word-break-auto-phrase-fallback-002-ref.html", "root": 19, "text_node": 20, "width": 384.0, "accepted_lines_off": 1, "accepted_lines_on": 2, "output_sha256_off": "b5dbad05c5a5e5a7cfccbbd0ecd12e613ddd5fc2c2e42a656cf1a18653dd9ceb", "output_sha256_on": "a8115d7e2b63616534eb9fd15969f82e431430a348f1fbc9662510dcbf56cce8"}
+    ],
+    "representative_geometry": {
+      "font_sha256": "6415b31659d4137850f284484574b9232a00ce23ee4400a6655d98031a034cce",
+      "font_size": 32.0,
+      "glyph_ids_off_and_on_in_source_order": [1538, 1572, 1593, 1544, 1601, 1560, 1567, 1541, 1592, 1582, 1579, 1576, 1571, 1544, 1587, 1570],
+      "off": [{"source_range": [0, 48], "advance": 448.0, "height": 32.0, "baseline": 28.0, "glyph_count": 16}],
+      "on": [
+        {"source_range": [0, 30], "advance": 256.0, "height": 32.0, "baseline": 28.0, "glyph_count": 10},
+        {"source_range": [30, 48], "advance": 192.0, "height": 32.0, "baseline": 60.0, "glyph_count": 6}
+      ]
+    }
+  },
+  "instrumented_snapshot_run": {
+    "purpose": "Inspection-only rerun to expose native output snapshots for the changed rows.",
+    "instrumentation_source_sha256": "f04eb627f7f21d741eeac16e4db0b4674a9fe06476116f2e13ea3ff14a89fc83",
+    "off_binary_sha256": "5305222fdd1663c2f2646dd841fb979f2de2d0a89fe1e52f86a619cf1faa46f1",
+    "on_binary_sha256": "76b2cfcc8a4405cfb870f69ce85fec2ba64432c12e482b7239b678283129423f",
+    "off_report_sha256": "19994b17e65f424155cbdf77e0bda098beb5e0970b20e040bc930fa7e8bfd4d3",
+    "on_report_sha256": "4fb26b82264be8def66cc915a7baa19f640efb8738402ca1c48c8461ea6c7614"
+  },
+  "decision": {
+    "recommendation": "Enable Parley complex-scripts or supply equivalent segmentation model data when RAiKiri native layout is the complex-script reference.",
+    "evidence": "The disabled feature emitted 75 missing-model diagnostics and kept Thai fallback text at 448px on one line under a 384px forced width; the enabled feature emitted no such diagnostics and split the same glyph sequence into 256px and 192px lines.",
+    "production_switch_necessity": "Not established. Shodo candidate outputs did not change; this experiment did not run WPT image reftests or a production-path comparison.",
+    "performance_measured": false,
+    "saved_s4_baseline_changed": false,
+    "mandatory_shodo_p2m_6_dependency": false,
+    "wpt_pass_claim": false
+  }
+}

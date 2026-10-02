@@ -210,7 +210,10 @@ Exploratory earlier samples reproduced a 34–36% increase for the saved candida
 in two original hyphens reference documents, with 16 independent alternating
 process pairs on one CPU. That observation is tracked in `shodo-jt1`; it is not
 attributed to current main. Its reproduction and stage attribution are recorded
-in [raikiri jt1 regression](raikiri-jt1-regression.md). Native
-segmentation-model configuration is tracked in `shodo-bqz`. Both followups
-require S4 validation before a switching-necessity decision, and do not
-currently block the excluded production-switch issue.
+in [raikiri jt1 regression](raikiri-jt1-regression.md). The native
+segmentation-model comparison for `shodo-bqz` is recorded in
+[Parley complex-scripts comparison](raikiri-bqz-complex-scripts.md). It shows
+that the Parley feature changes Thai fallback line breaks in the selected
+retained-layout replay and clears the missing-model diagnostics. It does not
+establish WPT reftest success, performance impact, or production-switch
+necessity. The production-switch issue remains out of scope.
