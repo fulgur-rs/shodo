@@ -102,7 +102,9 @@ fn default_ignorables_paint_no_ink_even_with_a_visible_space_glyph() {
             assert!(
                 expected
                     .data()
-                    .chunks_exact(4)
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
                     .any(|pixel| pixel[..3] != [255, 255, 255])
             );
             let (actual, glyphs) = render(&text);
