@@ -5,12 +5,14 @@ use shodo::geometry::WritingMode;
 use shodo::node::{NodeId, TextSource};
 use shodo::style::LineOptions;
 use shodo::style::{
-    OverflowWrap, TextCombineUpright, TextTransform, TextWrapMode, WhiteSpaceCollapse,
+    InlineStyle, OverflowWrap, ParagraphStyle, TextCombineUpright, TextTransform, TextWrapMode,
+    WhiteSpaceCollapse,
 };
 use shodo::{
     AtomicIntrinsics, AtomicSizes, LayoutContext, LineBreakOverride, LineConstraint, LineResult,
-    SoftBreakOpportunity,
+    ParagraphBuilder, SoftBreakOpportunity,
 };
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 #[test]
@@ -358,4 +360,24 @@ fn layout_cache_and_break_plans_keep_paragraphs_separate() {
         panic!("expected plain line");
     };
     assert_eq!(line.text_range(), 0..4);
+}
+
+#[test]
+fn first_line_break_analysis_runs_during_context_free_analysis() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let observed = calls.clone();
+    let style = ParagraphStyle {
+        first_line: Some(InlineStyle::default()),
+        ..Default::default()
+    };
+    let mut builder = ParagraphBuilder::new(&style, &Default::default());
+    builder.with_line_break_override(move |_| {
+        observed.fetch_add(1, Ordering::Relaxed);
+        LineBreakOverride::UseStandard
+    });
+    builder.push_text(TextSource::Generated { node: NodeId(1) }, "a b");
+
+    let _analysis = builder.analyze().unwrap();
+
+    assert_eq!(calls.load(Ordering::Relaxed), 4);
 }

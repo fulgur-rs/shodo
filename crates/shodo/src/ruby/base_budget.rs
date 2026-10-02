@@ -4,6 +4,7 @@ use super::builder::{Boundary, RubyInput};
 use crate::builder::RawItem;
 use crate::limits::{LimitExceeded, LimitKind, Limits};
 
+#[derive(Clone)]
 struct BaseScope {
     limits: Limits,
     spent: Cost,
@@ -14,7 +15,7 @@ struct BaseScope {
     transient_text: u64,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct BaseScopes {
     scopes: Vec<BaseScope>,
     bases: Vec<Vec<Option<usize>>>,
@@ -152,6 +153,28 @@ impl BaseScopes {
                 bytes[0].saturating_add(bytes[1]),
             )?;
             scope.style_bytes = bytes;
+        }
+        Ok(())
+    }
+
+    /// Add normal-pass shaping work to an alternate pass prepared in advance.
+    pub(crate) fn merge_shaped_glyphs_from(&mut self, normal: &Self) -> Result<(), LimitExceeded> {
+        debug_assert_eq!(self.scopes.len(), normal.scopes.len());
+        for (alternate, normal) in self.scopes.iter().zip(&normal.scopes) {
+            Limits::check(
+                alternate.limits.max_shaped_glyphs,
+                LimitKind::ShapedGlyphs,
+                alternate
+                    .spent
+                    .get(LimitKind::ShapedGlyphs)
+                    .saturating_add(normal.spent.get(LimitKind::ShapedGlyphs)),
+            )?;
+        }
+        for (alternate, normal) in self.scopes.iter_mut().zip(&normal.scopes) {
+            alternate.spent.add(
+                LimitKind::ShapedGlyphs,
+                normal.spent.get(LimitKind::ShapedGlyphs),
+            );
         }
         Ok(())
     }
