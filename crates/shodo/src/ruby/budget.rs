@@ -1,6 +1,5 @@
 //! Aggregate retained resources across normal, first-line and nested paragraphs.
 use crate::limits::{LimitExceeded, LimitKind, Limits};
-use crate::paragraph::ParagraphData;
 
 #[derive(Clone, Copy, Default)]
 pub(super) struct Cost {
@@ -169,20 +168,25 @@ impl RubyBudget {
         self.spent.add(kind, amount);
         Ok(())
     }
-    pub(crate) fn paragraph(&mut self, data: &ParagraphData) -> Result<(), LimitExceeded> {
+    pub(crate) fn paragraph_analysis(
+        &mut self,
+        text_bytes: u64,
+        items: u64,
+        styles: u64,
+        style_bytes: u64,
+    ) -> Result<(), LimitExceeded> {
         for (kind, amount) in [
-            (LimitKind::TextBytes, data.text.len() as u64),
-            (LimitKind::Items, data.items.len() as u64),
-            (LimitKind::Styles, data.styles.len() as u64),
-            (
-                LimitKind::StyleBytes,
-                crate::style::memory::paragraph(&data.style)
-                    .saturating_add(crate::style::memory::styles(&data.styles)),
-            ),
-            (LimitKind::ShapedGlyphs, data.glyphs.len() as u64),
+            (LimitKind::TextBytes, text_bytes),
+            (LimitKind::Items, items),
+            (LimitKind::Styles, styles),
+            (LimitKind::StyleBytes, style_bytes),
         ] {
             self.charge(kind, amount)?;
         }
         Ok(())
+    }
+
+    pub(crate) fn paragraph_shaping(&mut self, glyphs: u64) -> Result<(), LimitExceeded> {
+        self.charge(LimitKind::ShapedGlyphs, glyphs)
     }
 }
