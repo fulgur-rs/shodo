@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.12](https://github.com/fulgur-rs/shodo/compare/v0.0.11...v0.0.12) - 2026-10-03
+
+### Other
+
+- borrow Ruby base caret stop ranges
+- avoid ruby hit paths in regular hit testing
+
 ## [0.0.11](https://github.com/fulgur-rs/shodo/compare/v0.0.10...v0.0.11) - 2026-10-03
 
 ### Other
