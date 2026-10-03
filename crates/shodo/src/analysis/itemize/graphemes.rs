@@ -11,10 +11,19 @@ pub(super) fn boundaries(scalars: &[Scalar], breaks: &BreakAnalysis) -> Vec<usiz
     let last_end = scalars.last().unwrap().end;
     let lo = breaks.graphemes.partition_point(|cut| *cut <= first.offset);
     let hi = breaks.graphemes.partition_point(|cut| *cut < last_end);
+    let mut scalar_cursor = 0;
     let shared = breaks.graphemes[lo..hi].iter().map(|cut| {
         #[cfg(test)]
         super::tests::record_shared_cut();
-        scalars.partition_point(|s| s.end <= *cut)
+        while scalar_cursor < scalars.len() {
+            #[cfg(test)]
+            super::tests::record_shared_scalar_comparison();
+            if scalars[scalar_cursor].end > *cut {
+                break;
+            }
+            scalar_cursor += 1;
+        }
+        scalar_cursor
     });
     let lo = breaks
         .authored_bidi_controls
@@ -282,6 +291,24 @@ mod tests {
             "🇦\u{200e}🇧🇨🇩\u{200f}🇦🇧🇨".repeat(4),
         ] {
             check_substrings(&text);
+        }
+    }
+
+    #[test]
+    fn shared_cut_scalar_mapping_uses_linear_comparisons() {
+        for scalar_count in [1_024, 4_096, 16_384] {
+            let text = "a".repeat(scalar_count);
+            let (scalars, breaks) = prepared(&text);
+            super::super::tests::reset_shared_scalar_comparisons();
+
+            let actual = boundaries(&scalars, &breaks);
+
+            assert!(actual.iter().copied().eq(0..=scalar_count));
+            let comparisons = super::super::tests::shared_scalar_comparisons();
+            assert!(
+                comparisons <= scalar_count * 3,
+                "{scalar_count} scalars required {comparisons} scalar/cut comparisons"
+            );
         }
     }
 }

@@ -17,15 +17,11 @@ fn main() {
 fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args == ["--describe"] {
-        println!(
-            "{}",
-            serde_json::to_string(
-                &workloads()
-                    .iter()
-                    .map(Workload::settings)
-                    .collect::<Vec<_>>()
-            )?
-        );
+        let mut definitions: Vec<_> = workloads().iter().map(Workload::settings).collect();
+        for size in [1_024, 4_096, 16_384] {
+            definitions.push(workload("itemize-graphemes", size)?.settings());
+        }
+        println!("{}", serde_json::to_string(&definitions)?);
         return Ok(());
     }
     if args.len() != 3 {
@@ -40,7 +36,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     if !["--cold", "--memory"].contains(&mode) {
         return Err("unknown probe mode".into());
     }
-    let workload = Workload::named(&args[1], args[2].parse()?)?;
+    let workload = workload(&args[1], args[2].parse()?)?;
     let limits = Limits::default();
     #[cfg(not(feature = "allocation-counting"))]
     let report = cold(&workload, &limits)?;
@@ -49,6 +45,21 @@ fn run() -> Result<(), Box<dyn Error>> {
     println!("{}", serde_json::to_string(&report)?);
     Ok(())
 }
+
+fn workload(id: &str, scale: usize) -> Result<Workload, Box<dyn Error>> {
+    if id != "itemize-graphemes" {
+        return Ok(Workload::named(id, scale)?);
+    }
+    if ![1_024, 4_096, 16_384].contains(&scale) {
+        return Err("itemize-graphemes size must be 1024, 4096 or 16384".into());
+    }
+    let mut workload = Workload::named("latin-short", 1)?;
+    workload.id = id.into();
+    workload.scale = scale;
+    workload.text = "a".repeat(scale);
+    Ok(workload)
+}
+
 #[cfg(not(feature = "allocation-counting"))]
 fn cold(w: &Workload, limits: &Limits) -> Result<serde_json::Value, Box<dyn Error>> {
     use std::time::Instant;

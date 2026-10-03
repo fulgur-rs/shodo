@@ -48,6 +48,20 @@ fn independent_process_cold_runs_have_complete_font_backed_output() {
     }
     assert_eq!(digests[0], digests[1]);
 }
+
+#[cfg(not(feature = "allocation-counting"))]
+#[test]
+fn itemize_grapheme_sizes_use_the_fixed_latin_font_workload() {
+    let r = probe("--cold", "itemize-graphemes", "1024");
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+    let v: serde_json::Value = serde_json::from_slice(&r.stdout).unwrap();
+    assert_eq!(v["settings"]["id"], "itemize-graphemes");
+    assert_eq!(v["settings"]["scale"], 1024);
+    assert_eq!(v["settings"]["text"].as_str().unwrap().len(), 1024);
+    assert!(v["durations_ns"]["build"].as_u64().unwrap() > 0);
+    assert!(v["digest"]["glyphs"].as_u64().unwrap() > 0);
+    assert_eq!(v["digest"]["synthetic_glyphs"], 0);
+}
 #[cfg(feature = "allocation-counting")]
 #[test]
 fn memory_scopes_record_ownership_retries_and_releases() {
