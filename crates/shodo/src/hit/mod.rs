@@ -13,6 +13,7 @@ use crate::Line;
 use crate::geometry::LogicalRect;
 use crate::mapping::{Affinity, TextOrigin};
 pub use crate::ruby::hit::RubyHit;
+use std::ops::Range;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TextPosition {
@@ -84,18 +85,15 @@ impl<'a> LineLayout<'a> {
             .flat_map(|(parent, line)| {
                 let index = &index[parent];
                 line.ruby_annotations().filter_map(move |a| {
-                    let range = a.base_text_range();
-                    let begin = index
-                        .stops
-                        .partition_point(|c| (c.position.offset as usize) < range.start);
-                    let end = index
-                        .stops
-                        .partition_point(|c| (c.position.offset as usize) <= range.end);
+                    if a.visibility() != crate::ruby::RubyVisibility::Visible {
+                        return None;
+                    }
+                    let base_stops = ruby_base_stop_range(&index.stops, a.base_text_range());
                     crate::ruby::hit::AnnotationIndex::new(
                         parent,
                         line.block_offset(),
                         a,
-                        index.stops[begin..end].to_vec(),
+                        base_stops,
                     )
                 })
             })
@@ -154,7 +152,12 @@ impl<'a> LineLayout<'a> {
         }
         if let Some(entry_index) = self.ruby_hit_entry(inline, block) {
             let entry = &self.ruby[entry_index];
-            let stop = entry.base_caret(inline, block)?;
+            let base_stops = self
+                .index
+                .get(entry.parent_line)?
+                .stops
+                .get(entry.base_stops.clone())?;
+            let stop = entry.base_caret(base_stops, inline, block)?;
             return Some(HitResult {
                 position: stop.position,
                 origin: self.lines[entry.parent_line]
@@ -249,6 +252,12 @@ impl<'a> LineLayout<'a> {
     }
 }
 
+fn ruby_base_stop_range(stops: &[Caret], range: Range<usize>) -> Range<usize> {
+    let begin = stops.partition_point(|c| (c.position.offset as usize) < range.start);
+    let end = stops.partition_point(|c| (c.position.offset as usize) <= range.end);
+    begin..end
+}
+
 fn bounds_are_finite(rect: LogicalRect) -> bool {
     [
         rect.inline_start,
@@ -299,6 +308,119 @@ fn union_bounds(a: LogicalRect, b: LogicalRect) -> LogicalRect {
 #[cfg(test)]
 mod tests {
     use super::*;
+    mod fixture {
+        use crate as shodo;
+        include!("../../../../dev/bench/examples/support/ruby_base_caret_fixture.rs");
+    }
+
+    fn legacy_base_caret(stops: &[Caret], inline: f32, block: f32) -> Option<Caret> {
+        stops
+            .iter()
+            .min_by(|a, b| {
+                let distance = |caret: &Caret| {
+                    if caret.rect.block_size == 0.0 && caret.rect.inline_size > 0.0 {
+                        (block - caret.rect.block_start).abs()
+                    } else {
+                        (inline - caret.rect.inline_start).abs()
+                    }
+                };
+                distance(a).total_cmp(&distance(b)).then(
+                    (a.position.affinity == Affinity::Upstream)
+                        .cmp(&(b.position.affinity == Affinity::Upstream)),
+                )
+            })
+            .copied()
+    }
+
+    #[test]
+    fn ruby_base_stop_range_includes_exact_closed_endpoints() {
+        let stops = [8, 10, 10, 11, 12, 13].map(|offset| Caret {
+            position: TextPosition {
+                line: 0,
+                offset,
+                affinity: Affinity::Downstream,
+            },
+            rect: LogicalRect {
+                inline_start: offset as f32,
+                inline_size: 0.0,
+                block_start: 0.0,
+                block_size: 10.0,
+            },
+        });
+        assert_eq!(ruby_base_stop_range(&stops, 10..12), 1..5);
+        assert_eq!(ruby_base_stop_range(&stops, 20..30), 6..6);
+    }
+
+    #[test]
+    fn ruby_base_hits_match_owned_closed_slice_and_affinity_ties() {
+        let lines = fixture::nested(1, 64, false);
+        let layout = LineLayout::new(&lines);
+        let annotation = lines[0]
+            .ruby_annotations()
+            .find(|a| a.visibility() == crate::RubyVisibility::Visible)
+            .unwrap();
+        let range = annotation.base_text_range();
+        let parent_stops = &layout.index[0].stops;
+        let begin = parent_stops.partition_point(|c| (c.position.offset as usize) < range.start);
+        let end = parent_stops.partition_point(|c| (c.position.offset as usize) <= range.end);
+        let owned_stops = parent_stops[begin..end].to_vec();
+        assert!(!owned_stops.is_empty());
+        assert!(owned_stops.first().unwrap().position.offset as usize >= range.start);
+        assert!(owned_stops.last().unwrap().position.offset as usize <= range.end);
+        for endpoint in [range.start, range.end] {
+            if let Some(index) = parent_stops
+                .iter()
+                .position(|stop| stop.position.offset as usize == endpoint)
+            {
+                assert!(index >= begin && index < end, "closed endpoint {endpoint}");
+            }
+        }
+
+        let bounds = layout.ruby[0].bounds().unwrap();
+        let block = bounds.block_start + bounds.block_size / 2.0;
+        let mut points = Vec::new();
+        for stop in &owned_stops {
+            points.push((stop.rect.inline_start, false));
+        }
+        for pair in owned_stops.windows(2) {
+            let a = pair[0].rect.inline_start;
+            let b = pair[1].rect.inline_start;
+            if a != b {
+                points.push(((a + b) / 2.0, true));
+            }
+        }
+
+        let mut comparisons = 0;
+        let mut tie_comparisons = 0;
+        for (inline, is_tie) in points {
+            if inline < bounds.inline_start || inline > bounds.inline_start + bounds.inline_size {
+                continue;
+            }
+            if layout.hit_test_ruby(inline, block).is_none() {
+                continue;
+            }
+            let stop = legacy_base_caret(&owned_stops, inline, block).unwrap();
+            let origin = lines[0].offset_mapping().and_then(|mapping| {
+                mapping.text_to_dom(stop.position.offset, stop.position.affinity)
+            });
+            assert_eq!(
+                layout.hit_test(inline, block),
+                Some(HitResult {
+                    position: stop.position,
+                    origin,
+                    inside: true,
+                })
+            );
+            comparisons += 1;
+            tie_comparisons += usize::from(is_tie);
+        }
+        assert!(comparisons > 0);
+        assert!(
+            tie_comparisons > 0,
+            "at least one in-bounds midpoint must exercise a tie"
+        );
+    }
+
     #[test]
     fn repeated_hits_and_navigation_do_not_rebuild_glyph_indexes() {
         let limits = Default::default();
