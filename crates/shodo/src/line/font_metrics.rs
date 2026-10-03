@@ -18,15 +18,25 @@ pub(crate) mod resolve_counts {
     std::thread_local! {
         static RESOLVES: Cell<usize> = const { Cell::new(0) };
         static INSTANCE_RESOLVES: Cell<usize> = const { Cell::new(0) };
+        static KEY_HASHES: Cell<usize> = const { Cell::new(0) };
     }
 
     pub(crate) fn reset() {
         RESOLVES.with(|count| count.set(0));
         INSTANCE_RESOLVES.with(|count| count.set(0));
+        KEY_HASHES.with(|count| count.set(0));
     }
 
     pub(crate) fn snapshot() -> (usize, usize) {
         (RESOLVES.with(Cell::get), INSTANCE_RESOLVES.with(Cell::get))
+    }
+
+    pub(crate) fn key_hashes() -> usize {
+        KEY_HASHES.with(Cell::get)
+    }
+
+    pub(crate) fn record_key_hash() {
+        KEY_HASHES.with(|count| count.set(count.get() + 1));
     }
 
     pub(crate) fn record_resolve() {
@@ -57,6 +67,8 @@ struct StyleMetricsKey<'a> {
 
 impl Hash for StyleMetricsKey<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        #[cfg(test)]
+        resolve_counts::record_key_hash();
         let style = self.style;
         self.generations.hash(state);
         style.font_families.len().hash(state);
@@ -220,16 +232,9 @@ pub(crate) fn resolve(
     }
 }
 
+#[derive(Default)]
 struct StyleMetricsCache<'a> {
-    entries: HashMap<StyleMetricsKey<'a>, StyleMetrics>,
-}
-
-impl<'a> Default for StyleMetricsCache<'a> {
-    fn default() -> Self {
-        Self {
-            entries: HashMap::new(),
-        }
-    }
+    entries: HashMap<StyleMetricsKey<'a>, usize>,
 }
 
 impl<'a> StyleMetricsCache<'a> {
@@ -237,25 +242,30 @@ impl<'a> StyleMetricsCache<'a> {
         &mut self,
         fonts: &FontCollection,
         style: &'a InlineStyle,
+        resolved: &[StyleMetrics],
         warnings: &mut WarningSink,
     ) -> StyleMetrics {
         let generations = fonts.generations();
         let key = StyleMetricsKey { style, generations };
-        if let Some(metrics) = self.entries.get(&key).copied()
-            && fonts.generations() == generations
-        {
-            return metrics;
+        match self.entries.entry(key) {
+            std::collections::hash_map::Entry::Occupied(entry) => {
+                if fonts.generations() == generations {
+                    return resolved[*entry.get()];
+                }
+                resolve(fonts, style, warnings)
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                let before = warnings.checkpoint();
+                let metrics = resolve(fonts, style, warnings);
+                let after = warnings.checkpoint();
+                if matches!((before, after), (Some(before), Some(after)) if before == after)
+                    && fonts.generations() == generations
+                {
+                    entry.insert(resolved.len());
+                }
+                metrics
+            }
         }
-
-        let before = warnings.checkpoint();
-        let metrics = resolve(fonts, style, warnings);
-        let after = warnings.checkpoint();
-        if matches!((before, after), (Some(before), Some(after)) if before == after)
-            && fonts.generations() == generations
-        {
-            self.entries.insert(key, metrics);
-        }
-        metrics
     }
 }
 
@@ -265,10 +275,11 @@ pub(crate) fn resolve_styles(
     warnings: &mut WarningSink,
 ) -> Vec<StyleMetrics> {
     let mut cache = StyleMetricsCache::default();
-    styles
-        .iter()
-        .map(|style| cache.resolve(fonts, style, warnings))
-        .collect()
+    let mut resolved = Vec::with_capacity(styles.len());
+    for style in styles {
+        resolved.push(cache.resolve(fonts, style, &resolved, warnings));
+    }
+    resolved
 }
 
 /// Resolve the character's fallback face and its actual adjusted instance,
@@ -510,6 +521,23 @@ mod tests {
     }
 
     #[test]
+    fn distinct_cache_misses_hash_each_key_once() {
+        let fonts = fonts();
+        let styles: Vec<_> = (0..3)
+            .map(|i| InlineStyle {
+                font_size: 17.0 + i as f32,
+                ..style()
+            })
+            .collect();
+        let mut warnings = WarningSink::default();
+
+        resolve_counts::reset();
+        resolve_styles(&fonts, &styles, &mut warnings);
+
+        assert_eq!(resolve_counts::key_hashes(), styles.len());
+    }
+
+    #[test]
     fn colliding_key_hashes_still_compare_exact_metric_inputs() {
         #[derive(Default)]
         struct ConstantHasher;
@@ -551,11 +579,13 @@ mod tests {
         let fonts = fonts();
         let style = style();
         let mut cache = StyleMetricsCache::default();
+        let mut resolved = Vec::new();
         let mut warnings = WarningSink::default();
 
         resolve_counts::reset();
-        let before = cache.resolve(&fonts, &style, &mut warnings);
-        let same_generation = cache.resolve(&fonts, &style, &mut warnings);
+        let before = cache.resolve(&fonts, &style, &resolved, &mut warnings);
+        resolved.push(before);
+        let same_generation = cache.resolve(&fonts, &style, &resolved, &mut warnings);
         assert_metrics_eq(same_generation, before);
         assert_eq!(resolve_counts::snapshot().0, 1);
 
@@ -569,7 +599,7 @@ mod tests {
                 },
             )
             .unwrap();
-        let after = cache.resolve(&fonts, &style, &mut warnings);
+        let after = cache.resolve(&fonts, &style, &resolved, &mut warnings);
 
         assert_eq!(after.font, replacement);
         assert_ne!(after.font, before.font);

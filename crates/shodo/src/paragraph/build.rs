@@ -1008,8 +1008,10 @@ mod tests {
             assert!(painted.warnings().is_empty());
 
             let text = "a".repeat(count);
-            let mut plain_style = ParagraphStyle::default();
-            plain_style.root = font_style("Latin");
+            let plain_style = ParagraphStyle {
+                root: font_style("Latin"),
+                ..Default::default()
+            };
             let mut plain_builder = crate::ParagraphBuilder::new(&plain_style, &Limits::default());
             plain_builder.push_text(
                 TextSource::Generated {
@@ -1050,14 +1052,14 @@ mod tests {
             for offset in [0, 1, (count / 2) as u32, count as u32] {
                 assert_eq!(layout.caret(pos(offset)), plain_layout.caret(pos(offset)));
             }
-            for i in 0..count {
+            for (i, span) in paint_spans.iter().enumerate() {
                 assert_eq!(
                     layout.selection_rects(pos(i as u32), pos(i as u32 + 1)),
                     plain_layout.selection_rects(pos(i as u32), pos(i as u32 + 1)),
                     "selection geometry at {i}, styles={count}"
                 );
                 assert_eq!(
-                    paint_spans[i].rect,
+                    span.rect,
                     plain_layout
                         .selection_rects(pos(i as u32), pos(i as u32 + 1))
                         .first()
