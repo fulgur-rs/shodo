@@ -6,6 +6,256 @@ use skrifa::MetadataProvider;
 use skrifa::raw::TableProvider;
 
 #[test]
+fn combined_width_trials_reuse_selected_result_for_two_shaper_calls() {
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        crate::font::FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            crate::test_support::fonts::CJK.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Width CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let style = crate::style::ParagraphStyle {
+        writing_mode: WritingMode::VerticalRl,
+        root: crate::style::InlineStyle {
+            font_families: vec![crate::style::FontFamily::Named("Width CJK".into())],
+            text_combine_upright: crate::style::TextCombineUpright::All,
+            text_autospace: crate::style::TextAutospace::NoAutospace,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+    builder.push_text(
+        crate::node::TextSource::Generated {
+            node: crate::node::NodeId(1),
+        },
+        "12",
+    );
+
+    HARFRUST_SHAPE_CALLS.with(|calls| calls.set(0));
+    COMBINED_WIDTH_GROUP_CLONE_BYTES.with(|bytes| bytes.set(0));
+    COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| bytes.set(0));
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+
+    assert!(
+        paragraph
+            .data
+            .shape_items
+            .iter()
+            .all(|item| item.width_feature == Some(*b"hwid"))
+    );
+    assert_eq!(HARFRUST_SHAPE_CALLS.with(|calls| calls.get()), 2);
+    assert_eq!(
+        COMBINED_WIDTH_GROUP_CLONE_BYTES.with(|bytes| bytes.get()),
+        0
+    );
+    assert!(COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| bytes.get()) > 0);
+}
+
+#[test]
+fn combined_width_reuse_preserves_global_glyph_limit_failure() {
+    let limits = Limits {
+        max_shaped_glyphs: Some(3),
+        ..Limits::default()
+    };
+    let fonts = FontCollection::with_options(
+        &limits,
+        crate::font::FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            crate::test_support::fonts::CJK.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Width CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let root = crate::style::InlineStyle {
+        font_families: vec![crate::style::FontFamily::Named("Width CJK".into())],
+        ..Default::default()
+    };
+    let style = crate::style::ParagraphStyle {
+        writing_mode: WritingMode::VerticalRl,
+        root: root.clone(),
+        ..Default::default()
+    };
+    let mut combined = root;
+    combined.text_combine_upright = crate::style::TextCombineUpright::All;
+    let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+    for node in [1, 2] {
+        let node = crate::node::NodeId(node);
+        builder
+            .open_inline(node, &combined, crate::node::InlineEdges::default())
+            .push_text(crate::node::TextSource::Generated { node }, "12")
+            .close_inline();
+    }
+
+    HARFRUST_SHAPE_CALLS.with(|calls| calls.set(0));
+    let error = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap_err();
+    assert_eq!(
+        (error.kind, error.limit, error.actual),
+        (LimitKind::ShapedGlyphs, 3, 4)
+    );
+    assert_eq!(HARFRUST_SHAPE_CALLS.with(|calls| calls.get()), 5);
+}
+
+#[test]
+fn ruby_base_glyph_limits_keep_the_regular_trial_and_final_shape_path() {
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        crate::font::FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            crate::test_support::fonts::CJK.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Width CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let base_style = crate::style::InlineStyle {
+        font_families: vec![crate::style::FontFamily::Named("Width CJK".into())],
+        text_combine_upright: crate::style::TextCombineUpright::All,
+        ..Default::default()
+    };
+    let paragraph_style = crate::style::ParagraphStyle {
+        writing_mode: WritingMode::VerticalRl,
+        root: base_style.clone(),
+        ..Default::default()
+    };
+    let base = crate::RubyContent::text(
+        crate::node::TextSource::Generated {
+            node: crate::node::NodeId(2),
+        },
+        "12",
+        &base_style,
+        &Limits {
+            max_shaped_glyphs: Some(1),
+            ..Limits::default()
+        },
+    );
+    let annotation = crate::RubyContent::text(
+        crate::node::TextSource::Generated {
+            node: crate::node::NodeId(3),
+        },
+        "あ",
+        &base_style,
+        &limits,
+    );
+    let ruby = crate::Ruby::new(
+        vec![crate::RubyBase {
+            node: crate::node::NodeId(2),
+            content: base,
+            align: crate::RubyAlign::default(),
+        }],
+        vec![crate::RubyLevel {
+            annotations: vec![crate::RubyAnnotation {
+                node: crate::node::NodeId(3),
+                content: annotation,
+                span: crate::RubySpan::Auto,
+                visibility: crate::RubyVisibility::Visible,
+            }],
+            style: crate::RubyStyle::default(),
+        }],
+    )
+    .unwrap();
+    let mut builder = crate::ParagraphBuilder::new(&paragraph_style, &limits);
+    builder.push_ruby(crate::node::NodeId(1), &base_style, ruby);
+
+    HARFRUST_SHAPE_CALLS.with(|calls| calls.set(0));
+    let error = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap_err();
+    assert_eq!((error.kind, error.limit), (LimitKind::ShapedGlyphs, 1));
+    assert_eq!(HARFRUST_SHAPE_CALLS.with(|calls| calls.get()), 3);
+}
+
+#[test]
+fn combined_width_reuse_replays_selected_warnings_through_the_global_cap() {
+    let limits = Limits {
+        max_shaping_run_bytes: Some(0),
+        max_warnings: Some(1),
+        ..Limits::default()
+    };
+    let fonts = FontCollection::with_options(
+        &limits,
+        crate::font::FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            crate::test_support::fonts::CJK.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Width CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let style = crate::style::ParagraphStyle {
+        writing_mode: WritingMode::VerticalRl,
+        root: crate::style::InlineStyle {
+            font_families: vec![crate::style::FontFamily::Named("Width CJK".into())],
+            text_combine_upright: crate::style::TextCombineUpright::All,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+    builder.push_text(
+        crate::node::TextSource::Generated {
+            node: crate::node::NodeId(1),
+        },
+        "12",
+    );
+
+    HARFRUST_SHAPE_CALLS.with(|calls| calls.set(0));
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    assert_eq!(
+        paragraph
+            .warnings()
+            .iter()
+            .map(|warning| warning.kind)
+            .collect::<Vec<_>>(),
+        [
+            crate::limits::WarningKind::Unsupported,
+            crate::limits::WarningKind::Suppressed,
+        ]
+    );
+    assert_eq!(HARFRUST_SHAPE_CALLS.with(|calls| calls.get()), 4);
+}
+
+#[test]
 fn split_items_share_retained_author_features() {
     for real in [false, true] {
         let limits = Limits::default();
@@ -240,7 +490,7 @@ fn shape(
     let mut runs = Vec::new();
     let mut sat = Saturation::default();
     shape_item(
-        &mut store, &mut runs, text, 0, 0, font, size, limits, &mut sat,
+        &mut store, &mut runs, text, 0, 0, font, size, limits, &mut sat, 0,
     )?;
     Ok((store, runs))
 }

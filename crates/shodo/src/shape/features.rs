@@ -5,14 +5,19 @@ use std::{collections::HashMap, sync::Arc};
 
 type Key = (u32, bool, Option<[u8; 4]>);
 
-/// Immutable paragraph-owned arrays, also used by every line-edge reshape.
-pub(crate) struct FeatureSets(HashMap<Key, Arc<[harfrust::Feature]>>);
+/// Paragraph-owned feature arrays shared by trials, retained runs, and line-edge reshapes.
+pub(crate) struct FeatureSets(HashMap<Key, FeatureSet>);
 
-fn key(item: &ShapeItem) -> Key {
+struct FeatureSet {
+    features: Arc<[harfrust::Feature]>,
+    retained: bool,
+}
+
+fn key(item: &ShapeItem, width_feature: Option<[u8; 4]>) -> Key {
     (
         item.style,
         item.orientation == super::orientation::RunOrientation::Upright,
-        item.width_feature,
+        width_feature,
     )
 }
 
@@ -20,16 +25,60 @@ impl FeatureSets {
     pub(crate) fn new(items: &[ShapeItem], styles: &[InlineStyle]) -> Self {
         let mut sets = HashMap::new();
         for item in items {
-            sets.entry(key(item))
-                .or_insert_with(|| Arc::from(for_item(&styles[item.style as usize], item)));
+            sets.entry(key(item, item.width_feature))
+                .or_insert_with(|| FeatureSet {
+                    features: Arc::from(for_item(&styles[item.style as usize], item)),
+                    retained: item.width_feature.is_some(),
+                });
         }
         Self(sets)
     }
 
-    pub(super) fn get(&self, item: &ShapeItem) -> Arc<[harfrust::Feature]> {
+    pub(super) fn prepare_width_feature(
+        &mut self,
+        item: &ShapeItem,
+        styles: &[InlineStyle],
+        width_feature: [u8; 4],
+    ) {
         self.0
-            .get(&key(item))
+            .entry(key(item, Some(width_feature)))
+            .or_insert_with(|| FeatureSet {
+                features: Arc::from(for_item_with_width(
+                    &styles[item.style as usize],
+                    item.orientation,
+                    Some(width_feature),
+                )),
+                retained: false,
+            });
+    }
+
+    pub(super) fn retain_width_feature(&mut self, item: &ShapeItem, width_feature: [u8; 4]) {
+        self.0
+            .get_mut(&key(item, Some(width_feature)))
             .expect("prepared shaping features")
+            .retained = true;
+    }
+
+    pub(super) fn discard_unselected_width_feature(
+        &mut self,
+        item: &ShapeItem,
+        width_feature: [u8; 4],
+    ) {
+        let key = key(item, Some(width_feature));
+        if self.0.get(&key).is_some_and(|features| !features.retained) {
+            self.0.remove(&key);
+        }
+    }
+
+    pub(super) fn get(
+        &self,
+        item: &ShapeItem,
+        width_feature: Option<[u8; 4]>,
+    ) -> Arc<[harfrust::Feature]> {
+        self.0
+            .get(&key(item, width_feature))
+            .expect("prepared shaping features")
+            .features
             .clone()
     }
 }
@@ -43,8 +92,16 @@ pub(super) fn for_item(
     style: &InlineStyle,
     item: &crate::analysis::itemize::ShapeItem,
 ) -> Vec<harfrust::Feature> {
-    let mut result = for_orientation(style, item.orientation);
-    if let Some(tag) = item.width_feature {
+    for_item_with_width(style, item.orientation, item.width_feature)
+}
+
+fn for_item_with_width(
+    style: &InlineStyle,
+    orientation: super::orientation::RunOrientation,
+    width_feature: Option<[u8; 4]>,
+) -> Vec<harfrust::Feature> {
+    let mut result = for_orientation(style, orientation);
+    if let Some(tag) = width_feature {
         // Automatic composition features precede explicit author settings.
         result.insert(0, harfrust::Feature::new(harfrust::Tag::new(&tag), 1, ..));
     }

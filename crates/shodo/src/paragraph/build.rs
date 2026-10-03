@@ -594,27 +594,44 @@ fn build_data(
         style.writing_mode,
         &combine_spans,
     );
-    crate::shape::select_combined_widths(
-        cx,
-        &mut shape_items_input,
-        &styles,
-        fonts,
-        style.writing_mode,
-        &shape_limits,
-    );
-    let shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
-    let (glyphs, runs) = shape_items_with_base_scopes(
-        cx,
-        &shape_items_input,
-        &styles,
-        fonts,
-        style.writing_mode,
-        &shape_limits,
-        warnings,
-        sat,
-        if bases.enabled() { Some(bases) } else { None },
-        &shape_features,
-    )?;
+    let (glyphs, runs, shape_features) = if bases.enabled() {
+        crate::shape::select_combined_widths(
+            cx,
+            &mut shape_items_input,
+            &styles,
+            fonts,
+            style.writing_mode,
+            &shape_limits,
+        );
+        let shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
+        let (glyphs, runs) = shape_items_with_base_scopes(
+            cx,
+            &shape_items_input,
+            &styles,
+            fonts,
+            style.writing_mode,
+            &shape_limits,
+            warnings,
+            sat,
+            Some(bases),
+            &shape_features,
+        )?;
+        (glyphs, runs, shape_features)
+    } else {
+        let mut shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
+        let (glyphs, runs) = crate::shape::shape_items_with_combined_width_reuse(
+            cx,
+            &mut shape_items_input,
+            &styles,
+            fonts,
+            style.writing_mode,
+            &shape_limits,
+            warnings,
+            sat,
+            &mut shape_features,
+        )?;
+        (glyphs, runs, shape_features)
+    };
     let base_level = u8::from(used_direction == Direction::Rtl);
     let style_metrics = crate::line::font_metrics::resolve_styles(fonts, &styles, warnings);
     let combine_geometry = crate::analysis::combine::geometry(
