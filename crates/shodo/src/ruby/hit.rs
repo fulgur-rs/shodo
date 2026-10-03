@@ -2,6 +2,7 @@
 use crate::geometry::LogicalRect;
 use crate::hit::{Caret, HitResult, LineLayout};
 use crate::{RubyAnnotationView, RubyTransform, RubyVisibility};
+use std::ops::Range;
 
 /// A dedicated annotation hit. The position/source belong to `annotation.line()`.
 /// `path()` lists the retained transforms from the caller's line to that lane.
@@ -26,7 +27,7 @@ pub(crate) struct AnnotationIndex<'a> {
     annotation: RubyAnnotationView<'a>,
     parent_block_offset: f32,
     child: LineLayout<'a>,
-    base_stops: Vec<Caret>,
+    pub(crate) base_stops: Range<usize>,
     bounds: Option<LogicalRect>,
 }
 impl<'a> AnnotationIndex<'a> {
@@ -34,7 +35,7 @@ impl<'a> AnnotationIndex<'a> {
         parent_line: usize,
         parent_block_offset: f32,
         annotation: RubyAnnotationView<'a>,
-        base_stops: Vec<Caret>,
+        base_stops: Range<usize>,
     ) -> Option<Self> {
         if annotation.visibility() != RubyVisibility::Visible {
             return None;
@@ -55,8 +56,13 @@ impl<'a> AnnotationIndex<'a> {
     pub(crate) fn bounds(&self) -> Option<LogicalRect> {
         self.bounds
     }
-    pub(crate) fn base_caret(&self, inline: f32, block: f32) -> Option<Caret> {
-        self.base_stops
+    pub(crate) fn base_caret(
+        &self,
+        base_stops: &[Caret],
+        inline: f32,
+        block: f32,
+    ) -> Option<Caret> {
+        base_stops
             .iter()
             .min_by(|a, b| {
                 let distance = |caret: &Caret| {
