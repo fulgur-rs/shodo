@@ -691,6 +691,8 @@ impl FontCollection {
         let color = cluster.prefer_color(query.presentation);
         candidates.retain_mut(|candidate| {
             #[cfg(test)]
+            crate::font::record_metric_font_ref_open();
+            #[cfg(test)]
             matching_tests::record_font_read();
             let Ok(font) = FontRef::from_index(candidate.data.data.as_ref(), candidate.data.index)
             else {

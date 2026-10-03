@@ -74,6 +74,22 @@ use crate::limits::{LimitKind, Limits};
 #[cfg(test)]
 std::thread_local! {
     pub(crate) static FONT_DATA_ACQUISITIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static METRIC_FONT_REF_OPENS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(crate) fn record_metric_font_ref_open() {
+    METRIC_FONT_REF_OPENS.with(|count| count.set(count.get() + 1));
+}
+
+#[cfg(test)]
+pub(crate) fn reset_metric_font_ref_opens() {
+    METRIC_FONT_REF_OPENS.with(|count| count.set(0));
+}
+
+#[cfg(test)]
+pub(crate) fn metric_font_ref_opens() -> usize {
+    METRIC_FONT_REF_OPENS.with(std::cell::Cell::get)
 }
 
 #[cfg(test)]

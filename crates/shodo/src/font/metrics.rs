@@ -158,6 +158,8 @@ impl FontCollection {
         if id.layer == self.root().layer.id && id.index == 0 {
             return Some(stub_metrics(size));
         }
+        #[cfg(test)]
+        super::record_metric_font_ref_open();
         let font = FontRef::from_index(data.data.as_ref(), data.index).ok()?;
         Some(horizontal_metrics_from_font(&font, size, coords))
     }
@@ -171,6 +173,8 @@ impl FontCollection {
     ) -> Option<VerticalFontMetrics> {
         let size = valid_size(size)?;
         let data = self.font_data(id)?;
+        #[cfg(test)]
+        super::record_metric_font_ref_open();
         let font = FontRef::from_index(data.data.as_ref(), data.index).ok()?;
         vertical_metrics_from_font(&font, size, coords)
     }
@@ -186,6 +190,8 @@ impl FontCollection {
         let Some(size) = valid_size(size) else {
             return (None, None);
         };
+        #[cfg(test)]
+        super::record_metric_font_ref_open();
         let font = FontRef::from_index(data.data.as_ref(), data.index).ok();
         let horizontal = if id.layer == self.root().layer.id && id.index == 0 {
             Some(stub_metrics(size))
@@ -244,6 +250,8 @@ impl FontCollection {
         let Some(data) = self.font_data(found.id) else {
             return missing;
         };
+        #[cfg(test)]
+        super::record_metric_font_ref_open();
         let Ok(font) = FontRef::from_index(data.data.as_ref(), data.index) else {
             return missing;
         };
