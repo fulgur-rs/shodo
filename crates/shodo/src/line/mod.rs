@@ -75,25 +75,11 @@ pub(crate) fn ruby_base_width(
         return LayoutUnit::ZERO;
     }
     let width = ruby_range_width(data, selected.clone(), atomics, cx, sat);
-    let outer = decoration::chain(data, scope.start);
+    let mut outer = decoration::path(data, scope.start);
     let mut excluded = LayoutUnit::ZERO;
     for (boundary, start) in [(selected.start, true), (selected.end, false)] {
-        for b in decoration::chain(data, boundary) {
-            if outer.contains(&b) && decoration::cloned(data, b) {
-                let e = data.boxes[b as usize].edges;
-                excluded = excluded.add(
-                    LayoutUnit::from_f32_round(
-                        if start {
-                            e.inline_start_total()
-                        } else {
-                            e.inline_end_total()
-                        },
-                        sat,
-                    ),
-                    sat,
-                );
-            }
-        }
+        let mut boundary = decoration::path(data, boundary);
+        decoration::add_shared_width(data, &mut outer, &mut boundary, start, &mut excluded, sat);
     }
     width.sub(excluded, sat)
 }
