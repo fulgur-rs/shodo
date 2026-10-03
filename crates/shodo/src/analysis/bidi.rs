@@ -2,7 +2,7 @@
 use super::{ItemKind, whitespace::Processed};
 use crate::geometry::{Direction, WritingMode};
 use crate::style::{InlineStyle, ParagraphStyle, TextOrientation, UnicodeBidi};
-use std::ops::Range;
+use std::{borrow::Cow, ops::Range};
 use unicode_bidi::{BidiClass, BidiInfo, Level, bidi_class};
 
 pub(crate) struct BidiParagraph {
@@ -183,21 +183,22 @@ pub(crate) fn analyze_bidi(
         };
     }
     // CSS preserved line separators start a new plaintext directional scope.
-    // Both scalars are three bytes, so the analyzed copy preserves every offset.
-    let normalized = text.replace('\u{2028}', "\u{2029}");
+    // When replacement is needed, both scalars are three bytes, so byte offsets stay stable.
+    let normalized = normalized_bidi_text(text);
+    let normalized_text = normalized.as_ref();
     let default_level = if style.unicode_bidi_plaintext {
         None
     } else {
         Some(Level::new(coordinate_level).unwrap())
     };
-    let info = BidiInfo::new(&normalized, default_level);
+    let info = BidiInfo::new(normalized_text, default_level);
     let mut inline_level = coordinate_level;
     let paragraphs = info
         .paragraphs
         .iter()
         .map(|p| {
             if style.unicode_bidi_plaintext
-                && let Some(strong) = first_strong(&normalized[p.range.clone()])
+                && let Some(strong) = first_strong(&normalized_text[p.range.clone()])
             {
                 inline_level = strong;
             }
@@ -211,6 +212,14 @@ pub(crate) fn analyze_bidi(
     BidiAnalysis {
         levels: info.levels.iter().map(|l| l.number()).collect(),
         paragraphs,
+    }
+}
+
+fn normalized_bidi_text(text: &str) -> Cow<'_, str> {
+    if text.contains('\u{2028}') {
+        Cow::Owned(text.replace('\u{2028}', "\u{2029}"))
+    } else {
+        Cow::Borrowed(text)
     }
 }
 
@@ -267,6 +276,30 @@ mod tests {
     use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult, ParagraphBuilder};
 
     #[test]
+    fn bidi_analysis_text_borrows_without_preserved_line_separators() {
+        let text = "אב 123 ".repeat(32);
+        let normalized = normalized_bidi_text(&text);
+
+        let std::borrow::Cow::Borrowed(normalized) = normalized else {
+            panic!("text without U+2028 should be borrowed");
+        };
+        assert!(std::ptr::eq(normalized.as_ptr(), text.as_ptr()));
+        assert_eq!(normalized, text);
+    }
+
+    #[test]
+    fn bidi_analysis_text_replaces_only_preserved_line_separators() {
+        let text = "אב\u{2028}\u{2029}\r\nabc";
+        let normalized = normalized_bidi_text(text);
+
+        let std::borrow::Cow::Owned(normalized) = normalized else {
+            panic!("text with U+2028 should own its replacement");
+        };
+        assert_eq!(normalized, "אב\u{2029}\u{2029}\r\nabc");
+        assert_eq!(normalized.len(), text.len());
+    }
+
+    #[test]
     fn plaintext_multiple_paragraph_directions() {
         let style = ParagraphStyle {
             unicode_bidi_plaintext: true,
@@ -303,11 +336,49 @@ mod tests {
         assert_eq!(
             a.paragraphs
                 .iter()
-                .map(|p| p.base_level)
+                .map(|p| (p.text.clone(), p.base_level, p.inline_level))
                 .collect::<Vec<_>>(),
-            vec![1, 0]
+            vec![(0..7, 1, 1), (7..10, 0, 0)]
         );
-        assert_eq!(&a.levels[7..], &[0, 0, 0]);
+        assert_eq!(a.levels.len(), 10);
+        assert_eq!(a.levels, vec![1, 1, 1, 1, 1, 1, 1, 0, 0, 0]);
+    }
+
+    #[test]
+    fn unicode_paragraph_separator_and_crlf_keep_plaintext_byte_ranges() {
+        let style = ParagraphStyle {
+            unicode_bidi_plaintext: true,
+            ..Default::default()
+        };
+        let cases = [
+            (
+                "אב\u{2029}abc",
+                vec![(0..7, 1, 1), (7..10, 0, 0)],
+                vec![1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+            ),
+            (
+                "אב\r\nabc",
+                vec![(0..5, 1, 1), (5..6, 0, 1), (6..9, 0, 0)],
+                vec![1, 1, 1, 1, 1, 0, 0, 0, 0],
+            ),
+        ];
+
+        for (text, expected_paragraphs, expected_levels) in cases {
+            let analysis = analyze_bidi(
+                text,
+                &style,
+                std::slice::from_ref(&style.root),
+                style.direction,
+            );
+            let paragraphs = analysis
+                .paragraphs
+                .iter()
+                .map(|p| (p.text.clone(), p.base_level, p.inline_level))
+                .collect::<Vec<_>>();
+
+            assert_eq!(paragraphs, expected_paragraphs, "ranges for {text:?}");
+            assert_eq!(analysis.levels, expected_levels, "levels for {text:?}");
+        }
     }
 
     #[test]
