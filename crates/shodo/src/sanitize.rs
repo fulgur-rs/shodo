@@ -71,10 +71,9 @@ fn finite_or(v: f32, fallback: f32, what: &str, warnings: &mut WarningSink) -> f
     if v.is_finite() {
         v
     } else {
-        warnings.push(
-            WarningKind::NonFiniteInput,
-            format!("non-finite {what} replaced with {fallback}"),
-        );
+        warnings.push_lazy(WarningKind::NonFiniteInput, || {
+            format!("non-finite {what} replaced with {fallback}")
+        });
         fallback
     }
 }
@@ -83,7 +82,9 @@ fn finite_or(v: f32, fallback: f32, what: &str, warnings: &mut WarningSink) -> f
 fn length(v: f32, what: &str, warnings: &mut WarningSink) -> f32 {
     let v = finite_or(v, 0.0, what, warnings);
     if v.abs() > MAX_LENGTH {
-        warnings.push(WarningKind::Saturated, format!("{what} clamped to 1e7 px"));
+        warnings.push_lazy(WarningKind::Saturated, || {
+            format!("{what} clamped to 1e7 px")
+        });
         v.clamp(-MAX_LENGTH, MAX_LENGTH)
     } else {
         v
@@ -94,10 +95,9 @@ fn length(v: f32, what: &str, warnings: &mut WarningSink) -> f32 {
 fn non_negative_length(v: f32, what: &str, warnings: &mut WarningSink) -> f32 {
     let v = length(v, what, warnings);
     if v < 0.0 {
-        warnings.push(
-            WarningKind::NegativeInput,
-            format!("negative {what} replaced with 0"),
-        );
+        warnings.push_lazy(WarningKind::NegativeInput, || {
+            format!("negative {what} replaced with 0")
+        });
         0.0
     } else {
         v
@@ -109,10 +109,9 @@ fn non_negative_length(v: f32, what: &str, warnings: &mut WarningSink) -> f32 {
 fn non_negative(v: f32, what: &str, warnings: &mut WarningSink) -> f32 {
     let v = finite_or(v, 0.0, what, warnings);
     if v < 0.0 {
-        warnings.push(
-            WarningKind::NegativeInput,
-            format!("negative {what} replaced with 0"),
-        );
+        warnings.push_lazy(WarningKind::NegativeInput, || {
+            format!("negative {what} replaced with 0")
+        });
         0.0
     } else {
         v

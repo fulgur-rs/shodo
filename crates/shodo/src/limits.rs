@@ -260,6 +260,31 @@ impl WarningSink {
         });
     }
 
+    /// Push a dynamically formatted message without building it when the sink
+    /// already suppressed further warnings or only needs the suppression
+    /// marker. `sanitize` uses this for per-value `format!` messages so
+    /// hostile input with `max_warnings=0` or a small cap does not allocate
+    /// a `String` per dropped warning.
+    pub(crate) fn push_lazy(&mut self, kind: WarningKind, message: impl FnOnce() -> String) {
+        if self.suppressed {
+            return;
+        }
+        if let Some(max) = self.max
+            && self.warnings.len() as u64 >= max
+        {
+            self.warnings.push(Warning {
+                kind: WarningKind::Suppressed,
+                message: "further warnings suppressed".into(),
+            });
+            self.suppressed = true;
+            return;
+        }
+        self.warnings.push(Warning {
+            kind,
+            message: message(),
+        });
+    }
+
     pub(crate) fn record_saturation(&mut self, sat: &Saturation) {
         if sat.non_finite > 0 {
             self.push(
@@ -367,5 +392,51 @@ mod tests {
             e.to_string(),
             "limit exceeded: TextBytes (limit 1, actual 2)"
         );
+    }
+
+    #[test]
+    fn push_lazy_skips_message_after_suppression() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let calls = AtomicUsize::new(0);
+        let mut sink = WarningSink::new(Some(0));
+        for _ in 0..10 {
+            sink.push_lazy(WarningKind::NonFiniteInput, || {
+                calls.fetch_add(1, Ordering::Relaxed);
+                "non-finite margin replaced with 0".to_string()
+            });
+        }
+        assert_eq!(calls.load(Ordering::Relaxed), 0);
+        assert_eq!(sink.as_slice().len(), 1);
+        assert_eq!(sink.as_slice()[0].kind, WarningKind::Suppressed);
+        assert!(sink.is_suppressed());
+        assert_eq!(sink.checkpoint(), None);
+    }
+
+    #[test]
+    fn push_lazy_matches_push_for_small_cap_order_and_checkpoint() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let lazy_calls = AtomicUsize::new(0);
+        let mut lazy = WarningSink::new(Some(5));
+        for i in 0..20 {
+            lazy.push_lazy(WarningKind::NegativeInput, || {
+                lazy_calls.fetch_add(1, Ordering::Relaxed);
+                format!("negative value {i} replaced with 0")
+            });
+        }
+        // Only the first `max` messages are built; the rest only add the
+        // single suppression marker.
+        assert_eq!(lazy_calls.load(Ordering::Relaxed), 5);
+        let mut eager = WarningSink::new(Some(5));
+        for i in 0..20 {
+            eager.push(
+                WarningKind::NegativeInput,
+                format!("negative value {i} replaced with 0"),
+            );
+        }
+        assert_eq!(lazy.as_slice(), eager.as_slice());
+        assert!(lazy.is_suppressed() && eager.is_suppressed());
+        assert_eq!(lazy.checkpoint(), None);
+        assert_eq!(eager.checkpoint(), None);
+        assert_eq!(lazy.remaining_limit(), eager.remaining_limit());
     }
 }

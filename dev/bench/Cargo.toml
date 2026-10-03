@@ -54,3 +54,6 @@ name = "ruby_hit_index"
 [[example]]
 name = "accesskit_word_starts"
 required-features = ["shodo/accesskit"]
+
+[[example]]
+name = "suppressed_warning_format"
