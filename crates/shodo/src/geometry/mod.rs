@@ -1,4 +1,9 @@
 //! Geometry: fixed-point units, writing modes, and logical/physical conversion.
+//!
+//! The [vertical output guide] shows how to compose glyph transforms, baselines
+//! and physical conversion for vertical, sideways and combined text.
+//!
+//! [vertical output guide]: https://github.com/fulgur-rs/shodo/blob/adf02f0dda2cb41837f371eef5b70b7389e28eea/docs/guides/vertical-layout.md
 
 mod unit;
 

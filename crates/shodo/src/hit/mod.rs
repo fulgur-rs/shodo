@@ -4,6 +4,11 @@
 //! `::first-line` can have a different dataset from following lines. Geometry
 //! uses the same logical coordinates as glyphs, with line block offsets added.
 //! Unsupported or absent GDEF ligature carets use proportional grapheme stops.
+//!
+//! See the [integration guide] for hit testing, source mapping and selections
+//! over accepted lines.
+//!
+//! [integration guide]: https://github.com/fulgur-rs/shodo/blob/adf02f0dda2cb41837f371eef5b70b7389e28eea/docs/guides/integration.md
 mod index;
 mod navigation;
 mod selection;

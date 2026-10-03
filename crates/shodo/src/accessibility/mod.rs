@@ -3,7 +3,10 @@
 //! Positions belong to one snapshot; preserve source anchors before reflow.
 //! Text uses each accepted line's own processed dataset, including nonpainting
 //! characters. DOM semantics, atomic alternatives and platform events belong
-//! to the caller. See `docs/accessibility.md` for the integration contract.
+//! to the caller. See the [accessibility integration guide] for snapshot
+//! lifetimes, source anchors, ruby readings and the optional AccessKit adapter.
+//!
+//! [accessibility integration guide]: https://github.com/fulgur-rs/shodo/blob/adf02f0dda2cb41837f371eef5b70b7389e28eea/docs/guides/accessibility.md
 mod output;
 #[cfg(test)]
 mod source_tests;
