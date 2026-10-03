@@ -7,8 +7,13 @@ std::thread_local! {
     static INFO_READS: Cell<usize> = const { Cell::new(0) };
     static FONT_READS: Cell<usize> = const { Cell::new(0) };
     static KEY_COMPARISONS: Cell<usize> = const { Cell::new(0) };
-    static REGISTERED_FACE_VISITS: Cell<usize> = const { Cell::new(0) };
+static REGISTERED_FACE_VISITS: Cell<usize> = const { Cell::new(0) };
     static NATIVE_FACE_ID_LOOKUPS: Cell<usize> = const { Cell::new(0) };
+    static RANK_SCANS: Cell<usize> = const { Cell::new(0) };
+}
+
+pub(super) fn record_rank() {
+    RANK_SCANS.with(|scans| scans.set(scans.get() + 1));
 }
 
 pub(super) fn record_key_comparison() {
@@ -437,6 +442,51 @@ fn check_uncached_reads(face_count: usize, expected_reads: usize) {
 
 pub(super) fn record_variation_clone() {
     VARIATION_CLONES.with(|count| count.set(count.get() + 1));
+}
+
+#[test]
+fn best_candidate_costs_at_most_one_rank_per_surviving_face() {
+    // Ordering every coverage survivor and keeping only the head pays for
+    // comparisons whose results are discarded. Selecting the head directly
+    // must stay within one rank computation per surviving candidate.
+    for faces in [8usize, 32, 128] {
+        let fonts = FontCollection::with_options(
+            &Limits::default(),
+            FontOptions {
+                system_fonts: false,
+                match_cache_entries: 0,
+                ..Default::default()
+            },
+        );
+        let mut latest = None;
+        for _ in 0..faces {
+            latest = Some(
+                fonts
+                    .register_face(
+                        super::super::browser_tests::test_font("Internal", &['a', 'b', 'c'], 600),
+                        0,
+                        FontFaceDescriptor {
+                            family: "Web".into(),
+                            ..Default::default()
+                        },
+                    )
+                    .unwrap(),
+            );
+        }
+        let query = FontQuery {
+            families: vec![FontFamily::Named("Web".into())],
+            ..Default::default()
+        };
+        RANK_SCANS.with(|scans| scans.set(0));
+        let found = fonts.match_cluster(&query, "a").unwrap();
+        // Equal ranks keep the most recently registered face.
+        assert_eq!(Some(found.id), latest, "{faces} equal-ranked faces");
+        let scanned = RANK_SCANS.with(Cell::get);
+        assert!(
+            scanned <= faces,
+            "{faces} equal-ranked faces ranked {scanned} candidates"
+        );
+    }
 }
 
 fn multi_axis_font() -> Vec<u8> {
