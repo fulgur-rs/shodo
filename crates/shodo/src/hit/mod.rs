@@ -57,6 +57,8 @@ pub struct LineLayout<'a> {
     index: Vec<index::LineIndex>,
     block_tree: spatial::Tree,
     ruby: Vec<crate::ruby::hit::AnnotationIndex<'a>>,
+    ruby_spatial: spatial::Tree,
+    ruby_unindexed: Vec<usize>,
 }
 impl<'a> LineLayout<'a> {
     /// Accessibility shares this finalized index rather than reinterpreting
@@ -76,7 +78,7 @@ impl<'a> LineLayout<'a> {
             .enumerate()
             .map(|(i, line)| index::LineIndex::new(i, line))
             .collect();
-        let ruby = lines
+        let ruby: Vec<_> = lines
             .iter()
             .enumerate()
             .flat_map(|(parent, line)| {
@@ -98,9 +100,21 @@ impl<'a> LineLayout<'a> {
                 })
             })
             .collect();
+        let mut ruby_rects = Vec::with_capacity(ruby.len());
+        let mut ruby_unindexed = Vec::new();
+        for (i, entry) in ruby.iter().enumerate() {
+            match entry.bounds() {
+                Some(rect) if bounds_are_finite(rect) => ruby_rects.push((i, rect)),
+                Some(_) => ruby_unindexed.push(i),
+                None => {}
+            }
+        }
+        let ruby_spatial = spatial::Tree::new(ruby_rects.into_iter(), false);
         Self {
             index,
             ruby,
+            ruby_spatial,
+            ruby_unindexed,
             lines,
             block_tree: spatial::Tree::new(
                 lines.iter().enumerate().map(|(i, l)| {
@@ -129,10 +143,7 @@ impl<'a> LineLayout<'a> {
         if !inline.is_finite() || !block.is_finite() {
             return None;
         }
-        self.ruby
-            .iter()
-            .rev()
-            .find_map(|entry| entry.hit(inline, block))
+        self.ruby_hit(inline, block).map(|(_, hit)| hit)
     }
 
     /// Outside the layout, clamp to a nearest stop with `inside=false`.
@@ -141,21 +152,53 @@ impl<'a> LineLayout<'a> {
         if inline.is_nan() || block.is_nan() {
             return None;
         }
-        for entry in self.ruby.iter().rev() {
-            if entry.hit(inline, block).is_some() {
-                let stop = entry.base_caret(inline, block)?;
-                return Some(HitResult {
-                    position: stop.position,
-                    origin: self.lines[entry.parent_line]
-                        .offset_mapping()
-                        .and_then(|mapping| {
-                            mapping.text_to_dom(stop.position.offset, stop.position.affinity)
-                        }),
-                    inside: true,
-                });
-            }
+        if let Some((entry_index, _)) = self.ruby_hit(inline, block) {
+            let entry = &self.ruby[entry_index];
+            let stop = entry.base_caret(inline, block)?;
+            return Some(HitResult {
+                position: stop.position,
+                origin: self.lines[entry.parent_line]
+                    .offset_mapping()
+                    .and_then(|mapping| {
+                        mapping.text_to_dom(stop.position.offset, stop.position.affinity)
+                    }),
+                inside: true,
+            });
         }
         self.hit_test_body(inline, block)
+    }
+
+    fn ruby_hit(&self, inline: f32, block: f32) -> Option<(usize, RubyHit<'a>)> {
+        let indexed = self
+            .ruby_spatial
+            .best_containing_by(inline, block, |i| self.ruby[i].hit(inline, block));
+        for &i in self.ruby_unindexed.iter().rev() {
+            if let Some(hit) = self.ruby[i].hit(inline, block) {
+                if indexed.as_ref().is_some_and(|(best, _)| *best > i) {
+                    return indexed;
+                }
+                return Some((i, hit));
+            }
+        }
+        indexed
+    }
+
+    pub(crate) fn hit_bounds(&self) -> Option<LogicalRect> {
+        let body = self
+            .index
+            .iter()
+            .filter_map(index::LineIndex::hit_bounds)
+            .reduce(union_bounds);
+        let ruby = if self.ruby_unindexed.is_empty() {
+            self.ruby_spatial.bounds()
+        } else {
+            Some(invalid_bounds())
+        };
+        match (body, ruby) {
+            (Some(a), Some(b)) => Some(union_bounds(a, b)),
+            (Some(bounds), None) | (None, Some(bounds)) => Some(bounds),
+            (None, None) => None,
+        }
     }
 
     /// Query only main text after this layout's annotations have been searched.
@@ -174,6 +217,53 @@ impl<'a> LineLayout<'a> {
                 .and_then(|m| m.text_to_dom(stop.position.offset, stop.position.affinity)),
             inside: index.inside(inline, block),
         })
+    }
+}
+
+fn bounds_are_finite(rect: LogicalRect) -> bool {
+    [
+        rect.inline_start,
+        rect.inline_start + rect.inline_size,
+        rect.inline_size,
+        rect.block_start,
+        rect.block_start + rect.block_size,
+        rect.block_size,
+    ]
+    .into_iter()
+    .all(f32::is_finite)
+}
+
+fn invalid_bounds() -> LogicalRect {
+    LogicalRect {
+        inline_start: f32::NAN,
+        inline_size: f32::NAN,
+        block_start: f32::NAN,
+        block_size: f32::NAN,
+    }
+}
+
+fn union_bounds(a: LogicalRect, b: LogicalRect) -> LogicalRect {
+    if !bounds_are_finite(a) || !bounds_are_finite(b) {
+        return invalid_bounds();
+    }
+    let a_right = a.inline_start + a.inline_size;
+    let b_right = b.inline_start + b.inline_size;
+    let a_bottom = a.block_start + a.block_size;
+    let b_bottom = b.block_start + b.block_size;
+    let inline_start = a.inline_start.min(b.inline_start);
+    let block_start = a.block_start.min(b.block_start);
+    let inline_end = a_right.max(b_right);
+    let block_end = a_bottom.max(b_bottom);
+    let bounds = LogicalRect {
+        inline_start,
+        inline_size: inline_end - inline_start,
+        block_start,
+        block_size: block_end - block_start,
+    };
+    if bounds_are_finite(bounds) {
+        bounds
+    } else {
+        invalid_bounds()
     }
 }
 

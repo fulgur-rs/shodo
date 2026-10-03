@@ -43,5 +43,8 @@ harness = false
 name = "ruby_inputs"
 
 [[example]]
+name = "ruby_hit_index"
+
+[[example]]
 name = "accesskit_word_starts"
 required-features = ["shodo/accesskit"]
