@@ -653,6 +653,9 @@ impl LineIndex {
     pub(super) fn inside(&self, inline: f32, block: f32) -> bool {
         self.spatial.contains(inline, block)
     }
+    pub(super) fn hit_bounds(&self) -> Option<LogicalRect> {
+        self.spatial.bounds()
+    }
 }
 fn affinity_key(a: Affinity) -> u8 {
     match a {

@@ -1,6 +1,7 @@
 //! Source-local queries over retained annotation lines, without reshaping.
+use crate::geometry::LogicalRect;
 use crate::hit::{Caret, HitResult, LineLayout};
-use crate::{RubyAnnotationView, RubyVisibility};
+use crate::{RubyAnnotationView, RubyTransform, RubyVisibility};
 
 /// A dedicated annotation hit. The position/source belong to `annotation.line()`.
 /// `path()` lists the retained transforms from the caller's line to that lane.
@@ -26,6 +27,7 @@ pub(crate) struct AnnotationIndex<'a> {
     parent_block_offset: f32,
     child: LineLayout<'a>,
     base_stops: Vec<Caret>,
+    bounds: Option<LogicalRect>,
 }
 impl<'a> AnnotationIndex<'a> {
     pub(crate) fn new(
@@ -37,13 +39,21 @@ impl<'a> AnnotationIndex<'a> {
         if annotation.visibility() != RubyVisibility::Visible {
             return None;
         }
+        let child = LineLayout::new(std::slice::from_ref(annotation.line()));
+        let bounds = child
+            .hit_bounds()
+            .map(|bounds| transformed_bounds(annotation.transform(), parent_block_offset, bounds));
         Some(Self {
             parent_line,
             annotation,
             parent_block_offset,
-            child: LineLayout::new(std::slice::from_ref(annotation.line())),
+            child,
             base_stops,
+            bounds,
         })
+    }
+    pub(crate) fn bounds(&self) -> Option<LogicalRect> {
+        self.bounds
     }
     pub(crate) fn base_caret(&self, inline: f32, block: f32) -> Option<Caret> {
         self.base_stops
@@ -91,6 +101,69 @@ impl<'a> AnnotationIndex<'a> {
     }
 }
 
+fn transformed_bounds(
+    transform: RubyTransform,
+    parent_block_offset: f32,
+    bounds: LogicalRect,
+) -> LogicalRect {
+    let inline_end = bounds.inline_start + bounds.inline_size;
+    let block_end = bounds.block_start + bounds.block_size;
+    let corners = [
+        (bounds.inline_start, bounds.block_start),
+        (bounds.inline_start, block_end),
+        (inline_end, bounds.block_start),
+        (inline_end, block_end),
+    ];
+    let mut min_inline = f32::INFINITY;
+    let mut max_inline = f32::NEG_INFINITY;
+    let mut min_block = f32::INFINITY;
+    let mut max_block = f32::NEG_INFINITY;
+    for (inline, block) in corners {
+        let parent_inline = transform.inline_inline * inline
+            + transform.inline_block * block
+            + transform.inline_offset;
+        let parent_block = transform.block_inline * inline
+            + transform.block_block * block
+            + transform.block_offset
+            + parent_block_offset;
+        if !parent_inline.is_finite() || !parent_block.is_finite() {
+            return invalid_bounds();
+        }
+        min_inline = min_inline.min(parent_inline);
+        max_inline = max_inline.max(parent_inline);
+        min_block = min_block.min(parent_block);
+        max_block = max_block.max(parent_block);
+    }
+    let result = LogicalRect {
+        inline_start: min_inline,
+        inline_size: max_inline - min_inline,
+        block_start: min_block,
+        block_size: max_block - min_block,
+    };
+    if [
+        result.inline_start,
+        result.inline_size,
+        result.block_start,
+        result.block_size,
+    ]
+    .into_iter()
+    .all(f32::is_finite)
+    {
+        result
+    } else {
+        invalid_bounds()
+    }
+}
+
+fn invalid_bounds() -> LogicalRect {
+    LogicalRect {
+        inline_start: f32::NAN,
+        inline_size: f32::NAN,
+        block_start: f32::NAN,
+        block_size: f32::NAN,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -104,7 +177,7 @@ mod tests {
     }
 
     #[test]
-    fn nested_miss_visits_each_visible_annotation_once() {
+    fn nested_miss_outside_all_annotation_bounds_visits_none() {
         let mut visits = Vec::new();
         for depth in [4, 8, 12, 16] {
             let (lines, _) = fixture::fixture(depth, &Default::default()).unwrap();
@@ -118,7 +191,110 @@ mod tests {
             assert!(!layout.hit_test(1_000_000.0, 1_000_000.0).unwrap().inside);
             visits.push((depth, ruby_visits, VISITS.with(|v| v.get())));
         }
-        assert_eq!(visits, [(4, 4, 4), (8, 8, 8), (12, 12, 12), (16, 16, 16)]);
+        assert_eq!(visits, [(4, 0, 0), (8, 0, 0), (12, 0, 0), (16, 0, 0)]);
+    }
+
+    fn spread_siblings(lines: &mut [crate::Line], count: usize) {
+        let seed = lines[0].ruby[0].clone();
+        lines[0].ruby = (0..count)
+            .map(|index| {
+                let mut annotation = seed.clone();
+                annotation.container = crate::node::NodeId(5000 + index as u64);
+                annotation.transform.inline_offset = index as f32 * 100.0;
+                annotation
+            })
+            .collect();
+    }
+
+    fn spread_block_siblings(lines: &mut [crate::Line], count: usize) {
+        let seed = lines[0].ruby[0].clone();
+        let bits = count.trailing_zeros();
+        lines[0].ruby = (0..count)
+            .map(|index| {
+                let mut annotation = seed.clone();
+                annotation.container = crate::node::NodeId(6000 + index as u64);
+                let spatial_rank = index.reverse_bits() >> (usize::BITS - bits);
+                annotation.transform.block_offset = spatial_rank as f32 * 100.0;
+                annotation
+            })
+            .collect();
+    }
+
+    #[test]
+    fn sparse_sibling_hit_miss_and_body_queries_visit_only_spatial_candidates() {
+        for count in [16, 64, 256, 1024] {
+            let (mut lines, _) = fixture::fixture(1, &Default::default()).unwrap();
+            spread_siblings(&mut lines, count);
+            let layout = LineLayout::new(&lines);
+            let first = lines[0].ruby_annotations().next().unwrap();
+            let mut point = parent_point(first, body_point(first.line()));
+            point.1 += lines[0].block_offset();
+
+            VISITS.with(|visits| visits.set(0));
+            let hit = layout.hit_test_ruby(point.0, point.1).unwrap();
+            assert_eq!(hit.annotation.container().0, 5000);
+            assert_eq!(
+                VISITS.with(|visits| visits.get()),
+                1,
+                "one separated annotation candidate should be tested for R={count}"
+            );
+
+            VISITS.with(|visits| visits.set(0));
+            assert!(layout.hit_test_ruby(1_000_000.0, 1_000_000.0).is_none());
+            assert_eq!(
+                VISITS.with(|visits| visits.get()),
+                0,
+                "a distant miss should test no annotation for R={count}"
+            );
+
+            let body = body_point(&lines[0]);
+            VISITS.with(|visits| visits.set(0));
+            let result = layout.hit_test(body.0, body.1).unwrap();
+            assert!(result.inside);
+            assert_eq!(
+                VISITS.with(|visits| visits.get()),
+                0,
+                "a body hit outside ruby bounds should test no annotation for R={count}"
+            );
+        }
+    }
+
+    #[test]
+    fn sparse_block_siblings_prune_interleaved_vertical_bounds() {
+        for count in [16, 64, 256, 1024] {
+            let (mut lines, _) = fixture::fixture(1, &Default::default()).unwrap();
+            spread_block_siblings(&mut lines, count);
+            let layout = LineLayout::new(&lines);
+            let first = lines[0].ruby_annotations().next().unwrap();
+            let base = parent_point(first, body_point(first.line()));
+            let max_node_visits = 4 * count.ilog2() as usize + 4;
+
+            VISITS.with(|visits| visits.set(0));
+            layout.reset_ruby_spatial_visits();
+            let hit = layout
+                .hit_test_ruby(base.0, base.1 + lines[0].block_offset())
+                .unwrap();
+            assert_eq!(hit.annotation.container().0, 6000);
+            assert_eq!(VISITS.with(|visits| visits.get()), 1);
+            assert!(
+                layout.ruby_spatial_visits() <= max_node_visits,
+                "a separated annotation hit should visit O(log R) tree nodes for R={count}"
+            );
+
+            let gap = count as f32 / 2.0 * 100.0 + 50.0;
+            VISITS.with(|visits| visits.set(0));
+            layout.reset_ruby_spatial_visits();
+            assert!(
+                layout
+                    .hit_test_ruby(base.0, base.1 + gap + lines[0].block_offset())
+                    .is_none()
+            );
+            assert_eq!(VISITS.with(|visits| visits.get()), 0);
+            assert!(
+                layout.ruby_spatial_visits() <= max_node_visits,
+                "a miss in an interleaved gap should visit O(log R) tree nodes for R={count}"
+            );
+        }
     }
 
     fn body_point(line: &crate::Line) -> (f32, f32) {
@@ -218,5 +394,25 @@ mod tests {
                 .collect::<Vec<_>>(),
             [9000, 9001]
         );
+    }
+
+    #[test]
+    fn hidden_and_non_finite_annotation_bounds_keep_exact_hit_behavior() {
+        for offset in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let (mut lines, _) = fixture::fixture(1, &Default::default()).unwrap();
+            lines[0].ruby[0].transform.inline_offset = offset;
+            let layout = LineLayout::new(&lines);
+            assert!(layout.hit_test_ruby(10.0, 10.0).is_none());
+            assert!(layout.hit_test_ruby(f32::INFINITY, 10.0).is_none());
+            assert!(layout.hit_test_ruby(10.0, f32::NAN).is_none());
+            assert!(layout.hit_test(f32::NAN, 10.0).is_none());
+            assert!(!layout.hit_test(1_000_000.0, 1_000_000.0).unwrap().inside);
+        }
+
+        let (mut lines, _) = fixture::fixture(1, &Default::default()).unwrap();
+        lines[0].ruby[0].visibility = RubyVisibility::Hidden;
+        let layout = LineLayout::new(&lines);
+        assert!(layout.hit_test_ruby(10.0, 10.0).is_none());
+        assert!(!layout.hit_test(10.0, 10.0).unwrap().inside);
     }
 }
