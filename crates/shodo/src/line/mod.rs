@@ -137,6 +137,83 @@ impl Paragraph {
     /// constraints.
     /// If a line cannot fit even at the top of a page, retry the same token
     /// with `max_block_size: None` to accept the overflowing line.
+    ///
+    /// Start with [`Self::start_token`]. Accept a [`LineResult::Line`] before
+    /// advancing to [`Line::break_token`] and updating the logical block
+    /// offset. [`LineResult::BlockSizeExceeded`] leaves the token unchanged.
+    /// Its limit is the space available to this line, so supply the remaining
+    /// page extent rather than the full page extent after every line.
+    ///
+    /// Float placement requires additional caller state: retain the returned
+    /// cursor, retry from `line_start`, and inspect [`Line::displaced_floats`]
+    /// before accepting a line. Withdraw only the last displaced float, then
+    /// retry and reevaluate before withdrawing another; do not batch withdrawals.
+    /// Defer re-reported withdrawn floats for that line. Save tokens,
+    /// cursors, placements and withdrawal/defer records together at page
+    /// checkpoints. The [float integration guide] describes the complete loop.
+    ///
+    /// # Examples
+    ///
+    /// Paginate plain text without floats or block-in-inline content. A height
+    /// rejection retries the current token at the next page's start; a line
+    /// taller than a whole page is accepted with the height limit removed:
+    ///
+    /// ```
+    /// use shodo::font::{FontCollection, FontOptions};
+    /// use shodo::limits::Limits;
+    /// use shodo::style::{LineOptions, ParagraphStyle};
+    /// use shodo::{AtomicSizes, LayoutContext, LineConstraint, LineResult, RichText};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let style = ParagraphStyle::default();
+    /// let fonts = FontCollection::with_options(&Limits::default(), FontOptions {
+    ///     system_fonts: false, ..Default::default()
+    /// });
+    /// let mut cx = LayoutContext::new();
+    /// let paragraph = RichText::new(&style)
+    ///     .push("A paragraph long enough to wrap across several lines and pages.", &style.root)
+    ///     .build(&mut cx, &fonts)?;
+    /// let options = LineOptions::default();
+    /// let page_extent = 48.0;
+    /// let mut page = 1;
+    /// let mut token = paragraph.start_token();
+    /// let mut constraint = LineConstraint::new(80.0);
+    /// constraint.max_block_size = Some(page_extent);
+    /// loop {
+    ///     match paragraph.next_line(
+    ///         &mut cx, token, &options, &constraint, &AtomicSizes::EMPTY,
+    ///     ) {
+    ///         LineResult::Line(line) => {
+    ///             println!("page {page}: {}", &line.text()[line.text_range()]);
+    ///             token = line.break_token();
+    ///             constraint.block_offset += line.block_size();
+    ///             constraint.max_block_size = Some(
+    ///                 (page_extent - constraint.block_offset).max(0.0),
+    ///             );
+    ///         }
+    ///         LineResult::BlockSizeExceeded { .. } => {
+    ///             if constraint.block_offset > 0.0 {
+    ///                 page += 1;
+    ///                 constraint.block_offset = 0.0;
+    ///                 constraint.max_block_size = Some(page_extent);
+    ///             } else {
+    ///                 constraint.max_block_size = None;
+    ///             }
+    ///             // Keep the same token until this candidate line is accepted.
+    ///         }
+    ///         LineResult::Done => break,
+    ///         other => return Err(format!("unexpected layout result: {other:?}").into()),
+    ///     }
+    /// }
+    /// assert!(page > 1);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// These examples use deterministic missing-glyph output. Register real
+    /// font data before rendering; read layout diagnostics through
+    /// [`LayoutContext::take_warnings`].
+    ///
+    /// [float integration guide]: https://github.com/fulgur-rs/shodo/blob/adf02f0dda2cb41837f371eef5b70b7389e28eea/docs/guides/float-integration-harness.md
     pub fn next_line(
         &self,
         cx: &mut LayoutContext,

@@ -179,6 +179,21 @@ impl ParagraphData {
 
 /// The analyzed and shaped inline content of one block container.
 /// Immutable; clones share data and keep the same id.
+///
+/// # Choosing a line layout API
+///
+/// | Requirement | API | Caller responsibility |
+/// | --- | --- | --- |
+/// | Collect all lines at a fixed width | [`Self::break_all`] | Supply atomic sizes; floats are zero-width anchors and blocks have no extent. |
+/// | Vary constraints through an iterator | [`Self::lines`] | Return a new constraint after float/height events; retain external placement state. |
+/// | Control retries, pagination or float placement directly | [`Self::next_line`] | Advance accepted tokens and block offsets; retry rejected tokens with changed constraints. |
+/// | Use balanced or pretty fixed-width breaks | [`Self::plan_breaks`] then [`Self::next_line`] or [`Self::lines`] | Set [`LineConstraint::break_plan`] and keep the plan's inputs unchanged. |
+///
+/// Start at [`Self::start_token`]. Only accepting a line advances to
+/// [`Line::break_token`]; retrying a height-limited line keeps the current token.
+/// [`LineResult`] describes other outcomes. Always slice [`Line::text`] with
+/// [`Line::text_range`], since first-line transformations can select a different
+/// processed-text dataset from [`Self::text`].
 #[derive(Clone)]
 pub struct Paragraph {
     pub(crate) data: Arc<ParagraphData>,
@@ -209,6 +224,10 @@ impl Paragraph {
         self.data.id
     }
 
+    /// Start line layout at the beginning of this paragraph.
+    /// The token is valid for this paragraph and its clones. To continue after
+    /// an accepted line, use [`Line::break_token`]; to restart layout at a new
+    /// width, use a fresh start token.
     pub fn start_token(&self) -> BreakToken {
         BreakToken {
             para: self.data.id,
@@ -442,11 +461,15 @@ pub struct BreakPlan {
 /// Space available to one line.
 #[derive(Clone, Copy, Debug)]
 pub struct LineConstraint<'a> {
+    /// Available logical inline size in px, after subtracting float insets.
     pub available_inline_size: f32,
     /// Inline-start inset from floats, relative to the content box.
     pub inline_start_offset: f32,
     /// Block position of the line within the container; copied to the line.
     pub block_offset: f32,
+    /// Maximum advance of this candidate line in px, not the total page size.
+    /// For pagination, supply the remaining page height (or logical block
+    /// extent in vertical writing). `None` permits an overflowing line.
     pub max_block_size: Option<f32>,
     /// Processed Unicode grapheme clusters per line. When set, normal line
     /// break opportunities, forced breaks, and available width do not end
@@ -454,11 +477,20 @@ pub struct LineConstraint<'a> {
     /// each. Zero still accepts one indivisible unit so layout progresses.
     /// A shaping or transform group may exceed the limit.
     pub max_graphemes: Option<usize>,
+    /// Last handled float in this paragraph. Retain the cursor returned by
+    /// [`LineResult::FloatEncountered`] so a retry does not report it again.
+    /// Update this together with external float placements when rolling back.
     pub floats_placed_through: Option<FloatCursor>,
+    /// Optional fixed-width break plan from [`Paragraph::plan_breaks`].
+    /// Mismatching paragraph, width, options, atomic sizes or float constraints
+    /// cause a warning and greedy fallback.
     pub break_plan: Option<&'a BreakPlan>,
 }
 
 impl LineConstraint<'_> {
+    /// Create a constraint with this available inline size and no height,
+    /// grapheme or break-plan limit. Offsets start at zero and no float has
+    /// been marked as placed.
     pub fn new(available_inline_size: f32) -> Self {
         Self {
             available_inline_size,
@@ -512,19 +544,32 @@ impl LineConstraint<'_> {
 }
 
 /// Outcome of [`Paragraph::next_line`].
+///
+/// Accept [`Self::Line`] before advancing to its next token. Height and float
+/// outcomes require changed constraints and a retry; repeating the same inputs
+/// repeats the same outcome. See [`Paragraph::next_line`] for a pagination
+/// example and [`Paragraph::lines`] for the iterator's event handling.
 // Keep the public by-value line result without a heap allocation on every line.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum LineResult {
+    /// A candidate line. Accept it, advance to [`Line::break_token`] and add
+    /// [`Line::block_size`] to the block offset. With floats, first inspect
+    /// [`Line::displaced_floats`] and withdraw/retry displaced placements.
     Line(Line),
     /// No content is left.
     Done,
     /// The line would be taller than `max_block_size`.
+    /// Retry the same token on a new page. If it still cannot fit at the page's
+    /// start, retry with [`LineConstraint::max_block_size`] set to `None`.
     BlockSizeExceeded {
+        /// Required advance of this line in logical px.
         needed_block_size: f32,
     },
     /// A float was reached; place it and call again from `line_start`.
+    /// Carry `float_cursor` in [`LineConstraint::floats_placed_through`] and
+    /// update the available inline strip from the caller's placements.
     FloatEncountered {
         node: NodeId,
         line_start: BreakToken,

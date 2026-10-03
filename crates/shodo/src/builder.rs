@@ -59,6 +59,62 @@ pub(crate) enum RawItem {
 ///
 /// Limits are checked on every call. After the first violation the builder
 /// ignores further input without allocating, and `build` returns the error.
+///
+/// Use [`RichText`] when your input is a flat sequence of styled spans. This
+/// builder accepts caller-defined [`NodeId`] and [`TextSource`] identities,
+/// nested inline boxes, atomic inlines and out-of-flow anchors. It owns copies
+/// of the recorded text and styles; the input borrows need not outlive it.
+/// Text uses the innermost open inline's resolved style, or
+/// [`ParagraphStyle::root`] when no inline is open. Resolve CSS inheritance and
+/// relative lengths before supplying a style.
+///
+/// # Examples
+///
+/// Record nested inline boxes while preserving byte offsets in one source
+/// string, `"Hello world!"`. Box identities and text-source identities are
+/// supplied separately:
+///
+/// ```
+/// use shodo::font::{FontCollection, FontOptions};
+/// use shodo::limits::Limits;
+/// use shodo::node::{InlineEdges, NodeId, TextSource};
+/// use shodo::style::{FontStyle, ParagraphStyle};
+/// use shodo::{LayoutContext, ParagraphBuilder};
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let limits = Limits::default();
+/// let fonts = FontCollection::with_options(&limits, FontOptions {
+///     system_fonts: false,
+///     ..FontOptions::default()
+/// });
+/// let style = ParagraphStyle::default();
+/// let bold = shodo::style::InlineStyle {
+///     font_weight: 700.0,
+///     ..style.root.clone()
+/// };
+/// let bold_italic = shodo::style::InlineStyle {
+///     font_style: FontStyle::Italic,
+///     ..bold.clone()
+/// };
+/// let source_node = NodeId(1);
+/// let mut builder = ParagraphBuilder::new(&style, &limits);
+/// builder
+///     .push_text(TextSource::Dom { node: source_node, offset: 0 }, "Hello ")
+///     .open_inline(NodeId(10), &bold, InlineEdges::default())
+///     .push_text(TextSource::Dom { node: source_node, offset: 6 }, "world")
+///     .open_inline(NodeId(11), &bold_italic, InlineEdges::default())
+///     .push_text(TextSource::Dom { node: source_node, offset: 11 }, "!")
+///     .close_inline()
+///     .close_inline();
+/// let mut cx = LayoutContext::new();
+/// let paragraph = builder.build(&mut cx, &fonts)?;
+/// assert_eq!(paragraph.text(), "Hello world!");
+/// # Ok(())
+/// # }
+/// ```
+///
+/// No font data is registered in this example: it exercises input construction
+/// with missing-glyph fallback. Register a real face before rendering glyphs.
 pub struct ParagraphBuilder {
     pub(crate) style: ParagraphStyle,
     pub(crate) limits: Limits,
@@ -86,6 +142,10 @@ pub struct ParagraphBuilder {
 }
 
 impl ParagraphBuilder {
+    /// Start a paragraph with a resolved block/root style and resource limits.
+    /// Both are copied. Text outside an open inline uses `style.root`.
+    /// Construction can record a limit error; inspect [`Self::error`] or the
+    /// result of [`Self::build`].
     pub fn new(style: &ParagraphStyle, limits: &Limits) -> Self {
         Self::with_root(&style.root, Some(style), limits)
     }
@@ -183,6 +243,17 @@ impl ParagraphBuilder {
         self
     }
 
+    /// Open a nested inline box and make `style` the current text style.
+    /// `node` identifies the box in output fragments; text sources are supplied
+    /// separately to [`Self::push_text`]. `edges` contains resolved logical
+    /// margin, border and padding lengths. Close this box with
+    /// [`Self::close_inline`] after recording its content.
+    ///
+    /// This method does not resolve inheritance. When
+    /// [`ParagraphStyle::first_line`] is set, descendant values equal to the
+    /// normal root use the value-based first-line fallback described there.
+    /// Use [`Self::open_inline_with_first_line`] for exact caller-resolved
+    /// normal and first-line styles.
     pub fn open_inline(
         &mut self,
         node: NodeId,
@@ -232,6 +303,10 @@ impl ParagraphBuilder {
         self
     }
 
+    /// Close the innermost inline and restore its parent's text style.
+    /// A close with no open inline is ignored with an
+    /// [`WarningKind::UnbalancedInline`] warning. Boxes still open at
+    /// [`Self::build`] or [`Self::analyze`] are closed with the same warning.
     pub fn close_inline(&mut self) -> &mut Self {
         if self.error.is_some() {
             return self;
@@ -250,6 +325,16 @@ impl ParagraphBuilder {
         self
     }
 
+    /// Copy text using the innermost open inline's style, or the root style.
+    /// Empty text is ignored. Whitespace processing and text transformation
+    /// happen during analysis, rather than during this call.
+    ///
+    /// [`TextSource::Dom`] uses a caller node and a UTF-8 byte offset within
+    /// that node's original text, not within the paragraph. For multiple slices
+    /// of one node, advance the source offset by their original byte lengths.
+    /// [`TextSource::Generated`] records an owner without a DOM byte offset.
+    /// Source positions are retained in [`Paragraph::offset_mapping`] unless
+    /// disabled with [`Self::with_offset_mapping`].
     pub fn push_text(&mut self, source: TextSource, text: &str) -> &mut Self {
         if self.error.is_some() || text.is_empty() {
             return self;
@@ -275,6 +360,11 @@ impl ParagraphBuilder {
         self
     }
 
+    /// Append an atomic inline, such as an image or inline-block.
+    /// This records its identity, resolved style and box edges. Supply its
+    /// margin-box size and required baseline separately through
+    /// [`crate::AtomicSizes`] before line layout; see
+    /// [`Paragraph::required_baseline`].
     pub fn push_atomic(
         &mut self,
         node: NodeId,
@@ -295,6 +385,10 @@ impl ParagraphBuilder {
         self
     }
 
+    /// Append an out-of-flow anchor using the current inline style.
+    /// Absolute positioning belongs to the caller. For a float, use
+    /// [`Paragraph::next_line`] to receive the placement request and update
+    /// the available line space before retrying.
     pub fn push_out_of_flow(&mut self, node: NodeId, kind: OutOfFlowKind) -> &mut Self {
         if self.reserve_item() {
             let style = self.current_style();
@@ -567,6 +661,11 @@ impl ParagraphBuilder {
     ///
     /// This stage does not use a [`crate::LayoutContext`], so callers can prepare
     /// multiple paragraphs before scheduling their shaping work.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LimitExceeded`] if input or analysis exceeds the configured
+    /// limits, including a violation recorded by an earlier builder call.
     pub fn analyze(mut self) -> Result<crate::ParagraphAnalysis, LimitExceeded> {
         self.close_unbalanced();
         if let Some(error) = self.error {
@@ -577,6 +676,16 @@ impl ParagraphBuilder {
 
     /// Analyzes and shapes the content. Fails only when a resource limit was
     /// exceeded; inline boxes left open are closed with a warning.
+    ///
+    /// Consumes the recorded input. The result owns its text, styles and font
+    /// dependencies, and can be reused at different line widths. Read
+    /// non-fatal diagnostics through [`Paragraph::warnings`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LimitExceeded`] if input, analysis or shaping exceeds the
+    /// configured limits, including a violation recorded by an earlier call.
+    /// Missing fonts produce warnings and fallback glyphs rather than an error.
     pub fn build(
         self,
         cx: &mut LayoutContext,
@@ -591,6 +700,40 @@ impl ParagraphBuilder {
 /// Convenience builder for plain rich text (no DOM). The n-th pushed span
 /// gets `NodeId(n)`, starting at 0, and offsets within the pushed string map
 /// through [`crate::mapping::OffsetMapping`].
+///
+/// Use [`ParagraphBuilder`] for nested inline boxes, atomic inlines or explicit
+/// source identities. `RichText` owns copies of text and styles and takes
+/// `self` on each append, so calls can be chained.
+///
+/// # Examples
+///
+/// ```
+/// use shodo::font::{FontCollection, FontOptions};
+/// use shodo::limits::Limits;
+/// use shodo::style::{InlineStyle, ParagraphStyle};
+/// use shodo::{LayoutContext, RichText};
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let limits = Limits::default();
+/// let fonts = FontCollection::with_options(&limits, FontOptions {
+///     system_fonts: false,
+///     ..FontOptions::default()
+/// });
+/// let normal = InlineStyle::default();
+/// let bold = InlineStyle { font_weight: 700.0, ..normal.clone() };
+/// let paragraph_style = ParagraphStyle { root: normal.clone(), ..Default::default() };
+/// let mut cx = LayoutContext::new();
+/// let paragraph = RichText::with_limits(&paragraph_style, &limits)
+///     .push("Hello ", &normal)
+///     .push("world", &bold)
+///     .build(&mut cx, &fonts)?;
+/// assert_eq!(paragraph.text(), "Hello world");
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Register real font data when using the result for glyph rendering; this
+/// example only exercises text input with missing-glyph fallback.
 pub struct RichText {
     builder: ParagraphBuilder,
     next_node: u64,
@@ -617,10 +760,14 @@ impl RichText {
         self.builder.push_ruby(node, style, ruby);
         self
     }
+    /// Start styled text with a copy of `style` and [`Limits::default`].
+    /// Use [`Self::with_limits`] to choose explicit resource budgets.
     pub fn new(style: &ParagraphStyle) -> Self {
         Self::with_limits(style, &Limits::default())
     }
 
+    /// Start styled text with copies of the resolved paragraph style and limits.
+    /// Limit violations recorded while appending are returned by [`Self::build`].
     pub fn with_limits(style: &ParagraphStyle, limits: &Limits) -> Self {
         Self {
             builder: ParagraphBuilder::new(style, limits),
@@ -628,6 +775,11 @@ impl RichText {
         }
     }
 
+    /// Append a span with a copy of its text and resolved style.
+    /// Each call assigns the next [`NodeId`], with source byte offsets starting
+    /// at zero within this string. Returns the builder for chaining.
+    /// Whitespace processing can collapse spaces across adjacent spans.
+    /// For exact first-line styles, use [`Self::push_with_first_line`].
     pub fn push(mut self, text: &str, style: &InlineStyle) -> Self {
         let node = NodeId(self.next_node);
         self.next_node += 1;
@@ -656,6 +808,14 @@ impl RichText {
         self
     }
 
+    /// Consume the spans and analyze/shape an immutable [`Paragraph`].
+    /// The result retains its font dependencies; input strings and styles may
+    /// be dropped. Read non-fatal diagnostics with [`Paragraph::warnings`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LimitExceeded`] if input, analysis or shaping exceeds the
+    /// configured limits. Missing fonts produce warnings and fallback glyphs.
     pub fn build(
         self,
         cx: &mut LayoutContext,
