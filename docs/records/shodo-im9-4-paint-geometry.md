@@ -27,6 +27,16 @@ candidate use separate Cargo target directories. Paint hashes, line geometry
 hashes, caret and selection hashes, and warnings match exactly across all
 workloads and samples.
 
+The captures set `SHODO_GEOMETRY_SAMPLES=21` for timings and
+`SHODO_GEOMETRY_SAMPLES=9` with `allocation-counting` for allocation runs. For
+example, run these commands from the workspace root in each revision, using a
+separate `CARGO_TARGET_DIR` for baseline and candidate:
+
+```sh
+SHODO_GEOMETRY_SAMPLES=21 cargo run --release -p shodo-bench --example paint_geometry
+SHODO_GEOMETRY_SAMPLES=9 cargo run --release -p shodo-bench --features allocation-counting --example paint_geometry
+```
+
 The cases include the original Latin, Arabic, combining, nested atomic and tab
 workloads, plus a single glyph, combining marks, an `ffi` ligature, RTL text,
 letter and word spacing, justification, a selected soft-hyphen overlay, ruby

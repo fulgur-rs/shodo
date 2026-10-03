@@ -56,6 +56,18 @@ pub(super) fn paint_segments(line: &Line) -> Vec<Segment> {
     LineGeometry::new(0, line, false).segments
 }
 
+fn combined_cluster_glyph_index(
+    glyphs: &Range<u32>,
+    text: &Range<u32>,
+    source_clusters: &[u32],
+) -> usize {
+    if glyphs.start < glyphs.end {
+        glyphs.start as usize
+    } else {
+        source_clusters.partition_point(|cluster| *cluster < text.start)
+    }
+}
+
 impl LineGeometry {
     fn new(number: usize, line: &Line, retain_carets: bool) -> Self {
         let mut result = Self {
@@ -68,14 +80,11 @@ impl LineGeometry {
                 Fragment::GlyphRun(run) => {
                     if run.orientation() == crate::GlyphOrientation::Combined {
                         for cluster in run.geometry_clusters() {
-                            let g = if cluster.glyphs.start < cluster.glyphs.end {
-                                cluster.glyphs.start as usize
-                            } else {
-                                line.data
-                                    .glyphs
-                                    .cluster
-                                    .partition_point(|c| *c < cluster.text.start)
-                            };
+                            let g = combined_cluster_glyph_index(
+                                &cluster.glyphs,
+                                &cluster.text,
+                                &line.data.glyphs.cluster,
+                            );
                             let Some(paint) =
                                 line.data.combine_geometry.glyphs.get(g).copied().flatten()
                             else {
@@ -763,6 +772,18 @@ mod tests {
     }
     fn take_combine_work() -> (usize, usize) {
         COMBINE_WORK.with(|work| work.replace((0, 0)))
+    }
+    #[test]
+    fn empty_combined_cluster_uses_text_start_for_paint_lookup() {
+        let source_clusters = [0, 4, 4, 9];
+        assert_eq!(
+            super::combined_cluster_glyph_index(&(0..0), &(4..8), &source_clusters),
+            1
+        );
+        assert_eq!(
+            super::combined_cluster_glyph_index(&(12..13), &(4..8), &source_clusters),
+            12
+        );
     }
     fn assert_geometry_clusters_match_public(run: GlyphRunView<'_>) {
         let public = run.clusters().collect::<Vec<_>>();
