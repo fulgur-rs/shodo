@@ -37,6 +37,8 @@ pub(crate) fn resolve(
     warnings: &mut WarningSink,
 ) -> (harfrust::ShaperInstance, Arc<RunInstance>, f32) {
     let font = harfrust::FontRef::from_index(bytes, index).expect("registered face");
+    #[cfg(test)]
+    crate::font::record_metric_font_ref_open();
     let metric_font = FontRef::from_index(bytes, index).expect("registered metric face");
     let explicit = |tag| {
         style

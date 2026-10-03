@@ -10,7 +10,7 @@ pub(crate) use features::FeatureSets;
 mod input;
 mod instance;
 pub(crate) mod orientation;
-use instance::RunInstance;
+pub(crate) use instance::RunInstance;
 pub(crate) use instance::resolve as resolve_instance;
 use std::sync::Arc;
 
