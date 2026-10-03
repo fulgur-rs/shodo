@@ -7,10 +7,31 @@ std::thread_local! {
     static INFO_READS: Cell<usize> = const { Cell::new(0) };
     static FONT_READS: Cell<usize> = const { Cell::new(0) };
     static KEY_COMPARISONS: Cell<usize> = const { Cell::new(0) };
+    static REGISTERED_FACE_VISITS: Cell<usize> = const { Cell::new(0) };
+    static NATIVE_FACE_ID_LOOKUPS: Cell<usize> = const { Cell::new(0) };
 }
 
 pub(super) fn record_key_comparison() {
     KEY_COMPARISONS.with(|n| n.set(n.get() + 1));
+}
+
+pub(super) fn record_registered_face_visit() {
+    REGISTERED_FACE_VISITS.with(|n| n.set(n.get() + 1));
+}
+
+pub(super) fn record_native_face_id_lookup() {
+    NATIVE_FACE_ID_LOOKUPS.with(|n| n.set(n.get() + 1));
+}
+
+fn fonts_without_match_cache() -> FontCollection {
+    FontCollection::with_options(
+        &Limits::default(),
+        FontOptions {
+            system_fonts: false,
+            match_cache_entries: 0,
+            ..Default::default()
+        },
+    )
 }
 
 #[test]
@@ -137,6 +158,189 @@ fn registered_matching_reuses_metadata_for_uncached_clusters() {
 #[test]
 fn registered_matching_does_not_reparse_color_while_sorting() {
     check_uncached_reads(3, 3);
+}
+
+#[test]
+fn named_registered_candidates_use_ascii_case_folded_indices_in_registration_order() {
+    let fonts = fonts_without_match_cache();
+    let bytes = super::super::browser_tests::test_font("Internal", &['a'], 600);
+    let register = |index| {
+        let family = match index {
+            7 => "Web",
+            64 => "wEb",
+            127 => "WEB",
+            3 => "Web-Ä",
+            _ => "Noise",
+        };
+        fonts
+            .register_face(
+                bytes.clone(),
+                0,
+                FontFaceDescriptor {
+                    family: family.into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .index
+    };
+    let mut expected = Vec::new();
+    for index in 0..64 {
+        let slot = register(index);
+        if index == 7 {
+            expected.push(slot);
+        }
+    }
+
+    REGISTERED_FACE_VISITS.with(|n| n.set(0));
+    let actual = fonts.registered_candidates(Some("WEB"));
+    assert_eq!(
+        actual
+            .iter()
+            .map(|candidate| candidate.id.index)
+            .collect::<Vec<_>>(),
+        expected
+    );
+    assert_eq!(
+        REGISTERED_FACE_VISITS.with(Cell::get),
+        expected.len(),
+        "named lookup should inspect only matching family slots"
+    );
+
+    for index in 64..128 {
+        let slot = register(index);
+        if [64, 127].contains(&index) {
+            expected.push(slot);
+        }
+    }
+    REGISTERED_FACE_VISITS.with(|n| n.set(0));
+    let actual = fonts.registered_candidates(Some("WEB"));
+    assert_eq!(
+        actual
+            .iter()
+            .map(|candidate| candidate.id.index)
+            .collect::<Vec<_>>(),
+        expected
+    );
+    assert_eq!(
+        REGISTERED_FACE_VISITS.with(Cell::get),
+        expected.len(),
+        "new registrations should append to the family index"
+    );
+
+    REGISTERED_FACE_VISITS.with(|n| n.set(0));
+    assert!(fonts.registered_candidates(Some("web-ä")).is_empty());
+    assert_eq!(
+        REGISTERED_FACE_VISITS.with(Cell::get),
+        0,
+        "family matching folds ASCII only"
+    );
+}
+
+#[test]
+fn native_candidate_face_ids_use_the_identity_index() {
+    let fonts = fonts_without_match_cache();
+    let bytes = super::super::browser_tests::test_font("Shared Native", &['a'], 600);
+    let registered: Vec<_> = (0..64)
+        .map(|_| fonts.register(bytes.clone()).unwrap())
+        .collect();
+
+    REGISTERED_FACE_VISITS.with(|n| n.set(0));
+    assert!(
+        fonts
+            .registered_candidates(Some("Shared Native"))
+            .is_empty()
+    );
+    assert_eq!(REGISTERED_FACE_VISITS.with(Cell::get), 0);
+
+    NATIVE_FACE_ID_LOOKUPS.with(|n| n.set(0));
+    let candidates = fonts.native_candidates("Shared Native");
+
+    assert_eq!(candidates.len(), registered.len());
+    let mut actual: Vec<_> = candidates
+        .iter()
+        .map(|candidate| candidate.id.index)
+        .collect();
+    let mut expected: Vec<_> = registered.iter().map(|id| id.index).collect();
+    actual.sort_unstable();
+    expected.sort_unstable();
+    assert_eq!(actual, expected);
+    assert_eq!(
+        NATIVE_FACE_ID_LOOKUPS.with(Cell::get),
+        candidates.len(),
+        "each catalog candidate should perform one face identity lookup"
+    );
+}
+
+#[test]
+fn native_materialization_rechecks_the_identity_index_after_candidate_creation() {
+    let fonts = fonts_without_match_cache();
+    let bytes = super::super::browser_tests::test_font("Shared Native", &['a'], 600);
+    let registered: Vec<_> = (0..64)
+        .map(|_| fonts.register(bytes.clone()).unwrap())
+        .collect();
+    let mut candidate = fonts
+        .native_candidates("Shared Native")
+        .into_iter()
+        .max_by_key(|candidate| candidate.id.index)
+        .unwrap();
+    let expected = *registered.iter().max_by_key(|id| id.index).unwrap();
+    assert_eq!(candidate.id, expected);
+
+    // Simulate another query materializing the same catalog face after this
+    // candidate was created but before best_match acquires the state lock.
+    candidate.id.index = u32::MAX;
+    let face_count = fonts.state().faces.len();
+    NATIVE_FACE_ID_LOOKUPS.with(|n| n.set(0));
+
+    let matched = fonts
+        .best_match(
+            vec![candidate],
+            &FontQuery::default(),
+            &mut FontCluster::new("a"),
+            true,
+        )
+        .unwrap();
+
+    assert_eq!(matched.id, expected);
+    assert_eq!(fonts.state().faces.len(), face_count);
+    assert_eq!(NATIVE_FACE_ID_LOOKUPS.with(Cell::get), 1);
+}
+
+#[test]
+fn document_family_indices_stay_local_and_parent_matching_is_preserved() {
+    let shared = fonts_without_match_cache();
+    let shared_id = shared
+        .register_face(
+            super::super::browser_tests::test_font("Root Internal", &['a'], 600),
+            0,
+            FontFaceDescriptor {
+                family: "Shared Family".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let document = FontCollection::for_document(&shared, &Limits::default());
+    let document_id = document
+        .register_face(
+            super::super::browser_tests::test_font("Document Internal", &['b'], 600),
+            0,
+            FontFaceDescriptor {
+                family: "shared family".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+    let local = document.registered_candidates(Some("SHARED FAMILY"));
+    assert_eq!(local.len(), 1);
+    assert_eq!(local[0].id, document_id);
+    let query = FontQuery {
+        families: vec![crate::style::FontFamily::Named("Shared Family".into())],
+        ..Default::default()
+    };
+    assert_eq!(document.match_cluster(&query, "a").unwrap().id, shared_id);
+    assert_eq!(document.match_cluster(&query, "b").unwrap().id, document_id);
 }
 
 #[test]

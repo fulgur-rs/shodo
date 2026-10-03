@@ -5,6 +5,13 @@ fn probe(mode: &str, id: &str, scale: &str) -> std::process::Output {
         .output()
         .unwrap()
 }
+
+fn font_match_probe(mode: &str, workload: &str, face_count: &str) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_shodo-font-match-probe"))
+        .args([mode, workload, face_count])
+        .output()
+        .unwrap()
+}
 #[test]
 fn wrong_build_mode_and_invalid_inputs_fail_without_a_report() {
     let wrong = if cfg!(feature = "allocation-counting") {
@@ -62,6 +69,65 @@ fn itemize_grapheme_sizes_use_the_fixed_latin_font_workload() {
     assert!(v["digest"]["glyphs"].as_u64().unwrap() > 0);
     assert_eq!(v["digest"]["synthetic_glyphs"], 0);
 }
+
+#[cfg(not(feature = "allocation-counting"))]
+#[test]
+fn font_match_probe_covers_registered_misses_and_native_matches() {
+    let registered = font_match_probe("--cold", "registered", "4");
+    assert!(
+        registered.status.success(),
+        "{}",
+        String::from_utf8_lossy(&registered.stderr)
+    );
+    let registered: serde_json::Value = serde_json::from_slice(&registered.stdout).unwrap();
+    assert_eq!(registered["settings"]["face_count"], 4);
+    assert_eq!(registered["matched_face_slot"], serde_json::Value::Null);
+    assert!(
+        registered["durations_ns"]["match_cache_miss"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+
+    let native = font_match_probe("--cold", "native", "4");
+    assert!(
+        native.status.success(),
+        "{}",
+        String::from_utf8_lossy(&native.stderr)
+    );
+    let native: serde_json::Value = serde_json::from_slice(&native.stdout).unwrap();
+    assert_eq!(native["settings"]["workload"], "native");
+    assert!(native["matched_face_slot"].as_u64().is_some());
+}
+
+#[cfg(feature = "allocation-counting")]
+#[test]
+fn font_match_probe_memory_mode_reports_registration_and_warm_hit_scopes() {
+    let output = font_match_probe("--memory", "registered", "4");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["settings"]["face_count"], 4);
+    for scope in ["registration", "match_cache_miss", "warm_cache_hit"] {
+        assert!(report["scopes"][scope]["calls"].as_u64().is_some());
+    }
+    assert!(
+        report["scopes"]["warm_cache_hit"]["calls"]
+            .as_u64()
+            .unwrap()
+            <= 3
+    );
+    assert!(
+        report["scopes"]["warm_cache_hit"]["allocated_bytes"]
+            .as_u64()
+            .unwrap()
+            <= 128
+    );
+}
+
 #[cfg(feature = "allocation-counting")]
 #[test]
 fn memory_scopes_record_ownership_retries_and_releases() {

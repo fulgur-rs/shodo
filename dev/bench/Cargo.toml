@@ -28,6 +28,10 @@ required-features = ["allocation-counting"]
 name = "shodo-probe"
 path = "src/bin/probe.rs"
 
+[[bin]]
+name = "shodo-font-match-probe"
+path = "src/bin/font_match_probe.rs"
+
 [dev-dependencies]
 criterion = { version = "=0.7.0", default-features = false, features = ["cargo_bench_support"] }
 
