@@ -212,6 +212,8 @@ pub(crate) fn itemize(
     let mut scalars = Vec::new();
     let mut style_indices = Vec::new();
     let mut compatible_styles = HashMap::new();
+    // Input styles may split flushes, but source offsets remain ordered across them.
+    let mut grapheme_cursor = 0;
     let mut flush = |text: &mut String,
                      scalars: &mut Vec<Scalar>,
                      style_indices: &mut Vec<u32>,
@@ -230,10 +232,21 @@ pub(crate) fn itemize(
                 [offsets[scalar_start]..offsets.get(scalar_end).copied().unwrap_or(text.len())];
             let mut prepared = FontCluster::new(cluster);
             let mut matched = HashMap::new();
-            scalars[scalar_start].grapheme_start = breaks
-                .graphemes
-                .binary_search(&scalars[scalar_start].offset)
-                .is_ok();
+            let grapheme_offset = scalars[scalar_start].offset;
+            while let Some(&cut) = breaks.graphemes.get(grapheme_cursor) {
+                #[cfg(test)]
+                tests::record_paragraph_grapheme_comparison();
+                if cut >= grapheme_offset {
+                    break;
+                }
+                grapheme_cursor += 1;
+            }
+            scalars[scalar_start].grapheme_start =
+                breaks.graphemes.get(grapheme_cursor).is_some_and(|cut| {
+                    #[cfg(test)]
+                    tests::record_paragraph_grapheme_comparison();
+                    *cut == grapheme_offset
+                });
             let mut part_start = scalar_start;
             while part_start < scalar_end {
                 let style = style_indices[part_start];
@@ -476,11 +489,37 @@ mod tests {
             std::cell::Cell::new(0)
         };
         static SHARED_CUT_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        static SHARED_SCALAR_COMPARISONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        static PARAGRAPH_GRAPHEME_COMPARISONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
         static REPAIRED_SCALARS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     }
 
     pub(super) fn record_shared_cut() {
         SHARED_CUT_VISITS.with(|visits| visits.set(visits.get() + 1));
+    }
+
+    pub(super) fn record_shared_scalar_comparison() {
+        SHARED_SCALAR_COMPARISONS.with(|count| count.set(count.get() + 1));
+    }
+
+    pub(super) fn reset_shared_scalar_comparisons() {
+        SHARED_SCALAR_COMPARISONS.with(|count| count.set(0));
+    }
+
+    pub(super) fn shared_scalar_comparisons() -> usize {
+        SHARED_SCALAR_COMPARISONS.with(std::cell::Cell::get)
+    }
+
+    pub(super) fn record_paragraph_grapheme_comparison() {
+        PARAGRAPH_GRAPHEME_COMPARISONS.with(|count| count.set(count.get() + 1));
+    }
+
+    fn reset_paragraph_grapheme_comparisons() {
+        PARAGRAPH_GRAPHEME_COMPARISONS.with(|count| count.set(0));
+    }
+
+    fn paragraph_grapheme_comparisons() -> usize {
+        PARAGRAPH_GRAPHEME_COMPARISONS.with(std::cell::Cell::get)
     }
 
     pub(super) fn record_repaired_scalar() {
@@ -518,6 +557,32 @@ mod tests {
         build(&style, |builder| {
             builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
         })
+    }
+
+    #[test]
+    fn paragraph_grapheme_start_matching_uses_linear_comparisons() {
+        for scalar_count in [1_024, 4_096, 16_384] {
+            let text = "a".repeat(scalar_count);
+            reset_paragraph_grapheme_comparisons();
+
+            let paragraph = paragraph(WritingMode::HorizontalTb, &text);
+
+            assert_eq!(paragraph.text(), text);
+            let grapheme_starts: Vec<_> = paragraph
+                .data
+                .shape_items
+                .iter()
+                .flat_map(|item| item.scalars.iter())
+                .map(|scalar| scalar.grapheme_start)
+                .collect();
+            assert_eq!(grapheme_starts.len(), scalar_count);
+            assert!(grapheme_starts.iter().all(|&is_start| is_start));
+            let comparisons = paragraph_grapheme_comparisons();
+            assert!(
+                comparisons <= scalar_count * 3,
+                "{scalar_count} scalars required {comparisons} paragraph-grapheme comparisons"
+            );
+        }
     }
 
     fn build(style: &ParagraphStyle, add: impl FnOnce(&mut ParagraphBuilder)) -> Paragraph {
