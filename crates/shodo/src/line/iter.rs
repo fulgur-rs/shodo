@@ -8,6 +8,37 @@ mod summary_tests;
 impl Paragraph {
     /// Greedy layout at a fixed width, treating floats as zero-width anchors.
     /// Blocks split lines but do not contribute a block extent here.
+    ///
+    /// Use [`Self::lines`] or [`Self::next_line`] for changing widths, height
+    /// constraints or actual float placement. This method collects accepted
+    /// lines into a `Vec`; it does not apply a [`crate::BreakPlan`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use shodo::font::{FontCollection, FontOptions};
+    /// use shodo::limits::Limits;
+    /// use shodo::style::{LineOptions, ParagraphStyle};
+    /// use shodo::{AtomicSizes, LayoutContext, RichText};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let style = ParagraphStyle::default();
+    /// let fonts = FontCollection::with_options(&Limits::default(), FontOptions {
+    ///     system_fonts: false, ..Default::default()
+    /// });
+    /// let mut cx = LayoutContext::new();
+    /// let paragraph = RichText::new(&style)
+    ///     .push("Hello world", &style.root)
+    ///     .build(&mut cx, &fonts)?;
+    /// let lines = paragraph.break_all(
+    ///     &mut cx, &LineOptions::default(), 80.0, &AtomicSizes::EMPTY,
+    /// );
+    /// assert!(!lines.is_empty());
+    /// for line in &lines {
+    ///     println!("{}", &line.text()[line.text_range()]);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn break_all(
         &self,
         cx: &mut LayoutContext,
@@ -156,6 +187,63 @@ impl Paragraph {
     /// the paragraph's float cursor, roll back external state on withdrawal,
     /// and retry an over-tall first-page line with no height limit. A callback
     /// that repeats an unsatisfiable constraint retries indefinitely.
+    ///
+    /// # Progress requirements
+    ///
+    /// `previous` can be a line, a block boundary, a float request or a height
+    /// rejection. A float request must update
+    /// [`LineConstraint::floats_placed_through`] and the available strip; a
+    /// height rejection must change the available block space. For explicit
+    /// page checkpoints and placement rollback, prefer [`Self::next_line`].
+    /// The iterator's accumulated height includes accepted lines; the caller
+    /// adds external block extents and chooses the constraint's block offset.
+    ///
+    /// # Examples
+    ///
+    /// Change the available width after the first accepted line. This input
+    /// has no floats, block boundaries or page-height limit:
+    ///
+    /// ```
+    /// use shodo::font::{FontCollection, FontOptions};
+    /// use shodo::limits::Limits;
+    /// use shodo::style::{LineOptions, ParagraphStyle};
+    /// use shodo::{AtomicSizes, LayoutContext, LineConstraint, LineResult, RichText};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let style = ParagraphStyle::default();
+    /// let fonts = FontCollection::with_options(&Limits::default(), FontOptions {
+    ///     system_fonts: false, ..Default::default()
+    /// });
+    /// let mut cx = LayoutContext::new();
+    /// let paragraph = RichText::new(&style)
+    ///     .push("A paragraph with several wrapped lines", &style.root)
+    ///     .build(&mut cx, &fonts)?;
+    /// let options = LineOptions::default();
+    /// let atomics = AtomicSizes::EMPTY;
+    /// let results = paragraph.lines(
+    ///     &mut cx, paragraph.start_token(), &options,
+    ///     |_, height| {
+    ///         let width = if height == 0.0 { 80.0 } else { 160.0 };
+    ///         let mut constraint = LineConstraint::new(width);
+    ///         constraint.block_offset = height;
+    ///         constraint
+    ///     },
+    ///     &atomics,
+    /// );
+    /// let mut accepted = 0;
+    /// for result in results {
+    ///     match result {
+    ///         LineResult::Line(line) => {
+    ///             println!("{}", &line.text()[line.text_range()]);
+    ///             accepted += 1;
+    ///         }
+    ///         LineResult::Done => break,
+    ///         other => return Err(format!("unexpected layout result: {other:?}").into()),
+    ///     }
+    /// }
+    /// assert!(accepted > 1);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn lines<'p, 'cx, F>(
         &'p self,
         cx: &'cx mut LayoutContext,
