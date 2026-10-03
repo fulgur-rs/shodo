@@ -702,21 +702,7 @@ impl FontCollection {
             candidate.color = is_color(&font);
             true
         });
-        candidates.sort_by(|a, b| {
-            let rank = |c: &Candidate| {
-                (
-                    u8::from(c.color != color),
-                    range_rank(query.width, c.descriptor.width, 100.),
-                    style_rank(query.style, c.descriptor.style),
-                    weight_rank(query.weight, c.descriptor.weight),
-                )
-            };
-            rank(a)
-                .partial_cmp(&rank(b))
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| a.order_cmp(b))
-        });
-        let mut selected = candidates.into_iter().next()?;
+        let mut selected = best_candidate(candidates, query, color)?;
         if selected.id.index == u32::MAX {
             let mut state = self.state();
             let source = selected.info.source().id();
@@ -972,6 +958,47 @@ fn prefer_color(presentation: FontPresentation, cluster: &str) -> bool {
         }
     }
 }
+/// One candidate's CSS Fonts 4 §5.2 rank: color presentation first, then the
+/// width, style, and weight pivots.
+type MatchRank = (u8, (u8, f32), (u8, f32), (u8, f32));
+fn match_rank(candidate: &Candidate, query: &FontQuery, color: bool) -> MatchRank {
+    #[cfg(test)]
+    matching_tests::record_rank();
+    (
+        u8::from(candidate.color != color),
+        range_rank(query.width, candidate.descriptor.width, 100.),
+        style_rank(query.style, candidate.descriptor.style),
+        weight_rank(query.weight, candidate.descriptor.weight),
+    )
+}
+/// Selects the head that a stable sort of the survivors produced, without
+/// ordering them: the sort's scratch buffer and its discarded comparison
+/// results are pure overhead when only the head is used. Equal ranks keep the
+/// earlier candidate, as the stable sort did.
+fn best_candidate(
+    mut candidates: Vec<Candidate>,
+    query: &FontQuery,
+    color: bool,
+) -> Option<Candidate> {
+    let mut best = 0;
+    let mut best_rank = match_rank(candidates.first()?, query, color);
+    // Scan by index: a candidate is large, and replacing the running best must
+    // not copy one per improvement.
+    for (index, candidate) in candidates.iter().enumerate().skip(1) {
+        let rank = match_rank(candidate, query, color);
+        let better = rank
+            .partial_cmp(&best_rank)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| candidate.order_cmp(&candidates[best]))
+            == std::cmp::Ordering::Less;
+        if better {
+            best = index;
+            best_rank = rank;
+        }
+    }
+    // The unselected candidates drop in an unspecified order either way.
+    Some(candidates.swap_remove(best))
+}
 // CSS Fonts search direction around a pivot (width=100%; weight special below).
 fn range_rank(requested: f32, (min, max): (f32, f32), pivot: f32) -> (u8, f32) {
     if (min..=max).contains(&requested) {
@@ -1043,6 +1070,9 @@ fn style_rank(requested: FontStyle, available: FontStyle) -> (u8, f32) {
 
 #[cfg(test)]
 mod matching_tests;
+
+#[cfg(test)]
+mod selection_tests;
 
 #[cfg(test)]
 mod retention_tests;
