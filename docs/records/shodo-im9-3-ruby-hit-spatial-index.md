@@ -12,12 +12,12 @@ Before uses `cfad161bb0a2cac935c7ab436bd4cdd5dfab0944`. After uses the `shodo-im
 
 | Visible annotations | Build µs before → after | Ruby hit ns before → after | Ruby miss ns before → after | Body hit ns before → after | Main miss ns before → after |
 |---:|---:|---:|---:|---:|---:|
-| 16 | 11.960 → 12.279 | 662 → 114 | 544 → 10 | 708 → 90 | 625 → 73 |
-| 64 | 53.566 → 55.255 | 2,971 → 127 | 2,614 → 10 | 2,954 → 123 | 2,742 → 94 |
-| 256 | 217.867 → 230.740 | 15,875 → 144 | 12,221 → 10 | 14,232 → 147 | 13,385 → 112 |
-| 1,024 | 851.331 → 928.514 | 60,537 → 162 | 52,401 → 10 | 56,905 → 172 | 52,439 → 134 |
+| 16 | 11.960 → 12.318 | 662 → 111 | 544 → 10 | 708 → 91 | 625 → 73 |
+| 64 | 53.566 → 57.146 | 2,971 → 127 | 2,614 → 10 | 2,954 → 121 | 2,742 → 93 |
+| 256 | 217.867 → 236.638 | 15,875 → 143 | 12,221 → 10 | 14,232 → 147 | 13,385 → 116 |
+| 1,024 | 851.331 → 974.228 | 60,537 → 156 | 52,401 → 10 | 56,905 → 172 | 52,439 → 138 |
 
-The candidate-visit regression covers R=16/64/256/1024: a separated annotation hit invokes one exact annotation check, a distant miss invokes zero, and a body hit outside ruby bounds invokes zero. The tree is balanced and prunes disjoint bounds; overlapping bounds can still require O(R) exact checks.
+The candidate-visit regression covers R=16/64/256/1024: a separated annotation hit invokes one exact annotation check, a distant miss invokes zero, and a body hit outside ruby bounds invokes zero. A second regression interleaves block-axis positions in bit-reversal order while keeping inline bounds equal. It checks tree-node visits for both a hit and a gap miss; the previous inline-only split fails this case. The adaptive tree splits each subtree along its wider center-coordinate spread. Overlapping bounds can still require O(R) exact checks.
 
 | Visible annotations | Build retained bytes before → after (delta) | Build peak extra bytes before → after (delta) |
 |---:|---:|---:|

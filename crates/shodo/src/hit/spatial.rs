@@ -44,6 +44,12 @@ impl Bounds {
             block_size: self.bottom - self.top,
         }
     }
+    fn center_inline(self) -> f64 {
+        f64::from(self.left) + f64::from(self.right)
+    }
+    fn center_block(self) -> f64 {
+        f64::from(self.top) + f64::from(self.bottom)
+    }
 }
 struct Node {
     bounds: Bounds,
@@ -78,6 +84,19 @@ impl Tree {
         }
         tree
     }
+    pub(super) fn new_adaptive(rects: impl Iterator<Item = (usize, LogicalRect)>) -> Self {
+        let mut rects: Vec<_> = rects.map(|(i, r)| (i, Bounds::rect(r))).collect();
+        let mut tree = Self {
+            nodes: Vec::with_capacity(rects.len().saturating_mul(2)),
+            root: None,
+            #[cfg(test)]
+            visits: Default::default(),
+        };
+        if !rects.is_empty() {
+            tree.root = Some(tree.build_adaptive(&mut rects));
+        }
+        tree
+    }
     fn build(&mut self, rects: &[(usize, Bounds)]) -> usize {
         let node = if rects.len() == 1 {
             Node {
@@ -101,10 +120,69 @@ impl Tree {
         self.nodes.push(node);
         index
     }
+    fn build_adaptive(&mut self, rects: &mut [(usize, Bounds)]) -> usize {
+        let node = if rects.len() == 1 {
+            Node {
+                bounds: rects[0].1,
+                children: None,
+                value: rects[0].0,
+                max_value: rects[0].0,
+            }
+        } else {
+            let mid = rects.len() / 2;
+            let (min_inline, max_inline, min_block, max_block) = rects.iter().fold(
+                (
+                    f64::INFINITY,
+                    f64::NEG_INFINITY,
+                    f64::INFINITY,
+                    f64::NEG_INFINITY,
+                ),
+                |(min_inline, max_inline, min_block, max_block), (_, bounds)| {
+                    let inline = bounds.center_inline();
+                    let block = bounds.center_block();
+                    (
+                        min_inline.min(inline),
+                        max_inline.max(inline),
+                        min_block.min(block),
+                        max_block.max(block),
+                    )
+                },
+            );
+            let split_block = max_block - min_block > max_inline - min_inline;
+            if split_block {
+                rects.select_nth_unstable_by(mid, |a, b| {
+                    a.1.center_block().total_cmp(&b.1.center_block())
+                });
+            } else {
+                rects.select_nth_unstable_by(mid, |a, b| {
+                    a.1.center_inline().total_cmp(&b.1.center_inline())
+                });
+            };
+            let left = self.build_adaptive(&mut rects[..mid]);
+            let right = self.build_adaptive(&mut rects[mid..]);
+            Node {
+                bounds: self.nodes[left].bounds.union(self.nodes[right].bounds),
+                children: Some((left, right)),
+                value: 0,
+                max_value: self.nodes[left].max_value.max(self.nodes[right].max_value),
+            }
+        };
+        let index = self.nodes.len();
+        self.nodes.push(node);
+        index
+    }
     fn visit(&self) {
         #[cfg(test)]
         self.visits
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+    #[cfg(test)]
+    pub(super) fn reset_visits(&self) {
+        self.visits.store(0, std::sync::atomic::Ordering::Relaxed);
+    }
+    #[cfg(test)]
+    pub(super) fn visit_count(&self) -> usize {
+        self.visits.load(std::sync::atomic::Ordering::Relaxed)
     }
     pub(super) fn contains(&self, x: f32, y: f32) -> bool {
         self.root.is_some_and(|r| self.contains_node(r, x, y))

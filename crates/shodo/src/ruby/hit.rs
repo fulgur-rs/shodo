@@ -206,6 +206,20 @@ mod tests {
             .collect();
     }
 
+    fn spread_block_siblings(lines: &mut [crate::Line], count: usize) {
+        let seed = lines[0].ruby[0].clone();
+        let bits = count.trailing_zeros();
+        lines[0].ruby = (0..count)
+            .map(|index| {
+                let mut annotation = seed.clone();
+                annotation.container = crate::node::NodeId(6000 + index as u64);
+                let spatial_rank = index.reverse_bits() >> (usize::BITS - bits);
+                annotation.transform.block_offset = spatial_rank as f32 * 100.0;
+                annotation
+            })
+            .collect();
+    }
+
     #[test]
     fn sparse_sibling_hit_miss_and_body_queries_visit_only_spatial_candidates() {
         for count in [16, 64, 256, 1024] {
@@ -241,6 +255,44 @@ mod tests {
                 VISITS.with(|visits| visits.get()),
                 0,
                 "a body hit outside ruby bounds should test no annotation for R={count}"
+            );
+        }
+    }
+
+    #[test]
+    fn sparse_block_siblings_prune_interleaved_vertical_bounds() {
+        for count in [16, 64, 256, 1024] {
+            let (mut lines, _) = fixture::fixture(1, &Default::default()).unwrap();
+            spread_block_siblings(&mut lines, count);
+            let layout = LineLayout::new(&lines);
+            let first = lines[0].ruby_annotations().next().unwrap();
+            let base = parent_point(first, body_point(first.line()));
+            let max_node_visits = 4 * count.ilog2() as usize + 4;
+
+            VISITS.with(|visits| visits.set(0));
+            layout.reset_ruby_spatial_visits();
+            let hit = layout
+                .hit_test_ruby(base.0, base.1 + lines[0].block_offset())
+                .unwrap();
+            assert_eq!(hit.annotation.container().0, 6000);
+            assert_eq!(VISITS.with(|visits| visits.get()), 1);
+            assert!(
+                layout.ruby_spatial_visits() <= max_node_visits,
+                "a separated annotation hit should visit O(log R) tree nodes for R={count}"
+            );
+
+            let gap = count as f32 / 2.0 * 100.0 + 50.0;
+            VISITS.with(|visits| visits.set(0));
+            layout.reset_ruby_spatial_visits();
+            assert!(
+                layout
+                    .hit_test_ruby(base.0, base.1 + gap + lines[0].block_offset())
+                    .is_none()
+            );
+            assert_eq!(VISITS.with(|visits| visits.get()), 0);
+            assert!(
+                layout.ruby_spatial_visits() <= max_node_visits,
+                "a miss in an interleaved gap should visit O(log R) tree nodes for R={count}"
             );
         }
     }

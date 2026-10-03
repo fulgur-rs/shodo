@@ -109,7 +109,7 @@ impl<'a> LineLayout<'a> {
                 None => {}
             }
         }
-        let ruby_spatial = spatial::Tree::new(ruby_rects.into_iter(), false);
+        let ruby_spatial = spatial::Tree::new_adaptive(ruby_rects.into_iter());
         Self {
             index,
             ruby,
@@ -181,6 +181,16 @@ impl<'a> LineLayout<'a> {
             }
         }
         indexed
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reset_ruby_spatial_visits(&self) {
+        self.ruby_spatial.reset_visits();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn ruby_spatial_visits(&self) -> usize {
+        self.ruby_spatial.visit_count()
     }
 
     pub(crate) fn hit_bounds(&self) -> Option<LogicalRect> {
