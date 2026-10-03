@@ -16,6 +16,13 @@ use std::sync::Arc;
 
 use std::ops::Range;
 
+#[cfg(test)]
+std::thread_local! {
+    pub(super) static HARFRUST_SHAPE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(super) static COMBINED_WIDTH_GROUP_CLONE_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(super) static COMBINED_WIDTH_TRIAL_STORE_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 use crate::font::FontId;
 use crate::geometry::{LayoutUnit, Saturation, WritingMode};
 use crate::limits::{LimitExceeded, LimitKind, Limits};
@@ -107,6 +114,27 @@ pub(crate) struct ShapedRun {
     pub(crate) instance: Arc<RunInstance>,
 }
 
+#[cfg(test)]
+fn trial_storage_capacity_bytes(store: &GlyphStore, run_capacity: usize) -> usize {
+    use std::mem::size_of;
+
+    let mut bytes = store.id.capacity() * size_of::<u32>()
+        + store.advance.capacity() * size_of::<LayoutUnit>()
+        + store.pen.capacity() * size_of::<LayoutUnit>()
+        + store.offset_inline.capacity() * size_of::<LayoutUnit>()
+        + store.offset_block.capacity() * size_of::<LayoutUnit>()
+        + store.cluster.capacity() * size_of::<u32>()
+        + store.flags.capacity() * size_of::<u8>()
+        + run_capacity * size_of::<ShapedRun>();
+    if let Some(spacing) = &store.spacing {
+        bytes += spacing.capacity() * size_of::<LayoutUnit>();
+    }
+    if let Some(leading) = &store.leading {
+        bytes += leading.capacity() * size_of::<LayoutUnit>();
+    }
+    bytes
+}
+
 /// Prove applicable width-feature coverage through the selected font/script/
 /// language/variation instance. A feature must change every visible source
 /// character; otherwise keep the complete composition on its ordinary glyphs.
@@ -152,7 +180,7 @@ pub(crate) fn select_combined_widths(
         }
         let mut warnings = crate::limits::WarningSink::new(limits.max_warnings);
         let mut sat = Saturation::default();
-        let Ok((plain, _)) = shape_items(
+        let Ok((plain, _plain_runs)) = shape_items(
             cx,
             group,
             styles,
@@ -165,11 +193,32 @@ pub(crate) fn select_combined_widths(
             begin = end;
             continue;
         };
+        #[cfg(test)]
+        COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| {
+            bytes.set(
+                bytes
+                    .get()
+                    .saturating_add(trial_storage_capacity_bytes(&plain, _plain_runs.capacity())),
+            );
+        });
+        #[cfg(test)]
+        COMBINED_WIDTH_GROUP_CLONE_BYTES.with(|bytes| {
+            let cloned = std::mem::size_of_val(group)
+                + group
+                    .iter()
+                    .map(|item| {
+                        item.scalars.len() * size_of::<crate::analysis::itemize::Scalar>()
+                            + item.before.len()
+                            + item.after.len()
+                    })
+                    .sum::<usize>();
+            bytes.set(bytes.get().saturating_add(cloned));
+        });
         let mut candidate = group.to_vec();
         for item in &mut candidate {
             item.width_feature = Some(tag);
         }
-        let Ok((narrow, _)) = shape_items(
+        let Ok((narrow, _narrow_runs)) = shape_items(
             cx,
             &candidate,
             styles,
@@ -182,6 +231,13 @@ pub(crate) fn select_combined_widths(
             begin = end;
             continue;
         };
+        #[cfg(test)]
+        COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| {
+            bytes.set(bytes.get().saturating_add(trial_storage_capacity_bytes(
+                &narrow,
+                _narrow_runs.capacity(),
+            )));
+        });
         starts.push(group.last().unwrap().end);
         let covered = starts.windows(2).all(|range| {
             let a = plain.cluster.partition_point(|offset| *offset < range[0])
@@ -202,6 +258,363 @@ pub(crate) fn select_combined_widths(
             }
         }
         begin = end;
+    }
+}
+
+/// Shape an unscoped paragraph while consuming each selected width-feature
+/// trial directly into its retained output. Ruby base scopes use the regular
+/// paragraph path because their local glyph and run-byte budgets change the
+/// accounting boundaries.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn shape_items_with_combined_width_reuse(
+    cx: &mut crate::LayoutContext,
+    items: &mut [crate::analysis::itemize::ShapeItem],
+    styles: &[crate::style::InlineStyle],
+    fonts: &crate::font::FontCollection,
+    mode: WritingMode,
+    limits: &Limits,
+    warnings: &mut crate::limits::WarningSink,
+    sat: &mut Saturation,
+    feature_sets: &mut FeatureSets,
+) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
+    let mut glyphs = GlyphStore::default();
+    let mut runs = Vec::new();
+    let mut cursor = 0;
+
+    while cursor < items.len() {
+        let Some((start, end, tag, starts)) = next_combined_width_group(items, cursor) else {
+            let (rest, rest_runs) = shape_inputs(
+                cx,
+                items[cursor..].iter().map(input::ShapeInput::whole),
+                styles,
+                fonts,
+                mode,
+                limits,
+                warnings,
+                sat,
+                None,
+                feature_sets,
+                glyphs.len() as u64,
+            )?;
+            append_shape_output(&mut glyphs, &mut runs, rest, rest_runs);
+            break;
+        };
+
+        if start > cursor {
+            let (prefix, prefix_runs) = shape_inputs(
+                cx,
+                items[cursor..start].iter().map(input::ShapeInput::whole),
+                styles,
+                fonts,
+                mode,
+                limits,
+                warnings,
+                sat,
+                None,
+                feature_sets,
+                glyphs.len() as u64,
+            )?;
+            append_shape_output(&mut glyphs, &mut runs, prefix, prefix_runs);
+        }
+
+        let selection = {
+            let group = &items[start..end];
+            try_shape_combined_width_group(
+                cx,
+                group,
+                &starts,
+                tag,
+                styles,
+                fonts,
+                mode,
+                limits,
+                feature_sets,
+            )
+        };
+
+        if let Some(selection) = selection {
+            if selection.use_width_feature {
+                for item in &mut items[start..end] {
+                    item.width_feature = Some(tag);
+                    feature_sets.retain_width_feature(item, tag);
+                }
+            } else {
+                for item in &items[start..end] {
+                    feature_sets.discard_unselected_width_feature(item, tag);
+                }
+            }
+
+            // The independent trial limit starts at zero. If its selected
+            // output would cross the paragraph limit, shape this group through
+            // the ordinary global-counting path to preserve the exact failing
+            // run and LimitExceeded.actual value.
+            let group_exceeds_limit = limits
+                .max_shaped_glyphs
+                .is_some_and(|max| glyphs.len() as u64 + selection.glyphs.len() as u64 > max);
+            if group_exceeds_limit {
+                let (group_glyphs, group_runs) = shape_inputs(
+                    cx,
+                    items[start..end].iter().map(input::ShapeInput::whole),
+                    styles,
+                    fonts,
+                    mode,
+                    limits,
+                    warnings,
+                    sat,
+                    None,
+                    feature_sets,
+                    glyphs.len() as u64,
+                )?;
+                append_shape_output(&mut glyphs, &mut runs, group_glyphs, group_runs);
+            } else {
+                warnings.append(selection.warnings);
+                sat.saturated += selection.saturation.saturated;
+                sat.non_finite += selection.saturation.non_finite;
+                append_shape_output(&mut glyphs, &mut runs, selection.glyphs, selection.runs);
+            }
+        } else {
+            let (group_glyphs, group_runs) = shape_inputs(
+                cx,
+                items[start..end].iter().map(input::ShapeInput::whole),
+                styles,
+                fonts,
+                mode,
+                limits,
+                warnings,
+                sat,
+                None,
+                feature_sets,
+                glyphs.len() as u64,
+            )?;
+            append_shape_output(&mut glyphs, &mut runs, group_glyphs, group_runs);
+        }
+        cursor = end;
+    }
+
+    Ok((glyphs, runs))
+}
+
+struct CombinedWidthSelection {
+    glyphs: GlyphStore,
+    runs: Vec<ShapedRun>,
+    warnings: crate::limits::WarningSink,
+    saturation: Saturation,
+    use_width_feature: bool,
+}
+
+fn next_combined_width_group(
+    items: &[crate::analysis::itemize::ShapeItem],
+    mut cursor: usize,
+) -> Option<(usize, usize, [u8; 4], Vec<u32>)> {
+    while cursor < items.len() {
+        let Some(combine) = items[cursor].combine else {
+            cursor += 1;
+            continue;
+        };
+        let mut end = cursor + 1;
+        while end < items.len() && items[end].combine == Some(combine) {
+            end += 1;
+        }
+        let group = &items[cursor..end];
+        if group.iter().any(|item| item.font.is_none()) {
+            cursor = end;
+            continue;
+        }
+        let mut starts: Vec<_> = group
+            .iter()
+            .flat_map(|item| item.scalars.iter())
+            .filter(|scalar| scalar.grapheme_start)
+            .map(|scalar| scalar.offset)
+            .collect();
+        starts.sort_unstable();
+        starts.dedup();
+        let tag = match starts.len() {
+            2 => *b"hwid",
+            3 => *b"twid",
+            4 => *b"qwid",
+            _ => {
+                cursor = end;
+                continue;
+            }
+        };
+        return Some((cursor, end, tag, starts));
+    }
+    None
+}
+
+#[allow(clippy::too_many_arguments)]
+fn try_shape_combined_width_group(
+    cx: &mut crate::LayoutContext,
+    group: &[crate::analysis::itemize::ShapeItem],
+    starts: &[u32],
+    tag: [u8; 4],
+    styles: &[crate::style::InlineStyle],
+    fonts: &crate::font::FontCollection,
+    mode: WritingMode,
+    limits: &Limits,
+    feature_sets: &mut FeatureSets,
+) -> Option<CombinedWidthSelection> {
+    for item in group {
+        feature_sets.prepare_width_feature(item, styles, tag);
+    }
+
+    let mut plain_warnings = crate::limits::WarningSink::new(limits.max_warnings);
+    let mut plain_saturation = Saturation::default();
+    let Ok((plain, plain_runs)) = shape_inputs(
+        cx,
+        group
+            .iter()
+            .map(|item| input::ShapeInput::whole(item).with_width_feature(None)),
+        styles,
+        fonts,
+        mode,
+        limits,
+        &mut plain_warnings,
+        &mut plain_saturation,
+        None,
+        feature_sets,
+        0,
+    ) else {
+        for item in group {
+            feature_sets.discard_unselected_width_feature(item, tag);
+        }
+        return None;
+    };
+    #[cfg(test)]
+    COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| {
+        bytes.set(
+            bytes
+                .get()
+                .saturating_add(trial_storage_capacity_bytes(&plain, plain_runs.capacity())),
+        );
+    });
+
+    let mut narrow_warnings = crate::limits::WarningSink::new(limits.max_warnings);
+    let mut narrow_saturation = Saturation::default();
+    let narrow_result = shape_inputs(
+        cx,
+        group
+            .iter()
+            .map(|item| input::ShapeInput::whole(item).with_width_feature(Some(tag))),
+        styles,
+        fonts,
+        mode,
+        limits,
+        &mut narrow_warnings,
+        &mut narrow_saturation,
+        None,
+        feature_sets,
+        0,
+    );
+
+    let Some((narrow, narrow_runs)) = narrow_result.ok() else {
+        for item in group {
+            feature_sets.discard_unselected_width_feature(item, tag);
+        }
+        return Some(CombinedWidthSelection {
+            glyphs: plain,
+            runs: plain_runs,
+            warnings: plain_warnings,
+            saturation: plain_saturation,
+            use_width_feature: false,
+        });
+    };
+    #[cfg(test)]
+    COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| {
+        bytes.set(bytes.get().saturating_add(trial_storage_capacity_bytes(
+            &narrow,
+            narrow_runs.capacity(),
+        )));
+    });
+
+    let group_end = group.last().expect("nonempty combined group").end;
+    let covered = starts.iter().enumerate().all(|(index, start)| {
+        let end = starts.get(index + 1).copied().unwrap_or(group_end);
+        let plain_range = plain.cluster.partition_point(|offset| *offset < *start)
+            ..plain.cluster.partition_point(|offset| *offset < end);
+        let narrow_range = narrow.cluster.partition_point(|offset| *offset < *start)
+            ..narrow.cluster.partition_point(|offset| *offset < end);
+        if plain_range.is_empty() || narrow_range.is_empty() {
+            return false;
+        }
+        let visible = plain.advance[plain_range.clone()]
+            .iter()
+            .any(|advance| advance.raw() != 0);
+        !visible || plain.id[plain_range] != narrow.id[narrow_range]
+    });
+
+    if covered {
+        Some(CombinedWidthSelection {
+            glyphs: narrow,
+            runs: narrow_runs,
+            warnings: narrow_warnings,
+            saturation: narrow_saturation,
+            use_width_feature: true,
+        })
+    } else {
+        for item in group {
+            feature_sets.discard_unselected_width_feature(item, tag);
+        }
+        Some(CombinedWidthSelection {
+            glyphs: plain,
+            runs: plain_runs,
+            warnings: plain_warnings,
+            saturation: plain_saturation,
+            use_width_feature: false,
+        })
+    }
+}
+
+fn append_shape_output(
+    target: &mut GlyphStore,
+    target_runs: &mut Vec<ShapedRun>,
+    mut source: GlyphStore,
+    mut source_runs: Vec<ShapedRun>,
+) {
+    if target.len() == 0
+        && target_runs.is_empty()
+        && target.spacing.is_none()
+        && target.leading.is_none()
+    {
+        *target = source;
+        *target_runs = source_runs;
+        return;
+    }
+    let old_len = target.len();
+    let added_len = source.len();
+    let glyph_offset = old_len as u32;
+    for run in &mut source_runs {
+        run.glyphs.start += glyph_offset;
+        run.glyphs.end += glyph_offset;
+    }
+    target.id.append(&mut source.id);
+    target.advance.append(&mut source.advance);
+    target.pen.append(&mut source.pen);
+    target.offset_inline.append(&mut source.offset_inline);
+    target.offset_block.append(&mut source.offset_block);
+    target.cluster.append(&mut source.cluster);
+    target.flags.append(&mut source.flags);
+    append_optional_layout_values(&mut target.spacing, source.spacing, old_len, added_len);
+    append_optional_layout_values(&mut target.leading, source.leading, old_len, added_len);
+    target_runs.append(&mut source_runs);
+}
+
+fn append_optional_layout_values(
+    target: &mut Option<Vec<LayoutUnit>>,
+    source: Option<Vec<LayoutUnit>>,
+    old_len: usize,
+    added_len: usize,
+) {
+    match (target, source) {
+        (Some(target), Some(mut source)) => target.append(&mut source),
+        (Some(target), None) => target.resize(old_len + added_len, LayoutUnit::ZERO),
+        (target @ None, Some(mut source)) => {
+            let mut combined = Vec::with_capacity(old_len + added_len);
+            combined.resize(old_len, LayoutUnit::ZERO);
+            combined.append(&mut source);
+            *target = Some(combined);
+        }
+        (None, None) => {}
     }
 }
 
@@ -256,6 +669,7 @@ pub(crate) fn shape_items_with_base_scopes(
         sat,
         bases,
         feature_sets,
+        0,
     )
 }
 
@@ -271,6 +685,7 @@ fn shape_inputs<'a>(
     sat: &mut Saturation,
     mut bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
     feature_sets: &FeatureSets,
+    glyph_offset: u64,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
     cx.bound_shaping_scratch(limits);
     let mut store = GlyphStore::default();
@@ -278,7 +693,7 @@ fn shape_inputs<'a>(
     for input in items {
         let original = input.original;
         let style = &styles[original.style as usize];
-        let features = feature_sets.get(original);
+        let features = feature_sets.get(original, input.width_feature);
         let font_data = original.font.as_ref().map(|found| {
             fonts
                 .font_data(found.id)
@@ -373,6 +788,7 @@ fn shape_inputs<'a>(
                         style.font_size,
                         limits,
                         sat,
+                        glyph_offset,
                     )?;
                     *store.id.last_mut().unwrap() = 0;
                     let mut current = runs.pop().unwrap();
@@ -479,10 +895,12 @@ fn shape_inputs<'a>(
                     .features(features)
                     .plan(Some(&plan)),
             );
+            #[cfg(test)]
+            HARFRUST_SHAPE_CALLS.with(|calls| calls.set(calls.get() + 1));
             Limits::check(
                 limits.max_shaped_glyphs,
                 LimitKind::ShapedGlyphs,
-                store.len() as u64 + shaped.len() as u64,
+                glyph_offset + store.len() as u64 + shaped.len() as u64,
             )?;
             if let Some(bases) = &mut bases {
                 // Ruby boundaries/isolation delimit shaping segments; transparent
@@ -769,6 +1187,7 @@ pub(crate) fn shape_item(
     font_size: f32,
     limits: &Limits,
     sat: &mut Saturation,
+    glyph_offset: u64,
 ) -> Result<(), LimitExceeded> {
     let em = LayoutUnit::from_f32_round(font_size, sat);
     let half_em = em.div_i32(2);
@@ -779,7 +1198,7 @@ pub(crate) fn shape_item(
         Limits::check(
             limits.max_shaped_glyphs,
             LimitKind::ShapedGlyphs,
-            store.len() as u64 + 1,
+            glyph_offset + store.len() as u64 + 1,
         )?;
         let mark = is_mark(c);
         let advance = if mark
@@ -924,6 +1343,7 @@ pub(crate) fn shape_window_edit(
             sat,
             None,
             &data.shape_features,
+            0,
         )
     } else {
         let mut items: Vec<crate::analysis::itemize::ShapeItem> = Vec::new();

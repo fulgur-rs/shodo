@@ -43,6 +43,9 @@ harness = false
 name = "ruby_inputs"
 
 [[example]]
+name = "combined_width_trial"
+
+[[example]]
 name = "ruby_hit_index"
 
 [[example]]

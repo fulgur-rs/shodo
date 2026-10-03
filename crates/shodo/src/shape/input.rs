@@ -7,6 +7,7 @@ pub(super) struct ShapeInput<'a> {
     pub(super) scalars: &'a [Scalar],
     pub(super) before: Context<'a>,
     pub(super) after: Context<'a>,
+    pub(super) width_feature: Option<[u8; 4]>,
 }
 
 pub(super) enum Context<'a> {
@@ -38,7 +39,12 @@ impl<'a> ShapeInput<'a> {
             scalars: &original.scalars,
             before: Context::Borrowed(&original.before),
             after: Context::Borrowed(&original.after),
+            width_feature: original.width_feature,
         }
+    }
+    pub(super) fn with_width_feature(mut self, width_feature: Option<[u8; 4]>) -> Self {
+        self.width_feature = width_feature;
+        self
     }
     fn clipped(original: &'a ShapeItem, text: &Range<u32>) -> Option<Self> {
         let begin = original.scalars.partition_point(|s| s.offset < text.start);
@@ -68,6 +74,7 @@ impl<'a> ShapeInput<'a> {
                     .map(|s| s.c)
                     .chain(original.after.chars()),
             ),
+            width_feature: original.width_feature,
         })
     }
 }
