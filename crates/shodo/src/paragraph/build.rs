@@ -616,10 +616,7 @@ fn build_data(
         &shape_features,
     )?;
     let base_level = u8::from(used_direction == Direction::Rtl);
-    let style_metrics: Vec<_> = styles
-        .iter()
-        .map(|s| crate::line::font_metrics::resolve(fonts, s, warnings))
-        .collect();
+    let style_metrics = crate::line::font_metrics::resolve_styles(fonts, &styles, warnings);
     let combine_geometry = crate::analysis::combine::geometry(
         &processed.text,
         &processed.items,
@@ -898,5 +895,406 @@ fn sanitize_font_size(size: f32, warnings: &mut crate::limits::WarningSink) -> f
         MAX_FONT_SIZE
     } else {
         size
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::AtomicSizes;
+    use crate::font::{FontFaceDescriptor, FontId, FontOptions};
+    use crate::geometry::LogicalRect;
+    use crate::hit::{LineLayout, TextPosition};
+    use crate::limits::{Limits, WarningSink};
+    use crate::mapping::Affinity;
+    use crate::node::{NodeId, TextSource};
+    use crate::style::{
+        FontFamily, FontMetricKind, FontSizeAdjust, FontVariation, InlineStyle, LineOptions,
+        ParagraphStyle,
+    };
+
+    fn fonts() -> (FontCollection, FontId) {
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        let latin = fonts
+            .register_face(
+                crate::test_support::fonts::LATIN.to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: "Latin".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        (fonts, latin)
+    }
+
+    fn font_style(family: &str) -> InlineStyle {
+        InlineStyle {
+            font_families: vec![FontFamily::Named(family.into())],
+            ..Default::default()
+        }
+    }
+
+    fn build_paint_variants(count: usize, fonts: &FontCollection) -> crate::Paragraph {
+        let limits = Limits::default();
+        let mut root = font_style("Latin");
+        root.paint.color = [255, 0, 255, 255];
+        let paragraph_style = ParagraphStyle {
+            root: root.clone(),
+            ..Default::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&paragraph_style, &limits);
+        for i in 0..count {
+            let mut paint = root.clone();
+            paint.paint.color = [i as u8, (i >> 8) as u8, 17, 255];
+            let node = NodeId(i as u64 + 1);
+            builder
+                .open_inline(node, &paint, Default::default())
+                .push_text(TextSource::Generated { node }, "a")
+                .close_inline();
+        }
+        builder
+            .build(&mut crate::LayoutContext::new(), fonts)
+            .unwrap()
+    }
+
+    fn assert_metrics_equal(
+        actual: crate::line::font_metrics::StyleMetrics,
+        expected: crate::line::font_metrics::StyleMetrics,
+    ) {
+        assert_eq!(actual.font, expected.font);
+        assert_eq!(actual.size, expected.size);
+        assert_eq!(actual.metrics, expected.metrics);
+        assert_eq!(actual.vertical_metrics, expected.vertical_metrics);
+        assert_eq!(actual.space, expected.space);
+        assert_eq!(actual.ch, expected.ch);
+        assert_eq!(actual.ic, expected.ic);
+    }
+
+    fn assert_data_metrics_match(data: &crate::paragraph::ParagraphData, fonts: &FontCollection) {
+        assert_eq!(data.style_metrics.len(), data.styles.len());
+        let mut warnings = WarningSink::default();
+        for (style, actual) in data.styles.iter().zip(&data.style_metrics) {
+            let expected = crate::line::font_metrics::resolve(fonts, style, &mut warnings);
+            assert_metrics_equal(*actual, expected);
+        }
+        assert!(warnings.as_slice().is_empty());
+    }
+
+    fn pos(offset: u32) -> TextPosition {
+        TextPosition {
+            line: 0,
+            offset,
+            affinity: Affinity::Downstream,
+        }
+    }
+
+    #[test]
+    fn paint_only_styles_resolve_once_and_keep_geometry_and_paint() {
+        for count in [1, 64, 1024] {
+            let (fonts, _) = fonts();
+            crate::line::font_metrics::resolve_counts::reset();
+            let painted = build_paint_variants(count, &fonts);
+            let (resolves, _) = crate::line::font_metrics::resolve_counts::snapshot();
+            assert_eq!(resolves, 1, "paint-only styles={count}");
+            assert_data_metrics_match(&painted.data, &fonts);
+            assert!(painted.warnings().is_empty());
+
+            let text = "a".repeat(count);
+            let mut plain_style = ParagraphStyle::default();
+            plain_style.root = font_style("Latin");
+            let mut plain_builder = crate::ParagraphBuilder::new(&plain_style, &Limits::default());
+            plain_builder.push_text(
+                TextSource::Generated {
+                    node: NodeId(99_999),
+                },
+                &text,
+            );
+            let plain = plain_builder
+                .build(&mut crate::LayoutContext::new(), &fonts)
+                .unwrap();
+            let lines = painted.break_all(
+                &mut crate::LayoutContext::new(),
+                &LineOptions::default(),
+                1_000_000.0,
+                &AtomicSizes::EMPTY,
+            );
+            let plain_lines = plain.break_all(
+                &mut crate::LayoutContext::new(),
+                &LineOptions::default(),
+                1_000_000.0,
+                &AtomicSizes::EMPTY,
+            );
+            assert_eq!(lines.len(), 1, "paint-only styles={count}");
+            assert_eq!(plain_lines.len(), 1, "plain reference styles={count}");
+            let paint_spans = lines[0].paint_spans();
+            assert_eq!(paint_spans.len(), count, "paint-only styles={count}");
+            for (i, span) in paint_spans.iter().enumerate() {
+                assert_eq!(span.text_range, i..i + 1, "paint-only styles={count}");
+                assert_eq!(
+                    span.style.color,
+                    [i as u8, (i >> 8) as u8, 17, 255],
+                    "paint-only styles={count}"
+                );
+            }
+
+            let layout = LineLayout::new(&lines);
+            let plain_layout = LineLayout::new(&plain_lines);
+            for offset in [0, 1, (count / 2) as u32, count as u32] {
+                assert_eq!(layout.caret(pos(offset)), plain_layout.caret(pos(offset)));
+            }
+            for i in 0..count {
+                assert_eq!(
+                    layout.selection_rects(pos(i as u32), pos(i as u32 + 1)),
+                    plain_layout.selection_rects(pos(i as u32), pos(i as u32 + 1)),
+                    "selection geometry at {i}, styles={count}"
+                );
+                assert_eq!(
+                    paint_spans[i].rect,
+                    plain_layout
+                        .selection_rects(pos(i as u32), pos(i as u32 + 1))
+                        .first()
+                        .copied()
+                        .unwrap_or(LogicalRect::default()),
+                    "paint geometry at {i}, styles={count}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn styles_with_distinct_font_sizes_resolve_once_per_metric_key() {
+        let (fonts, _) = fonts();
+        let root = font_style("Latin");
+        let paragraph_style = ParagraphStyle {
+            root: root.clone(),
+            ..Default::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&paragraph_style, &Limits::default());
+        for i in 0..32 {
+            let mut style = root.clone();
+            style.font_size = 17.0 + i as f32;
+            let node = NodeId(i as u64 + 1);
+            builder
+                .open_inline(node, &style, Default::default())
+                .push_text(TextSource::Generated { node }, "a")
+                .close_inline();
+        }
+        crate::line::font_metrics::resolve_counts::reset();
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        let (resolves, _) = crate::line::font_metrics::resolve_counts::snapshot();
+        assert_eq!(resolves, paragraph.data.styles.len());
+        assert_data_metrics_match(&paragraph.data, &fonts);
+    }
+
+    fn variable_font(bytes: &[u8]) -> Vec<u8> {
+        let mut tables = Vec::new();
+        for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
+            let at = 12 + n * 16;
+            let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
+            let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
+            tables.push((
+                bytes[at..at + 4].try_into().unwrap(),
+                bytes[offset..offset + len].to_vec(),
+            ));
+        }
+        let mut fvar = Vec::new();
+        for field in [1u16, 0, 16, 2, 2, 20, 0, 8] {
+            fvar.extend(field.to_be_bytes());
+        }
+        for (tag, values) in [(b"wght", [100i32, 400, 900]), (b"opsz", [8, 12, 72])] {
+            fvar.extend(tag);
+            for value in values {
+                fvar.extend((value << 16).to_be_bytes());
+            }
+            fvar.extend([0, 0, 1, 0]);
+        }
+        tables.push((*b"fvar", fvar));
+        crate::font::sfnt::build_sfnt(&tables)
+    }
+
+    #[test]
+    fn first_line_ruby_variations_size_adjust_and_fallback_keep_metrics() {
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        let variable_id = fonts
+            .register_face(
+                variable_font(crate::test_support::fonts::LATIN),
+                0,
+                FontFaceDescriptor {
+                    family: "Variable".into(),
+                    weight: (100.0, 900.0),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let cjk_id = fonts
+            .register_face(
+                crate::test_support::fonts::CJK.to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: "CJK".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+        let mut normal = InlineStyle {
+            font_families: vec![
+                FontFamily::Named("Variable".into()),
+                FontFamily::Named("CJK".into()),
+            ],
+            font_weight: 400.0,
+            font_optical_sizing: true,
+            ..Default::default()
+        };
+        normal.font_size_adjust = Some(FontSizeAdjust {
+            metric: FontMetricKind::ChWidth,
+            value: 1.1,
+        });
+        let mut first_line = normal.clone();
+        first_line.font_weight = 900.0;
+        first_line.font_optical_sizing = false;
+        first_line.font_variations = vec![
+            FontVariation {
+                tag: *b"wght",
+                value: 900.0,
+            },
+            FontVariation {
+                tag: *b"opsz",
+                value: 48.0,
+            },
+        ];
+        let paragraph_style = ParagraphStyle {
+            root: normal.clone(),
+            first_line: Some(first_line),
+            ..Default::default()
+        };
+
+        let base_content = crate::RubyContent::text(
+            TextSource::Generated { node: NodeId(10) },
+            "a",
+            &normal,
+            &limits,
+        );
+        let mut annotation_style = font_style("CJK");
+        annotation_style.font_size_adjust = Some(FontSizeAdjust {
+            metric: FontMetricKind::IcWidth,
+            value: 1.15,
+        });
+        let annotation_content = crate::RubyContent::text(
+            TextSource::Generated { node: NodeId(11) },
+            "水",
+            &annotation_style,
+            &limits,
+        );
+        let ruby = crate::Ruby::new(
+            vec![crate::RubyBase {
+                node: NodeId(10),
+                content: base_content,
+                align: Default::default(),
+            }],
+            vec![crate::RubyLevel {
+                annotations: vec![crate::RubyAnnotation {
+                    node: NodeId(11),
+                    content: annotation_content,
+                    span: Default::default(),
+                    visibility: Default::default(),
+                }],
+                style: Default::default(),
+            }],
+        )
+        .unwrap();
+
+        let mut builder = crate::ParagraphBuilder::new(&paragraph_style, &limits);
+        builder
+            .push_text(TextSource::Generated { node: NodeId(1) }, "a水")
+            .push_ruby(NodeId(12), &normal, ruby);
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        assert_data_metrics_match(&paragraph.data, &fonts);
+        let first_data = &paragraph.data.first_line.as_ref().unwrap().data;
+        assert_data_metrics_match(first_data, &fonts);
+        let lane = &paragraph.data.ruby.containers[0].lanes[0].paragraph;
+        assert_data_metrics_match(&lane.data, &fonts);
+        assert!(paragraph.data.runs.iter().any(|run| run.font == cjk_id));
+        assert!(
+            paragraph
+                .data
+                .runs
+                .iter()
+                .any(|run| run.font == variable_id)
+        );
+        assert!(paragraph.data.runs.iter().any(|run| {
+            run.font == variable_id && run.instance.variations.iter().any(|v| v.tag == *b"opsz")
+        }));
+        assert!(first_data.runs.iter().any(|run| {
+            run.font == variable_id
+                && run
+                    .instance
+                    .variations
+                    .iter()
+                    .any(|v| v.tag == *b"opsz" && v.value == 48.0)
+        }));
+        assert!(lane.data.style_metrics[0].ic > 0.0);
+        assert!(paragraph.data.style_metrics[0].ch > 0.0);
+        assert!(paragraph.warnings().is_empty());
+    }
+
+    #[test]
+    fn warning_producing_empty_styles_match_uncached_warning_sequence() {
+        let limits = Limits::default();
+        let (fonts, _) = fonts();
+        let mut root = font_style("Latin");
+        root.font_size_adjust = Some(FontSizeAdjust {
+            metric: FontMetricKind::IcHeight,
+            value: 1.0,
+        });
+        let paragraph_style = ParagraphStyle {
+            root: root.clone(),
+            ..Default::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&paragraph_style, &limits);
+        for (i, color) in [[1, 2, 3, 255], [4, 5, 6, 255]].into_iter().enumerate() {
+            let mut style = root.clone();
+            style.paint.color = color;
+            builder
+                .open_inline(NodeId(i as u64 + 1), &style, Default::default())
+                .close_inline();
+        }
+        crate::line::font_metrics::resolve_counts::reset();
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        let (resolves, _) = crate::line::font_metrics::resolve_counts::snapshot();
+        assert_eq!(resolves, paragraph.data.styles.len());
+
+        let mut uncached_warnings = WarningSink::new(limits.max_warnings);
+        for style in &paragraph.data.styles {
+            crate::line::font_metrics::resolve(&fonts, style, &mut uncached_warnings);
+        }
+        assert_eq!(paragraph.warnings(), uncached_warnings.as_slice());
+        assert!(paragraph.warnings().iter().any(|warning| {
+            warning.kind == crate::limits::WarningKind::Unsupported
+                && warning
+                    .message
+                    .contains("font-size-adjust metric unavailable")
+        }));
     }
 }
