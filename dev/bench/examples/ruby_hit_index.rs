@@ -184,6 +184,15 @@ fn main() {
         let body = body_point(&lines[0]);
         assert!(layout.hit_test_ruby(ruby.0, ruby.1).is_some());
         assert!(layout.hit_test_ruby(miss.0, miss.1).is_none());
+        let ruby_main_hit = layout.hit_test(ruby.0, ruby.1).unwrap();
+        assert!(ruby_main_hit.inside);
+        assert!(matches!(
+            ruby_main_hit.origin,
+            Some(shodo::mapping::TextOrigin::Dom {
+                node: NodeId(1_000),
+                offset: 0..=1,
+            })
+        ));
         assert!(layout.hit_test(body.0, body.1).unwrap().inside);
         assert!(!layout.hit_test(miss.0, miss.1).unwrap().inside);
 

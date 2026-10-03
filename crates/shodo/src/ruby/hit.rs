@@ -74,9 +74,7 @@ impl<'a> AnnotationIndex<'a> {
             .copied()
     }
 
-    pub(crate) fn hit(&self, inline: f32, block: f32) -> Option<RubyHit<'a>> {
-        #[cfg(test)]
-        tests::VISITS.with(|visits| visits.set(visits.get() + 1));
+    fn local_point(&self, inline: f32, block: f32) -> Option<(f32, f32)> {
         let t = self.annotation.transform();
         let determinant = t.inline_inline * t.block_block - t.inline_block * t.block_inline;
         if determinant == 0.0 {
@@ -84,8 +82,29 @@ impl<'a> AnnotationIndex<'a> {
         }
         let x = inline - t.inline_offset;
         let y = block - self.parent_block_offset - t.block_offset;
-        let x_local = (t.block_block * x - t.inline_block * y) / determinant;
-        let y_local = (t.inline_inline * y - t.block_inline * x) / determinant;
+        Some((
+            (t.block_block * x - t.inline_block * y) / determinant,
+            (t.inline_inline * y - t.block_inline * x) / determinant,
+        ))
+    }
+
+    pub(crate) fn hit_exists(&self, inline: f32, block: f32) -> bool {
+        #[cfg(test)]
+        tests::VISITS.with(|visits| visits.set(visits.get() + 1));
+        let Some((x_local, y_local)) = self.local_point(inline, block) else {
+            return false;
+        };
+        self.child.ruby_hit_entry(x_local, y_local).is_some()
+            || self
+                .child
+                .hit_test_body(x_local, y_local)
+                .is_some_and(|hit| hit.inside)
+    }
+
+    pub(crate) fn hit(&self, inline: f32, block: f32) -> Option<RubyHit<'a>> {
+        #[cfg(test)]
+        tests::VISITS.with(|visits| visits.set(visits.get() + 1));
+        let (x_local, y_local) = self.local_point(inline, block)?;
         if let Some(mut nested) = self.child.hit_test_ruby(x_local, y_local) {
             nested.parent_line = self.parent_line;
             nested.path.insert(0, self.annotation);
@@ -394,6 +413,15 @@ mod tests {
                 .collect::<Vec<_>>(),
             [9000, 9001]
         );
+        let main = layout.hit_test(point.0, point.1).unwrap();
+        assert!(main.inside);
+        assert!(matches!(
+            main.origin,
+            Some(crate::mapping::TextOrigin::Dom {
+                node: crate::node::NodeId(102),
+                ..
+            })
+        ));
     }
 
     #[test]
@@ -406,6 +434,7 @@ mod tests {
             assert!(layout.hit_test_ruby(f32::INFINITY, 10.0).is_none());
             assert!(layout.hit_test_ruby(10.0, f32::NAN).is_none());
             assert!(layout.hit_test(f32::NAN, 10.0).is_none());
+            assert!(!layout.hit_test(f32::INFINITY, 10.0).unwrap().inside);
             assert!(!layout.hit_test(1_000_000.0, 1_000_000.0).unwrap().inside);
         }
 

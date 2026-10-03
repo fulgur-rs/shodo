@@ -152,7 +152,7 @@ impl<'a> LineLayout<'a> {
         if inline.is_nan() || block.is_nan() {
             return None;
         }
-        if let Some((entry_index, _)) = self.ruby_hit(inline, block) {
+        if let Some(entry_index) = self.ruby_hit_entry(inline, block) {
             let entry = &self.ruby[entry_index];
             let stop = entry.base_caret(inline, block)?;
             return Some(HitResult {
@@ -169,15 +169,34 @@ impl<'a> LineLayout<'a> {
     }
 
     fn ruby_hit(&self, inline: f32, block: f32) -> Option<(usize, RubyHit<'a>)> {
+        self.best_ruby_candidate(inline, block, |i| self.ruby[i].hit(inline, block))
+    }
+
+    pub(crate) fn ruby_hit_entry(&self, inline: f32, block: f32) -> Option<usize> {
+        if !inline.is_finite() || !block.is_finite() {
+            return None;
+        }
+        self.best_ruby_candidate(inline, block, |i| {
+            self.ruby[i].hit_exists(inline, block).then_some(i)
+        })
+        .map(|(i, _)| i)
+    }
+
+    fn best_ruby_candidate<T>(
+        &self,
+        inline: f32,
+        block: f32,
+        mut hit: impl FnMut(usize) -> Option<T>,
+    ) -> Option<(usize, T)> {
         let indexed = self
             .ruby_spatial
-            .best_containing_by(inline, block, |i| self.ruby[i].hit(inline, block));
+            .best_containing_by(inline, block, &mut hit);
         for &i in self.ruby_unindexed.iter().rev() {
-            if let Some(hit) = self.ruby[i].hit(inline, block) {
+            if let Some(candidate) = hit(i) {
                 if indexed.as_ref().is_some_and(|(best, _)| *best > i) {
                     return indexed;
                 }
-                return Some((i, hit));
+                return Some((i, candidate));
             }
         }
         indexed
