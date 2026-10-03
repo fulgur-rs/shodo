@@ -169,6 +169,10 @@ struct Layer {
 
 struct LayerState {
     faces: Vec<FontData>,
+    /// Explicit descriptor faces grouped by CSS's ASCII-insensitive family key.
+    family_faces: std::collections::HashMap<String, FamilyFaceIndices>,
+    /// First stable slot for each exact blob/face identity.
+    face_slots: std::collections::HashMap<(u64, u32), usize>,
     /// Slots loaded from the platform catalog, rather than supplied by callers.
     native_faces: std::collections::HashSet<usize>,
     face_infos: Vec<Option<fontique::FontInfo>>,
@@ -182,6 +186,56 @@ struct LayerState {
     options: FontOptions,
     generics: std::collections::HashMap<crate::style::GenericFamily, Vec<String>>,
     fallbacks: Vec<matching::FallbackEntry>,
+}
+
+struct FamilyFaceIndices {
+    first: usize,
+    rest: Vec<usize>,
+}
+
+impl FamilyFaceIndices {
+    fn first(index: usize) -> Self {
+        Self {
+            first: index,
+            rest: Vec::new(),
+        }
+    }
+
+    fn push(&mut self, index: usize) {
+        self.rest.push(index);
+    }
+
+    fn len(&self) -> usize {
+        self.rest.len() + 1
+    }
+
+    fn iter(&self) -> impl Iterator<Item = usize> + '_ {
+        std::iter::once(self.first).chain(self.rest.iter().copied())
+    }
+}
+
+impl LayerState {
+    fn index_face(&mut self, index: usize, native_identity: bool) {
+        let face = &self.faces[index];
+        if native_identity {
+            self.face_slots
+                .entry((face.data.id(), face.index))
+                .or_insert(index);
+        }
+        if let Some(descriptor) = &self.descriptors[index] {
+            match self
+                .family_faces
+                .entry(descriptor.family.to_ascii_lowercase())
+            {
+                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                    entry.get_mut().push(index)
+                }
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(FamilyFaceIndices::first(index));
+                }
+            }
+        }
+    }
 }
 
 // Platform catalog access is Send but need not be Sync. Keep it in the
@@ -269,6 +323,8 @@ impl FontCollection {
                 match_cache_entries: options.match_cache_entries,
                 caches: RwLock::new(LayerCaches::default()),
                 state: Mutex::new(LayerState {
+                    family_faces: Default::default(),
+                    face_slots: Default::default(),
                     native_faces: Default::default(),
                     descriptors: vec![None; faces.len()],
                     face_infos: faces.iter().map(matching::face_info).collect(),
@@ -340,6 +396,8 @@ impl FontCollection {
             state.face_infos.push(info);
             state.descriptors.push(None);
             state.faces.push(data);
+            let slot = state.faces.len() - 1;
+            state.index_face(slot, true);
         }
         self.layer.generation.fetch_add(1, Ordering::SeqCst);
         Ok(FontId {
@@ -390,6 +448,7 @@ impl FontCollection {
         let data = FontData::new(blob.clone(), index);
         let info = matching::face_info(&data)
             .ok_or(FontError::Malformed("face has no usable character map"))?;
+        let native_identity = source.is_some();
         Limits::check(
             limits.max_faces_per_layer,
             LimitKind::FacesPerLayer,
@@ -418,6 +477,8 @@ impl FontCollection {
         state.face_infos.push(Some(info));
         state.faces.push(data);
         state.descriptors.push(Some(descriptor));
+        let slot = state.faces.len() - 1;
+        state.index_face(slot, native_identity);
         state.blob_bytes = bytes;
         self.layer.generation.fetch_add(1, Ordering::SeqCst);
         Ok(id)

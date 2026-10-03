@@ -584,40 +584,29 @@ impl FontCollection {
 
     fn registered_candidates(&self, name: Option<&str>) -> Vec<Candidate> {
         let state = self.state();
-        state
-            .faces
-            .iter()
-            .enumerate()
-            .filter_map(|(index, data)| {
-                // Platform fallback is selected through the catalog's script
-                // families. Prior queries must not add new last-resort faces.
-                if state.native_faces.contains(&index) {
-                    return None;
+        let mut candidates = Vec::new();
+        if let Some(name) = name {
+            let family_key = name.to_ascii_lowercase();
+            let Some(indices) = state.family_faces.get(&family_key) else {
+                return candidates;
+            };
+            candidates.reserve(indices.len());
+            for index in indices.iter() {
+                if let Some(candidate) =
+                    registered_candidate(&state, self.layer.id, index, Some(name))
+                {
+                    candidates.push(candidate);
                 }
-                let info = state.face_infos[index].as_ref()?.clone();
-                let descriptor = match &state.descriptors[index] {
-                    Some(desc)
-                        if name.is_none_or(|name| desc.family.eq_ignore_ascii_case(name)) =>
-                    {
-                        desc.clone()
-                    }
-                    Some(_) => return None,
-                    None if name.is_none() => intrinsic_descriptor(&info, String::new()),
-                    None => return None, // Named intrinsic families come from fontique.
-                };
-                Some(Candidate {
-                    order_key: (index as u64, 0),
-                    id: FontId {
-                        layer: self.layer.id,
-                        index: index as u32,
-                    },
-                    data: data.clone(),
-                    descriptor,
-                    info,
-                    color: false,
-                })
-            })
-            .collect()
+            }
+        } else {
+            candidates.reserve(state.faces.len());
+            for index in 0..state.faces.len() {
+                if let Some(candidate) = registered_candidate(&state, self.layer.id, index, None) {
+                    candidates.push(candidate);
+                }
+            }
+        }
+        candidates
     }
 
     fn native_candidates(&self, name: &str) -> Vec<Candidate> {
@@ -637,18 +626,13 @@ impl FontCollection {
                 continue;
             };
             let data = FontData::new(blob, info.index());
-            let index = match state
-                .faces
-                .iter()
-                .position(|face| face.data.id() == data.data.id() && face.index == data.index)
-            {
-                Some(index) => index,
-                None => {
-                    // Trusted platform faces are loaded only when selected below.
-                    // Use a temporary id whose slot is materialized by best_match.
-                    usize::MAX
-                }
-            };
+            #[cfg(test)]
+            matching_tests::record_native_face_id_lookup();
+            let index = state
+                .face_slots
+                .get(&(data.data.id(), data.index))
+                .copied()
+                .unwrap_or(usize::MAX);
             result.push(Candidate {
                 order_key: (info.source().id().to_u64(), info.index()),
                 id: FontId {
@@ -739,9 +723,14 @@ impl FontCollection {
             if let Some(blob) = state.retained_sources.get(&source) {
                 selected.data.data = blob.clone();
             }
-            let index = if let Some(index) = state.faces.iter().position(|face| {
-                face.data.id() == selected.data.data.id() && face.index == selected.data.index
-            }) {
+            // Another matcher may have materialized this face since candidate collection.
+            #[cfg(test)]
+            matching_tests::record_native_face_id_lookup();
+            let index = if let Some(index) = state
+                .face_slots
+                .get(&(selected.data.data.id(), selected.data.index))
+                .copied()
+            {
                 index
             } else {
                 let limits = &self.layer.limits;
@@ -756,6 +745,7 @@ impl FontCollection {
                 state.faces.push(selected.data.clone());
                 state.native_faces.insert(index);
                 state.descriptors.push(None);
+                state.index_face(index, true);
                 index
             };
             state
@@ -860,6 +850,45 @@ fn native_style(style: FontStyle) -> fontique::FontStyle {
         FontStyle::Oblique(a) => fontique::FontStyle::Oblique(Some(a)),
     }
 }
+fn registered_candidate(
+    state: &LayerState,
+    layer_id: u32,
+    index: usize,
+    name: Option<&str>,
+) -> Option<Candidate> {
+    #[cfg(test)]
+    matching_tests::record_registered_face_visit();
+    // Platform fallback is selected through the catalog's script families.
+    // Prior queries must not add new last-resort faces.
+    if state.native_faces.contains(&index) {
+        return None;
+    }
+    let data = state.faces.get(index)?;
+    let descriptor = match state.descriptors.get(index)?.as_ref() {
+        Some(desc) if name.is_none_or(|name| desc.family.eq_ignore_ascii_case(name)) => {
+            desc.clone()
+        }
+        Some(_) => return None,
+        None if name.is_none() => {
+            let info = state.face_infos.get(index)?.as_ref()?;
+            intrinsic_descriptor(info, String::new())
+        }
+        None => return None, // Named intrinsic families come from fontique.
+    };
+    let info = state.face_infos.get(index)?.as_ref()?.clone();
+    Some(Candidate {
+        order_key: (index as u64, 0),
+        id: FontId {
+            layer: layer_id,
+            index: index as u32,
+        },
+        data: data.clone(),
+        descriptor,
+        info,
+        color: false,
+    })
+}
+
 fn intrinsic_descriptor(info: &FontInfo, family: String) -> FontFaceDescriptor {
     let weight = info.weight().value();
     let width = info.width().percentage();
