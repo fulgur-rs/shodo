@@ -1,5 +1,10 @@
 //! Browser font collections, document-local CSS faces, cluster matching and metrics.
 //!
+//! See the [integration guide] for registration budgets, missing-font output,
+//! font generations and paragraph reuse.
+//!
+//! [integration guide]: https://github.com/fulgur-rs/shodo/blob/adf02f0dda2cb41837f371eef5b70b7389e28eea/docs/guides/integration.md
+//!
 //! System enumeration is lazy; a bundled-only application can disable it:
 //! ```
 //! use shodo::font::{FontCollection, FontOptions, FontQuery};

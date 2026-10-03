@@ -1,4 +1,9 @@
 //! Source-preserving CSS ruby input and formatting.
+//!
+//! The [ruby integration guide] covers pairing input, coordinated wrapping,
+//! annotation transforms, painting and dedicated annotation hit testing.
+//!
+//! [ruby integration guide]: https://github.com/fulgur-rs/shodo/blob/adf02f0dda2cb41837f371eef5b70b7389e28eea/docs/guides/ruby.md
 pub(crate) mod align;
 pub(crate) mod base_budget;
 pub(crate) mod budget;
