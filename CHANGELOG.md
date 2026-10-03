@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.11](https://github.com/fulgur-rs/shodo/compare/v0.0.10...v0.0.11) - 2026-10-03
+
+### Other
+
+- avoid bidi text copy without line separator
+- reuse combined width trial shapes
+- reduce style metrics cache miss cost
+- reuse metrics across paint-only styles
+- share identical paragraph font metrics
+- streamline paint geometry cluster scans ([#190](https://github.com/fulgur-rs/shodo/pull/190))
+- cover empty combined geometry fallback
+- streamline paint geometry cluster scans
+- adapt ruby index split axis
+- index ruby hit bounds
+- Index font matching candidates
+- use cursors for grapheme itemization
+
 ## [0.0.10](https://github.com/fulgur-rs/shodo/compare/v0.0.9...v0.0.10) - 2026-10-02
 
 ### Fixed
