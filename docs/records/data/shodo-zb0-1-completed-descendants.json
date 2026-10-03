@@ -1,0 +1,248 @@
+{
+  "issue": "shodo-zb0.1",
+  "decision": "The single-pass candidate was not adopted: measurements show no repeatable material speedup and no allocation or retained-memory reduction.",
+  "baseline_commit": "17a6904",
+  "candidate": "baseline plus candidate.patch in raw archive; temporary only",
+  "toolchain": {
+    "rustc": "1.96.0 (ac68faa20 2026-05-25)",
+    "host": "x86_64-unknown-linux-gnu",
+    "kernel": "Linux 7.2.5-3-omarchy x86_64",
+    "cpu_affinity": "taskset -c 0",
+    "profile": "release",
+    "limits": "default",
+    "cargo": "1.96.0"
+  },
+  "harness": {
+    "path": "dev/bench/examples/ruby_completed_descendants.rs",
+    "sha256": "d3cd335276ab7a505b16b5d03ed901a0dc52f08c4dda53042543c32fae268991",
+    "warmups_per_case": 3,
+    "timing_samples_per_case_per_process": 11,
+    "cases": 15,
+    "timing_scope": "ParagraphBuilder::build plus Paragraph::break_all; fixture construction, fixed-font load, warning serialization and output hashing are excluded",
+    "published_source_sha256": "29fe6494b6453ad763219ad195ae54b2b9ea95dbf0750fdd13d02c32e66ea649"
+  },
+  "workload_matrix": {
+    "base_depths": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "annotation_depths": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "column_counts": [
+      1,
+      4,
+      16,
+      64
+    ],
+    "continuation_fixtures": [
+      "short",
+      "medium",
+      "long"
+    ],
+    "font": "same checked-in fixture font, selected at shodo_fixtures::FONTS[1] for every paired run",
+    "font_loading": "fixed fixture loader; no system font discovery"
+  },
+  "contract": {
+    "all_timing_capture_pairs_exact": true,
+    "all_allocation_samples_exact": true,
+    "compared": [
+      "output_sha256",
+      "line_count",
+      "build_warnings",
+      "layout_warnings",
+      "max_shaped_glyphs=1 rejection result"
+    ],
+    "timing_captures": [
+      "exploratory-time",
+      "exploratory-time-pinned",
+      "exploratory-time-pinned-2",
+      "paired-run-11",
+      "paired-run-12",
+      "paired-run-13",
+      "paired-run-14",
+      "paired-run-15",
+      "paired-run-16"
+    ],
+    "allocation_capture_samples": 165
+  },
+  "allocation": {
+    "candidate_change": "0% in calls, allocated bytes, deallocated bytes, live bytes, peak extra bytes, and net bytes for every case",
+    "fields": [
+      "allocated_bytes",
+      "calls",
+      "deallocated_bytes",
+      "live_bytes",
+      "net_bytes",
+      "peak_extra_bytes",
+      "start_live_bytes"
+    ]
+  },
+  "timing": {
+    "case_pairing": "eight pinned baseline/candidate process pairs: two earlier CPU-pinned comparisons plus six later alternating pairs (runs 11-16); each per-case value is the median of 11 samples within a process",
+    "overall_case_run_median_change_percent": 0.1932554029794864,
+    "candidate_faster_case_runs": 55,
+    "case_runs": 120,
+    "by_case": [
+      {
+        "case": "base-depth-0",
+        "median_change_percent": -0.005783425404182196,
+        "min_change_percent": -2.45331281055603,
+        "max_change_percent": 80.44642471309427,
+        "candidate_faster_runs": 5,
+        "paired_runs": 8
+      },
+      {
+        "case": "base-depth-1",
+        "median_change_percent": -0.6980514874363797,
+        "min_change_percent": -4.778813556972938,
+        "max_change_percent": 76.8131951501551,
+        "candidate_faster_runs": 5,
+        "paired_runs": 8
+      },
+      {
+        "case": "base-depth-2",
+        "median_change_percent": -0.6482222832803752,
+        "min_change_percent": -21.71815526972044,
+        "max_change_percent": 77.14031699026663,
+        "candidate_faster_runs": 6,
+        "paired_runs": 8
+      },
+      {
+        "case": "base-depth-4",
+        "median_change_percent": -0.3826604693623725,
+        "min_change_percent": -10.26523906133594,
+        "max_change_percent": 78.906206566819,
+        "candidate_faster_runs": 5,
+        "paired_runs": 8
+      },
+      {
+        "case": "annotation-depth-0",
+        "median_change_percent": -0.614154787896326,
+        "min_change_percent": -39.87016228802982,
+        "max_change_percent": 88.19226530618374,
+        "candidate_faster_runs": 5,
+        "paired_runs": 8
+      },
+      {
+        "case": "annotation-depth-1",
+        "median_change_percent": 0.9330950827923568,
+        "min_change_percent": -45.040234853009586,
+        "max_change_percent": 76.16670058884219,
+        "candidate_faster_runs": 3,
+        "paired_runs": 8
+      },
+      {
+        "case": "annotation-depth-2",
+        "median_change_percent": 1.5076385217262511,
+        "min_change_percent": -8.178774938076517,
+        "max_change_percent": 86.92503978410144,
+        "candidate_faster_runs": 2,
+        "paired_runs": 8
+      },
+      {
+        "case": "annotation-depth-4",
+        "median_change_percent": 1.3261906269270707,
+        "min_change_percent": -6.480491138370814,
+        "max_change_percent": 78.69927641651545,
+        "candidate_faster_runs": 1,
+        "paired_runs": 8
+      },
+      {
+        "case": "columns-1",
+        "median_change_percent": 1.2679997193128734,
+        "min_change_percent": -7.485668476698981,
+        "max_change_percent": 70.29243582356195,
+        "candidate_faster_runs": 2,
+        "paired_runs": 8
+      },
+      {
+        "case": "columns-4",
+        "median_change_percent": -0.5176078083893865,
+        "min_change_percent": -18.764812309721258,
+        "max_change_percent": 78.26359466118977,
+        "candidate_faster_runs": 5,
+        "paired_runs": 8
+      },
+      {
+        "case": "columns-16",
+        "median_change_percent": 0.18027228912579352,
+        "min_change_percent": -40.43739766524395,
+        "max_change_percent": 82.18396272355871,
+        "candidate_faster_runs": 4,
+        "paired_runs": 8
+      },
+      {
+        "case": "columns-64",
+        "median_change_percent": -0.7833106667682277,
+        "min_change_percent": -2.0166916213674058,
+        "max_change_percent": 78.45796547895485,
+        "candidate_faster_runs": 6,
+        "paired_runs": 8
+      },
+      {
+        "case": "continuation-short",
+        "median_change_percent": 0.8410392842773118,
+        "min_change_percent": -26.225431970626257,
+        "max_change_percent": 75.01567496843533,
+        "candidate_faster_runs": 1,
+        "paired_runs": 8
+      },
+      {
+        "case": "continuation-medium",
+        "median_change_percent": 0.22576555303344126,
+        "min_change_percent": -26.811676369941452,
+        "max_change_percent": 2.940992377325591,
+        "candidate_faster_runs": 3,
+        "paired_runs": 8
+      },
+      {
+        "case": "continuation-long",
+        "median_change_percent": 1.2302103142480925,
+        "min_change_percent": -8.48553303693147,
+        "max_change_percent": 72.63955119849885,
+        "candidate_faster_runs": 2,
+        "paired_runs": 8
+      }
+    ],
+    "limitation": "Large host interference/outliers make small differences unresolvable; full captures are archived and no timing win is claimed.",
+    "paired_process_captures": 8
+  },
+  "process_task_clock": {
+    "event": "perf stat -e task-clock",
+    "pairs": 16,
+    "median_candidate_change_percent": 0.9834149733484843,
+    "candidate_faster_pairs": 1,
+    "changes_percent": [
+      1.921033792502791,
+      -3.7174802243134075,
+      1.3188357490969027,
+      2.941753822134352,
+      0.20068240998472042,
+      0.758369505563028,
+      7.00762112622324,
+      0.9387217019728888,
+      1.3793733442952316,
+      1.0281082447240797,
+      53.53846705256178,
+      36.58985056375765,
+      0.7074736504465662,
+      0.7476770540801647,
+      0.024167778086092717,
+      0.17802953671859356
+    ],
+    "limitation": "Whole-process measure includes harness setup and resource-limit rejection; supplemental to layout-only timings."
+  },
+  "raw_archive": {
+    "path": "docs/records/data/shodo-zb0-1-completed-descendants-raw.tar.gz",
+    "bytes": 59309,
+    "sha256": "ed72a88365d0901853aa54645374c48b2bdf394c35f5e4fba5ff95704c5e45d7",
+    "members": 54
+  },
+  "candidate_patch_sha256": "db59ff0b7d95d2583f900a26b4e73989187626be8ff0e1e2d43c9d470a70fabe"
+}
