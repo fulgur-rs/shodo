@@ -58,7 +58,7 @@ jobs:
             target/snapshot-report
             target/snapshot-checks
           if-no-files-found: warn
-      - run: cargo test -p shodo-bench --features allocation-counting --test allocator --test probe --test ruby_hit_path_allocations --test ruby_base_caret_range --test ruby_base_decoration --test style_memory
+      - run: cargo test -p shodo-bench --features allocation-counting --test allocator --test probe --test ruby_hit_path_allocations --test ruby_base_caret_range --test ruby_base_decoration --test style_memory --test suppressed_warning_format
       - run: cargo test -p shodo-bench --bench layout
         env:
           SHODO_BENCH_CASE: latin-short
