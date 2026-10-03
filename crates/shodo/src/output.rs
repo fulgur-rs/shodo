@@ -193,6 +193,15 @@ pub struct Glyph {
     pub cluster: u32,
 }
 
+/// Cluster data consumed by paint and hit geometry, without source classification.
+pub(crate) struct GeometryCluster {
+    pub(crate) text: Range<u32>,
+    pub(crate) glyphs: Range<u32>,
+    pub(crate) first_glyph_id: Option<u32>,
+    pub(crate) advance: f32,
+    pub(crate) shaping_advance: f32,
+}
+
 /// A shaping cluster with both its laid-out and original advance.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Cluster {
