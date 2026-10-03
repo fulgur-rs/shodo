@@ -324,7 +324,10 @@ impl<'a> GlyphRunView<'a> {
         }
     }
 
-    pub fn clusters(&self) -> impl ExactSizeIterator<Item = Cluster> + '_ {
+    fn cluster_parts(
+        &self,
+    ) -> impl ExactSizeIterator<Item = (Range<u32>, Range<u32>, &'a crate::shape::GlyphStore)> + '_
+    {
         let data = self.data();
         let (begin, count) = match self.source {
             GlyphSource::Shared if self.glyphs.0 < self.glyphs.1 => {
@@ -337,32 +340,36 @@ impl<'a> GlyphRunView<'a> {
                 (clusters.0 as usize, (clusters.1 - clusters.0) as usize)
             }
         };
-        (0..count).map(move |i| {
+        (0..count).map(move |i| match self.source {
+            GlyphSource::Shared if self.glyphs.0 == self.glyphs.1 => (
+                self.glyphs.0..self.glyphs.1,
+                self.text.0..self.text.1,
+                &data.glyphs,
+            ),
+            GlyphSource::Shared => {
+                let u = &data.units[data.clusters[begin + i] as usize];
+                let crate::analysis::units::UnitKind::Cluster { glyphs, .. } = &u.kind else {
+                    unreachable!()
+                };
+                (glyphs.clone(), u.shaping_text().clone(), &data.glyphs)
+            }
+            GlyphSource::Overlay { .. } => {
+                let c = &self.line.overlay_clusters[begin + i];
+                (
+                    c.glyphs.clone(),
+                    c.text.clone(),
+                    self.line.overlay.as_deref().expect("overlay store"),
+                )
+            }
+        })
+    }
+
+    pub fn clusters(&self) -> impl ExactSizeIterator<Item = Cluster> + '_ {
+        let data = self.data();
+        self.cluster_parts().map(move |(glyphs, text, store)| {
             #[cfg(test)]
             data.cluster_queries
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let (glyphs, text, store) = match self.source {
-                GlyphSource::Shared if self.glyphs.0 == self.glyphs.1 => (
-                    self.glyphs.0..self.glyphs.1,
-                    self.text.0..self.text.1,
-                    &data.glyphs,
-                ),
-                GlyphSource::Shared => {
-                    let u = &data.units[data.clusters[begin + i] as usize];
-                    let crate::analysis::units::UnitKind::Cluster { glyphs, .. } = &u.kind else {
-                        unreachable!()
-                    };
-                    (glyphs.clone(), u.shaping_text().clone(), &data.glyphs)
-                }
-                GlyphSource::Overlay { .. } => {
-                    let c = &self.line.overlay_clusters[begin + i];
-                    (
-                        c.glyphs.clone(),
-                        c.text.clone(),
-                        self.line.overlay.as_deref().expect("overlay store"),
-                    )
-                }
-            };
             let source = data
                 .text
                 .get(text.start as usize..text.end as usize)
@@ -378,6 +385,31 @@ impl<'a> GlyphRunView<'a> {
                 text_range: text.start as usize..text.end as usize,
                 advance: glyphs.clone().map(|g| self.glyph(g).advance).sum(),
                 shaping_advance: glyphs.map(|g| store.advance[g as usize].to_f32()).sum(),
+            }
+        })
+    }
+
+    pub(crate) fn geometry_clusters(
+        &self,
+    ) -> impl ExactSizeIterator<Item = crate::output::GeometryCluster> + '_ {
+        self.cluster_parts().map(move |(glyphs, text, store)| {
+            let first_glyph_id = if glyphs.start < glyphs.end {
+                Some(store.id[glyphs.start as usize])
+            } else {
+                None
+            };
+            let mut advance = 0.0;
+            let mut shaping_advance = 0.0;
+            for glyph in glyphs.clone() {
+                advance += self.glyph(glyph).advance;
+                shaping_advance += store.advance[glyph as usize].to_f32();
+            }
+            crate::output::GeometryCluster {
+                text,
+                glyphs,
+                first_glyph_id,
+                advance,
+                shaping_advance,
             }
         })
     }

@@ -56,6 +56,18 @@ pub(super) fn paint_segments(line: &Line) -> Vec<Segment> {
     LineGeometry::new(0, line, false).segments
 }
 
+fn combined_cluster_glyph_index(
+    glyphs: &Range<u32>,
+    text: &Range<u32>,
+    source_clusters: &[u32],
+) -> usize {
+    if glyphs.start < glyphs.end {
+        glyphs.start as usize
+    } else {
+        source_clusters.partition_point(|cluster| *cluster < text.start)
+    }
+}
+
 impl LineGeometry {
     fn new(number: usize, line: &Line, retain_carets: bool) -> Self {
         let mut result = Self {
@@ -67,13 +79,12 @@ impl LineGeometry {
             match fragment {
                 Fragment::GlyphRun(run) => {
                     if run.orientation() == crate::GlyphOrientation::Combined {
-                        let glyphs: Vec<_> = run.glyphs().collect();
-                        for cluster in run.clusters() {
-                            let g = line
-                                .data
-                                .glyphs
-                                .cluster
-                                .partition_point(|c| *c < cluster.text_range.start as u32);
+                        for cluster in run.geometry_clusters() {
+                            let g = combined_cluster_glyph_index(
+                                &cluster.glyphs,
+                                &cluster.text,
+                                &line.data.glyphs.cluster,
+                            );
                             let Some(paint) =
                                 line.data.combine_geometry.glyphs.get(g).copied().flatten()
                             else {
@@ -88,16 +99,15 @@ impl LineGeometry {
                                 1.0
                             };
                             let origin = line.block_offset() + run.baseline() - sign * em / 2.0;
-                            let text =
-                                cluster.text_range.start as u32..cluster.text_range.end as u32;
+                            let text = cluster.text;
                             let cuts = caret_cuts(line, &text);
-                            let gs = &glyphs[glyphs.partition_point(|g| g.cluster < text.start)
-                                ..glyphs.partition_point(|g| g.cluster < text.end)];
                             let scale = line.data.combine_geometry.scales[paint.span];
-                            let carets = if gs.len() == 1 && cuts.len() > 2 {
+                            let carets = if cluster.glyphs.end - cluster.glyphs.start == 1
+                                && cuts.len() > 2
+                            {
                                 ligature_carets(
                                     run,
-                                    gs[0].id,
+                                    cluster.first_glyph_id.expect("one glyph cluster"),
                                     cuts.len() - 2,
                                     cluster.shaping_advance,
                                 )
@@ -147,9 +157,8 @@ impl LineGeometry {
                             - if line_over_at_block_end { under } else { over },
                         block_size: (over + under).max(0.0),
                     };
-                    let glyphs: Vec<_> = run.glyphs().collect();
                     let mut pen = 0.0;
-                    for cluster in run.clusters() {
+                    for cluster in run.geometry_clusters() {
                         let from = run.inline_start()
                             + if reversed {
                                 run.inline_size() - pen
@@ -163,19 +172,23 @@ impl LineGeometry {
                             } else {
                                 pen
                             };
-                        let text = cluster.text_range.start as u32..cluster.text_range.end as u32;
+                        let text = cluster.text;
                         let (before, after) = line.ruby_caret_padding(&text);
                         let sign = if reversed { -1.0 } else { 1.0 };
                         let from = from + sign * before;
                         let to = to - sign * after;
                         let cuts = caret_cuts(line, &text);
-                        let gs = &glyphs[glyphs.partition_point(|g| g.cluster < text.start)
-                            ..glyphs.partition_point(|g| g.cluster < text.end)];
-                        let carets = if gs.len() == 1 && cuts.len() > 2 {
-                            ligature_carets(run, gs[0].id, cuts.len() - 2, cluster.shaping_advance)
-                        } else {
-                            None
-                        };
+                        let carets =
+                            if cluster.glyphs.end - cluster.glyphs.start == 1 && cuts.len() > 2 {
+                                ligature_carets(
+                                    run,
+                                    cluster.first_glyph_id.expect("one glyph cluster"),
+                                    cuts.len() - 2,
+                                    cluster.shaping_advance,
+                                )
+                            } else {
+                                None
+                            };
                         raw.push(RawCluster {
                             text,
                             from,
@@ -760,6 +773,45 @@ mod tests {
     fn take_combine_work() -> (usize, usize) {
         COMBINE_WORK.with(|work| work.replace((0, 0)))
     }
+    #[test]
+    fn empty_combined_cluster_uses_text_start_for_paint_lookup() {
+        let source_clusters = [0, 4, 4, 9];
+        assert_eq!(
+            super::combined_cluster_glyph_index(&(0..0), &(4..8), &source_clusters),
+            1
+        );
+        assert_eq!(
+            super::combined_cluster_glyph_index(&(12..13), &(4..8), &source_clusters),
+            12
+        );
+    }
+    fn assert_geometry_clusters_match_public(run: GlyphRunView<'_>) {
+        let public = run.clusters().collect::<Vec<_>>();
+        let glyphs = run.glyphs().collect::<Vec<_>>();
+        let geometry = run.geometry_clusters().collect::<Vec<_>>();
+        assert_eq!(geometry.len(), public.len());
+        for (geometry, public) in geometry.iter().zip(public) {
+            assert_eq!(
+                geometry.text.start as usize..geometry.text.end as usize,
+                public.text_range
+            );
+            assert_eq!(geometry.advance.to_bits(), public.advance.to_bits());
+            assert_eq!(
+                geometry.shaping_advance.to_bits(),
+                public.shaping_advance.to_bits()
+            );
+            let begin = glyphs.partition_point(|g| g.cluster < geometry.text.start);
+            let end = glyphs.partition_point(|g| g.cluster < geometry.text.end);
+            assert_eq!(
+                geometry.glyphs.end - geometry.glyphs.start,
+                (end - begin) as u32
+            );
+            assert_eq!(
+                geometry.first_glyph_id,
+                glyphs.get(begin).map(|g| g.id).filter(|_| begin < end)
+            );
+        }
+    }
     fn tcy_lines(
         count: usize,
         mode: crate::geometry::WritingMode,
@@ -937,6 +989,215 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn line_geometry_bypasses_public_cluster_iterator() {
+        let limits = Default::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register_face(
+                crate::test_support::fonts::LATIN.to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: "Geometry".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let style = ParagraphStyle {
+            root: InlineStyle {
+                font_families: vec![FontFamily::Named("Geometry".into())],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut builder = ParagraphBuilder::new(&style, &limits);
+        let text = format!("a\u{301} ffi {}", "a".repeat(64));
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, &text);
+        let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        let lines = paragraph.break_all(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            10000.0,
+            &AtomicSizes::EMPTY,
+        );
+        for run in lines
+            .iter()
+            .flat_map(Line::fragments)
+            .filter_map(|fragment| match fragment {
+                Fragment::GlyphRun(run) => Some(run),
+                _ => None,
+            })
+        {
+            assert_geometry_clusters_match_public(run);
+        }
+
+        paragraph
+            .data
+            .cluster_queries
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+        let layout = super::super::LineLayout::new(&lines);
+
+        assert!(!layout.index[0].segments.is_empty());
+        assert_eq!(
+            paragraph
+                .data
+                .cluster_queries
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "hit geometry must not construct public Cluster values"
+        );
+
+        let mut builder = ParagraphBuilder::new(&style, &limits);
+        builder.push_text(TextSource::Generated { node: NodeId(2) }, "of\u{ad}fice");
+        let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        let lines = paragraph.break_all(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            24.0,
+            &AtomicSizes::EMPTY,
+        );
+        assert!(lines.iter().any(|line| line.overlay.is_some()));
+        for run in lines
+            .iter()
+            .flat_map(Line::fragments)
+            .filter_map(|fragment| match fragment {
+                Fragment::GlyphRun(run) => Some(run),
+                _ => None,
+            })
+        {
+            assert_geometry_clusters_match_public(run);
+        }
+        paragraph
+            .data
+            .cluster_queries
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+        let layout = super::super::LineLayout::new(&lines);
+        assert_eq!(
+            paragraph
+                .data
+                .cluster_queries
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "overlay hit geometry must also use raw cluster ranges"
+        );
+        assert!(!layout.index.is_empty());
+
+        let reading = InlineStyle {
+            font_size: 24.0,
+            ..style.root.clone()
+        };
+        let ruby = crate::Ruby::new(
+            vec![crate::RubyBase {
+                node: NodeId(10),
+                content: crate::RubyContent::text(
+                    TextSource::Generated { node: NodeId(10) },
+                    "A",
+                    &style.root,
+                    &limits,
+                ),
+                align: crate::RubyAlign::SpaceAround,
+            }],
+            vec![crate::RubyLevel {
+                annotations: vec![crate::RubyAnnotation {
+                    node: NodeId(11),
+                    content: crate::RubyContent::text(
+                        TextSource::Generated { node: NodeId(11) },
+                        "MMMM",
+                        &reading,
+                        &limits,
+                    ),
+                    span: crate::RubySpan::All,
+                    visibility: crate::RubyVisibility::Visible,
+                }],
+                style: crate::RubyStyle {
+                    overhang: crate::RubyOverhang::None,
+                    ..Default::default()
+                },
+            }],
+        )
+        .unwrap();
+        let mut builder = ParagraphBuilder::new(&style, &limits);
+        builder.push_ruby(NodeId(12), &style.root, ruby);
+        let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        let lines = paragraph.break_all(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            10000.0,
+            &AtomicSizes::EMPTY,
+        );
+        let range = lines[0].text_range();
+        let padding = lines[0].ruby_caret_padding(&(range.start as u32..range.end as u32));
+        assert!(
+            padding.0 > 0.0 || padding.1 > 0.0,
+            "fixture must create ruby padding: {padding:?}, {:?}",
+            lines[0].ruby_caret_gaps
+        );
+        for run in lines
+            .iter()
+            .flat_map(Line::fragments)
+            .filter_map(|fragment| match fragment {
+                Fragment::GlyphRun(run) => Some(run),
+                _ => None,
+            })
+        {
+            assert_geometry_clusters_match_public(run);
+        }
+        paragraph
+            .data
+            .cluster_queries
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+        let layout = super::super::LineLayout::new(&lines);
+        assert_eq!(
+            paragraph
+                .data
+                .cluster_queries
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "ruby hit geometry must use raw cluster ranges"
+        );
+        assert_eq!(layout.index.len(), 1);
+
+        for mode in [
+            crate::geometry::WritingMode::VerticalRl,
+            crate::geometry::WritingMode::VerticalLr,
+        ] {
+            for direction in [
+                crate::geometry::Direction::Ltr,
+                crate::geometry::Direction::Rtl,
+            ] {
+                let lines = tcy_lines(3, mode, direction);
+                for run in lines
+                    .iter()
+                    .flat_map(Line::fragments)
+                    .filter_map(|fragment| match fragment {
+                        Fragment::GlyphRun(run) => Some(run),
+                        _ => None,
+                    })
+                {
+                    assert_geometry_clusters_match_public(run);
+                }
+                let data = &lines[0].data;
+                data.cluster_queries
+                    .store(0, std::sync::atomic::Ordering::Relaxed);
+                let layout = super::super::LineLayout::new(&lines);
+                assert_eq!(
+                    data.cluster_queries
+                        .load(std::sync::atomic::Ordering::Relaxed),
+                    0,
+                    "combined hit geometry must use raw cluster ranges"
+                );
+                assert_eq!(layout.index.len(), 3);
+            }
+        }
+    }
+
     fn synthetic_font(format: u16, bad: bool) -> Vec<u8> {
         let bytes = crate::test_support::fonts::LATIN;
         let glyph = 367u16;
