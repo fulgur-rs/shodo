@@ -69,3 +69,6 @@ name = "offset_mapping_index"
 
 [[example]]
 name = "shape_window_prep"
+
+[[example]]
+name = "missing_font_scalars"
