@@ -185,7 +185,7 @@ fn width_probe_builder(
         },
         "注",
         &annotation_style,
-        &limits,
+        limits,
     );
     let ruby = crate::Ruby::new(
         vec![crate::RubyBase {
@@ -211,7 +211,7 @@ fn width_probe_builder(
             root: cjk_style.clone(),
             ..Default::default()
         },
-        &limits,
+        limits,
     );
     builder.push_ruby(crate::node::NodeId(1), &cjk_style, ruby);
     builder
