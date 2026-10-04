@@ -15,7 +15,7 @@ pub(super) enum Context<'a> {
     Inline { bytes: [u8; 20], len: usize },
 }
 impl Context<'_> {
-    fn from_chars(chars: impl Iterator<Item = char>) -> Self {
+    pub(super) fn from_chars(chars: impl Iterator<Item = char>) -> Self {
         let mut bytes = [0; 20];
         let mut len = 0;
         for c in chars.take(5) {

@@ -66,3 +66,6 @@ name = "suppressed_warning_format"
 
 [[example]]
 name = "offset_mapping_index"
+
+[[example]]
+name = "shape_window_prep"
