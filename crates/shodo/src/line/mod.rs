@@ -312,7 +312,7 @@ impl Paragraph {
             };
             return LineResult::BlockInInline { node, token_after };
         }
-        cx.edge_reshape_spent = 0;
+        cx.begin_reshape_operation();
         let warning_checkpoint = cx.warnings.checkpoint();
         let mut sat = Saturation::default();
         let constraint = crate::sanitize::constraint(*constraint, &mut cx.warnings, &mut sat);

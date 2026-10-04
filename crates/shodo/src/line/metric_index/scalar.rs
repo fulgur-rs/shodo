@@ -169,6 +169,10 @@ pub(crate) fn measure(
             empty: true,
         };
     }
+    #[cfg(test)]
+    {
+        cx.ruby_scalar_calls += 1;
+    }
     let key = (data.id, data as *const ParagraphData as usize);
     if !cx.ruby_ranges.metrics.contains_key(&key) {
         let index = MetricIndex::new(data, atomics, cx);

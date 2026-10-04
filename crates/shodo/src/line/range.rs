@@ -212,6 +212,10 @@ pub(super) fn width(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> Option<LayoutUnit> {
+    #[cfg(test)]
+    {
+        cx.ruby_width_calls += 1;
+    }
     let first = data
         .selectable_clusters
         .partition_point(|u| (*u as usize) < range.start);

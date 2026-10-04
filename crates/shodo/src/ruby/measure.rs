@@ -151,6 +151,24 @@ pub(crate) fn candidate(
     candidate_inner(data, start, end, atomics, cx, sat)
 }
 
+/// Adjustment-only candidate for fit probes (line scan, partial-line index,
+/// intrinsic sizes). Accepted lines call `candidate` through `apply`, which
+/// also keeps the fragments.
+pub(crate) fn candidate_adjustment(
+    data: &ParagraphData,
+    start: usize,
+    end: usize,
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    if !cx.reuse_enabled() {
+        // The reference path measures every probe in full.
+        return candidate(data, start, end, atomics, cx, sat).adjustment;
+    }
+    candidate(data, start, end, atomics, cx, sat).adjustment
+}
+
 pub(crate) fn candidate_inner(
     data: &ParagraphData,
     start: usize,

@@ -104,7 +104,7 @@ pub(super) fn scan(
         let hangs = super::whitespace::fits_hanging(data, i);
         let suffix = super::decoration::width(data, i + 1, false, sat);
         let ruby_delta =
-            crate::ruby::measure::candidate(data, start, i + 1, atomics, cx, sat).adjustment;
+            crate::ruby::measure::candidate_adjustment(data, start, i + 1, atomics, cx, sat);
         let transparent =
             super::whitespace::transparent(data, i) && !matches!(unit.kind, UnitKind::ForcedBreak);
         let shared_extent = pos

@@ -21,7 +21,7 @@ impl Paragraph {
     ) -> IntrinsicSizes {
         // Intrinsic work can replace the caches used by a retained trial.
         cx.completed = None;
-        cx.edge_reshape_spent = 0;
+        cx.begin_reshape_operation();
         if self.data.first_line.is_some() {
             let min = self
                 .measure_intrinsics(cx, options, inputs, true)
@@ -118,15 +118,14 @@ impl Paragraph {
                 let suffix = super::decoration::width(data, i, false, &mut sat);
                 let natural_min = word
                     .add(
-                        crate::ruby::measure::candidate(
+                        crate::ruby::measure::candidate_adjustment(
                             data,
                             word_unit,
                             i,
                             &ruby_min_atomics,
                             cx,
                             &mut sat,
-                        )
-                        .adjustment,
+                        ),
                         &mut sat,
                     )
                     .add(kept_word_spacing, &mut sat)
@@ -144,15 +143,14 @@ impl Paragraph {
                 ));
                 let natural_max = total
                     .add(
-                        crate::ruby::measure::candidate(
+                        crate::ruby::measure::candidate_adjustment(
                             data,
                             total_unit,
                             i,
                             &ruby_max_atomics,
                             cx,
                             &mut sat,
-                        )
-                        .adjustment,
+                        ),
                         &mut sat,
                     )
                     .add(kept_total_spacing, &mut sat)
@@ -235,15 +233,14 @@ impl Paragraph {
                     max = max.max(
                         total
                             .add(
-                                crate::ruby::measure::candidate(
+                                crate::ruby::measure::candidate_adjustment(
                                     data,
                                     total_unit,
                                     i,
                                     &ruby_max_atomics,
                                     cx,
                                     &mut sat,
-                                )
-                                .adjustment,
+                                ),
                                 &mut sat,
                             )
                             .add(kept_total_spacing, &mut sat)
@@ -359,15 +356,14 @@ impl Paragraph {
                 };
                 let measured_word = word.add(tracking, &mut sat).add(delta, &mut sat);
                 let measured_word = measured_word.add(
-                    crate::ruby::measure::candidate(
+                    crate::ruby::measure::candidate_adjustment(
                         data,
                         word_unit,
                         i + 1,
                         &ruby_min_atomics,
                         cx,
                         &mut sat,
-                    )
-                    .adjustment,
+                    ),
                     &mut sat,
                 );
                 let natural_min = measured_word.sub(word_trailing, &mut sat).add(
@@ -423,15 +419,14 @@ impl Paragraph {
         let final_delta = super::windows::delta(data, word_unit, data.units.len(), cx, &mut sat);
         let natural_min = word
             .add(
-                crate::ruby::measure::candidate(
+                crate::ruby::measure::candidate_adjustment(
                     data,
                     word_unit,
                     data.units.len(),
                     &ruby_min_atomics,
                     cx,
                     &mut sat,
-                )
-                .adjustment,
+                ),
                 &mut sat,
             )
             .add(kept_word_spacing, &mut sat)
@@ -451,15 +446,14 @@ impl Paragraph {
             .max(LayoutUnit::ZERO);
         let natural_max = total
             .add(
-                crate::ruby::measure::candidate(
+                crate::ruby::measure::candidate_adjustment(
                     data,
                     total_unit,
                     data.units.len(),
                     &ruby_max_atomics,
                     cx,
                     &mut sat,
-                )
-                .adjustment,
+                ),
                 &mut sat,
             )
             .add(kept_total_spacing, &mut sat)

@@ -31,6 +31,16 @@ pub struct LayoutContext {
     pub(crate) ruby_lane_visits: usize,
     #[cfg(test)]
     pub(crate) ruby_column_visits: usize,
+    /// Measure every ruby candidate in full: the reference path that each
+    /// reuse path must match exactly.
+    #[cfg(test)]
+    pub(crate) ruby_reference: bool,
+    /// Calls of `line::range::width` (ruby range widths).
+    #[cfg(test)]
+    pub(crate) ruby_width_calls: usize,
+    /// Calls of `line::metric_index::scalar::measure`.
+    #[cfg(test)]
+    pub(crate) ruby_scalar_calls: usize,
 }
 
 impl LayoutContext {
@@ -41,6 +51,25 @@ impl LayoutContext {
     /// Warnings recorded by line layout since the last call.
     pub fn take_warnings(&mut self) -> Vec<Warning> {
         self.warnings.take()
+    }
+
+    /// Start one `next_line` or `intrinsic_sizes` operation: reset the edge
+    /// reshape budget and every per-operation reuse state bounded by it.
+    pub(crate) fn begin_reshape_operation(&mut self) {
+        self.edge_reshape_spent = 0;
+    }
+
+    /// Whether measurements may be reused within an operation. Tests switch
+    /// reuse off to obtain the reference path.
+    pub(crate) fn reuse_enabled(&self) -> bool {
+        #[cfg(test)]
+        {
+            !self.ruby_reference
+        }
+        #[cfg(not(test))]
+        {
+            true
+        }
     }
 
     /// Drops scratch that exceeds the current shaping window's conservative cap.
