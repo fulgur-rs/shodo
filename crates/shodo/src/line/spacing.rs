@@ -88,6 +88,16 @@ pub(crate) fn build(
                         let Some(ch) = data.text[offset as usize..].chars().next() else {
                             continue;
                         };
+                        if ch == '\u{200b}' {
+                            // U+200B stays zero-width and transparent to
+                            // tracking, but separates its neighbors for
+                            // text-autospace (WPT text-autospace-no-001).
+                            if value.summary.last.is_none() {
+                                value.summary.autospace_before = true;
+                            }
+                            value.summary.autospace_after = true;
+                            continue;
+                        }
                         if matches!(
                             category.get(ch),
                             GeneralCategory::Format | GeneralCategory::Control
@@ -140,7 +150,12 @@ pub(crate) fn build(
                             punct: (start + character) as u32,
                         };
                         if let Some(previous) = value.summary.last {
-                            let amount = super::autospace::gap(data, previous, edge, false);
+                            let amount = super::autospace::gap(
+                                data,
+                                previous,
+                                edge,
+                                value.summary.autospace_after,
+                            );
                             if amount != 0 {
                                 gaps.push(super::autospace::Gap {
                                     assigned: index as u32,
@@ -494,6 +509,7 @@ pub(super) fn apply(
     }
     let mut previous: Option<(usize, Edge)> = None;
     let mut barrier = false;
+    let mut autospace_barrier = false;
     let bidi_start = super::whitespace::bidi_trailing(data, start, scan.end);
     let level = |i: usize| {
         if i >= bidi_start
@@ -523,10 +539,18 @@ pub(super) fn apply(
             } else {
                 (summary.first, summary.last)
             };
+            // The side met first in visual traversal, then the other side.
+            let (autospace_facing, autospace_trailing) = if reversed {
+                (summary.autospace_after, summary.autospace_before)
+            } else {
+                (summary.autospace_before, summary.autospace_after)
+            };
             let Some(first) = first else {
                 barrier |= summary.before || summary.after;
+                autospace_barrier |= autospace_facing || autospace_trailing;
                 continue;
             };
+            let autospace_blocked = barrier || autospace_barrier || autospace_facing;
             if let Some((j, edge)) = previous {
                 let (right, left) = if data.base_level.is_multiple_of(2) {
                     super::punctuation::boundary(data, edge, first, barrier || summary.before)
@@ -552,9 +576,9 @@ pub(super) fn apply(
                 let cost = super::spacing_summary::gap(edge, first);
                 let gap = super::spacing_summary::raw(cost, sat);
                 let auto = if data.base_level.is_multiple_of(2) {
-                    super::autospace::gap(data, edge, first, barrier || summary.before)
+                    super::autospace::gap(data, edge, first, autospace_blocked || summary.before)
                 } else {
-                    super::autospace::gap(data, first, edge, barrier || summary.after)
+                    super::autospace::gap(data, first, edge, autospace_blocked || summary.after)
                 };
                 // Hanging whitespace takes the content→space gap itself;
                 // the content width remains the trimmed candidate width.
@@ -600,6 +624,7 @@ pub(super) fn apply(
                 }
             }
             barrier = summary.after;
+            autospace_barrier = autospace_trailing;
             previous = Some((i, last.unwrap()));
         }
     }

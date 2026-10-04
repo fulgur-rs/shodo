@@ -917,6 +917,13 @@ fn autospace_classification_and_grapheme_marks() {
         ("水 a", 0),
         ("水♥a", 0),
         ("水\u{200d}a", 1),
+        ("水\u{200b}a", 0),
+        ("a\u{200b}水", 0),
+        ("水\u{200b}1", 0),
+        ("1\u{200b}水", 0),
+        ("水\u{200b}\u{200b}a", 0),
+        ("水\u{200b}\u{200d}a", 0),
+        ("水\u{200b}a水", 1),
         ("々a", 1),
         ("㇀a", 1),
     ] {
@@ -929,6 +936,78 @@ fn autospace_classification_and_grapheme_marks() {
             natural.inline_size() + gaps as f32 * ic(20.0) / 8.0,
         );
     }
+}
+
+#[test]
+fn zero_width_space_blocks_autospace_but_stays_zero_width_and_breakable() {
+    // WPT text-autospace-no-001: `normal` with U+200B at each script
+    // boundary renders like `no-autospace` without it.
+    let mut no = root();
+    no.text_autospace = shodo::style::TextAutospace::NoAutospace;
+    let plain = "国国AA国国AA国国";
+    let separated = "国国\u{200b}AA\u{200b}国国\u{200b}AA\u{200b}国国";
+    let natural = lines(&paragraph(no.clone(), plain), 1000.0).remove(0);
+    for style in [root(), no] {
+        let p = paragraph(style, separated);
+        close(
+            lines(&p, 1000.0).remove(0).inline_size(),
+            natural.inline_size(),
+        );
+        let intrinsic = p.intrinsic_sizes(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            &AtomicIntrinsics::EMPTY,
+        );
+        close(intrinsic.max_content, natural.inline_size());
+    }
+    // Placement agrees with measurement: the Latin glyph sits directly
+    // after the ideograph, and tracking still crosses U+200B.
+    let mut tracked = root();
+    tracked.letter_spacing = 2.0;
+    let positions = |style: InlineStyle, text: &str| {
+        lines(&paragraph(style, text), 1000.0)
+            .remove(0)
+            .fragments()
+            .filter_map(|f| match f {
+                Fragment::GlyphRun(r) => Some(r.glyphs().map(|g| g.inline_position).collect()),
+                _ => None,
+            })
+            .flat_map(|v: Vec<f32>| v)
+            .collect::<Vec<_>>()
+    };
+    let mut tracked_no = tracked.clone();
+    tracked_no.text_autospace = shodo::style::TextAutospace::NoAutospace;
+    let actual = positions(tracked, "水\u{200b}a");
+    let expected = positions(tracked_no, "水a");
+    close(*actual.last().unwrap(), *expected.last().unwrap());
+    close(*expected.last().unwrap(), ic(20.0) + 2.0);
+    // The boundary keeps its break opportunity: a line just wider than
+    // `水` wraps after U+200B without a reserved autospace gap.
+    let p = paragraph(root(), "水\u{200b}a");
+    let wrapped = lines(&p, ic(20.0) + 1.0);
+    assert_eq!(wrapped.len(), 2);
+    close(wrapped[0].inline_size(), ic(20.0));
+    close(wrapped[1].inline_size(), advance('a'));
+}
+
+#[test]
+fn zero_width_space_in_its_own_inline_box_blocks_autospace() {
+    let layout = |auto| {
+        let mut style = root();
+        style.text_autospace = auto;
+        let p = build(style.clone(), |b| {
+            b.push_text(TextSource::Generated { node: NodeId(1) }, "水")
+                .open_inline(NodeId(2), &style, InlineEdges::default())
+                .push_text(TextSource::Generated { node: NodeId(3) }, "\u{200b}")
+                .close_inline()
+                .push_text(TextSource::Generated { node: NodeId(4) }, "a");
+        });
+        lines(&p, 1000.0).remove(0)
+    };
+    close(
+        layout(shodo::style::TextAutospace::Normal).inline_size(),
+        layout(shodo::style::TextAutospace::NoAutospace).inline_size(),
+    );
 }
 
 #[test]
