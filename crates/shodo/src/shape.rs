@@ -883,42 +883,40 @@ fn shape_inputs<'a>(
                     if let Some(bases) = &mut bases {
                         bases.item(scalar.item as usize, LimitKind::ShapedGlyphs, 1)?;
                     }
-                    shape_item(
+                    let glyph = store.len();
+                    push_notdef_glyph(
                         &mut store,
-                        &mut runs,
-                        &scalar.c.to_string(),
+                        scalar.c,
                         scalar.offset,
-                        scalar.item,
-                        fonts.primary_font(),
                         style.font_size,
                         limits,
                         sat,
                         glyph_offset,
                     )?;
-                    *store.id.last_mut().unwrap() = 0;
-                    let mut current = runs.pop().unwrap();
-                    current.text.end = scalar.end;
-                    current.instance = Arc::clone(run_instance);
-                    current.orientation = original.orientation;
+                    // Extend the window's previous run while it is contiguous
+                    // and its pen stays under the limit; otherwise start a run.
                     if runs.len() > window_run_start
                         && let Some(previous) = runs.last_mut()
-                        && previous.item == current.item
-                        && previous.font == current.font
-                        && previous.text.end == current.text.start
-                        && i64::from(store.pen[previous.glyphs.end as usize - 1].raw())
-                            + i64::from(store.advance[previous.glyphs.end as usize - 1].raw())
-                            + i64::from(store.advance[current.glyphs.start as usize].raw())
+                        && previous.item == scalar.item
+                        && previous.text.end == scalar.offset
+                        && i64::from(store.pen[glyph - 1].raw())
+                            + i64::from(store.advance[glyph - 1].raw())
+                            + i64::from(store.advance[glyph].raw())
                             <= i64::from(RUN_PEN_LIMIT)
                     {
-                        let pen = store.pen[previous.glyphs.end as usize - 1]
-                            + store.advance[previous.glyphs.end as usize - 1];
-                        for pos in &mut store.pen[current.glyphs.start as usize..] {
-                            *pos = pos.add(pen, sat);
-                        }
-                        previous.glyphs.end = current.glyphs.end;
-                        previous.text.end = current.text.end;
+                        store.pen[glyph] = store.pen[glyph - 1] + store.advance[glyph - 1];
+                        previous.glyphs.end = glyph as u32 + 1;
+                        previous.text.end = scalar.end;
                     } else {
-                        runs.push(current);
+                        runs.push(ShapedRun {
+                            glyphs: glyph as u32..glyph as u32 + 1,
+                            text: scalar.offset..scalar.end,
+                            item: scalar.item,
+                            orientation: original.orientation,
+                            font: fonts.primary_font(),
+                            font_size: style.font_size,
+                            instance: Arc::clone(run_instance),
+                        });
                     }
                 }
                 continue;
@@ -1258,82 +1256,46 @@ pub(crate) fn is_mark(c: char) -> bool {
     )
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn shape_item(
+/// Pushes one `.notdef` glyph for a scalar without a matching face, at pen
+/// zero: one em of advance, or zero for marks (shifted back half an em) and
+/// default ignorables. The caller places it in a run.
+fn push_notdef_glyph(
     store: &mut GlyphStore,
-    runs: &mut Vec<ShapedRun>,
-    text: &str,
-    text_start: u32,
-    item: u32,
-    font: FontId,
+    c: char,
+    cluster: u32,
     font_size: f32,
     limits: &Limits,
     sat: &mut Saturation,
     glyph_offset: u64,
 ) -> Result<(), LimitExceeded> {
+    // Converted per glyph so saturation counts stay per scalar.
     let em = LayoutUnit::from_f32_round(font_size, sat);
-    let half_em = em.div_i32(2);
-    let mut run_glyphs = store.len() as u32;
-    let mut run_text = text_start;
-    let mut pen = LayoutUnit::ZERO;
-    for (i, c) in text.char_indices() {
-        Limits::check(
-            limits.max_shaped_glyphs,
-            LimitKind::ShapedGlyphs,
-            glyph_offset + store.len() as u64 + 1,
-        )?;
-        let mark = is_mark(c);
-        let advance = if mark
-            || icu_properties::CodePointSetData::new::<
-                icu_properties::props::DefaultIgnorableCodePoint,
-            >()
-            .contains(c)
-        {
-            LayoutUnit::ZERO
-        } else {
-            em
-        };
-        let cluster = text_start + i as u32;
-        let overflows = i64::from(pen.raw()) + i64::from(advance.raw()) > i64::from(RUN_PEN_LIMIT);
-        if overflows && store.len() as u32 > run_glyphs {
-            runs.push(ShapedRun {
-                glyphs: run_glyphs..store.len() as u32,
-                text: run_text..cluster,
-                item,
-                orientation: orientation::RunOrientation::Horizontal,
-                font,
-                font_size,
-                instance: Arc::new(RunInstance::default()),
-            });
-            run_glyphs = store.len() as u32;
-            run_text = cluster;
-            pen = LayoutUnit::ZERO;
-        }
-        store.flags.push(0);
-        store.id.push(c as u32);
-        store.advance.push(advance);
-        store.pen.push(pen);
-        store.offset_inline.push(if mark {
-            LayoutUnit::ZERO - half_em
-        } else {
-            LayoutUnit::ZERO
-        });
-        store.offset_block.push(LayoutUnit::ZERO);
-        store.cluster.push(cluster);
-        pen = pen.add(advance, sat);
-    }
-    if store.len() as u32 > run_glyphs {
-        let end = text_start + text.len() as u32;
-        runs.push(ShapedRun {
-            glyphs: run_glyphs..store.len() as u32,
-            text: run_text..end,
-            item,
-            orientation: orientation::RunOrientation::Horizontal,
-            font,
-            font_size,
-            instance: Arc::new(RunInstance::default()),
-        });
-    }
+    Limits::check(
+        limits.max_shaped_glyphs,
+        LimitKind::ShapedGlyphs,
+        glyph_offset + store.len() as u64 + 1,
+    )?;
+    let mark = is_mark(c);
+    let advance = if mark || icu_properties::CodePointSetData::new::<
+        icu_properties::props::DefaultIgnorableCodePoint,
+    >()
+    .contains(c)
+    {
+        LayoutUnit::ZERO
+    } else {
+        em
+    };
+    store.flags.push(0);
+    store.id.push(0);
+    store.advance.push(advance);
+    store.pen.push(LayoutUnit::ZERO);
+    store.offset_inline.push(if mark {
+        LayoutUnit::ZERO - em.div_i32(2)
+    } else {
+        LayoutUnit::ZERO
+    });
+    store.offset_block.push(LayoutUnit::ZERO);
+    store.cluster.push(cluster);
     Ok(())
 }
 

@@ -1264,19 +1264,35 @@ fn missing_vorg_uses_vmtx_top_bearing_for_vertical_origin() {
     assert_eq!(paragraph.data.glyphs.offset_block[0].to_f32(), 8.0);
 }
 
+/// Shapes `text` through the missing-font path: the collection has no faces.
 fn shape(
     text: &str,
     size: f32,
     limits: &Limits,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
-    let font = FontCollection::new(&Limits::default()).primary_font();
-    let mut store = GlyphStore::default();
-    let mut runs = Vec::new();
-    let mut sat = Saturation::default();
-    shape_item(
-        &mut store, &mut runs, text, 0, 0, font, size, limits, &mut sat, 0,
-    )?;
-    Ok((store, runs))
+    let fonts = FontCollection::with_options(
+        limits,
+        crate::font::FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    let style = crate::style::ParagraphStyle {
+        root: crate::style::InlineStyle {
+            font_size: size,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut builder = crate::ParagraphBuilder::new(&style, limits);
+    builder.push_text(
+        crate::node::TextSource::Generated {
+            node: crate::node::NodeId(1),
+        },
+        text,
+    );
+    let paragraph = builder.build(&mut crate::LayoutContext::new(), &fonts)?;
+    Ok((paragraph.data.glyphs.clone(), paragraph.data.runs.clone()))
 }
 
 #[test]
@@ -1311,6 +1327,29 @@ fn pen_positions_restart_before_saturating() {
     // Differences inside a run stay exact.
     assert_eq!((g.pen[15] - g.pen[14]).to_f32(), 1.0e6);
     assert_eq!(runs[1].text, 16..32);
+}
+
+#[test]
+fn missing_font_glyphs_are_notdef_and_runs_share_one_instance() {
+    // ZWJ is default ignorable: a zero-advance glyph without a mark offset.
+    let text = format!("{}\u{200d}{}", "a".repeat(20), "b".repeat(19));
+    let (g, runs) = shape(&text, 1.0e6, &Limits::default()).unwrap();
+    assert!(g.id.iter().all(|&id| id == 0));
+    assert_eq!(g.advance[20], LayoutUnit::ZERO);
+    assert_eq!(g.offset_inline[20], LayoutUnit::ZERO);
+    assert_eq!(g.cluster[21], 23);
+    // The zero-advance ZWJ does not use pen space, so the second run takes
+    // one extra glyph before the pen limit.
+    let sizes: Vec<u32> = runs.iter().map(|r| r.glyphs.end - r.glyphs.start).collect();
+    assert_eq!(sizes, vec![16, 17, 7]);
+    assert_eq!(
+        runs.iter().map(|r| r.text.clone()).collect::<Vec<_>>(),
+        [0..16, 16..35, 35..42]
+    );
+    assert!(
+        runs.iter()
+            .all(|r| Arc::ptr_eq(&r.instance, &runs[0].instance))
+    );
 }
 
 #[test]
