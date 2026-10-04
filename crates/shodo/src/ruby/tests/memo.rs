@@ -1393,7 +1393,9 @@ fn narrow_retry_after_budget_exhausting_index_matches_reference() {
         indexed: Vec<usize>,
         /// Edge windows shaped during the 999 retry.
         shaped: usize,
-        hits: usize,
+        /// Memo hits during the 998 retry, which follows the 999 retry's
+        /// speculative index (rolled back for eight words).
+        retry_hits: usize,
     }
     let observe = |p: &Paragraph, reference: bool| {
         let mut cx = context(reference);
@@ -1401,7 +1403,7 @@ fn narrow_retry_after_budget_exhausting_index_matches_reference() {
             out: Vec::new(),
             indexed: Vec::new(),
             shaped: 0,
-            hits: 0,
+            retry_hits: 0,
         };
         for width in [1000.0f32, 999.0, 998.0, 120.0] {
             cx.cache_prepare_visits = 0;
@@ -1424,7 +1426,9 @@ fn narrow_retry_after_budget_exhausting_index_matches_reference() {
                     .edge_shape_calls
                     .load(std::sync::atomic::Ordering::Relaxed)
                     - shaped;
-                run.hits = cx.ruby_memo_hits - hits;
+            }
+            if width == 998.0 {
+                run.retry_hits = cx.ruby_memo_hits - hits;
             }
             run.indexed.push(cx.cache_prepare_visits);
             run.out.push(result_signature(result));
@@ -1451,7 +1455,10 @@ fn narrow_retry_after_budget_exhausting_index_matches_reference() {
                 assert_eq!(optimized.indexed[2], 0, "a clean index serves 998");
             } else {
                 assert!(optimized.indexed[2] > 0, "the rolled-back index is redone");
-                assert!(optimized.hits > 0, "the retry must replay memo entries");
+                assert!(
+                    optimized.retry_hits > 0,
+                    "the retry after the rolled-back index must replay memo entries"
+                );
             }
         }
     }
@@ -1459,6 +1466,15 @@ fn narrow_retry_after_budget_exhausting_index_matches_reference() {
 
 /// Review focus 4: min- and max-content atomics have distinct revisions and
 /// must never answer each other's probes, also across first-line passes.
+///
+/// `intrinsic_sizes` itself never reuses an entry: it probes only at legal
+/// breaks (so `through == end`) and builds fresh min/max atomics, with fresh
+/// revisions, for every pass, so each probe has its own key. The second half
+/// therefore probes one range directly under both revisions in one operation.
+/// A changed revision also resets the range caches (`RangeCache::begin`), so
+/// the first probe after a switch fills them and is not memoized, the second
+/// is recorded, and the third hits (the memo is on). A max probe never hits
+/// a min entry, and returning to min does not hit its older entry either.
 #[test]
 fn intrinsic_min_and_max_atomics_keep_separate_memo_entries() {
     let p = atomic_base(&Limits::default(), true);
@@ -1479,6 +1495,43 @@ fn intrinsic_min_and_max_atomics_keep_separate_memo_entries() {
     let (reference, reference_warnings, _) = run(true);
     assert_eq!((optimized, warnings), (reference, reference_warnings));
     assert!(sizes.max_content > sizes.min_content);
+
+    let data = &p.data;
+    let units = data.ruby.containers[0].units.clone();
+    let (min, max) = (sized(4.0), sized(80.0));
+    let probes = |reference: bool| {
+        let mut cx = context(reference);
+        let mut sat = Saturation::default();
+        let mut probe = |cx: &mut LayoutContext, atomics: &AtomicSizes| {
+            let hits = cx.ruby_memo_hits;
+            let value = crate::ruby::measure::candidate_adjustment(
+                data,
+                units.start,
+                units.end,
+                atomics,
+                cx,
+                &mut sat,
+            );
+            (value, cx.ruby_memo_hits - hits)
+        };
+        cx.begin_reshape_operation();
+        let out: Vec<_> = [&min, &min, &min, &max, &max, &max, &min]
+            .into_iter()
+            .map(|atomics| probe(&mut cx, atomics))
+            .collect();
+        (out, sat)
+    };
+    let (optimized, sat) = probes(false);
+    let (reference, ref_sat) = probes(true);
+    let values = |run: &[(LayoutUnit, usize)]| run.iter().map(|(v, _)| *v).collect::<Vec<_>>();
+    assert_eq!((values(&optimized), sat), (values(&reference), ref_sat));
+    assert_ne!(optimized[0].0, optimized[3].0, "min and max must differ");
+    let hits: Vec<_> = optimized.iter().map(|(_, hits)| *hits).collect();
+    assert_eq!(
+        hits,
+        [0, 0, 1, 0, 0, 1, 0],
+        "repeats hit within a revision, never across revisions"
+    );
 }
 
 /// Review focus 5: entries never outlive their operation, and a changed
@@ -1515,6 +1568,10 @@ fn memo_does_not_survive_operations_or_atomic_revisions() {
         .collect();
     assert_eq!(shared, fresh);
     assert_ne!(shared[0], shared[1]);
+    assert!(
+        cx.ruby_memo_hits > 0,
+        "the shared context must reuse memo entries"
+    );
 }
 
 /// A measurement that fills the range caches is not memoized: later hits
