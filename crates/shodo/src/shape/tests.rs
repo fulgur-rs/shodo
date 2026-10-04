@@ -1010,7 +1010,28 @@ fn nested_width_probe_builder(
     inner_glyphs: Option<u64>,
     limits: &Limits,
 ) -> crate::ParagraphBuilder {
-    nested_width_probe_builder_with(outer_glyphs, inner_glyphs, limits, |inner, _| {
+    nested_width_probe_builder_with(outer_glyphs, inner_glyphs, limits, |inner, style| {
+        // A leading non-TCY scalar keeps the group's first scalar a grapheme start (the
+        // first scalar right after a ruby base boundary is not one), which the width
+        // probe requires; without it the inner group is never probed.
+        let plain = crate::style::InlineStyle {
+            text_combine_upright: crate::style::TextCombineUpright::None,
+            ..style.clone()
+        };
+        inner
+            .open_inline(
+                crate::node::NodeId(19),
+                &plain,
+                crate::node::InlineEdges::default(),
+            )
+            .push_text(
+                crate::node::TextSource::Dom {
+                    node: crate::node::NodeId(19),
+                    offset: 0,
+                },
+                "x",
+            )
+            .close_inline();
         inner.push_text(
             crate::node::TextSource::Generated {
                 node: crate::node::NodeId(20),
@@ -1077,6 +1098,37 @@ fn nested_multi_input_width_probe_builder(
 fn scoped_output_reuse_matches_reference_for_nested_base_scopes() {
     let limits = Limits::default();
     let fonts = width_probe_fonts(&limits);
+    // Both the outer "34" group and the inner "12" group must be width-probed, so
+    // reuse saves a final shape for each of them.
+    let calls = |mode| {
+        let builder = nested_width_probe_builder(None, None, &limits);
+        HARFRUST_SHAPE_CALLS.with(|calls| calls.set(0));
+        let _mode_guard = CombinedWidthProbeModeGuard::new(mode);
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        (paragraph, HARFRUST_SHAPE_CALLS.with(|calls| calls.get()))
+    };
+    let (reference_paragraph, reference_calls) =
+        calls(crate::shape::CombinedWidthProbeMode::CloneReference);
+    let (reused_paragraph, reused_calls) = calls(crate::shape::CombinedWidthProbeMode::ScopedReuse);
+    assert_eq!(
+        width_probe_snapshot(&reference_paragraph),
+        width_probe_snapshot(&reused_paragraph)
+    );
+    let mut combine_ids: Vec<u32> = reused_paragraph
+        .data
+        .shape_items
+        .iter()
+        .filter_map(|item| item.combine)
+        .collect();
+    combine_ids.dedup();
+    assert!(combine_ids.len() >= 2, "{combine_ids:?}");
+    assert!(
+        reference_calls >= reused_calls + 2,
+        "reference={reference_calls} reused={reused_calls}"
+    );
+
     let mut outcomes = Vec::new();
     for outer in [None, Some(0), Some(1), Some(2), Some(3), Some(4), Some(6)] {
         for inner in [None, Some(0), Some(1), Some(2), Some(4)] {
@@ -1094,11 +1146,7 @@ fn scoped_output_reuse_matches_reference_for_nested_base_scopes() {
             outcomes.push(reference.is_ok());
         }
     }
-    eprintln!(
-        "nested outcomes: ok={} err={}",
-        outcomes.iter().filter(|ok| **ok).count(),
-        outcomes.iter().filter(|ok| !**ok).count()
-    );
+    assert!(outcomes.contains(&true) && outcomes.contains(&false));
 }
 
 #[test]
@@ -1134,11 +1182,18 @@ fn scoped_output_reuse_matches_reference_for_multi_input_groups_in_nested_bases(
     let data = &reused_paragraph.data;
     // The probed group is the combine id that owns several shape items; "34" in the
     // outer base is a separate single-item group.
+    // Its id is derived from the item holding the leading "1" rather than hard-coded.
+    let group_id = data
+        .shape_items
+        .iter()
+        .find(|item| item.scalars.first().is_some_and(|scalar| scalar.c == '1'))
+        .and_then(|item| item.combine)
+        .expect("the '1' item belongs to a combine group");
     let group_items: Vec<usize> = data
         .shape_items
         .iter()
         .enumerate()
-        .filter(|(_, item)| item.combine == Some(1) && item.font.is_some())
+        .filter(|(_, item)| item.combine == Some(group_id) && item.font.is_some())
         .map(|(index, _)| index)
         .collect();
     // Glyphs per shape item: runs whose source text covers the item's scalars.
@@ -1153,10 +1208,6 @@ fn scoped_output_reuse_matches_reference_for_multi_input_groups_in_nested_bases(
                 .sum()
         })
         .collect();
-    eprintln!(
-        "multi-input: group_items={group_items:?} glyphs={group_glyphs:?} \
-         reference_calls={reference_calls} reused_calls={reused_calls}"
-    );
     assert!(group_items.len() >= 2, "{group_items:?}");
     assert!(
         reference_calls >= reused_calls + 2,
@@ -1164,7 +1215,11 @@ fn scoped_output_reuse_matches_reference_for_multi_input_groups_in_nested_bases(
     );
     // The inner base spends `prefix` glyphs on its leading plain "x" before the group,
     // so a limit in [prefix + largest, prefix + total) admits each charge on its own
-    // but not their cumulative sum.
+    // but not their cumulative sum. The sweep proves the reused path reaches and
+    // reproduces that cumulative failure boundary. It cannot tell a cumulative
+    // preflight from a per-charge one, because the commit replay fails identically;
+    // the preflight's cumulative semantics are pinned by the unit tests in
+    // ruby/base_budget.rs (`shaped_glyph_preflight_accumulates_shared_ancestor_charges`).
     let prefix: u64 = data
         .shape_items
         .iter()
@@ -1182,7 +1237,16 @@ fn scoped_output_reuse_matches_reference_for_multi_input_groups_in_nested_bases(
     let largest = *group_glyphs.iter().max().unwrap();
     assert!(prefix > 0 && group_total > largest);
 
-    let values = [None, Some(0), Some(1), Some(2), Some(3), Some(4)];
+    let values = [
+        None,
+        Some(0),
+        Some(1),
+        Some(2),
+        Some(3),
+        Some(4),
+        Some(5),
+        Some(6),
+    ];
     let mut ok = 0;
     let mut err = 0;
     let mut cumulative_boundary = false;
@@ -1216,7 +1280,6 @@ fn scoped_output_reuse_matches_reference_for_multi_input_groups_in_nested_bases(
             }
         }
     }
-    eprintln!("multi-input outcomes: ok={ok} err={err} cumulative_boundary={cumulative_boundary}");
     assert!(ok > 0 && err > 0);
     assert!(cumulative_boundary);
 }
