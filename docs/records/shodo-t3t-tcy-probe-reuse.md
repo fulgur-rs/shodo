@@ -43,16 +43,18 @@
 
 ## 呼び出し回数と同値性
 
-再利用が成立した group では、TCY の入力ごとに harfrust の shape 呼び出しが 1 回減る。テストでの期待値は、`repeats = 1` でちょうど 1 回減ること、複数入力の group で 10 回中 3 回減ること。
+再利用が成立した group は最終の scoped shaping を省くため、harfrust の shape 呼び出しがその分減る。これは仕組みの説明であり、テストが固定している回数は次のものだけ。
 
-出力と挙動の同値性を、reference 経路（再利用なし）との比較で固定した。
+- `scoped_output_reuse_saves_final_shapes_and_keeps_local_glyph_caps` は、`WIDTH_PROBE_CASES[0]` の `repeats = 1` でちょうど 1 回少ないこと、`repeats = 2` の全 4 ケースで reference より少ないことを検証する。base の glyph 上限 `Some(1)` では両経路が同じ `ShapedGlyphs` エラーを返すことも確認する。
+- 入れ子 base のテストと、入れ子 base 内の複数入力 group のテストは、reference の呼び出し回数が再利用経路より 2 回以上多いことを検証する。
 
-- base の glyph 上限・run byte 上限と段落の glyph 上限の行列（repeats 1/2）で、出力・エラー・警告が reference と一致する（`scoped_output_reuse_matches_reference_across_base_and_paragraph_limits`）。
-- `::first-line` を含む累積 base glyph 予算（`scoped_output_reuse_matches_reference_for_first_line_cumulative_base_glyphs`）。
-- 警告上限が尽きた状態（`scoped_output_reuse_matches_reference_under_exhausted_warning_caps`）。
-- 入れ子の base scope（`scoped_output_reuse_matches_reference_for_nested_base_scopes`）、および入れ子の base 内の複数入力 group（`scoped_output_reuse_matches_reference_for_multi_input_groups_in_nested_bases`）。
-- 局所 glyph 上限を保ったまま最終 shape 回数が減ること（`scoped_output_reuse_saves_final_shapes_and_keeps_local_glyph_caps`）。
-- 状態を変更しない累積 preflight の単体テスト（`crates/shodo/src/ruby/base_budget.rs` の `shaped_glyph_preflight_*`）。共有祖先の charge の累積、内側と消費済み分の判定で状態が変わらないこと、`charge` と同じ飽和動作を確認する。
+出力と挙動の同値性は、reference 経路（再利用なし）との比較で固定した。各テストが掃引する値は次のとおり。
+
+- `scoped_output_reuse_matches_reference_across_base_and_paragraph_limits`: 4 ケース × `repeats` 1/2 × base glyph 上限 `None, 0, 1, 2, 3, 4, 6` × base run byte 上限 `None, 0, 1, 2, 4` × 段落 glyph 上限 `None, 1, 3, 5`。
+- `scoped_output_reuse_matches_reference_for_first_line_cumulative_base_glyphs`: `::first-line` ありで、4 ケース × `repeats` 1/2 × base glyph 上限 `None, 1, 2, 3, 4, 5, 6, 8` × 段落 glyph 上限 `None, 2, 4, 6, 8`。成功と失敗の両方の結果が現れることも確認する。
+- `scoped_output_reuse_matches_reference_under_exhausted_warning_caps`: 4 ケース × 警告上限 `Some(0), Some(1), Some(2)` × base run byte 上限 `None, 0, 1`。
+- `scoped_output_reuse_matches_reference_for_nested_base_scopes`: 外側 base glyph 上限 `None, 0, 1, 2, 3, 4, 6` × 内側 `None, 0, 1, 2, 4`。成功と失敗の両方が現れることを確認する。
+- `scoped_output_reuse_matches_reference_for_multi_input_groups_in_nested_bases`: 外側・内側の glyph 上限を `None, 0, 1..6` で掃引し、複数 shape input の group について、各 charge は単独なら通るが累積では超える境界を再利用経路が到達・再現することを確認する。ただし結果の同値性だけでは、累積 preflight と charge ごとの preflight を区別できない。commit が reference と同じ順序で charge を再生し、同じように失敗するため。累積 preflight の意味は `crates/shodo/src/ruby/base_budget.rs` の単体テスト（`shaped_glyph_preflight_accumulates_shared_ancestor_charges`、`shaped_glyph_preflight_checks_inner_and_spent_without_mutating`、`shaped_glyph_preflight_saturates_like_charge`）が固定する。
 
 baseline/candidate の出力 SHA-256 と build/layout warning は、両 run の全ケース・全サンプルで一致した（警告はいずれも空）。
 

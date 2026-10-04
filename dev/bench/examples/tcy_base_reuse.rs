@@ -19,6 +19,7 @@ use std::hint::black_box;
 use std::time::Instant;
 
 const REPEATS: usize = 64;
+const INLINE_SIZE: f32 = 96.0;
 
 #[derive(Clone, Copy)]
 enum Case {
@@ -77,10 +78,6 @@ impl Case {
             multiple_styles,
         }
     }
-
-    fn inline_size(self) -> f32 {
-        96.0
-    }
 }
 
 fn style(family: &str, direction: Direction) -> InlineStyle {
@@ -115,6 +112,7 @@ fn builder(case: Case, limits: &Limits) -> ParagraphBuilder {
         root: cjk_style.clone(),
         ..Default::default()
     };
+    // The TCY content builder uses `base_limits`; the outer paragraph uses `limits`.
     let mut base_builder = ParagraphBuilder::new(
         &paragraph_style,
         if matches!(case, Case::PlainTcy) {
@@ -196,12 +194,11 @@ fn builder(case: Case, limits: &Limits) -> ParagraphBuilder {
 fn output_signature(
     paragraph: &Paragraph,
     context: &mut LayoutContext,
-    case: Case,
 ) -> (String, String, Vec<String>, Vec<String>) {
     let lines = paragraph.break_all(
         context,
         &LineOptions::default(),
-        case.inline_size(),
+        INLINE_SIZE,
         &AtomicSizes::EMPTY,
     );
     let output = lines.iter().map(snapshot::line).collect::<Vec<_>>();
@@ -266,7 +263,7 @@ fn main() {
 
     let (paragraph, context) = outputs.first_mut().expect("at least one output");
     let (output_sha256, warning_sha256, build_warnings, layout_warnings) =
-        output_signature(paragraph, context, case);
+        output_signature(paragraph, context);
     assert!(outputs.iter().all(|(paragraph, _)| {
         paragraph
             .warnings()
