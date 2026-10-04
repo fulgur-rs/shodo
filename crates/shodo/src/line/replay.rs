@@ -151,6 +151,10 @@ pub(crate) fn replay(cx: &mut LayoutContext, effects: &Effects, sat: &mut Satura
     if cx.warnings.is_suppressed() != effects.suppressed
         || !effects.charges.replayable(cx.edge_reshape_spent)
     {
+        #[cfg(test)]
+        {
+            cx.ruby_replay_refusals += 1;
+        }
         return false;
     }
     cx.edge_reshape_spent = cx.edge_reshape_spent.saturating_add(effects.charges.bytes);

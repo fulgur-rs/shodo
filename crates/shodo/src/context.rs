@@ -22,6 +22,8 @@ pub struct LayoutContext {
     /// Reshape charges of the measurements currently being recorded for
     /// exact replay.
     pub(crate) reshape_log: crate::line::replay::ReshapeLog,
+    /// Adjustment-only ruby candidates measured in the current operation.
+    pub(crate) ruby_memo: crate::ruby::memo::RubyMemo,
     #[cfg(test)]
     pub(crate) cache_visits: usize,
     #[cfg(test)]
@@ -47,6 +49,13 @@ pub struct LayoutContext {
     /// Selected line profiles measured by `metric_index::content_shared`.
     #[cfg(test)]
     pub(crate) ruby_profile_selects: usize,
+    /// `line::replay::replay` calls refused by the gate (not counting
+    /// measurements that never recorded effects because they warned).
+    #[cfg(test)]
+    pub(crate) ruby_replay_refusals: usize,
+    /// Ruby candidate cores answered from `ruby_memo`.
+    #[cfg(test)]
+    pub(crate) ruby_memo_hits: usize,
 }
 
 impl LayoutContext {
@@ -64,6 +73,7 @@ impl LayoutContext {
     pub(crate) fn begin_reshape_operation(&mut self) {
         self.edge_reshape_spent = 0;
         self.reshape_log.clear();
+        self.ruby_memo.clear();
     }
 
     /// Whether measurements may be reused within an operation. Tests switch
@@ -107,6 +117,7 @@ impl LayoutContext {
         // Release it conservatively on any explicit shrink.
         self.completed = None;
         self.ruby_ranges = Default::default();
+        self.ruby_memo = Default::default();
         self.edge_shapes.clear();
         if bytes == 0 || self.scratch_bytes > bytes {
             self.scratch = None;

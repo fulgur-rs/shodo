@@ -15,6 +15,7 @@ pub use hit::RubyHit;
 mod index;
 pub(crate) mod input;
 pub(crate) mod measure;
+pub(crate) mod memo;
 pub(crate) mod overhang;
 pub(crate) mod pairing;
 pub(crate) mod place;

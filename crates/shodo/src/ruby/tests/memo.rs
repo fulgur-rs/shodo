@@ -506,13 +506,13 @@ struct Observed {
 
 /// Every `(start, end)` probe with a growing `end` per start, then one
 /// shrinking sweep, all inside one operation; then all of it again in a new
-/// operation on the same context.
+/// operation on the same context. Also returns the memo hits.
 fn observe_candidates(
     p: &Paragraph,
     atomics: &AtomicSizes,
     reference: bool,
     pre: PreState,
-) -> Observed {
+) -> (Observed, usize) {
     let data = &p.data;
     let mut cx = LayoutContext::new();
     cx.ruby_reference = reference;
@@ -530,7 +530,7 @@ fn observe_candidates(
     let spent = cx.edge_reshape_spent;
     cx.begin_reshape_operation();
     let reset_values = sweep(data, atomics, &mut cx, &mut sat);
-    Observed {
+    let observed = Observed {
         values,
         warnings,
         sat,
@@ -538,7 +538,8 @@ fn observe_candidates(
         reset_values,
         reset_warnings: cx.warnings.as_slice().to_vec(),
         reset_spent: cx.edge_reshape_spent,
-    }
+    };
+    (observed, cx.ruby_memo_hits)
 }
 
 fn sweep(
@@ -768,12 +769,17 @@ fn observe_warm(all: &[Fixture], reference: bool) -> Vec<String> {
 fn adjustment_only_candidates_match_reference_for_every_range() {
     for fixture in fixtures() {
         for pre in pre_states(&fixture.paragraph) {
-            assert_eq!(
-                observe_candidates(&fixture.paragraph, &fixture.atomics, false, pre),
-                observe_candidates(&fixture.paragraph, &fixture.atomics, true, pre),
-                "{}: {pre:?}",
-                fixture.name
-            );
+            let (optimized, hits) =
+                observe_candidates(&fixture.paragraph, &fixture.atomics, false, pre);
+            let (reference, reference_hits) =
+                observe_candidates(&fixture.paragraph, &fixture.atomics, true, pre);
+            assert_eq!(optimized, reference, "{}: {pre:?}", fixture.name);
+            assert_eq!(reference_hits, 0);
+            // Equivalence must not hold vacuously: nested and sibling probes
+            // share look-ahead endpoints and are answered from the memo.
+            if fixture.name.starts_with("nested") || fixture.name == "siblings" {
+                assert!(hits > 0, "{}: no memo hits", fixture.name);
+            }
         }
     }
 }
@@ -800,7 +806,7 @@ fn warm_context_paths_match_reference() {
 #[test]
 fn equivalence_fixtures_reach_budget_and_warning_paths() {
     let budget = arabic(&limits(Some(2), None), Direction::Ltr);
-    let observed = observe_candidates(
+    let (observed, _) = observe_candidates(
         &budget,
         &AtomicSizes::EMPTY,
         true,
@@ -818,7 +824,7 @@ fn equivalence_fixtures_reach_budget_and_warning_paths() {
         observed.warnings
     );
     let missing = atomic_base(&limits(None, None), false);
-    let observed = observe_candidates(
+    let (observed, _) = observe_candidates(
         &missing,
         &AtomicSizes::EMPTY,
         true,
@@ -1149,14 +1155,16 @@ fn shared_profile_recomputes_when_its_charges_cross_the_budget() {
             format!("{measure:?} {sat:?} {}", cx.edge_reshape_spent),
             cx.take_warnings(),
             cx.ruby_profile_selects,
+            cx.ruby_replay_refusals,
         )
     };
-    let (mut replayed, mut recomputed) = (0, 0);
+    let (mut replayed, mut recomputed, mut refused) = (0, 0, 0);
     for start in (0..n).step_by(3) {
         for end in (start + 1..n).step_by(4).chain([n]) {
             for spent in (64 * 64 - 64..=64 * 64 + 4).chain([0, u64::MAX]) {
-                let (optimized, warnings, shared) = run(false, start, end, spent);
-                let (reference, reference_warnings, separate) = run(true, start, end, spent);
+                let (optimized, warnings, shared, refusals) = run(false, start, end, spent);
+                let (reference, reference_warnings, separate, _) = run(true, start, end, spent);
+                refused += refusals;
                 assert_eq!(optimized, reference, "{start}..{end} spent {spent}");
                 assert_eq!(warnings, reference_warnings, "{start}..{end} spent {spent}");
                 if shared < separate {
@@ -1168,5 +1176,401 @@ fn shared_profile_recomputes_when_its_charges_cross_the_budget() {
             }
         }
     }
-    assert!(replayed > 0 && recomputed > 0, "{replayed} {recomputed}");
+    // Refused replays prove by construction that the gate, not a warning
+    // during recording, sent shared profiles back to measurement.
+    assert!(
+        replayed > 0 && recomputed > 0 && refused > 0,
+        "{replayed} {recomputed} {refused}"
+    );
+}
+
+/// Probes sharing `start..through` inside one operation measure the core
+/// once; a new operation measures it again. A warm-up operation fills the
+/// range caches first: a measurement that fills them is never memoized
+/// (`cold_cache_fills_are_not_memoized`).
+#[test]
+fn repeated_probe_in_one_operation_is_measured_once() {
+    let p = nested(4, &Limits::default(), "日", &style(24.0));
+    let data = &p.data;
+    let outer = data.ruby.containers[0].units.clone();
+    assert!(outer.start + 3 < outer.end);
+    let mut cx = LayoutContext::new();
+    let mut sat = Saturation::default();
+    let probe = |cx: &mut LayoutContext, sat: &mut Saturation, end| {
+        crate::ruby::measure::candidate_adjustment(
+            data,
+            outer.start,
+            end,
+            &AtomicSizes::EMPTY,
+            cx,
+            sat,
+        )
+    };
+    cx.begin_reshape_operation();
+    let warm_up = probe(&mut cx, &mut sat, outer.start + 2);
+    let baseline = cx.ruby_column_visits;
+    cx.begin_reshape_operation();
+    let first = probe(&mut cx, &mut sat, outer.start + 2);
+    let measured = cx.ruby_column_visits - baseline;
+    assert!(measured > 0);
+    let second = probe(&mut cx, &mut sat, outer.start + 3);
+    assert_eq!(
+        cx.ruby_column_visits - baseline,
+        measured,
+        "same through must replay"
+    );
+    cx.begin_reshape_operation();
+    let third = probe(&mut cx, &mut sat, outer.start + 3);
+    assert_eq!(
+        cx.ruby_column_visits - baseline,
+        2 * measured,
+        "a new operation measures again"
+    );
+    let mut reference = context(true);
+    let mut ref_sat = Saturation::default();
+    reference.begin_reshape_operation();
+    let ref_warm_up = probe(&mut reference, &mut ref_sat, outer.start + 2);
+    let mut expected = Vec::new();
+    for (end, new_operation) in [
+        (outer.start + 2, true),
+        (outer.start + 3, false),
+        (outer.start + 3, true),
+    ] {
+        if new_operation {
+            reference.begin_reshape_operation();
+        }
+        expected.push(probe(&mut reference, &mut ref_sat, end));
+    }
+    assert_eq!(warm_up, ref_warm_up);
+    assert_eq!(vec![first, second, third], expected);
+    assert_eq!(sat, ref_sat);
+}
+
+/// Width and scalar measurement calls grow linearly with nesting depth once
+/// the core is memoized (the remaining walk is fixed by layer 1b).
+#[test]
+fn memoized_nested_candidates_measure_linearly() {
+    let picks: [Pick; 3] = [PICKS[0], PICKS[1], PICKS[2]];
+    for (path, measure) in PATHS {
+        for (what, pick) in picks {
+            let (all, growth) = ratios(measure, false, pick);
+            assert!(
+                growth.iter().all(|g| *g <= 2.6),
+                "{path} {what}: {growth:?} {all:?}"
+            );
+        }
+    }
+}
+
+type CrossingRun = (Vec<LayoutUnit>, Vec<Warning>, u64, Saturation);
+
+/// Review focus 1: a core recorded within budget must be recomputed once a
+/// replayed charge would cross the operation's limit.
+#[test]
+fn memo_recomputes_when_replay_would_cross_reshape_budget() {
+    let window = 8;
+    let limit = window * RESHAPE_WINDOWS;
+    let p = arabic(&limits(Some(window), None), Direction::Ltr);
+    let data = &p.data;
+    let ruby = &data.ruby.containers[0];
+    let start = ruby.units.start;
+    // Both probes look ahead to the first paired cut after `start`, so they
+    // share one memo key.
+    let cut = ruby.cuts[1].unit;
+    assert!(cut - 1 > start);
+    let run = |reference: bool, preset: u64| -> (CrossingRun, u64, usize, usize) {
+        let mut cx = context(reference);
+        cx.warnings.set_max(data.limits.max_warnings);
+        let mut sat = Saturation::default();
+        // Warm-up: fill the range caches in an earlier operation, so the
+        // first probe below is recorded (cache fills are never memoized).
+        cx.begin_reshape_operation();
+        crate::ruby::measure::candidate_adjustment(
+            data,
+            start,
+            cut - 1,
+            &AtomicSizes::EMPTY,
+            &mut cx,
+            &mut sat,
+        );
+        cx.begin_reshape_operation();
+        let refusals = cx.ruby_replay_refusals;
+        let first = crate::ruby::measure::candidate_adjustment(
+            data,
+            start,
+            cut - 1,
+            &AtomicSizes::EMPTY,
+            &mut cx,
+            &mut sat,
+        );
+        let charged = cx.edge_reshape_spent;
+        cx.edge_reshape_spent = preset;
+        let columns = cx.ruby_column_visits;
+        let second = crate::ruby::measure::candidate_adjustment(
+            data,
+            start,
+            cut,
+            &AtomicSizes::EMPTY,
+            &mut cx,
+            &mut sat,
+        );
+        (
+            (
+                vec![first, second],
+                cx.warnings.as_slice().to_vec(),
+                cx.edge_reshape_spent,
+                sat,
+            ),
+            charged,
+            cx.ruby_column_visits - columns,
+            cx.ruby_replay_refusals - refusals,
+        )
+    };
+    let (_, charged, _, _) = run(true, 0);
+    assert!(charged > 0, "the fixture must charge the reshape budget");
+    // Replay stays within the limit: reused without measuring.
+    let (optimized, _, measured, refused) = run(false, 0);
+    assert_eq!(optimized, run(true, 0).0);
+    assert_eq!((measured, refused), (0, 0));
+    // Replay would cross the limit: refused, measured again, and warns like
+    // the reference.
+    let (optimized, _, measured, refused) = run(false, limit - 1);
+    let (reference, _, _, _) = run(true, limit - 1);
+    assert_eq!(optimized, reference);
+    assert!(measured > 0);
+    assert!(refused > 0);
+    assert!(
+        reference
+            .1
+            .iter()
+            .any(|w| w.message == "line edge reshape budget exceeded; keeping shared glyphs")
+    );
+}
+
+/// `words` small cursive words, then a ruby with cursive bases. Inside a
+/// word every unit is a prohibited break, which a fitting scan never probes
+/// with an edge window, while `PartialLine::index` measures the edge windows
+/// of every unit: the index charges far more of the reshape budget.
+fn cursive_words(limits: &Limits, words: usize) -> Paragraph {
+    let mut b = ParagraphBuilder::new(&paragraph_style(false), limits);
+    b.open_inline(NodeId(3), &style(6.0), Default::default());
+    b.push_text(
+        TextSource::Generated { node: NodeId(1) },
+        &"بببببب ".repeat(words),
+    );
+    b.close_inline();
+    b.push_ruby(
+        NodeId(100),
+        &style(24.0),
+        annotated(
+            vec![
+                base_text(30, "بببب", &style(24.0), limits),
+                base_text(31, "ببب", &style(24.0), limits),
+            ],
+            &["に", "ほん"],
+            RubyOverhang::Auto,
+            limits,
+        ),
+    );
+    finish(b)
+}
+
+/// Review focus 2: a speculative `PartialLine::index` that exhausts the
+/// budget is rolled back (warnings and saturation, not spent bytes or memo
+/// entries); the retried line must match the reference.
+///
+/// With a 12-byte window (limit 768 bytes) the wide scan of either fixture
+/// stays within budget and is retained. The 999 retry indexes it: six words
+/// fit, so the index serves the 998 retry too; eight words have the same
+/// windows but cross the limit during the index, which is rolled back (its
+/// warning with it), so the 998 retry has to index again.
+#[test]
+fn narrow_retry_after_budget_exhausting_index_matches_reference() {
+    struct Run {
+        out: Vec<String>,
+        /// `cache_prepare_visits` per width.
+        indexed: Vec<usize>,
+        /// Edge windows shaped during the 999 retry.
+        shaped: usize,
+        hits: usize,
+    }
+    let observe = |p: &Paragraph, reference: bool| {
+        let mut cx = context(reference);
+        let mut run = Run {
+            out: Vec::new(),
+            indexed: Vec::new(),
+            shaped: 0,
+            hits: 0,
+        };
+        for width in [1000.0f32, 999.0, 998.0, 120.0] {
+            cx.cache_prepare_visits = 0;
+            let (shaped, hits) = (
+                p.data
+                    .edge_shape_calls
+                    .load(std::sync::atomic::Ordering::Relaxed),
+                cx.ruby_memo_hits,
+            );
+            let result = p.next_line(
+                &mut cx,
+                p.start_token(),
+                &LineOptions::default(),
+                &LineConstraint::new(width),
+                &AtomicSizes::EMPTY,
+            );
+            if width == 999.0 {
+                run.shaped = p
+                    .data
+                    .edge_shape_calls
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                    - shaped;
+                run.hits = cx.ruby_memo_hits - hits;
+            }
+            run.indexed.push(cx.cache_prepare_visits);
+            run.out.push(result_signature(result));
+            run.out.push(format!("{:?}", cx.take_warnings()));
+        }
+        run
+    };
+    for window in [8, 12, 16, 64] {
+        for words in [6, 8] {
+            let p = cursive_words(&limits(Some(window), None), words);
+            let optimized = observe(&p, false);
+            assert_eq!(
+                optimized.out,
+                observe(&p, true).out,
+                "window {window} words {words}"
+            );
+            if window != 12 {
+                continue;
+            }
+            assert_eq!(optimized.out[1], "[]", "the wide scan must be retained");
+            assert!(optimized.indexed[1] > 0, "the 999 retry must index");
+            assert!(optimized.shaped > 0, "the index must charge edge windows");
+            if words == 6 {
+                assert_eq!(optimized.indexed[2], 0, "a clean index serves 998");
+            } else {
+                assert!(optimized.indexed[2] > 0, "the rolled-back index is redone");
+                assert!(optimized.hits > 0, "the retry must replay memo entries");
+            }
+        }
+    }
+}
+
+/// Review focus 4: min- and max-content atomics have distinct revisions and
+/// must never answer each other's probes, also across first-line passes.
+#[test]
+fn intrinsic_min_and_max_atomics_keep_separate_memo_entries() {
+    let p = atomic_base(&Limits::default(), true);
+    let mut inputs = AtomicIntrinsics::default();
+    inputs.insert_atomic(
+        NodeId(99),
+        AtomicIntrinsic {
+            min_content: 4.0,
+            max_content: 80.0,
+        },
+    );
+    let run = |reference: bool| {
+        let mut cx = context(reference);
+        let sizes = p.intrinsic_sizes(&mut cx, &LineOptions::default(), &inputs);
+        (format!("{sizes:?}"), cx.take_warnings(), sizes)
+    };
+    let (optimized, warnings, sizes) = run(false);
+    let (reference, reference_warnings, _) = run(true);
+    assert_eq!((optimized, warnings), (reference, reference_warnings));
+    assert!(sizes.max_content > sizes.min_content);
+}
+
+/// Review focus 5: entries never outlive their operation, and a changed
+/// atomic revision never hits an older entry.
+#[test]
+fn memo_does_not_survive_operations_or_atomic_revisions() {
+    let p = atomic_base(&Limits::default(), false);
+    let (small, large) = (sized(4.0), sized(80.0));
+    let order = [&small, &large, &small];
+    let mut cx = LayoutContext::new();
+    let shared: Vec<_> = order
+        .iter()
+        .map(|atomics| {
+            result_signature(p.next_line(
+                &mut cx,
+                p.start_token(),
+                &LineOptions::default(),
+                &LineConstraint::new(1000.0),
+                atomics,
+            ))
+        })
+        .collect();
+    let fresh: Vec<_> = order
+        .iter()
+        .map(|atomics| {
+            result_signature(p.next_line(
+                &mut LayoutContext::new(),
+                p.start_token(),
+                &LineOptions::default(),
+                &LineConstraint::new(1000.0),
+                atomics,
+            ))
+        })
+        .collect();
+    assert_eq!(shared, fresh);
+    assert_ne!(shared[0], shared[1]);
+}
+
+/// A measurement that fills the range caches is not memoized: later hits
+/// skip side effects (a `blocks` hit skips the block's reshape charges) that
+/// replaying the cold recording would repeat. The next, warm measurement is
+/// memoized. `siblings` charged 2952 bytes against the reference's 2808 when
+/// cold recordings were replayed.
+#[test]
+fn cold_cache_fills_are_not_memoized() {
+    let p = siblings(&Limits::default());
+    let data = &p.data;
+    let n = data.units.len();
+    let mut cx = LayoutContext::new();
+    let mut sat = Saturation::default();
+    cx.begin_reshape_operation();
+    let mut probe = |cx: &mut LayoutContext| {
+        let columns = cx.ruby_column_visits;
+        let hits = cx.ruby_memo_hits;
+        let value = crate::ruby::measure::candidate_adjustment(
+            data,
+            0,
+            n,
+            &AtomicSizes::EMPTY,
+            cx,
+            &mut sat,
+        );
+        (
+            value,
+            cx.ruby_column_visits - columns,
+            cx.ruby_memo_hits - hits,
+        )
+    };
+    let generation = cx.ruby_ranges.generation();
+    let (cold, measured, hits) = probe(&mut cx);
+    assert!(measured > 0 && hits == 0);
+    assert_ne!(cx.ruby_ranges.generation(), generation, "the probe fills");
+    let generation = cx.ruby_ranges.generation();
+    let (warm, measured_again, hits) = probe(&mut cx);
+    assert_eq!(
+        (measured_again, hits),
+        (measured, 0),
+        "a cold recording is measured again"
+    );
+    assert_eq!(cx.ruby_ranges.generation(), generation, "a warm probe");
+    let (replayed, measured, hits) = probe(&mut cx);
+    assert_eq!((measured, hits), (0, 1), "a warm recording is replayed");
+    assert_eq!((cold, warm), (replayed, replayed));
+    let pre = PreState {
+        spent: 0,
+        suppressed: false,
+    };
+    let (optimized, hits) = observe_candidates(&p, &AtomicSizes::EMPTY, false, pre);
+    let (reference, _) = observe_candidates(&p, &AtomicSizes::EMPTY, true, pre);
+    assert!(hits > 0);
+    assert_eq!(
+        (optimized.spent, &optimized.warnings, optimized.sat),
+        (reference.spent, &reference.warnings, reference.sat)
+    );
+    assert_eq!(optimized, reference);
 }
