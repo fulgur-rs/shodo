@@ -643,12 +643,10 @@ fn build_data(
     } else {
         None
     };
+    // Production builds have no reference path; the type comes from the
+    // reuse branch below.
     #[cfg(not(test))]
-    let reference_shape: Option<(
-        crate::shape::GlyphStore,
-        Vec<crate::shape::ShapedRun>,
-        crate::shape::FeatureSets,
-    )> = None;
+    let reference_shape = None;
     let (glyphs, runs, shape_features) = if let Some(reference) = reference_shape {
         reference
     } else {

@@ -222,7 +222,6 @@ pub(crate) fn select_combined_widths(
             begin = end;
             continue;
         };
-        #[cfg(test)]
         COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| {
             bytes.set(
                 bytes
@@ -230,7 +229,6 @@ pub(crate) fn select_combined_widths(
                     .saturating_add(trial_storage_capacity_bytes(&plain, _plain_runs.capacity())),
             );
         });
-        #[cfg(test)]
         let narrow_result =
             if combined_width_probe_mode_for_test() == CombinedWidthProbeMode::CloneReference {
                 use std::mem::size_of;
@@ -291,28 +289,10 @@ pub(crate) fn select_combined_widths(
                     0,
                 )
             };
-        #[cfg(not(test))]
-        let narrow_result = {
-            let mut candidate = group.to_vec();
-            for item in &mut candidate {
-                item.width_feature = Some(tag);
-            }
-            shape_items(
-                cx,
-                &candidate,
-                styles,
-                fonts,
-                mode,
-                limits,
-                &mut warnings,
-                &mut sat,
-            )
-        };
         let Ok((narrow, _narrow_runs)) = narrow_result else {
             begin = end;
             continue;
         };
-        #[cfg(test)]
         COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| {
             bytes.set(bytes.get().saturating_add(trial_storage_capacity_bytes(
                 &narrow,
@@ -342,10 +322,11 @@ pub(crate) fn select_combined_widths(
     }
 }
 
-/// Shape an unscoped paragraph while consuming each selected width-feature
-/// trial directly into its retained output. With Ruby base scopes, a trial is
-/// reused only when `scoped_reuse_fits`; otherwise the group is shaped through
-/// the scoped path so local budgets fail exactly as before.
+/// Shape a paragraph, with or without Ruby base scopes, while consuming each
+/// selected width-feature trial directly into its retained output. Without
+/// scopes every selected trial is reused; with scopes a trial is reused only
+/// when `scoped_reuse_fits`, and otherwise the group is shaped through the
+/// scoped path so local budgets fail exactly as before.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn shape_items_with_combined_width_reuse(
     cx: &mut crate::LayoutContext,
@@ -437,7 +418,7 @@ pub(crate) fn shape_items_with_combined_width_reuse(
             let group_exceeds_limit = limits
                 .max_shaped_glyphs
                 .is_some_and(|max| glyphs.len() as u64 + selection.glyphs.len() as u64 > max);
-            let scoped_fits = match (bases.as_deref(), traces.as_ref()) {
+            let scoped_fits = match (bases.as_deref_mut(), traces.as_ref()) {
                 (Some(bases), Some((plain, narrow))) => scoped_reuse_fits(
                     bases,
                     &items[start..end],
@@ -560,7 +541,7 @@ fn next_combined_width_group(
 /// neither path splits or warns), and replaying the trial's charges must fit
 /// every owning BaseScope chain.
 fn scoped_reuse_fits(
-    bases: &crate::ruby::base_budget::BaseScopes,
+    bases: &mut crate::ruby::base_budget::BaseScopes,
     group: &[crate::analysis::itemize::ShapeItem],
     limits: &Limits,
     trace: &[WindowCharge],
@@ -829,7 +810,9 @@ pub(crate) fn shape_items_with_base_scopes(
 
 /// Glyphs one harfrust call charged to its first scalar's owning item, in
 /// shaping order. Trials record it so a reused output can replay BaseScope
-/// charges exactly.
+/// charges exactly. Only harfrust calls are traced: the per-scalar charges of
+/// missing-font notdef glyphs are not, which is safe because groups with a
+/// missing font never take part in width selection and are never reused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct WindowCharge {
     pub(crate) item: u32,

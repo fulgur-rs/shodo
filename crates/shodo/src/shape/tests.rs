@@ -1284,6 +1284,162 @@ fn scoped_output_reuse_matches_reference_for_multi_input_groups_in_nested_bases(
     assert!(cumulative_boundary);
 }
 
+/// `depth` nested ruby bases (the outermost with `outer_glyphs`, the innermost with
+/// `inner_glyphs`); the innermost base holds `groups` text-combine-upright "1日2日"
+/// elements, each preceded by a plain "x". Latin lacks "日", so every group spans
+/// four shape inputs and four shaper charges owned by the deepest scope.
+fn deep_nested_multi_input_builder(
+    depth: usize,
+    groups: usize,
+    outer_glyphs: Option<u64>,
+    inner_glyphs: Option<u64>,
+    limits: &Limits,
+) -> crate::ParagraphBuilder {
+    assert!(depth >= 2);
+    let cjk = width_probe_style("Width CJK", crate::geometry::Direction::Ltr);
+    let mixed = crate::style::InlineStyle {
+        font_families: vec![
+            crate::style::FontFamily::Named("Width Latin".into()),
+            crate::style::FontFamily::Named("Width CJK".into()),
+        ],
+        ..cjk.clone()
+    };
+    let plain = crate::style::InlineStyle {
+        text_combine_upright: crate::style::TextCombineUpright::None,
+        ..cjk.clone()
+    };
+    let paragraph_style = crate::style::ParagraphStyle {
+        writing_mode: WritingMode::VerticalRl,
+        root: cjk.clone(),
+        ..Default::default()
+    };
+    let base_limits = |glyphs| Limits {
+        max_shaped_glyphs: glyphs,
+        ..Limits::default()
+    };
+    let mut content = crate::ParagraphBuilder::new(&paragraph_style, &base_limits(inner_glyphs));
+    for group in 0..groups as u64 {
+        let node = crate::node::NodeId(100_000 + 2 * group);
+        let text = crate::node::NodeId(100_001 + 2 * group);
+        content
+            .open_inline(node, &plain, crate::node::InlineEdges::default())
+            .push_text(crate::node::TextSource::Dom { node, offset: 0 }, "x")
+            .close_inline()
+            .open_inline(text, &mixed, crate::node::InlineEdges::default())
+            .push_text(
+                crate::node::TextSource::Dom {
+                    node: text,
+                    offset: 0,
+                },
+                "1日2日",
+            )
+            .close_inline();
+    }
+    for level in (0..depth as u64).rev() {
+        let node = crate::node::NodeId(10 * level + 1);
+        let ruby = crate::Ruby::new(
+            vec![crate::RubyBase {
+                node: crate::node::NodeId(10 * level + 2),
+                content: crate::RubyContent::from_builder(content),
+                align: crate::RubyAlign::default(),
+            }],
+            vec![crate::RubyLevel {
+                annotations: vec![crate::RubyAnnotation {
+                    node: crate::node::NodeId(10 * level + 3),
+                    content: crate::RubyContent::text(
+                        crate::node::TextSource::Generated {
+                            node: crate::node::NodeId(10 * level + 3),
+                        },
+                        "注",
+                        &cjk,
+                        limits,
+                    ),
+                    span: crate::RubySpan::Auto,
+                    visibility: crate::RubyVisibility::Visible,
+                }],
+                style: crate::RubyStyle::default(),
+            }],
+        )
+        .unwrap();
+        content = match level {
+            0 => crate::ParagraphBuilder::new(&paragraph_style, limits),
+            1 => crate::ParagraphBuilder::new(&paragraph_style, &base_limits(outer_glyphs)),
+            _ => crate::ParagraphBuilder::new(&paragraph_style, &Limits::default()),
+        };
+        content.push_ruby(node, &cjk, ruby);
+    }
+    content
+}
+
+#[test]
+fn scoped_output_reuse_preflight_stays_linear_in_deep_nested_bases() {
+    const DEPTH: usize = 32;
+    const GROUPS: usize = 6;
+    let limits = Limits::default();
+    let fonts = width_probe_fonts(&limits);
+    let build = |outer, inner, mode| {
+        let builder = deep_nested_multi_input_builder(DEPTH, GROUPS, outer, inner, &limits);
+        let _mode_guard = CombinedWidthProbeModeGuard::new(mode);
+        builder.build(&mut crate::LayoutContext::new(), &fonts)
+    };
+
+    crate::ruby::base_budget::PREFLIGHT_OPS.with(|log| log.borrow_mut().clear());
+    let reused = build(
+        None,
+        None,
+        crate::shape::CombinedWidthProbeMode::ScopedReuse,
+    )
+    .unwrap();
+    let ops = crate::ruby::base_budget::PREFLIGHT_OPS.with(|log| log.take());
+    let reference = build(
+        None,
+        None,
+        crate::shape::CombinedWidthProbeMode::CloneReference,
+    )
+    .unwrap();
+    assert_eq!(
+        width_probe_snapshot(&reference),
+        width_probe_snapshot(&reused)
+    );
+    // Every group is probed under the full scope chain with several charges, and
+    // each preflight does at most one chain walk per charge plus one.
+    let deep: Vec<_> = ops
+        .iter()
+        .filter(|op| op.depth >= DEPTH && op.charges >= 4)
+        .collect();
+    assert!(deep.len() >= GROUPS, "{ops:?}");
+    for op in &ops {
+        assert!(op.depth <= DEPTH, "{op:?}");
+        assert!(op.steps <= (op.charges + 1) * (op.depth + 1), "{op:?}");
+        // A single owner is summed first: charges + one walk.
+        assert!(op.steps <= op.charges + op.depth, "{op:?}");
+    }
+
+    let mut outcomes = Vec::new();
+    // The innermost base spends 30 glyphs in total and the last group spans 26..=30,
+    // so inner limits 28 and 29 fail inside one reused multi-input group.
+    for outer in [None, Some(0), Some(40), Some(80)] {
+        for inner in [None, Some(3), Some(28), Some(29), Some(30)] {
+            let reference = width_probe_outcome(build(
+                outer,
+                inner,
+                crate::shape::CombinedWidthProbeMode::CloneReference,
+            ));
+            assert_eq!(
+                reference,
+                width_probe_outcome(build(
+                    outer,
+                    inner,
+                    crate::shape::CombinedWidthProbeMode::ScopedReuse
+                )),
+                "outer={outer:?} inner={inner:?}"
+            );
+            outcomes.push(reference.is_ok());
+        }
+    }
+    assert!(outcomes.contains(&true) && outcomes.contains(&false));
+}
+
 #[test]
 #[ignore = "manual fixed-font timing probe; run with --ignored --nocapture"]
 fn combined_width_base_probe_performance_probe() {
