@@ -242,6 +242,20 @@ impl WalkState {
     }
 }
 
+/// Bound from which `extend` is the identity for `ruby`: below it the
+/// container stays clipped and is re-applied. Point 3 of `advance` puts every
+/// cut in `units`, making this `units.end`; taking the last cut into account
+/// as well keeps the walk exact even if a cut were ever placed past it.
+fn settled_from(ruby: &super::prepare::PreparedRuby) -> usize {
+    let last = ruby.cuts[ruby.cuts.len() - 1].unit;
+    debug_assert!(
+        last <= ruby.units.end,
+        "cut {last} after container end {}",
+        ruby.units.end
+    );
+    ruby.units.end.max(last)
+}
+
 /// One look-ahead step of `measure::walk`: extend the bound `t` to the next
 /// paired cut of `ruby` at or after `min(t, units.end)`.
 fn extend(ruby: &super::prepare::PreparedRuby, through: usize) -> usize {
@@ -290,6 +304,12 @@ fn extend(ruby: &super::prepare::PreparedRuby, through: usize) -> usize {
 ///    re-applied, in visit order, and a re-applied container whose bound
 ///    reaches `e_i` leaves the clipped list for good.
 ///
+///    The walk does not rely on this placement: it treats a container as
+///    clipped while `t < max(e_i, c_i)`, where `c_i` is its last cut unit
+///    (`settled_from`). For `t >= max(e_i, c_i)` the selected cut is at most
+///    `c_i <= t`, so `f_i(t) = t` holds for any cut placement, and the debug
+///    assertion `c_i <= e_i` only documents the expected invariant.
+///
 /// Like `measure::walk`, this assumes every container has at least one cut.
 pub(crate) fn advance(
     state: &mut Option<WalkState>,
@@ -327,7 +347,7 @@ pub(crate) fn advance(
         super::index::visit();
         let position = clipped[i];
         let ruby = &containers[visited[position]];
-        if through < ruby.units.end {
+        if through < settled_from(ruby) {
             clipped[kept] = position;
             kept += 1;
         }
@@ -341,7 +361,7 @@ pub(crate) fn advance(
         &mut through,
         |container, through| {
             let ruby = &containers[container];
-            if *through < ruby.units.end {
+            if *through < settled_from(ruby) {
                 clipped.push(visited.len());
             }
             *through = extend(ruby, *through);
