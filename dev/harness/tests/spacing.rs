@@ -145,6 +145,124 @@ fn word_spacing_and_tabs_use_real_space_metrics() {
     );
 }
 
+fn space_advance(font: usize, size: f32) -> f32 {
+    let font = FontRef::from_index(FONTS[font].bytes, 0).unwrap();
+    font.glyph_metrics(Size::new(size), LocationRef::default())
+        .advance_width(font.charmap().map(' ').unwrap())
+        .unwrap()
+}
+
+#[test]
+fn word_spacing_percent_resolves_against_the_space_advance() {
+    // (px term, percent term) pairs from WPT word-spacing-001, including a
+    // percent-only value that must still enable the spacing pass.
+    for (px, percent) in [
+        (0.0, 100.0),
+        (0.0, -100.0),
+        (0.0, -40.0),
+        (0.0, 0.0),
+        (0.0, 25.0),
+        (40.0, 400.0),
+        (-6.0, 50.0),
+    ] {
+        let used = px + percent / 100.0 * advance(' ');
+        for separator in [' ', '\u{a0}'] {
+            let text = format!("a{separator}b{separator}c");
+            let natural = lines(&paragraph(root(), &text), 1000.0)
+                .remove(0)
+                .inline_size();
+            let mut style = root();
+            style.word_spacing = px;
+            style.word_spacing_percent = percent;
+            let p = paragraph(style, &text);
+            let line = lines(&p, 1000.0).remove(0);
+            close(line.inline_size(), natural + 2.0 * used);
+            let intrinsic = p.intrinsic_sizes(
+                &mut LayoutContext::new(),
+                &Default::default(),
+                &AtomicIntrinsics::EMPTY,
+            );
+            close(intrinsic.max_content, line.inline_size());
+            let glyphs: Vec<_> = line
+                .fragments()
+                .flat_map(|f| match f {
+                    Fragment::GlyphRun(r) => r.glyphs().collect::<Vec<_>>(),
+                    _ => Vec::new(),
+                })
+                .collect();
+            close(
+                glyphs.last().unwrap().inline_position,
+                advance('a') + advance('b') + 2.0 * (advance(' ') + used),
+            );
+        }
+    }
+    // -100% cancels the space exactly: the words touch.
+    let mut style = root();
+    style.word_spacing_percent = -100.0;
+    close(
+        lines(&paragraph(style, "a b"), 1000.0)
+            .remove(0)
+            .inline_size(),
+        advance('a') + advance('b'),
+    );
+}
+
+#[test]
+fn word_spacing_percent_uses_each_inline_runs_selected_font() {
+    let mut style = root();
+    style.word_spacing_percent = 50.0;
+    let mut large = style.clone();
+    large.font_size = 40.0;
+    let mut cjk = style.clone();
+    cjk.font_families = vec![FontFamily::Named(FONTS[1].family.into())];
+    let layout = |percent: f32| {
+        let mut style = style.clone();
+        let mut large = large.clone();
+        let mut cjk = cjk.clone();
+        style.word_spacing_percent = percent;
+        large.word_spacing_percent = percent;
+        cjk.word_spacing_percent = percent;
+        let p = build(style, |b| {
+            b.push_text(TextSource::Generated { node: NodeId(1) }, "a b")
+                .open_inline(NodeId(2), &large, InlineEdges::default())
+                .push_text(TextSource::Generated { node: NodeId(3) }, " a b")
+                .close_inline()
+                .open_inline(NodeId(4), &cjk, InlineEdges::default())
+                .push_text(TextSource::Generated { node: NodeId(5) }, " 水 水")
+                .close_inline();
+        });
+        let line = lines(&p, 1000.0).remove(0).inline_size();
+        let intrinsic = p
+            .intrinsic_sizes(
+                &mut LayoutContext::new(),
+                &Default::default(),
+                &AtomicIntrinsics::EMPTY,
+            )
+            .max_content;
+        close(intrinsic, line);
+        line
+    };
+    let expected = 0.5 * space_advance(0, 20.0)
+        + 2.0 * 0.5 * space_advance(0, 40.0)
+        + 2.0 * 0.5 * space_advance(1, 20.0);
+    close(layout(50.0), layout(0.0) + expected);
+}
+
+#[test]
+fn space_tab_size_includes_resolved_word_spacing_percent() {
+    let mut style = root();
+    style.white_space_collapse = WhiteSpaceCollapse::Preserve;
+    style.tab_size = TabSize::Spaces(4.0);
+    style.word_spacing = 1.0;
+    style.word_spacing_percent = 50.0;
+    close(
+        lines(&paragraph(style, "a\tb"), 1000.0)
+            .remove(0)
+            .inline_size(),
+        (advance(' ') * 1.5 + 1.0) * 4.0 + advance('b'),
+    );
+}
+
 #[test]
 fn tabs_use_block_space_and_skip_too_close_stops() {
     let mut style = root();

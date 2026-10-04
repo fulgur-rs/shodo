@@ -126,7 +126,8 @@ pub(crate) fn build(
                             "item_cursor must track partition_point(|item| item.text.end <= offset); \
                              data.items is not text-ascending"
                         );
-                        let style = &data.styles[data.items[source].style as usize];
+                        let style_index = data.items[source].style as usize;
+                        let style = &data.styles[style_index];
                         let edge = Edge {
                             tracking: LayoutUnit::from_f32_round(style.letter_spacing, sat).raw(),
                             kind: if cursive { Kind::Cursive } else { Kind::Text },
@@ -153,9 +154,11 @@ pub(crate) fn build(
                             .summary
                             .join(Summary::leaf(edge, Some(data)), Some(data));
                         if word_separator(ch) {
+                            let used = style
+                                .used_word_spacing(data.style_metrics[style_index].space);
                             value.word = value
                                 .word
-                                .add(LayoutUnit::from_f32_round(style.word_spacing, sat), sat);
+                                .add(LayoutUnit::from_f32_round(used, sat), sat);
                         }
                     }
                 }
@@ -256,7 +259,7 @@ pub(crate) fn needed(data: &ParagraphData) -> bool {
         #[cfg(test)]
         data.spacing_setup_visits
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        s.letter_spacing == 0.0 && s.word_spacing == 0.0
+        s.letter_spacing == 0.0 && s.word_spacing == 0.0 && s.word_spacing_percent == 0.0
     }) || data.unit_spacing.iter().any(|s| {
         #[cfg(test)]
         data.spacing_setup_visits

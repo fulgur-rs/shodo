@@ -163,6 +163,7 @@ pub(crate) fn style(s: &mut InlineStyle, warnings: &mut WarningSink) {
     }
     s.letter_spacing = length(s.letter_spacing, "letter-spacing", warnings);
     s.word_spacing = length(s.word_spacing, "word-spacing", warnings);
+    s.word_spacing_percent = length(s.word_spacing_percent, "word-spacing percentage", warnings);
     s.tab_size = match s.tab_size {
         TabSize::Spaces(n) => TabSize::Spaces(non_negative(n, "tab-size", warnings)),
         TabSize::Px(v) => TabSize::Px(non_negative(v, "tab-size", warnings)),
