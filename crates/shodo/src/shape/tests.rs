@@ -5,6 +5,341 @@ use crate::limits::{LimitExceeded, LimitKind, Limits};
 use skrifa::MetadataProvider;
 use skrifa::raw::TableProvider;
 
+#[derive(Clone, Copy)]
+struct WidthProbeCase {
+    name: &'static str,
+    text: &'static str,
+    mode: WritingMode,
+    direction: crate::geometry::Direction,
+    multiple_styles: bool,
+    expected_width_feature: Option<[u8; 4]>,
+}
+
+const WIDTH_PROBE_CASES: [WidthProbeCase; 4] = [
+    WidthProbeCase {
+        name: "two-vertical-rl-ltr",
+        text: "12",
+        mode: WritingMode::VerticalRl,
+        direction: crate::geometry::Direction::Ltr,
+        multiple_styles: false,
+        expected_width_feature: Some(*b"hwid"),
+    },
+    WidthProbeCase {
+        name: "three-vertical-lr-rtl",
+        text: "123",
+        mode: WritingMode::VerticalLr,
+        direction: crate::geometry::Direction::Rtl,
+        multiple_styles: false,
+        expected_width_feature: None,
+    },
+    WidthProbeCase {
+        name: "four-vertical-rl-multiple-fonts",
+        text: "1234",
+        mode: WritingMode::VerticalRl,
+        direction: crate::geometry::Direction::Ltr,
+        multiple_styles: true,
+        expected_width_feature: None,
+    },
+    WidthProbeCase {
+        name: "two-vertical-lr-rtl-multiple-fonts",
+        text: "12",
+        mode: WritingMode::VerticalLr,
+        direction: crate::geometry::Direction::Rtl,
+        multiple_styles: true,
+        expected_width_feature: Some(*b"hwid"),
+    },
+];
+
+struct CombinedWidthProbeModeGuard;
+
+impl CombinedWidthProbeModeGuard {
+    fn new(mode: crate::shape::CombinedWidthProbeMode) -> Self {
+        crate::shape::set_combined_width_probe_mode(mode);
+        Self
+    }
+}
+
+impl Drop for CombinedWidthProbeModeGuard {
+    fn drop(&mut self) {
+        crate::shape::set_combined_width_probe_mode(
+            crate::shape::CombinedWidthProbeMode::CloneReference,
+        );
+    }
+}
+
+fn width_probe_fonts(limits: &Limits) -> FontCollection {
+    let fonts = FontCollection::with_options(
+        limits,
+        crate::font::FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    for (family, bytes) in [
+        ("Width CJK", crate::test_support::fonts::CJK),
+        ("Width Latin", crate::test_support::fonts::LATIN),
+    ] {
+        fonts
+            .register_face(
+                bytes.to_vec(),
+                0,
+                crate::font::FontFaceDescriptor {
+                    family: family.into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+    fonts
+}
+
+fn width_probe_style(
+    family: &str,
+    direction: crate::geometry::Direction,
+) -> crate::style::InlineStyle {
+    crate::style::InlineStyle {
+        font_families: vec![crate::style::FontFamily::Named(family.into())],
+        direction,
+        text_combine_upright: crate::style::TextCombineUpright::All,
+        text_autospace: crate::style::TextAutospace::NoAutospace,
+        ..Default::default()
+    }
+}
+
+fn width_probe_builder(
+    case: WidthProbeCase,
+    base_glyph_limit: Option<u64>,
+    base_shaping_run_bytes: Option<u64>,
+    repeats: usize,
+    limits: &Limits,
+) -> crate::ParagraphBuilder {
+    let base_limits = Limits {
+        max_shaped_glyphs: base_glyph_limit,
+        max_shaping_run_bytes: base_shaping_run_bytes,
+        ..Limits::default()
+    };
+    let cjk_style = width_probe_style("Width CJK", case.direction);
+    let latin_style = crate::style::InlineStyle {
+        font_size: 19.0,
+        ..width_probe_style("Width Latin", case.direction)
+    };
+    let mut plain_latin_style = latin_style.clone();
+    plain_latin_style.text_combine_upright = crate::style::TextCombineUpright::None;
+    let mut base_builder = crate::ParagraphBuilder::new(
+        &crate::style::ParagraphStyle {
+            writing_mode: case.mode,
+            direction: case.direction,
+            root: cjk_style.clone(),
+            ..Default::default()
+        },
+        &base_limits,
+    );
+    for repeat in 0..repeats {
+        if repeat > 0 {
+            let separator = crate::node::NodeId(3000 + repeat as u64);
+            base_builder
+                .open_inline(
+                    separator,
+                    &plain_latin_style,
+                    crate::node::InlineEdges::default(),
+                )
+                .push_text(
+                    crate::node::TextSource::Dom {
+                        node: separator,
+                        offset: 0,
+                    },
+                    "x",
+                )
+                .close_inline();
+        }
+        let wrapper = crate::node::NodeId(100 + repeat as u64);
+        let first = crate::node::NodeId(1000 + repeat as u64);
+        base_builder
+            .open_inline(wrapper, &cjk_style, crate::node::InlineEdges::default())
+            .push_text(
+                crate::node::TextSource::Dom {
+                    node: first,
+                    offset: 10,
+                },
+                case.text,
+            )
+            .close_inline();
+    }
+    if case.multiple_styles {
+        let node = crate::node::NodeId(9000);
+        base_builder
+            .open_inline(
+                node,
+                &plain_latin_style,
+                crate::node::InlineEdges::default(),
+            )
+            .push_text(crate::node::TextSource::Dom { node, offset: 0 }, "x")
+            .close_inline();
+    }
+    let base = crate::RubyContent::from_builder(base_builder);
+    let annotation_style = width_probe_style("Width CJK", case.direction);
+    let annotation = crate::RubyContent::text(
+        crate::node::TextSource::Dom {
+            node: crate::node::NodeId(3),
+            offset: 30,
+        },
+        "注",
+        &annotation_style,
+        &limits,
+    );
+    let ruby = crate::Ruby::new(
+        vec![crate::RubyBase {
+            node: crate::node::NodeId(2),
+            content: base,
+            align: crate::RubyAlign::default(),
+        }],
+        vec![crate::RubyLevel {
+            annotations: vec![crate::RubyAnnotation {
+                node: crate::node::NodeId(3),
+                content: annotation,
+                span: crate::RubySpan::Auto,
+                visibility: crate::RubyVisibility::Visible,
+            }],
+            style: crate::RubyStyle::default(),
+        }],
+    )
+    .unwrap();
+    let mut builder = crate::ParagraphBuilder::new(
+        &crate::style::ParagraphStyle {
+            writing_mode: case.mode,
+            direction: case.direction,
+            root: cjk_style.clone(),
+            ..Default::default()
+        },
+        &limits,
+    );
+    builder.push_ruby(crate::node::NodeId(1), &cjk_style, ruby);
+    builder
+}
+
+fn build_width_probe_case(
+    case: WidthProbeCase,
+    mode: crate::shape::CombinedWidthProbeMode,
+    base_glyph_limit: Option<u64>,
+    base_shaping_run_bytes: Option<u64>,
+    repeats: usize,
+) -> Result<crate::Paragraph, LimitExceeded> {
+    let limits = Limits::default();
+    let fonts = width_probe_fonts(&limits);
+    let builder = width_probe_builder(
+        case,
+        base_glyph_limit,
+        base_shaping_run_bytes,
+        repeats,
+        &limits,
+    );
+    HARFRUST_SHAPE_CALLS.with(|calls| calls.set(0));
+    COMBINED_WIDTH_GROUP_CLONE_COUNT.with(|count| count.set(0));
+    COMBINED_WIDTH_GROUP_CLONE_SCALARS.with(|count| count.set(0));
+    COMBINED_WIDTH_GROUP_CLONE_BYTES.with(|bytes| bytes.set(0));
+    COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| bytes.set(0));
+    let _mode_guard = CombinedWidthProbeModeGuard::new(mode);
+    builder.build(&mut crate::LayoutContext::new(), &fonts)
+}
+
+fn width_probe_snapshot(paragraph: &crate::Paragraph) -> String {
+    let glyphs = &paragraph.data.glyphs;
+    let geometry = &paragraph.data.combine_geometry;
+    let shape_items = paragraph
+        .data
+        .shape_items
+        .iter()
+        .map(|item| {
+            (
+                item.segment,
+                item.scalars
+                    .iter()
+                    .map(|scalar| {
+                        (
+                            scalar.c,
+                            scalar.offset,
+                            scalar.end,
+                            scalar.item,
+                            scalar.grapheme_start,
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+                item.end,
+                item.style,
+                item.level,
+                item.script,
+                item.font
+                    .as_ref()
+                    .map(|font| (font.id.index(), &font.variations, font.embolden, font.skew)),
+                item.orientation,
+                item.combine,
+                item.width_feature,
+                &item.before,
+                &item.after,
+            )
+        })
+        .collect::<Vec<_>>();
+    let runs = paragraph
+        .data
+        .runs
+        .iter()
+        .map(|run| {
+            (
+                run.glyphs.clone(),
+                run.text.clone(),
+                run.item,
+                run.orientation,
+                run.font.index(),
+                run.font_size.to_bits(),
+                format!("{:?}", run.instance),
+            )
+        })
+        .collect::<Vec<_>>();
+    let paints = geometry
+        .glyphs
+        .iter()
+        .map(|paint| paint.map(|p| (p.span, p.x, p.from, p.to, p.extra)))
+        .collect::<Vec<_>>();
+    let tabs = geometry
+        .tabs
+        .iter()
+        .map(|(range, p)| (range.clone(), (p.span, p.x, p.from, p.to, p.extra)))
+        .collect::<Vec<_>>();
+    let source_spans = paragraph
+        .data
+        .source_spans
+        .iter()
+        .map(|span| (span.old.clone(), span.new.clone(), span.kind))
+        .collect::<Vec<_>>();
+    format!(
+        "{:?}",
+        (
+            paragraph.text(),
+            paragraph.offset_mapping(),
+            &paragraph.warnings(),
+            shape_items,
+            &paragraph.data.items,
+            &paragraph.data.units,
+            &paragraph.data.boxes,
+            &paragraph.data.combine_spans,
+            source_spans,
+            (
+                &glyphs.id,
+                &glyphs.advance,
+                &glyphs.pen,
+                &glyphs.offset_inline,
+                &glyphs.offset_block,
+                &glyphs.cluster,
+                &glyphs.flags,
+                &glyphs.spacing,
+                &glyphs.leading,
+            ),
+            runs,
+            (&geometry.scales, &geometry.baselines, paints, tabs,),
+        )
+    )
+}
+
 #[test]
 fn combined_width_trials_reuse_selected_result_for_two_shaper_calls() {
     let limits = Limits::default();
@@ -194,6 +529,363 @@ fn ruby_base_glyph_limits_keep_the_regular_trial_and_final_shape_path() {
         .unwrap_err();
     assert_eq!((error.kind, error.limit), (LimitKind::ShapedGlyphs, 1));
     assert_eq!(HARFRUST_SHAPE_CALLS.with(|calls| calls.get()), 3);
+}
+
+#[test]
+fn ruby_base_combined_width_probe_borrows_the_feature_override_view() {
+    let paragraph = build_width_probe_case(
+        WIDTH_PROBE_CASES[0],
+        crate::shape::CombinedWidthProbeMode::FeatureView,
+        None,
+        None,
+        1,
+    )
+    .unwrap();
+
+    assert!(
+        paragraph
+            .data
+            .shape_items
+            .iter()
+            .all(|item| item.width_feature == Some(*b"hwid"))
+    );
+    assert_eq!(HARFRUST_SHAPE_CALLS.with(|calls| calls.get()), 3);
+    assert_eq!(
+        COMBINED_WIDTH_GROUP_CLONE_COUNT.with(|count| count.get()),
+        0
+    );
+    assert_eq!(
+        COMBINED_WIDTH_GROUP_CLONE_BYTES.with(|bytes| bytes.get()),
+        0,
+        "probe should borrow ShapeItem metadata while overriding only the width feature"
+    );
+}
+
+#[test]
+fn feature_override_view_matches_clone_reference_for_scoped_tcy_cases() {
+    for case in WIDTH_PROBE_CASES {
+        let reference = build_width_probe_case(
+            case,
+            crate::shape::CombinedWidthProbeMode::CloneReference,
+            None,
+            None,
+            1,
+        )
+        .unwrap_or_else(|error| panic!("{} clone reference: {error:?}", case.name));
+        let reference_calls = HARFRUST_SHAPE_CALLS.with(|calls| calls.get());
+        let reference_clone_count = COMBINED_WIDTH_GROUP_CLONE_COUNT.with(|count| count.get());
+        let reference_clone_scalars = COMBINED_WIDTH_GROUP_CLONE_SCALARS.with(|count| count.get());
+        let reference_clone_bytes = COMBINED_WIDTH_GROUP_CLONE_BYTES.with(|bytes| bytes.get());
+        let reference_trial_bytes = COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| bytes.get());
+        let selected_features: Vec<_> = reference
+            .data
+            .shape_items
+            .iter()
+            .filter(|item| item.combine.is_some())
+            .map(|item| item.width_feature)
+            .collect();
+        assert!(!selected_features.is_empty(), "no TCY items: {}", case.name);
+        assert!(
+            selected_features
+                .iter()
+                .all(|feature| *feature == case.expected_width_feature),
+            "width feature selection: {}",
+            case.name
+        );
+        let view = build_width_probe_case(
+            case,
+            crate::shape::CombinedWidthProbeMode::FeatureView,
+            None,
+            None,
+            1,
+        )
+        .unwrap_or_else(|error| panic!("{} feature view: {error:?}", case.name));
+
+        assert_eq!(
+            width_probe_snapshot(&reference),
+            width_probe_snapshot(&view),
+            "mapping, warning, glyph, source and geometry output: {}",
+            case.name
+        );
+        assert!(reference_clone_count > 0, "no probe group: {}", case.name);
+        assert!(
+            reference_clone_scalars > 0,
+            "no scalar clone: {}",
+            case.name
+        );
+        assert!(
+            reference_clone_bytes > 0,
+            "no cloned storage: {}",
+            case.name
+        );
+        assert_eq!(
+            HARFRUST_SHAPE_CALLS.with(|calls| calls.get()),
+            reference_calls
+        );
+        assert_eq!(
+            COMBINED_WIDTH_GROUP_CLONE_COUNT.with(|count| count.get()),
+            0,
+            "feature view cloned a group: {}",
+            case.name
+        );
+        assert_eq!(
+            COMBINED_WIDTH_GROUP_CLONE_SCALARS.with(|count| count.get()),
+            0,
+            "feature view cloned scalars: {}",
+            case.name
+        );
+        assert_eq!(
+            COMBINED_WIDTH_GROUP_CLONE_BYTES.with(|bytes| bytes.get()),
+            0,
+            "feature view cloned storage: {}",
+            case.name
+        );
+        assert_eq!(
+            COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| bytes.get()),
+            reference_trial_bytes,
+            "trial retention changed: {}",
+            case.name
+        );
+    }
+}
+
+#[test]
+fn feature_override_view_preserves_scoped_glyph_limit_failure() {
+    let case = WIDTH_PROBE_CASES[0];
+    let mut outcomes = Vec::new();
+    for mode in [
+        crate::shape::CombinedWidthProbeMode::CloneReference,
+        crate::shape::CombinedWidthProbeMode::FeatureView,
+    ] {
+        let error = build_width_probe_case(case, mode, Some(1), None, 1).unwrap_err();
+        assert_eq!(error.kind, LimitKind::ShapedGlyphs);
+        outcomes.push((
+            error.kind,
+            error.limit,
+            error.actual,
+            HARFRUST_SHAPE_CALLS.with(|calls| calls.get()),
+        ));
+        assert_eq!(
+            crate::shape::combined_width_probe_mode_for_test(),
+            crate::shape::CombinedWidthProbeMode::CloneReference,
+            "probe mode must not leak into tests reusing this worker thread"
+        );
+    }
+    assert_eq!(outcomes[0], outcomes[1]);
+}
+
+#[test]
+fn feature_override_view_preserves_scoped_shaping_warnings() {
+    let case = WIDTH_PROBE_CASES[0];
+    let reference = build_width_probe_case(
+        case,
+        crate::shape::CombinedWidthProbeMode::CloneReference,
+        None,
+        Some(0),
+        1,
+    )
+    .unwrap();
+    assert!(
+        !reference.warnings().is_empty(),
+        "the scoped shaping-run limit should exercise warning output"
+    );
+    let view = build_width_probe_case(
+        case,
+        crate::shape::CombinedWidthProbeMode::FeatureView,
+        None,
+        Some(0),
+        1,
+    )
+    .unwrap();
+    assert_eq!(
+        width_probe_snapshot(&reference),
+        width_probe_snapshot(&view)
+    );
+}
+
+#[test]
+fn unscoped_probe_output_reuse_matches_unlimited_base_output_but_skips_local_glyph_caps() {
+    let case = WIDTH_PROBE_CASES[0];
+    let scoped = build_width_probe_case(
+        case,
+        crate::shape::CombinedWidthProbeMode::CloneReference,
+        None,
+        None,
+        1,
+    )
+    .unwrap();
+    let scoped_calls = HARFRUST_SHAPE_CALLS.with(|calls| calls.get());
+    let reused = build_width_probe_case(
+        case,
+        crate::shape::CombinedWidthProbeMode::UnscopedOutputReuse,
+        None,
+        None,
+        1,
+    )
+    .unwrap();
+    let reused_calls = HARFRUST_SHAPE_CALLS.with(|calls| calls.get());
+    assert_eq!(width_probe_snapshot(&scoped), width_probe_snapshot(&reused));
+    assert_eq!(scoped_calls, reused_calls + 1);
+
+    let limited = build_width_probe_case(
+        case,
+        crate::shape::CombinedWidthProbeMode::CloneReference,
+        Some(1),
+        None,
+        1,
+    );
+    assert!(matches!(
+        limited,
+        Err(error) if error.kind == LimitKind::ShapedGlyphs && error.limit == 1
+    ));
+    let unscoped_limited = build_width_probe_case(
+        case,
+        crate::shape::CombinedWidthProbeMode::UnscopedOutputReuse,
+        Some(1),
+        None,
+        1,
+    );
+    assert!(
+        unscoped_limited.is_ok(),
+        "the output-reuse candidate bypasses the BaseScope glyph budget"
+    );
+}
+
+#[test]
+#[ignore = "manual fixed-font timing probe; run with --ignored --nocapture"]
+fn combined_width_base_probe_performance_probe() {
+    use std::time::{Duration, Instant};
+
+    const REPEATS: usize = 64;
+    const WARMUP_DEFAULT: usize = 3;
+    const SAMPLES_DEFAULT: usize = 21;
+
+    fn median_ns(samples: &[u128]) -> u128 {
+        let mut sorted = samples.to_vec();
+        sorted.sort_unstable();
+        sorted[sorted.len() / 2]
+    }
+
+    fn sample(
+        case: WidthProbeCase,
+        mode: crate::shape::CombinedWidthProbeMode,
+        limits: &Limits,
+        fonts: &FontCollection,
+    ) -> (Duration, String, usize, usize, usize, usize, usize) {
+        let builder = width_probe_builder(case, None, None, REPEATS, limits);
+        let mut cx = crate::LayoutContext::new();
+        HARFRUST_SHAPE_CALLS.with(|calls| calls.set(0));
+        COMBINED_WIDTH_GROUP_CLONE_COUNT.with(|count| count.set(0));
+        COMBINED_WIDTH_GROUP_CLONE_SCALARS.with(|count| count.set(0));
+        COMBINED_WIDTH_GROUP_CLONE_BYTES.with(|bytes| bytes.set(0));
+        COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| bytes.set(0));
+        let _mode_guard = CombinedWidthProbeModeGuard::new(mode);
+        let start = Instant::now();
+        let paragraph = builder.build(&mut cx, fonts).unwrap();
+        let elapsed = start.elapsed();
+        std::hint::black_box(&paragraph);
+        let snapshot = width_probe_snapshot(&paragraph);
+        (
+            elapsed,
+            snapshot,
+            COMBINED_WIDTH_GROUP_CLONE_COUNT.with(|count| count.get()),
+            COMBINED_WIDTH_GROUP_CLONE_SCALARS.with(|count| count.get()),
+            COMBINED_WIDTH_GROUP_CLONE_BYTES.with(|bytes| bytes.get()),
+            HARFRUST_SHAPE_CALLS.with(|calls| calls.get()),
+            COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| bytes.get()),
+        )
+    }
+
+    let requested = std::env::var("SHODO_TCY_PROBE_VARIANT").unwrap_or_else(|_| "compare".into());
+    let warmup_count = std::env::var("SHODO_TCY_PROBE_WARMUP").map_or(WARMUP_DEFAULT, |value| {
+        value.parse().expect("numeric warmup count")
+    });
+    let sample_count = std::env::var("SHODO_TCY_PROBE_SAMPLES").map_or(SAMPLES_DEFAULT, |value| {
+        value.parse().expect("numeric sample count")
+    });
+    let modes: &[crate::shape::CombinedWidthProbeMode] = match requested.as_str() {
+        "clone" => &[crate::shape::CombinedWidthProbeMode::CloneReference],
+        "view" => &[crate::shape::CombinedWidthProbeMode::FeatureView],
+        "reuse" => &[crate::shape::CombinedWidthProbeMode::UnscopedOutputReuse],
+        "compare" => &[
+            crate::shape::CombinedWidthProbeMode::CloneReference,
+            crate::shape::CombinedWidthProbeMode::FeatureView,
+        ],
+        "reuse-compare" => &[
+            crate::shape::CombinedWidthProbeMode::CloneReference,
+            crate::shape::CombinedWidthProbeMode::UnscopedOutputReuse,
+        ],
+        _ => panic!("SHODO_TCY_PROBE_VARIANT must be clone, view, reuse, compare or reuse-compare"),
+    };
+    let limits = Limits::default();
+    for case in WIDTH_PROBE_CASES {
+        let fonts = width_probe_fonts(&limits);
+        let mut outputs = Vec::new();
+        for &mode in modes {
+            let mut last = None;
+            for _ in 0..warmup_count {
+                last = Some(sample(case, mode, &limits, &fonts));
+            }
+            if let Some(last) = last {
+                outputs.push(last.1);
+            }
+        }
+        if outputs.len() == 2 {
+            assert_eq!(outputs[0], outputs[1], "output mismatch: {}", case.name);
+        }
+
+        let mut timings = vec![Vec::with_capacity(sample_count); modes.len()];
+        let mut metrics = vec![(0usize, 0usize, 0usize, 0usize, 0usize); modes.len()];
+        for index in 0..sample_count {
+            for variant in 0..modes.len() {
+                let mode_index = if index % 2 == 0 {
+                    variant
+                } else {
+                    modes.len() - 1 - variant
+                };
+                let (elapsed, output, groups, scalars, bytes, calls, trial_bytes) =
+                    sample(case, modes[mode_index], &limits, &fonts);
+                if let Some(expected) = outputs.get(mode_index) {
+                    assert_eq!(output, *expected, "unstable output: {}", case.name);
+                }
+                timings[mode_index].push(elapsed.as_nanos());
+                metrics[mode_index] = (groups, scalars, bytes, calls, trial_bytes);
+            }
+        }
+        for (index, mode) in modes.iter().enumerate() {
+            let (groups, scalars, bytes, calls, trial_bytes) = metrics[index];
+            eprintln!(
+                "tcy_probe case={} mode={mode:?} groups={groups} cloned_scalars={scalars} estimated_clone_bytes={bytes} shaper_calls={calls} trial_store_bytes={trial_bytes} median_ns={}",
+                case.name,
+                median_ns(&timings[index]),
+            );
+        }
+        if modes.len() == 2 {
+            match modes[1] {
+                crate::shape::CombinedWidthProbeMode::FeatureView => {
+                    assert_eq!(metrics[0].0, REPEATS, "expected one clone per TCY group");
+                    assert_eq!(metrics[1].0, 0, "view should not clone TCY groups");
+                    assert_eq!(metrics[0].3, metrics[1].3, "shaper calls changed");
+                    assert_eq!(metrics[0].4, metrics[1].4, "trial storage changed");
+                }
+                crate::shape::CombinedWidthProbeMode::UnscopedOutputReuse => {
+                    assert_eq!(metrics[0].0, REPEATS, "expected one clone per TCY group");
+                    assert_eq!(
+                        metrics[1].0, 0,
+                        "unscoped reuse should not clone TCY groups"
+                    );
+                    assert_eq!(
+                        metrics[0].3,
+                        metrics[1].3 + REPEATS,
+                        "shape-call saving changed"
+                    );
+                }
+                crate::shape::CombinedWidthProbeMode::CloneReference => {
+                    unreachable!("the reference mode is the comparison baseline")
+                }
+            }
+        }
+    }
 }
 
 #[test]

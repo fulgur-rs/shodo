@@ -19,8 +19,29 @@ use std::ops::Range;
 #[cfg(test)]
 std::thread_local! {
     pub(super) static HARFRUST_SHAPE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(super) static COMBINED_WIDTH_GROUP_CLONE_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(super) static COMBINED_WIDTH_GROUP_CLONE_SCALARS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(super) static COMBINED_WIDTH_GROUP_CLONE_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(super) static COMBINED_WIDTH_TRIAL_STORE_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static COMBINED_WIDTH_PROBE_MODE: std::cell::Cell<CombinedWidthProbeMode> = const { std::cell::Cell::new(CombinedWidthProbeMode::CloneReference) };
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CombinedWidthProbeMode {
+    CloneReference,
+    FeatureView,
+    UnscopedOutputReuse,
+}
+
+#[cfg(test)]
+pub(crate) fn set_combined_width_probe_mode(mode: CombinedWidthProbeMode) {
+    COMBINED_WIDTH_PROBE_MODE.with(|current| current.set(mode));
+}
+
+#[cfg(test)]
+pub(crate) fn combined_width_probe_mode_for_test() -> CombinedWidthProbeMode {
+    COMBINED_WIDTH_PROBE_MODE.with(std::cell::Cell::get)
 }
 
 use crate::font::FontId;
@@ -202,32 +223,83 @@ pub(crate) fn select_combined_widths(
             );
         });
         #[cfg(test)]
-        COMBINED_WIDTH_GROUP_CLONE_BYTES.with(|bytes| {
-            let cloned = std::mem::size_of_val(group)
-                + group
-                    .iter()
-                    .map(|item| {
-                        item.scalars.len() * size_of::<crate::analysis::itemize::Scalar>()
-                            + item.before.len()
-                            + item.after.len()
-                    })
-                    .sum::<usize>();
-            bytes.set(bytes.get().saturating_add(cloned));
-        });
-        let mut candidate = group.to_vec();
-        for item in &mut candidate {
-            item.width_feature = Some(tag);
-        }
-        let Ok((narrow, _narrow_runs)) = shape_items(
-            cx,
-            &candidate,
-            styles,
-            fonts,
-            mode,
-            limits,
-            &mut warnings,
-            &mut sat,
-        ) else {
+        let narrow_result =
+            if combined_width_probe_mode_for_test() == CombinedWidthProbeMode::CloneReference {
+                use std::mem::size_of;
+
+                COMBINED_WIDTH_GROUP_CLONE_COUNT.with(|count| count.set(count.get() + 1));
+                COMBINED_WIDTH_GROUP_CLONE_SCALARS.with(|count| {
+                    count.set(
+                        count.get().saturating_add(
+                            group.iter().map(|item| item.scalars.len()).sum::<usize>(),
+                        ),
+                    )
+                });
+                COMBINED_WIDTH_GROUP_CLONE_BYTES.with(|bytes| {
+                    let cloned = std::mem::size_of_val(group)
+                        + group
+                            .iter()
+                            .map(|item| {
+                                item.scalars.len() * size_of::<crate::analysis::itemize::Scalar>()
+                                    + item.before.len()
+                                    + item.after.len()
+                            })
+                            .sum::<usize>();
+                    bytes.set(bytes.get().saturating_add(cloned));
+                });
+                let mut candidate = group.to_vec();
+                for item in &mut candidate {
+                    item.width_feature = Some(tag);
+                }
+                shape_items(
+                    cx,
+                    &candidate,
+                    styles,
+                    fonts,
+                    mode,
+                    limits,
+                    &mut warnings,
+                    &mut sat,
+                )
+            } else {
+                let mut trial_features = FeatureSets::new(group, styles);
+                for item in group {
+                    trial_features.prepare_width_feature(item, styles, tag);
+                }
+                shape_inputs(
+                    cx,
+                    group
+                        .iter()
+                        .map(|item| input::ShapeInput::whole(item).with_width_feature(Some(tag))),
+                    styles,
+                    fonts,
+                    mode,
+                    limits,
+                    &mut warnings,
+                    &mut sat,
+                    None,
+                    &trial_features,
+                    0,
+                )
+            };
+        #[cfg(not(test))]
+        let narrow_result = {
+            let mut candidate = group.to_vec();
+            for item in &mut candidate {
+                item.width_feature = Some(tag);
+            }
+            shape_items(
+                cx,
+                &candidate,
+                styles,
+                fonts,
+                mode,
+                limits,
+                &mut warnings,
+                &mut sat,
+            )
+        };
+        let Ok((narrow, _narrow_runs)) = narrow_result else {
             begin = end;
             continue;
         };

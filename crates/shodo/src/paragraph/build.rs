@@ -611,7 +611,26 @@ fn build_data(
         style.writing_mode,
         &combine_spans,
     );
-    let (glyphs, runs, shape_features) = if bases.enabled() {
+    #[cfg(test)]
+    let unscoped_output_reuse_candidate = crate::shape::combined_width_probe_mode_for_test()
+        == crate::shape::CombinedWidthProbeMode::UnscopedOutputReuse;
+    #[cfg(not(test))]
+    let unscoped_output_reuse_candidate = false;
+    let (glyphs, runs, shape_features) = if bases.enabled() && unscoped_output_reuse_candidate {
+        let mut shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
+        let (glyphs, runs) = crate::shape::shape_items_with_combined_width_reuse(
+            cx,
+            &mut shape_items_input,
+            &styles,
+            fonts,
+            style.writing_mode,
+            &shape_limits,
+            warnings,
+            sat,
+            &mut shape_features,
+        )?;
+        (glyphs, runs, shape_features)
+    } else if bases.enabled() {
         crate::shape::select_combined_widths(
             cx,
             &mut shape_items_input,
