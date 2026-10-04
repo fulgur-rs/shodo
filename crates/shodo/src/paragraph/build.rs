@@ -963,7 +963,7 @@ mod tests {
     use crate::node::{NodeId, TextSource};
     use crate::style::{
         FontFamily, FontMetricKind, FontSizeAdjust, FontVariation, InlineStyle, LineOptions,
-        ParagraphStyle,
+        ParagraphStyle, TextCombineUpright,
     };
 
     fn fonts() -> (FontCollection, FontId) {
@@ -1047,6 +1047,196 @@ mod tests {
             offset,
             affinity: Affinity::Downstream,
         }
+    }
+
+    #[test]
+    fn combine_free_paragraphs_have_no_combine_spans() {
+        let (fonts, _) = fonts();
+        let root = font_style("Latin");
+        let paragraph_style = ParagraphStyle {
+            root,
+            ..Default::default()
+        };
+
+        for (text, has_first_line) in [("a b c".to_owned(), false), ("a b c ".repeat(128), true)] {
+            let mut style = paragraph_style.clone();
+            if has_first_line {
+                style.first_line = Some(style.root.clone());
+            }
+            let mut builder = crate::ParagraphBuilder::new(&style, &Limits::default());
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, &text);
+
+            let paragraph = builder
+                .build(&mut crate::LayoutContext::new(), &fonts)
+                .unwrap();
+
+            assert!(paragraph.data.combine_spans.is_empty());
+            assert!(!paragraph.data.breaks.opportunities.is_empty());
+            assert!(!paragraph.data.units.is_empty());
+            if has_first_line {
+                let alternate = paragraph.data.first_line.as_ref().unwrap();
+                assert!(alternate.data.combine_spans.is_empty());
+            }
+            assert!(
+                paragraph
+                    .data
+                    .units
+                    .iter()
+                    .all(|unit| unit.combine.is_none()),
+                "len={}",
+                text.len()
+            );
+        }
+    }
+
+    #[test]
+    fn empty_and_horizontal_disabled_tcy_have_no_combine_spans() {
+        let (fonts, _) = fonts();
+        let limits = Limits::default();
+        let empty_style = ParagraphStyle {
+            root: font_style("Latin"),
+            ..Default::default()
+        };
+        let empty = crate::ParagraphBuilder::new(&empty_style, &limits);
+
+        let empty = empty
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        assert!(empty.data.combine_spans.is_empty());
+
+        let mut root = font_style("Latin");
+        root.text_combine_upright = TextCombineUpright::All;
+        let horizontal_style = ParagraphStyle {
+            root,
+            writing_mode: WritingMode::HorizontalTb,
+            ..Default::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&horizontal_style, &limits);
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, "12");
+
+        let horizontal = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        assert!(horizontal.data.combine_spans.is_empty());
+        assert!(
+            horizontal
+                .data
+                .units
+                .iter()
+                .all(|unit| unit.combine.is_none())
+        );
+        assert!(horizontal.warnings().is_empty());
+    }
+
+    #[test]
+    fn tcy_spans_mark_member_units_and_breaks() {
+        let (fonts, _) = fonts();
+        let root = font_style("Latin");
+        let mut paragraph_style = ParagraphStyle {
+            root: root.clone(),
+            writing_mode: WritingMode::VerticalRl,
+            ..Default::default()
+        };
+        paragraph_style.root.text_combine_upright = TextCombineUpright::None;
+        let mut combined = root;
+        combined.text_combine_upright = TextCombineUpright::All;
+        let mut builder = crate::ParagraphBuilder::new(&paragraph_style, &Limits::default());
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+        for (node, text) in [(NodeId(2), "12"), (NodeId(4), "34")] {
+            builder
+                .open_inline(node, &combined, Default::default())
+                .push_text(TextSource::Generated { node }, text)
+                .close_inline();
+            if node == NodeId(2) {
+                builder.push_text(TextSource::Generated { node: NodeId(3) }, "b");
+            }
+        }
+        builder.push_text(TextSource::Generated { node: NodeId(5) }, "c");
+
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+
+        assert_eq!(paragraph.data.combine_spans.len(), 2);
+        let mut interior_opportunities = 0;
+        for opportunity in &paragraph.data.breaks.opportunities {
+            if paragraph.data.combine_spans.iter().any(|span| {
+                span.text.start < opportunity.offset && opportunity.offset < span.text.end
+            }) {
+                interior_opportunities += 1;
+                assert_eq!(
+                    opportunity.class,
+                    crate::analysis::units::BreakClass::Prohibited
+                );
+                assert!(!opportunity.min_content);
+            }
+        }
+        assert_eq!(interior_opportunities, 2);
+        let mut saturation = crate::geometry::Saturation::default();
+        for (span_index, span) in paragraph.data.combine_spans.iter().enumerate() {
+            let span_units = &paragraph.data.units[span.units.clone()];
+            assert!(!span_units.is_empty());
+            for unit in span_units {
+                assert_eq!(unit.combine, Some(span_index as u32));
+                assert_eq!(unit.level, 0);
+                if unit.text.end < span.text.end {
+                    assert_eq!(
+                        unit.break_after,
+                        crate::analysis::units::BreakClass::Prohibited
+                    );
+                    assert!(!unit.emergency_min_content);
+                    assert_eq!(unit.slice_advance, crate::geometry::LayoutUnit::ZERO);
+                }
+            }
+            assert_eq!(
+                span_units.last().unwrap().slice_advance,
+                crate::geometry::LayoutUnit::from_f32_round(span.em, &mut saturation)
+            );
+        }
+    }
+
+    #[test]
+    fn combine_free_build_keeps_rejection_warnings_and_override_callback() {
+        use std::sync::{Arc, Mutex};
+
+        let (fonts, _) = fonts();
+        let mut root = font_style("Latin");
+        root.text_combine_upright = TextCombineUpright::All;
+        let paragraph_style = ParagraphStyle {
+            root: root.clone(),
+            writing_mode: WritingMode::VerticalRl,
+            ..Default::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&paragraph_style, &Limits::default());
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, "12");
+        builder.open_inline(NodeId(2), &root, Default::default());
+        builder.push_text(TextSource::Generated { node: NodeId(3) }, "34");
+        builder.close_inline();
+        let visited = Arc::new(Mutex::new(Vec::new()));
+        let callback_visits = Arc::clone(&visited);
+        builder.with_line_break_override(move |context| {
+            callback_visits.lock().unwrap().push(context.offset);
+            crate::LineBreakOverride::Prohibit
+        });
+
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+
+        assert!(paragraph.data.combine_spans.is_empty());
+        assert_eq!(*visited.lock().unwrap(), vec![1, 2, 3]);
+        assert_eq!(
+            paragraph.data.breaks.at(1).class,
+            crate::analysis::units::BreakClass::Prohibited
+        );
+        assert_eq!(
+            paragraph
+                .warnings()
+                .iter()
+                .filter(|warning| warning.message.contains("text-combine-upright"))
+                .count(),
+            2
+        );
     }
 
     #[test]
