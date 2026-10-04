@@ -72,3 +72,6 @@ name = "shape_window_prep"
 
 [[example]]
 name = "missing_font_scalars"
+
+[[example]]
+name = "combine_empty_passes"
