@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.12](https://github.com/fulgur-rs/shodo/compare/v0.0.11...v0.0.12) - 2026-10-04
+
+### Added
+
+- space UTR #59 conditional punctuation for Chinese autospace (shodo-bor)
+
+### Fixed
+
+- prevent text-autospace across U+200B (shodo-6vb)
+- remove needless borrows in TCY probe fixtures
+
+### Other
+
+- Merge pull request #219 from fulgur-rs/feat/shodo-9ye-word-spacing-percent
+- Merge pull request #218 from fulgur-rs/perf/shodo-t3t-tcy-probe-reuse
+- record empty combine span scan measurements
+- push missing-font notdef glyphs without temporary runs
+- pin CFF origin cache to one shaping input
+- prepare shaping face state once per input
+- keep shaping window contexts inline
+- measure ruby content restoration scans
+- measure TCY width probes under ruby scopes
+- Optimize ruby alignment group and gap storage
+- share first-line whitespace flags
+- lazily format suppressed warning messages
+- reuse StyleMetrics probe instances
+- skip Ruby base ancestor Vec scans
+- Merge remote-tracking branch 'origin/main' into docs/rustdoc-guides
+- Merge pull request #205 from fulgur-rs/docs/rustdoc-lines
+- Merge pull request #204 from fulgur-rs/docs/rustdoc-builders
+- explain paragraph builder input contracts
+- borrow Ruby base caret stop ranges
+- avoid ruby hit paths in regular hit testing
+
 ## [0.0.11](https://github.com/fulgur-rs/shodo/compare/v0.0.10...v0.0.11) - 2026-10-03
 
 ### Other
