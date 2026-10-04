@@ -857,6 +857,371 @@ fn scoped_output_reuse_matches_reference_across_base_and_paragraph_limits() {
 }
 
 #[test]
+fn scoped_output_reuse_matches_reference_for_first_line_cumulative_base_glyphs() {
+    let mut outcomes = Vec::new();
+    for case in WIDTH_PROBE_CASES {
+        for repeats in [1, 2] {
+            for base_glyphs in [
+                None,
+                Some(1),
+                Some(2),
+                Some(3),
+                Some(4),
+                Some(5),
+                Some(6),
+                Some(8),
+            ] {
+                for paragraph_glyphs in [None, Some(2), Some(4), Some(6), Some(8)] {
+                    let paragraph = Limits {
+                        max_shaped_glyphs: paragraph_glyphs,
+                        ..Limits::default()
+                    };
+                    let run = |mode| {
+                        width_probe_outcome(build_width_probe_with(
+                            case,
+                            mode,
+                            base_glyphs,
+                            None,
+                            &paragraph,
+                            true,
+                            repeats,
+                        ))
+                    };
+                    let reference = run(crate::shape::CombinedWidthProbeMode::CloneReference);
+                    assert_eq!(
+                        reference,
+                        run(crate::shape::CombinedWidthProbeMode::ScopedReuse),
+                        "{} repeats={repeats} base_glyphs={base_glyphs:?} paragraph_glyphs={paragraph_glyphs:?}",
+                        case.name
+                    );
+                    outcomes.push(reference.is_ok());
+                }
+            }
+        }
+    }
+    assert!(outcomes.contains(&true) && outcomes.contains(&false));
+}
+
+#[test]
+fn scoped_output_reuse_matches_reference_under_exhausted_warning_caps() {
+    for case in WIDTH_PROBE_CASES {
+        for max_warnings in [Some(0), Some(1), Some(2)] {
+            for base_run_bytes in [None, Some(0), Some(1)] {
+                let paragraph = Limits {
+                    max_warnings,
+                    max_shaping_run_bytes: Some(1),
+                    ..Limits::default()
+                };
+                let run = |mode| {
+                    width_probe_outcome(build_width_probe_with(
+                        case,
+                        mode,
+                        None,
+                        base_run_bytes,
+                        &paragraph,
+                        false,
+                        2,
+                    ))
+                };
+                assert_eq!(
+                    run(crate::shape::CombinedWidthProbeMode::CloneReference),
+                    run(crate::shape::CombinedWidthProbeMode::ScopedReuse),
+                    "{} max_warnings={max_warnings:?} base_run_bytes={base_run_bytes:?}",
+                    case.name
+                );
+            }
+        }
+    }
+}
+
+/// Builds `<ruby><rb outer>34<ruby><rb inner>CONTENT</rb>..</ruby></rb>..</ruby>`
+/// where `fill_inner` pushes the content of the innermost base.
+fn nested_width_probe_builder_with(
+    outer_glyphs: Option<u64>,
+    inner_glyphs: Option<u64>,
+    limits: &Limits,
+    fill_inner: impl FnOnce(&mut crate::ParagraphBuilder, &crate::style::InlineStyle),
+) -> crate::ParagraphBuilder {
+    let style = width_probe_style("Width CJK", crate::geometry::Direction::Ltr);
+    let paragraph_style = crate::style::ParagraphStyle {
+        writing_mode: WritingMode::VerticalRl,
+        root: style.clone(),
+        ..Default::default()
+    };
+    let ruby = |node: u64, content: crate::RubyContent| {
+        crate::Ruby::new(
+            vec![crate::RubyBase {
+                node: crate::node::NodeId(node),
+                content,
+                align: crate::RubyAlign::default(),
+            }],
+            vec![crate::RubyLevel {
+                annotations: vec![crate::RubyAnnotation {
+                    node: crate::node::NodeId(node + 1),
+                    content: crate::RubyContent::text(
+                        crate::node::TextSource::Generated {
+                            node: crate::node::NodeId(node + 1),
+                        },
+                        "注",
+                        &style,
+                        limits,
+                    ),
+                    span: crate::RubySpan::Auto,
+                    visibility: crate::RubyVisibility::Visible,
+                }],
+                style: crate::RubyStyle::default(),
+            }],
+        )
+        .unwrap()
+    };
+    let inner_limits = Limits {
+        max_shaped_glyphs: inner_glyphs,
+        ..Limits::default()
+    };
+    let mut inner = crate::ParagraphBuilder::new(&paragraph_style, &inner_limits);
+    fill_inner(&mut inner, &style);
+    let outer_limits = Limits {
+        max_shaped_glyphs: outer_glyphs,
+        ..Limits::default()
+    };
+    let mut outer = crate::ParagraphBuilder::new(&paragraph_style, &outer_limits);
+    outer.push_text(
+        crate::node::TextSource::Generated {
+            node: crate::node::NodeId(10),
+        },
+        "34",
+    );
+    outer.push_ruby(
+        crate::node::NodeId(11),
+        &style,
+        ruby(12, crate::RubyContent::from_builder(inner)),
+    );
+    let mut builder = crate::ParagraphBuilder::new(&paragraph_style, limits);
+    builder.push_ruby(
+        crate::node::NodeId(1),
+        &style,
+        ruby(2, crate::RubyContent::from_builder(outer)),
+    );
+    builder
+}
+
+fn nested_width_probe_builder(
+    outer_glyphs: Option<u64>,
+    inner_glyphs: Option<u64>,
+    limits: &Limits,
+) -> crate::ParagraphBuilder {
+    nested_width_probe_builder_with(outer_glyphs, inner_glyphs, limits, |inner, _| {
+        inner.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(20),
+            },
+            "12",
+        );
+    })
+}
+
+/// One text-combine-upright element whose text needs two fonts (Latin digit, then a
+/// CJK-only scalar), so the single combine group produces several shape inputs and
+/// several shaper charges.
+fn nested_multi_input_width_probe_builder(
+    outer_glyphs: Option<u64>,
+    inner_glyphs: Option<u64>,
+    limits: &Limits,
+) -> crate::ParagraphBuilder {
+    nested_width_probe_builder_with(outer_glyphs, inner_glyphs, limits, |inner, cjk| {
+        let mixed = crate::style::InlineStyle {
+            font_families: vec![
+                crate::style::FontFamily::Named("Width Latin".into()),
+                crate::style::FontFamily::Named("Width CJK".into()),
+            ],
+            ..cjk.clone()
+        };
+        // A leading plain scalar keeps the group's first scalar a grapheme start (the
+        // first scalar right after a ruby base boundary is not one), which the
+        // width probe requires.
+        let plain = crate::style::InlineStyle {
+            text_combine_upright: crate::style::TextCombineUpright::None,
+            ..cjk.clone()
+        };
+        inner
+            .open_inline(
+                crate::node::NodeId(20),
+                &plain,
+                crate::node::InlineEdges::default(),
+            )
+            .push_text(
+                crate::node::TextSource::Dom {
+                    node: crate::node::NodeId(20),
+                    offset: 0,
+                },
+                "x",
+            )
+            .close_inline()
+            .open_inline(
+                crate::node::NodeId(21),
+                &mixed,
+                crate::node::InlineEdges::default(),
+            )
+            .push_text(
+                crate::node::TextSource::Dom {
+                    node: crate::node::NodeId(21),
+                    offset: 0,
+                },
+                "1日",
+            )
+            .close_inline();
+    })
+}
+
+#[test]
+fn scoped_output_reuse_matches_reference_for_nested_base_scopes() {
+    let limits = Limits::default();
+    let fonts = width_probe_fonts(&limits);
+    let mut outcomes = Vec::new();
+    for outer in [None, Some(0), Some(1), Some(2), Some(3), Some(4), Some(6)] {
+        for inner in [None, Some(0), Some(1), Some(2), Some(4)] {
+            let run = |mode| {
+                let builder = nested_width_probe_builder(outer, inner, &limits);
+                let _mode_guard = CombinedWidthProbeModeGuard::new(mode);
+                width_probe_outcome(builder.build(&mut crate::LayoutContext::new(), &fonts))
+            };
+            let reference = run(crate::shape::CombinedWidthProbeMode::CloneReference);
+            assert_eq!(
+                reference,
+                run(crate::shape::CombinedWidthProbeMode::ScopedReuse),
+                "outer={outer:?} inner={inner:?}"
+            );
+            outcomes.push(reference.is_ok());
+        }
+    }
+    eprintln!(
+        "nested outcomes: ok={} err={}",
+        outcomes.iter().filter(|ok| **ok).count(),
+        outcomes.iter().filter(|ok| !**ok).count()
+    );
+}
+
+#[test]
+fn scoped_output_reuse_matches_reference_for_multi_input_groups_in_nested_bases() {
+    let limits = Limits::default();
+    let fonts = width_probe_fonts(&limits);
+    let build = |outer, inner, mode| {
+        let builder = nested_multi_input_width_probe_builder(outer, inner, &limits);
+        HARFRUST_SHAPE_CALLS.with(|calls| calls.set(0));
+        let _mode_guard = CombinedWidthProbeModeGuard::new(mode);
+        builder.build(&mut crate::LayoutContext::new(), &fonts)
+    };
+
+    // The combine group must span several shape inputs, and reuse must save several calls.
+    let reference_paragraph = build(
+        None,
+        None,
+        crate::shape::CombinedWidthProbeMode::CloneReference,
+    )
+    .unwrap();
+    let reference_calls = HARFRUST_SHAPE_CALLS.with(|calls| calls.get());
+    let reused_paragraph = build(
+        None,
+        None,
+        crate::shape::CombinedWidthProbeMode::ScopedReuse,
+    )
+    .unwrap();
+    let reused_calls = HARFRUST_SHAPE_CALLS.with(|calls| calls.get());
+    assert_eq!(
+        width_probe_snapshot(&reference_paragraph),
+        width_probe_snapshot(&reused_paragraph)
+    );
+    let data = &reused_paragraph.data;
+    // The probed group is the combine id that owns several shape items; "34" in the
+    // outer base is a separate single-item group.
+    let group_items: Vec<usize> = data
+        .shape_items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| item.combine == Some(1) && item.font.is_some())
+        .map(|(index, _)| index)
+        .collect();
+    // Glyphs per shape item: runs whose source text covers the item's scalars.
+    let group_glyphs: Vec<u64> = group_items
+        .iter()
+        .map(|&index| {
+            let first = data.shape_items[index].scalars[0].offset;
+            data.runs
+                .iter()
+                .filter(|run| run.text.start <= first && first < run.text.end)
+                .map(|run| run.glyphs.len() as u64)
+                .sum()
+        })
+        .collect();
+    eprintln!(
+        "multi-input: group_items={group_items:?} glyphs={group_glyphs:?} \
+         reference_calls={reference_calls} reused_calls={reused_calls}"
+    );
+    assert!(group_items.len() >= 2, "{group_items:?}");
+    assert!(
+        reference_calls >= reused_calls + 2,
+        "reference={reference_calls} reused={reused_calls}"
+    );
+    // The inner base spends `prefix` glyphs on its leading plain "x" before the group,
+    // so a limit in [prefix + largest, prefix + total) admits each charge on its own
+    // but not their cumulative sum.
+    let prefix: u64 = data
+        .shape_items
+        .iter()
+        .filter(|item| item.scalars.first().is_some_and(|scalar| scalar.c == 'x'))
+        .map(|item| {
+            let first = item.scalars[0].offset;
+            data.runs
+                .iter()
+                .filter(|run| run.text.start <= first && first < run.text.end)
+                .map(|run| run.glyphs.len() as u64)
+                .sum::<u64>()
+        })
+        .sum();
+    let group_total: u64 = group_glyphs.iter().sum();
+    let largest = *group_glyphs.iter().max().unwrap();
+    assert!(prefix > 0 && group_total > largest);
+
+    let values = [None, Some(0), Some(1), Some(2), Some(3), Some(4)];
+    let mut ok = 0;
+    let mut err = 0;
+    let mut cumulative_boundary = false;
+    for outer in values {
+        for inner in values {
+            let reference = width_probe_outcome(build(
+                outer,
+                inner,
+                crate::shape::CombinedWidthProbeMode::CloneReference,
+            ));
+            assert_eq!(
+                reference,
+                width_probe_outcome(build(
+                    outer,
+                    inner,
+                    crate::shape::CombinedWidthProbeMode::ScopedReuse
+                )),
+                "outer={outer:?} inner={inner:?}"
+            );
+            match &reference {
+                Ok(_) => ok += 1,
+                Err((kind, limit, _)) => {
+                    err += 1;
+                    if *kind == LimitKind::ShapedGlyphs
+                        && *limit >= prefix + largest
+                        && *limit < prefix + group_total
+                    {
+                        cumulative_boundary = true;
+                    }
+                }
+            }
+        }
+    }
+    eprintln!("multi-input outcomes: ok={ok} err={err} cumulative_boundary={cumulative_boundary}");
+    assert!(ok > 0 && err > 0);
+    assert!(cumulative_boundary);
+}
+
+#[test]
 #[ignore = "manual fixed-font timing probe; run with --ignored --nocapture"]
 fn combined_width_base_probe_performance_probe() {
     use std::time::{Duration, Instant};
