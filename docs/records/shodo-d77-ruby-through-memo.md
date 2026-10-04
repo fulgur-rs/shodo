@@ -4,7 +4,7 @@
 
 採用する。ネストした ruby の候補計測から深さの 2 乗の項が消え、深さ 160 の `break_all` が baseline の約 3.44 s から 17.19 ms になった（ABBA −99.5%、BAAB −99.5%、どちらの順でも 12/12 ラウンドで candidate が速い）。深さを倍にしたときの時間の比は baseline が約 5.5–6.1 倍、candidate が 2.6–3.3 倍で、候補計測の操作数は参照経路が倍化ごとに約 3.7–4.1 倍、最適化経路が約 2.00–2.02 倍になる（「操作数」参照）。
 
-ただし wall clock の倍化比は 2 まで下がっていない。candidate の深さ 80→160 の比は 2.58–2.67（20→40 は 3.27–3.29）で、操作数の 2 倍より大きい。この差は操作数では説明できず、原因は調べていない（キャッシュや割り当てなどの可能性がある）。計画の採否基準（倍化比 ≤ 2.5）は満たさないが、管理者の裁定により、ネストで両順序の再現性のある改善があり、対照に退行がないことで採用を判断した。判断の根拠は、すべてのネストサイズで両方の順序の 12/12 ラウンドが改善したことと、操作数が参照経路の 4 倍から 2 倍に下がったこと。
+ただし wall clock の倍化比は 2 まで下がっていない。candidate の深さ 80→160 の比は 2.58–2.67（20→40 は 3.27–3.29）で、操作数の 2 倍より大きい。この差は操作数では説明できない。レビュー時の perf プロファイル（D=240、build を含むプロセス全体）では `spacing_summary::RangeIndex::query_node` が約 20%、`Summary::join` が約 17%、`whitespace::obstructed` が約 16% を占めており、これが有力な原因と考えている（プロファイルからの推定で、証明はしていない）。`obstructed(data, end)`（`line/whitespace.rs`）は `end` から積み重なった D 個の Close unit を前方に走査し、`decoration::chain` は D 個の祖先をたどるので、`range::width` 1 回あたり O(D) かかる。`range::width` の呼び出し回数は D に線形なので、この部分は全体で D² になる。`RangeIndex` の木の高さも深さとともに伸びる。いずれも本変更より前からあるコードで、定数は小さく、build できる最大の深さでも DoS にはならない。計画の採否基準（倍化比 ≤ 2.5）は満たさないが、管理者の裁定により、ネストで両順序の再現性のある改善があり、対照に退行がないことで採用を判断した。判断の根拠は、すべてのネストサイズで両方の順序の 12/12 ラウンドが改善したことと、操作数が参照経路の 4 倍から 2 倍に下がったこと。
 
 兄弟 ruby（base `"12"` の ruby を横に並べた 1 本の分割不能な行）は定数倍の改善にとどまる。R=400 で 2.54 s から 330.03 ms（−87.0%）になったが、倍化比は baseline 4.14–4.16、candidate 3.92–4.05 のままで、まだ 2 乗で伸びる。線形化は shodo-2j6 で扱う。
 
@@ -85,13 +85,27 @@ wall clock に依存しない指標として、ignored テスト `d77_operation_
 
 参照経路は倍化ごとに 3.7–4.1 倍、最適化経路は 2.00–2.02 倍で伸びる。D=64 で参照経路の `range::width` は 100,096 回、最適化経路は 1,920 回（`break_all`）と 1,792 回（`index`）。この差を wall clock なしで固定するのが、テスト `reference_nested_candidates_grow_quadratically`（参照経路が 3 倍以上で伸びる。計数が仕事を取りこぼしていないことの確認）、`memoized_nested_candidates_measure_linearly`、`incremental_walk_keeps_nested_probes_linear`。
 
+## メモリ
+
+memo（`ruby/memo.rs`）は 1 回の操作（`next_line` か `intrinsic_sizes`）の間だけエントリを持つ。時間を測った `f3744e1` は、look-ahead のない probe（`through == end`）も含めて、汚れのない probe をすべて記録していた。look-ahead のないキーは 1 回の走査で 1 度しか引かれず、そのエントリは計測した経路のどれでも再生に使われなかった（保存してもしなくても操作数は同じ）。`intrinsic_sizes` は `(total_unit, i)` と `(word_unit, i)` を unit ごとに probe するので、ruby 1 個と CJK unit N 個の段落では 1 回の呼び出しの後に約 N 個のエントリが残った（N=16000 で 16,000 エントリ、容量 28,672、約 3 MB。レビューでは N=32000 で容量 57,344、約 6 MB）。`begin_reshape_operation` の消去は容量を残すため、このマップは `shrink_to` までコンテキストに残っていた。main にはない増加で、信頼できない入力では、既定の `max_text_bytes`（16 MiB、CJK で約 560 万 unit）までの長さで数百 MB を超えうる。
+
+修正後の上限は次のとおり。
+
+- look-ahead のある probe（`through > end`）だけを記録する。D² の項はそこからしか生じない。look-ahead のない probe は、同じ `through` で先に記録された look-ahead のエントリがあれば再生し（コンテナの終わりで止まる probe は、1 unit 手前の look-ahead probe とキーが同じ）、なければ参照経路と同じく記録せずに計測する。
+- 同時に持つエントリは最大 1,024（`MAX_ENTRIES`、既定の `max_nesting_depth` 512 の 2 倍）。達したら次の挿入の前に全部消す。走査は 1 つの `through` を連続した end の範囲で引くので、いま使っている範囲は消えず、走査ごとの再利用は線形のまま。1 バケットは 105 バイト（キー 40、値 64、制御 1）で、上限でも約 210 KiB。
+- 消去（操作の開始時と、注釈レーンの `ruby_line` による操作途中のリセット）では、容量が 256 を超えるマップを解放する。残るマップは最大 256 バケット、約 27 KiB。
+
+`memo_stays_bounded_on_long_paragraphs`（ruby 1 個 + `"日"` × 1000/4000/16000）では、`intrinsic_sizes` の後はエントリ 0、容量 0、1 行の `next_line` の後も容量 3 になった。`memo_bounds_keep_look_ahead_hits` は、nested と siblings が引き続き memo を再生すること、2 base の ruby を 400 個並べた 1 行（エントリが上限を超えて 1 回消える）でも再生回数が ruby あたり 16 回で、100 個のとき（上限に届かない）と同じであること、その操作の後にマップが解放されることを確かめる。`ruby::memo::tests::entries_are_capped_and_large_maps_are_released` は上限と解放を直接固定する。
+
+上限を入れた後も、操作数（上の表）は時間を測った `f3744e1` と全く同じで、`exact_probes_replay_look_ahead_entries` は兄弟 ruby が ruby あたり 12 回再生することを固定する。最初の修正案（look-ahead のない probe を引きもしない）は、兄弟 ruby で再生を ruby あたり 1 回失い（R=100 で `range::width` 23,000→33,100）、release の再確認でも `siblings` 400 が約 20%、`nested` 160 が約 6.5% 遅くなった（その経路が引く `(0, end)` のキーは、直前の look-ahead probe が記録したもの）。採用した形では操作数が変わらないため、時間の表は測り直していない。
+
 ## 同値性
 
 出力と挙動の同値性は、reference 経路との比較で固定した。
 
 - `adjustment_only_candidates_match_reference_for_every_range`: フィクスチャごとに全 (start, end)、成長・縮小の両スイープ、pre-spent 3 値 × suppressed 2 値で候補の結果を参照経路と比較する。
 - `line_layout_paths_match_reference`: warm/cold の `break_all`、狭い再試行による `PartialLine::index`、`intrinsic_sizes` を参照経路と比較する。フィクスチャは入れ子、兄弟、アラビア語（LTR/RTL）、atomic base、`vertical-align`、overhang、hyphenation、区切り文字、first-line など。
-- review focus の 5 項目（`memo_recomputes_when_replay_would_cross_reshape_budget`、`narrow_retry_after_budget_exhausting_index_matches_reference`、焦点 3 の first-line 代替データセット（`walk_fixtures` の `first-line normal`/`first-line alternate`。`incremental_walk_matches_full_walk_for_every_range` が使う）、`intrinsic_min_and_max_atomics_keep_separate_memo_entries`、`memo_does_not_survive_operations_or_atomic_revisions`）と、`line/replay.rs` の単体テストが、再生条件を個別に固定する。
+- review focus の 5 項目（`memo_recomputes_when_replay_would_cross_reshape_budget`、`narrow_retry_after_budget_exhausting_index_matches_reference`、焦点 3 の first-line 代替データセット（`walk_fixtures` の `first-line normal`/`first-line alternate`。`incremental_walk_matches_full_walk_for_every_range` が使う）、`intrinsic_min_and_max_atomics_keep_separate_memo_entries` と、min/max の atomics のキーが別になることを直接確かめる `intrinsic_min_and_max_atomics_have_distinct_memo_keys`、`memo_does_not_survive_operations_or_atomic_revisions`）と、`line/replay.rs` の単体テストが、再生条件を個別に固定する。
 - 再生条件は「全 charge が受理され合計が最小上限以内」または「全 charge が拒否され現在値が最大上限超」。計画の条件 (a) は、記録時に全 charge が受理されたことまで要求するよう強めた。suppressed 中の拒否は警告が残らず、再生側で区別できなくなるため。
 
 baseline/candidate の出力 SHA-256 と build/layout warning の SHA-256 は、全 1440 サンプル（15 点 × 4 サンプル × 24 ラウンド）で一致した（`digest_mismatch` は空）。
@@ -101,8 +115,8 @@ baseline/candidate の出力 SHA-256 と build/layout warning の SHA-256 は、
 - タブ（shodo-b7d）: `line/range.rs` は、段落にタブがあると開始位置が変わるたびに tab prefix を作り直して `RangeCache` の世代を進め、世代が変わらない間だけ記録・再生する memo が無効になる、というのが shodo-b7d で想定している劣化。今回の `nestedtab`（最内にタブ 1 つ）では、この劣化は観測されなかった。candidate は `nested` と同じ傾向で、深さ 160 で 18.89 ms（`nested` は 17.19 ms）、倍化比は 2.54–3.06、baseline からは −99.5% になった。単一の開始位置から 1 回の走査を行うこの形ではタブの prefix が走査の間に作り直されないためかもしれないが、`nestedtab` が tab prefix の作り直しから `RangeCache` の世代の更新までの経路を実際に通るかは確認しておらず、この説明は仮説にとどまる。計測の途中で probe を変えて、タブを各段・末尾に置く、兄弟 ruby に付ける、幅広い内容にするなどの形も試したが、いずれも同じ傾向で、memo の無効化は再現しなかった（これらは記録の対象外で、コミットしていない）。したがって shodo-b7d の劣化を起こす入力は未特定で、この記録は「タブを足しても二次に戻る」ことを示してはいない。shodo-b7d は開いたままで、再現する入力（複数の開始位置を使う形など）が見つかれば、同じ probe に `nestedtab` 以外のケースとして足せる。
 - 兄弟 ruby は上のとおり定数倍の改善のみ（shodo-2j6）。
 - shodo-tj5: キャッシュ状態への依存（`blocks`/`sets` の hit が副作用を省く）の会計は従来から存在する性質で、本変更は記録時の世代と再生時の世代が等しい場合だけ再生することで、それを壊さない。会計の非対称そのもの（キャッシュが冷えているか温まっているかで `edge_reshape_spent` と Saturation が変わる）は既存の挙動で、見直しは shodo-tj5。
-- shodo-mc0: 行計測（`break_all`/`intrinsic_sizes`）の作業量に fail-closed の上限を設けるかは shodo-mc0 で検討する。この変更は上限や拒否条件を追加せず、既存の `RubyCutWork` も変えない。
-- 深さ 160 の `nested` でも candidate の倍化比は 2 を超える（80→160 で 2.58–2.67）。操作数は 2 倍で伸びるため、残りの wall-clock の超過の原因は未調査（「判断」と同じ）。
+- shodo-mc0: 行計測（`break_all`/`intrinsic_sizes`）の作業量に fail-closed の上限を設けるかは shodo-mc0 で検討する。この変更は上限や拒否条件を追加せず、既存の `RubyCutWork` も変えない（memo のエントリ数の上限は内部のキャッシュの大きさで、出力や警告を変えない）。
+- 深さ 160 の `nested` でも candidate の倍化比は 2 を超える（80→160 で 2.58–2.67）。操作数は 2 倍で伸びるため、残りの wall-clock の超過は計測の外にある既存の O(D) 処理（`whitespace::obstructed` の Close unit 走査と `decoration::chain`、`RangeIndex` の木の高さ）による可能性が高い（「判断」のプロファイル。証明はしていない）。
 
 ## 再計測
 

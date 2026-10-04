@@ -10,6 +10,15 @@
 //! Only look-ahead probes (`through > end`) are stored, at most `MAX_ENTRIES`
 //! at once, and a clear releases a map larger than `RETAINED_CAPACITY`.
 //!
+//! The budget is also reset in the middle of a `next_line`: formatting an
+//! accepted line lays out each annotation lane with `Paragraph::ruby_line`
+//! (`line::next_line_in_set` → `ruby::place::format` → `ruby_line` →
+//! `next_line_in_set` → `begin_reshape_operation`), which clears this memo
+//! along with `edge_reshape_spent`. That is safe: `format` runs after every
+//! fit probe of the line, outside any recording, so no probe of the outer
+//! operation is left to reuse the entries, and resetting `spent` there
+//! predates this memo (the reference path resets it the same way).
+//!
 //! # Validity
 //!
 //! An entry stands in for a fresh measurement iff every input of the core's
