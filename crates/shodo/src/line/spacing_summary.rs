@@ -82,6 +82,11 @@ pub(crate) struct Summary {
     pub(super) after: bool,
     pub(super) hang_before: bool,
     pub(super) hang_after: bool,
+    /// A U+200B before (after) the edges separates them from the preceding
+    /// (following) unit for text-autospace only. Tracking and punctuation
+    /// spacing still see the neighboring edges as adjacent.
+    pub(super) autospace_before: bool,
+    pub(super) autospace_after: bool,
 }
 
 impl Summary {
@@ -97,6 +102,8 @@ impl Summary {
             after: false,
             hang_before: false,
             hang_after: false,
+            autospace_before: false,
+            autospace_after: false,
         }
     }
 
@@ -121,7 +128,9 @@ impl Summary {
                         + data.map_or(0, |d| {
                             let blocked = self.after || other.before;
                             let (right, left) = super::punctuation::boundary(d, a, b, blocked);
-                            super::autospace::gap(d, a, b, blocked)
+                            let autospace_blocked =
+                                blocked || self.autospace_after || other.autospace_before;
+                            super::autospace::gap(d, a, b, autospace_blocked)
                                 - i64::from(right.raw())
                                 - i64::from(left.raw())
                         })
@@ -146,6 +155,16 @@ impl Summary {
             } else {
                 self.hang_after || other.hang_after
             },
+            autospace_before: if self.first.is_some() {
+                self.autospace_before
+            } else {
+                self.autospace_before || other.autospace_before
+            },
+            autospace_after: if other.last.is_some() {
+                other.autospace_after
+            } else {
+                self.autospace_after || other.autospace_after
+            },
         }
     }
 
@@ -157,6 +176,8 @@ impl Summary {
             after: self.before,
             hang_before: self.hang_after,
             hang_after: self.hang_before,
+            autospace_before: self.autospace_after,
+            autospace_after: self.autospace_before,
             ..self
         }
     }
