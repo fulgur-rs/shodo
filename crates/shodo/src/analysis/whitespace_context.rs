@@ -6,6 +6,21 @@ use crate::builder::RawItem;
 use crate::style::{InlineStyle, WhiteSpaceCollapse};
 use icu_properties::{CodePointMapData, CodePointSetData, props};
 
+#[cfg(test)]
+std::thread_local! {
+    static FLAG_GENERATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(super) fn reset_flag_generations() {
+    FLAG_GENERATIONS.with(|count| count.set(0));
+}
+
+#[cfg(test)]
+pub(super) fn flag_generations() -> usize {
+    FLAG_GENERATIONS.with(std::cell::Cell::get)
+}
+
 pub(super) const REMOVE: u8 = 1;
 const COLLAPSE_SPACE: u8 = 2;
 const BREAK: u8 = 4;
@@ -36,16 +51,15 @@ fn wide(c: char) -> bool {
     )
 }
 
-pub(super) fn whitespace_flags(text: &str, raw: &[RawItem], styles: &[InlineStyle]) -> Vec<u8> {
-    flags_in_context(text, raw, styles, false)
-}
-
 pub(super) fn flags_in_context(
     text: &str,
     raw: &[RawItem],
     styles: &[InlineStyle],
     annotation: bool,
 ) -> Vec<u8> {
+    #[cfg(test)]
+    FLAG_GENERATIONS.with(|count| count.set(count.get() + 1));
+
     use WhiteSpaceCollapse::*;
     let mut flags = vec![0; text.len()];
     let mut boundaries = vec![0usize];

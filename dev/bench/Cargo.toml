@@ -46,6 +46,9 @@ name = "ruby_inputs"
 name = "style_metric_instances"
 
 [[example]]
+name = "whitespace_flags"
+
+[[example]]
 name = "combined_width_trial"
 
 [[example]]

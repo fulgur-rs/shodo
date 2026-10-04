@@ -169,15 +169,26 @@ impl Paragraph {
         let mut input_limits = run_limits.clone();
         input_limits.max_text_bytes = limits.max_text_bytes;
         bases.start_pass(false)?;
-        let processed = crate::analysis::whitespace::process_with_base_scopes(
-            &text,
-            &items,
-            &styles,
-            offset_mapping,
-            &input_limits,
-            ruby_annotation,
-            &mut bases,
-        )
+        // First-line styles cannot change white-space-collapse, so both raw
+        // passes use the same flags. Keep only this pure input shared; each
+        // pass still owns its Processor, output, and base-budget state.
+        let input = crate::analysis::whitespace::ProcessInput {
+            raw_text: &text,
+            raw: &items,
+            styles: &styles,
+            with_mapping: offset_mapping,
+            limits: &input_limits,
+            annotation: ruby_annotation,
+        };
+        let shared_flags = alternate_styles
+            .as_ref()
+            .map(|_| crate::analysis::whitespace::prepare_whitespace_flags(&input));
+        let processed = match shared_flags.as_deref() {
+            Some(flags) => crate::analysis::whitespace::process_with_base_scopes_and_flags(
+                input, flags, &mut bases,
+            ),
+            None => crate::analysis::whitespace::process_with_base_scopes(input, &mut bases),
+        }
         .map_err(|error| bases.translate(error, budget))?;
         let source_cuts = alternate_styles
             .as_ref()
@@ -258,13 +269,19 @@ impl Paragraph {
             input_limits.max_text_bytes = limits.max_text_bytes;
             let mut alternate_bases = bases.clone();
             alternate_bases.start_pass(true)?;
-            let alternate = crate::analysis::whitespace::process_with_base_scopes(
-                &text,
-                &items,
-                &normal.styles,
-                offset_mapping,
-                &input_limits,
-                ruby_annotation,
+            let flags = shared_flags
+                .as_deref()
+                .expect("alternate pass prepares shared whitespace flags");
+            let alternate = crate::analysis::whitespace::process_with_base_scopes_and_flags(
+                crate::analysis::whitespace::ProcessInput {
+                    raw_text: &text,
+                    raw: &items,
+                    styles: &normal.styles,
+                    with_mapping: offset_mapping,
+                    limits: &input_limits,
+                    annotation: ruby_annotation,
+                },
+                flags,
                 &mut alternate_bases,
             )
             .and_then(|processed| {

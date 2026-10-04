@@ -5,7 +5,7 @@
 //! Segment breaks use whole-IFC neighbor context. The input is DOM text:
 //! LF is a segment break and CR is a CSS space, not an HTML source newline.
 
-use super::whitespace_context::{REMOVE, ignorable, whitespace_flags};
+use super::whitespace_context::{REMOVE, ignorable};
 use super::{Item, ItemKind};
 use crate::builder::RawItem;
 use crate::geometry::Direction;
@@ -27,6 +27,16 @@ pub(crate) struct Processed {
     pub(crate) width_origins: Vec<super::transform::WidthOrigin>,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct ProcessInput<'a> {
+    pub(crate) raw_text: &'a str,
+    pub(crate) raw: &'a [RawItem],
+    pub(crate) styles: &'a [InlineStyle],
+    pub(crate) with_mapping: bool,
+    pub(crate) limits: &'a Limits,
+    pub(crate) annotation: bool,
+}
+
 pub(crate) fn process(
     raw_text: &str,
     raw: &[RawItem],
@@ -34,7 +44,17 @@ pub(crate) fn process(
     with_mapping: bool,
     limits: &Limits,
 ) -> Result<Processed, LimitExceeded> {
-    process_in_context(raw_text, raw, styles, with_mapping, limits, false, None)
+    process_in_context(
+        ProcessInput {
+            raw_text,
+            raw,
+            styles,
+            with_mapping,
+            limits,
+            annotation: false,
+        },
+        None,
+    )
 }
 
 pub(crate) fn process_annotation(
@@ -44,49 +64,84 @@ pub(crate) fn process_annotation(
     with_mapping: bool,
     limits: &Limits,
 ) -> Result<Processed, LimitExceeded> {
-    process_in_context(raw_text, raw, styles, with_mapping, limits, true, None)
-}
-
-pub(crate) fn process_with_base_scopes(
-    raw_text: &str,
-    raw: &[RawItem],
-    styles: &[InlineStyle],
-    with_mapping: bool,
-    limits: &Limits,
-    annotation: bool,
-    bases: &mut crate::ruby::base_budget::BaseScopes,
-) -> Result<Processed, LimitExceeded> {
-    if bases.enabled() {
-        process_in_context(
+    process_in_context(
+        ProcessInput {
             raw_text,
             raw,
             styles,
             with_mapping,
             limits,
-            annotation,
-            Some(bases),
+            annotation: true,
+        },
+        None,
+    )
+}
+
+pub(crate) fn process_with_base_scopes(
+    input: ProcessInput<'_>,
+    bases: &mut crate::ruby::base_budget::BaseScopes,
+) -> Result<Processed, LimitExceeded> {
+    if bases.enabled() {
+        process_in_context(input, Some(bases))
+    } else if input.annotation {
+        process_annotation(
+            input.raw_text,
+            input.raw,
+            input.styles,
+            input.with_mapping,
+            input.limits,
         )
-    } else if annotation {
-        process_annotation(raw_text, raw, styles, with_mapping, limits)
     } else {
-        process(raw_text, raw, styles, with_mapping, limits)
+        process(
+            input.raw_text,
+            input.raw,
+            input.styles,
+            input.with_mapping,
+            input.limits,
+        )
     }
 }
 
+pub(crate) fn prepare_whitespace_flags(input: &ProcessInput<'_>) -> Vec<u8> {
+    super::whitespace_context::flags_in_context(
+        input.raw_text,
+        input.raw,
+        input.styles,
+        input.annotation,
+    )
+}
+
+pub(crate) fn process_with_base_scopes_and_flags(
+    input: ProcessInput<'_>,
+    flags: &[u8],
+    bases: &mut crate::ruby::base_budget::BaseScopes,
+) -> Result<Processed, LimitExceeded> {
+    let bases = if bases.enabled() { Some(bases) } else { None };
+    process_in_context_with_flags(input, flags, bases)
+}
+
 fn process_in_context(
-    raw_text: &str,
-    raw: &[RawItem],
-    styles: &[InlineStyle],
-    with_mapping: bool,
-    limits: &Limits,
-    annotation: bool,
+    input: ProcessInput<'_>,
     bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
 ) -> Result<Processed, LimitExceeded> {
-    let flags = if annotation {
-        super::whitespace_context::flags_in_context(raw_text, raw, styles, true)
-    } else {
-        whitespace_flags(raw_text, raw, styles)
-    };
+    let flags = prepare_whitespace_flags(&input);
+    process_in_context_with_flags(input, &flags, bases)
+}
+
+fn process_in_context_with_flags(
+    input: ProcessInput<'_>,
+    flags: &[u8],
+    bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
+) -> Result<Processed, LimitExceeded> {
+    let ProcessInput {
+        raw_text,
+        raw,
+        styles,
+        with_mapping,
+        limits,
+        annotation,
+    } = input;
+    debug_assert_eq!(flags.len(), raw_text.len());
     let mut p = Processor {
         out: String::with_capacity(
             raw_text.len().min(
@@ -511,6 +566,248 @@ mod tests {
 
     fn builder() -> ParagraphBuilder {
         ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default())
+    }
+
+    #[test]
+    fn first_line_analysis_generates_whitespace_flags_once() {
+        let style = ParagraphStyle {
+            first_line: Some(InlineStyle {
+                font_size: 18.0,
+                ..InlineStyle::default()
+            }),
+            ..ParagraphStyle::default()
+        };
+        let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, "a  \nb");
+
+        super::super::whitespace_context::reset_flag_generations();
+        let _analysis = builder.analyze().unwrap();
+
+        assert_eq!(super::super::whitespace_context::flag_generations(), 1);
+    }
+
+    #[test]
+    fn analysis_without_first_line_generates_whitespace_flags_once() {
+        let mut builder = builder();
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, "a  \nb");
+
+        super::super::whitespace_context::reset_flag_generations();
+        let _analysis = builder.analyze().unwrap();
+
+        assert_eq!(super::super::whitespace_context::flag_generations(), 1);
+    }
+
+    #[test]
+    fn first_line_ruby_annotation_reuses_flags_with_annotation_context() {
+        use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+        use crate::ruby::{
+            Ruby, RubyAnnotation, RubyBase, RubyContent, RubyLevel, RubySpan, RubyStyle,
+            RubyVisibility,
+        };
+
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register_face(
+                crate::test_support::fonts::LATIN.to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: "Latin".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        fonts
+            .register_face(
+                crate::test_support::fonts::CJK.to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: "CJK".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let mut root = InlineStyle {
+            font_families: vec![
+                crate::style::FontFamily::Named("Latin".into()),
+                crate::style::FontFamily::Named("CJK".into()),
+            ],
+            ..Default::default()
+        };
+        let first = InlineStyle {
+            font_size: 18.0,
+            ..root.clone()
+        };
+        let style = ParagraphStyle {
+            root: root.clone(),
+            first_line: Some(first),
+            ..Default::default()
+        };
+        let base = RubyContent::text(
+            TextSource::Generated { node: NodeId(10) },
+            "水",
+            &root,
+            &limits,
+        );
+        root.font_size = 8.0;
+        let annotation_style = ParagraphStyle {
+            root: root.clone(),
+            first_line: Some(InlineStyle {
+                font_size: 9.0,
+                ..root.clone()
+            }),
+            ..Default::default()
+        };
+        let mut annotation_builder = ParagraphBuilder::new(&annotation_style, &limits);
+        annotation_builder.push_text(TextSource::Generated { node: NodeId(11) }, "み\nず");
+        let ruby = Ruby::new(
+            vec![RubyBase {
+                node: NodeId(10),
+                content: base,
+                align: Default::default(),
+            }],
+            vec![RubyLevel {
+                annotations: vec![RubyAnnotation {
+                    node: NodeId(11),
+                    content: RubyContent::from_builder(annotation_builder),
+                    span: RubySpan::All,
+                    visibility: RubyVisibility::Visible,
+                }],
+                style: RubyStyle::default(),
+            }],
+        )
+        .unwrap();
+        let mut builder = ParagraphBuilder::new(&style, &limits);
+        builder.push_ruby(NodeId(12), &style.root, ruby);
+
+        super::super::whitespace_context::reset_flag_generations();
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+
+        assert_eq!(super::super::whitespace_context::flag_generations(), 2);
+        assert!(paragraph.warnings().is_empty());
+    }
+
+    fn assert_processed_eq(actual: &Processed, expected: &Processed) {
+        assert_eq!(actual.text, expected.text);
+        assert_eq!(
+            format!("{:?}", actual.items),
+            format!("{:?}", expected.items)
+        );
+        assert_eq!(
+            format!("{:?}", actual.mapping),
+            format!("{:?}", expected.mapping)
+        );
+        assert_eq!(actual.indivisible, expected.indivisible);
+        assert_eq!(actual.source_spans.len(), expected.source_spans.len());
+        for (actual, expected) in actual.source_spans.iter().zip(&expected.source_spans) {
+            assert_eq!(actual.old, expected.old);
+            assert_eq!(actual.new, expected.new);
+            assert_eq!(actual.kind, expected.kind);
+        }
+        assert_eq!(actual.width_origins.len(), expected.width_origins.len());
+        for (actual, expected) in actual.width_origins.iter().zip(&expected.width_origins) {
+            assert_eq!(actual.text, expected.text);
+            assert_eq!(actual.before_width, expected.before_width);
+        }
+    }
+
+    #[test]
+    fn supplied_flags_match_regenerated_processing_for_whitespace_modes() {
+        for mode in [
+            WhiteSpaceCollapse::Collapse,
+            WhiteSpaceCollapse::Preserve,
+            WhiteSpaceCollapse::PreserveBreaks,
+            WhiteSpaceCollapse::PreserveSpaces,
+            WhiteSpaceCollapse::BreakSpaces,
+        ] {
+            for annotation in [false, true] {
+                for with_mapping in [false, true] {
+                    let root = InlineStyle {
+                        white_space_collapse: mode,
+                        ..InlineStyle::default()
+                    };
+                    let child = InlineStyle {
+                        white_space_collapse: mode,
+                        ..root.clone()
+                    };
+                    let paragraph_style = ParagraphStyle {
+                        root,
+                        ..Default::default()
+                    };
+                    let mut builder = ParagraphBuilder::new(&paragraph_style, &Limits::default());
+                    builder
+                        .push_text(dom(1), "日 ")
+                        .open_inline(NodeId(2), &child, InlineEdges::default())
+                        .push_text(dom(3), "\t\n \u{2028}b")
+                        .close_inline();
+                    let input = ProcessInput {
+                        raw_text: &builder.text,
+                        raw: &builder.items,
+                        styles: &builder.styles,
+                        with_mapping,
+                        limits: &builder.limits,
+                        annotation,
+                    };
+                    let flags = prepare_whitespace_flags(&input);
+                    let expected = process_in_context(input, None).unwrap();
+                    let mut bases = crate::ruby::base_budget::BaseScopes::new(&[]);
+                    let actual =
+                        process_with_base_scopes_and_flags(input, &flags, &mut bases).unwrap();
+
+                    assert_processed_eq(&actual, &expected);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn supplied_flags_keep_limit_rejection_kind_limit_and_actual() {
+        let mut builder = builder();
+        builder.push_text(dom(1), "a b");
+        let flags_input = ProcessInput {
+            raw_text: &builder.text,
+            raw: &builder.items,
+            styles: &builder.styles,
+            with_mapping: true,
+            limits: &builder.limits,
+            annotation: false,
+        };
+        let flags = prepare_whitespace_flags(&flags_input);
+
+        for limits in [
+            Limits {
+                max_text_bytes: Some(1),
+                ..Limits::default()
+            },
+            Limits {
+                max_items: Some(0),
+                ..Limits::default()
+            },
+        ] {
+            let input = ProcessInput {
+                limits: &limits,
+                ..flags_input
+            };
+            let expected = process_in_context(input, None)
+                .err()
+                .expect("generated flags should hit the same resource limit");
+            let mut bases = crate::ruby::base_budget::BaseScopes::new(&[]);
+            let actual = process_with_base_scopes_and_flags(input, &flags, &mut bases)
+                .err()
+                .expect("supplied flags should hit the same resource limit");
+
+            assert_eq!(actual.kind, expected.kind);
+            assert_eq!(actual.limit, expected.limit);
+            assert_eq!(actual.actual, expected.actual);
+        }
     }
 
     #[test]
