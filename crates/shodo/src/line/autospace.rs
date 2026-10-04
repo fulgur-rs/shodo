@@ -19,8 +19,42 @@ pub(super) enum Class {
     Digit,
 }
 
-pub(super) fn classify(ch: char, mode: WritingMode, orientation: TextOrientation) -> Class {
-    let class = classify_character(ch);
+/// Whether a BCP 47 tag is a Chinese language: the `zh` macrolanguage or
+/// one of its ISO 639-3 member languages (UTR #59 Conditional resolution).
+pub(super) fn chinese(language: Option<&str>) -> bool {
+    const MEMBERS: [&str; 17] = [
+        "zh", "cdo", "cjy", "cmn", "cnp", "cpx", "csp", "czh", "czo", "gan", "hak", "hsn", "lzh",
+        "mnp", "nan", "wuu", "yue",
+    ];
+    language
+        .and_then(|tag| tag.split('-').next())
+        .is_some_and(|primary| MEMBERS.iter().any(|m| primary.eq_ignore_ascii_case(m)))
+}
+
+/// UTR #59 East_Asian_Spacing=Conditional: Other_Punctuation that is not
+/// East Asian Fullwidth, Halfwidth or Wide, minus a few marks that never
+/// take inter-script spacing.
+fn conditional(ch: char, gc: GeneralCategory) -> bool {
+    gc == GeneralCategory::OtherPunctuation
+        && !matches!(
+            CodePointMapData::<EastAsianWidth>::new().get(ch),
+            EastAsianWidth::Fullwidth | EastAsianWidth::Halfwidth | EastAsianWidth::Wide
+        )
+        && !matches!(
+            ch,
+            '"' | '\'' | '*' | '/' | '\u{b7}' | '\u{2020}' | '\u{2021}' | '\u{2026}'
+        )
+}
+
+/// `chinese` is the character's own content language; under it UTR #59
+/// Conditional punctuation is spaced like a non-ideographic letter.
+pub(super) fn classify(
+    ch: char,
+    mode: WritingMode,
+    orientation: TextOrientation,
+    chinese: bool,
+) -> Class {
+    let class = classify_character(ch, chinese);
     // CSS Text 4 §8.4.1 excludes non-ideographic letters and numerals
     // typeset upright in vertical text. The shaping resolver is the source
     // of the used orientation, including `mixed` and sideways writing modes.
@@ -33,8 +67,11 @@ pub(super) fn classify(ch: char, mode: WritingMode, orientation: TextOrientation
     }
 }
 
-fn classify_character(ch: char) -> Class {
+fn classify_character(ch: char, chinese: bool) -> Class {
     let gc = CodePointMapData::<GeneralCategory>::new().get(ch);
+    if chinese && conditional(ch, gc) {
+        return Class::Letter;
+    }
     // Punctuation and separators interrupt the boundary even when Han is
     // among Script_Extensions (e.g. CJK punctuation shared by several scripts).
     if matches!(

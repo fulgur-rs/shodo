@@ -1128,6 +1128,143 @@ fn zero_width_space_in_its_own_inline_box_blocks_autospace() {
     );
 }
 
+fn with_lang(mut style: InlineStyle, lang: Option<&str>) -> InlineStyle {
+    style.lang = lang.map(str::to_owned);
+    style
+}
+
+fn autospace_gaps(style: InlineStyle, text: &str) -> f32 {
+    let mut no = style.clone();
+    no.text_autospace = shodo::style::TextAutospace::NoAutospace;
+    let natural = lines(&paragraph(no, text), 1000.0).remove(0).inline_size();
+    let p = paragraph(style, text);
+    let actual = lines(&p, 1000.0).remove(0).inline_size();
+    let intrinsic = p.intrinsic_sizes(
+        &mut LayoutContext::new(),
+        &Default::default(),
+        &AtomicIntrinsics::EMPTY,
+    );
+    close(intrinsic.max_content, actual);
+    (actual - natural) / (ic(20.0) / 8.0)
+}
+
+#[test]
+fn chinese_autospace_spaces_conditional_punctuation() {
+    // UTR #59 Conditional punctuation is Narrow for Chinese content and
+    // Other otherwise (WPT text-autospace-zh-001).
+    for (text, gaps) in [
+        ("水!水", 2),
+        ("水#水", 2),
+        ("水,水", 2),
+        ("水.水", 2),
+        ("水?水", 2),
+        ("水@水", 2),
+        ("水\\水", 2),
+        ("水§水", 2),
+        ("水!a", 1),
+        ("a!水", 1),
+        ("国!国#国", 4),
+        ("水\"水", 0),
+        ("水'水", 0),
+        ("水*水", 0),
+        ("水/水", 0),
+        ("水·水", 0),
+        ("水…水", 0),
+        ("水！水", 0),
+        ("水 !水", 1),
+        ("水a水", 2),
+    ] {
+        for lang in ["zh", "zh-Hant-TW", "ZH-cn", "cmn", "yue", "zh-Hans"] {
+            let actual = autospace_gaps(with_lang(root(), Some(lang)), text);
+            assert!(
+                (actual - gaps as f32).abs() < 0.01,
+                "{text:?} lang {lang}: {actual} gaps, expected {gaps}"
+            );
+        }
+        let expected_elsewhere = match text {
+            "水a水" => 2.0,
+            _ => 0.0,
+        };
+        for lang in [None, Some("ja"), Some("en"), Some("zhx"), Some("i-default")] {
+            let actual = autospace_gaps(with_lang(root(), lang), text);
+            assert!(
+                (actual - expected_elsewhere).abs() < 0.01,
+                "{text:?} lang {lang:?}: {actual} gaps, expected {expected_elsewhere}"
+            );
+        }
+    }
+}
+
+#[test]
+fn chinese_autospace_uses_each_characters_own_language() {
+    let layout = |outer: Option<&str>, inner: Option<&str>, auto| {
+        let mut style = with_lang(root(), outer);
+        style.text_autospace = auto;
+        let child = with_lang(style.clone(), inner);
+        let p = build(style, |b| {
+            b.push_text(TextSource::Generated { node: NodeId(1) }, "水")
+                .open_inline(NodeId(2), &child, InlineEdges::default())
+                .push_text(TextSource::Generated { node: NodeId(3) }, "!")
+                .close_inline()
+                .push_text(TextSource::Generated { node: NodeId(4) }, "水");
+        });
+        lines(&p, 1000.0).remove(0)
+    };
+    for (outer, inner, gaps) in [
+        (Some("zh"), Some("zh"), 2.0),
+        (None, Some("zh"), 2.0),
+        (Some("zh"), Some("ja"), 0.0),
+        (Some("zh"), None, 0.0),
+    ] {
+        let no = layout(outer, inner, shodo::style::TextAutospace::NoAutospace);
+        let yes = layout(outer, inner, shodo::style::TextAutospace::Normal);
+        close(yes.inline_size() - no.inline_size(), gaps * ic(20.0) / 8.0);
+    }
+}
+
+#[test]
+fn chinese_punctuation_autospace_only_moves_glyphs() {
+    let zh = with_lang(root(), Some("zh"));
+    let mut no = zh.clone();
+    no.text_autospace = shodo::style::TextAutospace::NoAutospace;
+    let glyphs = |style: InlineStyle| {
+        let line = lines(&paragraph(style, "水!水"), 1000.0).remove(0);
+        let glyphs: Vec<_> = line
+            .fragments()
+            .flat_map(|f| match f {
+                Fragment::GlyphRun(r) => r
+                    .glyphs()
+                    .map(|g| (g.id, g.inline_position))
+                    .collect::<Vec<_>>(),
+                _ => Vec::new(),
+            })
+            .collect();
+        (line.text_range(), glyphs)
+    };
+    let (range, spaced) = glyphs(zh);
+    let (natural_range, natural) = glyphs(no);
+    assert_eq!(range, natural_range);
+    assert_eq!(
+        spaced.iter().map(|g| g.0).collect::<Vec<_>>(),
+        natural.iter().map(|g| g.0).collect::<Vec<_>>()
+    );
+    let gap = ic(20.0) / 8.0;
+    close(spaced[1].1, natural[1].1 + gap);
+    close(spaced[2].1, natural[2].1 + 2.0 * gap);
+    // `no-autospace` under Chinese content inserts nothing.
+    let mut no = with_lang(root(), Some("zh"));
+    no.text_autospace = shodo::style::TextAutospace::NoAutospace;
+    let plain = with_lang(root(), None);
+    close(
+        lines(&paragraph(no, "水!水"), 1000.0)
+            .remove(0)
+            .inline_size(),
+        lines(&paragraph(plain, "水!水"), 1000.0)
+            .remove(0)
+            .inline_size(),
+    );
+}
+
 #[test]
 fn autospace_and_tracking_compose_with_justification() {
     let mut style = root();
