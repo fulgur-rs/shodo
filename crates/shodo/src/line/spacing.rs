@@ -33,6 +33,11 @@ pub(crate) fn build(
     let script = CodePointMapData::<Script>::new();
     let mut previous_text = None;
     let mut gaps = Vec::new();
+    let chinese: Vec<bool> = data
+        .styles
+        .iter()
+        .map(|s| super::autospace::chinese(s.lang.as_deref()))
+        .collect();
     // `data.units` and each unit's `typographic_starts` sub-range advance
     // `offset` monotonically, so `item_cursor` tracks
     // `partition_point(|item| item.text.end <= offset)` instead of
@@ -147,6 +152,7 @@ pub(crate) fn build(
                                 ch,
                                 data.style.writing_mode,
                                 style.text_orientation,
+                                chinese[style_index],
                             ),
                             punct: (start + character) as u32,
                         };
