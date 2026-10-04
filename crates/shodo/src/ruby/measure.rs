@@ -172,7 +172,9 @@ pub(crate) fn candidate_adjustment(
         // The reference path measures every probe in full.
         return candidate_inner(data, start, end, atomics, cx, sat).adjustment;
     }
-    let (through, containers) = walk(data, start, end, cx);
+    // Fit probes grow `end` for a fixed `start`: resume the previous walk.
+    let mut walk = cx.ruby_memo.take_walk();
+    let through = super::memo::advance(&mut walk, data, start, end);
     let key = super::memo::MemoKey::new(data, atomics, start, through);
     let generation = cx.ruby_ranges.generation();
     let core = match cx.ruby_memo.get(&key) {
@@ -187,9 +189,10 @@ pub(crate) fn candidate_adjustment(
             entry.adjustment
         }
         _ => {
+            let containers = walk.as_ref().map_or(&[][..], |w| w.visited());
             let recording = crate::line::replay::begin(cx, sat);
             let adjustment =
-                measure_containers(data, start..through, &containers, atomics, cx, sat).adjustment;
+                measure_containers(data, start..through, containers, atomics, cx, sat).adjustment;
             let effects = crate::line::replay::finish(cx, recording, sat);
             // A recording that filled a cache whose later hits skip side
             // effects is not what measuring again would do; measure again.
@@ -207,6 +210,7 @@ pub(crate) fn candidate_adjustment(
             adjustment
         }
     };
+    cx.ruby_memo.put_walk(walk);
     lookahead(data, start, end, through, core, atomics, cx, sat)
 }
 

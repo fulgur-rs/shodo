@@ -1247,7 +1247,8 @@ fn repeated_probe_in_one_operation_is_measured_once() {
 }
 
 /// Width and scalar measurement calls grow linearly with nesting depth once
-/// the core is memoized (the remaining walk is fixed by layer 1b).
+/// the core is memoized (the walk counter is guarded by
+/// `incremental_walk_keeps_nested_probes_linear`).
 #[test]
 fn memoized_nested_candidates_measure_linearly() {
     let picks: [Pick; 3] = [PICKS[0], PICKS[1], PICKS[2]];
@@ -1573,4 +1574,117 @@ fn cold_cache_fills_are_not_memoized() {
         (reference.spent, &reference.warnings, reference.sat)
     );
     assert_eq!(optimized, reference);
+}
+
+fn walk_fixtures() -> Vec<(String, Paragraph)> {
+    let default = Limits::default();
+    let mut out = vec![
+        (
+            "nested4".to_string(),
+            nested(4, &default, "日", &style(24.0)),
+        ),
+        (
+            "nested-anywhere".to_string(),
+            nested(4, &default, "日本語", &anywhere(24.0)),
+        ),
+        ("siblings".to_string(), siblings(&default)),
+        ("arabic".to_string(), arabic(&default, Direction::Rtl)),
+    ];
+    // Outer container with two bases, each holding its own nested ruby, and
+    // several paired cuts: clipped containers interleave with unclipped ones.
+    let inner = |node: u64| {
+        let mut b = ParagraphBuilder::new(&paragraph_style(false), &default);
+        b.push_ruby(
+            NodeId(node),
+            &anywhere(24.0),
+            annotated(
+                vec![base_text(node + 1, "日本語", &anywhere(24.0), &default)],
+                &["にほんご"],
+                RubyOverhang::None,
+                &default,
+            ),
+        );
+        RubyContent::from_builder(b)
+    };
+    let mut b = ParagraphBuilder::new(&paragraph_style(false), &default);
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "日");
+    b.push_ruby(
+        NodeId(100),
+        &anywhere(24.0),
+        annotated(
+            vec![
+                inner(300),
+                inner(400),
+                base_text(32, "本日", &anywhere(24.0), &default),
+            ],
+            &["に", "ほん", "ご"],
+            RubyOverhang::None,
+            &default,
+        ),
+    );
+    b.push_text(TextSource::Generated { node: NodeId(2) }, "語");
+    out.push(("multi-base".to_string(), finish(b)));
+    // Review focus 3: the first-line alternate dataset uses source-matched
+    // cuts, which may omit a container's own end cut.
+    let first_line = atomic_base(&default, true);
+    out.push(("first-line normal".to_string(), first_line.clone()));
+    assert!(first_line.data.first_line.is_some());
+    let alternate = Paragraph {
+        data: std::sync::Arc::clone(&first_line.data.first_line.as_ref().unwrap().data),
+    };
+    out.push(("first-line alternate".to_string(), alternate));
+    out
+}
+
+#[test]
+fn incremental_walk_matches_full_walk_for_every_range() {
+    for (name, p) in walk_fixtures() {
+        let data = &p.data;
+        assert!(!data.ruby.containers.is_empty(), "{name}");
+        let n = data.units.len();
+        let full =
+            |start, end| crate::ruby::measure::walk(data, start, end, &mut LayoutContext::new());
+        for start in 0..n {
+            let mut state = None;
+            for end in start + 1..=n {
+                let through = crate::ruby::memo::advance(&mut state, data, start, end);
+                let (expected, visited) = full(start, end);
+                assert_eq!(
+                    (through, state.as_ref().unwrap().visited()),
+                    (expected, &visited[..]),
+                    "{name}: {start}..{end}"
+                );
+            }
+            // A shrinking end restarts from a full walk.
+            let through = crate::ruby::memo::advance(&mut state, data, start, start + 1);
+            let (expected, visited) = full(start, start + 1);
+            assert_eq!(
+                (through, state.as_ref().unwrap().visited()),
+                (expected, &visited[..]),
+                "{name}: restart at {start}"
+            );
+            // A changed start restarts from a full walk as well.
+            if start + 2 <= n {
+                let through = crate::ruby::memo::advance(&mut state, data, start + 1, n);
+                let (expected, visited) = full(start + 1, n);
+                assert_eq!(
+                    (through, state.as_ref().unwrap().visited()),
+                    (expected, &visited[..]),
+                    "{name}: changed start {}",
+                    start + 1
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn incremental_walk_keeps_nested_probes_linear() {
+    for (path, measure) in PATHS {
+        let (all, growth) = ratios(measure, false, PICKS[3].1);
+        assert!(
+            growth.iter().all(|g| *g <= 2.6),
+            "{path} walk: {growth:?} {all:?}"
+        );
+    }
 }
