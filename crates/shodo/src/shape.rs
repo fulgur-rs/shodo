@@ -916,24 +916,19 @@ fn shape_inputs<'a>(
             for scalar in scalars {
                 buffer.add(scalar.c, scalar.offset);
             }
-            let pre: String = input.scalars[start.saturating_sub(5)..start]
-                .iter()
-                .map(|s| s.c)
-                .collect();
-            let post: String = input.scalars[cursor..(cursor + 5).min(input.scalars.len())]
-                .iter()
-                .map(|s| s.c)
-                .collect();
-            buffer.set_pre_context(if start == 0 {
-                input.before.as_str()
-            } else {
-                &pre
+            // Inner window edges take up to five neighbouring scalars inline;
+            // only the input's outer edges use the item context.
+            let pre = (start > 0).then(|| {
+                input::Context::from_chars(
+                    input.scalars[start.saturating_sub(5)..start]
+                        .iter()
+                        .map(|s| s.c),
+                )
             });
-            buffer.set_post_context(if cursor == input.scalars.len() {
-                input.after.as_str()
-            } else {
-                &post
-            });
+            let post = (cursor < input.scalars.len())
+                .then(|| input::Context::from_chars(input.scalars[cursor..].iter().map(|s| s.c)));
+            buffer.set_pre_context(pre.as_ref().unwrap_or(&input.before).as_str());
+            buffer.set_post_context(post.as_ref().unwrap_or(&input.after).as_str());
             let upright = original.orientation == orientation::RunOrientation::Upright;
             buffer.set_direction(if upright {
                 harfrust::Direction::TopToBottom
