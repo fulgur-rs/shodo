@@ -1745,3 +1745,20 @@ fn incremental_walk_keeps_nested_probes_linear() {
         );
     }
 }
+
+/// Operation counts for docs/records/shodo-d77-ruby-through-memo.md.
+#[test]
+#[ignore = "report for the shodo-d77 record"]
+fn d77_operation_counts_report() {
+    for (path, measure) in PATHS {
+        for reference in [true, false] {
+            for depth in [8, 16, 32, 64] {
+                let c = measure(depth, reference);
+                println!(
+                    "{{\"path\":\"{path}\",\"reference\":{reference},\"depth\":{depth},\"width_calls\":{},\"scalar_calls\":{},\"columns\":{},\"walk\":{}}}",
+                    c.width_calls, c.scalar_calls, c.columns, c.walk
+                );
+            }
+        }
+    }
+}
