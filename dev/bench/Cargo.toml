@@ -60,3 +60,6 @@ required-features = ["shodo/accesskit"]
 
 [[example]]
 name = "suppressed_warning_format"
+
+[[example]]
+name = "offset_mapping_index"
