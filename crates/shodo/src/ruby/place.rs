@@ -99,6 +99,7 @@ pub(crate) fn format(
             }
         }
         let mut merged = HashMap::new();
+        let mut merged_gaps = Vec::new();
         let mut level_lanes = vec![Vec::new(); ruby.levels.len()];
         for lane in &fragment.lanes {
             level_lanes[ruby.lanes[lane.lane].level].push(lane);
@@ -125,19 +126,23 @@ pub(crate) fn format(
                 .iter()
                 .map(|l| super::align::count(&ruby.lanes[l.lane].paragraph.data, l.units.clone()))
                 .collect();
-            let gaps = super::align::gaps(
+            let gap_start = merged_gaps.len();
+            super::align::append_gaps(
                 style.align,
                 counts.iter().sum(),
                 width.sub(natural, sat).max(LayoutUnit::ZERO),
+                &mut merged_gaps,
             );
             let mut pen = span_origin(&origins, &columns) - overhang.0.to_f32();
-            let mut cursor = 0;
+            let mut cursor = gap_start;
             for (lane, count) in lanes.iter().zip(counts) {
-                let slice = gaps[cursor..cursor + count].to_vec();
+                let slice = cursor..cursor + count;
                 cursor += count;
-                let width = slice.iter().fold(lane.width, |w, (before, after)| {
-                    w.add(*before, sat).add(*after, sat)
-                });
+                let width = merged_gaps[slice.clone()]
+                    .iter()
+                    .fold(lane.width, |w, (before, after)| {
+                        w.add(*before, sat).add(*after, sat)
+                    });
                 merged.insert(lane.lane, (pen, width.to_f32(), slice));
                 pen += width.to_f32();
             }
@@ -171,7 +176,9 @@ pub(crate) fn format(
                             AnnotationAlign::Policy(style.align),
                         )
                     },
-                    |(origin, width, gaps)| (origin, width, AnnotationAlign::Gaps(gaps)),
+                    |(origin, width, gaps)| {
+                        (origin, width, AnnotationAlign::Gaps(&merged_gaps[gaps]))
+                    },
                 )
             };
             let child =

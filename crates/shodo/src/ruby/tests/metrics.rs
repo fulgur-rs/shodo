@@ -65,3 +65,23 @@ fn alignment_gaps_preserve_every_fixed_point_remainder() {
         }
     }
 }
+
+#[test]
+fn appended_alignment_gaps_keep_the_prefix_and_match_fresh_gaps() {
+    let prefix = (unit(7.0), unit(9.0));
+    for align in [
+        RubyAlign::Start,
+        RubyAlign::Center,
+        RubyAlign::SpaceBetween,
+        RubyAlign::SpaceAround,
+    ] {
+        for count in 0..17 {
+            let extra = LayoutUnit::from_raw(103);
+            let expected = super::align::gaps(align, count, extra);
+            let mut combined = vec![prefix; 3];
+            super::align::append_gaps(align, count, extra, &mut combined);
+            assert_eq!(&combined[..3], &[prefix; 3], "{align:?}/{count} prefix");
+            assert_eq!(&combined[3..], expected, "{align:?}/{count} suffix");
+        }
+    }
+}
