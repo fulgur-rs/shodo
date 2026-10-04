@@ -1088,6 +1088,98 @@ fn shared_features_preserve_style_orientation_and_width_settings() {
 }
 
 #[test]
+fn missing_vorg_origin_cache_spans_budget_windows_but_not_inputs() {
+    let original = crate::test_support::fonts::CJK;
+    let count = u16::from_be_bytes(original[4..6].try_into().unwrap()) as usize;
+    let tables: Vec<_> = (0..count)
+        .filter_map(|n| {
+            let at = 12 + n * 16;
+            let tag: [u8; 4] = original[at..at + 4].try_into().unwrap();
+            let start = u32::from_be_bytes(original[at + 8..at + 12].try_into().unwrap()) as usize;
+            let len = u32::from_be_bytes(original[at + 12..at + 16].try_into().unwrap()) as usize;
+            (&tag != b"VORG").then(|| (tag, original[start..start + len].to_vec()))
+        })
+        .collect();
+    let fonts = FontCollection::with_options(
+        &Limits::default(),
+        crate::font::FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            crate::font::sfnt::build_sfnt(&tables),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "No VORG".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let root = crate::style::InlineStyle {
+        font_size: 16.0,
+        font_families: vec![crate::style::FontFamily::Named("No VORG".into())],
+        ..Default::default()
+    };
+    let style = crate::style::ParagraphStyle {
+        writing_mode: crate::geometry::WritingMode::VerticalRl,
+        root: root.clone(),
+        ..Default::default()
+    };
+    let larger = crate::style::InlineStyle {
+        font_size: 20.0,
+        ..root
+    };
+    let build = |budget| {
+        let limits = Limits {
+            max_shaping_run_bytes: budget,
+            ..Limits::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        let node = crate::node::NodeId(1);
+        builder.push_text(crate::node::TextSource::Generated { node }, "水日水日水日");
+        builder
+            .open_inline(
+                crate::node::NodeId(2),
+                &larger,
+                crate::node::InlineEdges::default(),
+            )
+            .push_text(
+                crate::node::TextSource::Generated {
+                    node: crate::node::NodeId(3),
+                },
+                "水日水日",
+            )
+            .close_inline();
+        CFF_ORIGIN_DELTA_CALLS.with(|calls| calls.set(0));
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        let calls = CFF_ORIGIN_DELTA_CALLS.with(std::cell::Cell::get);
+        (paragraph, calls)
+    };
+    let (whole, whole_calls) = build(None);
+    // One window per Han scalar: each input repeats two glyphs over many windows.
+    let (split, split_calls) = build(Some(3));
+    assert_eq!(whole.data.shape_items.len(), 2);
+    // Two distinct glyphs per input; the cache is rebuilt for the second input.
+    assert_eq!(whole_calls, 4);
+    assert_eq!(split_calls, 4);
+    let glyphs = |p: &crate::Paragraph| {
+        let g = &p.data.glyphs;
+        (
+            g.id.clone(),
+            g.advance.clone(),
+            g.offset_inline.clone(),
+            g.offset_block.clone(),
+        )
+    };
+    assert_eq!(glyphs(&whole), glyphs(&split));
+    assert!(whole.warnings().is_empty() && split.warnings().is_empty());
+}
+
+#[test]
 fn missing_vorg_uses_vmtx_top_bearing_for_vertical_origin() {
     // CJK 水 has yMax=838 in this pinned outline and vmtx TSB=42.
     // Remove VORG and change only its TSB to 142: origin becomes 980.

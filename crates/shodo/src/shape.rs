@@ -19,6 +19,7 @@ use std::ops::Range;
 #[cfg(test)]
 std::thread_local! {
     pub(super) static HARFRUST_SHAPE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(super) static CFF_ORIGIN_DELTA_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(super) static COMBINED_WIDTH_GROUP_CLONE_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(super) static COMBINED_WIDTH_GROUP_CLONE_SCALARS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(super) static COMBINED_WIDTH_GROUP_CLONE_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -56,6 +57,8 @@ fn cff_vertical_origin_delta(
     glyph_id: u32,
     coords: &[skrifa::instance::NormalizedCoord],
 ) -> Option<f32> {
+    #[cfg(test)]
+    CFF_ORIGIN_DELTA_CALLS.with(|calls| calls.set(calls.get() + 1));
     let glyph = skrifa::GlyphId::new(glyph_id);
     let bounds = font
         .glyph_metrics(
