@@ -43,6 +43,9 @@ harness = false
 name = "ruby_inputs"
 
 [[example]]
+name = "ruby_content_restore"
+
+[[example]]
 name = "style_metric_instances"
 
 [[example]]
