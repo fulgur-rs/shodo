@@ -4,14 +4,14 @@
 use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
 use crate::geometry::{Direction, LayoutUnit, Saturation};
 use crate::limits::{Limits, Warning, WarningKind};
-use crate::node::{NodeId, TextSource};
+use crate::node::{NodeId, OutOfFlowKind, TextSource};
 use crate::ruby::*;
 use crate::style::{
     FontFamily, InlineStyle, LineBreak, LineOptions, ParagraphStyle, VerticalAlign,
 };
 use crate::{
-    AtomicIntrinsic, AtomicIntrinsics, AtomicSize, AtomicSizes, LayoutContext, Line,
-    LineConstraint, LineResult, Paragraph, ParagraphBuilder,
+    AtomicIntrinsic, AtomicIntrinsics, AtomicSize, AtomicSizes, FloatClear, FloatIntrinsic,
+    FloatSide, LayoutContext, Line, LineConstraint, LineResult, Paragraph, ParagraphBuilder,
 };
 
 const FAMILIES: [&str; 3] = [
@@ -319,6 +319,78 @@ fn hyphenated(limits: &Limits) -> Paragraph {
     finish(b)
 }
 
+/// A reading much wider than its one-glyph base.
+const WIDE_READING: &str = "にほんごにほんご";
+
+/// Max-content width of the leading float in `separated`.
+const LEAD_FLOAT_MAX: f32 = 200.0;
+
+#[derive(Clone, Copy, Debug)]
+enum Separator {
+    Forced,
+    Block,
+    Float,
+}
+
+/// A leading float (node 50), then a ruby with a wide reading next to a
+/// separator unit (node 51): a forced break, a block-in-inline or a second
+/// float. `ruby_first` puts the ruby before the separator, otherwise after.
+fn separated(limits: &Limits, separator: Separator, ruby_first: bool) -> Paragraph {
+    let mut b = ParagraphBuilder::new(&paragraph_style(false), limits);
+    b.push_out_of_flow(NodeId(50), OutOfFlowKind::Float);
+    let push_separator = |b: &mut ParagraphBuilder| {
+        match separator {
+            Separator::Forced => b.push_forced_break(NodeId(51)),
+            Separator::Block => b.push_block_in_inline(NodeId(51)),
+            Separator::Float => b.push_out_of_flow(NodeId(51), OutOfFlowKind::Float),
+        };
+    };
+    if !ruby_first {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "日");
+        push_separator(&mut b);
+    }
+    b.push_ruby(
+        NodeId(100),
+        &style(24.0),
+        annotated(
+            vec![base_text(30, "日", &style(24.0), limits)],
+            &[WIDE_READING],
+            RubyOverhang::None,
+            limits,
+        ),
+    );
+    if ruby_first {
+        push_separator(&mut b);
+    }
+    b.push_text(TextSource::Generated { node: NodeId(2) }, "本日");
+    finish(b)
+}
+
+/// Intrinsic inputs for `separated`: the leading float is a wide left float;
+/// a separating float is empty and clears with `clear`.
+fn separated_intrinsics(clear: FloatClear) -> AtomicIntrinsics {
+    let mut intrinsic = AtomicIntrinsics::default();
+    intrinsic.insert_float(
+        NodeId(50),
+        FloatIntrinsic {
+            min_content: 10.0,
+            max_content: LEAD_FLOAT_MAX,
+            side: FloatSide::Left,
+            clear: FloatClear::None,
+        },
+    );
+    intrinsic.insert_float(
+        NodeId(51),
+        FloatIntrinsic {
+            min_content: 0.0,
+            max_content: 0.0,
+            side: FloatSide::Left,
+            clear,
+        },
+    );
+    intrinsic
+}
+
 fn sized(inline_size: f32) -> AtomicSizes {
     let mut atomics = AtomicSizes::new();
     atomics.insert(
@@ -393,6 +465,21 @@ fn fixtures() -> Vec<Fixture> {
     out.push(first_line);
     out.push(Fixture::new("overhang", overhang(&default)));
     out.push(Fixture::new("hyphens", hyphenated(&default)));
+    for (separator, clear) in [
+        (Separator::Forced, FloatClear::None),
+        (Separator::Block, FloatClear::None),
+        (Separator::Float, FloatClear::None),
+        (Separator::Float, FloatClear::Left),
+    ] {
+        for ruby_first in [true, false] {
+            let mut fixture = Fixture::new(
+                format!("separated-{separator:?}-{clear:?}-{ruby_first}"),
+                separated(&default, separator, ruby_first),
+            );
+            fixture.intrinsic = separated_intrinsics(clear);
+            out.push(fixture);
+        }
+    }
     out
 }
 
@@ -410,10 +497,16 @@ struct Observed {
     warnings: Vec<Warning>,
     sat: Saturation,
     spent: u64,
+    /// The same probes again after `begin_reshape_operation` on the same
+    /// context.
+    reset_values: Vec<LayoutUnit>,
+    reset_warnings: Vec<Warning>,
+    reset_spent: u64,
 }
 
 /// Every `(start, end)` probe with a growing `end` per start, then one
-/// shrinking sweep, all inside one operation.
+/// shrinking sweep, all inside one operation; then all of it again in a new
+/// operation on the same context.
 fn observe_candidates(
     p: &Paragraph,
     atomics: &AtomicSizes,
@@ -432,26 +525,43 @@ fn observe_candidates(
     cx.begin_reshape_operation();
     cx.edge_reshape_spent = pre.spent;
     let mut sat = Saturation::default();
+    let values = sweep(data, atomics, &mut cx, &mut sat);
+    let warnings = cx.warnings.as_slice().to_vec();
+    let spent = cx.edge_reshape_spent;
+    cx.begin_reshape_operation();
+    let reset_values = sweep(data, atomics, &mut cx, &mut sat);
+    Observed {
+        values,
+        warnings,
+        sat,
+        spent,
+        reset_values,
+        reset_warnings: cx.warnings.as_slice().to_vec(),
+        reset_spent: cx.edge_reshape_spent,
+    }
+}
+
+fn sweep(
+    data: &crate::paragraph::ParagraphData,
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> Vec<LayoutUnit> {
     let mut values = Vec::new();
     let n = data.units.len();
     for start in 0..n {
         for end in start + 1..=n {
             values.push(crate::ruby::measure::candidate_adjustment(
-                data, start, end, atomics, &mut cx, &mut sat,
+                data, start, end, atomics, cx, sat,
             ));
         }
     }
     for end in (1..=n).rev() {
         values.push(crate::ruby::measure::candidate_adjustment(
-            data, 0, end, atomics, &mut cx, &mut sat,
+            data, 0, end, atomics, cx, sat,
         ));
     }
-    Observed {
-        values,
-        warnings: cx.warnings.as_slice().to_vec(),
-        sat,
-        spent: cx.edge_reshape_spent,
-    }
+    values
 }
 
 fn pre_states(p: &Paragraph) -> Vec<PreState> {
@@ -511,8 +621,42 @@ fn context(reference: bool) -> LayoutContext {
     cx
 }
 
+/// Fixtures whose scan is retained, so the 1000 -> 999 retry must index it.
+/// `atomic-missing-*` scans warn, and a scan that warns is never retained.
+fn retry_indexes(name: &str) -> bool {
+    matches!(name, "hyphens" | "atomic-sized" | "first-line")
+}
+
+/// The first line of `p` at `width`, following every float encountered with
+/// its cursor (each float result is recorded too).
+fn first_line_through_floats(
+    p: &Paragraph,
+    cx: &mut LayoutContext,
+    width: f32,
+    atomics: &AtomicSizes,
+    out: &mut Vec<String>,
+) {
+    let options = LineOptions::default();
+    let mut constraint = LineConstraint::new(width);
+    for _ in 0..8 {
+        let result = p.next_line(cx, p.start_token(), &options, &constraint, atomics);
+        let float_cursor = match &result {
+            LineResult::FloatEncountered { float_cursor, .. } => Some(*float_cursor),
+            _ => None,
+        };
+        out.push(format!("floats {width}: {}", result_signature(result)));
+        out.push(format!("warnings: {:?}", cx.take_warnings()));
+        match float_cursor {
+            Some(cursor) => constraint.floats_placed_through = Some(cursor),
+            None => return,
+        }
+    }
+    panic!("too many floats");
+}
+
 /// `break_all` with warm and cold contexts, a wide-then-narrow retry of the
-/// same token (drives `PartialLine::index`), and intrinsic sizes.
+/// same token (drives `PartialLine::index`), floats followed through their
+/// cursors, and intrinsic sizes.
 fn observe_layout(fixture: &Fixture, reference: bool) -> Vec<String> {
     let p = &fixture.paragraph;
     let options = LineOptions::default();
@@ -531,6 +675,7 @@ fn observe_layout(fixture: &Fixture, reference: bool) -> Vec<String> {
     }
     let mut retry = context(reference);
     for width in [1000.0f32, 999.0, 60.0, 30.0] {
+        retry.cache_prepare_visits = 0;
         let result = p.next_line(
             &mut retry,
             p.start_token(),
@@ -538,8 +683,19 @@ fn observe_layout(fixture: &Fixture, reference: bool) -> Vec<String> {
             &LineConstraint::new(width),
             &fixture.atomics,
         );
+        if width == 999.0 && retry_indexes(&fixture.name) {
+            assert!(
+                retry.cache_prepare_visits > 0,
+                "{}: the 999 retry must run PartialLine::index",
+                fixture.name
+            );
+        }
         out.push(format!("next_line {width}: {}", result_signature(result)));
         out.push(format!("warnings: {:?}", retry.take_warnings()));
+    }
+    for width in [1000.0f32, 60.0] {
+        let mut cx = context(reference);
+        first_line_through_floats(p, &mut cx, width, &fixture.atomics, &mut out);
     }
     let mut intrinsic = context(reference);
     out.push(format!(
@@ -547,6 +703,64 @@ fn observe_layout(fixture: &Fixture, reference: bool) -> Vec<String> {
         p.intrinsic_sizes(&mut intrinsic, &options, &fixture.intrinsic)
     ));
     out.push(format!("warnings: {:?}", intrinsic.take_warnings()));
+    out
+}
+
+/// One warm context across operations that `shrink_to` between them, and one
+/// that alternates paragraphs. Both modes must share `all`: font ids differ
+/// between font collections.
+fn observe_warm(all: &[Fixture], reference: bool) -> Vec<String> {
+    let options = LineOptions::default();
+    let mut out = Vec::new();
+    let operations = |cx: &mut LayoutContext, fixture: &Fixture, out: &mut Vec<String>| {
+        let p = &fixture.paragraph;
+        for width in [1000.0f32, 999.0, 48.0] {
+            let result = p.next_line(
+                cx,
+                p.start_token(),
+                &options,
+                &LineConstraint::new(width),
+                &fixture.atomics,
+            );
+            out.push(format!(
+                "{} next_line {width}: {}",
+                fixture.name,
+                result_signature(result)
+            ));
+        }
+        let lines = p.break_all(cx, &options, 48.0, &fixture.atomics);
+        out.push(format!(
+            "{} break_all: {:?}",
+            fixture.name,
+            lines.iter().map(signature).collect::<Vec<_>>()
+        ));
+        out.push(format!(
+            "{} intrinsic: {:?}",
+            fixture.name,
+            p.intrinsic_sizes(cx, &options, &fixture.intrinsic)
+        ));
+        out.push(format!("warnings: {:?}", cx.take_warnings()));
+    };
+    for fixture in all {
+        let mut cx = context(reference);
+        for bytes in [usize::MAX, 4096, 0] {
+            operations(&mut cx, fixture, &mut out);
+            cx.shrink_to(bytes);
+        }
+        operations(&mut cx, fixture, &mut out);
+    }
+    let pick = |name: &str| all.iter().find(|f| f.name == name).unwrap();
+    let mut cx = context(reference);
+    for name in [
+        "siblings",
+        "nested3",
+        "siblings",
+        "nested-anywhere",
+        "arabic-Some(2)-Ltr",
+        "siblings",
+    ] {
+        operations(&mut cx, pick(name), &mut out);
+    }
     out
 }
 
@@ -574,6 +788,12 @@ fn line_layout_paths_match_reference() {
             fixture.name
         );
     }
+}
+
+#[test]
+fn warm_context_paths_match_reference() {
+    let all = fixtures();
+    assert_eq!(observe_warm(&all, false), observe_warm(&all, true));
 }
 
 /// The equivalence fixtures must reach the paths they claim to cover.
@@ -612,6 +832,128 @@ fn equivalence_fixtures_reach_budget_and_warning_paths() {
             .warnings
             .iter()
             .any(|w| w.kind == WarningKind::MissingAtomicSize)
+    );
+
+    assert_separator_sites_reached();
+    assert_hyphen_index_site_reached();
+}
+
+/// Results of `next_line` from the start token, following floats.
+fn results_through_floats(p: &Paragraph, width: f32) -> Vec<LineResult> {
+    let mut cx = LayoutContext::new();
+    let mut constraint = LineConstraint::new(width);
+    let mut out = Vec::new();
+    loop {
+        let result = p.next_line(
+            &mut cx,
+            p.start_token(),
+            &LineOptions::default(),
+            &constraint,
+            &AtomicSizes::EMPTY,
+        );
+        let cursor = match &result {
+            LineResult::FloatEncountered { float_cursor, .. } => Some(*float_cursor),
+            _ => None,
+        };
+        out.push(result);
+        match cursor {
+            Some(cursor) => constraint.floats_placed_through = Some(cursor),
+            None => return out,
+        }
+    }
+}
+
+/// The `separated` fixtures reach the float site of `line::cache::resolve`
+/// and the forced-break, block-in-inline and float-clear sites of
+/// `intrinsic_sizes`, each with the wide ruby inside the probed range.
+fn assert_separator_sites_reached() {
+    let default = Limits::default();
+    // The ruby line width: the line ending at the forced break holds only
+    // the ruby, whose reading is wider than its one 24px glyph base.
+    let forced = separated(&default, Separator::Forced, true);
+    let results = results_through_floats(&forced, 1000.0);
+    let [
+        LineResult::FloatEncountered { node, .. },
+        LineResult::Line(line),
+    ] = &results[..]
+    else {
+        panic!("{:?}", results.len());
+    };
+    assert_eq!(*node, NodeId(50));
+    assert_eq!(line.break_reason(), crate::BreakReason::Forced);
+    let ruby_width = line.inline_size();
+    assert!(ruby_width > 24.0, "{ruby_width}");
+
+    // `resolve` reports the separating float after the ruby, positioned by
+    // the ruby adjustment.
+    let floated = separated(&default, Separator::Float, true);
+    let results = results_through_floats(&floated, 1000.0);
+    let LineResult::FloatEncountered {
+        node,
+        inline_position,
+        ..
+    } = &results[1]
+    else {
+        panic!("no second float");
+    };
+    assert_eq!(*node, NodeId(51));
+    assert_eq!(*inline_position, ruby_width);
+
+    // Only the separator site measures the leading float together with the
+    // ruby: the forced break and the clearance reset the left float strip
+    // before the paragraph-end site, which sees the ruby and "本日" alone.
+    for (separator, clear) in [
+        (Separator::Forced, FloatClear::None),
+        (Separator::Block, FloatClear::None),
+        (Separator::Float, FloatClear::Left),
+    ] {
+        let p = separated(&default, separator, true);
+        let sizes = p.intrinsic_sizes(
+            &mut LayoutContext::new(),
+            &LineOptions::default(),
+            &separated_intrinsics(clear),
+        );
+        assert_eq!(
+            sizes.max_content,
+            LEAD_FLOAT_MAX + ruby_width,
+            "{separator:?} {clear:?}"
+        );
+    }
+}
+
+/// After a 999 retry indexes the retained 1000 scan, a 30px retry is served
+/// from the index alone (no scan, no new index) and ends at a soft hyphen:
+/// only the hyphen site of `PartialLine::index` records such ends.
+fn assert_hyphen_index_site_reached() {
+    let p = hyphenated(&Limits::default());
+    let options = LineOptions::default();
+    let mut cx = LayoutContext::new();
+    for width in [1000.0f32, 999.0] {
+        let _ = p.next_line(
+            &mut cx,
+            p.start_token(),
+            &options,
+            &LineConstraint::new(width),
+            &AtomicSizes::EMPTY,
+        );
+    }
+    assert!(cx.cache_prepare_visits > 0);
+    cx.cache_prepare_visits = 0;
+    cx.cache_visits = 0;
+    let LineResult::Line(line) = p.next_line(
+        &mut cx,
+        p.start_token(),
+        &options,
+        &LineConstraint::new(30.0),
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!("no line");
+    };
+    assert_eq!((cx.cache_prepare_visits, cx.cache_visits), (0, 0));
+    assert!(
+        p.data.text[..line.text_range().end].ends_with('\u{ad}'),
+        "{:?}",
+        line.text_range()
     );
 }
 
