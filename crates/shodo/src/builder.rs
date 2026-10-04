@@ -967,6 +967,106 @@ mod tests {
             _ => panic!("expected an atomic"),
         }
     }
+
+    #[test]
+    fn ruby_content_restore_checks_depth_before_style_bytes() {
+        let mut source = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::unlimited());
+        source
+            .open_inline(NodeId(1), &bold(), InlineEdges::default())
+            .push_text(dom(2), "nested")
+            .close_inline();
+        let mut input = source.into_ruby_content();
+        let cost = crate::ruby::builder::InputCost::content(&input);
+        input.limits.max_nesting_depth = Some(cost.depth);
+        input.limits.max_style_bytes = Some(0);
+
+        let error = match ParagraphBuilder::from_ruby_content(&input, NodeId(3)) {
+            Ok(_) => panic!("restoration wrapper exceeds the depth limit"),
+            Err(error) => error,
+        };
+        assert_eq!(
+            error,
+            LimitExceeded {
+                kind: LimitKind::NestingDepth,
+                limit: cost.depth,
+                actual: cost.depth.saturating_add(1),
+            }
+        );
+    }
+
+    #[test]
+    fn ruby_content_restore_reports_exact_style_byte_limit() {
+        let mut source = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::unlimited());
+        source
+            .open_inline(NodeId(1), &bold(), InlineEdges::default())
+            .push_text(dom(2), "styled")
+            .close_inline();
+        let mut input = source.into_ruby_content();
+        let cost = crate::ruby::builder::InputCost::content(&input);
+        let limit = cost.style_bytes.saturating_sub(1);
+        input.limits.max_nesting_depth = Some(cost.depth.saturating_add(1));
+        input.limits.max_style_bytes = Some(limit);
+
+        let error = match ParagraphBuilder::from_ruby_content(&input, NodeId(3)) {
+            Ok(_) => panic!("style bytes exceed the configured limit"),
+            Err(error) => error,
+        };
+        assert_eq!(
+            error,
+            LimitExceeded {
+                kind: LimitKind::StyleBytes,
+                limit,
+                actual: cost.style_bytes,
+            }
+        );
+    }
+
+    #[test]
+    fn ruby_content_restore_preserves_input_and_wrapper_output() {
+        let normal = bold();
+        let first = InlineStyle {
+            font_size: 19.0,
+            ..normal.clone()
+        };
+        let style = ParagraphStyle {
+            first_line: Some(first.clone()),
+            ..ParagraphStyle::default()
+        };
+        let mut source = ParagraphBuilder::new(&style, &Limits::unlimited());
+        source.close_inline();
+        source.with_offset_mapping(false);
+        source
+            .open_inline_with_first_line(NodeId(4), &normal, &first, InlineEdges::default())
+            .push_text(dom(5), "restored output")
+            .close_inline();
+        let mut input = source.into_ruby_content();
+        let cost = crate::ruby::builder::InputCost::content(&input);
+        input.limits.max_nesting_depth = Some(cost.depth.saturating_add(1));
+
+        let restored = ParagraphBuilder::from_ruby_content(&input, NodeId(6)).unwrap();
+        assert_eq!(restored.text, input.text);
+        assert_eq!(restored.offset_mapping, input.offset_mapping);
+        assert_eq!(restored.style, input.style);
+        assert_eq!(restored.styles[..input.styles.len()], input.styles);
+        for (index, first_line) in &input.first_line_styles {
+            assert_eq!(restored.first_line_styles.get(index), Some(first_line));
+        }
+        assert_eq!(restored.ruby_cost.depth, input.ruby_cost.depth);
+        assert_eq!(restored.warnings.as_slice(), input.warnings);
+        assert!(matches!(
+            restored.items.first(),
+            Some(RawItem::Open {
+                node: NodeId(6),
+                ..
+            })
+        ));
+        assert!(matches!(restored.items.last(), Some(RawItem::Close)));
+        assert_eq!(
+            format!("{:?}", &restored.items[1..restored.items.len() - 1]),
+            format!("{:?}", input.items),
+            "restoration should keep all original items between the isolate markers"
+        );
+    }
 }
 
 #[cfg(test)]
