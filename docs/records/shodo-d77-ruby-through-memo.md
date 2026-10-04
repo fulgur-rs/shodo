@@ -91,18 +91,18 @@ wall clock に依存しない指標として、ignored テスト `d77_operation_
 
 - `adjustment_only_candidates_match_reference_for_every_range`: フィクスチャごとに全 (start, end)、成長・縮小の両スイープ、pre-spent 3 値 × suppressed 2 値で候補の結果を参照経路と比較する。
 - `line_layout_paths_match_reference`: warm/cold の `break_all`、狭い再試行による `PartialLine::index`、`intrinsic_sizes` を参照経路と比較する。フィクスチャは入れ子、兄弟、アラビア語（LTR/RTL）、atomic base、`vertical-align`、overhang、hyphenation、区切り文字、first-line など。
-- review focus の 5 テストと、`line/replay.rs` の単体テストが、再生条件を個別に固定する。
+- review focus の 5 項目（`memo_recomputes_when_replay_would_cross_reshape_budget`、`narrow_retry_after_budget_exhausting_index_matches_reference`、焦点 3 の first-line 代替データセット（`walk_fixtures` の `first-line normal`/`first-line alternate`。`incremental_walk_matches_full_walk_for_every_range` が使う）、`intrinsic_min_and_max_atomics_keep_separate_memo_entries`、`memo_does_not_survive_operations_or_atomic_revisions`）と、`line/replay.rs` の単体テストが、再生条件を個別に固定する。
 - 再生条件は「全 charge が受理され合計が最小上限以内」または「全 charge が拒否され現在値が最大上限超」。計画の条件 (a) は、記録時に全 charge が受理されたことまで要求するよう強めた。suppressed 中の拒否は警告が残らず、再生側で区別できなくなるため。
 
 baseline/candidate の出力 SHA-256 と build/layout warning の SHA-256 は、全 1440 サンプル（15 点 × 4 サンプル × 24 ラウンド）で一致した（`digest_mismatch` は空）。
 
 ## 制限
 
-- タブ（shodo-b7d）: `line/range.rs` は、段落にタブがあると開始位置が変わるたびに tab prefix を作り直して `RangeCache` の世代を進め、世代が変わらない間だけ記録・再生する memo が無効になる、というのが shodo-b7d で想定している劣化。今回の `nestedtab`（最内にタブ 1 つ）では、この劣化は観測されなかった。candidate は `nested` と同じ傾向で、深さ 160 で 18.89 ms（`nested` は 17.19 ms）、倍化比は 2.54–3.06、baseline からは −99.5% になった。単一の開始位置から 1 回の走査を行うこの形ではタブの prefix が走査の間に作り直されないためと考えられる。計測の途中で probe を変えて、タブを各段・末尾に置く、兄弟 ruby に付ける、幅広い内容にするなどの形も試したが、いずれも同じ傾向で、memo の無効化は再現しなかった（これらは記録の対象外で、コミットしていない）。したがって shodo-b7d の劣化を起こす入力は未特定で、この記録は「タブを足しても二次に戻る」ことを示してはいない。shodo-b7d は開いたままで、再現する入力（複数の開始位置を使う形など）が見つかれば、同じ probe に `nestedtab` 以外のケースとして足せる。
+- タブ（shodo-b7d）: `line/range.rs` は、段落にタブがあると開始位置が変わるたびに tab prefix を作り直して `RangeCache` の世代を進め、世代が変わらない間だけ記録・再生する memo が無効になる、というのが shodo-b7d で想定している劣化。今回の `nestedtab`（最内にタブ 1 つ）では、この劣化は観測されなかった。candidate は `nested` と同じ傾向で、深さ 160 で 18.89 ms（`nested` は 17.19 ms）、倍化比は 2.54–3.06、baseline からは −99.5% になった。単一の開始位置から 1 回の走査を行うこの形ではタブの prefix が走査の間に作り直されないためかもしれないが、`nestedtab` が tab prefix の作り直しから `RangeCache` の世代の更新までの経路を実際に通るかは確認しておらず、この説明は仮説にとどまる。計測の途中で probe を変えて、タブを各段・末尾に置く、兄弟 ruby に付ける、幅広い内容にするなどの形も試したが、いずれも同じ傾向で、memo の無効化は再現しなかった（これらは記録の対象外で、コミットしていない）。したがって shodo-b7d の劣化を起こす入力は未特定で、この記録は「タブを足しても二次に戻る」ことを示してはいない。shodo-b7d は開いたままで、再現する入力（複数の開始位置を使う形など）が見つかれば、同じ probe に `nestedtab` 以外のケースとして足せる。
 - 兄弟 ruby は上のとおり定数倍の改善のみ（shodo-2j6）。
 - shodo-tj5: キャッシュ状態への依存（`blocks`/`sets` の hit が副作用を省く）の会計は従来から存在する性質で、本変更は記録時の世代と再生時の世代が等しい場合だけ再生することで、それを壊さない。会計の非対称そのもの（キャッシュが冷えているか温まっているかで `edge_reshape_spent` と Saturation が変わる）は既存の挙動で、見直しは shodo-tj5。
 - shodo-mc0: 行計測（`break_all`/`intrinsic_sizes`）の作業量に fail-closed の上限を設けるかは shodo-mc0 で検討する。この変更は上限や拒否条件を追加せず、既存の `RubyCutWork` も変えない。
-- 深さ 160 の `nested` でも candidate の倍化比は 2 を超える（80→160 で 2.58–2.67）。操作数は 2 倍で伸びるため、残りは本変更の外。
+- 深さ 160 の `nested` でも candidate の倍化比は 2 を超える（80→160 で 2.58–2.67）。操作数は 2 倍で伸びるため、残りの wall-clock の超過の原因は未調査（「判断」と同じ）。
 
 ## 再計測
 

@@ -26,8 +26,10 @@ const INLINE_SIZE: f32 = 96.0;
 enum Case {
     /// `size` rubies nested in each other's single base around "日".
     Nested,
-    /// As `Nested`, but the innermost content is "日\t日". Any tab disables
-    /// the through memo (shodo-b7d), so this case stays quadratic.
+    /// As `Nested`, but the innermost content is "日\t日". Intended as the
+    /// shodo-b7d trigger (tab prefix reset bumping the `RangeCache`
+    /// generation), but in measurement it did not reproduce the quadratic;
+    /// it is not confirmed that the inner tab reaches that path.
     NestedTab,
     /// `size` sibling rubies with base "12": one unbreakable line.
     Siblings,
