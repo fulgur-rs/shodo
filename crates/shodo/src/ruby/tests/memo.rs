@@ -1276,9 +1276,14 @@ fn memo_recomputes_when_replay_would_cross_reshape_budget() {
     let ruby = &data.ruby.containers[0];
     let start = ruby.units.start;
     // Both probes look ahead to the first paired cut after `start`, so they
-    // share one memo key.
+    // share one memo key (a probe ending at the cut has no look-ahead and is
+    // never stored).
     let cut = ruby.cuts[1].unit;
-    assert!(cut - 1 > start);
+    assert!(cut - 2 > start);
+    for end in [cut - 2, cut - 1] {
+        let (through, _) = crate::ruby::measure::walk(data, start, end, &mut LayoutContext::new());
+        assert_eq!(through, cut, "{start}..{end} must look ahead to the cut");
+    }
     let run = |reference: bool, preset: u64| -> (CrossingRun, u64, usize, usize) {
         let mut cx = context(reference);
         cx.warnings.set_max(data.limits.max_warnings);
@@ -1289,7 +1294,7 @@ fn memo_recomputes_when_replay_would_cross_reshape_budget() {
         crate::ruby::measure::candidate_adjustment(
             data,
             start,
-            cut - 1,
+            cut - 2,
             &AtomicSizes::EMPTY,
             &mut cx,
             &mut sat,
@@ -1299,7 +1304,7 @@ fn memo_recomputes_when_replay_would_cross_reshape_budget() {
         let first = crate::ruby::measure::candidate_adjustment(
             data,
             start,
-            cut - 1,
+            cut - 2,
             &AtomicSizes::EMPTY,
             &mut cx,
             &mut sat,
@@ -1310,7 +1315,7 @@ fn memo_recomputes_when_replay_would_cross_reshape_budget() {
         let second = crate::ruby::measure::candidate_adjustment(
             data,
             start,
-            cut,
+            cut - 1,
             &AtomicSizes::EMPTY,
             &mut cx,
             &mut sat,
@@ -1464,17 +1469,15 @@ fn narrow_retry_after_budget_exhausting_index_matches_reference() {
     }
 }
 
-/// Review focus 4: min- and max-content atomics have distinct revisions and
-/// must never answer each other's probes, also across first-line passes.
+/// Review focus 4, end to end: `intrinsic_sizes` with min/max atomics matches
+/// the reference, and look-ahead probes of one range under both revisions in
+/// one operation replay only within a revision.
 ///
-/// `intrinsic_sizes` itself never reuses an entry: it probes only at legal
-/// breaks (so `through == end`) and builds fresh min/max atomics, with fresh
-/// revisions, for every pass, so each probe has its own key. The second half
-/// therefore probes one range directly under both revisions in one operation.
-/// A changed revision also resets the range caches (`RangeCache::begin`), so
-/// the first probe after a switch fills them and is not memoized, the second
-/// is recorded, and the third hits (the memo is on). A max probe never hits
-/// a min entry, and returning to min does not hit its older entry either.
+/// `intrinsic_sizes` probes only at legal breaks (`through == end`), which
+/// are never stored, so the second half probes a look-ahead range directly.
+/// A changed revision resets the range caches (`RangeCache::begin`), so the
+/// first probe after a switch fills them and is not memoized, the second is
+/// recorded, and the third hits.
 #[test]
 fn intrinsic_min_and_max_atomics_keep_separate_memo_entries() {
     let p = atomic_base(&Limits::default(), true);
@@ -1498,6 +1501,11 @@ fn intrinsic_min_and_max_atomics_keep_separate_memo_entries() {
 
     let data = &p.data;
     let units = data.ruby.containers[0].units.clone();
+    // The range must cover the atomic (so min and max differ) and look ahead.
+    let end = units.end - 1;
+    let (through, _) =
+        crate::ruby::measure::walk(data, units.start, end, &mut LayoutContext::new());
+    assert!(through > end, "{}..{end} must look ahead", units.start);
     let (min, max) = (sized(4.0), sized(80.0));
     let probes = |reference: bool| {
         let mut cx = context(reference);
@@ -1507,7 +1515,7 @@ fn intrinsic_min_and_max_atomics_keep_separate_memo_entries() {
             let value = crate::ruby::measure::candidate_adjustment(
                 data,
                 units.start,
-                units.end,
+                end,
                 atomics,
                 cx,
                 &mut sat,
@@ -1530,7 +1538,7 @@ fn intrinsic_min_and_max_atomics_keep_separate_memo_entries() {
     assert_eq!(
         hits,
         [0, 0, 1, 0, 0, 1, 0],
-        "repeats hit within a revision, never across revisions"
+        "repeats hit within a revision; a revision switch measures again"
     );
 }
 
@@ -1583,7 +1591,19 @@ fn memo_does_not_survive_operations_or_atomic_revisions() {
 fn cold_cache_fills_are_not_memoized() {
     let p = siblings(&Limits::default());
     let data = &p.data;
-    let n = data.units.len();
+    // End inside the last sibling, so the probe looks ahead to its end (a
+    // probe without look-ahead is never stored).
+    let last = data
+        .ruby
+        .containers
+        .iter()
+        .max_by_key(|ruby| ruby.units.start)
+        .unwrap()
+        .units
+        .clone();
+    let end = last.start + 1;
+    let (through, _) = crate::ruby::measure::walk(data, 0, end, &mut LayoutContext::new());
+    assert!(through > end, "0..{end} must look ahead");
     let mut cx = LayoutContext::new();
     let mut sat = Saturation::default();
     cx.begin_reshape_operation();
@@ -1593,7 +1613,7 @@ fn cold_cache_fills_are_not_memoized() {
         let value = crate::ruby::measure::candidate_adjustment(
             data,
             0,
-            n,
+            end,
             &AtomicSizes::EMPTY,
             cx,
             &mut sat,
@@ -1746,7 +1766,126 @@ fn incremental_walk_keeps_nested_probes_linear() {
     }
 }
 
-/// Operation counts for docs/records/shodo-d77-ruby-through-memo.md.
+/// One two-base ruby followed by `n` plain CJK units: every probe past the
+/// ruby has `through == end`.
+fn one_ruby_then(n: usize) -> Paragraph {
+    let default = Limits::default();
+    let mut b = ParagraphBuilder::new(&paragraph_style(false), &default);
+    b.push_ruby(
+        NodeId(100),
+        &style(24.0),
+        annotated(
+            vec![
+                base_text(30, "日本", &style(24.0), &default),
+                base_text(31, "語", &style(24.0), &default),
+            ],
+            &["にほん"],
+            RubyOverhang::None,
+            &default,
+        ),
+    );
+    b.push_text(TextSource::Generated { node: NodeId(1) }, &"日".repeat(n));
+    finish(b)
+}
+
+/// Entries are stored only for look-ahead probes (`through > end`), so a long
+/// paragraph with one ruby keeps a handful of entries however long it is,
+/// while nested and sibling rubies still replay their look-ahead cores.
+#[test]
+fn memo_stays_bounded_on_long_paragraphs() {
+    let mut seen = Vec::new();
+    for n in [1000, 4000, 16000] {
+        let p = one_ruby_then(n);
+        let mut cx = LayoutContext::new();
+        p.intrinsic_sizes(
+            &mut cx,
+            &LineOptions::default(),
+            &AtomicIntrinsics::default(),
+        );
+        let intrinsic = (cx.ruby_memo.len(), cx.ruby_memo.capacity());
+        // `break_all` ends with an operation that finds no line and clears
+        // the memo, so observe the single line's operation directly.
+        let _ = p.next_line(
+            &mut cx,
+            p.start_token(),
+            &LineOptions::default(),
+            &LineConstraint::new(1.0e6),
+            &AtomicSizes::EMPTY,
+        );
+        let one_line = (cx.ruby_memo.len(), cx.ruby_memo.capacity());
+        println!("n {n}: intrinsic {intrinsic:?} one line {one_line:?}");
+        seen.push((n, intrinsic, one_line));
+    }
+    for (n, intrinsic, one_line) in seen {
+        for (what, (len, capacity)) in [("intrinsic", intrinsic), ("one line", one_line)] {
+            assert!(
+                len <= 16 && capacity <= crate::ruby::memo::RETAINED_CAPACITY,
+                "{what} n {n}: len {len} capacity {capacity}"
+            );
+        }
+    }
+}
+
+/// `n` two-base sibling rubies: a one-line scan has about three look-ahead
+/// endpoints per ruby, so 400 rubies overflow `MAX_ENTRIES`.
+fn many_siblings(n: usize) -> Paragraph {
+    let default = Limits::default();
+    let mut b = ParagraphBuilder::new(&paragraph_style(false), &default);
+    for i in 0..n as u64 {
+        b.push_ruby(
+            NodeId(1000 + i),
+            &style(24.0),
+            annotated(
+                vec![
+                    base_text(30, "日本語", &style(24.0), &default),
+                    base_text(31, "日本", &style(24.0), &default),
+                ],
+                &["にほんご"],
+                RubyOverhang::None,
+                &default,
+            ),
+        );
+    }
+    finish(b)
+}
+
+/// The memo bounds keep the look-ahead reuse: nested and sibling rubies still
+/// replay, a one-line scan replays the same number of cores whether or not
+/// it overflows `MAX_ENTRIES` (each look-ahead endpoint is asked for over one
+/// contiguous run of ends), and the overflowing operation's map is released.
+#[test]
+fn memo_bounds_keep_look_ahead_hits() {
+    let line = |p: &Paragraph, cx: &mut LayoutContext| {
+        let _ = p.next_line(
+            cx,
+            p.start_token(),
+            &LineOptions::default(),
+            &LineConstraint::new(1.0e7),
+            &AtomicSizes::EMPTY,
+        );
+    };
+    for (name, p) in [
+        ("nested", nested(16, &Limits::default(), "日", &style(24.0))),
+        ("siblings", siblings(&Limits::default())),
+    ] {
+        let mut cx = LayoutContext::new();
+        line(&p, &mut cx);
+        assert!(cx.ruby_memo_hits > 0, "{name}");
+        let mut cx = LayoutContext::new();
+        p.break_all(&mut cx, &LineOptions::default(), 96.0, &AtomicSizes::EMPTY);
+        assert!(cx.ruby_memo_hits > 0, "{name} break_all");
+    }
+    for (n, overflows) in [(100, false), (400, true)] {
+        let p = many_siblings(n);
+        let mut cx = LayoutContext::new();
+        line(&p, &mut cx);
+        assert_eq!(cx.ruby_memo.overflow_clears > 0, overflows, "n {n}");
+        assert_eq!(cx.ruby_memo_hits, 16 * n, "n {n}");
+        assert!(cx.ruby_memo.len() <= crate::ruby::memo::MAX_ENTRIES);
+        cx.begin_reshape_operation();
+        assert!(cx.ruby_memo.capacity() <= crate::ruby::memo::RETAINED_CAPACITY);
+    }
+}
 #[test]
 #[ignore = "report for the shodo-d77 record"]
 fn d77_operation_counts_report() {
@@ -1760,5 +1899,33 @@ fn d77_operation_counts_report() {
                 );
             }
         }
+    }
+}
+
+/// A probe ending at a container's end has no look-ahead and is not stored,
+/// but it still replays the entry that the look-ahead probe one unit earlier
+/// recorded under the same `through`: every single-base sibling of an
+/// unbreakable line replays 12 cores, as before the memo bounds.
+#[test]
+fn exact_probes_replay_look_ahead_entries() {
+    let default = Limits::default();
+    for r in [25usize, 50] {
+        let mut b = ParagraphBuilder::new(&paragraph_style(false), &default);
+        for i in 0..r as u64 {
+            b.push_ruby(
+                NodeId(1000 + i),
+                &style(24.0),
+                annotated(
+                    vec![base_text(30, "12", &style(24.0), &default)],
+                    &["日"],
+                    RubyOverhang::None,
+                    &default,
+                ),
+            );
+        }
+        let p = finish(b);
+        let mut cx = LayoutContext::new();
+        p.break_all(&mut cx, &LineOptions::default(), 96.0, &AtomicSizes::EMPTY);
+        assert_eq!(cx.ruby_memo_hits, 12 * r, "r {r}");
     }
 }

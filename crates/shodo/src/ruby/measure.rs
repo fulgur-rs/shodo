@@ -188,6 +188,15 @@ pub(crate) fn candidate_adjustment(
             }
             entry.adjustment
         }
+        _ if through == end => {
+            // No look-ahead: the key can still replay the entry of an earlier
+            // look-ahead probe with the same `through` (above), but it is not
+            // stored. Fit scans ask for an exact key once per scan, so storing
+            // it only grows the memo by one entry per probe (one per unit in
+            // `intrinsic_sizes`). Measure as the reference path does.
+            let containers = walk.as_ref().map_or(&[][..], |w| w.visited());
+            measure_containers(data, start..through, containers, atomics, cx, sat).adjustment
+        }
         _ => {
             let containers = walk.as_ref().map_or(&[][..], |w| w.visited());
             let recording = crate::line::replay::begin(cx, sat);

@@ -7,6 +7,8 @@
 //! operation and replayed while its recorded side effects replay exactly
 //! (`line::replay`). Entries live until the operation's reshape budget is
 //! reset (`LayoutContext::begin_reshape_operation`) or the context shrinks.
+//! Only look-ahead probes (`through > end`) are stored, at most `MAX_ENTRIES`
+//! at once, and a clear releases a map larger than `RETAINED_CAPACITY`.
 //!
 //! # Validity
 //!
@@ -84,11 +86,32 @@ pub(crate) struct MemoEntry {
     pub(crate) generation: u64,
 }
 
+/// Entries held at once. Reaching it clears the memo before the next insert.
+/// A fit scan asks for one `through` over a contiguous run of growing ends,
+/// so clearing loses at most the rest of runs already left behind, never the
+/// current one, and the look-ahead reuse of a scan stays linear. Repeat scans
+/// in one operation (a `PartialLine::index` after a line scan) replay older
+/// entries only while they fit: 1024 is twice the default
+/// `max_nesting_depth`, so a maximally nested chain's look-ahead endpoints
+/// from one scan all fit. A bucket takes 105 bytes (key 40, entry 64, one
+/// control byte) and 1024 entries need 2048 buckets: about 210 KiB at most.
+pub(crate) const MAX_ENTRIES: usize = 1024;
+
+/// Capacity kept across operations. A larger map (an operation with many
+/// look-ahead endpoints, e.g. a long line of sibling rubies) is freed when the
+/// memo is cleared, so it does not stay pinned for the context's lifetime;
+/// ordinary lines (tens of endpoints) keep reusing their allocation. The
+/// largest retained map has 256 buckets (224 usable), about 27 KiB.
+pub(crate) const RETAINED_CAPACITY: usize = 256;
+
 #[derive(Debug, Default)]
 pub(crate) struct RubyMemo {
     entries: crate::hashing::FastMap<MemoKey, MemoEntry>,
     /// Look-ahead walk of the latest probe start (see `advance`).
     walk: Option<WalkState>,
+    /// Clears forced by `MAX_ENTRIES`.
+    #[cfg(test)]
+    pub(crate) overflow_clears: usize,
 }
 
 impl RubyMemo {
@@ -97,6 +120,15 @@ impl RubyMemo {
     }
 
     pub(crate) fn insert(&mut self, key: MemoKey, entry: MemoEntry) {
+        if self.entries.len() >= MAX_ENTRIES && !self.entries.contains_key(&key) {
+            // Dropping entries only means measuring again, which is exactly
+            // what the reference path does.
+            self.entries.clear();
+            #[cfg(test)]
+            {
+                self.overflow_clears += 1;
+            }
+        }
         self.entries.insert(key, entry);
     }
 
@@ -115,9 +147,77 @@ impl RubyMemo {
         self.walk = walk;
     }
 
+    /// Forget every entry and the walk, releasing a map that grew beyond
+    /// `RETAINED_CAPACITY` (the walk's vectors are dropped with it).
     pub(crate) fn clear(&mut self) {
-        self.entries.clear();
+        if self.entries.capacity() > RETAINED_CAPACITY {
+            self.entries = Default::default();
+        } else {
+            self.entries.clear();
+        }
         self.walk = None;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn capacity(&self) -> usize {
+        self.entries.capacity()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn key(through: usize) -> MemoKey {
+        MemoKey {
+            id: 1,
+            data: 2,
+            revision: 3,
+            start: 0,
+            through,
+        }
+    }
+
+    fn entry() -> MemoEntry {
+        let mut cx = crate::LayoutContext::new();
+        let sat = crate::geometry::Saturation::default();
+        let recording = crate::line::replay::begin(&mut cx, &sat);
+        MemoEntry {
+            adjustment: LayoutUnit::ZERO,
+            effects: crate::line::replay::finish(&mut cx, recording, &sat).unwrap(),
+            generation: 0,
+        }
+    }
+
+    #[test]
+    fn entries_are_capped_and_large_maps_are_released() {
+        let mut memo = RubyMemo::default();
+        for through in 0..3 * MAX_ENTRIES {
+            memo.insert(key(through), entry());
+            assert!(memo.len() <= MAX_ENTRIES, "{through}");
+            // The latest key always survives a forced clear.
+            assert!(memo.get(&key(through)).is_some());
+        }
+        assert_eq!(memo.overflow_clears, 2);
+        // Re-inserting a present key never clears.
+        memo.insert(key(3 * MAX_ENTRIES - 1), entry());
+        assert_eq!(memo.overflow_clears, 2);
+        assert!(memo.capacity() > RETAINED_CAPACITY);
+        memo.clear();
+        assert_eq!((memo.len(), memo.capacity()), (0, 0));
+        // A small map keeps its allocation across operations.
+        for through in 0..64 {
+            memo.insert(key(through), entry());
+        }
+        let capacity = memo.capacity();
+        assert!(capacity <= RETAINED_CAPACITY);
+        memo.clear();
+        assert_eq!((memo.len(), memo.capacity()), (0, capacity));
     }
 }
 
