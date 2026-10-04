@@ -2906,3 +2906,214 @@ fn font_substitution_edge_keeps_owned_scalars_and_source_end() {
     assert_eq!(p.data.shape_items[0].scalars[5].end, 6);
     assert_eq!(warnings.take().len(), 1);
 }
+
+/// Mirrors one case of `dev/bench/examples/tcy_base_reuse.rs` with the same
+/// fixture font files, so the release probe's shaper calls can be counted.
+fn tcy_base_reuse_probe_builder(case: &str, limits: &Limits) -> crate::ParagraphBuilder {
+    use crate::geometry::Direction;
+    use crate::node::{InlineEdges, NodeId, TextSource};
+    const REPEATS: u64 = 64;
+    if case == "deep-nested-multi" {
+        return tcy_base_reuse_probe_deep_builder(limits);
+    }
+    let (text, mode, direction, multiple_styles) = match case {
+        "base-two-rl" | "base-fallback" | "plain-tcy" => {
+            ("12", WritingMode::VerticalRl, Direction::Ltr, false)
+        }
+        "base-three-lr-rtl" => ("123", WritingMode::VerticalLr, Direction::Rtl, false),
+        "base-four-rl-multi" => ("1234", WritingMode::VerticalRl, Direction::Ltr, true),
+        "base-two-lr-rtl-multi" => ("12", WritingMode::VerticalLr, Direction::Rtl, true),
+        _ => panic!("unknown case {case}"),
+    };
+    let cjk = width_probe_style("Width CJK", direction);
+    let plain_latin = crate::style::InlineStyle {
+        font_size: 19.0,
+        text_combine_upright: crate::style::TextCombineUpright::None,
+        ..width_probe_style("Width Latin", direction)
+    };
+    let base_limits = Limits {
+        max_shaping_run_bytes: (case == "base-fallback").then_some(1),
+        ..Limits::default()
+    };
+    let paragraph_style = crate::style::ParagraphStyle {
+        writing_mode: mode,
+        direction,
+        root: cjk.clone(),
+        ..Default::default()
+    };
+    let plain = case == "plain-tcy";
+    let mut base =
+        crate::ParagraphBuilder::new(&paragraph_style, if plain { limits } else { &base_limits });
+    for repeat in 0..REPEATS {
+        if repeat > 0 {
+            let separator = NodeId(3000 + repeat);
+            base.open_inline(separator, &plain_latin, InlineEdges::default())
+                .push_text(
+                    TextSource::Dom {
+                        node: separator,
+                        offset: 0,
+                    },
+                    "x",
+                )
+                .close_inline();
+        }
+        base.open_inline(NodeId(100 + repeat), &cjk, InlineEdges::default())
+            .push_text(
+                TextSource::Dom {
+                    node: NodeId(1000 + repeat),
+                    offset: 10,
+                },
+                text,
+            )
+            .close_inline();
+    }
+    if multiple_styles {
+        let node = NodeId(9000);
+        base.open_inline(node, &plain_latin, InlineEdges::default())
+            .push_text(TextSource::Dom { node, offset: 0 }, "x")
+            .close_inline();
+    }
+    if plain {
+        return base;
+    }
+    let mut builder = crate::ParagraphBuilder::new(&paragraph_style, limits);
+    builder.push_ruby(
+        NodeId(1),
+        &cjk,
+        tcy_base_reuse_probe_ruby(crate::RubyContent::from_builder(base), &cjk, limits),
+    );
+    builder
+}
+
+fn tcy_base_reuse_probe_ruby(
+    base: crate::RubyContent,
+    style: &crate::style::InlineStyle,
+    limits: &Limits,
+) -> crate::Ruby {
+    use crate::node::{NodeId, TextSource};
+    crate::Ruby::new(
+        vec![crate::RubyBase {
+            node: NodeId(2),
+            content: base,
+            align: crate::RubyAlign::default(),
+        }],
+        vec![crate::RubyLevel {
+            annotations: vec![crate::RubyAnnotation {
+                node: NodeId(3),
+                content: crate::RubyContent::text(
+                    TextSource::Dom {
+                        node: NodeId(3),
+                        offset: 30,
+                    },
+                    "日",
+                    style,
+                    limits,
+                ),
+                span: crate::RubySpan::Auto,
+                visibility: crate::RubyVisibility::Visible,
+            }],
+            style: crate::RubyStyle::default(),
+        }],
+    )
+    .unwrap()
+}
+
+/// Mirror of the probe's `deep_builder` (250 levels, 400 groups).
+fn tcy_base_reuse_probe_deep_builder(limits: &Limits) -> crate::ParagraphBuilder {
+    use crate::geometry::Direction;
+    use crate::node::{InlineEdges, NodeId, TextSource};
+    const DEPTH: usize = 250;
+    const GROUPS: u64 = 400;
+    let cjk = width_probe_style("Width CJK", Direction::Ltr);
+    let mixed = crate::style::InlineStyle {
+        font_families: vec![
+            crate::style::FontFamily::Named("Width Latin".into()),
+            crate::style::FontFamily::Named("Width CJK".into()),
+        ],
+        ..cjk.clone()
+    };
+    let plain = crate::style::InlineStyle {
+        text_combine_upright: crate::style::TextCombineUpright::None,
+        ..width_probe_style("Width Latin", Direction::Ltr)
+    };
+    let paragraph_style = crate::style::ParagraphStyle {
+        writing_mode: WritingMode::VerticalRl,
+        direction: Direction::Ltr,
+        root: cjk.clone(),
+        ..Default::default()
+    };
+    let base_limits = Limits::default();
+    let mut content = crate::ParagraphBuilder::new(&paragraph_style, &base_limits);
+    for group in 0..GROUPS {
+        let separator = NodeId(100_000 + 2 * group);
+        let text = NodeId(100_001 + 2 * group);
+        content
+            .open_inline(separator, &plain, InlineEdges::default())
+            .push_text(
+                TextSource::Dom {
+                    node: separator,
+                    offset: 0,
+                },
+                "x",
+            )
+            .close_inline()
+            .open_inline(text, &mixed, InlineEdges::default())
+            .push_text(
+                TextSource::Dom {
+                    node: text,
+                    offset: 0,
+                },
+                "1日2日",
+            )
+            .close_inline();
+    }
+    for level in (0..DEPTH).rev() {
+        let ruby =
+            tcy_base_reuse_probe_ruby(crate::RubyContent::from_builder(content), &cjk, limits);
+        content = crate::ParagraphBuilder::new(
+            &paragraph_style,
+            if level == 0 { limits } else { &base_limits },
+        );
+        content.push_ruby(NodeId(1), &cjk, ruby);
+    }
+    content
+}
+
+#[test]
+#[ignore = "manual shaper-call count for the tcy_base_reuse release probe cases; run with --ignored --nocapture"]
+fn tcy_base_reuse_probe_shaper_calls() {
+    let limits = Limits::default();
+    let fonts = width_probe_fonts(&limits);
+    for case in [
+        "base-two-rl",
+        "base-three-lr-rtl",
+        "base-four-rl-multi",
+        "base-two-lr-rtl-multi",
+        "base-fallback",
+        "plain-tcy",
+        "deep-nested-multi",
+    ] {
+        let run = |mode| {
+            let builder = tcy_base_reuse_probe_builder(case, &limits);
+            HARFRUST_SHAPE_CALLS.with(|calls| calls.set(0));
+            let _mode_guard = CombinedWidthProbeModeGuard::new(mode);
+            let paragraph = builder
+                .build(&mut crate::LayoutContext::new(), &fonts)
+                .unwrap();
+            (
+                width_probe_snapshot(&paragraph),
+                paragraph.data.glyphs.len(),
+                HARFRUST_SHAPE_CALLS.with(|calls| calls.get()),
+            )
+        };
+        let (reference, reference_glyphs, reference_calls) =
+            run(crate::shape::CombinedWidthProbeMode::CloneReference);
+        let (reused, reused_glyphs, reused_calls) =
+            run(crate::shape::CombinedWidthProbeMode::ScopedReuse);
+        assert_eq!(reference, reused, "{case}");
+        assert_eq!(reference_glyphs, reused_glyphs, "{case}");
+        println!(
+            "{{\"case\":\"{case}\",\"glyphs\":{reused_glyphs},\"reference_shaper_calls\":{reference_calls},\"scoped_reuse_shaper_calls\":{reused_calls}}}"
+        );
+    }
+}
