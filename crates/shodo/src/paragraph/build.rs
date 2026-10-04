@@ -612,25 +612,12 @@ fn build_data(
         &combine_spans,
     );
     #[cfg(test)]
-    let unscoped_output_reuse_candidate = crate::shape::combined_width_probe_mode_for_test()
-        == crate::shape::CombinedWidthProbeMode::UnscopedOutputReuse;
-    #[cfg(not(test))]
-    let unscoped_output_reuse_candidate = false;
-    let (glyphs, runs, shape_features) = if bases.enabled() && unscoped_output_reuse_candidate {
-        let mut shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
-        let (glyphs, runs) = crate::shape::shape_items_with_combined_width_reuse(
-            cx,
-            &mut shape_items_input,
-            &styles,
-            fonts,
-            style.writing_mode,
-            &shape_limits,
-            warnings,
-            sat,
-            &mut shape_features,
-        )?;
-        (glyphs, runs, shape_features)
-    } else if bases.enabled() {
+    let reference_shape = if bases.enabled()
+        && matches!(
+            crate::shape::combined_width_probe_mode_for_test(),
+            crate::shape::CombinedWidthProbeMode::CloneReference
+                | crate::shape::CombinedWidthProbeMode::FeatureView
+        ) {
         crate::shape::select_combined_widths(
             cx,
             &mut shape_items_input,
@@ -649,12 +636,28 @@ fn build_data(
             &shape_limits,
             warnings,
             sat,
-            Some(bases),
+            Some(&mut *bases),
             &shape_features,
         )?;
-        (glyphs, runs, shape_features)
+        Some((glyphs, runs, shape_features))
+    } else {
+        None
+    };
+    #[cfg(not(test))]
+    let reference_shape: Option<(
+        crate::shape::GlyphStore,
+        Vec<crate::shape::ShapedRun>,
+        crate::shape::FeatureSets,
+    )> = None;
+    let (glyphs, runs, shape_features) = if let Some(reference) = reference_shape {
+        reference
     } else {
         let mut shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
+        let scoped = if bases.enabled() {
+            Some(&mut *bases)
+        } else {
+            None
+        };
         let (glyphs, runs) = crate::shape::shape_items_with_combined_width_reuse(
             cx,
             &mut shape_items_input,
@@ -664,6 +667,7 @@ fn build_data(
             &shape_limits,
             warnings,
             sat,
+            scoped,
             &mut shape_features,
         )?;
         (glyphs, runs, shape_features)

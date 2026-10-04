@@ -62,7 +62,7 @@ impl CombinedWidthProbeModeGuard {
 impl Drop for CombinedWidthProbeModeGuard {
     fn drop(&mut self) {
         crate::shape::set_combined_width_probe_mode(
-            crate::shape::CombinedWidthProbeMode::CloneReference,
+            crate::shape::CombinedWidthProbeMode::ScopedReuse,
         );
     }
 }
@@ -112,6 +112,7 @@ fn width_probe_builder(
     base_shaping_run_bytes: Option<u64>,
     repeats: usize,
     limits: &Limits,
+    first_line: bool,
 ) -> crate::ParagraphBuilder {
     let base_limits = Limits {
         max_shaped_glyphs: base_glyph_limit,
@@ -209,6 +210,10 @@ fn width_probe_builder(
             writing_mode: case.mode,
             direction: case.direction,
             root: cjk_style.clone(),
+            first_line: first_line.then(|| crate::style::InlineStyle {
+                font_size: 24.0,
+                ..cjk_style.clone()
+            }),
             ..Default::default()
         },
         limits,
@@ -232,6 +237,7 @@ fn build_width_probe_case(
         base_shaping_run_bytes,
         repeats,
         &limits,
+        false,
     );
     HARFRUST_SHAPE_CALLS.with(|calls| calls.set(0));
     COMBINED_WIDTH_GROUP_CLONE_COUNT.with(|count| count.set(0));
@@ -240,6 +246,37 @@ fn build_width_probe_case(
     COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| bytes.set(0));
     let _mode_guard = CombinedWidthProbeModeGuard::new(mode);
     builder.build(&mut crate::LayoutContext::new(), &fonts)
+}
+
+fn build_width_probe_with(
+    case: WidthProbeCase,
+    mode: crate::shape::CombinedWidthProbeMode,
+    base_glyph_limit: Option<u64>,
+    base_shaping_run_bytes: Option<u64>,
+    paragraph: &Limits,
+    first_line: bool,
+    repeats: usize,
+) -> Result<crate::Paragraph, LimitExceeded> {
+    let fonts = width_probe_fonts(paragraph);
+    let builder = width_probe_builder(
+        case,
+        base_glyph_limit,
+        base_shaping_run_bytes,
+        repeats,
+        paragraph,
+        first_line,
+    );
+    HARFRUST_SHAPE_CALLS.with(|calls| calls.set(0));
+    let _mode_guard = CombinedWidthProbeModeGuard::new(mode);
+    builder.build(&mut crate::LayoutContext::new(), &fonts)
+}
+
+fn width_probe_outcome(
+    result: Result<crate::Paragraph, LimitExceeded>,
+) -> Result<String, (LimitKind, u64, u64)> {
+    result
+        .map(|paragraph| width_probe_snapshot(&paragraph))
+        .map_err(|error| (error.kind, error.limit, error.actual))
 }
 
 fn width_probe_snapshot(paragraph: &crate::Paragraph) -> String {
@@ -455,7 +492,7 @@ fn combined_width_reuse_preserves_global_glyph_limit_failure() {
 }
 
 #[test]
-fn ruby_base_glyph_limits_keep_the_regular_trial_and_final_shape_path() {
+fn ruby_base_glyph_limits_fall_back_to_the_scoped_final_shape() {
     let limits = Limits::default();
     let fonts = FontCollection::with_options(
         &limits,
@@ -667,7 +704,7 @@ fn feature_override_view_preserves_scoped_glyph_limit_failure() {
         ));
         assert_eq!(
             crate::shape::combined_width_probe_mode_for_test(),
-            crate::shape::CombinedWidthProbeMode::CloneReference,
+            crate::shape::CombinedWidthProbeMode::ScopedReuse,
             "probe mode must not leak into tests reusing this worker thread"
         );
     }
@@ -704,51 +741,119 @@ fn feature_override_view_preserves_scoped_shaping_warnings() {
 }
 
 #[test]
-fn unscoped_probe_output_reuse_matches_unlimited_base_output_but_skips_local_glyph_caps() {
+fn scoped_output_reuse_saves_final_shapes_and_keeps_local_glyph_caps() {
+    let limits = Limits::default();
+    for case in WIDTH_PROBE_CASES {
+        let reference = build_width_probe_with(
+            case,
+            crate::shape::CombinedWidthProbeMode::CloneReference,
+            None,
+            None,
+            &limits,
+            false,
+            2,
+        )
+        .unwrap();
+        let reference_calls = HARFRUST_SHAPE_CALLS.with(|calls| calls.get());
+        let reused = build_width_probe_with(
+            case,
+            crate::shape::CombinedWidthProbeMode::ScopedReuse,
+            None,
+            None,
+            &limits,
+            false,
+            2,
+        )
+        .unwrap();
+        let reused_calls = HARFRUST_SHAPE_CALLS.with(|calls| calls.get());
+        assert_eq!(
+            width_probe_snapshot(&reference),
+            width_probe_snapshot(&reused),
+            "{}",
+            case.name
+        );
+        assert!(
+            reused_calls < reference_calls,
+            "{}: {reused_calls} >= {reference_calls}",
+            case.name
+        );
+    }
     let case = WIDTH_PROBE_CASES[0];
-    let scoped = build_width_probe_case(
+    let reference_calls = {
+        build_width_probe_with(
+            case,
+            crate::shape::CombinedWidthProbeMode::CloneReference,
+            None,
+            None,
+            &limits,
+            false,
+            1,
+        )
+        .unwrap();
+        HARFRUST_SHAPE_CALLS.with(|calls| calls.get())
+    };
+    build_width_probe_with(
         case,
-        crate::shape::CombinedWidthProbeMode::CloneReference,
+        crate::shape::CombinedWidthProbeMode::ScopedReuse,
         None,
         None,
+        &limits,
+        false,
         1,
     )
     .unwrap();
-    let scoped_calls = HARFRUST_SHAPE_CALLS.with(|calls| calls.get());
-    let reused = build_width_probe_case(
-        case,
-        crate::shape::CombinedWidthProbeMode::UnscopedOutputReuse,
-        None,
-        None,
-        1,
-    )
-    .unwrap();
-    let reused_calls = HARFRUST_SHAPE_CALLS.with(|calls| calls.get());
-    assert_eq!(width_probe_snapshot(&scoped), width_probe_snapshot(&reused));
-    assert_eq!(scoped_calls, reused_calls + 1);
+    assert_eq!(
+        HARFRUST_SHAPE_CALLS.with(|calls| calls.get()) + 1,
+        reference_calls
+    );
 
-    let limited = build_width_probe_case(
-        case,
+    for mode in [
         crate::shape::CombinedWidthProbeMode::CloneReference,
-        Some(1),
-        None,
-        1,
-    );
-    assert!(matches!(
-        limited,
-        Err(error) if error.kind == LimitKind::ShapedGlyphs && error.limit == 1
-    ));
-    let unscoped_limited = build_width_probe_case(
-        case,
-        crate::shape::CombinedWidthProbeMode::UnscopedOutputReuse,
-        Some(1),
-        None,
-        1,
-    );
-    assert!(
-        unscoped_limited.is_ok(),
-        "the output-reuse candidate bypasses the BaseScope glyph budget"
-    );
+        crate::shape::CombinedWidthProbeMode::ScopedReuse,
+    ] {
+        let error =
+            build_width_probe_with(case, mode, Some(1), None, &limits, false, 1).unwrap_err();
+        assert_eq!(
+            (error.kind, error.limit),
+            (LimitKind::ShapedGlyphs, 1),
+            "{mode:?}"
+        );
+    }
+}
+
+#[test]
+fn scoped_output_reuse_matches_reference_across_base_and_paragraph_limits() {
+    for case in WIDTH_PROBE_CASES {
+        for repeats in [1, 2] {
+            for base_glyphs in [None, Some(0), Some(1), Some(2), Some(3), Some(4), Some(6)] {
+                for base_run_bytes in [None, Some(0), Some(1), Some(2), Some(4)] {
+                    for paragraph_glyphs in [None, Some(1), Some(3), Some(5)] {
+                        let paragraph = Limits {
+                            max_shaped_glyphs: paragraph_glyphs,
+                            ..Limits::default()
+                        };
+                        let run = |mode| {
+                            width_probe_outcome(build_width_probe_with(
+                                case,
+                                mode,
+                                base_glyphs,
+                                base_run_bytes,
+                                &paragraph,
+                                false,
+                                repeats,
+                            ))
+                        };
+                        assert_eq!(
+                            run(crate::shape::CombinedWidthProbeMode::CloneReference),
+                            run(crate::shape::CombinedWidthProbeMode::ScopedReuse),
+                            "{} repeats={repeats} base_glyphs={base_glyphs:?} base_run_bytes={base_run_bytes:?} paragraph_glyphs={paragraph_glyphs:?}",
+                            case.name
+                        );
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[test]
@@ -772,7 +877,7 @@ fn combined_width_base_probe_performance_probe() {
         limits: &Limits,
         fonts: &FontCollection,
     ) -> (Duration, String, usize, usize, usize, usize, usize) {
-        let builder = width_probe_builder(case, None, None, REPEATS, limits);
+        let builder = width_probe_builder(case, None, None, REPEATS, limits, false);
         let mut cx = crate::LayoutContext::new();
         HARFRUST_SHAPE_CALLS.with(|calls| calls.set(0));
         COMBINED_WIDTH_GROUP_CLONE_COUNT.with(|count| count.set(0));
@@ -806,14 +911,14 @@ fn combined_width_base_probe_performance_probe() {
     let modes: &[crate::shape::CombinedWidthProbeMode] = match requested.as_str() {
         "clone" => &[crate::shape::CombinedWidthProbeMode::CloneReference],
         "view" => &[crate::shape::CombinedWidthProbeMode::FeatureView],
-        "reuse" => &[crate::shape::CombinedWidthProbeMode::UnscopedOutputReuse],
+        "reuse" => &[crate::shape::CombinedWidthProbeMode::ScopedReuse],
         "compare" => &[
             crate::shape::CombinedWidthProbeMode::CloneReference,
             crate::shape::CombinedWidthProbeMode::FeatureView,
         ],
         "reuse-compare" => &[
             crate::shape::CombinedWidthProbeMode::CloneReference,
-            crate::shape::CombinedWidthProbeMode::UnscopedOutputReuse,
+            crate::shape::CombinedWidthProbeMode::ScopedReuse,
         ],
         _ => panic!("SHODO_TCY_PROBE_VARIANT must be clone, view, reuse, compare or reuse-compare"),
     };
@@ -868,12 +973,9 @@ fn combined_width_base_probe_performance_probe() {
                     assert_eq!(metrics[0].3, metrics[1].3, "shaper calls changed");
                     assert_eq!(metrics[0].4, metrics[1].4, "trial storage changed");
                 }
-                crate::shape::CombinedWidthProbeMode::UnscopedOutputReuse => {
+                crate::shape::CombinedWidthProbeMode::ScopedReuse => {
                     assert_eq!(metrics[0].0, REPEATS, "expected one clone per TCY group");
-                    assert_eq!(
-                        metrics[1].0, 0,
-                        "unscoped reuse should not clone TCY groups"
-                    );
+                    assert_eq!(metrics[1].0, 0, "scoped reuse should not clone TCY groups");
                     assert_eq!(
                         metrics[0].3,
                         metrics[1].3 + REPEATS,

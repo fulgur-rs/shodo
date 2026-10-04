@@ -18,7 +18,9 @@ use crate::mapping::OffsetMapping;
 use crate::node::{NodeId, Sides};
 use crate::output::Line;
 use crate::sanitize;
-use crate::shape::{GlyphStore, ShapedRun, shape_items_with_base_scopes};
+#[cfg(test)]
+use crate::shape::shape_items_with_base_scopes;
+use crate::shape::{GlyphStore, ShapedRun};
 use crate::style::{InlineStyle, ParagraphStyle, TextOrientation};
 
 static NEXT_PARAGRAPH_ID: AtomicU64 = AtomicU64::new(1);
