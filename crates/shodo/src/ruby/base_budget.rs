@@ -239,6 +239,51 @@ impl BaseScopes {
     ) -> Result<(), LimitExceeded> {
         self.charge(self.items.get(item).copied().flatten(), kind, amount)
     }
+
+    /// Whether charging `charges` (item index, glyph count) in order would
+    /// stay within every owning scope chain. Mirrors `charge` cumulatively,
+    /// including saturation, without touching `spent` or `failure`.
+    pub(crate) fn can_charge_shaped_glyphs(
+        &self,
+        charges: impl IntoIterator<Item = (usize, u64)>,
+    ) -> bool {
+        let mut pending: Vec<(usize, u64)> = Vec::new();
+        for (item, amount) in charges {
+            let owner = self.items.get(item).copied().flatten();
+            let mut cursor = owner;
+            while let Some(i) = cursor {
+                let scope = &self.scopes[i];
+                let earlier = pending
+                    .iter()
+                    .find(|(index, _)| *index == i)
+                    .map_or(0, |(_, added)| *added);
+                let actual = scope
+                    .spent
+                    .get(LimitKind::ShapedGlyphs)
+                    .saturating_add(earlier)
+                    .saturating_add(amount);
+                if Limits::check(
+                    limit(&scope.limits, LimitKind::ShapedGlyphs),
+                    LimitKind::ShapedGlyphs,
+                    actual,
+                )
+                .is_err()
+                {
+                    return false;
+                }
+                cursor = scope.parent;
+            }
+            let mut cursor = owner;
+            while let Some(i) = cursor {
+                match pending.iter_mut().find(|(index, _)| *index == i) {
+                    Some((_, added)) => *added = added.saturating_add(amount),
+                    None => pending.push((i, amount)),
+                }
+                cursor = self.scopes[i].parent;
+            }
+        }
+        true
+    }
     pub(crate) fn container(&mut self, container: usize, amount: u64) -> Result<(), LimitExceeded> {
         self.container_cost(container, LimitKind::Items, amount)
     }
@@ -352,5 +397,66 @@ impl BaseScopes {
             }
             a = self.scopes[a].parent?;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scope(limit: Option<u64>, parent: Option<usize>) -> BaseScope {
+        BaseScope {
+            limits: Limits {
+                max_shaped_glyphs: limit,
+                ..Limits::default()
+            },
+            spent: Cost::default(),
+            parent,
+            styles: 0,
+            style_indices: Vec::new(),
+            style_bytes: [0; 2],
+            transient_text: 0,
+        }
+    }
+
+    /// Item 0 and 1 belong to the inner scope 1, whose parent is scope 0.
+    fn nested(outer: Option<u64>, inner: Option<u64>) -> BaseScopes {
+        BaseScopes {
+            scopes: vec![scope(outer, None), scope(inner, Some(0))],
+            items: vec![Some(1), Some(1), None],
+            ..BaseScopes::default()
+        }
+    }
+
+    #[test]
+    fn shaped_glyph_preflight_accumulates_shared_ancestor_charges() {
+        let scopes = nested(Some(3), None);
+        assert!(scopes.can_charge_shaped_glyphs([(0, 2), (2, 9)]));
+        assert!(!scopes.can_charge_shaped_glyphs([(0, 2), (1, 2)]));
+        let mut reference = scopes.clone();
+        reference.item(0, LimitKind::ShapedGlyphs, 2).unwrap();
+        let error = reference.item(1, LimitKind::ShapedGlyphs, 2).unwrap_err();
+        assert_eq!(
+            (error.kind, error.limit, error.actual),
+            (LimitKind::ShapedGlyphs, 3, 4)
+        );
+    }
+
+    #[test]
+    fn shaped_glyph_preflight_checks_inner_and_spent_without_mutating() {
+        let mut scopes = nested(None, Some(2));
+        scopes.item(0, LimitKind::ShapedGlyphs, 1).unwrap();
+        assert!(scopes.can_charge_shaped_glyphs([(1, 1)]));
+        assert!(!scopes.can_charge_shaped_glyphs([(1, 1), (0, 1)]));
+        assert_eq!(scopes.scopes[1].spent.get(LimitKind::ShapedGlyphs), 1);
+        assert_eq!(scopes.scopes[0].spent.get(LimitKind::ShapedGlyphs), 1);
+        assert_eq!(scopes.failure, None);
+    }
+
+    #[test]
+    fn shaped_glyph_preflight_saturates_like_charge() {
+        let mut scopes = nested(None, None);
+        scopes.item(0, LimitKind::ShapedGlyphs, u64::MAX).unwrap();
+        assert!(scopes.can_charge_shaped_glyphs([(0, 1), (1, u64::MAX)]));
     }
 }

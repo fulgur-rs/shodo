@@ -281,6 +281,7 @@ pub(crate) fn select_combined_widths(
                     &mut warnings,
                     &mut sat,
                     None,
+                    None,
                     &trial_features,
                     0,
                 )
@@ -368,6 +369,7 @@ pub(crate) fn shape_items_with_combined_width_reuse(
                 warnings,
                 sat,
                 None,
+                None,
                 feature_sets,
                 glyphs.len() as u64,
             )?;
@@ -385,6 +387,7 @@ pub(crate) fn shape_items_with_combined_width_reuse(
                 limits,
                 warnings,
                 sat,
+                None,
                 None,
                 feature_sets,
                 glyphs.len() as u64,
@@ -437,6 +440,7 @@ pub(crate) fn shape_items_with_combined_width_reuse(
                     warnings,
                     sat,
                     None,
+                    None,
                     feature_sets,
                     glyphs.len() as u64,
                 )?;
@@ -457,6 +461,7 @@ pub(crate) fn shape_items_with_combined_width_reuse(
                 limits,
                 warnings,
                 sat,
+                None,
                 None,
                 feature_sets,
                 glyphs.len() as u64,
@@ -547,6 +552,7 @@ fn try_shape_combined_width_group(
         &mut plain_warnings,
         &mut plain_saturation,
         None,
+        None,
         feature_sets,
         0,
     ) else {
@@ -577,6 +583,7 @@ fn try_shape_combined_width_group(
         limits,
         &mut narrow_warnings,
         &mut narrow_saturation,
+        None,
         None,
         feature_sets,
         0,
@@ -743,9 +750,19 @@ pub(crate) fn shape_items_with_base_scopes(
         warnings,
         sat,
         bases,
+        None,
         feature_sets,
         0,
     )
+}
+
+/// Glyphs one harfrust call charged to its first scalar's owning item, in
+/// shaping order. Trials record it so a reused output can replay BaseScope
+/// charges exactly.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct WindowCharge {
+    pub(crate) item: u32,
+    pub(crate) glyphs: u64,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -759,6 +776,7 @@ fn shape_inputs<'a>(
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
     mut bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
+    mut trace: Option<&mut Vec<WindowCharge>>,
     feature_sets: &FeatureSets,
     glyph_offset: u64,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
@@ -982,6 +1000,12 @@ fn shape_inputs<'a>(
                 LimitKind::ShapedGlyphs,
                 glyph_offset + store.len() as u64 + shaped.len() as u64,
             )?;
+            if let Some(trace) = &mut trace {
+                trace.push(WindowCharge {
+                    item: scalars[0].item,
+                    glyphs: shaped.len() as u64,
+                });
+            }
             if let Some(bases) = &mut bases {
                 // Ruby boundaries/isolation delimit shaping segments; transparent
                 // DOM node boundaries within a base keep the same scope.
@@ -1385,6 +1409,7 @@ pub(crate) fn shape_window_edit(
             &limits,
             warnings,
             sat,
+            None,
             None,
             &data.shape_features,
             0,
