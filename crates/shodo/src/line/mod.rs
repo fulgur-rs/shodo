@@ -8,7 +8,7 @@ mod decoration;
 pub(crate) mod font_metrics;
 pub(crate) mod fragments;
 mod hyphen;
-mod intrinsic;
+pub(crate) mod intrinsic;
 mod iter;
 pub(crate) mod metric_index;
 pub(crate) mod metrics;

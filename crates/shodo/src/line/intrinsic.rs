@@ -50,39 +50,11 @@ impl Paragraph {
         let mut data: &ParagraphData = first.map_or(&self.data, |f| &f.data);
         cx.warnings.set_max(self.data.limits.max_warnings);
         let mut sat = Saturation::default();
-        let mut ruby_min_atomics = AtomicSizes::new();
-        let mut ruby_max_atomics = AtomicSizes::new();
-        if !data.ruby.containers.is_empty() {
-            for (node, value) in &inputs.atomics {
-                let lo = crate::sanitize::layout_length(
-                    value.min_content,
-                    true,
-                    &mut cx.warnings,
-                    &mut sat,
-                );
-                let hi = crate::sanitize::layout_length(
-                    value.max_content,
-                    true,
-                    &mut cx.warnings,
-                    &mut sat,
-                )
-                .max(lo);
-                ruby_min_atomics.insert(
-                    *node,
-                    crate::AtomicSize {
-                        inline_size: lo,
-                        ..Default::default()
-                    },
-                );
-                ruby_max_atomics.insert(
-                    *node,
-                    crate::AtomicSize {
-                        inline_size: hi,
-                        ..Default::default()
-                    },
-                );
-            }
-        }
+        let (ruby_min_atomics, ruby_max_atomics) = if data.ruby.containers.is_empty() {
+            (AtomicSizes::new(), AtomicSizes::new())
+        } else {
+            ruby_atomics(inputs, cx, &mut sat)
+        };
         let mut options = *options;
         options.text_indent.length = crate::sanitize::layout_length(
             options.text_indent.length,
@@ -478,4 +450,37 @@ impl Paragraph {
             max_content: max.to_f32(),
         }
     }
+}
+
+/// Min- and max-content atomic sizes for ruby measurement. Every `insert`
+/// takes a fresh revision from a global counter, so with at least one atomic
+/// the two sets never share a revision (or a ruby memo key); without atomics
+/// both are empty and equal, and sharing is exact.
+pub(crate) fn ruby_atomics(
+    inputs: &AtomicIntrinsics,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> (AtomicSizes, AtomicSizes) {
+    let mut min = AtomicSizes::new();
+    let mut max = AtomicSizes::new();
+    for (node, value) in &inputs.atomics {
+        let lo = crate::sanitize::layout_length(value.min_content, true, &mut cx.warnings, sat);
+        let hi =
+            crate::sanitize::layout_length(value.max_content, true, &mut cx.warnings, sat).max(lo);
+        min.insert(
+            *node,
+            crate::AtomicSize {
+                inline_size: lo,
+                ..Default::default()
+            },
+        );
+        max.insert(
+            *node,
+            crate::AtomicSize {
+                inline_size: hi,
+                ..Default::default()
+            },
+        );
+    }
+    (min, max)
 }

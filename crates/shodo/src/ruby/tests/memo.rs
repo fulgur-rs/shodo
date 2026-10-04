@@ -1469,6 +1469,51 @@ fn narrow_retry_after_budget_exhausting_index_matches_reference() {
     }
 }
 
+/// Review focus 4: the min- and max-content atomics built by
+/// `intrinsic_sizes` get distinct memo keys for the same range, so they can
+/// never answer each other's probes. A hit pattern alone cannot show this: a
+/// changed revision also bumps the range cache generation
+/// (`RangeCache::begin`), which already refuses every older entry.
+#[test]
+fn intrinsic_min_and_max_atomics_have_distinct_memo_keys() {
+    let p = atomic_base(&Limits::default(), true);
+    let data = &p.data;
+    let mut inputs = AtomicIntrinsics::default();
+    inputs.insert_atomic(
+        NodeId(99),
+        AtomicIntrinsic {
+            min_content: 4.0,
+            max_content: 80.0,
+        },
+    );
+    let mut cx = LayoutContext::new();
+    let mut sat = Saturation::default();
+    let (min, max) = crate::line::intrinsic::ruby_atomics(&inputs, &mut cx, &mut sat);
+    let key = crate::ruby::memo::MemoKey::new;
+    let n = data.units.len();
+    for start in 0..n {
+        for through in start + 1..=n {
+            assert_ne!(
+                key(data, &min, start, through),
+                key(data, &max, start, through),
+                "{start}..{through}"
+            );
+        }
+    }
+    // Each pass builds its atomics afresh: the next pass's keys differ too.
+    let (next_min, next_max) = crate::line::intrinsic::ruby_atomics(&inputs, &mut cx, &mut sat);
+    let all = [&min, &max, &next_min, &next_max].map(|atomics| key(data, atomics, 0, n));
+    for i in 0..all.len() {
+        for j in i + 1..all.len() {
+            assert_ne!(all[i], all[j], "{i} {j}");
+        }
+    }
+    // Without atomics both sets are empty and equal: sharing a key is exact.
+    let (empty_min, empty_max) =
+        crate::line::intrinsic::ruby_atomics(&AtomicIntrinsics::default(), &mut cx, &mut sat);
+    assert_eq!(empty_min, empty_max);
+}
+
 /// Review focus 4, end to end: `intrinsic_sizes` with min/max atomics matches
 /// the reference, and look-ahead probes of one range under both revisions in
 /// one operation replay only within a revision.
@@ -1477,7 +1522,8 @@ fn narrow_retry_after_budget_exhausting_index_matches_reference() {
 /// are never stored, so the second half probes a look-ahead range directly.
 /// A changed revision resets the range caches (`RangeCache::begin`), so the
 /// first probe after a switch fills them and is not memoized, the second is
-/// recorded, and the third hits.
+/// recorded, and the third hits. Key separation itself is shown by
+/// `intrinsic_min_and_max_atomics_have_distinct_memo_keys`.
 #[test]
 fn intrinsic_min_and_max_atomics_keep_separate_memo_entries() {
     let p = atomic_base(&Limits::default(), true);
