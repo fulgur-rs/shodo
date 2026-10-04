@@ -75,3 +75,6 @@ name = "missing_font_scalars"
 
 [[example]]
 name = "combine_empty_passes"
+
+[[example]]
+name = "tcy_base_reuse"

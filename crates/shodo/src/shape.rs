@@ -24,15 +24,19 @@ std::thread_local! {
     pub(super) static COMBINED_WIDTH_GROUP_CLONE_SCALARS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(super) static COMBINED_WIDTH_GROUP_CLONE_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(super) static COMBINED_WIDTH_TRIAL_STORE_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    static COMBINED_WIDTH_PROBE_MODE: std::cell::Cell<CombinedWidthProbeMode> = const { std::cell::Cell::new(CombinedWidthProbeMode::CloneReference) };
+    static COMBINED_WIDTH_PROBE_MODE: std::cell::Cell<CombinedWidthProbeMode> = const { std::cell::Cell::new(CombinedWidthProbeMode::ScopedReuse) };
 }
 
 #[cfg(test)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CombinedWidthProbeMode {
+    /// Reference: select with cloned trial groups, then shape every item
+    /// through the scoped path.
     CloneReference,
+    /// Reference variant that borrows the trial feature override.
     FeatureView,
-    UnscopedOutputReuse,
+    /// Production: reuse the selected trial output under BaseScope replay.
+    ScopedReuse,
 }
 
 #[cfg(test)]
@@ -162,6 +166,7 @@ fn trial_storage_capacity_bytes(store: &GlyphStore, run_capacity: usize) -> usiz
 /// Prove applicable width-feature coverage through the selected font/script/
 /// language/variation instance. A feature must change every visible source
 /// character; otherwise keep the complete composition on its ordinary glyphs.
+#[cfg(test)]
 pub(crate) fn select_combined_widths(
     cx: &mut crate::LayoutContext,
     items: &mut [crate::analysis::itemize::ShapeItem],
@@ -217,7 +222,6 @@ pub(crate) fn select_combined_widths(
             begin = end;
             continue;
         };
-        #[cfg(test)]
         COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| {
             bytes.set(
                 bytes
@@ -225,7 +229,6 @@ pub(crate) fn select_combined_widths(
                     .saturating_add(trial_storage_capacity_bytes(&plain, _plain_runs.capacity())),
             );
         });
-        #[cfg(test)]
         let narrow_result =
             if combined_width_probe_mode_for_test() == CombinedWidthProbeMode::CloneReference {
                 use std::mem::size_of;
@@ -281,32 +284,15 @@ pub(crate) fn select_combined_widths(
                     &mut warnings,
                     &mut sat,
                     None,
+                    None,
                     &trial_features,
                     0,
                 )
             };
-        #[cfg(not(test))]
-        let narrow_result = {
-            let mut candidate = group.to_vec();
-            for item in &mut candidate {
-                item.width_feature = Some(tag);
-            }
-            shape_items(
-                cx,
-                &candidate,
-                styles,
-                fonts,
-                mode,
-                limits,
-                &mut warnings,
-                &mut sat,
-            )
-        };
         let Ok((narrow, _narrow_runs)) = narrow_result else {
             begin = end;
             continue;
         };
-        #[cfg(test)]
         COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| {
             bytes.set(bytes.get().saturating_add(trial_storage_capacity_bytes(
                 &narrow,
@@ -336,10 +322,11 @@ pub(crate) fn select_combined_widths(
     }
 }
 
-/// Shape an unscoped paragraph while consuming each selected width-feature
-/// trial directly into its retained output. Ruby base scopes use the regular
-/// paragraph path because their local glyph and run-byte budgets change the
-/// accounting boundaries.
+/// Shape a paragraph, with or without Ruby base scopes, while consuming each
+/// selected width-feature trial directly into its retained output. Without
+/// scopes every selected trial is reused; with scopes a trial is reused only
+/// when `scoped_reuse_fits`, and otherwise the group is shaped through the
+/// scoped path so local budgets fail exactly as before.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn shape_items_with_combined_width_reuse(
     cx: &mut crate::LayoutContext,
@@ -350,11 +337,13 @@ pub(crate) fn shape_items_with_combined_width_reuse(
     limits: &Limits,
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
+    mut bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
     feature_sets: &mut FeatureSets,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
     let mut glyphs = GlyphStore::default();
     let mut runs = Vec::new();
     let mut cursor = 0;
+    let mut traces = bases.is_some().then(|| (Vec::new(), Vec::new()));
 
     while cursor < items.len() {
         let Some((start, end, tag, starts)) = next_combined_width_group(items, cursor) else {
@@ -367,6 +356,7 @@ pub(crate) fn shape_items_with_combined_width_reuse(
                 limits,
                 warnings,
                 sat,
+                bases.as_deref_mut(),
                 None,
                 feature_sets,
                 glyphs.len() as u64,
@@ -385,6 +375,7 @@ pub(crate) fn shape_items_with_combined_width_reuse(
                 limits,
                 warnings,
                 sat,
+                bases.as_deref_mut(),
                 None,
                 feature_sets,
                 glyphs.len() as u64,
@@ -404,6 +395,7 @@ pub(crate) fn shape_items_with_combined_width_reuse(
                 mode,
                 limits,
                 feature_sets,
+                traces.as_mut(),
             )
         };
 
@@ -426,7 +418,20 @@ pub(crate) fn shape_items_with_combined_width_reuse(
             let group_exceeds_limit = limits
                 .max_shaped_glyphs
                 .is_some_and(|max| glyphs.len() as u64 + selection.glyphs.len() as u64 > max);
-            if group_exceeds_limit {
+            let scoped_fits = match (bases.as_deref_mut(), traces.as_ref()) {
+                (Some(bases), Some((plain, narrow))) => scoped_reuse_fits(
+                    bases,
+                    &items[start..end],
+                    limits,
+                    if selection.use_width_feature {
+                        narrow
+                    } else {
+                        plain
+                    },
+                ),
+                _ => true,
+            };
+            if group_exceeds_limit || !scoped_fits {
                 let (group_glyphs, group_runs) = shape_inputs(
                     cx,
                     items[start..end].iter().map(input::ShapeInput::whole),
@@ -436,12 +441,25 @@ pub(crate) fn shape_items_with_combined_width_reuse(
                     limits,
                     warnings,
                     sat,
+                    bases.as_deref_mut(),
                     None,
                     feature_sets,
                     glyphs.len() as u64,
                 )?;
                 append_shape_output(&mut glyphs, &mut runs, group_glyphs, group_runs);
             } else {
+                if let (Some(bases), Some((plain, narrow))) =
+                    (bases.as_deref_mut(), traces.as_ref())
+                {
+                    let trace = if selection.use_width_feature {
+                        narrow
+                    } else {
+                        plain
+                    };
+                    for charge in trace {
+                        bases.item(charge.item as usize, LimitKind::ShapedGlyphs, charge.glyphs)?;
+                    }
+                }
                 warnings.append(selection.warnings);
                 sat.saturated += selection.saturation.saturated;
                 sat.non_finite += selection.saturation.non_finite;
@@ -457,6 +475,7 @@ pub(crate) fn shape_items_with_combined_width_reuse(
                 limits,
                 warnings,
                 sat,
+                bases.as_deref_mut(),
                 None,
                 feature_sets,
                 glyphs.len() as u64,
@@ -517,6 +536,34 @@ fn next_combined_width_group(
     None
 }
 
+/// Whether a selected unscoped trial can stand in for scoped shaping: every
+/// input must be one window under both the scoped and global run budgets (so
+/// neither path splits or warns), and replaying the trial's charges must fit
+/// every owning BaseScope chain.
+fn scoped_reuse_fits(
+    bases: &mut crate::ruby::base_budget::BaseScopes,
+    group: &[crate::analysis::itemize::ShapeItem],
+    limits: &Limits,
+    trace: &[WindowCharge],
+) -> bool {
+    let global = limits.max_shaping_run_bytes.unwrap_or(u64::MAX);
+    group.iter().all(|item| {
+        let Some(first) = item.scalars.first() else {
+            return true;
+        };
+        let bytes = item
+            .scalars
+            .iter()
+            .map(|scalar| scalar.c.len_utf8() as u64)
+            .fold(0u64, u64::saturating_add);
+        bytes <= bases.shaping_run_bytes(first.item as usize, global)
+    }) && bases.can_charge_shaped_glyphs(
+        trace
+            .iter()
+            .map(|charge| (charge.item as usize, charge.glyphs)),
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn try_shape_combined_width_group(
     cx: &mut crate::LayoutContext,
@@ -528,7 +575,16 @@ fn try_shape_combined_width_group(
     mode: WritingMode,
     limits: &Limits,
     feature_sets: &mut FeatureSets,
+    traces: Option<&mut (Vec<WindowCharge>, Vec<WindowCharge>)>,
 ) -> Option<CombinedWidthSelection> {
+    let (plain_trace, narrow_trace) = match traces {
+        Some((plain, narrow)) => {
+            plain.clear();
+            narrow.clear();
+            (Some(plain), Some(narrow))
+        }
+        None => (None, None),
+    };
     for item in group {
         feature_sets.prepare_width_feature(item, styles, tag);
     }
@@ -547,6 +603,7 @@ fn try_shape_combined_width_group(
         &mut plain_warnings,
         &mut plain_saturation,
         None,
+        plain_trace,
         feature_sets,
         0,
     ) else {
@@ -578,6 +635,7 @@ fn try_shape_combined_width_group(
         &mut narrow_warnings,
         &mut narrow_saturation,
         None,
+        narrow_trace,
         feature_sets,
         0,
     );
@@ -695,6 +753,7 @@ fn append_optional_layout_values(
 
 /// Shapes one compatible style/font/script segment, then assigns each cluster
 /// to the item supplying its first scalar. Node boundaries do not lose GSUB.
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn shape_items(
     cx: &mut crate::LayoutContext,
@@ -743,9 +802,21 @@ pub(crate) fn shape_items_with_base_scopes(
         warnings,
         sat,
         bases,
+        None,
         feature_sets,
         0,
     )
+}
+
+/// Glyphs one harfrust call charged to its first scalar's owning item, in
+/// shaping order. Trials record it so a reused output can replay BaseScope
+/// charges exactly. Only harfrust calls are traced: the per-scalar charges of
+/// missing-font notdef glyphs are not, which is safe because groups with a
+/// missing font never take part in width selection and are never reused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct WindowCharge {
+    pub(crate) item: u32,
+    pub(crate) glyphs: u64,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -759,6 +830,7 @@ fn shape_inputs<'a>(
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
     mut bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
+    mut trace: Option<&mut Vec<WindowCharge>>,
     feature_sets: &FeatureSets,
     glyph_offset: u64,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
@@ -982,6 +1054,12 @@ fn shape_inputs<'a>(
                 LimitKind::ShapedGlyphs,
                 glyph_offset + store.len() as u64 + shaped.len() as u64,
             )?;
+            if let Some(trace) = &mut trace {
+                trace.push(WindowCharge {
+                    item: scalars[0].item,
+                    glyphs: shaped.len() as u64,
+                });
+            }
             if let Some(bases) = &mut bases {
                 // Ruby boundaries/isolation delimit shaping segments; transparent
                 // DOM node boundaries within a base keep the same scope.
@@ -1385,6 +1463,7 @@ pub(crate) fn shape_window_edit(
             &limits,
             warnings,
             sat,
+            None,
             None,
             &data.shape_features,
             0,
