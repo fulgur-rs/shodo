@@ -366,6 +366,7 @@ fn non_finite_style_values_become_initial_or_zero() {
                 font_size: 10.0,
                 letter_spacing: f32::INFINITY,
                 word_spacing: f32::NAN,
+                word_spacing_percent: f32::NAN,
                 font_weight: f32::NAN,
                 tab_size: TabSize::Spaces(f32::NEG_INFINITY),
                 ..InlineStyle::default()
@@ -386,7 +387,14 @@ fn non_finite_style_values_become_initial_or_zero() {
         .iter()
         .filter(|w| w.kind == WarningKind::NonFiniteInput)
         .count();
-    assert!(count >= 5, "{:?}", p.warnings());
+    assert!(count >= 6, "{:?}", p.warnings());
+    assert!(
+        p.warnings()
+            .iter()
+            .any(|w| w.message.contains("word-spacing percentage")),
+        "{:?}",
+        p.warnings()
+    );
     let line = &lines(&p, 100.0, &LineOptions::default())[0];
     // The child's normal line height contributes despite the zero root strut.
     assert_eq!(line.block_size(), 10.0);

@@ -137,7 +137,8 @@ fn shaping_compatible(a: &InlineStyle, b: &InlineStyle) -> bool {
         font_size_adjust,
         lang,
         letter_spacing,
-        word_spacing
+        word_spacing,
+        word_spacing_percent
     )
 }
 

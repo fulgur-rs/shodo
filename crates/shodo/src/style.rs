@@ -1,6 +1,7 @@
 //! Computed style values. Lengths are resolved px; percentages and `em` are
 //! resolved by the caller, except values that depend on the font actually
-//! used (for example `line-height: normal`), which shodo resolves.
+//! used (for example `line-height: normal` or a `word-spacing` percentage),
+//! which shodo resolves.
 
 use crate::geometry::{Direction, WritingMode};
 
@@ -478,7 +479,13 @@ pub struct InlineStyle {
     pub lang: Option<String>,
     pub line_height: LineHeight,
     pub letter_spacing: f32,
+    /// Absolute `word-spacing` term in px.
     pub word_spacing: f32,
+    /// Percentage `word-spacing` term (25 = 25%), resolved against the
+    /// U+0020 advance of the font selected for this style and added to
+    /// [`Self::word_spacing`]. `calc(25% + 2px)` is `25.0` here and `2.0`
+    /// there.
+    pub word_spacing_percent: f32,
     pub white_space_collapse: WhiteSpaceCollapse,
     pub text_wrap_mode: TextWrapMode,
     pub line_break: LineBreak,
@@ -499,6 +506,14 @@ pub struct InlineStyle {
     pub text_emphasis: Option<TextEmphasis>,
     pub text_box_edge: TextBoxEdge,
     pub box_decoration_break: BoxDecorationBreak,
+}
+
+impl InlineStyle {
+    /// Used `word-spacing` in px, given the U+0020 advance of this style's
+    /// selected font.
+    pub(crate) fn used_word_spacing(&self, space: f32) -> f32 {
+        self.word_spacing + self.word_spacing_percent / 100.0 * space
+    }
 }
 
 impl Default for InlineStyle {
@@ -526,6 +541,7 @@ impl Default for InlineStyle {
             line_height: LineHeight::default(),
             letter_spacing: 0.0,
             word_spacing: 0.0,
+            word_spacing_percent: 0.0,
             white_space_collapse: WhiteSpaceCollapse::default(),
             text_wrap_mode: TextWrapMode::default(),
             line_break: LineBreak::default(),

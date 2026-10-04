@@ -112,9 +112,10 @@ pub(crate) fn geometry(
             for (at, ch) in text[cluster as usize..text_end as usize].char_indices() {
                 if crate::line::spacing::word_separator(ch) {
                     let item = items.partition_point(|item| item.text.end <= cluster + at as u32);
+                    let style = items[item].style as usize;
                     extra = extra.add(
                         crate::geometry::LayoutUnit::from_f32_round(
-                            styles[items[item].style as usize].word_spacing,
+                            styles[style].used_word_spacing(metrics[style].space),
                             sat,
                         ),
                         sat,
@@ -172,7 +173,9 @@ pub(crate) fn geometry(
                 let style = &styles[style_index];
                 let font = metrics[style_index];
                 let interval = match style.tab_size {
-                    crate::style::TabSize::Spaces(n) => n * (font.space + style.word_spacing),
+                    crate::style::TabSize::Spaces(n) => {
+                        n * (font.space + style.used_word_spacing(font.space))
+                    }
                     crate::style::TabSize::Px(value) => value,
                 };
                 cluster.width = crate::line::tab_advance(

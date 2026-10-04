@@ -304,6 +304,7 @@ macro_rules! first_line_properties {
             line_height,
             letter_spacing,
             word_spacing,
+            word_spacing_percent,
             text_transform,
             word_space_transform,
             text_emphasis

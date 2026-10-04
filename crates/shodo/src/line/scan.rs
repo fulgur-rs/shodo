@@ -434,7 +434,9 @@ pub(super) fn tab_width(
     let block = &data.styles[0];
     let metrics = data.style_metrics[0];
     let interval = match style.tab_size {
-        TabSize::Spaces(n) => n * (metrics.space + block.letter_spacing + block.word_spacing),
+        TabSize::Spaces(n) => {
+            n * (metrics.space + block.letter_spacing + block.used_word_spacing(metrics.space))
+        }
         TabSize::Px(v) => v,
     };
     tab_advance(
