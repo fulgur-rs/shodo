@@ -1067,3 +1067,33 @@ fn reference_nested_candidates_grow_quadratically() {
         }
     }
 }
+
+/// A present but empty slot (as left by an unwound query between take and
+/// put-back) is rebuilt, never unwrapped.
+#[test]
+fn vacated_index_slots_are_rebuilt() {
+    let p = overhang(&Limits::default());
+    let n = p.data.units.len();
+    let mut cx = LayoutContext::new();
+    let measure = |cx: &mut LayoutContext| {
+        format!(
+            "{:?}",
+            crate::ruby::measure::candidate(
+                &p.data,
+                0,
+                n,
+                &AtomicSizes::EMPTY,
+                cx,
+                &mut Saturation::default(),
+            )
+        )
+    };
+    let first = measure(&mut cx);
+    assert!(
+        cx.ruby_ranges.slots_filled(),
+        "fixture must use both indexes"
+    );
+    cx.ruby_ranges.vacate_slots();
+    assert_eq!(measure(&mut cx), first);
+    assert!(cx.ruby_ranges.slots_filled());
+}

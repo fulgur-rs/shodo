@@ -262,18 +262,13 @@ pub(crate) fn content(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> ContentGeometry {
-    let key = (data.id, data as *const ParagraphData as usize);
-    if !cx.ruby_ranges.metrics.contains_key(&key) {
-        let index = MetricIndex::new(data, atomics, cx);
-        cx.ruby_ranges.metrics.insert(key, index);
-    }
+    let mut index = super::take_index(data, atomics, cx);
     let end = super::super::plan::hyphen_end(data, selected.end).filter(|e| *e > selected.start);
     let windows = end
         .and_then(|end| super::super::hyphen::line(data, selected.start, end, cx, sat))
         .unwrap_or_else(|| {
             super::super::windows::measure(data, selected.start, selected.end, cx, sat)
         });
-    let mut index = cx.ruby_ranges.metrics.remove(&key).unwrap();
     let selection = index.select(data, &selected, &windows, cx, sat);
     let contents: Vec<crate::ruby::geometry::Bounds> = boxes
         .iter()
@@ -368,7 +363,7 @@ pub(crate) fn content(
         .into_iter()
         .map(|b| b.map(|b| b.fixed(sat)))
         .collect();
-    cx.ruby_ranges.metrics.insert(key, index);
+    super::put_index(data, index, cx);
     ContentGeometry {
         areas,
         leaf_areas,

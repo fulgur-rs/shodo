@@ -94,6 +94,26 @@ pub(super) fn unit_record(
     })
 }
 
+/// Move the dataset's index out of its value slot, building it when the slot
+/// is missing or empty. The key stays in the map, so the matching `put_index`
+/// neither removes nor rehashes an entry.
+fn take_index(
+    data: &ParagraphData,
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+) -> Box<MetricIndex> {
+    let key = (data.id, data as *const ParagraphData as usize);
+    match cx.ruby_ranges.metrics.get_mut(&key).and_then(Option::take) {
+        Some(index) => index,
+        None => Box::new(MetricIndex::new(data, atomics, cx)),
+    }
+}
+
+fn put_index(data: &ParagraphData, index: Box<MetricIndex>, cx: &mut LayoutContext) {
+    let key = (data.id, data as *const ParagraphData as usize);
+    *cx.ruby_ranges.metrics.entry(key).or_default() = Some(index);
+}
+
 impl MetricIndex {
     fn new(data: &ParagraphData, atomics: &AtomicSizes, cx: &mut LayoutContext) -> Self {
         let mut resolver = ProfileResolver::new(data, 0..data.units.len());

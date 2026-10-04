@@ -15,10 +15,13 @@ use std::ops::Range;
 pub(crate) struct RangeCache {
     root: Option<(u64, usize, u64)>,
     sets: crate::hashing::FastMap<(u64, usize), Costs>,
-    pub(super) metrics: crate::hashing::FastMap<(u64, usize), super::metric_index::MetricIndex>,
+    /// Value slots: a query moves the index out and back without removing the
+    /// key, so the map is not rehashed per query. An empty slot is rebuilt.
+    pub(super) metrics:
+        crate::hashing::FastMap<(u64, usize), Option<Box<super::metric_index::MetricIndex>>>,
     blocks: crate::hashing::FastMap<(u64, usize, usize, usize), LayoutUnit>,
     pub(crate) neighbors:
-        crate::hashing::FastMap<(u64, usize), crate::ruby::overhang::NeighborIndex>,
+        crate::hashing::FastMap<(u64, usize), Option<Box<crate::ruby::overhang::NeighborIndex>>>,
 }
 
 impl RangeCache {
@@ -47,6 +50,26 @@ impl RangeCache {
             self.neighbors.clear();
             self.root = Some(root);
         }
+    }
+
+    /// Empty every index slot while keeping its key. The scalar caches are
+    /// cleared too, so a repeated query must go through the vacated slots
+    /// instead of being answered from a cached result.
+    #[cfg(test)]
+    pub(crate) fn vacate_slots(&mut self) {
+        self.sets.clear();
+        self.blocks.clear();
+        self.metrics.values_mut().for_each(|slot| *slot = None);
+        self.neighbors.values_mut().for_each(|slot| *slot = None);
+    }
+
+    /// Both index maps are populated and every slot holds an index.
+    #[cfg(test)]
+    pub(crate) fn slots_filled(&self) -> bool {
+        !self.metrics.is_empty()
+            && !self.neighbors.is_empty()
+            && self.metrics.values().all(Option::is_some)
+            && self.neighbors.values().all(Option::is_some)
     }
 }
 

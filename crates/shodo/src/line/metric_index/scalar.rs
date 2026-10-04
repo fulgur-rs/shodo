@@ -173,17 +173,12 @@ pub(crate) fn measure(
     {
         cx.ruby_scalar_calls += 1;
     }
-    let key = (data.id, data as *const ParagraphData as usize);
-    if !cx.ruby_ranges.metrics.contains_key(&key) {
-        let index = MetricIndex::new(data, atomics, cx);
-        cx.ruby_ranges.metrics.insert(key, index);
-    }
+    let mut index = super::take_index(data, atomics, cx);
     let end = super::super::plan::hyphen_end(data, range.end).filter(|e| *e > range.start);
     let windows = end
         .and_then(|end| super::super::hyphen::line(data, range.start, end, cx, sat))
         .unwrap_or_else(|| super::super::windows::measure(data, range.start, range.end, cx, sat));
-    let mut index = cx.ruby_ranges.metrics.remove(&key).unwrap();
     let metrics = index.select(data, &range, &windows, cx, sat).metrics;
-    cx.ruby_ranges.metrics.insert(key, index);
+    super::put_index(data, index, cx);
     metrics
 }
