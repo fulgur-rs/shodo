@@ -294,7 +294,7 @@ impl Paragraph {
         constraint: &LineConstraint<'_>,
         atomics: &AtomicSizes,
         planned_end_override: Option<usize>,
-        annotation_align: Option<crate::ruby::align::AnnotationAlign>,
+        annotation_align: Option<crate::ruby::align::AnnotationAlign<'_>>,
         normal_cursors: Option<&[Option<u32>]>,
     ) -> LineResult {
         let data = &*self.data;
@@ -528,7 +528,7 @@ impl Paragraph {
         units: std::ops::Range<usize>,
         width: f32,
         atomics: &AtomicSizes,
-        align: crate::ruby::align::AnnotationAlign,
+        align: crate::ruby::align::AnnotationAlign<'_>,
     ) -> Line {
         let token = BreakToken {
             para: self.data.id,
