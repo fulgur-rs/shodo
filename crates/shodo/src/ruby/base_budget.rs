@@ -48,7 +48,9 @@ impl PreflightOps {
 
     #[cfg(test)]
     fn record(self) {
-        PREFLIGHT_OPS.with(|log| log.borrow_mut().push(self));
+        if PREFLIGHT_OPS_ENABLED.with(std::cell::Cell::get) {
+            PREFLIGHT_OPS.with(|log| log.borrow_mut().push(self));
+        }
     }
 
     #[cfg(not(test))]
@@ -59,6 +61,9 @@ impl PreflightOps {
 std::thread_local! {
     pub(crate) static PREFLIGHT_OPS: std::cell::RefCell<Vec<PreflightOps>> =
         const { std::cell::RefCell::new(Vec::new()) };
+    /// Tests that inspect `PREFLIGHT_OPS` enable recording explicitly.
+    pub(crate) static PREFLIGHT_OPS_ENABLED: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
 }
 
 impl BaseScopes {

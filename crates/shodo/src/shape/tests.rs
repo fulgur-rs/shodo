@@ -1384,12 +1384,14 @@ fn scoped_output_reuse_preflight_stays_linear_in_deep_nested_bases() {
     };
 
     crate::ruby::base_budget::PREFLIGHT_OPS.with(|log| log.borrow_mut().clear());
+    crate::ruby::base_budget::PREFLIGHT_OPS_ENABLED.with(|enabled| enabled.set(true));
     let reused = build(
         None,
         None,
         crate::shape::CombinedWidthProbeMode::ScopedReuse,
-    )
-    .unwrap();
+    );
+    crate::ruby::base_budget::PREFLIGHT_OPS_ENABLED.with(|enabled| enabled.set(false));
+    let reused = reused.unwrap();
     let ops = crate::ruby::base_budget::PREFLIGHT_OPS.with(|log| log.take());
     let reference = build(
         None,
