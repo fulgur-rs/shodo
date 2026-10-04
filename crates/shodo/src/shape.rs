@@ -804,6 +804,36 @@ fn shape_inputs<'a>(
         } else {
             None
         };
+        // Face, shaper, vertical-origin source and language do not change
+        // between budget windows of one input; prepare them once per input.
+        let font = font_data.as_ref().map(|data| {
+            harfrust::FontRef::from_index(data.data.as_ref(), data.index).expect("registered face")
+        });
+        let shared = original.font.as_ref().map(|found| {
+            fonts
+                .shaper_data(found.id)
+                .expect("registered shaping data")
+        });
+        let shaper = shared
+            .as_ref()
+            .zip(font.as_ref())
+            .zip(resolved.as_ref())
+            .map(|((shared, font), (instance, _, _))| {
+                shared.shaper(font).instance(Some(instance)).build()
+            });
+        let cff_without_vorg = font_data
+            .as_ref()
+            .filter(|_| original.orientation == orientation::RunOrientation::Upright)
+            .and_then(|data| skrifa::FontRef::from_index(data.data.as_ref(), data.index).ok())
+            .filter(|font| {
+                font.vorg().is_err()
+                    && (font.cff().is_ok() || font.cff2().is_ok())
+                    && font.vmtx().is_ok()
+            });
+        // Origin deltas depend on this input's face and variation coordinates,
+        // so the cache never outlives the input.
+        let mut cff_origin_deltas = std::collections::HashMap::new();
+        let language: Option<harfrust::Language> = style.lang.as_ref().and_then(|l| l.parse().ok());
         let mut cursor = 0;
         while cursor < input.scalars.len() {
             let start = cursor;
@@ -890,27 +920,9 @@ fn shape_inputs<'a>(
                 }
                 continue;
             };
-            let data = font_data.as_ref().expect("matched font data");
-            let font = harfrust::FontRef::from_index(data.data.as_ref(), data.index)
-                .expect("registered face");
-            let shared = fonts
-                .shaper_data(found.id)
-                .expect("registered shaping data");
             let (instance, run_instance, font_size) = resolved.as_ref().expect("matched instance");
             let font_size = *font_size;
-            let shaper = shared.shaper(&font).instance(Some(instance)).build();
-            let cff_without_vorg = if original.orientation == orientation::RunOrientation::Upright {
-                skrifa::FontRef::from_index(data.data.as_ref(), data.index)
-                    .ok()
-                    .filter(|font| {
-                        font.vorg().is_err()
-                            && (font.cff().is_ok() || font.cff2().is_ok())
-                            && font.vmtx().is_ok()
-                    })
-            } else {
-                None
-            };
-            let mut cff_origin_deltas = std::collections::HashMap::new();
+            let shaper = shaper.as_ref().expect("matched shaper");
             let mut buffer = cx.scratch.take().unwrap_or_default();
             buffer.clear();
             for scalar in scalars {
@@ -941,8 +953,8 @@ fn shape_inputs<'a>(
                 harfrust::Script::from_iso15924_tag(harfrust::Tag::new(&original.script))
                     .unwrap_or(harfrust::script::UNKNOWN),
             );
-            if let Some(language) = style.lang.as_ref().and_then(|l| l.parse().ok()) {
-                buffer.set_language(language);
+            if let Some(language) = &language {
+                buffer.set_language(language.clone());
             }
             // Keep controls in the shaping input for joining/substitutions, but
             // remove their residual glyphs: even a zero-width space can have ink.
@@ -955,7 +967,7 @@ fn shape_inputs<'a>(
             let features = &run_instance.features;
             let plan = cx
                 .plans
-                .get(found.id, &shaper, &buffer, Some(instance), features);
+                .get(found.id, shaper, &buffer, Some(instance), features);
             let shaped = shaper.shape(
                 buffer,
                 harfrust::ShapeOptions::default()
