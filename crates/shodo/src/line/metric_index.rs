@@ -7,7 +7,7 @@ mod scalar;
 use content::{ContentBounds, ContentSummary, content_bounds};
 // Keep the existing crate-visible type path even when callers infer it.
 #[allow(unused_imports)]
-pub(crate) use content::{ContentGeometry, content};
+pub(crate) use content::{ContentGeometry, ProfileShare, content, content_shared};
 use scalar::{Bounds, Summary, union};
 pub(crate) use scalar::{ScalarMetrics, measure};
 

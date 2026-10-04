@@ -199,6 +199,9 @@ pub(crate) fn candidate_inner(
     );
     let selected = start..through;
     let mut measure = RubyMeasure::default();
+    // Every container below resolves its columns against `selected`; measure
+    // that line profile once per candidate.
+    let mut profile = crate::line::metric_index::ProfileShare::default();
     // Reverse structural traversal resolves children before parents. Index those
     // completed fragments by source start so siblings are never compared as
     // potential descendants of every subsequent column/container. Container
@@ -318,6 +321,7 @@ pub(crate) fn candidate_inner(
             &selected,
             &bases,
             atomics,
+            &mut profile,
             cx,
             sat,
         );
@@ -382,6 +386,7 @@ pub(crate) fn candidate_inner(
                         tracks.base,
                         &source.paragraph.data,
                         atomics,
+                        &mut profile,
                         cx,
                         sat,
                     );
@@ -424,6 +429,7 @@ pub(crate) fn candidate_inner(
                 tracks.base,
                 child,
                 atomics,
+                &mut profile,
                 cx,
                 sat,
             );
@@ -495,6 +501,7 @@ fn lane_overhang(
     area: super::geometry::Bounds,
     child: &ParagraphData,
     atomics: &AtomicSizes,
+    share: &mut crate::line::metric_index::ProfileShare,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> (LayoutUnit, LayoutUnit) {
@@ -520,6 +527,7 @@ fn lane_overhang(
         area,
         cap,
         atomics,
+        share,
         cx,
         sat,
     );

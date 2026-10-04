@@ -19,6 +19,9 @@ pub struct LayoutContext {
     /// Bytes of edge reshape windows requested by the current `next_line` or
     /// `intrinsic_sizes` call. First-line intrinsic passes share one budget.
     pub(crate) edge_reshape_spent: u64,
+    /// Reshape charges of the measurements currently being recorded for
+    /// exact replay.
+    pub(crate) reshape_log: crate::line::replay::ReshapeLog,
     #[cfg(test)]
     pub(crate) cache_visits: usize,
     #[cfg(test)]
@@ -41,6 +44,9 @@ pub struct LayoutContext {
     /// Calls of `line::metric_index::scalar::measure`.
     #[cfg(test)]
     pub(crate) ruby_scalar_calls: usize,
+    /// Selected line profiles measured by `metric_index::content_shared`.
+    #[cfg(test)]
+    pub(crate) ruby_profile_selects: usize,
 }
 
 impl LayoutContext {
@@ -57,6 +63,7 @@ impl LayoutContext {
     /// reshape budget and every per-operation reuse state bounded by it.
     pub(crate) fn begin_reshape_operation(&mut self) {
         self.edge_reshape_spent = 0;
+        self.reshape_log.clear();
     }
 
     /// Whether measurements may be reused within an operation. Tests switch

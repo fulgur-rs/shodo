@@ -15,6 +15,7 @@ pub(crate) mod metrics;
 mod plan;
 pub(crate) mod punctuation;
 pub(crate) mod range;
+pub(crate) mod replay;
 pub(crate) mod reshape;
 mod scan;
 pub(crate) mod spacing;

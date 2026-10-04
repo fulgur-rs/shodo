@@ -1097,3 +1097,76 @@ fn vacated_index_slots_are_rebuilt() {
     assert_eq!(measure(&mut cx), first);
     assert!(cx.ruby_ranges.slots_filled());
 }
+
+/// All containers of one candidate resolve their columns against the same
+/// selected range; its edge windows and line profile are measured once.
+#[test]
+fn one_candidate_selects_its_line_profile_once() {
+    let p = nested(6, &Limits::default(), "日", &style(24.0));
+    let n = p.data.units.len();
+    let run = |reference: bool| {
+        let mut cx = context(reference);
+        let measure = crate::ruby::measure::candidate(
+            &p.data,
+            0,
+            n,
+            &AtomicSizes::EMPTY,
+            &mut cx,
+            &mut Saturation::default(),
+        );
+        (format!("{measure:?}"), cx.ruby_profile_selects)
+    };
+    let (optimized, shared) = run(false);
+    let (reference, separate) = run(true);
+    assert_eq!(optimized, reference);
+    // One `overhang::columns` query per container (overhang is `None`).
+    assert_eq!(separate, 6);
+    assert_eq!(shared, 1);
+}
+
+/// A shared profile whose recorded reshape charges no longer fit is measured
+/// afresh, so the crossing charge is refused and warns exactly once, as on
+/// the reference path. Sweeping the candidate range and the starting `spent`
+/// across the limit reaches accepted, crossing and refused replays.
+#[test]
+fn shared_profile_recomputes_when_its_charges_cross_the_budget() {
+    let limits = limits(Some(64), None);
+    let p = nested(3, &limits, "بببب", &anywhere(24.0));
+    let n = p.data.units.len();
+    let run = |reference: bool, start: usize, end: usize, spent: u64| {
+        let mut cx = context(reference);
+        cx.edge_reshape_spent = spent;
+        let mut sat = Saturation::default();
+        let measure = crate::ruby::measure::candidate(
+            &p.data,
+            start,
+            end,
+            &AtomicSizes::EMPTY,
+            &mut cx,
+            &mut sat,
+        );
+        (
+            format!("{measure:?} {sat:?} {}", cx.edge_reshape_spent),
+            cx.take_warnings(),
+            cx.ruby_profile_selects,
+        )
+    };
+    let (mut replayed, mut recomputed) = (0, 0);
+    for start in (0..n).step_by(3) {
+        for end in (start + 1..n).step_by(4).chain([n]) {
+            for spent in (64 * 64 - 64..=64 * 64 + 4).chain([0, u64::MAX]) {
+                let (optimized, warnings, shared) = run(false, start, end, spent);
+                let (reference, reference_warnings, separate) = run(true, start, end, spent);
+                assert_eq!(optimized, reference, "{start}..{end} spent {spent}");
+                assert_eq!(warnings, reference_warnings, "{start}..{end} spent {spent}");
+                if shared < separate {
+                    replayed += 1;
+                }
+                if shared > 1 && shared < separate {
+                    recomputed += 1;
+                }
+            }
+        }
+    }
+    assert!(replayed > 0 && recomputed > 0, "{replayed} {recomputed}");
+}

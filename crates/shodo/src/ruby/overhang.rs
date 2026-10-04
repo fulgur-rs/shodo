@@ -121,6 +121,7 @@ impl NeighborIndex {
         unit: usize,
         ruby_start: usize,
         atomics: &AtomicSizes,
+        share: &mut crate::line::metric_index::ProfileShare,
         cx: &mut LayoutContext,
         sat: &mut Saturation,
     ) -> Option<Bounds> {
@@ -149,12 +150,13 @@ impl NeighborIndex {
             boxes.extend(independent.iter().map(|b| Some(*b)));
         }
         let range = unit..unit + 1;
-        let geometry = crate::line::metric_index::content(
+        let geometry = crate::line::metric_index::content_shared(
             data,
             selected.clone(),
             std::slice::from_ref(&range),
             &boxes,
             atomics,
+            share,
             cx,
             sat,
         );
@@ -221,6 +223,7 @@ pub(crate) fn columns(
     selected: &Range<usize>,
     bases: &[Range<usize>],
     atomics: &AtomicSizes,
+    share: &mut crate::line::metric_index::ProfileShare,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> ColumnGeometry {
@@ -228,8 +231,16 @@ pub(crate) fn columns(
         .iter()
         .map(|c| c.box_index.or(ruby.box_index))
         .collect();
-    let geometry =
-        crate::line::metric_index::content(data, selected.clone(), bases, &boxes, atomics, cx, sat);
+    let geometry = crate::line::metric_index::content_shared(
+        data,
+        selected.clone(),
+        bases,
+        &boxes,
+        atomics,
+        share,
+        cx,
+        sat,
+    );
     let mut area = None;
     for (base, (content, bounds)) in bases
         .iter()
@@ -240,12 +251,13 @@ pub(crate) fn columns(
         }
     }
     let area = area.unwrap_or_else(|| {
-        crate::line::metric_index::content(
+        crate::line::metric_index::content_shared(
             data,
             selected.clone(),
             &[],
             &[ruby.box_index],
             atomics,
+            share,
             cx,
             sat,
         )
@@ -270,6 +282,7 @@ pub(crate) fn allowances(
     area: Bounds,
     cap: LayoutUnit,
     atomics: &AtomicSizes,
+    share: &mut crate::line::metric_index::ProfileShare,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> (LayoutUnit, LayoutUnit) {
@@ -313,7 +326,7 @@ pub(crate) fn allowances(
             return LayoutUnit::ZERO;
         }
         let Some(neighbor) =
-            index.neighbor_bounds(data, selected, i, ruby.units.start, atomics, cx, sat)
+            index.neighbor_bounds(data, selected, i, ruby.units.start, atomics, share, cx, sat)
         else {
             return LayoutUnit::ZERO;
         };

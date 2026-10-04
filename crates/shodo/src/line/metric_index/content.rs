@@ -251,8 +251,25 @@ pub(crate) struct ContentGeometry {
     pub(crate) contents: Vec<crate::ruby::geometry::Bounds>,
 }
 
+/// Edge windows and selected line profile of one `selected` range, shared by
+/// the containers of one candidate. Reuse replays the recorded reshape
+/// charges and saturation exactly (`line::replay`), or measures afresh.
+#[derive(Default)]
+pub(crate) struct ProfileShare {
+    entry: Option<SharedSelection>,
+}
+
+struct SharedSelection {
+    owner: (u64, usize),
+    selected: Range<usize>,
+    effects: crate::line::replay::Effects,
+    selection: Selection,
+}
+
 /// Resolve all requested columns against one actual selected line profile.
+/// Production callers share the profile through `content_shared`.
 #[allow(clippy::too_many_arguments)]
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn content(
     data: &ParagraphData,
     selected: Range<usize>,
@@ -262,20 +279,79 @@ pub(crate) fn content(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> ContentGeometry {
+    content_shared(
+        data,
+        selected,
+        ranges,
+        boxes,
+        atomics,
+        &mut ProfileShare::default(),
+        cx,
+        sat,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn content_shared(
+    data: &ParagraphData,
+    selected: Range<usize>,
+    ranges: &[Range<usize>],
+    boxes: &[Option<u32>],
+    atomics: &AtomicSizes,
+    share: &mut ProfileShare,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> ContentGeometry {
+    let owner = (data.id, data as *const ParagraphData as usize);
     let mut index = super::take_index(data, atomics, cx);
-    let end = super::super::plan::hyphen_end(data, selected.end).filter(|e| *e > selected.start);
-    let windows = end
-        .and_then(|end| super::super::hyphen::line(data, selected.start, end, cx, sat))
-        .unwrap_or_else(|| {
-            super::super::windows::measure(data, selected.start, selected.end, cx, sat)
-        });
-    let selection = index.select(data, &selected, &windows, cx, sat);
+    let replayed = cx.reuse_enabled()
+        && share
+            .entry
+            .as_ref()
+            .is_some_and(|e| e.owner == owner && e.selected == selected)
+        && crate::line::replay::replay(cx, &share.entry.as_ref().unwrap().effects, sat);
+    let fresh;
+    let selection: &Selection = if replayed {
+        &share.entry.as_ref().unwrap().selection
+    } else {
+        let recording = crate::line::replay::begin(cx, sat);
+        let end =
+            super::super::plan::hyphen_end(data, selected.end).filter(|e| *e > selected.start);
+        let windows = end
+            .and_then(|end| super::super::hyphen::line(data, selected.start, end, cx, sat))
+            .unwrap_or_else(|| {
+                super::super::windows::measure(data, selected.start, selected.end, cx, sat)
+            });
+        let selection = index.select(data, &selected, &windows, cx, sat);
+        #[cfg(test)]
+        {
+            cx.ruby_profile_selects += 1;
+        }
+        match crate::line::replay::finish(cx, recording, sat) {
+            Some(effects) => {
+                &share
+                    .entry
+                    .insert(SharedSelection {
+                        owner,
+                        selected: selected.clone(),
+                        effects,
+                        selection,
+                    })
+                    .selection
+            }
+            None => {
+                share.entry = None;
+                fresh = selection;
+                &fresh
+            }
+        }
+    };
     let contents: Vec<crate::ruby::geometry::Bounds> = boxes
         .iter()
         .map(|b| {
             if let Some(b) = b {
                 index.box_contents[*b as usize]
-                    .shift(index.box_delta(data, &selection, *b))
+                    .shift(index.box_delta(data, selection, *b))
                     .fixed(sat)
             } else {
                 let (a, d) = crate::ruby::geometry::font_extents(data, 0, sat);
@@ -292,7 +368,7 @@ pub(crate) fn content(
         .map(|(b, content)| {
             if let Some(b) = b {
                 index.box_paints[*b as usize]
-                    .shift(index.box_delta(data, &selection, *b))
+                    .shift(index.box_delta(data, selection, *b))
                     .fixed(sat)
             } else {
                 *content
@@ -305,7 +381,7 @@ pub(crate) fn content(
             if range.is_empty() {
                 None
             } else {
-                index.selected_content(data, &selection, range, cx)
+                index.selected_content(data, selection, range, cx)
             }
         })
         .collect();
@@ -346,8 +422,7 @@ pub(crate) fn content(
                     area = ContentBounds::join(
                         area,
                         Some(
-                            index.box_paints[b as usize]
-                                .shift(index.box_delta(data, &selection, b)),
+                            index.box_paints[b as usize].shift(index.box_delta(data, selection, b)),
                         ),
                     );
                     if Some(b) == boundary {
