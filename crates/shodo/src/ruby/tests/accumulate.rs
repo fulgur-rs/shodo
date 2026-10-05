@@ -2155,3 +2155,79 @@ fn charging_sibling_profiles_repeat_and_warn_like_the_reference() {
     );
     assert!(warned > 0, "some step's profile measurement must warn");
 }
+
+/// A remaining worst case (shodo-mc0): siblings inside a top-aligned span,
+/// each followed by a glyph larger than every earlier one, so the partial
+/// group and the profile change at every step and every profile-dependent
+/// position is measured again.
+pub(super) fn profile_churn(r: usize) -> Paragraph {
+    let default = Limits::default();
+    let mut b = ParagraphBuilder::new(&paragraph_style(false), &default);
+    b.open_inline(
+        NodeId(40),
+        &InlineStyle {
+            vertical_align: VerticalAlign::Top,
+            ..style(24.0)
+        },
+        Default::default(),
+    );
+    for i in 0..r as u64 {
+        b.push_ruby(
+            NodeId(1000 + i),
+            &style(24.0),
+            annotated(
+                vec![base_text(3000 + i, "12", &style(24.0), &default)],
+                &["日"],
+                RubyOverhang::None,
+                &default,
+            ),
+        );
+        b.open_inline(
+            NodeId(5000 + i),
+            &style(24.0 + i as f32),
+            Default::default(),
+        );
+        b.push_text(
+            TextSource::Generated {
+                node: NodeId(6000 + i),
+            },
+            "日",
+        );
+        b.close_inline();
+    }
+    b.close_inline();
+    finish(b)
+}
+
+#[test]
+#[ignore = "report for the shodo-2j6 record"]
+fn j6_operation_counts_report() {
+    type Shape = (&'static str, fn(usize) -> Paragraph);
+    let shapes: [Shape; 3] = [
+        ("siblings", digit_siblings),
+        ("outer", outer_siblings),
+        ("churn", profile_churn),
+    ];
+    for (shape, build) in shapes {
+        for mode in [Mode::Reference, Mode::Memo, Mode::Accumulate] {
+            for r in [16, 32, 64, 128] {
+                if mode != Mode::Accumulate && r > 64 {
+                    continue;
+                }
+                let p = build(r);
+                let mut cx = mode_context(mode);
+                one_line(&p, &mut cx);
+                let c = counters(&cx);
+                println!(
+                    "{{\"shape\":\"{shape}\",\"mode\":\"{mode:?}\",\"r\":{r},\"container_measures\":{},\"replayed\":{},\"width_calls\":{},\"scalar_calls\":{},\"dirty\":{:?},\"resets\":{}}}",
+                    c.measures,
+                    c.replayed,
+                    cx.ruby_width_calls,
+                    cx.ruby_scalar_calls,
+                    c.dirty,
+                    c.resets
+                );
+            }
+        }
+    }
+}
