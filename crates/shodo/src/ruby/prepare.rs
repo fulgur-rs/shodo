@@ -249,6 +249,8 @@ pub(crate) fn prepare(
                 if let Some(first) = builder.style.first_line.as_mut() {
                     first.line_height = LineHeight::Normal;
                 }
+                // Annotation boxes are inline content of the same document.
+                builder.style.line_height_quirk = data.style.line_height_quirk;
                 if normalized.style.position == RubyPosition::InterCharacter
                     && data.style.writing_mode == WritingMode::HorizontalTb
                 {

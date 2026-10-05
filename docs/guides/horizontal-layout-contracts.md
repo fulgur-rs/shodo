@@ -43,3 +43,28 @@ the [Japanese layout contract](japanese-layout.md); vertical typography is
 described in the [vertical output contract](vertical-layout.md). [Ruby layout](ruby.md)
 adds coordinated annotation lanes and ink overflow. Emphasis placement belongs
 to the renderer.
+
+## Quirks-mode line height
+
+`ParagraphStyle::line_height_quirk` implements the line height calculation
+quirk of quirks and limited-quirks documents. It is decided per line and per
+inline box, the root inline box included. A box contributes its strut to a
+line only when, on that line:
+
+- it directly contains text or preserved white space (collapsible spaces
+  removed at the line end do not count; hidden soft hyphens and other
+  zero-width characters do);
+- its own inline-start border or padding (on the line holding its start) or
+  inline-end border or padding (on the line holding its end) is nonzero —
+  margins never count;
+- it holds a forced break and nothing else of its own content on that line;
+- it is the root inline box and the line holds ruby.
+
+A box that does not contribute is ignored only for sizing the line box;
+descendants still align to its font metrics. Matching Chromium, a
+`box-decoration-break: clone` edge repeated on a continuation line does not
+count, although CSS Inline 3 §5.3 speaks of fragments. Known differences from
+Chromium: descendants aligned `top`/`bottom` (and empty `text-top` /
+`text-bottom` children) do not yet credit their ancestors for the forced-break
+rule (shodo-9kt), and list-item lines do not force the root strut
+(shodo-qu8).

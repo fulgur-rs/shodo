@@ -2477,3 +2477,34 @@ fn continued_columns_keep_their_own_alignment_nodes_and_source_ranges() {
         );
     }
 }
+
+#[test]
+fn annotation_paragraphs_inherit_line_height_quirk() {
+    for quirk in [false, true] {
+        // Nested: the annotation itself carries ruby.
+        let mut inner = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: style(12.0),
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        inner.push_ruby(NodeId(30), &style(12.0), ruby(base("に"), "ni"));
+        let mut outer = ruby(base("日"), "x");
+        outer.levels[0].annotations[0].content = RubyContent::from_builder(inner);
+        let mut b = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: style(24.0),
+                line_height_quirk: quirk,
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        b.push_ruby(NodeId(8), &style(24.0), outer);
+        let p = b.build(&mut LayoutContext::new(), &fonts()).unwrap();
+        let lane = &p.data.ruby.containers[0].lanes[0].paragraph.data;
+        assert_eq!(lane.style.line_height_quirk, quirk);
+        let nested = &lane.ruby.containers[0].lanes[0].paragraph.data;
+        assert_eq!(nested.style.line_height_quirk, quirk);
+    }
+}
