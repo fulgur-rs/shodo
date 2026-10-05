@@ -9,6 +9,9 @@
 //! reset (`LayoutContext::begin_reshape_operation`) or the context shrinks.
 //! Only look-ahead probes (`through > end`) are stored, at most `MAX_ENTRIES`
 //! at once, and a clear releases a map larger than `RETAINED_CAPACITY`.
+//! The memo also owns the container accumulators of `super::accumulate`
+//! (at most `MAX_ACCUMULATORS`, least recently used evicted), with the same
+//! lifetime: `clear` resets them, releasing large vectors.
 //!
 //! The budget is also reset in the middle of a `next_line`: formatting an
 //! accepted line lays out each annotation lane with `Paragraph::ruby_line`
@@ -118,6 +121,8 @@ pub(crate) struct RubyMemo {
     entries: crate::hashing::FastMap<MemoKey, MemoEntry>,
     /// Look-ahead walk of the latest probe start (see `advance`).
     walk: Option<WalkState>,
+    /// Container accumulators, least recently used first.
+    accumulators: Vec<super::accumulate::Accumulator>,
     /// Clears forced by `MAX_ENTRIES`.
     #[cfg(test)]
     pub(crate) overflow_clears: usize,
@@ -156,13 +161,53 @@ impl RubyMemo {
         self.walk = walk;
     }
 
+    /// Move out the accumulator of `key`, or a fresh one (reusing the least
+    /// recently used accumulator's allocation when all slots are taken).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn take_accumulator(
+        &mut self,
+        key: super::accumulate::AccumulatorKey,
+    ) -> super::accumulate::Accumulator {
+        if let Some(i) = self.accumulators.iter().position(|a| a.key() == Some(key)) {
+            return self.accumulators.remove(i);
+        }
+        let mut accumulator = if self.accumulators.len() >= super::accumulate::MAX_ACCUMULATORS {
+            self.accumulators.remove(0)
+        } else {
+            Default::default()
+        };
+        accumulator.reset(Some(key), 0);
+        accumulator
+    }
+
+    /// Put an accumulator back as the most recently used.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn put_accumulator(&mut self, accumulator: super::accumulate::Accumulator) {
+        debug_assert!(self.accumulators.len() < super::accumulate::MAX_ACCUMULATORS);
+        self.accumulators.push(accumulator);
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn drop_accumulator(&mut self, key: super::accumulate::AccumulatorKey) {
+        self.accumulators.retain(|a| a.key() != Some(key));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn accumulator_keys(&self) -> Vec<Option<super::accumulate::AccumulatorKey>> {
+        self.accumulators.iter().map(|a| a.key()).collect()
+    }
+
     /// Forget every entry and the walk, releasing a map that grew beyond
-    /// `RETAINED_CAPACITY` (the walk's vectors are dropped with it).
+    /// `RETAINED_CAPACITY` (the walk's vectors are dropped with it), and
+    /// reset the accumulators (`Accumulator::reset` releases large vectors).
     pub(crate) fn clear(&mut self) {
         if self.entries.capacity() > RETAINED_CAPACITY {
             self.entries = Default::default();
         } else {
             self.entries.clear();
+        }
+        for accumulator in &mut self.accumulators {
+            accumulator.reset(None, 0);
         }
         self.walk = None;
     }
@@ -227,6 +272,24 @@ mod tests {
         assert!(capacity <= RETAINED_CAPACITY);
         memo.clear();
         assert_eq!((memo.len(), memo.capacity()), (0, capacity));
+    }
+
+    #[test]
+    fn accumulators_are_kept_for_the_two_latest_keys() {
+        use crate::ruby::accumulate::AccumulatorKey;
+        let key = AccumulatorKey::for_test;
+        let mut memo = RubyMemo::default();
+        for start in [1, 2, 1, 3] {
+            let accumulator = memo.take_accumulator(key(start));
+            assert_eq!(accumulator.key(), Some(key(start)));
+            memo.put_accumulator(accumulator);
+        }
+        // 2 was the least recently used key when 3 arrived.
+        assert_eq!(memo.accumulator_keys(), vec![Some(key(1)), Some(key(3))]);
+        memo.drop_accumulator(key(1));
+        assert_eq!(memo.accumulator_keys(), vec![Some(key(3))]);
+        memo.clear();
+        assert_eq!(memo.accumulator_keys(), vec![None]);
     }
 }
 
