@@ -9,7 +9,8 @@ use shodo::style::{
 };
 use shodo::{
     AtomicIntrinsics, AtomicSizes, LayoutContext, LineConstraint, LineResult, Paragraph,
-    ParagraphBuilder,
+    ParagraphBuilder, Ruby, RubyAlign, RubyAnnotation, RubyBase, RubyContent, RubyLevel, RubySpan,
+    RubyStyle, RubyVisibility,
 };
 
 fn japanese_with(
@@ -1623,4 +1624,105 @@ fn rtl_inline_hanging_uses_the_run_values() {
     assert_eq!(line.text_range(), 0..12);
     assert_eq!(line.inline_size(), 40.);
     assert_eq!((line.hang_start(), line.hang_end()), (8., 8.));
+}
+
+/// One ruby pairing `base` with `annotation`, each in its own style,
+/// followed by plain `tail` text (none when empty).
+fn ruby_then_han(
+    annotation: &str,
+    annotation_style: &InlineStyle,
+    base: &str,
+    base_style: &InlineStyle,
+    tail: &str,
+) -> Paragraph {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let limits = Limits::default();
+    let root = style.root.clone();
+    japanese_with(style, limits.clone(), |b| {
+        let ruby = Ruby::new(
+            vec![RubyBase {
+                node: NodeId(11),
+                content: RubyContent::text(
+                    TextSource::Generated { node: NodeId(12) },
+                    base,
+                    base_style,
+                    &limits,
+                ),
+                align: RubyAlign::default(),
+            }],
+            vec![RubyLevel {
+                annotations: vec![RubyAnnotation {
+                    node: NodeId(13),
+                    content: RubyContent::text(
+                        TextSource::Generated { node: NodeId(14) },
+                        annotation,
+                        annotation_style,
+                        &limits,
+                    ),
+                    span: RubySpan::Auto,
+                    visibility: RubyVisibility::Visible,
+                }],
+                style: RubyStyle::default(),
+            }],
+        )
+        .unwrap();
+        b.push_ruby(NodeId(10), &root, ruby);
+        if !tail.is_empty() {
+            b.push_text(TextSource::Generated { node: NodeId(20) }, tail);
+        }
+    })
+}
+
+const FORCE_END: HangingPunctuation = HangingPunctuation {
+    first: false,
+    force_end: true,
+    allow_end: false,
+    last: false,
+};
+
+/// Ruby range measurement never hangs: a per-run value inside a mid-line
+/// ruby must not shrink the ruby and pull the following text over it.
+#[test]
+fn inline_hanging_does_not_shrink_mid_line_ruby_measurement() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let plain = &style.root;
+    for (annotation, hanging) in [("にほ」", LAST), ("にほ、", FORCE_END)] {
+        let span = with_hanging(&style, Some(hanging));
+        let para = ruby_then_han(annotation, &span, "日", plain, "日");
+        let line = first_line(&para, 200.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(line.inline_size(), 56.0, "{annotation}");
+        assert_eq!(line.hang_end(), 0.0, "{annotation}");
+        assert_eq!(glyphs(&line).last().unwrap().inline_position, 40.0);
+    }
+}
+
+#[test]
+fn inline_hanging_does_not_shrink_a_mid_line_ruby_base() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let plain = &style.root;
+    let span = with_hanging(&style, Some(FORCE_END));
+    let base = ruby_then_han("に", plain, "日本、", plain, "日");
+    let hung = ruby_then_han("に", plain, "日本、", &span, "日");
+    for para in [&base, &hung] {
+        let line = first_line(para, 200.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(line.inline_size(), 64.0);
+        assert_eq!(line.hang_end(), 0.0);
+        assert_eq!(glyphs(&line).last().unwrap().inline_position, 48.0);
+    }
+}
+
+#[test]
+fn inline_hanging_still_hangs_a_ruby_base_at_the_line_end() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let paragraph = LineOptions {
+        hanging_punctuation: FORCE_END,
+        ..Default::default()
+    };
+    for (hanging, options) in [(Some(FORCE_END), LineOptions::default()), (None, paragraph)] {
+        let base = with_hanging(&style, hanging);
+        let para = ruby_then_han("に", &style.root, "日本、", &base, "");
+        let line = first_line(&para, 200.0, &options, &AtomicSizes::EMPTY);
+        assert_eq!(line.inline_size(), 32.0, "{hanging:?}");
+        assert_eq!(line.hang_end(), 16.0, "{hanging:?}");
+    }
 }

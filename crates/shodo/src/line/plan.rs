@@ -61,13 +61,24 @@ pub(super) fn selected(
     sat: &mut Saturation,
 ) -> Scan {
     let mut scan = selected_raw(
-        data, start, end, offset, indent, flags, options, available, atomics, cx, sat,
+        data,
+        start,
+        end,
+        offset,
+        indent,
+        flags,
+        Some(options),
+        available,
+        atomics,
+        cx,
+        sat,
     );
     crate::ruby::measure::apply(data, start, &mut scan, atomics, cx, sat);
     scan
 }
 
 /// Ordinary unit costs without recursively applying this range's ruby groups.
+/// `options` is `None` for ruby range measurement (see `punctuation::edges`).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn selected_raw(
     data: &ParagraphData,
@@ -76,7 +87,7 @@ pub(super) fn selected_raw(
     offset: LayoutUnit,
     indent: LayoutUnit,
     flags: u8,
-    options: &LineOptions,
+    options: Option<&LineOptions>,
     available: LayoutUnit,
     atomics: &AtomicSizes,
     cx: &mut LayoutContext,

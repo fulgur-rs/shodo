@@ -435,13 +435,15 @@ impl EdgeAdjustment {
     }
 }
 
+/// `options` is `None` for ruby range measurement, which never hangs: a
+/// per-box `hanging` must not bypass that, since nothing reports the hang.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn edges(
     data: &ParagraphData,
     summary: super::spacing_summary::Summary,
     flags: u8,
     last: bool,
-    options: &crate::style::LineOptions,
+    options: Option<&crate::style::LineOptions>,
     available: LayoutUnit,
     natural: LayoutUnit,
     sat: &mut Saturation,
@@ -479,7 +481,9 @@ pub(super) fn edges(
             {
                 value.start_trim = (if ltr { p.left } else { p.right }).max(LayoutUnit::ZERO);
             }
-            let hanging = p.hanging.unwrap_or(options.hanging_punctuation);
+            let hanging = options.map_or_else(HangingPunctuation::default, |o| {
+                p.hanging.unwrap_or(o.hanging_punctuation)
+            });
             if flags & BreakToken::FIRST_LINE != 0 && hanging.first && p.first {
                 value.hang_start = p
                     .layout_advance(sat)
@@ -533,7 +537,9 @@ pub(super) fn edges(
                     .min(remaining);
             }
             let advance = remaining.sub(value.end_trim, sat).max(LayoutUnit::ZERO);
-            let hanging = p.hanging.unwrap_or(options.hanging_punctuation);
+            let hanging = options.map_or_else(HangingPunctuation::default, |o| {
+                p.hanging.unwrap_or(o.hanging_punctuation)
+            });
             if hanging.force_end && p.stop || last && hanging.last && p.last {
                 value.hang_end = advance;
             } else if hanging.allow_end && p.stop {
@@ -563,7 +569,7 @@ pub(super) fn removed<'a>(
         spacing.summary(Some(data)),
         flags,
         last,
-        options,
+        Some(options),
         LayoutUnit::ZERO,
         natural,
         sat,
@@ -577,7 +583,7 @@ pub(super) fn prepare(
     start: usize,
     scan: &mut super::Scan,
     flags: u8,
-    options: &crate::style::LineOptions,
+    options: Option<&crate::style::LineOptions>,
     available: LayoutUnit,
     indent: LayoutUnit,
     sat: &mut Saturation,
@@ -643,7 +649,7 @@ pub(super) fn intrinsic(
         summary,
         flags,
         last,
-        options,
+        Some(options),
         if minimum {
             LayoutUnit::ZERO
         } else {

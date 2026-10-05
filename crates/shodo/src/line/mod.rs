@@ -52,7 +52,7 @@ pub(crate) fn ruby_range_width(
         crate::geometry::LayoutUnit::ZERO,
         crate::geometry::LayoutUnit::ZERO,
         0,
-        &crate::style::LineOptions::default(),
+        None,
         crate::geometry::LayoutUnit::MAX,
         atomics,
         cx,
