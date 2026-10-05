@@ -1011,9 +1011,8 @@ fn nested_width_probe_builder(
     limits: &Limits,
 ) -> crate::ParagraphBuilder {
     nested_width_probe_builder_with(outer_glyphs, inner_glyphs, limits, |inner, style| {
-        // A leading non-TCY scalar keeps the group's first scalar a grapheme start (the
-        // first scalar right after a ruby base boundary is not one), which the width
-        // probe requires; without it the inner group is never probed.
+        // A leading non-TCY "x" puts the inner group after other base content;
+        // `base_leading_width_probe_builder` covers a group at the base start.
         let plain = crate::style::InlineStyle {
             text_combine_upright: crate::style::TextCombineUpright::None,
             ..style.clone()
@@ -1057,9 +1056,8 @@ fn nested_multi_input_width_probe_builder(
             ],
             ..cjk.clone()
         };
-        // A leading plain scalar keeps the group's first scalar a grapheme start (the
-        // first scalar right after a ruby base boundary is not one), which the
-        // width probe requires.
+        // A leading plain "x" spends inner-base glyphs before the group, which the
+        // cumulative glyph-limit sweep below relies on.
         let plain = crate::style::InlineStyle {
             text_combine_upright: crate::style::TextCombineUpright::None,
             ..cjk.clone()
@@ -1092,6 +1090,176 @@ fn nested_multi_input_width_probe_builder(
             )
             .close_inline();
     })
+}
+
+/// The inner base starts with its combine group, right after the isolate controls
+/// of both ruby boundaries.
+fn base_leading_width_probe_builder(
+    outer_glyphs: Option<u64>,
+    inner_glyphs: Option<u64>,
+    limits: &Limits,
+) -> crate::ParagraphBuilder {
+    nested_width_probe_builder_with(outer_glyphs, inner_glyphs, limits, |inner, _| {
+        inner.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(20),
+            },
+            "12",
+        );
+    })
+}
+
+#[test]
+fn base_leading_combined_group_selects_a_width_feature() {
+    let limits = Limits::default();
+    let fonts = width_probe_fonts(&limits);
+    let build = |outer, inner, mode| {
+        let builder = base_leading_width_probe_builder(outer, inner, &limits);
+        let _mode_guard = CombinedWidthProbeModeGuard::new(mode);
+        builder.build(&mut crate::LayoutContext::new(), &fonts)
+    };
+    let mut snapshots = Vec::new();
+    for mode in [
+        crate::shape::CombinedWidthProbeMode::CloneReference,
+        crate::shape::CombinedWidthProbeMode::ScopedReuse,
+    ] {
+        let paragraph = build(None, None, mode).unwrap();
+        let group: Vec<_> = paragraph
+            .data
+            .shape_items
+            .iter()
+            .filter(|item| item.scalars.iter().any(|s| matches!(s.c, '1' | '2')))
+            .map(|item| {
+                (
+                    item.scalars
+                        .iter()
+                        .map(|s| (s.c, s.grapheme_start))
+                        .collect::<Vec<_>>(),
+                    item.width_feature,
+                )
+            })
+            .collect();
+        assert_eq!(
+            group,
+            [(vec![('1', true), ('2', true)], Some(*b"hwid"))],
+            "{mode:?}"
+        );
+        snapshots.push(width_probe_snapshot(&paragraph));
+    }
+    assert_eq!(snapshots[0], snapshots[1]);
+
+    let mut outcomes = Vec::new();
+    for outer in [None, Some(0), Some(1), Some(2), Some(3), Some(4), Some(6)] {
+        for inner in [None, Some(0), Some(1), Some(2), Some(4)] {
+            let reference = width_probe_outcome(build(
+                outer,
+                inner,
+                crate::shape::CombinedWidthProbeMode::CloneReference,
+            ));
+            assert_eq!(
+                reference,
+                width_probe_outcome(build(
+                    outer,
+                    inner,
+                    crate::shape::CombinedWidthProbeMode::ScopedReuse
+                )),
+                "outer={outer:?} inner={inner:?}"
+            );
+            outcomes.push(reference.is_ok());
+        }
+    }
+    assert!(outcomes.contains(&true) && outcomes.contains(&false));
+}
+
+/// Ruby-free: a combine group right after an out-of-flow placeholder.
+#[test]
+fn combined_group_after_out_of_flow_selects_a_width_feature() {
+    let limits = Limits::default();
+    let fonts = width_probe_fonts(&limits);
+    let combined = width_probe_style("Width CJK", crate::geometry::Direction::Ltr);
+    let plain = crate::style::InlineStyle {
+        text_combine_upright: crate::style::TextCombineUpright::None,
+        ..combined.clone()
+    };
+    let paragraph_style = crate::style::ParagraphStyle {
+        writing_mode: WritingMode::VerticalRl,
+        root: plain,
+        ..Default::default()
+    };
+    let mut builder = crate::ParagraphBuilder::new(&paragraph_style, &limits);
+    builder
+        .push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            "あ",
+        )
+        .push_out_of_flow(crate::node::NodeId(2), crate::node::OutOfFlowKind::Absolute)
+        .open_inline(
+            crate::node::NodeId(3),
+            &combined,
+            crate::node::InlineEdges::default(),
+        )
+        .push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(4),
+            },
+            "12",
+        )
+        .close_inline();
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    let group: Vec<_> = paragraph
+        .data
+        .shape_items
+        .iter()
+        .filter(|item| item.combine.is_some())
+        .map(|item| item.width_feature)
+        .collect();
+    assert_eq!(group, [Some(*b"hwid")]);
+}
+
+/// A grapheme right after a transparent gap is a legal run-byte split point, so
+/// the budget never has to split inside a grapheme there.
+#[test]
+fn run_byte_budget_splits_after_a_transparent_gap() {
+    let limits = Limits {
+        max_shaping_run_bytes: Some(1),
+        ..Limits::default()
+    };
+    let fonts = width_probe_fonts(&limits);
+    let style = crate::style::ParagraphStyle {
+        root: width_probe_style("Width Latin", crate::geometry::Direction::Ltr),
+        ..Default::default()
+    };
+    let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+    builder
+        .push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            "a",
+        )
+        .push_out_of_flow(crate::node::NodeId(2), crate::node::OutOfFlowKind::Absolute)
+        .push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(3),
+            },
+            "b",
+        );
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    assert_eq!(paragraph.data.shape_items.len(), 1);
+    assert!(
+        paragraph
+            .warnings()
+            .iter()
+            .all(|warning| !warning.message.contains("giant grapheme")),
+        "{:?}",
+        paragraph.warnings()
+    );
 }
 
 #[test]
