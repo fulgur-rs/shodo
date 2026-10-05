@@ -1,8 +1,6 @@
 //! Quirks-mode line height calculation (Quirks Mode Standard §3.3-3.4,
 //! CSS Inline 3 §5.3), decided per line from units so that retained line
 //! metrics and the ruby metric index share one definition.
-// Wired into line metrics by later changes; unused until then.
-#![allow(dead_code)]
 use crate::analysis::units::UnitKind;
 use crate::paragraph::ParagraphData;
 use crate::style::WhiteSpaceCollapse;
@@ -56,11 +54,23 @@ pub(crate) fn content(data: &ParagraphData, i: usize, t: usize) -> bool {
 pub(crate) struct Struts {
     pub(crate) root: bool,
     pub(crate) boxes: crate::hashing::FastSet<u32>,
+    /// First unit of the line's trailing run (`whitespace::trailing_start`).
+    pub(crate) trailing: usize,
 }
 
 impl Struts {
     pub(crate) fn contributes(&self, b: Option<u32>) -> bool {
         b.map_or(self.root, |b| self.boxes.contains(&b))
+    }
+
+    /// Whether every unit of a glyph record's text is trimmed at the line end.
+    pub(crate) fn trimmed(&self, data: &ParagraphData, text: &Range<u32>) -> bool {
+        let first = data.units.partition_point(|u| u.text.end <= text.start);
+        let covered = data.units[first.min(data.units.len())..]
+            .iter()
+            .take_while(|u| u.text.start < text.end)
+            .count();
+        covered > 0 && first >= self.trailing && (first..first + covered).all(|i| trims(data, i))
     }
 
     fn mark(&mut self, b: Option<u32>) {
@@ -75,6 +85,7 @@ impl Struts {
     pub(crate) fn line(data: &ParagraphData, units: Range<usize>) -> Self {
         let mut s = Self::default();
         let t = super::whitespace::trailing_start(data, units.start, units.end);
+        s.trailing = t;
         let mut forced = None;
         for i in units.clone() {
             let u = &data.units[i];
@@ -255,6 +266,18 @@ mod tests {
         let n = p.data.units.len();
         let s = Struts::line(&p.data, 0..n);
         assert!(s.contributes(Some(0)) && s.contributes(None));
+    }
+
+    #[test]
+    fn trailing_space_record_is_trimmed() {
+        let space = |p: &Paragraph| {
+            let n = p.data.units.len();
+            let s = Struts::line(&p.data, 0..n);
+            let i = n - 1;
+            s.trimmed(&p.data, &p.data.units[i].text)
+        };
+        assert!(space(&build(|b| text(b, "x "))));
+        assert!(!space(&build(|b| text(b, "x"))));
     }
 
     #[test]

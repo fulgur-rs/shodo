@@ -127,7 +127,6 @@ pub(super) fn trailing(
 /// `finalize` resetting it when the hanging advance is zero. Every unit in
 /// `start..end` that `trailing` would hang lies at or after it; quirks-mode
 /// text presence (`line::quirk`) uses it so zero-width spaces still trim.
-#[allow(dead_code)]
 pub(crate) fn trailing_start(data: &ParagraphData, start: usize, end: usize) -> usize {
     let mut begin = end;
     let mut blocked = obstructed(data, end);
