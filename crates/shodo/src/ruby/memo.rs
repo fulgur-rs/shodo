@@ -180,10 +180,15 @@ impl RubyMemo {
         accumulator
     }
 
-    /// Put an accumulator back as the most recently used.
+    /// Put an accumulator back as the most recently used. Take/put pairs
+    /// nest (a nested candidate measured while an outer accumulator is out
+    /// takes and puts its own), so the slots may already be full here: the
+    /// least recently used accumulators are dropped to keep the bound.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn put_accumulator(&mut self, accumulator: super::accumulate::Accumulator) {
-        debug_assert!(self.accumulators.len() < super::accumulate::MAX_ACCUMULATORS);
+        while self.accumulators.len() >= super::accumulate::MAX_ACCUMULATORS {
+            self.accumulators.remove(0);
+        }
         self.accumulators.push(accumulator);
     }
 
@@ -290,6 +295,41 @@ mod tests {
         assert_eq!(memo.accumulator_keys(), vec![Some(key(3))]);
         memo.clear();
         assert_eq!(memo.accumulator_keys(), vec![None]);
+    }
+
+    #[test]
+    fn nested_accumulator_slots_stay_bounded() {
+        use crate::ruby::accumulate::{AccumulatorKey, Entry, MAX_ACCUMULATORS};
+        let key = AccumulatorKey::for_test;
+        let mut memo = RubyMemo::default();
+        for start in [1, 2] {
+            let mut accumulator = memo.take_accumulator(key(start));
+            accumulator.push_raw(Entry::placeholder(None));
+            memo.put_accumulator(accumulator);
+        }
+        assert_eq!(memo.accumulator_keys(), vec![Some(key(1)), Some(key(2))]);
+        // An outer probe takes 1; a nested probe takes and puts a fresh 3.
+        let mut outer = memo.take_accumulator(key(1));
+        assert_eq!((outer.key(), outer.len()), (Some(key(1)), 1));
+        let nested = memo.take_accumulator(key(3));
+        assert_eq!((nested.key(), nested.len()), (Some(key(3)), 0));
+        memo.put_accumulator(nested);
+        assert_eq!(memo.accumulator_keys(), vec![Some(key(2)), Some(key(3))]);
+        // Putting the outer one back evicts the least recently used (2).
+        outer.push_raw(Entry::placeholder(None));
+        memo.put_accumulator(outer);
+        assert!(memo.accumulator_keys().len() <= MAX_ACCUMULATORS);
+        assert_eq!(memo.accumulator_keys(), vec![Some(key(3)), Some(key(1))]);
+        let outer = memo.take_accumulator(key(1));
+        assert_eq!((outer.key(), outer.len()), (Some(key(1)), 2));
+        memo.put_accumulator(outer);
+        // A new key with full slots reuses the least recently used (3)
+        // allocation, re-keyed and emptied.
+        let fresh = memo.take_accumulator(key(4));
+        assert_eq!((fresh.key(), fresh.len()), (Some(key(4)), 0));
+        assert_eq!(memo.accumulator_keys(), vec![Some(key(1))]);
+        memo.put_accumulator(fresh);
+        assert_eq!(memo.accumulator_keys(), vec![Some(key(1)), Some(key(4))]);
     }
 }
 

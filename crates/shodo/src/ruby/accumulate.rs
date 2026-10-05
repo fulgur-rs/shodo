@@ -467,6 +467,7 @@ impl Accumulator {
                 break;
             }
         }
+        debug_assert!(self.entries.len() < MAX_CONTAINERS, "accumulator cap");
         let pos = self.entries.len() as u32;
         self.entries
             .push(Entry::placeholder(self.open.last().copied()));
@@ -513,7 +514,8 @@ impl Accumulator {
     }
 
     #[cfg(test)]
-    fn push_raw(&mut self, entry: Entry) {
+    pub(crate) fn push_raw(&mut self, entry: Entry) {
+        debug_assert!(self.entries.len() < MAX_CONTAINERS, "accumulator cap");
         let pos = self.entries.len();
         self.entries.push(Entry::placeholder(None));
         self.unstored.insert(pos as u32);
@@ -723,5 +725,67 @@ mod tests {
         assert!(matches!(a.then(b), Replay::Refused));
         assert!(matches!(a.then(Replay::Refused), Replay::Refused));
         assert!(matches!(Replay::Empty.then(Replay::Empty), Replay::Empty));
+    }
+
+    /// `Effects::then` is order-free (saturating byte sum, limit min/max,
+    /// outcome conjunctions, wrapping Saturation sums), so the tree may
+    /// compose replay aggregates in position order without loss.
+    #[test]
+    fn replay_aggregates_are_order_free() {
+        let mut seed = 0x51_7cc1_b727_220a;
+        for _ in 0..200 {
+            let suppressed = next(&mut seed).is_multiple_of(2);
+            let a = Replay::Effects(effects(next(&mut seed) % 50, suppressed));
+            let b = Replay::Effects(effects(next(&mut seed) % 50, suppressed));
+            assert_eq!(format!("{:?}", a.then(b)), format!("{:?}", b.then(a)));
+        }
+    }
+
+    /// Independent of `Node::then`: `forward` is the prefix of the present
+    /// adjustments in position order and `reverse` the one in reverse
+    /// position order (how a candidate adds them), including the guard.
+    #[test]
+    fn tree_directions_match_independent_folds() {
+        let mut seed = 0x0123_4567_89ab_cdef;
+        let mut acc = Accumulator::default();
+        for len in [1usize, 2, 3, 6, 11, 21] {
+            acc.reset(None, 0);
+            for at in 0..len {
+                acc.push_raw(entry(&mut seed, at));
+            }
+            for start in 0..=len {
+                for end in start..=len {
+                    let values: Vec<LayoutUnit> = acc.entries[start..end]
+                        .iter()
+                        .filter(|e| e.present)
+                        .map(|e| e.adjustment)
+                        .collect();
+                    let fold = |values: &mut dyn Iterator<Item = &LayoutUnit>| {
+                        values.fold(Prefix::EMPTY, |p, v| p.then(Prefix::leaf(*v)))
+                    };
+                    let node = acc.query(start..end);
+                    assert_eq!(node.forward, fold(&mut values.iter()), "{start}..{end}");
+                    assert_eq!(
+                        node.reverse,
+                        fold(&mut values.iter().rev()),
+                        "{start}..{end}"
+                    );
+                    for _ in 0..4 {
+                        let base = value(&mut seed);
+                        for (prefix, order) in [
+                            (node.forward, values.clone()),
+                            (node.reverse, values.iter().rev().copied().collect()),
+                        ] {
+                            let mut sat = Saturation::default();
+                            let sequential = order.iter().fold(base, |s, v| s.add(*v, &mut sat));
+                            assert_eq!(prefix.fits(base), sat.saturated == 0, "{start}..{end}");
+                            if prefix.fits(base) {
+                                assert_eq!(prefix.total(base), sequential, "{start}..{end}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
