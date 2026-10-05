@@ -234,8 +234,9 @@ pub(crate) fn itemize(
             let mut prepared = FontCluster::new(cluster);
             let mut matched = HashMap::new();
             let grapheme_offset = scalars[scalar_start].offset;
-            // Paragraph grapheme cuts sit before transparent markers (ruby base
-            // isolates, out-of-flow placeholders, authored bidi controls), so
+            // Paragraph grapheme cuts sit before transparent markers (isolate
+            // controls of ruby bases and isolating inlines, out-of-flow
+            // placeholders, authored bidi controls), so
             // after such a gap they never equal the next grapheme's first
             // scalar. Match the actual character starts instead: exactly one
             // scalar per paragraph grapheme is then flagged.
@@ -845,6 +846,13 @@ mod tests {
                 ('\u{200e}', false),
                 ('d', true)
             ]
+        );
+        // A control right after projected content: the cut before it used to
+        // flag the control instead of the next character.
+        let inner = paragraph(WritingMode::HorizontalTb, "x\u{200e}d");
+        assert_eq!(
+            flags(&inner),
+            [('x', true), ('\u{200e}', false), ('d', true)]
         );
         // The same holds for a control at the paragraph start.
         let leading = paragraph(WritingMode::HorizontalTb, "\u{200e}a");
