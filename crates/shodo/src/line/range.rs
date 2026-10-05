@@ -1067,6 +1067,73 @@ mod tests {
         assert_eq!(state(&cx), (f + 3, e + 1));
     }
 
+    /// A prefix whose early tab steps are clean and a later one saturates:
+    /// the clean extension moves nothing, the saturating extension fills,
+    /// and the latched `effects` flag makes the next start invalidate.
+    #[test]
+    fn mixed_tab_prefix_latches_effects_when_a_later_step_saturates() {
+        let clean = InlineStyle {
+            font_families: vec![FontFamily::Named("Shodo Fixture CJK".into())],
+            font_size: 24.0,
+            white_space_collapse: WhiteSpaceCollapse::Preserve,
+            tab_size: crate::style::TabSize::Px(40.0),
+            ..Default::default()
+        };
+        let huge = InlineStyle {
+            tab_size: crate::style::TabSize::Px(1.0e12),
+            ..clean.clone()
+        };
+        let mut b = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: clean.clone(),
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "日\t本");
+        b.open_inline(NodeId(2), &huge, InlineEdges::default());
+        b.push_text(TextSource::Generated { node: NodeId(3) }, "\t語");
+        b.close_inline();
+        let mut cx = LayoutContext::new();
+        let p = b.build(&mut cx, &fonts()).unwrap();
+        let tabs: Vec<usize> = p
+            .data
+            .units
+            .iter()
+            .enumerate()
+            .filter(|(_, u)| matches!(u.kind, UnitKind::Tab))
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(tabs.len(), 2, "{tabs:?}");
+        let (first, second) = (tabs[0], tabs[1]);
+        let n = p.data.units.len();
+        let state = |cx: &LayoutContext| (cx.ruby_ranges.fills(), cx.ruby_ranges.epoch());
+        let query = |cx: &mut LayoutContext, range: Range<usize>| {
+            let mut sat = Saturation::default();
+            width(&p.data, range, &AtomicSizes::EMPTY, cx, &mut sat).unwrap();
+            sat
+        };
+        cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+        let (f, e) = state(&cx);
+        // Building the costs fills once; the clean first tab adds nothing.
+        assert!(query(&mut cx, 0..first + 1).is_clean());
+        assert_eq!(state(&cx), (f + 1, e));
+        // A clean extension of the same start moves nothing.
+        assert!(query(&mut cx, 0..second).is_clean());
+        assert_eq!(state(&cx), (f + 1, e));
+        // The extension whose new step saturates fills.
+        assert!(!query(&mut cx, 0..n).is_clean());
+        assert_eq!(state(&cx), (f + 2, e));
+        // Covered again: no step is computed, so nothing moves (the total
+        // itself may still saturate the width).
+        query(&mut cx, 0..n);
+        assert_eq!(state(&cx), (f + 2, e));
+        // Another start discards the prefix whose flag latched: invalidate,
+        // and its own saturating step fills.
+        assert!(!query(&mut cx, 1..n).is_clean());
+        assert_eq!(state(&cx), (f + 3, e + 1));
+    }
+
     /// One paragraph per golden fixture: preserved tabs under different
     /// tab sizes, a ligature clipped by the range start, hanging trailing
     /// tabs and a tab interval that saturates.
@@ -1202,6 +1269,7 @@ mod tests {
         let got = tab_golden();
         if std::env::var_os("SHODO_UPDATE_GOLDEN").is_some() {
             std::fs::write(path, &got).unwrap();
+            panic!("golden updated; rerun without SHODO_UPDATE_GOLDEN");
         }
         let want = std::fs::read_to_string(path).expect("golden file");
         assert_eq!(got, want);
