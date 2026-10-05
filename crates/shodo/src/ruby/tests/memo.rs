@@ -537,6 +537,9 @@ pub(super) fn observe_candidates_in(
 ) -> (Observed, Counters) {
     let data = &p.data;
     let mut cx = mode_context(mode);
+    // The sweeps ask for every range in one operation, quadratically many
+    // probes no layout call makes: they check reuse, not the work allowance.
+    cx.ruby_line_work_disabled = true;
     if pre.suppressed {
         cx.warnings.set_max(Some(0));
         cx.warnings.push(WarningKind::Unsupported, "pre-existing");

@@ -175,9 +175,14 @@ pub(crate) fn candidate_adjustment(
         // The reference path measures every probe in full.
         return candidate_inner(data, start, end, atomics, cx, sat).adjustment;
     }
+    if !super::line_work::admit(data, start, end, cx) {
+        // Past the operation's work allowance: fit without the adjustment.
+        return LayoutUnit::ZERO;
+    }
     // Fit probes grow `end` for a fixed `start`: resume the previous walk.
     let mut walk = cx.ruby_memo.take_walk();
     let through = super::memo::advance(&mut walk, data, start, end);
+    super::line_work::walked(cx, walk.as_ref().map_or(0, |w| w.visited().len()));
     let key = super::memo::MemoKey::new(data, atomics, start, through);
     let epoch = cx.ruby_ranges.epoch();
     let core = match cx.ruby_memo.get(&key) {
@@ -189,6 +194,19 @@ pub(crate) fn candidate_adjustment(
                 cx.ruby_memo_hits += 1;
             }
             entry.adjustment
+        }
+        _ if !super::line_work::admit_walk(
+            data,
+            atomics,
+            start,
+            through,
+            walk.as_ref().map_or(0, |w| w.visited().len()),
+            cx,
+        ) =>
+        {
+            // A second wide walk from this start: fit without it.
+            cx.ruby_memo.put_walk(walk);
+            return LayoutUnit::ZERO;
         }
         _ if through == end => {
             // No look-ahead: the key can still replay the entry of an earlier
@@ -454,6 +472,7 @@ pub(super) fn measure_one(
     {
         cx.ruby_container_measures += 1;
     }
+    super::line_work::charge(cx, 1);
     let begin = &ruby.cuts[cut_at_or_before(ruby, units.start)];
     let finish = &ruby.cuts[cut_at_or_after(ruby, units.end)];
     let source_columns = selected_columns(ruby, &units);

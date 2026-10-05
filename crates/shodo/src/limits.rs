@@ -31,6 +31,16 @@ pub struct Limits {
     /// rejected candidates. These are work units, not CPU instructions;
     /// `None` disables this work limit.
     pub max_ruby_cut_work: Option<u64>,
+    /// Ruby line-measurement work per `next_line` or `intrinsic_sizes` call,
+    /// as a factor (16): the call may measure ruby containers this many times
+    /// per unit its fit probes cover plus per container of its widest
+    /// container walk, and measures a walk wider than 16,384 containers for
+    /// one end per start only. Past it, the rest of the call fits lines (and
+    /// measures intrinsic sizes) without ruby annotation adjustments and
+    /// warns, rather than failing line layout; accepted lines still place
+    /// their ruby exactly. Zero always fits without the adjustments; `None`
+    /// disables this work limit.
+    pub max_ruby_line_work: Option<u64>,
     /// UTF-8 bytes per line-edge reshape window (4096); exceeding it warns
     /// and preserves shared glyphs rather than failing line layout.
     pub max_reshape_window_bytes: Option<u64>,
@@ -79,6 +89,7 @@ impl Default for Limits {
             max_nesting_depth: Some(512),
             max_shaped_glyphs: Some(1 << 22),
             max_ruby_cut_work: Some(1 << 23),
+            max_ruby_line_work: Some(16),
             max_reshape_window_bytes: Some(4096),
             max_shaping_run_bytes: Some(64 * 1024),
             max_balance_iterations: Some(16),
@@ -108,6 +119,7 @@ impl Limits {
             max_nesting_depth: None,
             max_shaped_glyphs: None,
             max_ruby_cut_work: None,
+            max_ruby_line_work: None,
             max_reshape_window_bytes: None,
             max_shaping_run_bytes: None,
             max_balance_iterations: None,

@@ -24,6 +24,16 @@ pub struct LayoutContext {
     pub(crate) reshape_log: crate::line::replay::ReshapeLog,
     /// Adjustment-only ruby candidates measured in the current operation.
     pub(crate) ruby_memo: crate::ruby::memo::RubyMemo,
+    /// Ruby line-measurement work of the current operation (shodo-mc0).
+    pub(crate) ruby_line_work: crate::ruby::line_work::LineWork,
+    /// The ruby line-measurement work state of every operation that charged
+    /// any, as it was when the next one began.
+    /// Admit every ruby probe: tests that sweep every range of a paragraph
+    /// in one operation (not a layout call) check reuse exactness alone.
+    #[cfg(test)]
+    pub(crate) ruby_line_work_disabled: bool,
+    #[cfg(test)]
+    pub(crate) ruby_line_work_log: Vec<crate::ruby::line_work::LineWork>,
     #[cfg(test)]
     pub(crate) cache_visits: usize,
     #[cfg(test)]
@@ -118,11 +128,17 @@ impl LayoutContext {
     }
 
     /// Start one `next_line` or `intrinsic_sizes` operation: reset the edge
-    /// reshape budget and every per-operation reuse state bounded by it.
+    /// reshape budget, the ruby line-measurement work and every
+    /// per-operation reuse state bounded by them.
     pub(crate) fn begin_reshape_operation(&mut self) {
         self.edge_reshape_spent = 0;
         self.reshape_log.clear();
         self.ruby_memo.clear();
+        #[cfg(test)]
+        if self.ruby_line_work != Default::default() {
+            self.ruby_line_work_log.push(self.ruby_line_work.clone());
+        }
+        self.ruby_line_work.clear();
     }
 
     /// Whether measurements may be reused within an operation. Tests switch

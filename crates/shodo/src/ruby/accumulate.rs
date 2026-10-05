@@ -721,7 +721,7 @@ impl Accumulator {
     }
 }
 
-fn max_containers(_cx: &LayoutContext) -> usize {
+pub(crate) fn max_containers(_cx: &LayoutContext) -> usize {
     #[cfg(test)]
     if let Some(cap) = _cx.ruby_accumulate_cap {
         return cap;
@@ -1033,6 +1033,7 @@ impl Step<'_> {
                 } else {
                     // Some running sum saturates: add one value at a time in
                     // the reference order, counting every saturation.
+                    super::line_work::charge(cx, run.len() as u64);
                     for pos in run.clone().rev() {
                         let entry = &acc.entries[pos];
                         if entry.present {

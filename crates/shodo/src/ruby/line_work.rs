@@ -1,0 +1,195 @@
+//! Fail-closed bound on ruby line-measurement work (shodo-mc0).
+//!
+//! The through memo (`super::memo`) and the container accumulator
+//! (`super::accumulate`) make the common fit scans linear, but some inputs
+//! still re-measure most containers at every probe: a line profile that
+//! changes at every step, a walk beyond the accumulator's container cap,
+//! measurements that warn (never stored) under `max_warnings: None`, and
+//! the other shapes listed in `docs/records/shodo-mc0-ruby-line-work.md`.
+//!
+//! Each `next_line` or `intrinsic_sizes` call therefore gets an allowance of
+//! `Limits::max_ruby_line_work` (a factor) times the units its fit probes
+//! cover (the last end minus the first start) plus the widest container
+//! walk it has made. Every live container measurement
+//! (`measure::measure_one`) and every position an accumulator adds one at a
+//! time costs one unit. A probe is admitted only while the spent units are
+//! below the allowance; once one is refused, the rest of the call answers
+//! every adjustment-only probe with zero (sticky, so no later probe resumes
+//! a walk that skipped steps) and the sink takes one warning.
+//!
+//! A walk wider than an accumulator keeps (`accumulate::MAX_CONTAINERS`,
+//! 16,384) is measured for at most one `through` per start and atomic
+//! revision in an operation: the through memo alone would measure every
+//! container of such a walk again at each step, so the next probe that
+//! would is refused the same way.
+//!
+//! A probe admitted just below the allowance measures at most the
+//! containers of its walk, so the fit probes of a call spend at most the
+//! allowance plus one walk; an accepted line then measures its own
+//! containers once more (linear).
+//!
+//! The refusal is a function of the call's own probe sequence and of the
+//! state the exact-replay gates read (`edge_reshape_spent`, sink
+//! suppression), never of caches left by earlier calls: the per-operation
+//! memo and accumulators start empty, range cache hits charge like misses
+//! (shodo-tj5), a scan that warned is never retained as a `PartialLine`, a
+//! failed speculative `PartialLine::index` restores this state and clears the
+//! memo before scanning again, and the allowance uses maxima, so repeating a
+//! probe never raises it.
+//!
+//! Accepted lines measure their ruby in full (`measure::candidate` through
+//! `apply`), so the ruby geometry of a placed line is exact; only the fit
+//! decision (and intrinsic sizes) ignore annotation overflow after a refusal.
+use crate::LayoutContext;
+use crate::limits::WarningKind;
+use crate::paragraph::ParagraphData;
+
+/// Work state of the current operation, reset by
+/// `LayoutContext::begin_reshape_operation`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct LineWork {
+    /// Units spent: live container measurements and sequentially added
+    /// positions.
+    spent: u64,
+    /// Units the admitted probes cover: the last end minus the first start
+    /// over all of them (`intrinsic_sizes` probes many starts).
+    span: u64,
+    /// Smallest admitted start.
+    first: Option<usize>,
+    /// Largest admitted end.
+    last: usize,
+    /// Most containers one admitted probe walked.
+    walk: u64,
+    /// `(start, atomic revision, through)` of the first walk per start and
+    /// revision that was wider than an accumulator keeps and measured on a
+    /// memo miss (`admit_walk`). Each entry stands for more than
+    /// `MAX_CONTAINERS` spent units, so few exist.
+    wide: Vec<(usize, u64, usize)>,
+    /// A probe was refused: every later probe of the operation is too.
+    exhausted: bool,
+}
+
+impl LineWork {
+    pub(crate) fn clear(&mut self) {
+        self.spent = 0;
+        self.span = 0;
+        self.first = None;
+        self.last = 0;
+        self.walk = 0;
+        self.exhausted = false;
+        self.wide.clear();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn spent(&self) -> u64 {
+        self.spent
+    }
+
+    #[cfg(test)]
+    pub(crate) fn exhausted(&self) -> bool {
+        self.exhausted
+    }
+
+    #[cfg(test)]
+    pub(crate) fn walk(&self) -> u64 {
+        self.walk
+    }
+
+    /// `span + walk`, the extent the allowance multiplies.
+    #[cfg(test)]
+    pub(crate) fn extent(&self) -> u64 {
+        self.span + self.walk
+    }
+}
+
+pub(crate) const WARNING: &str =
+    "ruby line measurement budget exceeded; fitting without ruby adjustments";
+
+/// Charge `units` of work to the current operation.
+pub(crate) fn charge(cx: &mut LayoutContext, units: u64) {
+    cx.ruby_line_work.spent = cx.ruby_line_work.spent.saturating_add(units);
+}
+
+/// Whether the adjustment-only probe `start..end` may measure. Refusing the
+/// first time warns once and makes the operation's later probes refuse too.
+pub(crate) fn admit(
+    data: &ParagraphData,
+    start: usize,
+    end: usize,
+    cx: &mut LayoutContext,
+) -> bool {
+    let Some(factor) = data.limits.max_ruby_line_work else {
+        return true;
+    };
+    #[cfg(test)]
+    if cx.ruby_line_work_disabled {
+        return true;
+    }
+    let work = &mut cx.ruby_line_work;
+    if !work.exhausted {
+        let first = work.first.map_or(start, |first| first.min(start));
+        work.first = Some(first);
+        work.last = work.last.max(end);
+        work.span = (work.last - first) as u64;
+        let allowance = factor.saturating_mul(work.span.saturating_add(work.walk));
+        if work.spent < allowance {
+            return true;
+        }
+        refuse(cx);
+    }
+    false
+}
+
+/// Record the container walk of an admitted probe.
+pub(crate) fn walked(cx: &mut LayoutContext, containers: usize) {
+    let work = &mut cx.ruby_line_work;
+    work.walk = work.walk.max(containers as u64);
+}
+
+/// Whether an admitted probe of `start..through` that missed the memo may
+/// measure its walk of `containers`. A walk wider than an accumulator keeps
+/// is measured by the through memo alone, every container at every new
+/// `through`: per start and atomic revision, only the first such `through`
+/// is measured (again if asked again: intrinsic sizes ask for the end of a
+/// row with the min and the max atomics, which may share a revision); a
+/// probe with another `through` is refused (warning once, like `admit`, and
+/// refusing every later probe).
+pub(crate) fn admit_walk(
+    data: &ParagraphData,
+    atomics: &crate::AtomicSizes,
+    start: usize,
+    through: usize,
+    containers: usize,
+    cx: &mut LayoutContext,
+) -> bool {
+    if data.limits.max_ruby_line_work.is_none()
+        || containers <= super::accumulate::max_containers(cx)
+    {
+        return true;
+    }
+    #[cfg(test)]
+    if cx.ruby_line_work_disabled {
+        return true;
+    }
+    let work = &mut cx.ruby_line_work;
+    match work
+        .wide
+        .iter()
+        .find(|(s, revision, _)| *s == start && *revision == atomics.revision)
+    {
+        None => {
+            work.wide.push((start, atomics.revision, through));
+            true
+        }
+        Some(&(_, _, first)) if first == through => true,
+        Some(_) => {
+            refuse(cx);
+            false
+        }
+    }
+}
+
+fn refuse(cx: &mut LayoutContext) {
+    cx.ruby_line_work.exhausted = true;
+    cx.warnings.push(WarningKind::Unsupported, WARNING);
+}

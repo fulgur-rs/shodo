@@ -590,12 +590,19 @@ pub(super) fn resolve(
         }
         let warnings_before = cx.warnings.clone();
         let saturation_before = *sat;
+        let ruby_work_before = cx.ruby_line_work.clone();
         if !cached.index(atomics, cx, sat) {
             // Speculative index preparation must not add diagnostics to the
             // requested line. A failed narrower retry needs a fresh scan at
             // its own width, rather than the retained wider result.
             cx.warnings = warnings_before;
             *sat = saturation_before;
+            // Nor ruby work: the rescan starts like a call without the
+            // retained line (an empty memo, the work spent before indexing),
+            // so whether it exceeds its ruby work allowance does not depend
+            // on the retained line (`ruby::line_work`).
+            cx.ruby_line_work = ruby_work_before;
+            cx.ruby_memo.clear();
             if valid {
                 return resolve(
                     para,
