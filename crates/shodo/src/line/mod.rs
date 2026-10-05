@@ -14,6 +14,7 @@ pub(crate) mod metric_index;
 pub(crate) mod metrics;
 mod plan;
 pub(crate) mod punctuation;
+pub(crate) mod quirk;
 pub(crate) mod range;
 pub(crate) mod replay;
 pub(crate) mod reshape;
