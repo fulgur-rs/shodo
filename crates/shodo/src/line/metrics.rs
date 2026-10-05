@@ -469,30 +469,17 @@ pub(crate) fn measure(
         above = above.max(bottom_height - below);
     }
     let mut deltas = crate::hashing::FastMap::default();
-    for (g, (top, bottom)) in groups {
-        let align = data.styles[data.boxes[g as usize].style as usize].vertical_align;
-        deltas.insert(
-            g,
-            if align == VerticalAlign::Bottom {
+    // Sized groups first; a ghost (position-only) group only places a group
+    // that no member sized.
+    for (g, (top, bottom)) in groups.into_iter().chain(ghosts) {
+        if let std::collections::hash_map::Entry::Vacant(slot) = deltas.entry(g) {
+            let align = data.styles[data.boxes[g as usize].style as usize].vertical_align;
+            slot.insert(if align == VerticalAlign::Bottom {
                 height - above - bottom
             } else {
                 -above - top
-            },
-        );
-    }
-    for (g, (top, bottom)) in ghosts {
-        if deltas.contains_key(&g) {
-            continue;
+            });
         }
-        let align = data.styles[data.boxes[g as usize].style as usize].vertical_align;
-        deltas.insert(
-            g,
-            if align == VerticalAlign::Bottom {
-                height - above - bottom
-            } else {
-                -above - top
-            },
-        );
     }
     for (i, (g, own)) in memberships.into_iter().enumerate() {
         if let Some(g) = g {
