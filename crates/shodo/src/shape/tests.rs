@@ -3119,3 +3119,424 @@ fn tcy_base_reuse_probe_shaper_calls() {
         );
     }
 }
+
+#[test]
+fn vertical_punctuation_blanks_follow_the_upright_inline_axis() {
+    use crate::font::{FontFaceDescriptor, FontOptions};
+    use crate::line::punctuation::PunctuationClass;
+    use crate::node::{NodeId, TextSource};
+    use crate::style::{
+        FontFamily, FontVariantEastAsian, FontVariantEastAsianWidth, InlineStyle, ParagraphStyle,
+        TextSpacingTrim,
+    };
+
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            crate::test_support::fonts::CJK.to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Vertical blank CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let layout = |trim, width| {
+        let style = ParagraphStyle {
+            writing_mode: WritingMode::VerticalRl,
+            root: InlineStyle {
+                font_families: vec![FontFamily::Named("Vertical blank CJK".into())],
+                font_size: 20.0,
+                lang: Some("ja".into()),
+                text_spacing_trim: trim,
+                font_variant_east_asian: FontVariantEastAsian {
+                    width,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        builder.push_text(
+            TextSource::Generated { node: NodeId(1) },
+            "水）（水水（（水（水",
+        );
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        let crate::LineResult::Line(line) = paragraph.next_line(
+            &mut crate::LayoutContext::new(),
+            paragraph.start_token(),
+            &Default::default(),
+            &crate::LineConstraint::new(400.0),
+            &crate::AtomicSizes::EMPTY,
+        ) else {
+            panic!("expected one line")
+        };
+        let mut origins = Vec::new();
+        for fragment in line.fragments() {
+            if let crate::Fragment::GlyphRun(run) = fragment {
+                for i in 0..run.glyphs().len() {
+                    origins.push(run.inline_start() + run.glyph_origin(i).unwrap().0);
+                }
+            }
+        }
+        let blanks: Vec<_> = paragraph
+            .data
+            .punctuation
+            .iter()
+            .filter(|p| {
+                matches!(
+                    p.class,
+                    PunctuationClass::Opening | PunctuationClass::Closing
+                )
+            })
+            .map(|p| (p.class, p.left, p.right))
+            .collect();
+        (
+            paragraph.data.glyphs.id.clone(),
+            blanks,
+            line.inline_size(),
+            origins,
+        )
+    };
+    let half = LayoutUnit::from_f32_round(10.0, &mut Saturation::default());
+
+    // The rotated vertical forms keep their ink in one half of the vertical
+    // em, so the inline blanks come from y bounds rather than x bounds.
+    let (vertical_ids, vertical_blanks, _, _) = layout(TextSpacingTrim::SpaceAll, None);
+    assert_eq!(vertical_blanks.len(), 5);
+    assert!(
+        vertical_blanks
+            .iter()
+            .all(|&(class, left, right)| match class {
+                PunctuationClass::Opening => left == half && right == LayoutUnit::ZERO,
+                _ => left == LayoutUnit::ZERO && right == half,
+            })
+    );
+
+    // `pwid` replaces the parentheses before `vert`, leaving upright
+    // proportional glyphs whose ink fills the vertical em. Such glyphs have
+    // no blank to trim, so `normal` lays out exactly like `space-all`.
+    let proportional = Some(FontVariantEastAsianWidth::ProportionalWidth);
+    let normal = layout(TextSpacingTrim::Normal, proportional);
+    let space_all = layout(TextSpacingTrim::SpaceAll, proportional);
+    assert_ne!(normal.0[1..3], vertical_ids[1..3]);
+    assert!(
+        normal
+            .1
+            .iter()
+            .all(|&(_, left, right)| left == LayoutUnit::ZERO && right == LayoutUnit::ZERO)
+    );
+    assert_eq!(normal.2, 200.0);
+    assert_eq!(normal, space_all);
+}
+
+#[test]
+fn vertical_layout_trims_use_upright_blanks() {
+    use crate::font::{FontFaceDescriptor, FontOptions};
+    use crate::node::{NodeId, TextSource};
+    use crate::style::{FontFamily, InlineStyle, ParagraphStyle, TextSpacingTrim};
+
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            crate::test_support::fonts::CJK.to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Vertical layout CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    // Returns each line's inline size and every glyph's inline origin.
+    let layout = |text: &str, trim, width| {
+        let style = ParagraphStyle {
+            writing_mode: WritingMode::VerticalRl,
+            root: InlineStyle {
+                font_families: vec![FontFamily::Named("Vertical layout CJK".into())],
+                font_size: 20.0,
+                lang: Some("ja".into()),
+                text_spacing_trim: trim,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        let mut lines = Vec::new();
+        let mut token = paragraph.start_token();
+        while let crate::LineResult::Line(line) = paragraph.next_line(
+            &mut crate::LayoutContext::new(),
+            token,
+            &Default::default(),
+            &crate::LineConstraint::new(width),
+            &crate::AtomicSizes::EMPTY,
+        ) {
+            let mut origins = Vec::new();
+            for fragment in line.fragments() {
+                if let crate::Fragment::GlyphRun(run) = fragment {
+                    for i in 0..run.glyphs().len() {
+                        origins.push(run.inline_start() + run.glyph_origin(i).unwrap().0);
+                    }
+                }
+            }
+            lines.push((line.inline_size(), origins));
+            token = line.break_token();
+        }
+        lines
+    };
+    // The first rotated closing parenthesis loses its trailing half.
+    let pair = layout("水））", TextSpacingTrim::Normal, 400.0);
+    assert_eq!(pair.len(), 1);
+    assert_eq!(pair[0].0, 50.0);
+    // A rotated middle dot loses a quarter on each side, so its outline
+    // origin moves a quarter toward the line start.
+    let middle = layout("水・水", TextSpacingTrim::TrimAll, 400.0);
+    let spaced = layout("水・水", TextSpacingTrim::SpaceAll, 400.0);
+    assert_eq!(middle[0].0, 50.0);
+    assert_eq!(spaced[0].0, 60.0);
+    assert_eq!(middle[0].1[1], spaced[0].1[1] - 5.0);
+
+    // `allow-end` sets the rotated closing parenthesis half-width only when
+    // the line would otherwise overflow, so it stays on the first line. Its
+    // ink is at the inline start, so trimming keeps the outline origin.
+    let normal = layout("水水水）", TextSpacingTrim::Normal, 75.0);
+    let space_all = layout("水水水）", TextSpacingTrim::SpaceAll, 75.0);
+    assert_eq!(normal.len(), 1);
+    assert_eq!(normal[0].0, 70.0);
+    assert_eq!(normal[0].1[3], space_all[1].1[1] + 40.0);
+    assert_eq!(
+        space_all.iter().map(|line| line.0).collect::<Vec<_>>(),
+        [40.0, 40.0]
+    );
+}
+
+fn vertical_spacing_fonts(family: &str) -> (Limits, FontCollection) {
+    use crate::font::{FontFaceDescriptor, FontOptions};
+
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            crate::test_support::fonts::CJK.to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: family.into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    (limits, fonts)
+}
+
+#[test]
+fn colon_punctuation_class_follows_the_shaped_glyph() {
+    use crate::line::punctuation::PunctuationClass as P;
+    use crate::node::{NodeId, TextSource};
+    use crate::style::{FontFamily, InlineStyle, ParagraphStyle, TextSpacingTrim};
+
+    let (limits, fonts) = vertical_spacing_fonts("Colon CJK");
+    let punctuation = |mode, lang: &str, text: &str| {
+        let style = ParagraphStyle {
+            writing_mode: mode,
+            root: InlineStyle {
+                font_families: vec![FontFamily::Named("Colon CJK".into())],
+                font_size: 20.0,
+                lang: Some(lang.into()),
+                text_spacing_trim: TextSpacingTrim::Normal,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        let crate::LineResult::Line(line) = paragraph.next_line(
+            &mut crate::LayoutContext::new(),
+            paragraph.start_token(),
+            &Default::default(),
+            &crate::LineConstraint::new(400.0),
+            &crate::AtomicSizes::EMPTY,
+        ) else {
+            panic!("expected one line")
+        };
+        (paragraph.data.punctuation[1], line.inline_size())
+    };
+    let layout = |mode, lang: &str, text: &str| {
+        let (punctuation, size) = punctuation(mode, lang, text);
+        (punctuation.class, size)
+    };
+
+    // Rotated or centered glyphs keep the language convention.
+    assert_eq!(
+        layout(WritingMode::HorizontalTb, "ja", "水；（水"),
+        (P::Middle, 70.0)
+    );
+    assert_eq!(
+        layout(WritingMode::HorizontalTb, "zh-Hans", "水；（水"),
+        (P::Closing, 70.0)
+    );
+    assert_eq!(
+        layout(WritingMode::VerticalRl, "ja", "水：（水"),
+        (P::Middle, 70.0)
+    );
+    // Upright vertical colons and semicolons fill more than half of the
+    // vertical em, so they are neither closing nor middle punctuation and
+    // leave the following bracket fullwidth.
+    for (lang, text) in [
+        ("ja", "水；（水"),
+        ("zh-Hans", "水：（水"),
+        ("zh-Hans", "水；（水"),
+        ("zh-Hant", "水：（水"),
+        ("zh-Hant", "水；（水"),
+    ] {
+        let (colon, size) = punctuation(WritingMode::VerticalRl, lang, text);
+        assert_eq!((colon.class, size), (P::Other, 80.0), "{lang} {text}");
+        assert_eq!(
+            (colon.left, colon.right),
+            (LayoutUnit::ZERO, LayoutUnit::ZERO)
+        );
+    }
+    // The dot convention also comes from the glyph in both flows.
+    assert_eq!(
+        layout(WritingMode::HorizontalTb, "zh-Hant", "水。（水"),
+        (P::Middle, 70.0)
+    );
+    assert_eq!(
+        layout(WritingMode::VerticalRl, "ja", "水。（水"),
+        (P::Closing, 70.0)
+    );
+    assert_eq!(
+        layout(WritingMode::VerticalRl, "zh-Hant", "水。（水"),
+        (P::Middle, 70.0)
+    );
+}
+
+#[test]
+fn vertical_normal_keeps_wrapped_opening_from_another_inline_fullwidth() {
+    use crate::node::{InlineEdges, NodeId, TextSource};
+    use crate::style::{FontFamily, InlineStyle, ParagraphStyle, TextSpacingTrim};
+
+    let (limits, fonts) = vertical_spacing_fonts("Wrapped CJK");
+    let root = InlineStyle {
+        font_families: vec![FontFamily::Named("Wrapped CJK".into())],
+        font_size: 20.0,
+        lang: Some("ja".into()),
+        text_spacing_trim: TextSpacingTrim::Normal,
+        ..Default::default()
+    };
+    let style = ParagraphStyle {
+        writing_mode: WritingMode::VerticalRl,
+        root: root.clone(),
+        ..Default::default()
+    };
+    let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+    builder.push_text(TextSource::Generated { node: NodeId(1) }, "水水水）");
+    builder.open_inline(NodeId(2), &root, InlineEdges::default());
+    builder.push_text(TextSource::Generated { node: NodeId(3) }, "（水");
+    builder.close_inline();
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    let mut sizes = Vec::new();
+    let mut token = paragraph.start_token();
+    while let crate::LineResult::Line(line) = paragraph.next_line(
+        &mut crate::LayoutContext::new(),
+        token,
+        &Default::default(),
+        &crate::LineConstraint::new(80.0),
+        &crate::AtomicSizes::EMPTY,
+    ) {
+        sizes.push(line.inline_size());
+        token = line.break_token();
+    }
+    // `normal` does not trim the start of a line, even though the opening
+    // bracket would pair with the closing bracket on the previous line.
+    assert_eq!(sizes, [80.0, 40.0]);
+}
+
+#[test]
+fn colon_punctuation_class_follows_synthetic_and_sideways_glyphs() {
+    use crate::line::punctuation::PunctuationClass as P;
+    use crate::node::{InlineEdges, NodeId, TextSource};
+    use crate::style::{FontFamily, InlineStyle, ParagraphStyle, TextOrientation, TextSpacingTrim};
+
+    let (limits, fonts) = vertical_spacing_fonts("Synthetic colon CJK");
+    let layout = |orientation, bold_colon: bool| {
+        let root = InlineStyle {
+            font_families: vec![FontFamily::Named("Synthetic colon CJK".into())],
+            font_size: 20.0,
+            lang: Some("ja".into()),
+            text_spacing_trim: TextSpacingTrim::Normal,
+            text_orientation: orientation,
+            ..Default::default()
+        };
+        let style = ParagraphStyle {
+            writing_mode: WritingMode::VerticalRl,
+            root: root.clone(),
+            ..Default::default()
+        };
+        let mut colon = root.clone();
+        if bold_colon {
+            colon.font_weight = 700.0;
+        }
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        builder.open_inline(NodeId(1), &colon, InlineEdges::default());
+        builder.push_text(TextSource::Generated { node: NodeId(2) }, "水；");
+        builder.close_inline();
+        builder.push_text(TextSource::Generated { node: NodeId(3) }, "（水");
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        let crate::LineResult::Line(line) = paragraph.next_line(
+            &mut crate::LayoutContext::new(),
+            paragraph.start_token(),
+            &Default::default(),
+            &crate::LineConstraint::new(400.0),
+            &crate::AtomicSizes::EMPTY,
+        ) else {
+            panic!("expected one line")
+        };
+        let synthetic = paragraph.data.runs.iter().any(|run| run.instance.embolden);
+        (
+            paragraph.data.punctuation[1].class,
+            line.inline_size(),
+            synthetic,
+        )
+    };
+
+    // Synthetic emboldening keeps the upright semicolon filling the em.
+    assert_eq!(layout(TextOrientation::Mixed, true), (P::Other, 80.0, true));
+    // Sideways text measures the rotated horizontal glyph instead.
+    assert_eq!(
+        layout(TextOrientation::Sideways, false),
+        (P::Middle, 70.0, false)
+    );
+}
