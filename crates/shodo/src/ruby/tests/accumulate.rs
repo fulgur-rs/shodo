@@ -512,7 +512,9 @@ pub(super) fn cursive_siblings(limits: &Limits) -> Paragraph {
 }
 
 /// Preserved tabs between siblings: width queries for different starts
-/// replace the tab prefix (a `RangeCache` invalidation).
+/// replace the tab prefix. The steps stay clean, so the replacement does not
+/// invalidate the `RangeCache` (see `effectful_tab_siblings` for the one that
+/// does).
 pub(super) fn tab_siblings(limits: &Limits) -> Paragraph {
     let tab = InlineStyle {
         white_space_collapse: WhiteSpaceCollapse::Preserve,
@@ -986,6 +988,19 @@ fn effectful_tab_prefix_replacement_stops_replay() {
     );
     assert_eq!(observed, reference);
     assert!(counters.resets > 0, "{counters:?}");
+    // The epoch moves past its post-begin value because the saturating tab
+    // prefix was replaced.
+    let mut cx = mode_context(Mode::Accumulate);
+    cx.ruby_ranges
+        .begin(&fixture.paragraph.data, &AtomicSizes::EMPTY);
+    let epoch = cx.ruby_ranges.epoch();
+    let containers = &fixture.paragraph.data.ruby.containers;
+    let starts = [0, containers[1].units.start, containers[2].units.start];
+    sweep_in(&fixture.paragraph, &starts, &mut cx);
+    assert!(
+        cx.ruby_ranges.epoch() > epoch,
+        "the replacement must move the epoch"
+    );
     assert_eq!(
         observe_layout_in(&fixture, Mode::Accumulate),
         observe_layout_in(&fixture, Mode::Reference)
@@ -1187,17 +1202,21 @@ fn saturating_replayed_runs_add_one_value_at_a_time() {
     assert!(cx.ruby_sequential_replays > 0, "{:?}", observed.4);
 }
 
-/// Tab prefixes replaced for alternating starts move the cache epoch inside
-/// and between steps; every surviving accumulator holds entries of the
-/// current epoch only, and the values match the reference.
+/// Tab prefixes replaced for alternating starts: with saturating tab steps
+/// the cache epoch moves inside and between steps (past its post-begin
+/// value); every surviving accumulator holds entries of the current epoch
+/// only, and the values match the reference.
 #[test]
 fn alternating_tab_starts_keep_entries_of_the_current_epoch() {
-    let p = tab_siblings(&Limits::default());
+    let p = effectful_tab_siblings(&Limits::default());
     let containers = &p.data.ruby.containers;
     let starts = [0, containers[1].units.start, containers[2].units.start];
     let reference = sweep_from(&p, &starts, Mode::Reference);
     for mode in [Mode::Accumulate, Mode::Verify] {
         let mut cx = mode_context(mode);
+        // The first `begin` invalidates once for the new root; capture the
+        // epoch after it so only tab-driven moves are counted.
+        cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
         let epoch = cx.ruby_ranges.epoch();
         let observed = sweep_in(&p, &starts, &mut cx);
         assert_eq!(
@@ -1206,8 +1225,8 @@ fn alternating_tab_starts_keep_entries_of_the_current_epoch() {
             "{mode:?}"
         );
         assert!(
-            cx.ruby_ranges.epoch() != epoch,
-            "the starts must replace the tab prefix"
+            cx.ruby_ranges.epoch() > epoch,
+            "{mode:?}: the starts must replace the saturating tab prefix"
         );
         // Every surviving accumulator was recorded under the current epoch.
         for key in cx.ruby_memo.accumulator_keys().into_iter().flatten() {
@@ -1217,6 +1236,28 @@ fn alternating_tab_starts_keep_entries_of_the_current_epoch() {
                 "{mode:?}"
             );
         }
+    }
+}
+
+/// Clean counterpart: the same alternating starts over 40px tabs replace the
+/// prefix without moving the epoch.
+#[test]
+fn alternating_clean_tab_starts_keep_the_epoch() {
+    let p = tab_siblings(&Limits::default());
+    let containers = &p.data.ruby.containers;
+    let starts = [0, containers[1].units.start, containers[2].units.start];
+    let reference = sweep_from(&p, &starts, Mode::Reference);
+    for mode in [Mode::Accumulate, Mode::Verify] {
+        let mut cx = mode_context(mode);
+        cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+        let epoch = cx.ruby_ranges.epoch();
+        let observed = sweep_in(&p, &starts, &mut cx);
+        assert_eq!(
+            (&observed.0, observed.1, observed.2, &observed.3),
+            (&reference.0, reference.1, reference.2, &reference.3),
+            "{mode:?}"
+        );
+        assert_eq!(cx.ruby_ranges.epoch(), epoch, "{mode:?}");
     }
 }
 
@@ -1960,6 +2001,7 @@ pub(super) fn sibling_fixtures() -> Vec<Fixture> {
             ),
         ),
         Fixture::new("tab-siblings", tab_siblings(&default)),
+        Fixture::new("effectful-tab-siblings", effectful_tab_siblings(&default)),
         Fixture::new("atomic-siblings", atomic_siblings(&limits(None, Some(2)))),
         Fixture::new(
             "first-line-siblings",
