@@ -78,3 +78,6 @@ name = "combine_empty_passes"
 
 [[example]]
 name = "tcy_base_reuse"
+
+[[example]]
+name = "d77_scale"

@@ -125,7 +125,7 @@ fn selected_lanes<'a>(
     })
 }
 
-fn cut_at_or_after(ruby: &super::prepare::PreparedRuby, unit: usize) -> usize {
+pub(super) fn cut_at_or_after(ruby: &super::prepare::PreparedRuby, unit: usize) -> usize {
     ruby.cuts
         .partition_point(|c| c.unit < unit)
         .min(ruby.cuts.len() - 1)
@@ -151,6 +151,78 @@ pub(crate) fn candidate(
     candidate_inner(data, start, end, atomics, cx, sat)
 }
 
+/// Adjustment-only candidate for fit probes (line scan, partial-line index,
+/// intrinsic sizes). Accepted lines call `candidate` through `apply`, which
+/// also keeps the fragments. The container core is memoized per operation by
+/// `start..through` (`super::memo`); the end-dependent look-ahead tail is
+/// always computed live, after the core, preserving the side-effect order.
+pub(crate) fn candidate_adjustment(
+    data: &ParagraphData,
+    start: usize,
+    end: usize,
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    cx.ruby_ranges.begin(data, atomics);
+    if start >= end || data.ruby.containers.is_empty() {
+        return LayoutUnit::ZERO;
+    }
+    if !cx.reuse_enabled() {
+        // The reference path measures every probe in full.
+        return candidate_inner(data, start, end, atomics, cx, sat).adjustment;
+    }
+    // Fit probes grow `end` for a fixed `start`: resume the previous walk.
+    let mut walk = cx.ruby_memo.take_walk();
+    let through = super::memo::advance(&mut walk, data, start, end);
+    let key = super::memo::MemoKey::new(data, atomics, start, through);
+    let generation = cx.ruby_ranges.generation();
+    let core = match cx.ruby_memo.get(&key) {
+        Some(entry)
+            if entry.generation == generation
+                && crate::line::replay::replay(cx, &entry.effects, sat) =>
+        {
+            #[cfg(test)]
+            {
+                cx.ruby_memo_hits += 1;
+            }
+            entry.adjustment
+        }
+        _ if through == end => {
+            // No look-ahead: the key can still replay the entry of an earlier
+            // look-ahead probe with the same `through` (above), but it is not
+            // stored. Fit scans ask for an exact key once per scan, so storing
+            // it only grows the memo by one entry per probe (one per unit in
+            // `intrinsic_sizes`). Measure as the reference path does.
+            let containers = walk.as_ref().map_or(&[][..], |w| w.visited());
+            measure_containers(data, start..through, containers, atomics, cx, sat).adjustment
+        }
+        _ => {
+            let containers = walk.as_ref().map_or(&[][..], |w| w.visited());
+            let recording = crate::line::replay::begin(cx, sat);
+            let adjustment =
+                measure_containers(data, start..through, containers, atomics, cx, sat).adjustment;
+            let effects = crate::line::replay::finish(cx, recording, sat);
+            // A recording that filled a cache whose later hits skip side
+            // effects is not what measuring again would do; measure again.
+            match effects.filter(|_| cx.ruby_ranges.generation() == generation) {
+                Some(effects) => cx.ruby_memo.insert(
+                    key,
+                    super::memo::MemoEntry {
+                        adjustment,
+                        effects,
+                        generation,
+                    },
+                ),
+                None => cx.ruby_memo.remove(&key),
+            }
+            adjustment
+        }
+    };
+    cx.ruby_memo.put_walk(walk);
+    lookahead(data, start, end, through, core, atomics, cx, sat)
+}
+
 pub(crate) fn candidate_inner(
     data: &ParagraphData,
     start: usize,
@@ -162,6 +234,31 @@ pub(crate) fn candidate_inner(
     if start >= end || data.ruby.containers.is_empty() {
         return RubyMeasure::default();
     }
+    let (through, containers) = walk(data, start, end, cx);
+    let mut measure = measure_containers(data, start..through, &containers, atomics, cx, sat);
+    measure.adjustment = lookahead(
+        data,
+        start,
+        end,
+        through,
+        measure.adjustment,
+        atomics,
+        cx,
+        sat,
+    );
+    measure
+}
+
+/// Visit the intersecting containers in structural order, extending `end` to
+/// the next legal paired endpoint. The visited list is a function of
+/// `start..through`: the containers with `units.end > start` and
+/// `units.start < through`, in index order.
+pub(super) fn walk(
+    data: &ParagraphData,
+    start: usize,
+    end: usize,
+    _cx: &mut LayoutContext,
+) -> (usize, Vec<usize>) {
     let mut through = end;
     let mut containers = Vec::new();
     data.ruby.intervals.intersecting(
@@ -172,21 +269,56 @@ pub(crate) fn candidate_inner(
             let ruby = &data.ruby.containers[container];
             #[cfg(test)]
             {
-                cx.ruby_measure_visits += 1;
+                _cx.ruby_measure_visits += 1;
             }
             let clipped = (*through).min(ruby.units.end);
             *through = (*through).max(ruby.cuts[cut_at_or_after(ruby, clipped)].unit);
             containers.push(container);
         },
     );
-    let selected = start..through;
+    (through, containers)
+}
+
+/// A probe measured through a later paired endpoint charges the look-ahead
+/// units beyond `end` as part of its adjustment.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn lookahead(
+    data: &ParagraphData,
+    start: usize,
+    end: usize,
+    through: usize,
+    adjustment: LayoutUnit,
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    if through <= end {
+        return adjustment;
+    }
+    let full = crate::line::ruby_range_width(data, start..through, atomics, cx, sat);
+    let consumed = crate::line::ruby_range_width(data, start..end, atomics, cx, sat);
+    adjustment.add(full.sub(consumed, sat), sat)
+}
+
+/// Measure the visited containers of `selected` (children before parents).
+pub(super) fn measure_containers(
+    data: &ParagraphData,
+    selected: Range<usize>,
+    containers: &[usize],
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> RubyMeasure {
     let mut measure = RubyMeasure::default();
+    // Every container below resolves its columns against `selected`; measure
+    // that line profile once per candidate.
+    let mut profile = crate::line::metric_index::ProfileShare::default();
     // Reverse structural traversal resolves children before parents. Index those
     // completed fragments by source start so siblings are never compared as
     // potential descendants of every subsequent column/container. Container
     // identity preserves ancestors that share a clipped continuation start.
     let mut completed = std::collections::BTreeMap::<(usize, usize), usize>::new();
-    for container in containers.into_iter().rev() {
+    for &container in containers.iter().rev() {
         let ruby = &data.ruby.containers[container];
         #[cfg(test)]
         {
@@ -300,6 +432,7 @@ pub(crate) fn candidate_inner(
             &selected,
             &bases,
             atomics,
+            &mut profile,
             cx,
             sat,
         );
@@ -364,6 +497,7 @@ pub(crate) fn candidate_inner(
                         tracks.base,
                         &source.paragraph.data,
                         atomics,
+                        &mut profile,
                         cx,
                         sat,
                     );
@@ -406,6 +540,7 @@ pub(crate) fn candidate_inner(
                 tracks.base,
                 child,
                 atomics,
+                &mut profile,
                 cx,
                 sat,
             );
@@ -453,11 +588,6 @@ pub(crate) fn candidate_inner(
             has_content,
         });
     }
-    if through > end {
-        let full = crate::line::ruby_range_width(data, selected, atomics, cx, sat);
-        let consumed = crate::line::ruby_range_width(data, start..end, atomics, cx, sat);
-        measure.adjustment = measure.adjustment.add(full.sub(consumed, sat), sat);
-    }
     measure
 }
 
@@ -477,6 +607,7 @@ fn lane_overhang(
     area: super::geometry::Bounds,
     child: &ParagraphData,
     atomics: &AtomicSizes,
+    share: &mut crate::line::metric_index::ProfileShare,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> (LayoutUnit, LayoutUnit) {
@@ -502,6 +633,7 @@ fn lane_overhang(
         area,
         cap,
         atomics,
+        share,
         cx,
         sat,
     );

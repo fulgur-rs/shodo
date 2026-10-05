@@ -13,7 +13,7 @@ thread_local! {
 }
 
 #[inline]
-fn visit() {
+pub(super) fn visit() {
     #[cfg(test)]
     VISITS.with(|count| count.set(count.get() + 1));
 }
@@ -463,32 +463,66 @@ impl ContainerIndex {
     /// Visit intersecting containers in structural order. The callback may
     /// extend `through` to the next legal paired endpoint; later siblings use
     /// that new bound, preserving the candidate look-ahead contract.
+    ///
+    /// Containers are sorted by source start, so the visit is a left-to-right
+    /// fold: a subtree whose furthest end is `<= start` is skipped and the
+    /// walk continues, while the first container starting at or after
+    /// `through` stops it (every later container starts there too, and
+    /// `through` changes only inside `emit`).
     pub(crate) fn intersecting(
         &self,
         containers: &[PreparedRuby],
         start: usize,
         through: &mut usize,
-        mut emit: impl FnMut(usize, &mut usize),
+        emit: impl FnMut(usize, &mut usize),
     ) {
-        if self.leaves == 0 || start >= *through {
-            return;
-        }
-        self.walk(containers, 1, 0..self.leaves, start, through, &mut emit);
+        self.intersecting_from(containers, start, 0, through, emit);
     }
 
+    /// `intersecting` restricted to container indices `>= from`, so a walk
+    /// stopped at `from` can resume with a larger `through`. The stop test
+    /// looks at the first leaf `>= from` of each subtree; anything it prunes
+    /// the full walk would stop at as well, so the visit order of the full
+    /// walk's suffix is unchanged.
+    pub(crate) fn intersecting_from(
+        &self,
+        containers: &[PreparedRuby],
+        start: usize,
+        from: usize,
+        through: &mut usize,
+        mut emit: impl FnMut(usize, &mut usize),
+    ) {
+        if self.leaves == 0 || start >= *through || from >= containers.len() {
+            return;
+        }
+        self.walk(
+            containers,
+            1,
+            0..self.leaves,
+            start,
+            from,
+            through,
+            &mut emit,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn walk(
         &self,
         containers: &[PreparedRuby],
         node: usize,
         range: Range<usize>,
         start: usize,
+        from: usize,
         through: &mut usize,
         emit: &mut impl FnMut(usize, &mut usize),
     ) {
         visit();
-        if self.ends[node] <= start
-            || range.start >= containers.len()
-            || containers[range.start].units.start >= *through
+        let first = range.start.max(from);
+        if range.end <= from
+            || self.ends[node] <= start
+            || first >= containers.len()
+            || containers[first].units.start >= *through
         {
             return;
         }
@@ -501,6 +535,7 @@ impl ContainerIndex {
                 node * 2,
                 range.start..middle,
                 start,
+                from,
                 through,
                 emit,
             );
@@ -509,6 +544,7 @@ impl ContainerIndex {
                 node * 2 + 1,
                 middle..range.end,
                 start,
+                from,
                 through,
                 emit,
             );

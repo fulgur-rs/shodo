@@ -276,7 +276,9 @@ fn within_line_reshape_budget(
     let bytes = u64::from(data.units[range.end - 1].text.end - data.units[range.start].text.start);
     let before = cx.edge_reshape_spent;
     cx.edge_reshape_spent = before.saturating_add(bytes);
-    if cx.edge_reshape_spent <= limit {
+    let within = cx.edge_reshape_spent <= limit;
+    crate::line::replay::record_charge(cx, bytes, limit, within);
+    if within {
         return true;
     }
     if before <= limit {

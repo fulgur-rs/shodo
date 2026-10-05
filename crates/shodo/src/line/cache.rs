@@ -241,8 +241,14 @@ impl PartialLine {
             prefix.push(next);
             let (delta, viable) = super::windows::candidate(data, start, start + k + 1, cx, sat);
             let delta = delta.add(
-                crate::ruby::measure::candidate(data, start, start + k + 1, atomics, cx, sat)
-                    .adjustment,
+                crate::ruby::measure::candidate_adjustment(
+                    data,
+                    start,
+                    start + k + 1,
+                    atomics,
+                    cx,
+                    sat,
+                ),
                 sat,
             );
             let suffix = decoration::width(data, start + k + 1, false, sat);
@@ -308,15 +314,14 @@ impl PartialLine {
                         .add(suffix, sat)
                         .add(super::windows::cost(&windows, start + k + 1, sat), sat);
                     let required = required.add(
-                        crate::ruby::measure::candidate(
+                        crate::ruby::measure::candidate_adjustment(
                             data,
                             start,
                             start + k + 1,
                             atomics,
                             cx,
                             sat,
-                        )
-                        .adjustment,
+                        ),
                         sat,
                     );
                     let adjustment = super::punctuation::edges(
@@ -635,7 +640,7 @@ pub(super) fn resolve(
             sum.add(window.delta(i, sat), sat)
         });
         let ruby_delta =
-            crate::ruby::measure::candidate(&data, start, i, atomics, cx, sat).adjustment;
+            crate::ruby::measure::candidate_adjustment(&data, start, i, atomics, cx, sat);
         return Err((node, ordinal, position.add(delta, sat).add(ruby_delta, sat)));
     }
     let (hang_start, trailing) =

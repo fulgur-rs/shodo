@@ -121,6 +121,7 @@ impl NeighborIndex {
         unit: usize,
         ruby_start: usize,
         atomics: &AtomicSizes,
+        share: &mut crate::line::metric_index::ProfileShare,
         cx: &mut LayoutContext,
         sat: &mut Saturation,
     ) -> Option<Bounds> {
@@ -149,12 +150,13 @@ impl NeighborIndex {
             boxes.extend(independent.iter().map(|b| Some(*b)));
         }
         let range = unit..unit + 1;
-        let geometry = crate::line::metric_index::content(
+        let geometry = crate::line::metric_index::content_shared(
             data,
             selected.clone(),
             std::slice::from_ref(&range),
             &boxes,
             atomics,
+            share,
             cx,
             sat,
         );
@@ -166,6 +168,25 @@ impl NeighborIndex {
     }
 }
 
+/// Neighbor index value slot; see `line::metric_index::take_index`.
+fn take_neighbors(data: &ParagraphData, cx: &mut LayoutContext) -> Box<NeighborIndex> {
+    let key = (data.id, data as *const ParagraphData as usize);
+    match cx
+        .ruby_ranges
+        .neighbors
+        .get_mut(&key)
+        .and_then(Option::take)
+    {
+        Some(index) => index,
+        None => Box::new(NeighborIndex::new(data, cx)),
+    }
+}
+
+fn put_neighbors(data: &ParagraphData, index: Box<NeighborIndex>, cx: &mut LayoutContext) {
+    let key = (data.id, data as *const ParagraphData as usize);
+    *cx.ruby_ranges.neighbors.entry(key).or_default() = Some(index);
+}
+
 /// Physical line-right column, from the same sparse pieces used by retained L2.
 pub(crate) fn rightmost_column(
     data: &ParagraphData,
@@ -173,18 +194,14 @@ pub(crate) fn rightmost_column(
     columns: &Range<usize>,
     cx: &mut LayoutContext,
 ) -> usize {
-    let key = (data.id, data as *const ParagraphData as usize);
-    if !cx.ruby_ranges.neighbors.contains_key(&key) {
-        let index = NeighborIndex::new(data, cx);
-        cx.ruby_ranges.neighbors.insert(key, index);
-    }
-    let index = cx.ruby_ranges.neighbors.get_mut(&key).unwrap();
+    let index = take_neighbors(data, cx);
     let target = bases[columns.start].start..bases[columns.end - 1].end;
     let (_, right) = index.columns.edges(target, false);
     #[cfg(test)]
     {
         cx.ruby_measure_visits += index.columns.take_visits();
     }
+    put_neighbors(data, index, cx);
     right
         .and_then(|u| {
             let i = bases.partition_point(|b| b.end <= u);
@@ -206,6 +223,7 @@ pub(crate) fn columns(
     selected: &Range<usize>,
     bases: &[Range<usize>],
     atomics: &AtomicSizes,
+    share: &mut crate::line::metric_index::ProfileShare,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> ColumnGeometry {
@@ -213,8 +231,16 @@ pub(crate) fn columns(
         .iter()
         .map(|c| c.box_index.or(ruby.box_index))
         .collect();
-    let geometry =
-        crate::line::metric_index::content(data, selected.clone(), bases, &boxes, atomics, cx, sat);
+    let geometry = crate::line::metric_index::content_shared(
+        data,
+        selected.clone(),
+        bases,
+        &boxes,
+        atomics,
+        share,
+        cx,
+        sat,
+    );
     let mut area = None;
     for (base, (content, bounds)) in bases
         .iter()
@@ -225,12 +251,13 @@ pub(crate) fn columns(
         }
     }
     let area = area.unwrap_or_else(|| {
-        crate::line::metric_index::content(
+        crate::line::metric_index::content_shared(
             data,
             selected.clone(),
             &[],
             &[ruby.box_index],
             atomics,
+            share,
             cx,
             sat,
         )
@@ -255,20 +282,16 @@ pub(crate) fn allowances(
     area: Bounds,
     cap: LayoutUnit,
     atomics: &AtomicSizes,
+    share: &mut crate::line::metric_index::ProfileShare,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> (LayoutUnit, LayoutUnit) {
     if cap == LayoutUnit::ZERO || columns.is_empty() {
         return (LayoutUnit::ZERO, LayoutUnit::ZERO);
     }
-    let key = (data.id, data as *const ParagraphData as usize);
-    if !cx.ruby_ranges.neighbors.contains_key(&key) {
-        let index = NeighborIndex::new(data, cx);
-        cx.ruby_ranges.neighbors.insert(key, index);
-    }
     // Move the scalar index out only while querying, so counters and bounded
     // actual advance queries can use the same context without cloning tables.
-    let mut index = cx.ruby_ranges.neighbors.remove(&key).unwrap();
+    let mut index = take_neighbors(data, cx);
     let target = ruby.units.start.max(selected.start)..ruby.units.end.min(selected.end);
     let (before, after) = index
         .neighbors
@@ -303,7 +326,7 @@ pub(crate) fn allowances(
             return LayoutUnit::ZERO;
         }
         let Some(neighbor) =
-            index.neighbor_bounds(data, selected, i, ruby.units.start, atomics, cx, sat)
+            index.neighbor_bounds(data, selected, i, ruby.units.start, atomics, share, cx, sat)
         else {
             return LayoutUnit::ZERO;
         };
@@ -326,6 +349,6 @@ pub(crate) fn allowances(
     } else {
         LayoutUnit::ZERO
     };
-    cx.ruby_ranges.neighbors.insert(key, index);
+    put_neighbors(data, index, cx);
     (leading, trailing)
 }

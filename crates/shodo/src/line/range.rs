@@ -15,13 +15,33 @@ use std::ops::Range;
 pub(crate) struct RangeCache {
     root: Option<(u64, usize, u64)>,
     sets: crate::hashing::FastMap<(u64, usize), Costs>,
-    pub(super) metrics: crate::hashing::FastMap<(u64, usize), super::metric_index::MetricIndex>,
+    /// Value slots: a query moves the index out and back without removing the
+    /// key, so the map is not rehashed per query. An empty slot is rebuilt.
+    pub(super) metrics:
+        crate::hashing::FastMap<(u64, usize), Option<Box<super::metric_index::MetricIndex>>>,
     blocks: crate::hashing::FastMap<(u64, usize, usize, usize), LayoutUnit>,
     pub(crate) neighbors:
-        crate::hashing::FastMap<(u64, usize), crate::ruby::overhang::NeighborIndex>,
+        crate::hashing::FastMap<(u64, usize), Option<Box<crate::ruby::overhang::NeighborIndex>>>,
+    /// Bumped whenever a cache fills or clears in a way that changes the side
+    /// effects of later queries: a `blocks` hit skips the reshape charges and
+    /// saturation of measuring the block, a `sets` hit skips the build's
+    /// saturation, and a tab prefix extends with saturating arithmetic. The
+    /// metric and neighbor index slots are side-effect free and do not count.
+    /// Per-operation reuse (`ruby::memo`) records and replays a measurement
+    /// only while this is unchanged, so replayed effects always equal those of
+    /// measuring again against the same cache state.
+    generation: u64,
 }
 
 impl RangeCache {
+    pub(crate) fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    fn bump(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+    }
+
     pub(crate) fn begin(&mut self, data: &ParagraphData, atomics: &AtomicSizes) {
         let root = (
             data.id,
@@ -46,7 +66,29 @@ impl RangeCache {
             self.metrics.clear();
             self.neighbors.clear();
             self.root = Some(root);
+            self.bump();
         }
+    }
+
+    /// Empty every index slot while keeping its key. The scalar caches are
+    /// cleared too, so a repeated query must go through the vacated slots
+    /// instead of being answered from a cached result.
+    #[cfg(test)]
+    pub(crate) fn vacate_slots(&mut self) {
+        self.sets.clear();
+        self.blocks.clear();
+        self.metrics.values_mut().for_each(|slot| *slot = None);
+        self.neighbors.values_mut().for_each(|slot| *slot = None);
+        self.bump();
+    }
+
+    /// Both index maps are populated and every slot holds an index.
+    #[cfg(test)]
+    pub(crate) fn slots_filled(&self) -> bool {
+        !self.metrics.is_empty()
+            && !self.neighbors.is_empty()
+            && self.metrics.values().all(Option::is_some)
+            && self.neighbors.values().all(Option::is_some)
     }
 }
 
@@ -82,6 +124,7 @@ pub(crate) fn block_size(
     }
     let height = bounds.height(sat);
     cx.ruby_ranges.blocks.insert(key, height);
+    cx.ruby_ranges.bump();
     height
 }
 
@@ -212,6 +255,10 @@ pub(super) fn width(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> Option<LayoutUnit> {
+    #[cfg(test)]
+    {
+        cx.ruby_width_calls += 1;
+    }
     let first = data
         .selectable_clusters
         .partition_point(|u| (*u as usize) < range.start);
@@ -268,6 +315,17 @@ pub(super) fn width(
     if !cx.ruby_ranges.sets.contains_key(&key) {
         let costs = build(data, atomics, cx, sat);
         cx.ruby_ranges.sets.insert(key, costs);
+        cx.ruby_ranges.bump();
+    }
+    let extends_tabs = cx.ruby_ranges.sets.get(&key).is_some_and(|costs| {
+        !costs.tabs.is_empty()
+            && costs
+                .tab_prefix
+                .as_ref()
+                .is_none_or(|p| p.start != range.start || p.through < range.end)
+    });
+    if extends_tabs {
+        cx.ruby_ranges.bump();
     }
     let costs = cx.ruby_ranges.sets.get_mut(&key)?;
     let mut tab_total = 0_i64;

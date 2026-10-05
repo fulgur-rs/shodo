@@ -8,13 +8,14 @@ mod decoration;
 pub(crate) mod font_metrics;
 pub(crate) mod fragments;
 mod hyphen;
-mod intrinsic;
+pub(crate) mod intrinsic;
 mod iter;
 pub(crate) mod metric_index;
 pub(crate) mod metrics;
 mod plan;
 pub(crate) mod punctuation;
 pub(crate) mod range;
+pub(crate) mod replay;
 pub(crate) mod reshape;
 mod scan;
 pub(crate) mod spacing;
@@ -312,7 +313,7 @@ impl Paragraph {
             };
             return LineResult::BlockInInline { node, token_after };
         }
-        cx.edge_reshape_spent = 0;
+        cx.begin_reshape_operation();
         let warning_checkpoint = cx.warnings.checkpoint();
         let mut sat = Saturation::default();
         let constraint = crate::sanitize::constraint(*constraint, &mut cx.warnings, &mut sat);

@@ -19,6 +19,11 @@ pub struct LayoutContext {
     /// Bytes of edge reshape windows requested by the current `next_line` or
     /// `intrinsic_sizes` call. First-line intrinsic passes share one budget.
     pub(crate) edge_reshape_spent: u64,
+    /// Reshape charges of the measurements currently being recorded for
+    /// exact replay.
+    pub(crate) reshape_log: crate::line::replay::ReshapeLog,
+    /// Adjustment-only ruby candidates measured in the current operation.
+    pub(crate) ruby_memo: crate::ruby::memo::RubyMemo,
     #[cfg(test)]
     pub(crate) cache_visits: usize,
     #[cfg(test)]
@@ -31,6 +36,26 @@ pub struct LayoutContext {
     pub(crate) ruby_lane_visits: usize,
     #[cfg(test)]
     pub(crate) ruby_column_visits: usize,
+    /// Measure every ruby candidate in full: the reference path that each
+    /// reuse path must match exactly.
+    #[cfg(test)]
+    pub(crate) ruby_reference: bool,
+    /// Calls of `line::range::width` (ruby range widths).
+    #[cfg(test)]
+    pub(crate) ruby_width_calls: usize,
+    /// Calls of `line::metric_index::scalar::measure`.
+    #[cfg(test)]
+    pub(crate) ruby_scalar_calls: usize,
+    /// Selected line profiles measured by `metric_index::content_shared`.
+    #[cfg(test)]
+    pub(crate) ruby_profile_selects: usize,
+    /// `line::replay::replay` calls refused by the gate (not counting
+    /// measurements that never recorded effects because they warned).
+    #[cfg(test)]
+    pub(crate) ruby_replay_refusals: usize,
+    /// Ruby candidate cores answered from `ruby_memo`.
+    #[cfg(test)]
+    pub(crate) ruby_memo_hits: usize,
 }
 
 impl LayoutContext {
@@ -41,6 +66,27 @@ impl LayoutContext {
     /// Warnings recorded by line layout since the last call.
     pub fn take_warnings(&mut self) -> Vec<Warning> {
         self.warnings.take()
+    }
+
+    /// Start one `next_line` or `intrinsic_sizes` operation: reset the edge
+    /// reshape budget and every per-operation reuse state bounded by it.
+    pub(crate) fn begin_reshape_operation(&mut self) {
+        self.edge_reshape_spent = 0;
+        self.reshape_log.clear();
+        self.ruby_memo.clear();
+    }
+
+    /// Whether measurements may be reused within an operation. Tests switch
+    /// reuse off to obtain the reference path.
+    pub(crate) fn reuse_enabled(&self) -> bool {
+        #[cfg(test)]
+        {
+            !self.ruby_reference
+        }
+        #[cfg(not(test))]
+        {
+            true
+        }
     }
 
     /// Drops scratch that exceeds the current shaping window's conservative cap.
@@ -71,6 +117,7 @@ impl LayoutContext {
         // Release it conservatively on any explicit shrink.
         self.completed = None;
         self.ruby_ranges = Default::default();
+        self.ruby_memo = Default::default();
         self.edge_shapes.clear();
         if bytes == 0 || self.scratch_bytes > bytes {
             self.scratch = None;
