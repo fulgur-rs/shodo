@@ -4,11 +4,15 @@ use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
 use crate::limits::Limits;
 use crate::node::{NodeId, TextSource};
 use crate::style::{
-    FontFamily, FontMetricKind, FontSizeAdjust, FontVariation, InlineStyle, ParagraphStyle,
-    TextSpacingTrim,
+    FontFamily, FontFeature, FontMetricKind, FontSizeAdjust, FontVariation, InlineStyle,
+    ParagraphStyle, TextSpacingTrim,
 };
 use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult, ParagraphBuilder};
-use skrifa::{FontRef, MetadataProvider, raw::TableProvider};
+use skrifa::{
+    FontRef, GlyphId, MetadataProvider,
+    instance::{LocationRef, Size},
+    raw::TableProvider,
+};
 
 fn cjk_tables() -> Vec<([u8; 4], Vec<u8>)> {
     let base = crate::test_support::fonts::CJK;
@@ -422,10 +426,166 @@ fn quote_font(proportional: bool) -> Vec<u8> {
     cjk_font(&mut tables)
 }
 
+fn quote_font_with_halt() -> Vec<u8> {
+    let base = FontRef::new(crate::test_support::fonts::CJK).unwrap();
+    let fullwidth_glyph = base.charmap().map('水').unwrap().to_u32() as u16;
+    let mut tables = cjk_tables();
+    add_cmap_format12_mappings(
+        &mut tables,
+        &[
+            ('\u{2019}' as u32, fullwidth_glyph),
+            ('\u{201d}' as u32, fullwidth_glyph),
+            ('卜' as u32, fullwidth_glyph),
+            ('一' as u32, fullwidth_glyph),
+        ],
+    );
+
+    // GPOS SinglePos applies an author-selected `halt` advance reduction.
+    let mut gpos = Vec::new();
+    for value in [1u16, 0, 10, 30, 44, 1] {
+        gpos.extend(value.to_be_bytes());
+    }
+    gpos.extend(b"DFLT");
+    for value in [8u16, 4, 0, 0, 0xffff, 1, 0, 1] {
+        gpos.extend(value.to_be_bytes());
+    }
+    gpos.extend(b"halt");
+    for value in [
+        8u16,
+        0,
+        1,
+        0,
+        1,
+        4,
+        1,
+        0,
+        1,
+        8,
+        1,
+        8,
+        4,
+        (-500i16) as u16,
+        1,
+        1,
+        fullwidth_glyph,
+    ] {
+        gpos.extend(value.to_be_bytes());
+    }
+    tables.retain(|table| table.0 != *b"GPOS");
+    tables.push((*b"GPOS", gpos));
+    cjk_font(&mut tables)
+}
+
+fn quote_font_with_expansion(glyph_count: u16) -> Vec<u8> {
+    assert!(glyph_count > 1);
+    let base = FontRef::new(crate::test_support::fonts::CJK).unwrap();
+    let quote_glyph = base.charmap().map('、').unwrap().to_u32() as u16;
+    let fullwidth_glyph = base.charmap().map('水').unwrap().to_u32() as u16;
+    let mut tables = cjk_tables();
+    let hmtx = &mut tables
+        .iter_mut()
+        .find(|table| table.0 == *b"hmtx")
+        .unwrap()
+        .1;
+    // Keep metrics positive and proportional while making the test cluster
+    // cross the run pen limit at the ordinary test font size.
+    hmtx[usize::from(quote_glyph) * 4..usize::from(quote_glyph) * 4 + 2]
+        .copy_from_slice(&16384u16.to_be_bytes());
+    hmtx[usize::from(fullwidth_glyph) * 4..usize::from(fullwidth_glyph) * 4 + 2]
+        .copy_from_slice(&32767u16.to_be_bytes());
+    let head = &mut tables
+        .iter_mut()
+        .find(|table| table.0 == *b"head")
+        .unwrap()
+        .1;
+    head[18..20].copy_from_slice(&32u16.to_be_bytes());
+    add_cmap_format12_mappings(
+        &mut tables,
+        &[
+            ('\u{2019}' as u32, quote_glyph),
+            ('\u{201d}' as u32, quote_glyph),
+            ('卜' as u32, fullwidth_glyph),
+            ('一' as u32, fullwidth_glyph),
+        ],
+    );
+
+    // Place Coverage after the MultipleSubst Sequence table.
+    let coverage_offset = 10 + 2 * glyph_count;
+    let mut gsub = Vec::new();
+    for value in [1u16, 0, 10, 30, 44, 1] {
+        gsub.extend(value.to_be_bytes());
+    }
+    gsub.extend(b"DFLT");
+    for value in [8u16, 4, 0, 0, 0xffff, 1, 0, 1] {
+        gsub.extend(value.to_be_bytes());
+    }
+    gsub.extend(b"ccmp");
+    for value in [
+        8u16,
+        0,
+        1,
+        0,
+        1,
+        4,
+        2,
+        0,
+        1,
+        8,
+        1,
+        coverage_offset,
+        1,
+        8,
+        glyph_count,
+    ] {
+        gsub.extend(value.to_be_bytes());
+    }
+    for _ in 0..glyph_count {
+        gsub.extend(quote_glyph.to_be_bytes());
+    }
+    for value in [1u16, 1, quote_glyph] {
+        gsub.extend(value.to_be_bytes());
+    }
+    tables.retain(|table| table.0 != *b"GSUB");
+    tables.push((*b"GSUB", gsub));
+    cjk_font(&mut tables)
+}
+
+fn quote_font_without_quote_metric() -> (Vec<u8>, u16) {
+    let base = FontRef::new(crate::test_support::fonts::CJK).unwrap();
+    let invalid_glyph = base.maxp().unwrap().num_glyphs() + 1;
+    let fullwidth_glyph = base.charmap().map('水').unwrap().to_u32() as u16;
+    let mut tables = cjk_tables();
+    add_cmap_format12_mappings(
+        &mut tables,
+        &[
+            ('\u{2019}' as u32, invalid_glyph),
+            ('卜' as u32, fullwidth_glyph),
+            ('一' as u32, fullwidth_glyph),
+        ],
+    );
+    (cjk_font(&mut tables), invalid_glyph)
+}
+
 fn quote_paragraph(
     text: &str,
     writing_mode: crate::geometry::WritingMode,
     proportional: bool,
+) -> crate::Paragraph {
+    quote_paragraph_with_font(
+        text,
+        writing_mode,
+        quote_font(proportional),
+        20.0,
+        Vec::new(),
+    )
+}
+
+fn quote_paragraph_with_font(
+    text: &str,
+    writing_mode: crate::geometry::WritingMode,
+    font: Vec<u8>,
+    font_size: f32,
+    font_features: Vec<FontFeature>,
 ) -> crate::Paragraph {
     let limits = Limits::default();
     let fonts = FontCollection::with_options(
@@ -437,7 +597,7 @@ fn quote_paragraph(
     );
     fonts
         .register_face(
-            quote_font(proportional),
+            font,
             0,
             FontFaceDescriptor {
                 family: "QuoteMetrics".into(),
@@ -449,7 +609,8 @@ fn quote_paragraph(
         writing_mode,
         root: InlineStyle {
             font_families: vec![FontFamily::Named("QuoteMetrics".into())],
-            font_size: 20.0,
+            font_size,
+            font_features,
             ..Default::default()
         },
         ..Default::default()
@@ -495,6 +656,97 @@ fn intrinsic_proportional_quotes_only_change_horizontal_pairing() {
         assert_eq!(pair(before, quote), (before.right, LayoutUnit::ZERO));
         assert_eq!(pair(quote, after), (LayoutUnit::ZERO, LayoutUnit::ZERO));
     }
+}
+
+#[test]
+fn author_halt_keeps_fullwidth_quote_class_from_its_original_metric() {
+    use crate::geometry::WritingMode;
+
+    let font = quote_font_with_halt();
+    let face = FontRef::new(&font).unwrap();
+    let glyph = face.charmap().map('水').unwrap();
+    let original_metric = face
+        .glyph_metrics(Size::new(20.0), LocationRef::new(&[]))
+        .advance_width(glyph)
+        .unwrap();
+    assert!((original_metric - 20.0).abs() < 1.0 / 64.0);
+
+    let paragraph = quote_paragraph_with_font(
+        "’",
+        WritingMode::HorizontalTb,
+        font,
+        20.0,
+        vec![FontFeature {
+            tag: *b"halt",
+            value: 1,
+        }],
+    );
+    assert_eq!(paragraph.data.glyphs.id, [glyph.to_u32()]);
+    assert_eq!(paragraph.data.glyphs.advance[0].to_f32(), 10.0);
+    assert_eq!(paragraph.data.punctuation[0].class, P::Closing);
+    assert_eq!(paragraph.data.punctuation[0].advance.to_f32(), 10.0);
+}
+
+#[test]
+fn missing_quote_glyph_metric_keeps_closing_class() {
+    use crate::geometry::WritingMode;
+
+    let (font, invalid_glyph) = quote_font_without_quote_metric();
+    let face = FontRef::new(&font).unwrap();
+    let metrics = face.glyph_metrics(Size::new(20.0), LocationRef::new(&[]));
+    assert!(
+        metrics
+            .advance_width(face.charmap().map('水').unwrap())
+            .is_some()
+    );
+    assert!(
+        metrics
+            .advance_width(GlyphId::new(u32::from(invalid_glyph)))
+            .is_none()
+    );
+
+    let paragraph =
+        quote_paragraph_with_font("’", WritingMode::HorizontalTb, font, 20.0, Vec::new());
+    assert_eq!(paragraph.data.glyphs.id, [u32::from(invalid_glyph)]);
+    assert_eq!(paragraph.data.punctuation[0].class, P::Closing);
+}
+
+#[test]
+fn proportional_quote_expanded_across_runs_keeps_closing_class() {
+    use crate::geometry::WritingMode;
+
+    // 1,639 glyphs split at the pen budget into 1,638 + 1 in this font.
+    let font_bytes = quote_font_with_expansion(1639);
+    let face = FontRef::new(&font_bytes).unwrap();
+    let metrics = face.glyph_metrics(Size::new(20.0), LocationRef::new(&[]));
+    let quote_glyph = face.charmap().map('、').unwrap();
+    let fullwidth_glyph = face.charmap().map('水').unwrap();
+    let quote_metric = metrics.advance_width(quote_glyph).unwrap();
+    let fullwidth_metric = metrics.advance_width(fullwidth_glyph).unwrap();
+    assert!(
+        quote_metric < fullwidth_metric,
+        "{quote_metric} >= {fullwidth_metric}"
+    );
+    let paragraph =
+        quote_paragraph_with_font("’", WritingMode::HorizontalTb, font_bytes, 20.0, Vec::new());
+    assert_eq!(paragraph.data.glyphs.len(), 1639);
+    let run_sizes: Vec<_> = paragraph
+        .data
+        .runs
+        .iter()
+        .map(|run| run.glyphs.end - run.glyphs.start)
+        .collect();
+    assert_eq!(run_sizes, [1638, 1]);
+    assert!(paragraph.data.runs.iter().all(|run| run.text == (0..3)));
+    assert!(
+        paragraph
+            .data
+            .glyphs
+            .cluster
+            .iter()
+            .all(|offset| *offset == 0)
+    );
+    assert_eq!(paragraph.data.punctuation[0].class, P::Closing);
 }
 
 fn paragraph_without_fullwidth_metric(text: &str) -> crate::Paragraph {

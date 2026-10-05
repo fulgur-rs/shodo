@@ -263,6 +263,9 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
                 && p.class == PunctuationClass::Closing
                 && matches!(source_char, '\u{2019}' | '\u{201d}')
                 && g == begin + 1
+                // Pen-budget splits may place one cluster across multiple runs.
+                && (begin == 0 || data.glyphs.cluster[begin - 1] != offset)
+                && (g == data.glyphs.cluster.len() || data.glyphs.cluster[g] != offset)
                 && reliable_fullwidth_metric
                 && !run.instance.embolden
                 && run.instance.skew.is_none()
