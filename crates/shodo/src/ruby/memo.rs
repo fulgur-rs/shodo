@@ -167,6 +167,7 @@ impl RubyMemo {
     pub(crate) fn take_accumulator(
         &mut self,
         key: super::accumulate::AccumulatorKey,
+        epoch: u64,
     ) -> super::accumulate::Accumulator {
         if let Some(i) = self.accumulators.iter().position(|a| a.key() == Some(key)) {
             return self.accumulators.remove(i);
@@ -176,14 +177,18 @@ impl RubyMemo {
         } else {
             Default::default()
         };
-        accumulator.reset(Some(key), 0);
+        // Reset under the caller's epoch so `prepare` does not reset again.
+        accumulator.reset(Some(key), epoch);
         accumulator
     }
 
     /// Put an accumulator back as the most recently used. Take/put pairs
-    /// nest (a nested candidate measured while an outer accumulator is out
-    /// takes and puts its own), so the slots may already be full here: the
-    /// least recently used accumulators are dropped to keep the bound.
+    /// may nest (a nested candidate measured while an outer accumulator is
+    /// out takes and puts its own), so the slots may already be full here: the
+    /// least recently used accumulators are dropped to keep the bound. The
+    /// nesting is defensive and not reachable today: `candidate_adjustment`
+    /// is called only from scan, cache and intrinsic, and `measure_one` uses
+    /// `candidate_inner` for lanes.
     pub(crate) fn put_accumulator(&mut self, accumulator: super::accumulate::Accumulator) {
         // A nested candidate with the same key may have put a fresh
         // accumulator back while this one was out: the one put last wins, so
@@ -305,7 +310,7 @@ mod tests {
         let key = AccumulatorKey::for_test;
         let mut memo = RubyMemo::default();
         for start in [1, 2, 1, 3] {
-            let accumulator = memo.take_accumulator(key(start));
+            let accumulator = memo.take_accumulator(key(start), 0);
             assert_eq!(accumulator.key(), Some(key(start)));
             memo.put_accumulator(accumulator);
         }
@@ -323,15 +328,15 @@ mod tests {
         let key = AccumulatorKey::for_test;
         let mut memo = RubyMemo::default();
         for start in [1, 2] {
-            let mut accumulator = memo.take_accumulator(key(start));
+            let mut accumulator = memo.take_accumulator(key(start), 0);
             accumulator.push_raw(Entry::placeholder(None));
             memo.put_accumulator(accumulator);
         }
         assert_eq!(memo.accumulator_keys(), vec![Some(key(1)), Some(key(2))]);
         // An outer probe takes 1; a nested probe takes and puts a fresh 3.
-        let mut outer = memo.take_accumulator(key(1));
+        let mut outer = memo.take_accumulator(key(1), 0);
         assert_eq!((outer.key(), outer.len()), (Some(key(1)), 1));
-        let nested = memo.take_accumulator(key(3));
+        let nested = memo.take_accumulator(key(3), 0);
         assert_eq!((nested.key(), nested.len()), (Some(key(3)), 0));
         memo.put_accumulator(nested);
         assert_eq!(memo.accumulator_keys(), vec![Some(key(2)), Some(key(3))]);
@@ -340,12 +345,12 @@ mod tests {
         memo.put_accumulator(outer);
         assert!(memo.accumulator_keys().len() <= MAX_ACCUMULATORS);
         assert_eq!(memo.accumulator_keys(), vec![Some(key(3)), Some(key(1))]);
-        let outer = memo.take_accumulator(key(1));
+        let outer = memo.take_accumulator(key(1), 0);
         assert_eq!((outer.key(), outer.len()), (Some(key(1)), 2));
         memo.put_accumulator(outer);
         // A new key with full slots reuses the least recently used (3)
         // allocation, re-keyed and emptied.
-        let fresh = memo.take_accumulator(key(4));
+        let fresh = memo.take_accumulator(key(4), 0);
         assert_eq!((fresh.key(), fresh.len()), (Some(key(4)), 0));
         assert_eq!(memo.accumulator_keys(), vec![Some(key(1))]);
         memo.put_accumulator(fresh);
@@ -360,9 +365,9 @@ mod tests {
         use crate::ruby::accumulate::{AccumulatorKey, Entry};
         let key = AccumulatorKey::for_test;
         let mut memo = RubyMemo::default();
-        let mut outer = memo.take_accumulator(key(1));
+        let mut outer = memo.take_accumulator(key(1), 0);
         outer.push_raw(Entry::placeholder(None));
-        let nested = memo.take_accumulator(key(1));
+        let nested = memo.take_accumulator(key(1), 0);
         assert_eq!(nested.len(), 0);
         memo.put_accumulator(nested);
         memo.put_accumulator(outer);

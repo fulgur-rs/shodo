@@ -269,7 +269,7 @@ fn gate(cx: &LayoutContext, effects: &Effects) -> bool {
 }
 
 /// Whether `replay` would apply `effects` now; changes nothing.
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg(test)]
 pub(crate) fn replayable(cx: &LayoutContext, effects: &Effects) -> bool {
     gate(cx, effects)
 }

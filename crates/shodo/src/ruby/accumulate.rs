@@ -790,8 +790,9 @@ pub(crate) fn core(
         )
         .adjustment;
     }
-    let mut accumulator = cx.ruby_memo.take_accumulator(key);
-    let kept = accumulator.prepare(key, data, through, containers, cx.ruby_ranges.epoch());
+    let epoch = cx.ruby_ranges.epoch();
+    let mut accumulator = cx.ruby_memo.take_accumulator(key, epoch);
+    let kept = accumulator.prepare(key, data, through, containers, epoch);
     let mut step = Step {
         data,
         containers,
