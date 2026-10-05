@@ -349,6 +349,7 @@ impl Descendants for Completed<'_> {
             #[cfg(test)]
             {
                 _cx.ruby_measure_visits += 1;
+                _cx.ruby_descendant_reads += 1;
             }
             if nested.units.end <= range.end {
                 width = width.add(nested.adjustment, sat);
@@ -368,6 +369,7 @@ impl Descendants for Completed<'_> {
             #[cfg(test)]
             {
                 _cx.ruby_measure_visits += 1;
+                _cx.ruby_descendant_reads += 1;
             }
             if nested.units.end <= range.end {
                 area = area.union(nested.whole_area);

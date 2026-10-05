@@ -68,7 +68,7 @@ pub struct LayoutContext {
     pub(crate) ruby_replayed_containers: usize,
     /// Accumulator dirty marks by reason (`ruby::accumulate::Dirty`).
     #[cfg(test)]
-    pub(crate) ruby_dirty: [usize; 8],
+    pub(crate) ruby_dirty: [usize; 7],
     /// Accumulators reset at the end of a step that could not keep them.
     #[cfg(test)]
     pub(crate) ruby_accumulator_resets: usize,
@@ -95,6 +95,16 @@ pub struct LayoutContext {
     /// the detached profile contract).
     #[cfg(test)]
     pub(crate) ruby_repeated_profile_replays: usize,
+    /// Reads of completed descendants by an enclosing container: one per
+    /// read the accumulator's segment tree answers, one per position or
+    /// fragment iterated otherwise (its fallback loop, and the reference
+    /// path's `measure::Completed`). Counted apart from general visits.
+    #[cfg(test)]
+    pub(crate) ruby_descendant_reads: usize,
+    /// Detached profile measurements (`metric_index::content_shared`) that
+    /// warned, so the step kept no fixed profile.
+    #[cfg(test)]
+    pub(crate) ruby_profile_warnings: usize,
 }
 
 impl LayoutContext {

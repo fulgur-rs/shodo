@@ -185,6 +185,12 @@ impl RubyMemo {
     /// takes and puts its own), so the slots may already be full here: the
     /// least recently used accumulators are dropped to keep the bound.
     pub(crate) fn put_accumulator(&mut self, accumulator: super::accumulate::Accumulator) {
+        // A nested candidate with the same key may have put a fresh
+        // accumulator back while this one was out: the one put last wins, so
+        // no key is held twice.
+        if let Some(key) = accumulator.key() {
+            self.accumulators.retain(|a| a.key() != Some(key));
+        }
         while self.accumulators.len() >= super::accumulate::MAX_ACCUMULATORS {
             self.accumulators.remove(0);
         }
@@ -206,6 +212,14 @@ impl RubyMemo {
     #[cfg(test)]
     pub(crate) fn accumulator_keys(&self) -> Vec<Option<super::accumulate::AccumulatorKey>> {
         self.accumulators.iter().map(|a| a.key()).collect()
+    }
+
+    /// Largest accumulator length and the accumulators' total heap bytes.
+    #[cfg(test)]
+    pub(crate) fn accumulator_footprint(&self) -> (usize, usize) {
+        let len = self.accumulators.iter().map(|a| a.len()).max().unwrap_or(0);
+        let bytes = self.accumulators.iter().map(|a| a.heap_bytes()).sum();
+        (len, bytes)
     }
 
     /// Forget every entry and the walk, releasing a map that grew beyond
@@ -336,6 +350,24 @@ mod tests {
         assert_eq!(memo.accumulator_keys(), vec![Some(key(1))]);
         memo.put_accumulator(fresh);
         assert_eq!(memo.accumulator_keys(), vec![Some(key(1)), Some(key(4))]);
+    }
+
+    /// A nested probe for the same start takes and puts a fresh accumulator
+    /// while the outer one is out; putting the outer one back replaces it,
+    /// so a key is never held twice.
+    #[test]
+    fn putting_back_a_key_replaces_its_nested_copy() {
+        use crate::ruby::accumulate::{AccumulatorKey, Entry};
+        let key = AccumulatorKey::for_test;
+        let mut memo = RubyMemo::default();
+        let mut outer = memo.take_accumulator(key(1));
+        outer.push_raw(Entry::placeholder(None));
+        let nested = memo.take_accumulator(key(1));
+        assert_eq!(nested.len(), 0);
+        memo.put_accumulator(nested);
+        memo.put_accumulator(outer);
+        assert_eq!(memo.accumulator_keys(), vec![Some(key(1))]);
+        assert_eq!(memo.accumulator(key(1)).map(|a| a.len()), Some(1));
     }
 }
 

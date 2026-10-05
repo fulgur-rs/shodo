@@ -957,7 +957,7 @@ fn walks_beyond_the_cap_fall_back_to_the_memo_path() {
                 // Never used: exactly the through-memo path's work.
                 assert_eq!(observed.4.measures, memo.4.measures);
                 assert_eq!(observed.4.replayed, 0);
-                assert_eq!(observed.4.dirty, [0; 8]);
+                assert_eq!(observed.4.dirty, [0; 7]);
             }
         }
     }
@@ -1245,16 +1245,15 @@ pub(super) fn adjacent_overhang_siblings(paragraph: &ParagraphStyle) -> Paragrap
 /// plain text between the rubies no clean position's recorded neighbour
 /// ever changes (the trailing text is selected while its ruby is still the
 /// top position), so D3 marks nothing there; adjacent rubies need marks.
-/// No fallback marks every position any more (histogram index 7, formerly
-/// `Full`, stays zero): profile digest changes, which `rtl_isolate_siblings`
-/// has, are handled by D4-D5.
+/// Profile digest changes, which `rtl_isolate_siblings` has, are handled by
+/// D4-D5 (no fallback marks every position).
 #[test]
 fn neighbour_rule_matches_reference_on_overhang_siblings() {
     let rtl = ParagraphStyle {
         direction: Direction::Rtl,
         ..paragraph_style(false)
     };
-    // (fixture, D3 must mark, no all-positions fallback)
+    // (fixture, D3 must mark)
     let fixtures = [
         (
             Fixture::new(
@@ -1262,24 +1261,20 @@ fn neighbour_rule_matches_reference_on_overhang_siblings() {
                 overhang_siblings(&paragraph_style(false)),
             ),
             false,
-            true,
         ),
         (
             Fixture::new("overhang-siblings-rtl", overhang_siblings(&rtl)),
             false,
-            true,
         ),
         (
             Fixture::new("rtl-isolate-siblings", rtl_isolate_siblings()),
             false,
-            true,
         ),
         (
             Fixture::new(
                 "adjacent-overhang-siblings",
                 adjacent_overhang_siblings(&paragraph_style(false)),
             ),
-            true,
             true,
         ),
         (
@@ -1288,11 +1283,10 @@ fn neighbour_rule_matches_reference_on_overhang_siblings() {
                 adjacent_overhang_siblings(&rtl),
             ),
             true,
-            true,
         ),
     ];
-    for (fixture, marks, stable) in &fixtures {
-        let mut dirty = [0; 8];
+    for (fixture, marks) in &fixtures {
+        let mut dirty = [0; 7];
         for pre in pre_states(&fixture.paragraph) {
             let (reference, _) =
                 observe_candidates_in(&fixture.paragraph, &fixture.atomics, Mode::Reference, pre);
@@ -1311,9 +1305,6 @@ fn neighbour_rule_matches_reference_on_overhang_siblings() {
                 "{}: D3 must mark positions {dirty:?}",
                 fixture.name
             );
-        }
-        if *stable {
-            assert_eq!(dirty[7], 0, "{}: {dirty:?}", fixture.name);
         }
         assert_eq!(
             observe_layout_in(fixture, Mode::Verify),
@@ -1423,7 +1414,7 @@ fn profile_and_edge_rules_match_reference() {
             cursive_siblings(&limits(Some(6), None)),
         ),
     ];
-    let (mut profile, mut edge, mut full) = (0, 0, 0);
+    let (mut profile, mut edge) = (0, 0);
     for fixture in &fixtures {
         for pre in pre_states(&fixture.paragraph) {
             let (reference, _) =
@@ -1434,7 +1425,6 @@ fn profile_and_edge_rules_match_reference() {
                 assert_eq!(observed, reference, "{} {mode:?} {pre:?}", fixture.name);
                 profile += counters.dirty[Dirty::Profile as usize];
                 edge += counters.dirty[Dirty::Edge as usize];
-                full += counters.dirty[7];
             }
         }
         assert_eq!(
@@ -1445,7 +1435,6 @@ fn profile_and_edge_rules_match_reference() {
         );
     }
     assert!(profile > 0 && edge > 0, "profile {profile} edge {edge}");
-    assert_eq!(full, 0, "no conservative fallback remains");
 }
 
 /// Container work grows linearly with the sibling count (the reference and
@@ -1537,7 +1526,7 @@ pub(super) fn partial_group_siblings(normal: f32, block: f32) -> Fixture {
 fn edge_rule_covers_partial_groups_on_units_and_neighbour_units() {
     for block in [56.0, 60.0] {
         let fixture = partial_group_siblings(48.0, block);
-        let mut dirty = [0; 8];
+        let mut dirty = [0; 7];
         for pre in pre_states(&fixture.paragraph) {
             let (reference, _) =
                 observe_candidates_in(&fixture.paragraph, &fixture.atomics, Mode::Reference, pre);
@@ -1555,7 +1544,6 @@ fn edge_rule_covers_partial_groups_on_units_and_neighbour_units() {
             "{}: {dirty:?}",
             fixture.name
         );
-        assert_eq!(dirty[7], 0, "{}: {dirty:?}", fixture.name);
         assert_eq!(
             observe_layout_in(&fixture, Mode::Verify),
             observe_layout_in(&fixture, Mode::Reference),
@@ -1617,7 +1605,7 @@ pub(super) fn grouped_neighbour_siblings(tall: f32) -> Paragraph {
 #[test]
 fn profile_rule_covers_grouped_neighbour_units() {
     let fixture = Fixture::new("grouped-neighbour", grouped_neighbour_siblings(48.0));
-    let mut dirty = [0; 8];
+    let mut dirty = [0; 7];
     for pre in pre_states(&fixture.paragraph) {
         let (reference, _) =
             observe_candidates_in(&fixture.paragraph, &fixture.atomics, Mode::Reference, pre);
@@ -1631,7 +1619,6 @@ fn profile_rule_covers_grouped_neighbour_units() {
         }
     }
     assert!(dirty[Dirty::Profile as usize] > 0, "{dirty:?}");
-    assert_eq!(dirty[7], 0, "{dirty:?}");
     assert_eq!(
         observe_layout_in(&fixture, Mode::Verify),
         observe_layout_in(&fixture, Mode::Reference),
@@ -1677,4 +1664,494 @@ fn outer_base_siblings_grow_linearly() {
         growth.iter().all(|g| *g <= 2.6),
         "visits {growth:?} {all:?}"
     );
+}
+
+/// An outer ruby whose base ends with plain text after its inner siblings:
+/// probes inside the tail move the outer container's clipped end while the
+/// last inner sibling (the top position) stays unchanged, so only D2 marks
+/// the outer container.
+fn outer_tail_siblings() -> Paragraph {
+    let default = Limits::default();
+    let mut base = ParagraphBuilder::new(&paragraph_style(false), &default);
+    for i in 0..3u64 {
+        base.push_ruby(
+            NodeId(1000 + i),
+            &style(24.0),
+            annotated(
+                vec![base_text(3000 + i, "12", &style(24.0), &default)],
+                &["日"],
+                RubyOverhang::None,
+                &default,
+            ),
+        );
+    }
+    base.push_text(TextSource::Generated { node: NodeId(2999) }, "日日日日");
+    let mut b = ParagraphBuilder::new(&paragraph_style(false), &default);
+    b.push_ruby(
+        NodeId(100),
+        &style(24.0),
+        annotated(
+            vec![RubyContent::from_builder(base)],
+            &["にほにほにほにほ"],
+            RubyOverhang::None,
+            &default,
+        ),
+    );
+    finish(b)
+}
+
+/// Every sibling shape the dirty rules distinguish.
+pub(super) fn sibling_fixtures() -> Vec<Fixture> {
+    let default = Limits::default();
+    vec![
+        Fixture::new("digit-siblings", digit_siblings(6)),
+        Fixture::new("outer-siblings", outer_siblings(4)),
+        Fixture::new("outer-tail-siblings", outer_tail_siblings()),
+        Fixture::new(
+            "overhang-siblings",
+            overhang_siblings(&paragraph_style(false)),
+        ),
+        // Text between the rubies above keeps every clean position's
+        // recorded neighbour; adjacent rubies are the shape D3 marks.
+        Fixture::new(
+            "adjacent-overhang-siblings",
+            adjacent_overhang_siblings(&paragraph_style(false)),
+        ),
+        Fixture::new("rtl-isolate-siblings", rtl_isolate_siblings()),
+        Fixture::new("grouped-top", grouped_siblings(VerticalAlign::Top)),
+        Fixture::new("grouped-bottom", grouped_siblings(VerticalAlign::Bottom)),
+        Fixture::new("cursive-siblings", cursive_siblings(&default)),
+        Fixture::new(
+            "cursive-siblings-6",
+            cursive_siblings(&limits(Some(6), None)),
+        ),
+        Fixture::new(
+            "kerning-siblings",
+            row(
+                &paragraph_style(false),
+                4,
+                "AV",
+                "に",
+                "To",
+                RubyOverhang::Auto,
+                &style(24.0),
+                &default,
+            ),
+        ),
+        Fixture::new(
+            "anywhere-siblings",
+            row(
+                &paragraph_style(false),
+                5,
+                "日本語",
+                "にほんご",
+                "",
+                RubyOverhang::None,
+                &anywhere(24.0),
+                &default,
+            ),
+        ),
+        Fixture::new("tab-siblings", tab_siblings(&default)),
+        Fixture::new("atomic-siblings", atomic_siblings(&limits(None, Some(2)))),
+        Fixture::new(
+            "first-line-siblings",
+            row(
+                &paragraph_style(true),
+                4,
+                "日本",
+                "にほんご",
+                "、",
+                RubyOverhang::Auto,
+                &style(24.0),
+                &default,
+            ),
+        ),
+    ]
+}
+
+/// Sibling fixtures checked per test: the reference sweeps are cubic in
+/// debug builds, so the fixtures are split over tests that run in parallel.
+const SIBLING_CHUNK: usize = 2;
+const SIBLING_CHUNKS: usize = 8;
+
+/// All `(start, end)` probes (growing, shrinking, restarted in a new
+/// operation) and line layout (break_all warm/cold, narrow retries through
+/// `PartialLine::index`, floats, intrinsic sizes), on every path, with the
+/// step oracle, for chunk `chunk` of `sibling_fixtures`.
+fn sibling_fixtures_match_reference_in(chunk: usize) {
+    let fixtures = sibling_fixtures();
+    for fixture in fixtures
+        .iter()
+        .skip(chunk * SIBLING_CHUNK)
+        .take(SIBLING_CHUNK)
+    {
+        for pre in pre_states(&fixture.paragraph) {
+            let (reference, _) =
+                observe_candidates_in(&fixture.paragraph, &fixture.atomics, Mode::Reference, pre);
+            for mode in [Mode::Memo, Mode::Accumulate, Mode::Verify] {
+                let (observed, _) =
+                    observe_candidates_in(&fixture.paragraph, &fixture.atomics, mode, pre);
+                assert_eq!(observed, reference, "{} {mode:?} {pre:?}", fixture.name);
+            }
+        }
+        let reference = observe_layout_in(fixture, Mode::Reference);
+        for mode in [Mode::Accumulate, Mode::Verify] {
+            assert_eq!(
+                observe_layout_in(fixture, mode),
+                reference,
+                "{} {mode:?}",
+                fixture.name
+            );
+        }
+    }
+}
+
+/// Warm contexts over every fixture, with the step oracle; the per-fixture
+/// probes and line layout run in the `_N` chunks below, which together cover
+/// every sibling fixture.
+#[test]
+fn sibling_fixtures_match_reference_with_the_step_oracle() {
+    assert!(SIBLING_CHUNK * SIBLING_CHUNKS >= sibling_fixtures().len());
+    let mut all = fixtures();
+    all.extend(sibling_fixtures());
+    assert_eq!(
+        observe_warm_in(&all, Mode::Verify),
+        observe_warm_in(&all, Mode::Reference)
+    );
+}
+
+#[test]
+fn sibling_fixtures_match_reference_with_the_step_oracle_0() {
+    sibling_fixtures_match_reference_in(0);
+}
+
+#[test]
+fn sibling_fixtures_match_reference_with_the_step_oracle_1() {
+    sibling_fixtures_match_reference_in(1);
+}
+
+#[test]
+fn sibling_fixtures_match_reference_with_the_step_oracle_2() {
+    sibling_fixtures_match_reference_in(2);
+}
+
+#[test]
+fn sibling_fixtures_match_reference_with_the_step_oracle_3() {
+    sibling_fixtures_match_reference_in(3);
+}
+
+#[test]
+fn sibling_fixtures_match_reference_with_the_step_oracle_4() {
+    sibling_fixtures_match_reference_in(4);
+}
+
+#[test]
+fn sibling_fixtures_match_reference_with_the_step_oracle_5() {
+    sibling_fixtures_match_reference_in(5);
+}
+
+#[test]
+fn sibling_fixtures_match_reference_with_the_step_oracle_6() {
+    sibling_fixtures_match_reference_in(6);
+}
+
+#[test]
+fn sibling_fixtures_match_reference_with_the_step_oracle_7() {
+    sibling_fixtures_match_reference_in(7);
+}
+
+/// The fixtures reach every rule, replay and reset path (equivalence must
+/// not hold vacuously).
+#[test]
+fn sibling_fixtures_reach_every_accumulator_path() {
+    let mut total = Counters::default();
+    for fixture in sibling_fixtures() {
+        let pre = PreState {
+            spent: 0,
+            suppressed: false,
+        };
+        let (_, c) =
+            observe_candidates_in(&fixture.paragraph, &fixture.atomics, Mode::Accumulate, pre);
+        total.replayed += c.replayed;
+        total.resets += c.resets;
+        for (sum, n) in total.dirty.iter_mut().zip(c.dirty) {
+            *sum += n;
+        }
+    }
+    assert!(total.replayed > 0 && total.resets > 0, "{total:?}");
+    for reason in [
+        Dirty::Unstored,
+        Dirty::New,
+        Dirty::Clipped,
+        Dirty::Neighbour,
+        Dirty::Profile,
+        Dirty::Edge,
+        Dirty::Ancestor,
+    ] {
+        assert!(total.dirty[reason as usize] > 0, "{reason:?}: {total:?}");
+    }
+}
+
+/// Cursive words before cursive siblings: the narrow retry's speculative
+/// `PartialLine::index` crosses the budget and is rolled back (warnings and
+/// Saturation, not spent bytes or accumulators).
+fn cursive_words_then_siblings(limits: &Limits) -> Paragraph {
+    let mut b = ParagraphBuilder::new(&paragraph_style(false), limits);
+    b.open_inline(NodeId(3), &style(6.0), Default::default());
+    b.push_text(
+        TextSource::Generated { node: NodeId(1) },
+        &"بببببب ".repeat(8),
+    );
+    b.close_inline();
+    for i in 0..4u64 {
+        b.push_ruby(
+            NodeId(1000 + i),
+            &style(24.0),
+            annotated(
+                vec![base_text(3000 + i, "بببب", &style(24.0), limits)],
+                &["に"],
+                RubyOverhang::Auto,
+                limits,
+            ),
+        );
+        b.push_text(
+            TextSource::Generated {
+                node: NodeId(2000 + i),
+            },
+            "ببب",
+        );
+    }
+    finish(b)
+}
+
+/// The wide scan, then narrow retries of the same token. Up to a 48-byte
+/// window the wide scan itself exceeds the budget (warns, not retained, no
+/// index); from 56 bytes the 999 retry's index stays within it and serves
+/// 998. With 52 and 54 bytes the wide scan is clean and retained, the 999
+/// retry's index crosses the limit and is rolled back, and the 998 retry
+/// indexes again while replaying the accumulators the rolled-back pass
+/// recorded (measured while writing this test).
+#[test]
+fn narrow_retry_rollback_with_siblings_matches_reference() {
+    for window in [8, 12, 16, 52, 54, 64] {
+        let p = cursive_words_then_siblings(&limits(Some(window), None));
+        let observe = |mode: Mode| {
+            let mut cx = mode_context(mode);
+            let mut out = Vec::new();
+            let mut indexed = Vec::new();
+            let mut replayed = Vec::new();
+            for width in [1000.0f32, 999.0, 998.0, 120.0] {
+                cx.cache_prepare_visits = 0;
+                let before = cx.ruby_replayed_containers;
+                let result = p.next_line(
+                    &mut cx,
+                    p.start_token(),
+                    &LineOptions::default(),
+                    &LineConstraint::new(width),
+                    &AtomicSizes::EMPTY,
+                );
+                out.push(result_signature(result));
+                out.push(format!("{:?}", cx.take_warnings()));
+                out.push(format!("{:?}", std::mem::take(&mut cx.ruby_oracle_misses)));
+                indexed.push(cx.cache_prepare_visits);
+                replayed.push(cx.ruby_replayed_containers - before);
+            }
+            (out, indexed, replayed)
+        };
+        let (reference, ..) = observe(Mode::Reference);
+        for mode in [Mode::Accumulate, Mode::Verify] {
+            let (observed, indexed, replayed) = observe(mode);
+            assert_eq!(observed, reference, "window {window} {mode:?}");
+            if mode == Mode::Accumulate && (window == 52 || window == 54) {
+                assert_eq!(observed[1], "[]", "the wide scan must be retained");
+                assert!(indexed[1] > 0, "the 999 retry must index: {indexed:?}");
+                assert!(
+                    indexed[2] > 0,
+                    "the rolled-back index is redone: {indexed:?}"
+                );
+                assert!(
+                    replayed[2] > 0,
+                    "the retry after the rollback must replay: {replayed:?}"
+                );
+            }
+        }
+    }
+}
+
+/// A walk longer than the cap is measured as the through memo does and its
+/// accumulator is released; results stay those of the reference.
+#[test]
+fn cap_overflow_falls_back_and_releases_the_accumulator() {
+    let p = digit_siblings(12);
+    let data = &p.data;
+    let n = data.units.len();
+    let run = |mode: Mode, cap: Option<usize>| {
+        let mut cx = mode_context(mode);
+        cx.ruby_accumulate_cap = cap;
+        let mut sat = Saturation::default();
+        cx.begin_reshape_operation();
+        let values: Vec<_> = (1..=n)
+            .map(|end| {
+                crate::ruby::measure::candidate_adjustment(
+                    data,
+                    0,
+                    end,
+                    &AtomicSizes::EMPTY,
+                    &mut cx,
+                    &mut sat,
+                )
+            })
+            .collect();
+        (
+            values,
+            sat,
+            cx.edge_reshape_spent,
+            cx.ruby_memo.accumulator_keys(),
+            counters(&cx),
+        )
+    };
+    let (reference, ref_sat, ref_spent, _, _) = run(Mode::Reference, None);
+    let (values, sat, spent, keys, capped) = run(Mode::Accumulate, Some(3));
+    assert_eq!((&values, sat, spent), (&reference, ref_sat, ref_spent));
+    let key = crate::ruby::accumulate::AccumulatorKey::new(data, &AtomicSizes::EMPTY, 0);
+    assert!(!keys.contains(&Some(key)), "{keys:?}");
+    let (values, _, _, _, uncapped) = run(Mode::Accumulate, None);
+    assert_eq!(values, reference);
+    assert!(
+        capped.replayed < uncapped.replayed,
+        "{capped:?} {uncapped:?}"
+    );
+}
+
+/// Accumulator memory stays within its per-position bound and is released
+/// when the next operation starts.
+#[test]
+fn accumulator_memory_is_bounded_and_released_per_operation() {
+    use crate::ruby::accumulate::{BYTES_PER_CONTAINER, RETAINED_CONTAINERS};
+    for siblings in [100, 400] {
+        let p = many_siblings(siblings);
+        let data = &p.data;
+        let mut cx = mode_context(Mode::Accumulate);
+        let mut sat = Saturation::default();
+        cx.begin_reshape_operation();
+        for end in 1..=data.units.len() {
+            crate::ruby::measure::candidate_adjustment(
+                data,
+                0,
+                end,
+                &AtomicSizes::EMPTY,
+                &mut cx,
+                &mut sat,
+            );
+        }
+        let (len, bytes) = cx.ruby_memo.accumulator_footprint();
+        assert!(len >= siblings, "{siblings}: {len} positions");
+        assert!(
+            bytes <= len * BYTES_PER_CONTAINER,
+            "{siblings}: {len} positions, {bytes} bytes"
+        );
+        cx.begin_reshape_operation();
+        let (len, bytes) = cx.ruby_memo.accumulator_footprint();
+        assert_eq!(len, 0);
+        assert!(
+            bytes <= RETAINED_CONTAINERS * BYTES_PER_CONTAINER,
+            "{siblings}: {bytes} bytes retained"
+        );
+    }
+}
+
+/// Carried (review of Task 6): the fills gate observed directly. A step
+/// whose measurements fill the range caches stores no entry (every position
+/// stays unstored); the same step again, against warm caches, stores all.
+#[test]
+fn entries_recorded_while_caches_fill_are_unstored() {
+    let p = digit_siblings(8);
+    let data = &p.data;
+    let n = data.units.len();
+    let key = crate::ruby::accumulate::AccumulatorKey::new(data, &AtomicSizes::EMPTY, 0);
+    let mut cx = mode_context(Mode::Accumulate);
+    cx.begin_reshape_operation();
+    let mut sat = Saturation::default();
+    let mut ask = |cx: &mut LayoutContext| {
+        let fills = cx.ruby_ranges.fills();
+        // An exact probe (`through == end`) is not memoized: every ask
+        // reaches the accumulator.
+        crate::ruby::measure::candidate_adjustment(data, 0, n, &AtomicSizes::EMPTY, cx, &mut sat);
+        let acc = cx.ruby_memo.accumulator(key).unwrap();
+        (
+            cx.ruby_ranges.fills() != fills,
+            acc.len(),
+            acc.unstored.len(),
+        )
+    };
+    let (filled, len, unstored) = ask(&mut cx);
+    assert!(filled && len == 8, "{filled} {len}");
+    assert_eq!(unstored, len, "entries recorded while filling are unstored");
+    let (filled, len, unstored) = ask(&mut cx);
+    assert!(!filled && len == 8, "{filled} {len}");
+    assert_eq!(
+        unstored, 0,
+        "entries recorded against warm caches are stored"
+    );
+}
+
+/// Descendant reads of one unbreakable line of outer-base siblings.
+fn outer_descendant_reads(r: usize, mode: Mode) -> usize {
+    let mut cx = mode_context(mode);
+    one_line(&outer_siblings(r), &mut cx);
+    cx.ruby_descendant_reads
+}
+
+/// Carried (review of Task 9): end to end, the clipped outer container's
+/// descendant reads are answered by the segment tree, so they grow linearly
+/// with the sibling count (the reference iterates every completed fragment
+/// at every step: quadratic).
+#[test]
+fn outer_base_descendant_reads_grow_linearly() {
+    let (all, growth) = doubling(
+        |r| outer_descendant_reads(r, Mode::Accumulate),
+        [32, 64, 128],
+    );
+    assert!(growth.iter().all(|g| *g <= 2.2), "{growth:?} {all:?}");
+    let (all, growth) = doubling(|r| outer_descendant_reads(r, Mode::Reference), [8, 16, 32]);
+    assert!(
+        growth.iter().all(|g| *g >= 3.0),
+        "reference {growth:?} {all:?}"
+    );
+}
+
+/// Carried (review of Task 4): on charging cursive siblings (edge windows
+/// charge the reshape budget, overhang `Auto` reads neighbour bounds through
+/// the shared profile, so containers make several profile calls), replayed
+/// runs repeat a charging profile (`own + m * P`, `m > 1`) and some step's
+/// profile measurement warns, everywhere matching the reference. The
+/// allowances' empty-base fallback call (`overhang::columns`, a second
+/// `content_shared`) is reached here too: clipped selections leave a
+/// container's bases empty (checked with temporary instrumentation while
+/// writing this test).
+#[test]
+fn charging_sibling_profiles_repeat_and_warn_like_the_reference() {
+    let (mut repeated, mut warned) = (0, 0);
+    // A 6-byte window warns in the profile measurement (from any `spent`
+    // while the sink is unsuppressed); 8 bytes repeat without warning.
+    for window in [6, 8] {
+        let p = cursive_siblings(&limits(Some(window), None));
+        for pre in pre_states(&p) {
+            let (reference, _) =
+                observe_candidates_in(&p, &AtomicSizes::EMPTY, Mode::Reference, pre);
+            for mode in [Mode::Accumulate, Mode::Verify] {
+                let (observed, c) = observe_candidates_in(&p, &AtomicSizes::EMPTY, mode, pre);
+                assert_eq!(observed, reference, "window {window} {mode:?} {pre:?}");
+                if mode == Mode::Accumulate {
+                    repeated += c.repeated_profile;
+                    warned += c.profile_warnings;
+                }
+            }
+        }
+    }
+    assert!(
+        repeated > 0,
+        "some replayed run must repeat a charging profile"
+    );
+    assert!(warned > 0, "some step's profile measurement must warn");
 }

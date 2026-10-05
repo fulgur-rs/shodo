@@ -677,9 +677,14 @@ pub(super) struct Counters {
     pub(super) hits: usize,
     pub(super) measures: usize,
     pub(super) replayed: usize,
-    pub(super) dirty: [usize; 8],
+    pub(super) dirty: [usize; 7],
     pub(super) resets: usize,
     pub(super) refusals: usize,
+    /// Replays of runs with more profile calls than positions under a
+    /// charging profile (`ruby_repeated_profile_replays`).
+    pub(super) repeated_profile: usize,
+    /// Detached profile measurements that warned.
+    pub(super) profile_warnings: usize,
 }
 
 pub(super) fn counters(cx: &LayoutContext) -> Counters {
@@ -690,6 +695,8 @@ pub(super) fn counters(cx: &LayoutContext) -> Counters {
         dirty: cx.ruby_dirty,
         resets: cx.ruby_accumulator_resets,
         refusals: cx.ruby_replay_refusals,
+        repeated_profile: cx.ruby_repeated_profile_replays,
+        profile_warnings: cx.ruby_profile_warnings,
     }
 }
 

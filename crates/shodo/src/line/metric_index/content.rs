@@ -567,6 +567,10 @@ pub(crate) fn content_shared(
                     .selection
             }
             None => {
+                #[cfg(test)]
+                if parent.is_some() {
+                    cx.ruby_profile_warnings += 1;
+                }
                 share.entry = None;
                 fresh = selection;
                 &fresh

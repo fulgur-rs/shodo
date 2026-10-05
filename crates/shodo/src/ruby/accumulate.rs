@@ -220,9 +220,8 @@ impl AccumulatorKey {
     }
 }
 
-/// Why a position is measured live (test histogram `cx.ruby_dirty`).
-/// Index 7 of the histogram is unused (it counted a removed fallback that
-/// marked every position).
+/// Why a position is measured live (test histogram `cx.ruby_dirty`, one
+/// slot per reason).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Dirty {
     Unstored = 0,
@@ -474,6 +473,10 @@ pub(crate) struct Accumulator {
     pub(crate) dependents: usize,
     /// Enclosing chain of the latest appended position.
     open: Vec<u32>,
+    /// Container of every position (the walk the positions were appended
+    /// for), checked against the next step's walk.
+    #[cfg(debug_assertions)]
+    walk: Vec<usize>,
 }
 
 impl Accumulator {
@@ -501,6 +504,10 @@ impl Accumulator {
             self.entries.clear();
             self.nodes.clear();
             self.open.clear();
+        }
+        #[cfg(debug_assertions)]
+        {
+            self.walk = Vec::new();
         }
         self.clipped.clear();
         self.unstored.clear();
@@ -584,6 +591,8 @@ impl Accumulator {
         self.open.push(pos);
         self.unstored.insert(pos);
         self.update(pos as usize);
+        #[cfg(debug_assertions)]
+        self.walk.push(container);
     }
 
     /// Start a step for `start..through` (the key's start). Returns the
@@ -608,6 +617,13 @@ impl Accumulator {
             self.reset(Some(key), epoch);
         }
         let kept = self.entries.len();
+        // Kept positions describe the same containers: the new walk extends
+        // the one they were appended for (`memo::advance`).
+        #[cfg(debug_assertions)]
+        debug_assert!(
+            self.walk.len() == kept && self.walk[..] == containers[..kept],
+            "accumulator walk is not a prefix of the step's walk"
+        );
         for &container in &containers[kept..] {
             self.push(data, containers, container);
         }
@@ -1217,6 +1233,7 @@ impl Tree<'_> {
             #[cfg(test)]
             {
                 _cx.ruby_measure_visits += 1;
+                _cx.ruby_descendant_reads += 1;
             }
             if entry.present && entry.units.end <= range.end {
                 width = width.add(entry.adjustment, sat);
@@ -1245,6 +1262,10 @@ impl Descendants for Tree<'_> {
             _cx.ruby_measure_visits += 1;
         }
         if node.max_end <= range.end && node.forward.fits(width) {
+            #[cfg(test)]
+            {
+                _cx.ruby_descendant_reads += 1;
+            }
             return node.forward.total(width);
         }
         self.add_each(span, range, width, _cx, sat)
@@ -1261,6 +1282,10 @@ impl Descendants for Tree<'_> {
             _cx.ruby_measure_visits += 1;
         }
         if node.max_end <= range.end {
+            #[cfg(test)]
+            {
+                _cx.ruby_descendant_reads += 1;
+            }
             return node.area.map_or(area, |a| area.union(a));
         }
         let mut area = area;
@@ -1269,6 +1294,7 @@ impl Descendants for Tree<'_> {
             #[cfg(test)]
             {
                 _cx.ruby_measure_visits += 1;
+                _cx.ruby_descendant_reads += 1;
             }
             if entry.present && entry.units.end <= range.end {
                 area = area.union(entry.whole_area);
