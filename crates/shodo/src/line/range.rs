@@ -42,9 +42,27 @@ pub(crate) struct RangeCache {
     /// fill replays exactly after it. Reuse across measurements
     /// (`ruby::accumulate`) still resets on an invalidation, conservatively.
     epoch: u64,
+    /// The caches of the same dataset under the previous atomic revision.
+    /// `intrinsic_sizes` measures min and max content with separate atomics
+    /// and switches at every forced break and cleared float: dropping the
+    /// caches at each switch rebuilt the paragraph's indexes every time,
+    /// quadratic in the paragraph (shodo-mc0). At most one is kept.
+    alt: Option<Box<Stash>>,
     /// Override of `MAX_BLOCKS`.
     #[cfg(test)]
     pub(crate) block_cap: Option<usize>,
+}
+
+/// The caches of one root, stashed by `RangeCache::begin`.
+#[derive(Debug, Default)]
+struct Stash {
+    root: Option<(u64, usize, u64)>,
+    sets: crate::hashing::FastMap<(u64, usize), Costs>,
+    metrics: crate::hashing::FastMap<(u64, usize), Option<Box<super::metric_index::MetricIndex>>>,
+    blocks: crate::hashing::FastMap<BlockKey, LayoutUnit>,
+    block_effects: crate::hashing::FastMap<BlockKey, (LayoutUnit, crate::line::replay::Effects)>,
+    neighbors:
+        crate::hashing::FastMap<(u64, usize), Option<Box<crate::ruby::overhang::NeighborIndex>>>,
 }
 
 /// Entries kept in `blocks` and `block_effects` together. Reaching it clears
@@ -98,6 +116,16 @@ impl RangeCache {
         self.epoch = self.epoch.wrapping_add(1);
     }
 
+    /// Exchange the current caches with `stash`.
+    fn swap(&mut self, stash: &mut Stash) {
+        std::mem::swap(&mut self.root, &mut stash.root);
+        std::mem::swap(&mut self.sets, &mut stash.sets);
+        std::mem::swap(&mut self.metrics, &mut stash.metrics);
+        std::mem::swap(&mut self.blocks, &mut stash.blocks);
+        std::mem::swap(&mut self.block_effects, &mut stash.block_effects);
+        std::mem::swap(&mut self.neighbors, &mut stash.neighbors);
+    }
+
     pub(crate) fn begin(&mut self, data: &ParagraphData, atomics: &AtomicSizes) {
         let root = (
             data.id,
@@ -107,7 +135,8 @@ impl RangeCache {
         // Retained nested annotation layout revisits datasets already indexed
         // as children of this root. Keep their scalar tables together, without
         // treating child materialization as a new independent paragraph. A new
-        // dataset or changed atomic revision still replaces the whole cache.
+        // dataset replaces the whole cache; a changed atomic revision of the
+        // same dataset stashes it, and the stashed revision comes back whole.
         let key = (root.0, root.1);
         if self.root.is_some_and(|owner| owner.2 == root.2)
             && (self.sets.contains_key(&key)
@@ -116,15 +145,37 @@ impl RangeCache {
         {
             return;
         }
-        if self.root != Some(root) {
-            self.sets.clear();
-            self.blocks.clear();
-            self.block_effects.clear();
-            self.metrics.clear();
-            self.neighbors.clear();
+        if self.root == Some(root) {
+            return;
+        }
+        if self
+            .root
+            .is_some_and(|owner| (owner.0, owner.1) == (root.0, root.1))
+        {
+            let mut stash = match self.alt.take() {
+                Some(mut alt) if alt.root == Some(root) => {
+                    // Both revisions' caches stay whole: no invalidation.
+                    self.swap(&mut alt);
+                    self.alt = Some(alt);
+                    return;
+                }
+                // A third revision drops the stashed one.
+                _ => Box::<Stash>::default(),
+            };
+            self.swap(&mut stash);
+            self.alt = Some(stash);
             self.root = Some(root);
             self.invalidate();
+            return;
         }
+        self.sets.clear();
+        self.blocks.clear();
+        self.block_effects.clear();
+        self.metrics.clear();
+        self.neighbors.clear();
+        self.alt = None;
+        self.root = Some(root);
+        self.invalidate();
     }
 
     /// Empty every index slot while keeping its key. The scalar caches are
@@ -132,6 +183,7 @@ impl RangeCache {
     /// instead of being answered from a cached result.
     #[cfg(test)]
     pub(crate) fn vacate_slots(&mut self) {
+        self.alt = None;
         self.sets.clear();
         self.blocks.clear();
         self.block_effects.clear();
@@ -313,6 +365,10 @@ fn difference(a: Saturation, b: Saturation) -> Saturation {
 /// Build the range costs of a paragraph. Charges nothing: the saturation
 /// of measuring each unit is kept in `Costs::saturated` for the queries.
 fn build(data: &ParagraphData, atomics: &AtomicSizes, cx: &mut LayoutContext) -> Costs {
+    #[cfg(test)]
+    {
+        cx.ruby_range_build_units += data.units.len();
+    }
     let mut advances = vec![0_i64];
     let mut hanging_advances = vec![0_i64];
     let mut hanging_units = Vec::new();

@@ -194,3 +194,62 @@ fn one_wide_walk_is_measured_and_the_next_probe_refused() {
         p.intrinsic_sizes(&mut wide, &options, &AtomicIntrinsics::EMPTY)
     );
 }
+
+/// `r` segments of "日日" and a ruby over "12", each ended by a forced
+/// break, after one atomic inline.
+fn ruby_lines(r: usize) -> Paragraph {
+    use crate::node::{NodeId, TextSource};
+    use crate::ruby::RubyOverhang;
+    let default = Limits::default();
+    let mut b = crate::ParagraphBuilder::new(&paragraph_style(false), &default);
+    b.push_atomic(NodeId(99), &style(24.0), Default::default());
+    for i in 0..r as u64 {
+        b.push_text(
+            TextSource::Generated {
+                node: NodeId(5000 + i),
+            },
+            "日日",
+        );
+        b.push_ruby(
+            NodeId(1000 + i),
+            &style(24.0),
+            annotated(
+                vec![base_text(3000 + i, "12", &style(24.0), &default)],
+                &["日"],
+                RubyOverhang::None,
+                &default,
+            ),
+        );
+        b.push_forced_break(NodeId(7000 + i));
+    }
+    finish(b)
+}
+
+/// Units of the range costs built by one `intrinsic_sizes` call with caller
+/// atomics (the min and max atomics have different revisions).
+fn intrinsic_builds(r: usize) -> usize {
+    let p = ruby_lines(r);
+    let mut inputs = AtomicIntrinsics::new();
+    inputs.insert_atomic(
+        crate::node::NodeId(99),
+        crate::AtomicIntrinsic {
+            min_content: 10.0,
+            max_content: 20.0,
+        },
+    );
+    let mut cx = mode_context(Mode::Accumulate);
+    p.intrinsic_sizes(&mut cx, &LineOptions::default(), &inputs);
+    cx.ruby_range_build_units
+}
+
+/// shodo-2j6's "atomics with intrinsic sizes": the min and max probes at
+/// every forced break alternate two atomic revisions. Each switch used to
+/// drop the range caches and rebuild the paragraph's indexes, quadratic in
+/// the paragraph; both revisions' caches are now kept.
+#[test]
+fn alternating_intrinsic_revisions_keep_both_range_caches() {
+    // Each dataset (the paragraph and each ruby base) is built once per
+    // revision: linear. Rebuilding at every switch was quadratic.
+    let (all, growth) = doubling(intrinsic_builds, [16, 32, 64]);
+    assert!(growth.iter().all(|g| *g <= 2.2), "{growth:?} {all:?}");
+}

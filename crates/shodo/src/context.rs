@@ -50,6 +50,9 @@ pub struct LayoutContext {
     /// reuse path must match exactly.
     #[cfg(test)]
     pub(crate) ruby_reference: bool,
+    /// Units of the range costs built by `line::range::build`.
+    #[cfg(test)]
+    pub(crate) ruby_range_build_units: usize,
     /// Calls of `line::range::width` (ruby range widths).
     #[cfg(test)]
     pub(crate) ruby_width_calls: usize,
