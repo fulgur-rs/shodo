@@ -1726,3 +1726,45 @@ fn inline_hanging_still_hangs_a_ruby_base_at_the_line_end() {
         assert_eq!(line.hang_end(), 16.0, "{hanging:?}");
     }
 }
+
+#[test]
+fn root_hanging_applies_but_first_line_hanging_is_ignored() {
+    // hanging-punctuation does not apply to ::first-line.
+    let mut first = japanese_style(TextSpacingTrim::SpaceAll);
+    first.first_line = Some(with_hanging(&first, Some(LAST)));
+    let mut root = japanese_style(TextSpacingTrim::SpaceAll);
+    root.root.hanging_punctuation = Some(LAST);
+    for (style, expected_size, expected_hang) in [(first, 48.0, 0.0), (root, 32.0, 16.0)] {
+        let para = japanese_with(style, Limits::default(), |b| {
+            b.push_text(TextSource::Generated { node: NodeId(1) }, "日本」");
+        });
+        let line = first_line(&para, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(line.inline_size(), expected_size);
+        assert_eq!(line.hang_end(), expected_hang);
+    }
+}
+
+#[test]
+fn inline_allow_end_reports_only_the_part_that_does_not_fit() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let span = with_hanging(
+        &style,
+        Some(HangingPunctuation {
+            allow_end: true,
+            ..Default::default()
+        }),
+    );
+    let para = japanese_with(style, Limits::default(), |b| {
+        b.open_inline(NodeId(2), &span, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(3) }, "日本、")
+            .close_inline();
+    });
+    let options = LineOptions::default();
+    let narrow = first_line(&para, 44.0, &options, &AtomicSizes::EMPTY);
+    assert_eq!(narrow.inline_size(), 44.0);
+    assert_eq!(narrow.hang_end(), 4.0);
+    assert_eq!(narrow.text_range(), 0..9);
+    let fitting = first_line(&para, 48.0, &options, &AtomicSizes::EMPTY);
+    assert_eq!(fitting.inline_size(), 48.0);
+    assert_eq!(fitting.hang_end(), 0.0);
+}
