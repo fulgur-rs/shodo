@@ -1454,6 +1454,9 @@ fn memo_recomputes_when_replay_would_cross_reshape_budget() {
     let (optimized, _, measured, refused) = run(false, limit - 1);
     let (reference, _, _, _) = run(true, limit - 1);
     assert_eq!(optimized, reference);
+    // `measured` shows the memo entry itself was refused (a replayed core
+    // visits no column); `refused` also counts refused `blocks` replays
+    // since shodo-tj5.
     assert!(measured > 0);
     assert!(refused > 0);
     assert!(

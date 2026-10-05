@@ -145,6 +145,8 @@ pub(crate) fn block_size(
             cache.blocks.insert(key, height);
         }
         Some(effects) => {
+            // No `blocks` entry exists: a hit there returned above.
+            debug_assert!(!cache.blocks.contains_key(&key));
             cache.block_effects.insert(key, (height, effects));
         }
         None => {
@@ -1224,6 +1226,73 @@ mod tests {
         assert!(charged > 0, "some range must charge the reshape budget");
     }
 
+    /// shodo-tj5: a `blocks` entry with effects whose replay the gate refuses
+    /// (the operation's budget is nearly spent, or the sink's suppression
+    /// changed) is measured again, exactly as in a context that never cached
+    /// it: same height, saturation, spent bytes and warnings, also for the
+    /// next query after a measurement that warned (it is not stored).
+    #[test]
+    fn refused_block_replays_measure_like_a_fresh_context() {
+        let p = charging_paragraph(crate::style::TabSize::Px(40.0), false);
+        let n = p.data.units.len();
+        let limit = p.data.limits.max_reshape_window_bytes.unwrap() * 64;
+        let measure = |cx: &mut LayoutContext, range: Range<usize>| {
+            let mut sat = Saturation::default();
+            let height = block_size(
+                &p.data,
+                range,
+                &Default::default(),
+                &AtomicSizes::EMPTY,
+                cx,
+                &mut sat,
+            );
+            (height, sat, cx.edge_reshape_spent, cx.take_warnings())
+        };
+        // Bring a context to the preset state: spent bytes and suppression.
+        let preset = |cx: &mut LayoutContext, spent: u64, suppress: bool| {
+            cx.begin_reshape_operation();
+            cx.take_warnings();
+            cx.warnings.set_max(None);
+            cx.edge_reshape_spent = spent;
+            if suppress {
+                cx.warnings.set_max(Some(0));
+                cx.warnings
+                    .push(crate::limits::WarningKind::Unsupported, "suppress");
+                assert!(cx.warnings.is_suppressed());
+            }
+        };
+        let mut refused = 0;
+        let mut warned = 0;
+        for start in 0..n {
+            for end in start + 1..=n {
+                let mut warm = LayoutContext::new();
+                warm.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+                preset(&mut warm, 0, false);
+                if measure(&mut warm, start..end).2 == 0 {
+                    continue;
+                }
+                for (spent, suppress) in [(limit - 1, false), (0, true)] {
+                    let mut fresh = LayoutContext::new();
+                    fresh.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+                    preset(&mut warm, spent, suppress);
+                    preset(&mut fresh, spent, suppress);
+                    let before = warm.ruby_replay_refusals;
+                    // Twice: the second query follows a measurement that
+                    // may have warned (and so was not stored).
+                    for _ in 0..2 {
+                        let got = measure(&mut warm, start..end);
+                        let want = measure(&mut fresh, start..end);
+                        warned += usize::from(!want.3.is_empty());
+                        assert_eq!(got, want, "{start}..{end} {spent} {suppress}");
+                    }
+                    refused += warm.ruby_replay_refusals - before;
+                }
+            }
+        }
+        assert!(refused > 0, "some replay must be refused");
+        assert!(warned > 0, "some refused measurement must warn");
+    }
+
     /// shodo-tj5: `width` charges depend only on the range, not on the
     /// queries before it: a history run forwards, backwards and query by
     /// query in fresh contexts gives the same value and saturation per range.
@@ -1434,6 +1503,15 @@ mod tests {
         }
         let want = std::fs::read_to_string(path).expect("golden file");
         assert_eq!(got, want);
+        // shodo-tj5: a repeated query charges what it charged the first time,
+        // whatever ran in between.
+        let mut seen = std::collections::HashMap::new();
+        for line in want.lines() {
+            let mut words = line.splitn(3, ' ');
+            let key = (words.next(), words.next());
+            let rest = words.next();
+            assert_eq!(*seen.entry(key).or_insert(rest), rest, "{line}");
+        }
         // The record must exercise saturation, a clipped ligature and tabs.
         assert!(
             want.lines()
