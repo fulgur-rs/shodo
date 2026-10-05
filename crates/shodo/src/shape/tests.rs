@@ -1222,6 +1222,46 @@ fn combined_group_after_out_of_flow_selects_a_width_feature() {
 
 /// A grapheme right after a transparent gap is a legal run-byte split point, so
 /// the budget never has to split inside a grapheme there.
+/// An authored bidi control is its own shaping cluster even though it starts no
+/// paragraph grapheme, so the run-byte budget may still split right before it.
+#[test]
+fn run_byte_budget_splits_before_an_authored_bidi_control() {
+    let limits = Limits {
+        max_shaping_run_bytes: Some(2),
+        ..Limits::default()
+    };
+    let fonts = width_probe_fonts(&limits);
+    let style = crate::style::ParagraphStyle {
+        root: width_probe_style("Width Latin", crate::geometry::Direction::Ltr),
+        ..Default::default()
+    };
+    let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+    builder.push_text(
+        crate::node::TextSource::Generated {
+            node: crate::node::NodeId(1),
+        },
+        "ab\u{200e}",
+    );
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    assert_eq!(paragraph.data.shape_items.len(), 1);
+    let flags: Vec<_> = paragraph.data.shape_items[0]
+        .scalars
+        .iter()
+        .map(|s| (s.c, s.grapheme_start))
+        .collect();
+    assert_eq!(flags, [('a', true), ('b', true), ('\u{200e}', false)]);
+    assert!(
+        paragraph
+            .warnings()
+            .iter()
+            .all(|warning| !warning.message.contains("giant grapheme")),
+        "{:?}",
+        paragraph.warnings()
+    );
+}
+
 #[test]
 fn run_byte_budget_splits_after_a_transparent_gap() {
     let limits = Limits {
