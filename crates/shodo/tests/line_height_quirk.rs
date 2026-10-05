@@ -573,3 +573,111 @@ fn known_pending_vertical_align_differences() {
         [20.0]
     );
 }
+
+/// First atomic's (top offset from the line's alphabetic baseline, gap from
+/// its bottom edge to the line bottom, line top offset to its top edge, line height).
+fn img_position(
+    quirk: bool,
+    input: impl FnOnce(&mut ParagraphBuilder, &mut Doc),
+) -> (f32, f32, f32, f32) {
+    let mut doc = Doc::new();
+    let p = build(&root(quirk), |b| input(b, &mut doc));
+    let mut cx = LayoutContext::new();
+    let line = first_line(&p, &mut cx, &doc);
+    let h = line.block_size();
+    for f in line.fragments() {
+        if let shodo::Fragment::Atomic(a) = f {
+            let r = a.margin_rect;
+            return (
+                r.block_start - line.baseline(shodo::geometry::BaselineKind::Alphabetic),
+                h - (r.block_start + r.block_size),
+                r.block_start,
+                h,
+            );
+        }
+    }
+    panic!("no atomic fragment");
+}
+
+fn first_line(p: &shodo::Paragraph, cx: &mut LayoutContext, doc: &Doc) -> shodo::Line {
+    match p.next_line(
+        cx,
+        p.start_token(),
+        &LineOptions::default(),
+        &LineConstraint::new(WIDE),
+        &doc.atomics,
+    ) {
+        LineResult::Line(l) => l,
+        other => panic!("unexpected {other:?}"),
+    }
+}
+
+#[test]
+fn suppressed_boxes_keep_their_vertical_align_shifts() {
+    // x<span lh40><img va></span>: the root text sizes the quirk line (20)
+    // while the span's strut is suppressed. The span still shifts its
+    // descendants, so the image sits at the same offset from the baseline
+    // as without the quirk.
+    for align in [
+        VerticalAlign::Middle,
+        VerticalAlign::TextTop,
+        VerticalAlign::Sub,
+    ] {
+        let input = |b: &mut ParagraphBuilder, d: &mut Doc| {
+            text(b, "x");
+            b.open_inline(NodeId(2), &span(40.0), InlineEdges::default());
+            d.img(b, align);
+            b.close_inline();
+        };
+        let on = img_position(true, input);
+        let off = img_position(false, input);
+        assert_eq!(on.0, off.0, "{align:?}: {on:?} vs {off:?}");
+    }
+}
+
+#[test]
+fn ghost_groups_position_without_sizing() {
+    // x<span lh40 va:top><img va:middle></span>: the span is suppressed but
+    // its group is still top aligned, and the quirk line is 20 high (flag
+    // off: 40).
+    let top = InlineStyle {
+        vertical_align: VerticalAlign::Top,
+        ..span(40.0)
+    };
+    let input = |b: &mut ParagraphBuilder, d: &mut Doc| {
+        text(b, "x");
+        b.open_inline(NodeId(2), &top, InlineEdges::default());
+        d.img(b, VerticalAlign::Middle);
+        b.close_inline();
+    };
+    let on = img_position(true, input);
+    let off = img_position(false, input);
+    assert_eq!(on.3, 20.0);
+    // Only the image sizes its group, so it sits flush with the line top;
+    // with the strut (flag off) it is centered inside the 40px strut instead.
+    assert_eq!(on.2, 0.0, "{on:?} vs {off:?}");
+    assert_ne!(off.2, 0.0);
+    // The same with va:bottom: the image sits flush with the line bottom.
+    let bottom = InlineStyle {
+        vertical_align: VerticalAlign::Bottom,
+        ..span(40.0)
+    };
+    let input = |b: &mut ParagraphBuilder, d: &mut Doc| {
+        text(b, "x");
+        b.open_inline(NodeId(2), &bottom, InlineEdges::default());
+        d.img(b, VerticalAlign::Baseline);
+        b.close_inline();
+    };
+    let on = img_position(true, input);
+    let off = img_position(false, input);
+    assert_eq!(on.1, 0.0, "{on:?} vs {off:?}");
+    // An empty bottom aligned span is a ghost with no members: no panic.
+    assert_eq!(
+        q(WIDE, |b, _| {
+            b.open_inline(NodeId(2), &bottom, InlineEdges::default());
+            b.close_inline();
+            text(b, "x");
+        }),
+        [20.0]
+    );
+}
