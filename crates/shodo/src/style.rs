@@ -503,6 +503,10 @@ pub struct InlineStyle {
     /// characters of this box, so `Some(HangingPunctuation::default())` is
     /// CSS `none` even when the paragraph enables hanging. Each edge
     /// character uses the value of the box it belongs to.
+    /// `ParagraphStyle::root.hanging_punctuation = Some(..)` therefore
+    /// overrides `LineOptions` for root-level text. The value is ignored in
+    /// [`ParagraphStyle::first_line`]: `hanging-punctuation` does not apply
+    /// to `::first-line`.
     pub hanging_punctuation: Option<HangingPunctuation>,
     pub vertical_align: VerticalAlign,
     pub direction: Direction,
@@ -637,11 +641,18 @@ pub struct TextIndent {
     pub each_line: bool,
 }
 
+/// CSS `hanging-punctuation` flags; set them paragraph-wide via
+/// [`LineOptions::hanging_punctuation`] or per box via
+/// [`InlineStyle::hanging_punctuation`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct HangingPunctuation {
+    /// Hangs one eligible opening mark on the first formatted line.
     pub first: bool,
+    /// Excludes a comma/stop's remaining advance even if it fits.
     pub force_end: bool,
+    /// Excludes only the part of a comma/stop that exceeds the available width.
     pub allow_end: bool,
+    /// Hangs one eligible ending mark on the final line.
     pub last: bool,
 }
 
