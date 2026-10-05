@@ -2,11 +2,11 @@
 
 ## 結論
 
-採用する。`white-space: pre` の tab を 1 つ含む ruby の `break_all` から 2 乗の項が消えた。測定前に固定した倍化比 2.6 以下の基準は `nestedtab` では文字どおりには満たせなかったので、その基準を下の理由で言い直して採用の根拠にする。
+採用する。測定前に固定した倍化比 2.6 以下の基準は `nestedtab` では文字どおりには満たせなかったので、その基準を下の理由で言い直して採用の根拠にする。
 
 `white-space: pre` の tab を 1 つ含む ruby の `break_all` から 2 乗の項が消えた。`nestedtab`（入れ子の ruby の最内側が `"日\t日"`）は depth 160 で baseline 5.04 s（BAAB 5.06 s）が 17.78 ms（17.37 ms）になり（−99.6% / −99.7%）、`siblingstab`（先頭に `"\t"` を置いた兄弟 ruby）は 800 で 13.25 s（13.29 s）が 34.12 ms（34.30 ms）になった（−99.7%）。tab を含む全 7 点で、ABBA・BAAB とも 12/12 ラウンドで candidate が速く、遅いラウンドは 0。出力と警告の SHA-256 は全 1536 サンプルで一致した（`digest_mismatch` は空）。操作数では、`nestedtab` の `container_measures` が参照 3,136 / 12,416 / 49,408（depth 16 / 32 / 64）に対し memo と accumulator が 48 / 96 / 192（384 まで正確に 2.0 倍ずつ）で、キャッシュの世代（epoch）は 1 のまま動かない。
 
-基準の言い直し。計画の倍化比 2.6 以下は、wall clock の比で線形性を見るための代理の基準だった。`siblingstab` の candidate は ABBA 2.18 / 2.21、BAAB 2.22 / 2.18 で 2.6 以下を満たす。`nestedtab` の candidate は ABBA 2.91 / 2.57 / 2.62、BAAB 2.90 / 2.66 / 2.49 で、20→40 の 2.91 / 2.90、ABBA の 80→160 の 2.62、BAAB の 40→80 の 2.66 が 2.6 を超える。しかし tab のない `nested` の対照（変更していない経路）が同じ曲線を示す。candidate の `nested` は ABBA 3.12 / 2.71 / 2.56、BAAB 3.15 / 2.72 / 2.63 で、baseline も 3.18 / 2.66 / 2.54 と 3.08 / 2.73 / 2.56。shodo-d77 の記録の `nested` の candidate も 3.27 / 2.73 / 2.58（BAAB 3.29 / 2.70 / 2.67）だった。`nestedtab` の倍化比を `nested` の倍化比で割ると ABBA が 0.93 / 0.95 / 1.02、BAAB が 0.92 / 0.98 / 0.95 で、tab による上乗せの増加は見えない（同じ size の時間の比 `nestedtab` / `nested` は ABBA が 1.25 / 1.16 / 1.10 / 1.13、BAAB が 1.27 / 1.17 / 1.14 / 1.08 と、size とともに縮む）。操作数は `nested` も `nestedtab` も 48 / 96 / 192 / 384 とちょうど 2.0 倍で線形で、epoch は 1 のまま。したがって 2.6 を超える分は、tab と無関係な、すでにある深さに比例する wall clock の要因（shodo-d77 と shodo-2j6 の記録でも未解決として挙げている）で、tab prefix の修正の効果を損なうものではない。この言い直しは測定後のものであることを明記しておく。
+基準の言い直し。計画の倍化比 2.6 以下は、wall clock の比で線形性を見るための代理の基準だった。`siblingstab` の candidate は ABBA 2.18 / 2.21、BAAB 2.22 / 2.18 で 2.6 以下を満たす。`nestedtab` の candidate は ABBA 2.91 / 2.57 / 2.62、BAAB 2.90 / 2.66 / 2.49 で、20→40 の 2.91 / 2.90、ABBA の 80→160 の 2.62、BAAB の 40→80 の 2.66 が 2.6 を超える。しかし tab のない `nested` の対照（変更していない経路）が同じ曲線を示す。candidate の `nested` は ABBA 3.12 / 2.71 / 2.56、BAAB 3.15 / 2.72 / 2.63 で、baseline も 3.18 / 2.66 / 2.54 と 3.08 / 2.73 / 2.56。shodo-d77 の記録の `nested` の candidate も 3.27 / 2.73 / 2.58（BAAB 3.29 / 2.70 / 2.67）だった。`nestedtab` の倍化比を `nested` の倍化比で割ると ABBA が 0.93 / 0.95 / 1.02、BAAB が 0.92 / 0.98 / 0.95 で、tab による上乗せの増加は見えない（同じ size の時間の比 `nestedtab` / `nested` は ABBA が 1.25 / 1.16 / 1.10 / 1.13、BAAB が 1.27 / 1.17 / 1.14 / 1.08 と、size とともに縮む）。操作数は `nested` も `nestedtab` も 48 / 96 / 192 / 384 とちょうど 2.0 倍で線形で、epoch は 1 のまま。したがって 2.6 を超える分は、tab と無関係な、すでにある深さに比例する wall clock の要因と考えられる（本記録では原因を特定していない。shodo-d77 と shodo-2j6 の記録でも未解決として挙げている）。これは tab prefix の修正の効果を損なうものではない。この言い直しは測定後のものであることを明記しておく。
 
 対照は ±3% に収まった。`nested` は −2.2%〜+2.3%、`siblings` は −0.7%〜+1.5%、`plain` は −1.0%〜+0.5%（個別の最大 Δ は `nested` 160 の ABBA +2.0% と BAAB +2.3%。candidate が速いラウンドは 4/12 だった）。ruby も tab もない経路は変わらず、この差は揺らぎの範囲と考える。`plain` 800 の BAAB には、1 ラウンドだけ比 1.40 の外れ値があった。
 
@@ -62,7 +62,7 @@
 
 ## 操作数
 
-wall clock に依存しない指標として、ignored テスト `accumulate_tests::b7d_operation_counts_report` が 1 行の走査で container の計測回数と、範囲キャッシュの世代 `epoch` と `fills`（飽和を埋めた tab step の数）を数える。
+wall clock に依存しない指標として、ignored テスト `accumulate_tests::b7d_operation_counts_report` が 1 行の走査で container の計測回数と、範囲キャッシュの世代 `epoch` と `fills`（範囲キャッシュの単調な fill の回数。blocks/sets の挿入と、Saturation のある tab step を含む。tab のない `nested` でも同じ値になる）を数える。
 
 | shape | 経路 | r | container_measures | replayed | width_calls | epoch | fills |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
