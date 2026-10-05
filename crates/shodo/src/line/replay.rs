@@ -138,6 +138,17 @@ impl Effects {
         self.sat
     }
 
+    /// No charges and no saturation, recorded with an unsuppressed sink
+    /// that took no warning. Measuring again then gives the same result in
+    /// any state: no charge was made, so no budget outcome or `spent` value
+    /// was read, and nothing on the path reads the suppression state. Such
+    /// effects may be replayed without `replay`'s gate (which would refuse
+    /// them under a suppressed sink). A recording under a suppressed sink
+    /// may have dropped a warning, so it is never empty.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.charges == Charges::default() && self.sat.is_clean() && !self.suppressed
+    }
+
     /// These effects without `sat` (a part recorded elsewhere).
     pub(crate) fn without_sat(self, sat: Saturation) -> Self {
         Self {
@@ -350,6 +361,19 @@ mod tests {
         }
         s.saturated += extra_sat;
         finish(cx, recording, &s)
+    }
+
+    #[test]
+    fn only_unsuppressed_recordings_without_effects_are_empty() {
+        let mut cx = LayoutContext::new();
+        assert!(record(&mut cx, &[], 0).unwrap().is_empty());
+        assert!(!record(&mut cx, &[], 1).unwrap().is_empty());
+        assert!(!record(&mut cx, &[(0, 100)], 0).unwrap().is_empty());
+        cx.warnings.set_max(Some(0));
+        cx.warnings.push(WarningKind::Unsupported, "suppress");
+        assert!(cx.warnings.is_suppressed());
+        let suppressed = record(&mut cx, &[], 0).unwrap();
+        assert!(!suppressed.is_empty());
     }
 
     #[test]

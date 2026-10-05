@@ -31,14 +31,16 @@
 //!   `through`;
 //! - gate (`line::replay::replay`): `edge_reshape_spent` against the recorded
 //!   charge aggregate, and whether the warning sink is suppressed;
-//! - cache state: some `RangeCache` hits skip side effects that a cold fill
-//!   incurs (a `blocks` hit skips the block's reshape charges, a `sets` hit
-//!   the build's saturation). A measurement that filled such a cache is not
-//!   stored, and an entry replays only while `RangeCache::generation` equals
-//!   the one it was recorded under, so it always replays the effects of a
-//!   measurement against the same warm cache state. The edge window cache
-//!   charges on hits as on misses and stores only clean windows, and the
-//!   metric and neighbor index slots are side-effect free;
+//! - cache state: no input. Every `RangeCache` query charges what a cold
+//!   query of the same range would (a `blocks` hit replays its recorded
+//!   effects through the same gate, and the range costs and tab prefix
+//!   charge per unit and per tab step of the queried range; see
+//!   `line::range`), the edge window cache charges on hits as on misses and
+//!   stores only clean windows, and the metric and neighbor index slots are
+//!   side-effect free. So a recording that filled caches replays exactly.
+//!   As a conservative guard, an entry replays only while
+//!   `RangeCache::epoch` (caches cleared) equals the one it was recorded
+//!   under;
 //! - everything else the core reads (prepared ruby data) is immutable for the
 //!   operation. Nothing on the measurement path reads the warning count, and
 //!   an entry exists only for a measurement that pushed no warning at all.
@@ -93,10 +95,10 @@ pub(crate) struct MemoEntry {
     /// Sum of the container adjustments, before the look-ahead correction.
     pub(crate) adjustment: LayoutUnit,
     pub(crate) effects: Effects,
-    /// `RangeCache::generation` during the whole recording. The entry
-    /// replays only while it is unchanged: a recording that filled a cache
-    /// whose later hits skip side effects is never stored.
-    pub(crate) generation: u64,
+    /// `RangeCache::epoch` during the whole recording. The entry replays
+    /// only while it is unchanged (a conservative guard: the caches were
+    /// not cleared since).
+    pub(crate) epoch: u64,
 }
 
 /// Entries held at once. Reaching it clears the memo before the next insert.
@@ -274,7 +276,7 @@ mod tests {
         MemoEntry {
             adjustment: LayoutUnit::ZERO,
             effects: crate::line::replay::finish(&mut cx, recording, &sat).unwrap(),
-            generation: 0,
+            epoch: 0,
         }
     }
 

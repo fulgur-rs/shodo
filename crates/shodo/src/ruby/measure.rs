@@ -179,11 +179,10 @@ pub(crate) fn candidate_adjustment(
     let mut walk = cx.ruby_memo.take_walk();
     let through = super::memo::advance(&mut walk, data, start, end);
     let key = super::memo::MemoKey::new(data, atomics, start, through);
-    let generation = cx.ruby_ranges.generation();
+    let epoch = cx.ruby_ranges.epoch();
     let core = match cx.ruby_memo.get(&key) {
         Some(entry)
-            if entry.generation == generation
-                && crate::line::replay::replay(cx, &entry.effects, sat) =>
+            if entry.epoch == epoch && crate::line::replay::replay(cx, &entry.effects, sat) =>
         {
             #[cfg(test)]
             {
@@ -206,15 +205,16 @@ pub(crate) fn candidate_adjustment(
             let adjustment =
                 super::accumulate::core(data, start, through, containers, atomics, cx, sat);
             let effects = crate::line::replay::finish(cx, recording, sat);
-            // A recording that filled a cache whose later hits skip side
-            // effects is not what measuring again would do; measure again.
-            match effects.filter(|_| cx.ruby_ranges.generation() == generation) {
+            // Range cache queries charge the same cold or warm, so a
+            // recording that filled caches replays exactly; only an
+            // invalidation during it leaves no single epoch to check.
+            match effects.filter(|_| cx.ruby_ranges.epoch() == epoch) {
                 Some(effects) => cx.ruby_memo.insert(
                     key,
                     super::memo::MemoEntry {
                         adjustment,
                         effects,
-                        generation,
+                        epoch,
                     },
                 ),
                 None => cx.ruby_memo.remove(&key),

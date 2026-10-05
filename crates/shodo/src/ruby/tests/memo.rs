@@ -1297,8 +1297,8 @@ fn shared_profile_recomputes_when_its_charges_cross_the_budget() {
 
 /// Probes sharing `start..through` inside one operation measure the core
 /// once; a new operation measures it again. A warm-up operation fills the
-/// range caches first: a measurement that fills them is never memoized
-/// (`cold_cache_fills_are_not_memoized`).
+/// range caches first (since shodo-tj5 a measurement that fills them is
+/// memoized too: `cold_cache_fills_are_memoized`).
 #[test]
 fn repeated_probe_in_one_operation_is_measured_once() {
     let p = nested(4, &Limits::default(), "日", &style(24.0));
@@ -1399,8 +1399,8 @@ fn memo_recomputes_when_replay_would_cross_reshape_budget() {
         let mut cx = context(reference);
         cx.warnings.set_max(data.limits.max_warnings);
         let mut sat = Saturation::default();
-        // Warm-up: fill the range caches in an earlier operation, so the
-        // first probe below is recorded (cache fills are never memoized).
+        // Warm-up: fill the range caches in an earlier operation (kept from
+        // before shodo-tj5, when cache fills were never memoized).
         cx.begin_reshape_operation();
         crate::ruby::measure::candidate_adjustment(
             data,
@@ -1454,6 +1454,9 @@ fn memo_recomputes_when_replay_would_cross_reshape_budget() {
     let (optimized, _, measured, refused) = run(false, limit - 1);
     let (reference, _, _, _) = run(true, limit - 1);
     assert_eq!(optimized, reference);
+    // `measured` shows the memo entry itself was refused (a replayed core
+    // visits no column); `refused` also counts refused `blocks` replays
+    // since shodo-tj5.
     assert!(measured > 0);
     assert!(refused > 0);
     assert!(
@@ -1583,7 +1586,7 @@ fn narrow_retry_after_budget_exhausting_index_matches_reference() {
 /// Review focus 4: the min- and max-content atomics built by
 /// `intrinsic_sizes` get distinct memo keys for the same range, so they can
 /// never answer each other's probes. A hit pattern alone cannot show this: a
-/// changed revision also bumps the range cache generation
+/// changed revision also moves the range cache epoch
 /// (`RangeCache::begin`), which already refuses every older entry.
 #[test]
 fn intrinsic_min_and_max_atomics_have_distinct_memo_keys() {
@@ -1631,9 +1634,9 @@ fn intrinsic_min_and_max_atomics_have_distinct_memo_keys() {
 ///
 /// `intrinsic_sizes` probes only at legal breaks (`through == end`), which
 /// are never stored, so the second half probes a look-ahead range directly.
-/// A changed revision resets the range caches (`RangeCache::begin`), so the
-/// first probe after a switch fills them and is not memoized, the second is
-/// recorded, and the third hits. Key separation itself is shown by
+/// A changed revision resets the range caches (`RangeCache::begin`, a new
+/// epoch), so the first probe after a switch is measured and recorded, and
+/// the next two hit. Key separation itself is shown by
 /// `intrinsic_min_and_max_atomics_have_distinct_memo_keys`.
 #[test]
 fn intrinsic_min_and_max_atomics_keep_separate_memo_entries() {
@@ -1692,9 +1695,13 @@ fn intrinsic_min_and_max_atomics_keep_separate_memo_entries() {
     assert_eq!((values(&optimized), sat), (values(&reference), ref_sat));
     assert_ne!(optimized[0].0, optimized[3].0, "min and max must differ");
     let hits: Vec<_> = optimized.iter().map(|(_, hits)| *hits).collect();
+    // A revision switch clears the range caches (a new epoch), so the
+    // entries of the earlier revision are measured again; within a
+    // revision every repeat replays, including the one after the probe
+    // that filled the caches (shodo-tj5).
     assert_eq!(
         hits,
-        [0, 0, 1, 0, 0, 1, 0],
+        [0, 1, 1, 0, 1, 1, 0],
         "repeats hit within a revision; a revision switch measures again"
     );
 }
@@ -1739,13 +1746,12 @@ fn memo_does_not_survive_operations_or_atomic_revisions() {
     );
 }
 
-/// A measurement that fills the range caches is not memoized: later hits
-/// skip side effects (a `blocks` hit skips the block's reshape charges) that
-/// replaying the cold recording would repeat. The next, warm measurement is
-/// memoized. `siblings` charged 2952 bytes against the reference's 2808 when
-/// cold recordings were replayed.
+/// shodo-tj5: a measurement that fills the range caches is memoized. A
+/// `blocks` hit replays the block's reshape charges, so the cold recording
+/// charges what measuring again would (`siblings` charged 2952 bytes cold
+/// against 2808 warm before), and the next probe replays it.
 #[test]
-fn cold_cache_fills_are_not_memoized() {
+fn cold_cache_fills_are_memoized() {
     let p = siblings(&Limits::default());
     let data = &p.data;
     // End inside the last sibling, so the probe looks ahead to its end (a
@@ -1781,21 +1787,16 @@ fn cold_cache_fills_are_not_memoized() {
             cx.ruby_memo_hits - hits,
         )
     };
-    let generation = cx.ruby_ranges.generation();
-    let (cold, measured, hits) = probe(&mut cx);
+    let spent = |cx: &mut LayoutContext, probe: &mut dyn FnMut(&mut LayoutContext) -> _| {
+        let before = cx.edge_reshape_spent;
+        let out: (LayoutUnit, usize, usize) = probe(cx);
+        (out, cx.edge_reshape_spent - before)
+    };
+    let ((cold, measured, hits), cold_spent) = spent(&mut cx, &mut probe);
     assert!(measured > 0 && hits == 0);
-    assert_ne!(cx.ruby_ranges.generation(), generation, "the probe fills");
-    let generation = cx.ruby_ranges.generation();
-    let (warm, measured_again, hits) = probe(&mut cx);
-    assert_eq!(
-        (measured_again, hits),
-        (measured, 0),
-        "a cold recording is measured again"
-    );
-    assert_eq!(cx.ruby_ranges.generation(), generation, "a warm probe");
-    let (replayed, measured, hits) = probe(&mut cx);
-    assert_eq!((measured, hits), (0, 1), "a warm recording is replayed");
-    assert_eq!((cold, warm), (replayed, replayed));
+    let ((replayed, measured, hits), replayed_spent) = spent(&mut cx, &mut probe);
+    assert_eq!((measured, hits), (0, 1), "a cold recording is replayed");
+    assert_eq!((cold, cold_spent), (replayed, replayed_spent));
     let pre = PreState {
         spent: 0,
         suppressed: false,
@@ -2037,7 +2038,9 @@ fn memo_bounds_keep_look_ahead_hits() {
         let mut cx = LayoutContext::new();
         line(&p, &mut cx);
         assert_eq!(cx.ruby_memo.overflow_clears > 0, overflows, "n {n}");
-        assert_eq!(cx.ruby_memo_hits, 16 * n, "n {n}");
+        // 16 per sibling before shodo-tj5, when probes that filled the range
+        // caches were not stored.
+        assert_eq!(cx.ruby_memo_hits, 19 * n, "n {n}");
         assert!(cx.ruby_memo.len() <= crate::ruby::memo::MAX_ENTRIES);
         cx.begin_reshape_operation();
         assert!(cx.ruby_memo.capacity() <= crate::ruby::memo::RETAINED_CAPACITY);
@@ -2062,7 +2065,8 @@ fn d77_operation_counts_report() {
 /// A probe ending at a container's end has no look-ahead and is not stored,
 /// but it still replays the entry that the look-ahead probe one unit earlier
 /// recorded under the same `through`: every single-base sibling of an
-/// unbreakable line replays 12 cores, as before the memo bounds.
+/// unbreakable line replays 13 cores (12 before shodo-tj5, when the probe
+/// that filled the range caches was not stored).
 #[test]
 fn exact_probes_replay_look_ahead_entries() {
     let default = Limits::default();
@@ -2083,6 +2087,6 @@ fn exact_probes_replay_look_ahead_entries() {
         let p = finish(b);
         let mut cx = LayoutContext::new();
         p.break_all(&mut cx, &LineOptions::default(), 96.0, &AtomicSizes::EMPTY);
-        assert_eq!(cx.ruby_memo_hits, 12 * r, "r {r}");
+        assert_eq!(cx.ruby_memo_hits, 13 * r, "r {r}");
     }
 }

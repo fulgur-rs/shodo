@@ -1,7 +1,8 @@
 //! shodo-b7d probe: `break_all` time with preserved tabs (`white-space: pre`,
 //! `tab-size: 40px`): nested rubies with and without a tab in the innermost
 //! content, sibling rubies with and without a leading tab, and a ruby-free
-//! control with a tab every four characters.
+//! control with a tab every four characters. The `hugetab` cases (added for
+//! shodo-tj5) use `tab-size: 1e12px`, whose tab steps saturate.
 //!
 //! `sample <case> <size> <label> <index> <reps>` prints one JSON line. The
 //! paragraph, its output digest and the contexts are prepared outside the
@@ -39,6 +40,10 @@ enum Case {
     SiblingsTab,
     /// Ruby-free control: "日日日\t" repeated `size` times.
     Plain,
+    /// As `NestedTab` under `tab-size: 1e12px`.
+    NestedHugeTab,
+    /// As `SiblingsTab` under `tab-size: 1e12px`.
+    SiblingsHugeTab,
 }
 
 impl Case {
@@ -49,6 +54,8 @@ impl Case {
             "siblings" => Self::Siblings,
             "siblingstab" => Self::SiblingsTab,
             "plain" => Self::Plain,
+            "nestedhugetab" => Self::NestedHugeTab,
+            "siblingshugetab" => Self::SiblingsHugeTab,
             other => panic!("unknown case {other}"),
         }
     }
@@ -60,29 +67,38 @@ impl Case {
             Self::Siblings => "siblings",
             Self::SiblingsTab => "siblingstab",
             Self::Plain => "plain",
+            Self::NestedHugeTab => "nestedhugetab",
+            Self::SiblingsHugeTab => "siblingshugetab",
+        }
+    }
+
+    fn tab_size(self) -> f32 {
+        match self {
+            Self::NestedHugeTab | Self::SiblingsHugeTab => 1.0e12,
+            _ => 40.0,
         }
     }
 }
 
-fn style() -> InlineStyle {
+fn style(tab: f32) -> InlineStyle {
     InlineStyle {
         font_families: vec![FontFamily::Named(shodo_fixtures::FONTS[1].family.into())],
         white_space_collapse: WhiteSpaceCollapse::Preserve,
-        tab_size: TabSize::Px(40.0),
+        tab_size: TabSize::Px(tab),
         ..Default::default()
     }
 }
 
 /// The fixed CJK font has "日" and digits; other kana/kanji may be missing,
 /// which the geometry snapshot rejects.
-fn ruby(base: RubyContent, reading: &str, limits: &Limits) -> Ruby {
+fn ruby(base: RubyContent, reading: &str, tab: f32, limits: &Limits) -> Ruby {
     let annotation = RubyContent::text(
         TextSource::Dom {
             node: NodeId(3),
             offset: 30,
         },
         reading,
-        &style(),
+        &style(tab),
         limits,
     );
     Ruby::new(
@@ -115,42 +131,49 @@ fn text(b: &mut ParagraphBuilder, node: u64, text: &str) {
 }
 
 /// `size` rubies over "12" pushed into `b`.
-fn siblings(b: &mut ParagraphBuilder, size: usize, paragraph: &ParagraphStyle, limits: &Limits) {
+fn siblings(
+    b: &mut ParagraphBuilder,
+    size: usize,
+    paragraph: &ParagraphStyle,
+    tab: f32,
+    limits: &Limits,
+) {
     for i in 0..size as u64 {
         let mut base = ParagraphBuilder::new(paragraph, limits);
         text(&mut base, 500_000 + i, "12");
         b.push_ruby(
             NodeId(600_000 + i),
-            &style(),
-            ruby(RubyContent::from_builder(base), "日", limits),
+            &style(tab),
+            ruby(RubyContent::from_builder(base), "日", tab, limits),
         );
     }
 }
 
 fn builder(case: Case, size: usize, limits: &Limits) -> ParagraphBuilder {
+    let tab = case.tab_size();
     let paragraph = ParagraphStyle {
-        root: style(),
+        root: style(tab),
         ..Default::default()
     };
     let mut top = ParagraphBuilder::new(&paragraph, limits);
     match case {
-        Case::Siblings => siblings(&mut top, size, &paragraph, limits),
-        Case::SiblingsTab => {
+        Case::Siblings => siblings(&mut top, size, &paragraph, tab, limits),
+        Case::SiblingsTab | Case::SiblingsHugeTab => {
             text(&mut top, 1, "\t");
-            siblings(&mut top, size, &paragraph, limits);
+            siblings(&mut top, size, &paragraph, tab, limits);
         }
-        Case::Nested | Case::NestedTab => {
+        Case::Nested | Case::NestedTab | Case::NestedHugeTab => {
             let mut content = ParagraphBuilder::new(&paragraph, limits);
-            let inner = if matches!(case, Case::NestedTab) {
+            let inner = if matches!(case, Case::NestedTab | Case::NestedHugeTab) {
                 "日\t日"
             } else {
                 "日"
             };
             text(&mut content, 1, inner);
             for _ in 0..size {
-                let r = ruby(RubyContent::from_builder(content), "日", limits);
+                let r = ruby(RubyContent::from_builder(content), "日", tab, limits);
                 content = ParagraphBuilder::new(&paragraph, limits);
-                content.push_ruby(NodeId(4), &style(), r);
+                content.push_ruby(NodeId(4), &style(tab), r);
             }
             top = content;
         }

@@ -4,12 +4,21 @@
 //! discretionary hyphens use bounded selected windows and a replaced spacing
 //! leaf. A source-clipped shaping cluster corrects its own slices, keeping the
 //! remainder of the range indexed.
+//!
+//! Every query charges the reshape budget and `Saturation` exactly as a
+//! cold query of the same paragraph and range would, whatever earlier
+//! queries left in the caches (as `windows` charges edge window cache hits):
+//! a `blocks` hit replays the recorded effects of its measurement, and the
+//! range costs and tab prefix keep their saturation per unit and per tab
+//! step, charged for the units and tabs of each query's own range.
 use super::spacing_summary::{RangeIndex, raw};
 use crate::LayoutContext;
 use crate::analysis::units::UnitKind;
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::paragraph::{AtomicSizes, ParagraphData};
 use std::ops::Range;
+
+type BlockKey = (u64, usize, usize, usize);
 
 #[derive(Debug, Default)]
 pub(crate) struct RangeCache {
@@ -19,53 +28,29 @@ pub(crate) struct RangeCache {
     /// key, so the map is not rehashed per query. An empty slot is rebuilt.
     pub(super) metrics:
         crate::hashing::FastMap<(u64, usize), Option<Box<super::metric_index::MetricIndex>>>,
-    blocks: crate::hashing::FastMap<(u64, usize, usize, usize), LayoutUnit>,
+    /// Block sizes whose measurement had no side effects (`Effects::is_empty`).
+    blocks: crate::hashing::FastMap<BlockKey, LayoutUnit>,
+    /// Block sizes with the effects of their measurement, replayed on a hit
+    /// through the exact `line::replay` gate. Kept apart so the common entry
+    /// without effects stays as small as before.
+    block_effects: crate::hashing::FastMap<BlockKey, (LayoutUnit, crate::line::replay::Effects)>,
     pub(crate) neighbors:
         crate::hashing::FastMap<(u64, usize), Option<Box<crate::ruby::overhang::NeighborIndex>>>,
-    /// Bumped whenever a cache fills or clears in a way that changes the side
-    /// effects of later queries: a `blocks` hit skips the reshape charges and
-    /// saturation of measuring the block, a `sets` hit skips the build's
-    /// saturation, and a covered tab step skips its saturation. Tab steps
-    /// whose saturation was clean change no effects and do not count, nor do
-    /// the metric and neighbor index slots.
-    /// Per-operation reuse (`ruby::memo`) records and replays a measurement
-    /// only while this is unchanged, so replayed effects always equal those of
-    /// measuring again against the same cache state. Every bump is either a
-    /// fill (`fills`) or an invalidation (`epoch`).
-    generation: u64,
-    /// Monotone fills: a `blocks` or `sets` insertion, and a tab step with
-    /// saturation computed for the current prefix. A fill only turns later
-    /// misses into hits, so a measurement recorded while no fill and no
-    /// invalidation happened stays exact until the next invalidation
-    /// (`ruby::accumulate`).
-    fills: u64,
     /// Invalidations: caches cleared (`begin` with a new root,
-    /// `vacate_slots`) or a tab prefix holding a step with saturation
-    /// replaced for another start.
+    /// `vacate_slots`). Fills need no counter: a query's side effects do not
+    /// depend on what the caches hold, so a measurement recorded before a
+    /// fill replays exactly after it. Reuse across measurements
+    /// (`ruby::accumulate`) still resets on an invalidation, conservatively.
     epoch: u64,
 }
 
 impl RangeCache {
-    pub(crate) fn generation(&self) -> u64 {
-        self.generation
-    }
-
-    pub(crate) fn fills(&self) -> u64 {
-        self.fills
-    }
-
     pub(crate) fn epoch(&self) -> u64 {
         self.epoch
     }
 
-    fn fill(&mut self) {
-        self.fills = self.fills.wrapping_add(1);
-        self.generation = self.generation.wrapping_add(1);
-    }
-
     fn invalidate(&mut self) {
         self.epoch = self.epoch.wrapping_add(1);
-        self.generation = self.generation.wrapping_add(1);
     }
 
     pub(crate) fn begin(&mut self, data: &ParagraphData, atomics: &AtomicSizes) {
@@ -89,6 +74,7 @@ impl RangeCache {
         if self.root != Some(root) {
             self.sets.clear();
             self.blocks.clear();
+            self.block_effects.clear();
             self.metrics.clear();
             self.neighbors.clear();
             self.root = Some(root);
@@ -103,6 +89,7 @@ impl RangeCache {
     pub(crate) fn vacate_slots(&mut self) {
         self.sets.clear();
         self.blocks.clear();
+        self.block_effects.clear();
         self.metrics.values_mut().for_each(|slot| *slot = None);
         self.neighbors.values_mut().for_each(|slot| *slot = None);
         self.invalidate();
@@ -121,6 +108,11 @@ impl RangeCache {
 /// Cache only scalar block measurements, never child Lines or lane cursors.
 /// Actual edge-window run instances supply fallback font metrics, matching
 /// retained output without constructing glyph buffers for each fit probe.
+///
+/// A hit has the side effects of the measurement it stands for: an entry
+/// with effects replays them only when `line::replay` proves that measuring
+/// again would do exactly that (same budget outcomes, no warning), and is
+/// measured again otherwise. A measurement that warned is not stored.
 pub(crate) fn block_size(
     data: &ParagraphData,
     range: Range<usize>,
@@ -138,6 +130,40 @@ pub(crate) fn block_size(
     if let Some(height) = cx.ruby_ranges.blocks.get(&key) {
         return *height;
     }
+    if let Some((height, effects)) = cx.ruby_ranges.block_effects.get(&key).copied()
+        && super::replay::replay(cx, &effects, sat)
+    {
+        return height;
+    }
+    let recording = super::replay::begin(cx, sat);
+    let height = measure_block(data, range, ruby, atomics, cx, sat);
+    let effects = super::replay::finish(cx, recording, sat);
+    let cache = &mut cx.ruby_ranges;
+    match effects {
+        Some(effects) if effects.is_empty() => {
+            cache.block_effects.remove(&key);
+            cache.blocks.insert(key, height);
+        }
+        Some(effects) => {
+            // No `blocks` entry exists: a hit there returned above.
+            debug_assert!(!cache.blocks.contains_key(&key));
+            cache.block_effects.insert(key, (height, effects));
+        }
+        None => {
+            cache.block_effects.remove(&key);
+        }
+    }
+    height
+}
+
+fn measure_block(
+    data: &ParagraphData,
+    range: Range<usize>,
+    ruby: &crate::ruby::measure::RubyMeasure,
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> LayoutUnit {
     let metrics = super::metric_index::measure(data, range, atomics, cx, sat);
     let mut bounds = crate::ruby::geometry::Bounds {
         top: LayoutUnit::ZERO.sub(metrics.baseline, sat),
@@ -148,10 +174,7 @@ pub(crate) fn block_size(
             bounds = bounds.union(fragment.contribution);
         }
     }
-    let height = bounds.height(sat);
-    cx.ruby_ranges.blocks.insert(key, height);
-    cx.ruby_ranges.fill();
-    height
+    bounds.height(sat)
 }
 
 #[derive(Debug)]
@@ -164,8 +187,23 @@ struct Costs {
     last_preserved: Vec<usize>,
     last_blocked_preserved: Vec<usize>,
     bad_atomics: Vec<usize>,
+    /// Units whose width saturated while the costs were built, with the
+    /// running (wrapping) saturation through each: a query charges those of
+    /// its own range. Empty for ordinary paragraphs.
+    saturated: Vec<(usize, Saturation)>,
     tabs: Vec<usize>,
     tab_prefix: Option<TabPrefix>,
+}
+
+impl Costs {
+    /// Saturation of building the units of `range`.
+    fn saturation(&self, range: &Range<usize>) -> Saturation {
+        let through = |end: usize| match self.saturated.partition_point(|(i, _)| *i < end) {
+            0 => Saturation::default(),
+            k => self.saturated[k - 1].1,
+        };
+        difference(through(range.end), through(range.start))
+    }
 }
 
 /// Extra advances of the tabs after one range start, grown as later ends
@@ -180,35 +218,53 @@ struct TabPrefix {
     first: usize,
     /// `extra[k]`: the extra advance of the first `k + 1` covered tabs.
     extra: Vec<i64>,
-    /// Whether computing any covered tab step changed the saturation
-    /// counters: an OR of per-step flags, since the counters wrap.
-    effects: bool,
+    /// `sat[k]`: the (wrapping) saturation of computing the first `k + 1`
+    /// covered tab steps. Empty while every step was clean.
+    sat: Vec<Saturation>,
 }
 
 impl TabPrefix {
+    /// Number of covered tabs before unit `end` (`end <= through`).
+    fn count(&self, tabs: &[usize], end: usize) -> usize {
+        tabs[self.first..self.first + self.extra.len()].partition_point(|t| *t < end)
+    }
+
     /// Extra advance of the covered tabs before unit `end` (`end <= through`).
     fn before(&self, tabs: &[usize], end: usize) -> i64 {
-        let covered = &tabs[self.first..self.first + self.extra.len()];
-        match covered.partition_point(|t| *t < end) {
+        match self.count(tabs, end) {
             0 => 0,
             k => self.extra[k - 1],
         }
     }
+
+    /// Saturation of the covered tab steps before unit `end`.
+    fn saturation(&self, tabs: &[usize], end: usize) -> Saturation {
+        match self.count(tabs, end) {
+            0 => Saturation::default(),
+            _ if self.sat.is_empty() => Saturation::default(),
+            k => self.sat[k - 1],
+        }
+    }
 }
 
-/// Add one tab step's saturation to the caller's counters. Counters only
-/// ever increment; wrapping matches release `+=` and `line::replay`.
+/// Add saturation to the caller's counters. Counters only ever increment;
+/// wrapping matches release `+=` and `line::replay`.
 fn absorb(sat: &mut Saturation, step: Saturation) {
     sat.saturated = sat.saturated.wrapping_add(step.saturated);
     sat.non_finite = sat.non_finite.wrapping_add(step.non_finite);
 }
 
-fn build(
-    data: &ParagraphData,
-    atomics: &AtomicSizes,
-    cx: &mut LayoutContext,
-    sat: &mut Saturation,
-) -> Costs {
+/// `a - b` of running (wrapping) saturation counts.
+fn difference(a: Saturation, b: Saturation) -> Saturation {
+    Saturation {
+        saturated: a.saturated.wrapping_sub(b.saturated),
+        non_finite: a.non_finite.wrapping_sub(b.non_finite),
+    }
+}
+
+/// Build the range costs of a paragraph. Charges nothing: the saturation
+/// of measuring each unit is kept in `Costs::saturated` for the queries.
+fn build(data: &ParagraphData, atomics: &AtomicSizes, cx: &mut LayoutContext) -> Costs {
     let mut advances = vec![0_i64];
     let mut hanging_advances = vec![0_i64];
     let mut hanging_units = Vec::new();
@@ -216,6 +272,8 @@ fn build(
     let mut last_preserved = vec![0];
     let mut last_blocked_preserved = vec![0];
     let mut bad_atomics = Vec::new();
+    let mut saturated = Vec::new();
+    let mut running = Saturation::default();
     let mut tabs = Vec::new();
     let mut local_warnings = crate::limits::WarningSink::new(Some(0));
     for (i, unit) in data.units.iter().enumerate() {
@@ -223,6 +281,7 @@ fn build(
         {
             cx.ruby_measure_visits += 1;
         }
+        let mut sat = Saturation::default();
         let width = if let UnitKind::Atomic { node } = unit.kind {
             let mut local_sat = Saturation::default();
             let value = atomics
@@ -242,9 +301,13 @@ fn build(
             tabs.push(i);
             LayoutUnit::ZERO
         } else {
-            super::scan::unit_width(data, unit, LayoutUnit::ZERO, atomics, cx, sat)
+            super::scan::unit_width(data, unit, LayoutUnit::ZERO, atomics, cx, &mut sat)
         };
-        let width = width.add(data.unit_spacing[i].word, sat);
+        let width = width.add(data.unit_spacing[i].word, &mut sat);
+        if !sat.is_clean() {
+            absorb(&mut running, sat);
+            saturated.push((i, running));
+        }
         advances.push(advances.last().unwrap() + i64::from(width.raw()));
         let hanging = super::whitespace::hangable(data, i);
         hanging_advances.push(
@@ -297,6 +360,7 @@ fn build(
         last_preserved,
         last_blocked_preserved,
         bad_atomics,
+        saturated,
         tabs,
         tab_prefix: None,
     }
@@ -367,29 +431,18 @@ pub(super) fn width(
     }
     let key = (data.id, data as *const ParagraphData as usize);
     if !cx.ruby_ranges.sets.contains_key(&key) {
-        let costs = build(data, atomics, cx, sat);
+        let costs = build(data, atomics, cx);
         cx.ruby_ranges.sets.insert(key, costs);
-        cx.ruby_ranges.fill();
     }
+    let costs = cx.ruby_ranges.sets.get_mut(&key)?;
+    absorb(sat, costs.saturation(&range));
     // Each tab step's value and saturation depend only on the paragraph,
     // the range start and the tab (`clipped_delta` is the same for every
     // end past the tab: a preserved tab is its own item, so no shared
-    // cluster slice lies after it). A step charges the caller's `sat` only
-    // when it is computed, as before. Discarding or computing a step whose
-    // saturation was clean therefore changes no later query's effects and
-    // moves no generation; an effectful step keeps the old rule: computing
-    // it fills, discarding it for another start invalidates.
-    let discards_effects = cx.ruby_ranges.sets.get(&key).is_some_and(|costs| {
-        costs
-            .tab_prefix
-            .as_ref()
-            .is_some_and(|p| p.start != range.start && p.effects)
-    });
-    if discards_effects {
-        cx.ruby_ranges.invalidate();
-    }
-    let mut computed_effects = false;
-    let costs = cx.ruby_ranges.sets.get_mut(&key)?;
+    // cluster slice lies after it). Steps are stored with their saturation
+    // and every query charges the steps of its tabs, computed now or
+    // earlier, so replacing the prefix for another start changes no
+    // query's effects.
     let mut tab_total = 0_i64;
     if !costs.tabs.is_empty() {
         if costs
@@ -402,13 +455,13 @@ pub(super) fn width(
                 through: range.start,
                 first: costs.tabs.partition_point(|t| *t < range.start),
                 extra: Vec::new(),
-                effects: false,
+                sat: Vec::new(),
             });
         }
         let prefix = costs.tab_prefix.as_mut().unwrap();
         if prefix.through < range.end {
             // The start's decoration is the same for every step: measure it
-            // once and charge its saturation per step, as calling it per
+            // once and count its saturation per step, as calling it per
             // step did.
             let mut decoration: Option<(LayoutUnit, Saturation)> = None;
             let from = prefix.first + prefix.extra.len();
@@ -442,18 +495,22 @@ pub(super) fn width(
                 let extra =
                     i64::from(super::scan::tab_width(data, &data.units[i], pos, &mut step).raw());
                 prefix.extra.push(previous + extra);
-                if !step.is_clean() {
-                    prefix.effects = true;
-                    computed_effects = true;
+                if !step.is_clean() && prefix.sat.is_empty() {
+                    // The first saturating step: earlier steps were clean.
+                    prefix
+                        .sat
+                        .resize(prefix.extra.len() - 1, Saturation::default());
+                    prefix.sat.push(step);
+                } else if !prefix.sat.is_empty() {
+                    let mut running = prefix.sat.last().copied().unwrap_or_default();
+                    absorb(&mut running, step);
+                    prefix.sat.push(running);
                 }
-                absorb(sat, step);
             }
             prefix.through = range.end;
         }
         tab_total = prefix.before(&costs.tabs, range.end);
-    }
-    if computed_effects {
-        cx.ruby_ranges.fill();
+        absorb(sat, prefix.saturation(&costs.tabs, range.end));
     }
     let costs = cx.ruby_ranges.sets.get(&key)?;
     let mut stop = range
@@ -952,82 +1009,11 @@ mod tests {
         }
     }
 
+    /// Only clearing the caches moves the epoch: building costs, tab
+    /// prefixes (extended, covered or replaced) and block measurements do
+    /// not.
     #[test]
-    fn generation_splits_into_monotone_fills_and_invalidating_epochs() {
-        let root = InlineStyle {
-            font_families: vec![FontFamily::Named("Shodo Fixture CJK".into())],
-            font_size: 24.0,
-            white_space_collapse: WhiteSpaceCollapse::Preserve,
-            tab_size: crate::style::TabSize::Px(40.0),
-            ..Default::default()
-        };
-        let mut b = ParagraphBuilder::new(
-            &ParagraphStyle {
-                root: root.clone(),
-                ..Default::default()
-            },
-            &Limits::default(),
-        );
-        b.push_text(TextSource::Generated { node: NodeId(1) }, "日\t本\t語");
-        let mut cx = LayoutContext::new();
-        let p = b.build(&mut cx, &fonts()).unwrap();
-        let n = p.data.units.len();
-        assert!(n >= 4, "{n}");
-        let state = |cx: &LayoutContext| {
-            (
-                cx.ruby_ranges.generation(),
-                cx.ruby_ranges.fills(),
-                cx.ruby_ranges.epoch(),
-            )
-        };
-        let query = |cx: &mut LayoutContext, range: Range<usize>| {
-            width(
-                &p.data,
-                range,
-                &AtomicSizes::EMPTY,
-                cx,
-                &mut Saturation::default(),
-            )
-            .unwrap();
-        };
-        cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
-        let (g, f, e) = state(&cx);
-        // Building the costs fills; zero-effect tab steps do not.
-        query(&mut cx, 0..2);
-        assert_eq!(state(&cx), (g + 1, f + 1, e));
-        // Extending the same start's prefix without effects changes nothing.
-        query(&mut cx, 0..n);
-        assert_eq!(state(&cx), (g + 1, f + 1, e));
-        // A covered range changes nothing.
-        query(&mut cx, 0..3);
-        assert_eq!(state(&cx), (g + 1, f + 1, e));
-        // Replacing a prefix without effects changes nothing.
-        query(&mut cx, 1..n);
-        assert_eq!(state(&cx), (g + 1, f + 1, e));
-        // A block measurement fills.
-        block_size(
-            &p.data,
-            0..2,
-            &Default::default(),
-            &AtomicSizes::EMPTY,
-            &mut cx,
-            &mut Saturation::default(),
-        );
-        assert_eq!(state(&cx), (g + 2, f + 2, e));
-        // A new atomic revision clears every cache.
-        let mut atomics = AtomicSizes::new();
-        atomics.insert(NodeId(9), crate::AtomicSize::default());
-        cx.ruby_ranges.begin(&p.data, &atomics);
-        assert_eq!(state(&cx), (g + 3, f + 2, e + 1));
-        // Vacating the slots invalidates.
-        cx.ruby_ranges.vacate_slots();
-        assert_eq!(state(&cx), (g + 4, f + 2, e + 2));
-    }
-
-    /// Tab steps that saturate keep the old rule: computing one fills,
-    /// discarding a prefix that holds one invalidates.
-    #[test]
-    fn effectful_tab_steps_fill_and_their_discard_invalidates() {
+    fn only_cleared_caches_move_the_epoch() {
         let root = InlineStyle {
             font_families: vec![FontFamily::Named("Shodo Fixture CJK".into())],
             font_size: 24.0,
@@ -1046,31 +1032,47 @@ mod tests {
         let mut cx = LayoutContext::new();
         let p = b.build(&mut cx, &fonts()).unwrap();
         let n = p.data.units.len();
-        let state = |cx: &LayoutContext| (cx.ruby_ranges.fills(), cx.ruby_ranges.epoch());
+        assert!(n >= 4, "{n}");
         let query = |cx: &mut LayoutContext, range: Range<usize>| {
-            let mut sat = Saturation::default();
-            width(&p.data, range, &AtomicSizes::EMPTY, cx, &mut sat).unwrap();
-            sat
+            width(
+                &p.data,
+                range,
+                &AtomicSizes::EMPTY,
+                cx,
+                &mut Saturation::default(),
+            )
+            .unwrap();
         };
         cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
-        let (f, e) = state(&cx);
-        // Costs build fills once; the saturating first tab fills again.
-        assert!(!query(&mut cx, 0..2).is_clean());
-        assert_eq!(state(&cx), (f + 2, e));
-        // A covered range neither charges nor fills.
-        assert!(query(&mut cx, 0..2).is_clean());
-        assert_eq!(state(&cx), (f + 2, e));
-        // Another start discards the effectful prefix: an invalidation, and
-        // its own saturating steps fill.
-        assert!(!query(&mut cx, 1..n).is_clean());
-        assert_eq!(state(&cx), (f + 3, e + 1));
+        let e = cx.ruby_ranges.epoch();
+        // Build, extend, cover and replace saturating tab prefixes.
+        for range in [0..2, 0..n, 0..3, 1..n, 0..n, 2..n] {
+            query(&mut cx, range);
+        }
+        block_size(
+            &p.data,
+            0..2,
+            &Default::default(),
+            &AtomicSizes::EMPTY,
+            &mut cx,
+            &mut Saturation::default(),
+        );
+        assert_eq!(cx.ruby_ranges.epoch(), e);
+        // A new atomic revision clears every cache.
+        let mut atomics = AtomicSizes::new();
+        atomics.insert(NodeId(9), crate::AtomicSize::default());
+        cx.ruby_ranges.begin(&p.data, &atomics);
+        assert_eq!(cx.ruby_ranges.epoch(), e + 1);
+        // Vacating the slots invalidates.
+        cx.ruby_ranges.vacate_slots();
+        assert_eq!(cx.ruby_ranges.epoch(), e + 2);
     }
 
     /// A prefix whose early tab steps are clean and a later one saturates:
-    /// the clean extension moves nothing, the saturating extension fills,
-    /// and the latched `effects` flag makes the next start invalidate.
+    /// a query charges exactly the saturating steps before its end, whether
+    /// the prefix computed them now, earlier, or for another start first.
     #[test]
-    fn mixed_tab_prefix_latches_effects_when_a_later_step_saturates() {
+    fn covered_tab_steps_charge_like_computed_ones() {
         let clean = InlineStyle {
             font_families: vec![FontFamily::Named("Shodo Fixture CJK".into())],
             font_size: 24.0,
@@ -1106,31 +1108,259 @@ mod tests {
         assert_eq!(tabs.len(), 2, "{tabs:?}");
         let (first, second) = (tabs[0], tabs[1]);
         let n = p.data.units.len();
-        let state = |cx: &LayoutContext| (cx.ruby_ranges.fills(), cx.ruby_ranges.epoch());
         let query = |cx: &mut LayoutContext, range: Range<usize>| {
             let mut sat = Saturation::default();
             width(&p.data, range, &AtomicSizes::EMPTY, cx, &mut sat).unwrap();
             sat
         };
         cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
-        let (f, e) = state(&cx);
-        // Building the costs fills once; the clean first tab adds nothing.
+        // Clean steps charge nothing, computed or covered.
         assert!(query(&mut cx, 0..first + 1).is_clean());
-        assert_eq!(state(&cx), (f + 1, e));
-        // A clean extension of the same start moves nothing.
         assert!(query(&mut cx, 0..second).is_clean());
-        assert_eq!(state(&cx), (f + 1, e));
-        // The extension whose new step saturates fills.
-        assert!(!query(&mut cx, 0..n).is_clean());
-        assert_eq!(state(&cx), (f + 2, e));
-        // Covered again: no step is computed, so nothing moves (the total
-        // itself may still saturate the width).
-        query(&mut cx, 0..n);
-        assert_eq!(state(&cx), (f + 2, e));
-        // Another start discards the prefix whose flag latched: invalidate,
-        // and its own saturating step fills.
+        // The saturating step charges when computed and again when covered.
+        let full = query(&mut cx, 0..n);
+        assert!(!full.is_clean());
+        assert_eq!(query(&mut cx, 0..n), full);
+        // Still charged after the prefix was replaced for another start.
         assert!(!query(&mut cx, 1..n).is_clean());
-        assert_eq!(state(&cx), (f + 3, e + 1));
+        assert_eq!(query(&mut cx, 0..n), full);
+        // Covered prefix ends before the saturating tab: clean again.
+        assert!(query(&mut cx, 0..second).is_clean());
+    }
+
+    /// A Latin paragraph whose ligature and kerning edges need reshape
+    /// windows (charging the budget) for some ranges, with preserved tabs
+    /// and optionally one unit whose width saturates.
+    fn charging_paragraph(tab_size: crate::style::TabSize, saturating_unit: bool) -> Paragraph {
+        let fonts = fonts();
+        fonts
+            .register_face(
+                crate::test_support::fonts::LATIN.to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: "Shodo Fixture Latin".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let root = InlineStyle {
+            font_families: vec![FontFamily::Named("Shodo Fixture Latin".into())],
+            font_size: 12.0,
+            overflow_wrap: crate::style::OverflowWrap::Anywhere,
+            white_space_collapse: WhiteSpaceCollapse::Preserve,
+            tab_size,
+            ..Default::default()
+        };
+        let mut b = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: root.clone(),
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        for (node, text) in [(1, "f"), (2, "f"), (3, "i"), (4, "\tAVAW\tWAy fi")] {
+            b.push_text(
+                TextSource::Dom {
+                    node: NodeId(node),
+                    offset: 40,
+                },
+                text,
+            );
+        }
+        let mut p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+        if saturating_unit {
+            // Sanitized styles keep every single unit below `LayoutUnit::MAX`;
+            // force one so building the range costs saturates.
+            let data = std::sync::Arc::get_mut(&mut p.data).unwrap();
+            let unit = data
+                .units
+                .iter()
+                .position(|u| matches!(u.kind, UnitKind::Cluster { .. }) && u.text.start > 3)
+                .unwrap();
+            data.unit_spacing[unit].word = LayoutUnit::MAX;
+        }
+        p
+    }
+
+    /// shodo-tj5: a `blocks` hit charges the reshape budget and saturation
+    /// exactly as the cold measurement that filled it, and so does a cold
+    /// measurement after the caches are vacated.
+    #[test]
+    fn block_size_charges_the_same_cold_and_warm() {
+        let p = charging_paragraph(crate::style::TabSize::Px(40.0), false);
+        let n = p.data.units.len();
+        let mut cx = LayoutContext::new();
+        cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+        let measure = |cx: &mut LayoutContext, range: Range<usize>| {
+            cx.begin_reshape_operation();
+            let mut sat = Saturation::default();
+            let height = block_size(
+                &p.data,
+                range,
+                &Default::default(),
+                &AtomicSizes::EMPTY,
+                cx,
+                &mut sat,
+            );
+            (height, sat, cx.edge_reshape_spent)
+        };
+        let mut charged = 0;
+        for start in 0..n {
+            for end in start + 1..=n {
+                let cold = measure(&mut cx, start..end);
+                let warm = measure(&mut cx, start..end);
+                assert_eq!(cold, warm, "warm {start}..{end}");
+                charged += usize::from(cold.2 > 0);
+            }
+        }
+        cx.ruby_ranges.vacate_slots();
+        for start in 0..n {
+            for end in start + 1..=n {
+                let again = measure(&mut cx, start..end);
+                let mut fresh = LayoutContext::new();
+                fresh.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+                assert_eq!(again, measure(&mut fresh, start..end), "{start}..{end}");
+            }
+        }
+        assert!(charged > 0, "some range must charge the reshape budget");
+    }
+
+    /// shodo-tj5: a `blocks` entry with effects whose replay the gate refuses
+    /// (the operation's budget is nearly spent, or the sink's suppression
+    /// changed) is measured again, exactly as in a context that never cached
+    /// it: same height, saturation, spent bytes and warnings, also for the
+    /// next query after a measurement that warned (it is not stored).
+    #[test]
+    fn refused_block_replays_measure_like_a_fresh_context() {
+        let p = charging_paragraph(crate::style::TabSize::Px(40.0), false);
+        let n = p.data.units.len();
+        let limit = p.data.limits.max_reshape_window_bytes.unwrap() * 64;
+        let measure = |cx: &mut LayoutContext, range: Range<usize>| {
+            let mut sat = Saturation::default();
+            let height = block_size(
+                &p.data,
+                range,
+                &Default::default(),
+                &AtomicSizes::EMPTY,
+                cx,
+                &mut sat,
+            );
+            (height, sat, cx.edge_reshape_spent, cx.take_warnings())
+        };
+        // Bring a context to the preset state: spent bytes and suppression.
+        let preset = |cx: &mut LayoutContext, spent: u64, suppress: bool| {
+            cx.begin_reshape_operation();
+            cx.take_warnings();
+            cx.warnings.set_max(None);
+            cx.edge_reshape_spent = spent;
+            if suppress {
+                cx.warnings.set_max(Some(0));
+                cx.warnings
+                    .push(crate::limits::WarningKind::Unsupported, "suppress");
+                assert!(cx.warnings.is_suppressed());
+            }
+        };
+        let mut refused = 0;
+        let mut warned = 0;
+        for start in 0..n {
+            for end in start + 1..=n {
+                let mut warm = LayoutContext::new();
+                warm.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+                preset(&mut warm, 0, false);
+                if measure(&mut warm, start..end).2 == 0 {
+                    continue;
+                }
+                for (spent, suppress) in [(limit - 1, false), (0, true)] {
+                    let mut fresh = LayoutContext::new();
+                    fresh.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+                    preset(&mut warm, spent, suppress);
+                    preset(&mut fresh, spent, suppress);
+                    let before = warm.ruby_replay_refusals;
+                    // Twice: the second query follows a measurement that
+                    // may have warned (and so was not stored).
+                    for _ in 0..2 {
+                        let got = measure(&mut warm, start..end);
+                        let want = measure(&mut fresh, start..end);
+                        warned += usize::from(!want.3.is_empty());
+                        assert_eq!(got, want, "{start}..{end} {spent} {suppress}");
+                    }
+                    refused += warm.ruby_replay_refusals - before;
+                }
+            }
+        }
+        assert!(refused > 0, "some replay must be refused");
+        assert!(warned > 0, "some refused measurement must warn");
+    }
+
+    /// shodo-tj5: `width` charges depend only on the range, not on the
+    /// queries before it: a history run forwards, backwards and query by
+    /// query in fresh contexts gives the same value and saturation per range.
+    #[test]
+    fn width_charges_do_not_depend_on_query_order() {
+        for (tab_size, saturating_unit) in [
+            (crate::style::TabSize::Px(40.0), false),
+            (crate::style::TabSize::Px(40.0), true),
+            (crate::style::TabSize::Px(1.0e12), false),
+        ] {
+            let p = charging_paragraph(tab_size, saturating_unit);
+            let n = p.data.units.len();
+            let mut history = Vec::new();
+            for start in 0..n {
+                for end in start + 1..=n {
+                    history.push(start..end);
+                }
+            }
+            let run = |cx: &mut LayoutContext, range: Range<usize>| {
+                cx.begin_reshape_operation();
+                let mut sat = Saturation::default();
+                let value = width(&p.data, range, &AtomicSizes::EMPTY, cx, &mut sat);
+                (value, sat, cx.edge_reshape_spent)
+            };
+            let mut forwards = LayoutContext::new();
+            forwards.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+            let mut backwards = LayoutContext::new();
+            backwards.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+            let ahead: Vec<_> = history
+                .iter()
+                .map(|r| run(&mut forwards, r.clone()))
+                .collect();
+            let mut behind: Vec<_> = history
+                .iter()
+                .rev()
+                .map(|r| run(&mut backwards, r.clone()))
+                .collect();
+            behind.reverse();
+            let mut saturated = false;
+            for ((range, a), b) in history.iter().zip(&ahead).zip(&behind) {
+                let mut fresh = LayoutContext::new();
+                fresh.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+                let alone = run(&mut fresh, range.clone());
+                assert_eq!(
+                    a, &alone,
+                    "{tab_size:?} {saturating_unit} forwards {range:?}"
+                );
+                assert_eq!(
+                    b, &alone,
+                    "{tab_size:?} {saturating_unit} backwards {range:?}"
+                );
+                saturated |= !alone.1.is_clean();
+            }
+            if saturating_unit || tab_size == crate::style::TabSize::Px(1.0e12) {
+                assert!(saturated, "{tab_size:?} {saturating_unit}: must saturate");
+            }
+            if tab_size == crate::style::TabSize::Px(1.0e12) {
+                // The first tab's own step saturates, also when the tab is
+                // the computed prefix's first step and hangs at the end.
+                let tab = p
+                    .data
+                    .units
+                    .iter()
+                    .position(|u| matches!(u.kind, UnitKind::Tab))
+                    .unwrap();
+                let i = history.iter().position(|r| *r == (0..tab + 1)).unwrap();
+                assert!(!ahead[i].1.is_clean(), "{:?}", ahead[i]);
+            }
+        }
     }
 
     /// One paragraph per golden fixture: preserved tabs under different
@@ -1272,6 +1502,15 @@ mod tests {
         }
         let want = std::fs::read_to_string(path).expect("golden file");
         assert_eq!(got, want);
+        // shodo-tj5: a repeated query charges what it charged the first time,
+        // whatever ran in between.
+        let mut seen = std::collections::HashMap::new();
+        for line in want.lines() {
+            let mut words = line.splitn(3, ' ');
+            let key = (words.next(), words.next());
+            let rest = words.next();
+            assert_eq!(*seen.entry(key).or_insert(rest), rest, "{line}");
+        }
         // The record must exercise saturation, a clipped ligature and tabs.
         assert!(
             want.lines()
