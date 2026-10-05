@@ -292,9 +292,17 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
             if (advance.to_f32() - nominal).abs() > 1.0 / 64.0 {
                 continue;
             }
+            // Upright vertical glyphs advance along the font's y axis, and
+            // their inline offset already carries the vertical origin.
+            let upright = run.orientation == crate::shape::orientation::RunOrientation::Upright;
             let mut bounds: Option<(f32, f32)> = None;
             for glyph in begin..g {
                 if let Some(b) = metrics.bounds(GlyphId::new(data.glyphs.id[glyph])) {
+                    let (start, end) = if upright {
+                        (-b.y_max, -b.y_min)
+                    } else {
+                        (b.x_min, b.x_max)
+                    };
                     let pen = data.glyphs.pen[glyph]
                         .sub(data.glyphs.pen[begin], sat)
                         .add(data.glyphs.offset_inline[glyph], sat);
@@ -304,8 +312,8 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
                         pen
                     }
                     .to_f32();
-                    bounds = Some(bounds.map_or((pen + b.x_min, pen + b.x_max), |(l, r)| {
-                        (l.min(pen + b.x_min), r.max(pen + b.x_max))
+                    bounds = Some(bounds.map_or((pen + start, pen + end), |(l, r)| {
+                        (l.min(pen + start), r.max(pen + end))
                     }));
                 }
             }
