@@ -127,9 +127,14 @@ cargo test -p shodo --lib memo_tests::d77_operation_counts_report -- --ignored -
 cargo run --release -p shodo-bench --example d77_scale -- sample <case> <size> <label> <index> <reps>
 # baseline: a93a359 の worktree に probe と [[example]] name = "d77_scale" を足し、別の CARGO_TARGET_DIR で build
 cargo build --release -p shodo-bench --example d77_scale
-bash run.sh                                   # 12 ラウンド ABBA + 12 ラウンド BAAB
-python3 summarize.py samples.jsonl > summary.json
-python3 assemble.py adopted <candidate commit>
+S=dev/bench/scripts/shodo-d77
+# 12 ラウンド ABBA + 12 ラウンド BAAB（jq が必要）
+BASE=<baseline の d77_scale> CAND=<candidate の d77_scale> OUT=<dir>/samples.jsonl bash $S/run.sh
+python3 $S/summarize.py <dir>/samples.jsonl > <dir>/summary.json
+# <dir> には binaries.txt（両バイナリの sha256sum 出力）と counts.jsonl（操作数の出力）も置く
+python3 $S/assemble.py adopted <candidate commit> <dir> <baseline worktree> docs/records/data/shodo-d77-ruby-through-memo.json
 ```
+
+集計スクリプトは `dev/bench/scripts/shodo-d77/` にある。本記録の数値はこれらと同じ処理（測定時は絶対パスを埋め込んだ版）で生成した。
 
 `<case>` は `nested`, `nestedtab`, `siblings`, `ordinary`, `plain` のいずれか。`<label>` は出力 JSON に記録する baseline/candidate の名前、`<index>` はサンプル番号、`<reps>` は 1 サンプル内の `break_all` 回数。本記録のケースとサイズと reps は次のとおり: nested 20/40/80/160 = 10/2/1/1、nestedtab 20/40/80/160 = 6/1/1/1、siblings 100/200/400 = 1/1/1、ordinary 200/800 = 10/2、plain 200/800 = 200/50。
