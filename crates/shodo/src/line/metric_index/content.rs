@@ -242,6 +242,39 @@ impl MetricIndex {
         }
         result
     }
+
+    /// The parts of `selection` that container geometry reads.
+    fn digest(&self, selection: &Selection) -> SelectionDigest {
+        let bits = |b: Option<ContentBounds>| b.map(|b| (b.top.to_bits(), b.bottom.to_bits()));
+        let mut partial: Vec<_> = selection
+            .partial
+            .iter()
+            .map(|(i, b)| {
+                (
+                    self.groups[*i].units.clone(),
+                    b.top.to_bits(),
+                    b.bottom.to_bits(),
+                )
+            })
+            .collect();
+        partial.sort_unstable_by_key(|p| (p.0.start, p.0.end));
+        SelectionDigest {
+            height: selection.height.to_bits(),
+            above: selection.above.to_bits(),
+            partial,
+            removed: selection.removed.clone(),
+            replacements: selection
+                .replacements
+                .iter()
+                .map(|(u, s)| {
+                    (
+                        *u,
+                        [bits(s.normal), bits(s.top), bits(s.bottom), bits(s.raw)],
+                    )
+                })
+                .collect(),
+        }
+    }
 }
 
 pub(crate) struct ContentGeometry {
@@ -254,9 +287,26 @@ pub(crate) struct ContentGeometry {
 /// Edge windows and selected line profile of one `selected` range, shared by
 /// the containers of one candidate. Reuse replays the recorded reshape
 /// charges and saturation exactly (`line::replay`), or measures afresh.
+///
+/// A detached share (`ruby::accumulate`) keeps the profile's effects out of
+/// the current container's recording: its charges count for the frame below
+/// it, and `ContainerNote` records how many calls the container made and
+/// their Saturation.
+///
+/// Contract: a container recorded under a detached share has own effects
+/// that EXCLUDE the profile's reshape charges (and, once `without_sat` takes
+/// out `ContainerNote::sat`, its Saturation). Whoever replays such a
+/// container MUST also replay `ContainerNote::calls` copies of the current
+/// selection's profile effects (`effects().times(calls)`), in sequence with
+/// the container's own effects (`Effects::then`), or the profile's charges,
+/// warnings and Saturation are silently dropped. The composition is exact
+/// because charges are an order-free aggregate and Saturation is counters;
+/// the replay gate then decides the whole sequence at once, refusing exactly
+/// where measuring afresh would cross the reshape budget.
 #[derive(Default)]
 pub(crate) struct ProfileShare {
     entry: Option<SharedSelection>,
+    detached: Option<Detached>,
 }
 
 struct SharedSelection {
@@ -264,6 +314,160 @@ struct SharedSelection {
     selected: Range<usize>,
     effects: crate::line::replay::Effects,
     selection: Selection,
+    /// Kept by detached shares only.
+    digest: Option<SelectionDigest>,
+}
+
+struct Detached {
+    /// Frame receiving the profile's charges (the one below the container
+    /// recording), or none without an enclosing recording.
+    parent: Option<usize>,
+    /// Fresh profile measurements over the whole candidate.
+    fresh: u32,
+    note: ContainerNote,
+}
+
+/// What a detached share observed while one container was measured.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct ContainerNote {
+    /// `content_shared` calls, each measuring or replaying the profile. A
+    /// replay of the container MUST add this many copies of the profile
+    /// effects to its own effects (see `ProfileShare`).
+    pub(crate) calls: u32,
+    /// Saturation of those profile measurements and replays.
+    pub(crate) sat: Saturation,
+    /// A call read a top/bottom group, whose position follows the profile's
+    /// height and above.
+    pub(crate) profile: bool,
+    /// Visual neighbours `(before, after)` whose allowance was computed
+    /// (`ruby::overhang::allowances`): `around` over the clipped ruby target,
+    /// in line-relative order. A slot is meaningful only where `read` is set.
+    pub(crate) neighbours: [Option<usize>; 2],
+    /// Sides whose neighbour an allowance read, so that a read `None` (a line
+    /// edge) differs from a side never read.
+    pub(crate) read: [bool; 2],
+    /// A side was read twice with different neighbours; one slot cannot
+    /// describe the dependency (never the case while every allowance of a
+    /// container queries the same target).
+    pub(crate) mixed: bool,
+    /// Some allowance read a visual neighbour (possibly none at a line edge).
+    pub(crate) neighbour_dependent: bool,
+}
+
+impl ProfileShare {
+    pub(crate) fn detached() -> Self {
+        Self {
+            entry: None,
+            detached: Some(Detached {
+                parent: None,
+                fresh: 0,
+                note: ContainerNote::default(),
+            }),
+        }
+    }
+
+    /// Start a container whose recording opens above frame `parent`.
+    pub(crate) fn begin_container(&mut self, parent: Option<usize>) {
+        if let Some(d) = &mut self.detached {
+            d.parent = parent;
+            d.note = ContainerNote::default();
+        }
+    }
+
+    pub(crate) fn note(&self) -> ContainerNote {
+        self.detached
+            .as_ref()
+            .map(|d| d.note.clone())
+            .unwrap_or_default()
+    }
+
+    /// The profile was measured more than once: a replay was refused or a
+    /// measurement warned, so its effects are not one fixed `P`.
+    pub(crate) fn refreshed(&self) -> bool {
+        self.detached.as_ref().is_some_and(|d| d.fresh > 1)
+    }
+
+    pub(crate) fn effects(&self) -> Option<crate::line::replay::Effects> {
+        self.entry.as_ref().map(|e| e.effects)
+    }
+
+    pub(crate) fn digest(&self) -> Option<SelectionDigest> {
+        self.entry.as_ref().and_then(|e| e.digest.clone())
+    }
+
+    /// Record the neighbours an allowance computation read (`Some(side)`),
+    /// each possibly absent at a line edge.
+    pub(crate) fn note_neighbours(
+        &mut self,
+        before: Option<Option<usize>>,
+        after: Option<Option<usize>>,
+    ) {
+        if let Some(d) = &mut self.detached {
+            let note = &mut d.note;
+            for (i, side) in [before, after].into_iter().enumerate() {
+                if let Some(unit) = side {
+                    if note.read[i] && note.neighbours[i] != unit {
+                        note.mixed = true;
+                    }
+                    note.neighbour_dependent = true;
+                    note.read[i] = true;
+                    note.neighbours[i] = unit;
+                }
+            }
+        }
+    }
+}
+
+/// The parts of a selected line profile that container geometry reads,
+/// compared between accumulator steps (`ruby::accumulate`). Floats are
+/// compared by their bits, unquantized.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct SelectionDigest {
+    pub(crate) height: u32,
+    pub(crate) above: u32,
+    /// Units and bounds (bits) of every partially selected group, by start.
+    pub(crate) partial: Vec<(Range<usize>, u32, u32)>,
+    /// Units whose glyphs an edge window removed.
+    pub(crate) removed: Vec<Range<usize>>,
+    /// Owner unit and content bounds (bits) of every edge-window replacement.
+    pub(crate) replacements: Vec<(usize, SummaryBits)>,
+}
+
+/// `ContentSummary` bounds (normal, top, bottom, raw) as `(top, bottom)` bits.
+pub(crate) type SummaryBits = [Option<(u64, u64)>; 4];
+
+impl SelectionDigest {
+    /// The profile's height or above changed: every group moves.
+    pub(crate) fn profile_changed(&self, other: &Self) -> bool {
+        self.height != other.height || self.above != other.above
+    }
+
+    /// Source ranges whose partial group, edge-window removal or replacement
+    /// is not the same in both digests.
+    pub(crate) fn changed_ranges(&self, other: &Self) -> Vec<Range<usize>> {
+        let mut out = Vec::new();
+        for (a, b) in [(self, other), (other, self)] {
+            out.extend(
+                a.partial
+                    .iter()
+                    .filter(|p| !b.partial.contains(p))
+                    .map(|p| p.0.clone()),
+            );
+            out.extend(a.removed.iter().filter(|r| !b.removed.contains(r)).cloned());
+            out.extend(
+                a.replacements
+                    .iter()
+                    .filter(|r| !b.replacements.contains(r))
+                    .map(|r| r.0..r.0 + 1),
+            );
+        }
+        out
+    }
+}
+
+fn add_sat(total: &mut Saturation, part: Saturation) {
+    total.saturated = total.saturated.wrapping_add(part.saturated);
+    total.non_finite = total.non_finite.wrapping_add(part.non_finite);
 }
 
 /// Resolve all requested columns against one actual selected line profile.
@@ -304,12 +508,22 @@ pub(crate) fn content_shared(
 ) -> ContentGeometry {
     let owner = (data.id, data as *const ParagraphData as usize);
     let mut index = super::take_index(data, atomics, cx);
-    let replayed = cx.reuse_enabled()
-        && share
-            .entry
-            .as_ref()
-            .is_some_and(|e| e.owner == owner && e.selected == selected)
-        && crate::line::replay::replay(cx, &share.entry.as_ref().unwrap().effects, sat);
+    // `Some(frame)` for a detached share: profile charges skip the
+    // container's recording and count for `frame`.
+    let parent = share.detached.as_ref().map(|d| d.parent);
+    let shared = share
+        .entry
+        .as_ref()
+        .filter(|e| cx.reuse_enabled() && e.owner == owner && e.selected == selected)
+        .map(|e| e.effects);
+    let replayed = shared.is_some_and(|effects| match parent {
+        Some(frame) => crate::line::replay::replay_to(cx, &effects, sat, frame),
+        None => crate::line::replay::replay(cx, &effects, sat),
+    });
+    if replayed && let Some(d) = share.detached.as_mut() {
+        d.note.calls += 1;
+        add_sat(&mut d.note.sat, shared.unwrap().sat());
+    }
     let fresh;
     let selection: &Selection = if replayed {
         &share.entry.as_ref().unwrap().selection
@@ -327,8 +541,20 @@ pub(crate) fn content_shared(
         {
             cx.ruby_profile_selects += 1;
         }
-        match crate::line::replay::finish(cx, recording, sat) {
+        let finished = match parent {
+            Some(frame) => crate::line::replay::finish_to(cx, recording, sat, frame),
+            None => crate::line::replay::finish(cx, recording, sat),
+        };
+        if let Some(d) = share.detached.as_mut() {
+            d.fresh += 1;
+            d.note.calls += 1;
+            if let Some(effects) = &finished {
+                add_sat(&mut d.note.sat, effects.sat());
+            }
+        }
+        match finished {
             Some(effects) => {
+                let digest = parent.is_some().then(|| index.digest(&selection));
                 &share
                     .entry
                     .insert(SharedSelection {
@@ -336,16 +562,28 @@ pub(crate) fn content_shared(
                         selected: selected.clone(),
                         effects,
                         selection,
+                        digest,
                     })
                     .selection
             }
             None => {
+                #[cfg(test)]
+                if parent.is_some() {
+                    cx.ruby_profile_warnings += 1;
+                }
                 share.entry = None;
                 fresh = selection;
                 &fresh
             }
         }
     };
+    if let Some(d) = share.detached.as_mut() {
+        d.note.profile |= boxes
+            .iter()
+            .flatten()
+            .any(|b| index.boxes[*b as usize].group.is_some())
+            || ranges.iter().any(|r| !r.is_empty() && index.grouped(r));
+    }
     let contents: Vec<crate::ruby::geometry::Bounds> = boxes
         .iter()
         .map(|b| {
@@ -385,6 +623,7 @@ pub(crate) fn content_shared(
             }
         })
         .collect();
+    let mut grouped_ancestor = false;
     let areas = ranges
         .iter()
         .enumerate()
@@ -419,6 +658,7 @@ pub(crate) fn content_shared(
                             break;
                         }
                     }
+                    grouped_ancestor |= index.boxes[b as usize].group.is_some();
                     area = ContentBounds::join(
                         area,
                         Some(
@@ -434,6 +674,9 @@ pub(crate) fn content_shared(
             area.map(|a| a.fixed(sat))
         })
         .collect();
+    if let Some(d) = share.detached.as_mut() {
+        d.note.profile |= grouped_ancestor;
+    }
     let leaf_areas = leaf_areas
         .into_iter()
         .map(|b| b.map(|b| b.fixed(sat)))

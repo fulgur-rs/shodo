@@ -81,3 +81,6 @@ name = "tcy_base_reuse"
 
 [[example]]
 name = "d77_scale"
+
+[[example]]
+name = "sibling_scale"

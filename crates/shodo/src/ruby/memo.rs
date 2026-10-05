@@ -9,6 +9,9 @@
 //! reset (`LayoutContext::begin_reshape_operation`) or the context shrinks.
 //! Only look-ahead probes (`through > end`) are stored, at most `MAX_ENTRIES`
 //! at once, and a clear releases a map larger than `RETAINED_CAPACITY`.
+//! The memo also owns the container accumulators of `super::accumulate`
+//! (at most `MAX_ACCUMULATORS`, least recently used evicted), with the same
+//! lifetime: `clear` resets them, releasing large vectors.
 //!
 //! The budget is also reset in the middle of a `next_line`: formatting an
 //! accepted line lays out each annotation lane with `Paragraph::ruby_line`
@@ -43,7 +46,8 @@
 //! This also covers the rollback of a speculative `PartialLine::index`
 //! (`line/cache.rs`): a failed index restores warnings and saturation but not
 //! `edge_reshape_spent`, the reshape log or this memo. Entries recorded during
-//! that pass remain valid:
+//! that pass remain valid (the container accumulators too, for the same
+//! reasons; see `super::accumulate`):
 //! - saturation is stored as a delta and added to whatever the caller holds,
 //!   exactly as measuring again would;
 //! - the restored sink may be unsuppressed again; entries recorded while it
@@ -118,6 +122,8 @@ pub(crate) struct RubyMemo {
     entries: crate::hashing::FastMap<MemoKey, MemoEntry>,
     /// Look-ahead walk of the latest probe start (see `advance`).
     walk: Option<WalkState>,
+    /// Container accumulators, least recently used first.
+    accumulators: Vec<super::accumulate::Accumulator>,
     /// Clears forced by `MAX_ENTRIES`.
     #[cfg(test)]
     pub(crate) overflow_clears: usize,
@@ -156,13 +162,82 @@ impl RubyMemo {
         self.walk = walk;
     }
 
+    /// Move out the accumulator of `key`, or a fresh one (reusing the least
+    /// recently used accumulator's allocation when all slots are taken).
+    pub(crate) fn take_accumulator(
+        &mut self,
+        key: super::accumulate::AccumulatorKey,
+        epoch: u64,
+    ) -> super::accumulate::Accumulator {
+        if let Some(i) = self.accumulators.iter().position(|a| a.key() == Some(key)) {
+            return self.accumulators.remove(i);
+        }
+        let mut accumulator = if self.accumulators.len() >= super::accumulate::MAX_ACCUMULATORS {
+            self.accumulators.remove(0)
+        } else {
+            Default::default()
+        };
+        // Reset under the caller's epoch so `prepare` does not reset again.
+        accumulator.reset(Some(key), epoch);
+        accumulator
+    }
+
+    /// Put an accumulator back as the most recently used. Take/put pairs
+    /// may nest (a nested candidate measured while an outer accumulator is
+    /// out takes and puts its own), so the slots may already be full here: the
+    /// least recently used accumulators are dropped to keep the bound. The
+    /// nesting is defensive and not reachable today: `candidate_adjustment`
+    /// is called only from scan, cache and intrinsic, and `measure_one` uses
+    /// `candidate_inner` for lanes.
+    pub(crate) fn put_accumulator(&mut self, accumulator: super::accumulate::Accumulator) {
+        // A nested candidate with the same key may have put a fresh
+        // accumulator back while this one was out: the one put last wins, so
+        // no key is held twice.
+        if let Some(key) = accumulator.key() {
+            self.accumulators.retain(|a| a.key() != Some(key));
+        }
+        while self.accumulators.len() >= super::accumulate::MAX_ACCUMULATORS {
+            self.accumulators.remove(0);
+        }
+        self.accumulators.push(accumulator);
+    }
+
+    pub(crate) fn drop_accumulator(&mut self, key: super::accumulate::AccumulatorKey) {
+        self.accumulators.retain(|a| a.key() != Some(key));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn accumulator(
+        &self,
+        key: super::accumulate::AccumulatorKey,
+    ) -> Option<&super::accumulate::Accumulator> {
+        self.accumulators.iter().find(|a| a.key() == Some(key))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn accumulator_keys(&self) -> Vec<Option<super::accumulate::AccumulatorKey>> {
+        self.accumulators.iter().map(|a| a.key()).collect()
+    }
+
+    /// Largest accumulator length and the accumulators' total heap bytes.
+    #[cfg(test)]
+    pub(crate) fn accumulator_footprint(&self) -> (usize, usize) {
+        let len = self.accumulators.iter().map(|a| a.len()).max().unwrap_or(0);
+        let bytes = self.accumulators.iter().map(|a| a.heap_bytes()).sum();
+        (len, bytes)
+    }
+
     /// Forget every entry and the walk, releasing a map that grew beyond
-    /// `RETAINED_CAPACITY` (the walk's vectors are dropped with it).
+    /// `RETAINED_CAPACITY` (the walk's vectors are dropped with it), and
+    /// reset the accumulators (`Accumulator::reset` releases large vectors).
     pub(crate) fn clear(&mut self) {
         if self.entries.capacity() > RETAINED_CAPACITY {
             self.entries = Default::default();
         } else {
             self.entries.clear();
+        }
+        for accumulator in &mut self.accumulators {
+            accumulator.reset(None, 0);
         }
         self.walk = None;
     }
@@ -227,6 +302,77 @@ mod tests {
         assert!(capacity <= RETAINED_CAPACITY);
         memo.clear();
         assert_eq!((memo.len(), memo.capacity()), (0, capacity));
+    }
+
+    #[test]
+    fn accumulators_are_kept_for_the_two_latest_keys() {
+        use crate::ruby::accumulate::AccumulatorKey;
+        let key = AccumulatorKey::for_test;
+        let mut memo = RubyMemo::default();
+        for start in [1, 2, 1, 3] {
+            let accumulator = memo.take_accumulator(key(start), 0);
+            assert_eq!(accumulator.key(), Some(key(start)));
+            memo.put_accumulator(accumulator);
+        }
+        // 2 was the least recently used key when 3 arrived.
+        assert_eq!(memo.accumulator_keys(), vec![Some(key(1)), Some(key(3))]);
+        memo.drop_accumulator(key(1));
+        assert_eq!(memo.accumulator_keys(), vec![Some(key(3))]);
+        memo.clear();
+        assert_eq!(memo.accumulator_keys(), vec![None]);
+    }
+
+    #[test]
+    fn nested_accumulator_slots_stay_bounded() {
+        use crate::ruby::accumulate::{AccumulatorKey, Entry, MAX_ACCUMULATORS};
+        let key = AccumulatorKey::for_test;
+        let mut memo = RubyMemo::default();
+        for start in [1, 2] {
+            let mut accumulator = memo.take_accumulator(key(start), 0);
+            accumulator.push_raw(Entry::placeholder(None));
+            memo.put_accumulator(accumulator);
+        }
+        assert_eq!(memo.accumulator_keys(), vec![Some(key(1)), Some(key(2))]);
+        // An outer probe takes 1; a nested probe takes and puts a fresh 3.
+        let mut outer = memo.take_accumulator(key(1), 0);
+        assert_eq!((outer.key(), outer.len()), (Some(key(1)), 1));
+        let nested = memo.take_accumulator(key(3), 0);
+        assert_eq!((nested.key(), nested.len()), (Some(key(3)), 0));
+        memo.put_accumulator(nested);
+        assert_eq!(memo.accumulator_keys(), vec![Some(key(2)), Some(key(3))]);
+        // Putting the outer one back evicts the least recently used (2).
+        outer.push_raw(Entry::placeholder(None));
+        memo.put_accumulator(outer);
+        assert!(memo.accumulator_keys().len() <= MAX_ACCUMULATORS);
+        assert_eq!(memo.accumulator_keys(), vec![Some(key(3)), Some(key(1))]);
+        let outer = memo.take_accumulator(key(1), 0);
+        assert_eq!((outer.key(), outer.len()), (Some(key(1)), 2));
+        memo.put_accumulator(outer);
+        // A new key with full slots reuses the least recently used (3)
+        // allocation, re-keyed and emptied.
+        let fresh = memo.take_accumulator(key(4), 0);
+        assert_eq!((fresh.key(), fresh.len()), (Some(key(4)), 0));
+        assert_eq!(memo.accumulator_keys(), vec![Some(key(1))]);
+        memo.put_accumulator(fresh);
+        assert_eq!(memo.accumulator_keys(), vec![Some(key(1)), Some(key(4))]);
+    }
+
+    /// A nested probe for the same start takes and puts a fresh accumulator
+    /// while the outer one is out; putting the outer one back replaces it,
+    /// so a key is never held twice.
+    #[test]
+    fn putting_back_a_key_replaces_its_nested_copy() {
+        use crate::ruby::accumulate::{AccumulatorKey, Entry};
+        let key = AccumulatorKey::for_test;
+        let mut memo = RubyMemo::default();
+        let mut outer = memo.take_accumulator(key(1), 0);
+        outer.push_raw(Entry::placeholder(None));
+        let nested = memo.take_accumulator(key(1), 0);
+        assert_eq!(nested.len(), 0);
+        memo.put_accumulator(nested);
+        memo.put_accumulator(outer);
+        assert_eq!(memo.accumulator_keys(), vec![Some(key(1))]);
+        assert_eq!(memo.accumulator(key(1)).map(|a| a.len()), Some(1));
     }
 }
 

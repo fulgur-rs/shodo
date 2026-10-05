@@ -21,6 +21,26 @@ fn combine(a: Option<Bounds>, b: Option<Bounds>) -> Option<Bounds> {
         (a, None) | (None, a) => a,
     }
 }
+/// Units that take part in visual neighbour queries: content, tabs and
+/// breaks, inline edges with inline-axis decoration, and ruby boundaries.
+pub(crate) fn is_event(data: &ParagraphData, i: usize) -> bool {
+    match data.units[i].kind {
+        UnitKind::Cluster { .. }
+        | UnitKind::Atomic { .. }
+        | UnitKind::Tab
+        | UnitKind::ForcedBreak
+        | UnitKind::BlockInInline { .. } => true,
+        UnitKind::Open { box_index } | UnitKind::Close { box_index } => {
+            let e = data.boxes[box_index as usize].edges;
+            e.inline_start_total() != 0.0 || e.inline_end_total() != 0.0
+        }
+        _ => matches!(
+            data.items[data.units[i].item as usize].kind,
+            crate::analysis::ItemKind::RubyBoundary { .. }
+        ),
+    }
+}
+
 impl NeighborIndex {
     fn new(data: &ParagraphData, _cx: &mut LayoutContext) -> Self {
         let mut box_units = vec![0..0; data.boxes.len()];
@@ -35,26 +55,11 @@ impl NeighborIndex {
                 _ => {}
             }
         }
-        let event = |i: usize| match data.units[i].kind {
-            UnitKind::Cluster { .. }
-            | UnitKind::Atomic { .. }
-            | UnitKind::Tab
-            | UnitKind::ForcedBreak
-            | UnitKind::BlockInInline { .. } => true,
-            UnitKind::Open { box_index } | UnitKind::Close { box_index } => {
-                let e = data.boxes[box_index as usize].edges;
-                e.inline_start_total() != 0.0 || e.inline_end_total() != 0.0
-            }
-            _ => matches!(
-                data.items[data.units[i].item as usize].kind,
-                crate::analysis::ItemKind::RubyBoundary { .. }
-            ),
-        };
         let neighbors = crate::line::spacing_summary::VisualNeighbors::new(
             data.units
                 .iter()
                 .enumerate()
-                .map(|(i, u)| (u.level, event(i))),
+                .map(|(i, u)| (u.level, is_event(data, i))),
         );
         #[cfg(test)]
         {
@@ -187,6 +192,29 @@ fn put_neighbors(data: &ParagraphData, index: Box<NeighborIndex>, cx: &mut Layou
     *cx.ruby_ranges.neighbors.entry(key).or_default() = Some(index);
 }
 
+/// Visual neighbours of the single `unit` among the event units of
+/// `selected`, in line-relative order. Not interchangeable with the
+/// neighbours an allowance records (`around` over a whole clipped ruby
+/// target, whose visual edge may be a non-event unit); the accumulator's D3
+/// rule (`ruby::accumulate`) relates the two.
+pub(crate) fn visual_neighbours(
+    data: &ParagraphData,
+    selected: &Range<usize>,
+    unit: usize,
+    cx: &mut LayoutContext,
+) -> (Option<usize>, Option<usize>) {
+    let index = take_neighbors(data, cx);
+    let pair = index
+        .neighbors
+        .around(selected, &(unit..unit + 1), data.base_level % 2 == 1);
+    #[cfg(test)]
+    {
+        cx.ruby_measure_visits += index.neighbors.take_visits();
+    }
+    put_neighbors(data, index, cx);
+    pair
+}
+
 /// Physical line-right column, from the same sparse pieces used by retained L2.
 pub(crate) fn rightmost_column(
     data: &ParagraphData,
@@ -311,6 +339,14 @@ pub(crate) fn allowances(
             bases.get(i).filter(|b| b.contains(&u)).map(|_| i)
         })
     };
+    // `column_at` is pure, so deciding both sides first keeps every side
+    // effect in its original order.
+    let leading_side = column_at(first).is_some_and(|i| columns.contains(&i));
+    let trailing_side = column_at(last).is_some_and(|i| columns.contains(&i));
+    share.note_neighbours(
+        leading_side.then_some(before),
+        trailing_side.then_some(after),
+    );
     let mut allowance = |i: Option<usize>| {
         let Some(i) = i else {
             return LayoutUnit::ZERO;
@@ -339,12 +375,12 @@ pub(crate) fn allowances(
             .min(cap)
             .max(LayoutUnit::ZERO)
     };
-    let leading = if column_at(first).is_some_and(|i| columns.contains(&i)) {
+    let leading = if leading_side {
         allowance(before)
     } else {
         LayoutUnit::ZERO
     };
-    let trailing = if column_at(last).is_some_and(|i| columns.contains(&i)) {
+    let trailing = if trailing_side {
         allowance(after)
     } else {
         LayoutUnit::ZERO

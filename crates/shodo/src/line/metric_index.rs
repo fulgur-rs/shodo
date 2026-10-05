@@ -7,7 +7,9 @@ mod scalar;
 use content::{ContentBounds, ContentSummary, content_bounds};
 // Keep the existing crate-visible type path even when callers infer it.
 #[allow(unused_imports)]
-pub(crate) use content::{ContentGeometry, ProfileShare, content, content_shared};
+pub(crate) use content::{
+    ContainerNote, ContentGeometry, ProfileShare, SelectionDigest, content, content_shared,
+};
 use scalar::{Bounds, Summary, union};
 pub(crate) use scalar::{ScalarMetrics, measure};
 
@@ -48,6 +50,8 @@ pub(super) struct MetricIndex {
     groups: Vec<Group>,
     group_keys: crate::hashing::FastMap<u64, usize>,
     group_at: Vec<Option<u64>>,
+    /// Prefix counts of units that belong to a top/bottom group.
+    grouped: Vec<u32>,
     boxes: Vec<RecordProfile>,
     resolver: ProfileResolver,
 }
@@ -186,6 +190,11 @@ impl MetricIndex {
                 tree[size + i]
             };
         }
+        let mut grouped = Vec::with_capacity(data.units.len() + 1);
+        grouped.push(0u32);
+        for key in &group_at {
+            grouped.push(grouped.last().unwrap() + u32::from(key.is_some()));
+        }
         let mut groups: Vec<_> = groups.into_iter().collect();
         groups.sort_unstable_by_key(|(_, g)| g.units.start);
         let group_keys: crate::hashing::FastMap<u64, usize> = groups
@@ -293,9 +302,16 @@ impl MetricIndex {
             groups,
             group_keys,
             group_at,
+            grouped,
             boxes,
             resolver,
         }
+    }
+
+    /// Whether any unit of `range` belongs to a top/bottom group: its content
+    /// moves with the selected profile's height and above.
+    fn grouped(&self, range: &Range<usize>) -> bool {
+        self.grouped[range.end] > self.grouped[range.start]
     }
 
     fn select(

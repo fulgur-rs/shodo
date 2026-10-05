@@ -29,8 +29,18 @@ pub(crate) struct RangeCache {
     /// metric and neighbor index slots are side-effect free and do not count.
     /// Per-operation reuse (`ruby::memo`) records and replays a measurement
     /// only while this is unchanged, so replayed effects always equal those of
-    /// measuring again against the same cache state.
+    /// measuring again against the same cache state. Every bump is either a
+    /// fill (`fills`) or an invalidation (`epoch`).
     generation: u64,
+    /// Monotone fills: a `blocks` or `sets` insertion, and a tab prefix
+    /// created or extended for its current start. A fill only turns later
+    /// misses into hits, so a measurement recorded while no fill and no
+    /// invalidation happened stays exact until the next invalidation
+    /// (`ruby::accumulate`).
+    fills: u64,
+    /// Invalidations: caches cleared (`begin` with a new root,
+    /// `vacate_slots`) or a tab prefix replaced for another start.
+    epoch: u64,
 }
 
 impl RangeCache {
@@ -38,7 +48,21 @@ impl RangeCache {
         self.generation
     }
 
-    fn bump(&mut self) {
+    pub(crate) fn fills(&self) -> u64 {
+        self.fills
+    }
+
+    pub(crate) fn epoch(&self) -> u64 {
+        self.epoch
+    }
+
+    fn fill(&mut self) {
+        self.fills = self.fills.wrapping_add(1);
+        self.generation = self.generation.wrapping_add(1);
+    }
+
+    fn invalidate(&mut self) {
+        self.epoch = self.epoch.wrapping_add(1);
         self.generation = self.generation.wrapping_add(1);
     }
 
@@ -66,7 +90,7 @@ impl RangeCache {
             self.metrics.clear();
             self.neighbors.clear();
             self.root = Some(root);
-            self.bump();
+            self.invalidate();
         }
     }
 
@@ -79,7 +103,7 @@ impl RangeCache {
         self.blocks.clear();
         self.metrics.values_mut().for_each(|slot| *slot = None);
         self.neighbors.values_mut().for_each(|slot| *slot = None);
-        self.bump();
+        self.invalidate();
     }
 
     /// Both index maps are populated and every slot holds an index.
@@ -124,7 +148,7 @@ pub(crate) fn block_size(
     }
     let height = bounds.height(sat);
     cx.ruby_ranges.blocks.insert(key, height);
-    cx.ruby_ranges.bump();
+    cx.ruby_ranges.fill();
     height
 }
 
@@ -315,17 +339,24 @@ pub(super) fn width(
     if !cx.ruby_ranges.sets.contains_key(&key) {
         let costs = build(data, atomics, cx, sat);
         cx.ruby_ranges.sets.insert(key, costs);
-        cx.ruby_ranges.bump();
+        cx.ruby_ranges.fill();
     }
-    let extends_tabs = cx.ruby_ranges.sets.get(&key).is_some_and(|costs| {
-        !costs.tabs.is_empty()
-            && costs
-                .tab_prefix
-                .as_ref()
-                .is_none_or(|p| p.start != range.start || p.through < range.end)
+    // A prefix for another start is replaced (an invalidation); a missing
+    // prefix is created and a short one extended (fills).
+    let tab_change = cx.ruby_ranges.sets.get(&key).and_then(|costs| {
+        if costs.tabs.is_empty() {
+            return None;
+        }
+        match &costs.tab_prefix {
+            Some(p) if p.start != range.start => Some(true),
+            Some(p) if p.through >= range.end => None,
+            _ => Some(false),
+        }
     });
-    if extends_tabs {
-        cx.ruby_ranges.bump();
+    match tab_change {
+        Some(true) => cx.ruby_ranges.invalidate(),
+        Some(false) => cx.ruby_ranges.fill(),
+        None => {}
     }
     let costs = cx.ruby_ranges.sets.get_mut(&key)?;
     let mut tab_total = 0_i64;
@@ -864,5 +895,77 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn generation_splits_into_monotone_fills_and_invalidating_epochs() {
+        let root = InlineStyle {
+            font_families: vec![FontFamily::Named("Shodo Fixture CJK".into())],
+            font_size: 24.0,
+            white_space_collapse: WhiteSpaceCollapse::Preserve,
+            tab_size: crate::style::TabSize::Px(40.0),
+            ..Default::default()
+        };
+        let mut b = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: root.clone(),
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "日\t本\t語");
+        let mut cx = LayoutContext::new();
+        let p = b.build(&mut cx, &fonts()).unwrap();
+        let n = p.data.units.len();
+        assert!(n >= 4, "{n}");
+        let state = |cx: &LayoutContext| {
+            (
+                cx.ruby_ranges.generation(),
+                cx.ruby_ranges.fills(),
+                cx.ruby_ranges.epoch(),
+            )
+        };
+        let query = |cx: &mut LayoutContext, range: Range<usize>| {
+            width(
+                &p.data,
+                range,
+                &AtomicSizes::EMPTY,
+                cx,
+                &mut Saturation::default(),
+            )
+            .unwrap();
+        };
+        cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+        let (g, f, e) = state(&cx);
+        // Building the costs and creating the tab prefix: two fills.
+        query(&mut cx, 0..2);
+        assert_eq!(state(&cx), (g + 2, f + 2, e));
+        // Extending the same start's prefix fills.
+        query(&mut cx, 0..n);
+        assert_eq!(state(&cx), (g + 3, f + 3, e));
+        // A covered range changes nothing.
+        query(&mut cx, 0..3);
+        assert_eq!(state(&cx), (g + 3, f + 3, e));
+        // Another start replaces the prefix: an invalidation.
+        query(&mut cx, 1..n);
+        assert_eq!(state(&cx), (g + 4, f + 3, e + 1));
+        // A block measurement fills.
+        block_size(
+            &p.data,
+            0..2,
+            &Default::default(),
+            &AtomicSizes::EMPTY,
+            &mut cx,
+            &mut Saturation::default(),
+        );
+        assert_eq!(state(&cx), (g + 5, f + 4, e + 1));
+        // A new atomic revision clears every cache.
+        let mut atomics = AtomicSizes::new();
+        atomics.insert(NodeId(9), crate::AtomicSize::default());
+        cx.ruby_ranges.begin(&p.data, &atomics);
+        assert_eq!(state(&cx), (g + 6, f + 4, e + 2));
+        // Vacating the slots invalidates.
+        cx.ruby_ranges.vacate_slots();
+        assert_eq!(state(&cx), (g + 7, f + 4, e + 3));
     }
 }
