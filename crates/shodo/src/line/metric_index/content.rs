@@ -309,7 +309,6 @@ pub(crate) struct ProfileShare {
     detached: Option<Detached>,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 struct SharedSelection {
     owner: (u64, usize),
     selected: Range<usize>,
@@ -319,7 +318,6 @@ struct SharedSelection {
     digest: Option<SelectionDigest>,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 struct Detached {
     /// Frame receiving the profile's charges (the one below the container
     /// recording), or none without an enclosing recording.
@@ -330,7 +328,6 @@ struct Detached {
 }
 
 /// What a detached share observed while one container was measured.
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct ContainerNote {
     /// `content_shared` calls, each measuring or replaying the profile. A
@@ -349,7 +346,6 @@ pub(crate) struct ContainerNote {
     pub(crate) neighbour_dependent: bool,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 impl ProfileShare {
     pub(crate) fn detached() -> Self {
         Self {

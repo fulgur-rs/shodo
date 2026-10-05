@@ -63,6 +63,38 @@ pub struct LayoutContext {
     /// differed from their entry).
     #[cfg(test)]
     pub(crate) ruby_oracle_misses: Vec<String>,
+    /// Containers answered by an accumulator segment replay.
+    #[cfg(test)]
+    pub(crate) ruby_replayed_containers: usize,
+    /// Accumulator dirty marks by reason (`ruby::accumulate::Dirty`).
+    #[cfg(test)]
+    pub(crate) ruby_dirty: [usize; 8],
+    /// Accumulators reset at the end of a step that could not keep them.
+    #[cfg(test)]
+    pub(crate) ruby_accumulator_resets: usize,
+    /// Use the per-through memo alone (the shodo-d77 path).
+    #[cfg(test)]
+    pub(crate) ruby_accumulate_disabled: bool,
+    /// Step oracle: measure clean accumulator positions live and compare
+    /// them with their entries (`ruby_oracle_misses`).
+    #[cfg(test)]
+    pub(crate) ruby_accumulate_verify: bool,
+    /// Override of `ruby::accumulate::MAX_CONTAINERS`.
+    #[cfg(test)]
+    pub(crate) ruby_accumulate_cap: Option<usize>,
+    /// Step-oracle comparisons (clean entries that would have replayed,
+    /// measured live and compared).
+    #[cfg(test)]
+    pub(crate) ruby_oracle_checks: usize,
+    /// Accumulator replays whose saturation guard failed, so the run's
+    /// adjustments were added one at a time.
+    #[cfg(test)]
+    pub(crate) ruby_sequential_replays: usize,
+    /// Accumulator replays of a run with more profile calls than positions
+    /// while the step's profile charged reshape bytes (the `m > 1` case of
+    /// the detached profile contract).
+    #[cfg(test)]
+    pub(crate) ruby_repeated_profile_replays: usize,
 }
 
 impl LayoutContext {
@@ -89,6 +121,20 @@ impl LayoutContext {
         #[cfg(test)]
         {
             !self.ruby_reference
+        }
+        #[cfg(not(test))]
+        {
+            true
+        }
+    }
+
+    /// Whether adjustment-only candidates may use the container accumulator
+    /// (`ruby::accumulate`). Tests switch it off to obtain the through-memo
+    /// path alone.
+    pub(crate) fn accumulate_enabled(&self) -> bool {
+        #[cfg(test)]
+        {
+            self.reuse_enabled() && !self.ruby_accumulate_disabled
         }
         #[cfg(not(test))]
         {

@@ -66,7 +66,6 @@ impl Charges {
     /// saturating additions of a saturated total equal one saturating
     /// multiplication, every limit and outcome is unchanged, and zero copies
     /// are no charges at all.
-    #[cfg_attr(not(test), allow(dead_code))]
     fn times(&self, n: u64) -> Self {
         if n == 0 {
             return Self::default();
@@ -93,7 +92,6 @@ pub(crate) struct Effects {
     suppressed: bool,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 impl Effects {
     /// Effects of measuring both, in either order: charges are kept as an
     /// order-free aggregate and Saturation as counters. `None` if the two
@@ -195,7 +193,6 @@ pub(crate) fn begin(cx: &mut LayoutContext, sat: &Saturation) -> Recording {
 }
 
 /// Open recording frames; the innermost has index `depth - 1`.
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn depth(cx: &LayoutContext) -> usize {
     cx.reshape_log.frames.len()
 }
@@ -249,7 +246,6 @@ pub(crate) fn finish(
 /// `finish`, but the charges count for the frame at index `frame` (or for
 /// no recording) instead of the enclosing one. A detached profile share
 /// keeps the profile's charges out of the container recording this way.
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn finish_to(
     cx: &mut LayoutContext,
     recording: Recording,
@@ -314,7 +310,6 @@ pub(crate) fn replay(cx: &mut LayoutContext, effects: &Effects, sat: &mut Satura
 
 /// `replay`, merging the charges into the frame at index `frame` (or into
 /// no recording) instead of the innermost one.
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn replay_to(
     cx: &mut LayoutContext,
     effects: &Effects,

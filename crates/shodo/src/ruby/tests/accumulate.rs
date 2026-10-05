@@ -5,7 +5,7 @@ use crate::geometry::{Direction, LayoutUnit, Saturation};
 use crate::limits::Limits;
 use crate::node::{NodeId, TextSource};
 use crate::ruby::*;
-use crate::style::LineOptions;
+use crate::style::{InlineStyle, LineOptions, ParagraphStyle, TabSize, WhiteSpaceCollapse};
 use crate::{AtomicSizes, LayoutContext, LineConstraint, Paragraph, ParagraphBuilder};
 use std::ops::Range;
 
@@ -454,4 +454,631 @@ fn detached_container_with_replayed_profile_matches_the_reference() {
         own_charged,
         "some container must charge its own edge windows"
     );
+}
+
+/// `r` sibling rubies over `base` with one `reading` each, and `between`
+/// plain text before every ruby and after the last (none when empty).
+#[allow(clippy::too_many_arguments)]
+pub(super) fn row(
+    paragraph: &ParagraphStyle,
+    r: usize,
+    base: &str,
+    reading: &str,
+    between: &str,
+    overhang: RubyOverhang,
+    style: &InlineStyle,
+    limits: &Limits,
+) -> Paragraph {
+    let mut b = ParagraphBuilder::new(paragraph, limits);
+    let text = |b: &mut ParagraphBuilder, node: u64| {
+        if !between.is_empty() {
+            b.push_text(TextSource::Generated { node: NodeId(node) }, between);
+        }
+    };
+    for i in 0..r as u64 {
+        text(&mut b, 2000 + i);
+        b.push_ruby(
+            NodeId(1000 + i),
+            style,
+            annotated(
+                vec![base_text(3000 + i, base, style, limits)],
+                &[reading],
+                overhang,
+                limits,
+            ),
+        );
+    }
+    text(&mut b, 1999);
+    finish(b)
+}
+
+/// Cursive bases and cursive text between them: edge windows are unsafe and
+/// charge the reshape budget; overhang `Auto` reads the neighbours.
+pub(super) fn cursive_siblings(limits: &Limits) -> Paragraph {
+    row(
+        &paragraph_style(false),
+        4,
+        "بببب",
+        "に",
+        "ببب",
+        RubyOverhang::Auto,
+        &style(24.0),
+        limits,
+    )
+}
+
+/// Preserved tabs between siblings: width queries for different starts
+/// replace the tab prefix (a `RangeCache` invalidation).
+pub(super) fn tab_siblings(limits: &Limits) -> Paragraph {
+    let tab = InlineStyle {
+        white_space_collapse: WhiteSpaceCollapse::Preserve,
+        tab_size: TabSize::Px(40.0),
+        ..style(24.0)
+    };
+    row(
+        &ParagraphStyle {
+            root: tab.clone(),
+            ..paragraph_style(false)
+        },
+        4,
+        "日本",
+        "にほんご",
+        "\t",
+        RubyOverhang::None,
+        &tab,
+        limits,
+    )
+}
+
+/// Siblings whose odd bases hold an atomic inline without a caller size:
+/// their measurements warn (`MissingAtomicSize`) until the sink suppresses.
+pub(super) fn atomic_siblings(limits: &Limits) -> Paragraph {
+    let mut b = ParagraphBuilder::new(&paragraph_style(false), limits);
+    for i in 0..6u64 {
+        let mut base = ParagraphBuilder::new(&paragraph_style(false), limits);
+        base.push_text(
+            TextSource::Generated {
+                node: NodeId(3000 + i),
+            },
+            "日",
+        );
+        if i % 2 == 1 {
+            base.push_atomic(NodeId(90 + i), &style(24.0), Default::default());
+        }
+        b.push_ruby(
+            NodeId(1000 + i),
+            &style(24.0),
+            annotated(
+                vec![RubyContent::from_builder(base)],
+                &["にほんご"],
+                RubyOverhang::None,
+                limits,
+            ),
+        );
+    }
+    finish(b)
+}
+
+/// Siblings with 1e6 px readings: each adjustment is about 6.4e7 layout
+/// units, so the candidate's running total crosses `i32::MAX`.
+pub(super) fn huge_siblings(r: usize) -> Paragraph {
+    let default = Limits::default();
+    let mut b = ParagraphBuilder::new(&paragraph_style(false), &default);
+    for i in 0..r as u64 {
+        let ruby = Ruby::new(
+            vec![RubyBase {
+                node: NodeId(10),
+                content: base_text(3000 + i, "12", &style(24.0), &default),
+                align: RubyAlign::default(),
+            }],
+            vec![RubyLevel {
+                annotations: vec![RubyAnnotation {
+                    node: NodeId(20),
+                    content: base_text(4000 + i, "日", &style(1.0e6), &default),
+                    span: RubySpan::Auto,
+                    visibility: RubyVisibility::Visible,
+                }],
+                style: RubyStyle::default(),
+            }],
+        )
+        .unwrap();
+        b.push_ruby(NodeId(1000 + i), &style(24.0), ruby);
+    }
+    finish(b)
+}
+
+/// Growing sweeps of `candidate_adjustment` from `start` in one operation:
+/// values, Saturation, spent bytes, oracle mismatches and counters.
+type Sweep = (Vec<LayoutUnit>, Saturation, u64, Vec<String>, Counters);
+
+pub(super) fn sweep_from(p: &Paragraph, starts: &[usize], mode: Mode) -> Sweep {
+    sweep_in(p, starts, &mut mode_context(mode))
+}
+
+/// `sweep_from` on a prepared context.
+pub(super) fn sweep_in(p: &Paragraph, starts: &[usize], cx: &mut LayoutContext) -> Sweep {
+    let data = &p.data;
+    let n = data.units.len();
+    let mut sat = Saturation::default();
+    cx.begin_reshape_operation();
+    let mut values = Vec::new();
+    for end in 1..=n {
+        for &start in starts {
+            if start < end {
+                values.push(crate::ruby::measure::candidate_adjustment(
+                    data,
+                    start,
+                    end,
+                    &AtomicSizes::EMPTY,
+                    cx,
+                    &mut sat,
+                ));
+                assert!(
+                    cx.ruby_memo.accumulator_keys().len()
+                        <= crate::ruby::accumulate::MAX_ACCUMULATORS
+                );
+            }
+        }
+    }
+    let misses = std::mem::take(&mut cx.ruby_oracle_misses);
+    (values, sat, cx.edge_reshape_spent, misses, counters(cx))
+}
+
+#[test]
+fn accumulator_matches_reference_on_shodo_d77_fixtures() {
+    for fixture in fixtures() {
+        for pre in pre_states(&fixture.paragraph) {
+            let (reference, _) =
+                observe_candidates_in(&fixture.paragraph, &fixture.atomics, Mode::Reference, pre);
+            for mode in [Mode::Memo, Mode::Verify] {
+                let (observed, _) =
+                    observe_candidates_in(&fixture.paragraph, &fixture.atomics, mode, pre);
+                assert_eq!(observed, reference, "{} {mode:?} {pre:?}", fixture.name);
+            }
+        }
+        assert_eq!(
+            observe_layout_in(&fixture, Mode::Verify),
+            observe_layout_in(&fixture, Mode::Reference),
+            "{}",
+            fixture.name
+        );
+    }
+    let all = fixtures();
+    assert_eq!(
+        observe_warm_in(&all, Mode::Verify),
+        observe_warm_in(&all, Mode::Reference)
+    );
+}
+
+/// Each step measures every position at most once, so the accumulator never
+/// does more container work than the through memo; clean runs do replay.
+#[test]
+fn accumulator_never_measures_more_containers_than_the_memo() {
+    for r in [8, 16, 32] {
+        assert!(
+            sibling_measures(r, Mode::Accumulate) <= sibling_measures(r, Mode::Memo),
+            "siblings {r}"
+        );
+        assert!(
+            outer_measures(r, Mode::Accumulate) <= outer_measures(r, Mode::Memo),
+            "outer {r}"
+        );
+    }
+    let mut cx = mode_context(Mode::Accumulate);
+    digit_siblings(16).break_all(&mut cx, &LineOptions::default(), 96.0, &AtomicSizes::EMPTY);
+    assert!(counters(&cx).replayed > 0, "{:?}", counters(&cx));
+}
+
+/// Review focus 1: a profile replay that crosses the budget re-measures the
+/// profile mid-step; the step finishes live and the accumulator resets.
+#[test]
+fn profile_measured_again_mid_step_resets_and_matches_reference() {
+    let window = 8;
+    let limit = window * RESHAPE_WINDOWS;
+    let p = cursive_siblings(&limits(Some(window), None));
+    let mut resets = 0;
+    for spent in (limit - 96..=limit + 1).step_by(4) {
+        let pre = PreState {
+            spent,
+            suppressed: false,
+        };
+        let (reference, _) = observe_candidates_in(&p, &AtomicSizes::EMPTY, Mode::Reference, pre);
+        for mode in [Mode::Accumulate, Mode::Verify] {
+            let (observed, counters) = observe_candidates_in(&p, &AtomicSizes::EMPTY, mode, pre);
+            assert_eq!(observed, reference, "{mode:?} spent {spent}");
+            resets += counters.resets;
+        }
+    }
+    // The sweeps above charge far more than the budget in single-container
+    // probes before any multi-container step runs, so the crossing rarely
+    // lands inside a step. Fresh single probes `0..end` started just below
+    // the limit put it inside the step's profile measurement (which warns,
+    // so the step stores no entry) or a later profile replay (refused and
+    // measured again); then the probes continue past exhaustion.
+    let data = &p.data;
+    let n = data.units.len();
+    let key = crate::ruby::accumulate::AccumulatorKey::new(data, &AtomicSizes::EMPTY, 0);
+    let probe = |mode: Mode, spent: u64, end: usize| {
+        let mut cx = mode_context(mode);
+        cx.warnings.set_max(data.limits.max_warnings);
+        cx.begin_reshape_operation();
+        cx.edge_reshape_spent = spent;
+        let mut sat = Saturation::default();
+        let mut values = Vec::new();
+        let mut emptied = true;
+        for end in [end, n, end] {
+            values.push(crate::ruby::measure::candidate_adjustment(
+                data,
+                0,
+                end,
+                &AtomicSizes::EMPTY,
+                &mut cx,
+                &mut sat,
+            ));
+            if cx.ruby_accumulator_resets > 0 && values.len() == 1 {
+                emptied = cx.ruby_memo.accumulator(key).is_none_or(|a| a.len() == 0);
+            }
+        }
+        let observed = (
+            values,
+            sat,
+            cx.edge_reshape_spent,
+            cx.take_warnings(),
+            std::mem::take(&mut cx.ruby_oracle_misses),
+        );
+        (observed, counters(&cx), emptied)
+    };
+    let mut refusals = 0;
+    for end in 1..=n {
+        for spent in (limit - 200..=limit + 1).step_by(3) {
+            let (reference, ..) = probe(Mode::Reference, spent, end);
+            for mode in [Mode::Accumulate, Mode::Verify] {
+                let (observed, counters, emptied) = probe(mode, spent, end);
+                assert_eq!(observed, reference, "{mode:?} spent {spent} end {end}");
+                assert!(
+                    emptied,
+                    "a reset step keeps no entry: {mode:?} {spent} {end}"
+                );
+                resets += counters.resets;
+                refusals += counters.refusals;
+            }
+        }
+    }
+    assert!(resets > 0, "some step must measure its profile twice");
+    assert!(refusals > 0, "some profile replay must be refused");
+}
+
+/// Review focus 2: entries recorded while the sink was unsuppressed never
+/// replay once a later sibling's warning suppresses it.
+#[test]
+fn suppression_flip_mid_scan_refuses_older_entries() {
+    for warnings in [Some(1), Some(2), Some(5)] {
+        let fixture = Fixture::new("atomic-siblings", atomic_siblings(&limits(None, warnings)));
+        let pre = PreState {
+            spent: 0,
+            suppressed: false,
+        };
+        let (reference, _) = observe_candidates_in(
+            &fixture.paragraph,
+            &AtomicSizes::EMPTY,
+            Mode::Reference,
+            pre,
+        );
+        for mode in [Mode::Accumulate, Mode::Verify] {
+            let (observed, _) =
+                observe_candidates_in(&fixture.paragraph, &AtomicSizes::EMPTY, mode, pre);
+            assert_eq!(observed, reference, "{warnings:?} {mode:?}");
+        }
+        assert_eq!(
+            observe_layout_in(&fixture, Mode::Verify),
+            observe_layout_in(&fixture, Mode::Reference),
+            "{warnings:?}"
+        );
+    }
+}
+
+/// Review focus 3: a tab prefix replaced while a container is recorded moves
+/// the cache epoch; the step stops replaying and the accumulator resets.
+#[test]
+fn tab_prefix_replacement_mid_step_stops_replay() {
+    let fixture = Fixture::new("tab-siblings", tab_siblings(&Limits::default()));
+    let pre = PreState {
+        spent: 0,
+        suppressed: false,
+    };
+    let (reference, _) = observe_candidates_in(
+        &fixture.paragraph,
+        &AtomicSizes::EMPTY,
+        Mode::Reference,
+        pre,
+    );
+    let (observed, counters) = observe_candidates_in(
+        &fixture.paragraph,
+        &AtomicSizes::EMPTY,
+        Mode::Accumulate,
+        pre,
+    );
+    assert_eq!(observed, reference);
+    assert!(counters.resets > 0, "{counters:?}");
+    assert_eq!(
+        observe_layout_in(&fixture, Mode::Accumulate),
+        observe_layout_in(&fixture, Mode::Reference)
+    );
+}
+
+/// Review focus 4: a replayed run whose running total would saturate is
+/// added one value at a time, counting every saturation.
+#[test]
+fn huge_readings_saturate_like_reference() {
+    let p = huge_siblings(40);
+    let reference = sweep_from(&p, &[0], Mode::Reference);
+    assert!(
+        reference.1.saturated > 0,
+        "the readings must saturate the total"
+    );
+    for mode in [Mode::Memo, Mode::Accumulate, Mode::Verify] {
+        let observed = sweep_from(&p, &[0], mode);
+        assert_eq!(
+            (&observed.0, observed.1, observed.2, &observed.3),
+            (&reference.0, reference.1, reference.2, &reference.3),
+            "{mode:?}"
+        );
+        if mode == Mode::Accumulate {
+            assert!(observed.4.replayed > 0, "{:?}", observed.4);
+        }
+    }
+    let fixture = Fixture::new("huge", huge_siblings(40));
+    assert_eq!(
+        observe_layout_in(&fixture, Mode::Accumulate),
+        observe_layout_in(&fixture, Mode::Reference)
+    );
+}
+
+/// Review focus 5: three starts alternate in one operation; the least
+/// recently used accumulator is evicted and restarted exactly.
+#[test]
+fn three_keys_alternating_evict_and_restart_exactly() {
+    let p = digit_siblings(12);
+    let containers = &p.data.ruby.containers;
+    let starts = [0, containers[2].units.start, containers[5].units.start];
+    let reference = sweep_from(&p, &starts, Mode::Reference);
+    for mode in [Mode::Accumulate, Mode::Verify] {
+        let observed = sweep_from(&p, &starts, mode);
+        assert_eq!(
+            (&observed.0, observed.1, observed.2, &observed.3),
+            (&reference.0, reference.1, reference.2, &reference.3),
+            "{mode:?}"
+        );
+    }
+}
+
+/// Carried (review of Task 4): replayed containers that made several profile
+/// calls (allowances read neighbour bounds through the shared profile)
+/// replay `own + m * P` with a profile that charges reshape bytes. Every
+/// probe is asked twice: an exact probe is not memoized, so the second ask
+/// reaches the accumulator with the same `through` and replays.
+#[test]
+fn repeated_profile_calls_replay_with_their_charges() {
+    let window = 8;
+    let limit = window * RESHAPE_WINDOWS;
+    let p = row(
+        &paragraph_style(false),
+        4,
+        "ب",
+        "にほんご",
+        "ببب",
+        RubyOverhang::Auto,
+        &style(24.0),
+        &limits(Some(window), None),
+    );
+    let data = &p.data;
+    let n = data.units.len();
+    let run = |mode: Mode, pre: PreState| {
+        let mut cx = mode_context(mode);
+        if pre.suppressed {
+            cx.warnings.set_max(Some(0));
+            cx.warnings
+                .push(crate::limits::WarningKind::Unsupported, "pre-existing");
+        } else {
+            cx.warnings.set_max(data.limits.max_warnings);
+        }
+        cx.begin_reshape_operation();
+        cx.edge_reshape_spent = pre.spent;
+        let mut sat = Saturation::default();
+        let mut values = Vec::new();
+        for start in 0..n {
+            for end in start + 1..=n {
+                for _ in 0..2 {
+                    values.push(crate::ruby::measure::candidate_adjustment(
+                        data,
+                        start,
+                        end,
+                        &AtomicSizes::EMPTY,
+                        &mut cx,
+                        &mut sat,
+                    ));
+                }
+            }
+        }
+        let observed = (
+            values,
+            sat,
+            cx.edge_reshape_spent,
+            cx.take_warnings(),
+            std::mem::take(&mut cx.ruby_oracle_misses),
+        );
+        (observed, cx.ruby_repeated_profile_replays)
+    };
+    let mut repeated = 0;
+    for spent in [0, limit - 16, limit + 1] {
+        for suppressed in [false, true] {
+            let pre = PreState { spent, suppressed };
+            let (reference, _) = run(Mode::Reference, pre);
+            for mode in [Mode::Memo, Mode::Accumulate, Mode::Verify] {
+                let (observed, replays) = run(mode, pre);
+                assert_eq!(observed, reference, "{mode:?} {pre:?}");
+                if mode == Mode::Accumulate {
+                    repeated += replays;
+                }
+            }
+        }
+    }
+    assert!(
+        repeated > 0,
+        "some replayed run must repeat a charging profile"
+    );
+}
+
+/// Carried (review of Task 5): a walk longer than the accumulator cap
+/// releases the accumulator and measures on the through-memo path, exactly.
+#[test]
+fn walks_beyond_the_cap_fall_back_to_the_memo_path() {
+    let p = digit_siblings(12);
+    let key = crate::ruby::accumulate::AccumulatorKey::new(&p.data, &AtomicSizes::EMPTY, 0);
+    let reference = sweep_from(&p, &[0], Mode::Reference);
+    let memo = sweep_from(&p, &[0], Mode::Memo);
+    for cap in [0, 4] {
+        for mode in [Mode::Accumulate, Mode::Verify] {
+            let mut cx = mode_context(mode);
+            cx.ruby_accumulate_cap = Some(cap);
+            let observed = sweep_in(&p, &[0], &mut cx);
+            assert_eq!(
+                (&observed.0, observed.1, observed.2, &observed.3),
+                (&reference.0, reference.1, reference.2, &reference.3),
+                "cap {cap} {mode:?}"
+            );
+            // The last walks exceed the cap: their accumulator is gone.
+            assert!(cx.ruby_memo.accumulator(key).is_none(), "cap {cap}");
+            if cap == 0 {
+                // Never used: exactly the through-memo path's work.
+                assert_eq!(observed.4.measures, memo.4.measures);
+                assert_eq!(observed.4.replayed, 0);
+                assert_eq!(observed.4.dirty, [0; 8]);
+            }
+        }
+    }
+}
+
+/// Carried (review of Task 5): when the segment tree's prefix guard refuses
+/// a replayed run's total, its adjustments are added one by one in the
+/// reference order, so values and Saturation counts stay identical.
+#[test]
+fn saturating_replayed_runs_add_one_value_at_a_time() {
+    let p = huge_siblings(40);
+    let reference = sweep_from(&p, &[0], Mode::Reference);
+    let mut cx = mode_context(Mode::Accumulate);
+    let observed = sweep_in(&p, &[0], &mut cx);
+    assert_eq!(
+        (&observed.0, observed.1, observed.2, &observed.3),
+        (&reference.0, reference.1, reference.2, &reference.3)
+    );
+    assert!(cx.ruby_sequential_replays > 0, "{:?}", observed.4);
+}
+
+/// Tab prefixes replaced for alternating starts move the cache epoch inside
+/// and between steps; every surviving accumulator holds entries of the
+/// current epoch only, and the values match the reference.
+#[test]
+fn alternating_tab_starts_keep_entries_of_the_current_epoch() {
+    let p = tab_siblings(&Limits::default());
+    let containers = &p.data.ruby.containers;
+    let starts = [0, containers[1].units.start, containers[2].units.start];
+    let reference = sweep_from(&p, &starts, Mode::Reference);
+    for mode in [Mode::Accumulate, Mode::Verify] {
+        let mut cx = mode_context(mode);
+        let epoch = cx.ruby_ranges.epoch();
+        let observed = sweep_in(&p, &starts, &mut cx);
+        assert_eq!(
+            (&observed.0, observed.1, observed.2, &observed.3),
+            (&reference.0, reference.1, reference.2, &reference.3),
+            "{mode:?}"
+        );
+        assert!(
+            cx.ruby_ranges.epoch() != epoch,
+            "the starts must replace the tab prefix"
+        );
+        // Every surviving accumulator was recorded under the current epoch.
+        for key in cx.ruby_memo.accumulator_keys().into_iter().flatten() {
+            let acc = cx.ruby_memo.accumulator(key).unwrap();
+            assert!(
+                acc.len() == 0 || acc.epoch == cx.ruby_ranges.epoch(),
+                "{mode:?}"
+            );
+        }
+    }
+}
+
+/// The step oracle is not vacuous: under `Mode::Verify` clean entries that
+/// would have replayed are measured live and compared.
+#[test]
+fn step_oracle_compares_entries() {
+    let mut checks = 0;
+    for p in [digit_siblings(16), huge_siblings(12)] {
+        let mut cx = mode_context(Mode::Verify);
+        let (.., misses, _) = sweep_in(&p, &[0], &mut cx);
+        assert!(misses.is_empty(), "{misses:?}");
+        checks += cx.ruby_oracle_checks;
+        let mut cx = mode_context(Mode::Verify);
+        p.break_all(&mut cx, &LineOptions::default(), 96.0, &AtomicSizes::EMPTY);
+        assert!(
+            cx.ruby_oracle_misses.is_empty(),
+            "{:?}",
+            cx.ruby_oracle_misses
+        );
+        checks += cx.ruby_oracle_checks;
+    }
+    assert!(checks > 0);
+}
+
+/// Carried (review of Task 5): a cache invalidation between two steps for
+/// the same start and `through` moves the epoch; taking the accumulator back
+/// finds entries of another epoch and resets it, so nothing replays.
+#[test]
+fn epoch_moved_between_steps_resets_on_take() {
+    let p = digit_siblings(8);
+    let data = &p.data;
+    let n = data.units.len();
+    let run = |mode: Mode, invalidate: bool| {
+        let mut cx = mode_context(mode);
+        cx.begin_reshape_operation();
+        let mut sat = Saturation::default();
+        let mut values = Vec::new();
+        // The first ask fills the caches (its entries are not stored), the
+        // second records entries against warm caches, the third may replay.
+        for i in 0..3 {
+            if i == 2 && invalidate {
+                cx.ruby_ranges.vacate_slots();
+            }
+            // An exact probe (`through == end`) is not memoized: every ask
+            // reaches the accumulator with the same `through`.
+            values.push(crate::ruby::measure::candidate_adjustment(
+                data,
+                0,
+                n,
+                &AtomicSizes::EMPTY,
+                &mut cx,
+                &mut sat,
+            ));
+        }
+        let observed = (
+            values,
+            sat,
+            cx.edge_reshape_spent,
+            cx.take_warnings(),
+            std::mem::take(&mut cx.ruby_oracle_misses),
+        );
+        (observed, counters(&cx))
+    };
+    for invalidate in [false, true] {
+        let (reference, _) = run(Mode::Reference, invalidate);
+        for mode in [Mode::Accumulate, Mode::Verify] {
+            let (observed, counters) = run(mode, invalidate);
+            assert_eq!(observed, reference, "{mode:?} {invalidate}");
+            if mode == Mode::Accumulate {
+                // Without the invalidation the third ask replays everything
+                // but its top position; with it, nothing replays.
+                assert_eq!(counters.replayed > 0, !invalidate, "{counters:?}");
+            }
+        }
+    }
 }

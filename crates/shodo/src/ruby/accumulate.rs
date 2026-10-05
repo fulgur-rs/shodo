@@ -66,11 +66,33 @@
 //! `RangeCache::fills` nor `RangeCache::epoch`: every cache query it made was
 //! a hit, and stays one until the epoch moves. An accumulator is reset when
 //! the epoch differs from the one its entries were recorded under.
-#![allow(dead_code)]
+//!
+//! # Speculative index rollback
+//!
+//! A failed `PartialLine::index` (`line/cache.rs`) restores warnings and
+//! Saturation but not `edge_reshape_spent`, the reshape log or `RubyMemo`, so
+//! accumulators recorded during that pass survive into the retry. Their
+//! entries stay valid, for the reasons the through memo's do (`super::memo`):
+//! - an entry exists only for a measurement that pushed no warning; its
+//!   effects carry the sink's suppression state, so after the sink is
+//!   restored to unsuppressed the replay gate refuses entries recorded while
+//!   it was suppressed (they are measured live, as the reference does);
+//! - Saturation is stored as a delta (`own`, the profile's `P`) and added to
+//!   whatever the caller holds, as measuring again would add it;
+//! - `edge_reshape_spent` is restored on neither path, so the reference and
+//!   the accumulator enter the retry with equal `spent`; every replay is
+//!   decided against that value by the exact gate;
+//! - the classification state (`through`, digest, clipped units) describes
+//!   the recorded measurements, not the warning sink, and the cache state is
+//!   covered by the epoch check, which the rollback does not touch;
+//! - no recording encloses `PartialLine::index`, so no frame of the reshape
+//!   log is open across the rollback.
 
 use super::geometry::Bounds;
-use crate::geometry::LayoutUnit;
-use crate::line::metric_index::SelectionDigest;
+use super::measure::Descendants;
+use crate::LayoutContext;
+use crate::geometry::{LayoutUnit, Saturation};
+use crate::line::metric_index::{ProfileShare, SelectionDigest};
 use crate::line::replay::Effects;
 use crate::paragraph::{AtomicSizes, ParagraphData};
 use std::collections::BTreeSet;
@@ -118,6 +140,7 @@ impl AccumulatorKey {
 }
 
 /// Why a position is measured live (test histogram `cx.ruby_dirty`).
+#[allow(dead_code)] // Neighbour, Profile and Edge are marked from Tasks 7-8.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Dirty {
     Unstored = 0,
@@ -476,6 +499,34 @@ impl Accumulator {
         self.update(pos as usize);
     }
 
+    /// Start a step for `start..through` (the key's start). Returns the
+    /// number of positions kept from the previous step; the walk's new
+    /// suffix is appended unmeasured.
+    fn prepare(
+        &mut self,
+        key: AccumulatorKey,
+        data: &ParagraphData,
+        through: usize,
+        containers: &[usize],
+        epoch: u64,
+    ) -> usize {
+        // Another dataset, revision or start, a shorter look-ahead, or an
+        // invalidated cache: nothing recorded before can be reused. A longer
+        // `through` only appends to the walk (`memo::advance`, point 2).
+        if self.key != Some(key)
+            || through < self.through
+            || containers.len() < self.entries.len()
+            || epoch != self.epoch
+        {
+            self.reset(Some(key), epoch);
+        }
+        let kept = self.entries.len();
+        for &container in &containers[kept..] {
+            self.push(data, containers, container);
+        }
+        kept
+    }
+
     /// Replace the entry of `pos`, keeping the indexes and the tree in step.
     /// `full_end` is the container's unclipped end.
     pub(crate) fn store(&mut self, pos: usize, entry: Entry, full_end: usize) {
@@ -534,10 +585,482 @@ impl Accumulator {
     }
 }
 
+fn max_containers(_cx: &LayoutContext) -> usize {
+    #[cfg(test)]
+    if let Some(cap) = _cx.ruby_accumulate_cap {
+        return cap;
+    }
+    MAX_CONTAINERS
+}
+
+/// Step oracle switch (test only).
+fn verify(_cx: &LayoutContext) -> bool {
+    #[cfg(test)]
+    {
+        _cx.ruby_accumulate_verify
+    }
+    #[cfg(not(test))]
+    {
+        false
+    }
+}
+
+/// Mark `pos` dirty unless it is not below the top position (which every
+/// step measures first) or already dirty. Returns whether it was marked.
+fn mark(
+    dirty: &mut BTreeSet<u32>,
+    top: usize,
+    pos: u32,
+    _reason: Dirty,
+    _cx: &mut LayoutContext,
+) -> bool {
+    if pos as usize >= top || !dirty.insert(pos) {
+        return false;
+    }
+    #[cfg(test)]
+    {
+        _cx.ruby_dirty[_reason as usize] += 1;
+    }
+    true
+}
+
+/// Sum of the container adjustments of `start..through` (whose walk
+/// visited `containers`), with exactly the result and side effects of
+/// `measure::measure_containers`, measuring live only the positions whose
+/// inputs changed since the latest step for the same start.
+pub(crate) fn core(
+    data: &ParagraphData,
+    start: usize,
+    through: usize,
+    containers: &[usize],
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    let key = AccumulatorKey::new(data, atomics, start);
+    let cap = max_containers(cx);
+    if containers.len() > cap {
+        // Too many positions to keep: release them and measure as the
+        // through memo path does (exact, never approximated).
+        cx.ruby_memo.drop_accumulator(key);
+    }
+    // With one container, the top position is all there is to measure.
+    if !cx.accumulate_enabled() || containers.len() < 2 || containers.len() > cap {
+        return super::measure::measure_containers(
+            data,
+            start..through,
+            containers,
+            atomics,
+            cx,
+            sat,
+        )
+        .adjustment;
+    }
+    let mut accumulator = cx.ruby_memo.take_accumulator(key);
+    let kept = accumulator.prepare(key, data, through, containers, cx.ruby_ranges.epoch());
+    let mut step = Step {
+        data,
+        containers,
+        start,
+        selected: start..through,
+        atomics,
+        profile: ProfileShare::detached(),
+        total: LayoutUnit::ZERO,
+        top: containers.len() - 1,
+        replays: true,
+    };
+    step.run(&mut accumulator, kept, cx, sat);
+    cx.ruby_memo.put_accumulator(accumulator);
+    step.total
+}
+
+struct Step<'a> {
+    data: &'a ParagraphData,
+    containers: &'a [usize],
+    start: usize,
+    selected: Range<usize>,
+    atomics: &'a AtomicSizes,
+    /// The step's shared profile, detached from container recordings.
+    profile: ProfileShare,
+    /// Running sum, added in reverse structural order like the reference.
+    total: LayoutUnit,
+    /// The last position, measured first.
+    top: usize,
+    /// Clean runs may still replay: the profile was measured once (by the
+    /// top position) and the cache epoch has not moved.
+    replays: bool,
+}
+
+impl Step<'_> {
+    fn run(
+        &mut self,
+        acc: &mut Accumulator,
+        kept: usize,
+        cx: &mut LayoutContext,
+        sat: &mut Saturation,
+    ) {
+        let top = self.top;
+        // A reset accumulator has no clean position to classify.
+        let fresh = acc.digest.is_none();
+        let mut dirty = BTreeSet::new();
+        // The top position makes the step's first profile call exactly where
+        // the reference does; the profile it measures is this step's `P`.
+        self.live(acc, top, &mut dirty, cx, sat);
+        let digest = self.profile.digest();
+        if digest.is_none() {
+            self.replays = false;
+        }
+        for &pos in acc.unstored.range(..top as u32) {
+            let reason = if pos as usize >= kept {
+                Dirty::New
+            } else {
+                Dirty::Unstored
+            };
+            mark(&mut dirty, top, pos, reason, cx);
+        }
+        if self.replays
+            && !fresh
+            && let Some(digest) = &digest
+        {
+            self.classify(acc, digest, &mut dirty, cx);
+        }
+        // Reverse structural order, as `measure_containers`: the clean run
+        // above each dirty position, then the dirty position. Live
+        // measurements may mark lower positions (D6), which the next lookup
+        // finds.
+        let mut hi = top;
+        loop {
+            let next = dirty.range(..hi as u32).next_back().copied();
+            let lo = next.map_or(0, |d| d as usize + 1);
+            self.segment(acc, lo..hi, &mut dirty, cx, sat);
+            let Some(d) = next else {
+                break;
+            };
+            self.live(acc, d as usize, &mut dirty, cx, sat);
+            hi = d as usize;
+        }
+        if self.replays {
+            acc.through = self.selected.end;
+            acc.digest = digest;
+        } else {
+            acc.reset(acc.key, cx.ruby_ranges.epoch());
+            #[cfg(test)]
+            {
+                cx.ruby_accumulator_resets += 1;
+            }
+        }
+    }
+
+    /// D2 and D6, and, conservatively, every position whenever a newly
+    /// selected event unit or a changed profile could have changed anything
+    /// else (replaced by D3-D5 in later commits). Neither the neighbour
+    /// notes of the entries nor `overhang::visual_neighbours` are read here:
+    /// any new event unit dirties every position.
+    fn classify(
+        &self,
+        acc: &Accumulator,
+        digest: &SelectionDigest,
+        dirty: &mut BTreeSet<u32>,
+        cx: &mut LayoutContext,
+    ) {
+        let top = self.top;
+        for &pos in acc.clipped.range(..top as u32) {
+            let ruby = &self.data.ruby.containers[self.containers[pos as usize]];
+            if super::measure::intersect(&self.selected, &ruby.units)
+                != acc.entries[pos as usize].units
+            {
+                mark(dirty, top, pos, Dirty::Clipped, cx);
+            }
+        }
+        let events =
+            (acc.through..self.selected.end).any(|x| super::overhang::is_event(self.data, x));
+        if events || acc.digest.as_ref() != Some(digest) {
+            for pos in 0..top as u32 {
+                mark(dirty, top, pos, Dirty::Full, cx);
+            }
+        }
+        self.close(acc, dirty, cx);
+    }
+
+    /// D6: the ancestors of every dirty position.
+    fn close(&self, acc: &Accumulator, dirty: &mut BTreeSet<u32>, cx: &mut LayoutContext) {
+        let seeds: Vec<u32> = dirty.iter().copied().collect();
+        for seed in seeds {
+            let mut parent = acc.parent(seed);
+            while let Some(q) = parent {
+                if !mark(dirty, self.top, q, Dirty::Ancestor, cx) {
+                    break;
+                }
+                parent = acc.parent(q);
+            }
+        }
+    }
+
+    /// Replay the clean positions `run` as one aggregate, or measure them
+    /// live in reverse structural order when the gate refuses.
+    fn segment(
+        &mut self,
+        acc: &mut Accumulator,
+        run: Range<usize>,
+        dirty: &mut BTreeSet<u32>,
+        cx: &mut LayoutContext,
+        sat: &mut Saturation,
+    ) {
+        if run.is_empty() {
+            return;
+        }
+        if self.replays && !verify(cx) {
+            let node = acc.query(run.clone());
+            // Detached profile contract: the run's own effects plus one copy
+            // of this step's profile per recorded profile call.
+            let combined = match node.effects {
+                Replay::Effects(own) => self
+                    .profile
+                    .effects()
+                    .and_then(|profile| own.then(profile.times(node.calls))),
+                Replay::Empty | Replay::Refused => None,
+            };
+            if let Some(effects) = combined
+                && crate::line::replay::replay(cx, &effects, sat)
+            {
+                if node.reverse.fits(self.total) {
+                    self.total = node.reverse.total(self.total);
+                } else {
+                    // Some running sum saturates: add one value at a time in
+                    // the reference order, counting every saturation.
+                    for pos in run.clone().rev() {
+                        let entry = &acc.entries[pos];
+                        if entry.present {
+                            self.total = self.total.add(entry.adjustment, sat);
+                        }
+                    }
+                    #[cfg(test)]
+                    {
+                        cx.ruby_sequential_replays += 1;
+                    }
+                }
+                #[cfg(test)]
+                {
+                    cx.ruby_replayed_containers += run.len();
+                    if node.calls > run.len() as u64
+                        && self.profile.effects().is_some_and(|p| p.bytes() > 0)
+                    {
+                        cx.ruby_repeated_profile_replays += 1;
+                    }
+                }
+                return;
+            }
+        }
+        for pos in run.rev() {
+            self.clean(acc, pos, dirty, cx, sat);
+        }
+    }
+
+    /// Measure a clean position live. Under the step oracle, compare the
+    /// measurement with its entry whenever the entry would have replayed.
+    fn clean(
+        &mut self,
+        acc: &mut Accumulator,
+        pos: usize,
+        dirty: &mut BTreeSet<u32>,
+        cx: &mut LayoutContext,
+        sat: &mut Saturation,
+    ) {
+        #[cfg(test)]
+        let expected = {
+            let entry = &acc.entries[pos];
+            let would_replay = self.replays
+                && cx.ruby_accumulate_verify
+                && entry
+                    .own
+                    .and_then(|own| own.then(self.profile.effects()?.times(u64::from(entry.calls))))
+                    .is_some_and(|effects| crate::line::replay::replayable(cx, &effects));
+            would_replay.then(|| entry.clone())
+        };
+        self.live(acc, pos, dirty, cx, sat);
+        #[cfg(test)]
+        if let Some(expected) = expected
+            && self.replays
+        {
+            cx.ruby_oracle_checks += 1;
+            let measured = &acc.entries[pos];
+            if !expected.same_entry(measured) {
+                cx.ruby_oracle_misses.push(format!(
+                    "{:?} position {pos}: entry {expected:?}, measured {measured:?}",
+                    self.selected
+                ));
+            }
+        }
+    }
+
+    /// Measure `pos` live and store its entry; mark its ancestors when the
+    /// values they read changed (D6).
+    fn live(
+        &mut self,
+        acc: &mut Accumulator,
+        pos: usize,
+        dirty: &mut BTreeSet<u32>,
+        cx: &mut LayoutContext,
+        sat: &mut Saturation,
+    ) {
+        let container = self.containers[pos];
+        let full_end = self.data.ruby.containers[container].units.end;
+        let (fills, epoch) = (cx.ruby_ranges.fills(), cx.ruby_ranges.epoch());
+        self.profile
+            .begin_container(crate::line::replay::depth(cx).checked_sub(1));
+        let recording = crate::line::replay::begin(cx, sat);
+        let fragment = {
+            let completed = Scan {
+                acc: &*acc,
+                data: self.data,
+                containers: self.containers,
+                start: self.start,
+                from: pos + 1,
+            };
+            super::measure::measure_one(
+                self.data,
+                &self.selected,
+                container,
+                &completed,
+                &mut self.profile,
+                self.atomics,
+                cx,
+                sat,
+            )
+        };
+        let effects = crate::line::replay::finish(cx, recording, sat);
+        // An invalidated cache or a profile measured again (a refused replay
+        // or a warning) leaves no fixed `P` and no comparable cache state:
+        // stop replaying for the rest of the step and reset afterwards.
+        if cx.ruby_ranges.epoch() != epoch || self.profile.refreshed() {
+            self.replays = false;
+        }
+        let note = self.profile.note();
+        // Stored only if every cache query was a hit (no fill, no
+        // invalidation), so measuring again under the same epoch repeats
+        // exactly these effects.
+        let storable = self.replays && cx.ruby_ranges.fills() == fills;
+        let own = effects
+            .filter(|_| storable)
+            .map(|e| e.without_sat(note.sat));
+        let parent = acc.entries[pos].parent;
+        let neighbours = note.neighbours.map(|u| u.map(|u| u as u32));
+        let entry = match fragment {
+            Some(f) => {
+                self.total = self.total.add(f.adjustment, sat);
+                Entry {
+                    units: f.units,
+                    adjustment: f.adjustment,
+                    whole_area: f.whole_area,
+                    has_content: f.has_content,
+                    present: true,
+                    own,
+                    calls: note.calls,
+                    parent,
+                    neighbours,
+                    neighbour_dependent: note.neighbour_dependent,
+                    profile: note.profile,
+                }
+            }
+            None => Entry {
+                own,
+                calls: note.calls,
+                neighbours,
+                neighbour_dependent: note.neighbour_dependent,
+                profile: note.profile,
+                ..Entry::placeholder(parent)
+            },
+        };
+        let changed = !acc.entries[pos].same_values(&entry);
+        acc.store(pos, entry, full_end);
+        if changed {
+            let mut parent = acc.parent(pos as u32);
+            while let Some(q) = parent {
+                if !mark(dirty, self.top, q, Dirty::Ancestor, cx) {
+                    break;
+                }
+                parent = acc.parent(q);
+            }
+        }
+    }
+}
+
+/// Completed descendants of a position: the later positions (all already
+/// measured or replayed in this step) whose clipped start lies in a range
+/// and whose clipped end does not pass it, in structural order.
+struct Scan<'a> {
+    acc: &'a Accumulator,
+    data: &'a ParagraphData,
+    containers: &'a [usize],
+    start: usize,
+    from: usize,
+}
+
+impl Scan<'_> {
+    /// Positions from `from` whose clipped start lies in `range`; clipped
+    /// starts grow with the position (containers are sorted by start).
+    fn span(&self, range: &Range<usize>) -> Range<usize> {
+        let clipped = |c: &usize| self.data.ruby.containers[*c].units.start.max(self.start);
+        let len = self.acc.len();
+        let from = self.from.min(len);
+        let later = &self.containers[from..len];
+        let first = later.partition_point(|c| clipped(c) < range.start);
+        let last = later.partition_point(|c| clipped(c) < range.end);
+        from + first..from + last
+    }
+}
+
+impl Descendants for Scan<'_> {
+    fn add_adjustments(
+        &self,
+        range: &Range<usize>,
+        mut width: LayoutUnit,
+        _cx: &mut LayoutContext,
+        sat: &mut Saturation,
+    ) -> LayoutUnit {
+        for pos in self.span(range) {
+            let entry = &self.acc.entries[pos];
+            #[cfg(test)]
+            {
+                _cx.ruby_measure_visits += 1;
+            }
+            if entry.present && entry.units.end <= range.end {
+                width = width.add(entry.adjustment, sat);
+            }
+        }
+        width
+    }
+
+    fn union_areas(
+        &self,
+        range: &Range<usize>,
+        mut area: Bounds,
+        _cx: &mut LayoutContext,
+    ) -> Bounds {
+        for pos in self.span(range) {
+            let entry = &self.acc.entries[pos];
+            #[cfg(test)]
+            {
+                _cx.ruby_measure_visits += 1;
+            }
+            if entry.present && entry.units.end <= range.end {
+                area = area.union(entry.whole_area);
+            }
+        }
+        area
+    }
+
+    fn any_content(&self, range: &Range<usize>) -> bool {
+        self.span(range).any(|pos| {
+            let entry = &self.acc.entries[pos];
+            entry.present && entry.units.end <= range.end && entry.has_content
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geometry::Saturation;
 
     fn next(seed: &mut u64) -> u64 {
         *seed ^= *seed << 13;

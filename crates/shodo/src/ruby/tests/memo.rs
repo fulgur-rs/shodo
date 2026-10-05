@@ -647,11 +647,19 @@ pub(super) enum Mode {
     Memo,
     /// The default path: the memo and the container accumulator.
     Accumulate,
+    /// As `Accumulate`, with clean containers measured live and compared
+    /// with their entries (the step oracle).
+    Verify,
 }
 
 pub(super) fn mode_context(mode: Mode) -> LayoutContext {
     let mut cx = LayoutContext::new();
-    cx.ruby_reference = mode == Mode::Reference;
+    match mode {
+        Mode::Reference => cx.ruby_reference = true,
+        Mode::Memo => cx.ruby_accumulate_disabled = true,
+        Mode::Accumulate => {}
+        Mode::Verify => cx.ruby_accumulate_verify = true,
+    }
     cx
 }
 
@@ -667,11 +675,21 @@ pub(super) fn context(reference: bool) -> LayoutContext {
 #[derive(Clone, Debug, Default)]
 pub(super) struct Counters {
     pub(super) hits: usize,
+    pub(super) measures: usize,
+    pub(super) replayed: usize,
+    pub(super) dirty: [usize; 8],
+    pub(super) resets: usize,
+    pub(super) refusals: usize,
 }
 
 pub(super) fn counters(cx: &LayoutContext) -> Counters {
     Counters {
         hits: cx.ruby_memo_hits,
+        measures: cx.ruby_container_measures,
+        replayed: cx.ruby_replayed_containers,
+        dirty: cx.ruby_dirty,
+        resets: cx.ruby_accumulator_resets,
+        refusals: cx.ruby_replay_refusals,
     }
 }
 

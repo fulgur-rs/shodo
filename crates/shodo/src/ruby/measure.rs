@@ -154,8 +154,11 @@ pub(crate) fn candidate(
 /// Adjustment-only candidate for fit probes (line scan, partial-line index,
 /// intrinsic sizes). Accepted lines call `candidate` through `apply`, which
 /// also keeps the fragments. The container core is memoized per operation by
-/// `start..through` (`super::memo`); the end-dependent look-ahead tail is
-/// always computed live, after the core, preserving the side-effect order.
+/// `start..through` (`super::memo`); a miss measures it through the
+/// container accumulator (`super::accumulate`), which re-measures only the
+/// containers whose inputs changed since the previous `through`. The
+/// end-dependent look-ahead tail is always computed live, after the core,
+/// preserving the side-effect order.
 pub(crate) fn candidate_adjustment(
     data: &ParagraphData,
     start: usize,
@@ -195,13 +198,13 @@ pub(crate) fn candidate_adjustment(
             // it only grows the memo by one entry per probe (one per unit in
             // `intrinsic_sizes`). Measure as the reference path does.
             let containers = walk.as_ref().map_or(&[][..], |w| w.visited());
-            measure_containers(data, start..through, containers, atomics, cx, sat).adjustment
+            super::accumulate::core(data, start, through, containers, atomics, cx, sat)
         }
         _ => {
             let containers = walk.as_ref().map_or(&[][..], |w| w.visited());
             let recording = crate::line::replay::begin(cx, sat);
             let adjustment =
-                measure_containers(data, start..through, containers, atomics, cx, sat).adjustment;
+                super::accumulate::core(data, start, through, containers, atomics, cx, sat);
             let effects = crate::line::replay::finish(cx, recording, sat);
             // A recording that filled a cache whose later hits skip side
             // effects is not what measuring again would do; measure again.

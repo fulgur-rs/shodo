@@ -46,7 +46,8 @@
 //! This also covers the rollback of a speculative `PartialLine::index`
 //! (`line/cache.rs`): a failed index restores warnings and saturation but not
 //! `edge_reshape_spent`, the reshape log or this memo. Entries recorded during
-//! that pass remain valid:
+//! that pass remain valid (the container accumulators too, for the same
+//! reasons; see `super::accumulate`):
 //! - saturation is stored as a delta and added to whatever the caller holds,
 //!   exactly as measuring again would;
 //! - the restored sink may be unsuppressed again; entries recorded while it
@@ -163,7 +164,6 @@ impl RubyMemo {
 
     /// Move out the accumulator of `key`, or a fresh one (reusing the least
     /// recently used accumulator's allocation when all slots are taken).
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn take_accumulator(
         &mut self,
         key: super::accumulate::AccumulatorKey,
@@ -184,7 +184,6 @@ impl RubyMemo {
     /// nest (a nested candidate measured while an outer accumulator is out
     /// takes and puts its own), so the slots may already be full here: the
     /// least recently used accumulators are dropped to keep the bound.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn put_accumulator(&mut self, accumulator: super::accumulate::Accumulator) {
         while self.accumulators.len() >= super::accumulate::MAX_ACCUMULATORS {
             self.accumulators.remove(0);
@@ -192,9 +191,16 @@ impl RubyMemo {
         self.accumulators.push(accumulator);
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn drop_accumulator(&mut self, key: super::accumulate::AccumulatorKey) {
         self.accumulators.retain(|a| a.key() != Some(key));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn accumulator(
+        &self,
+        key: super::accumulate::AccumulatorKey,
+    ) -> Option<&super::accumulate::Accumulator> {
+        self.accumulators.iter().find(|a| a.key() == Some(key))
     }
 
     #[cfg(test)]
