@@ -257,6 +257,10 @@ pub(crate) fn finish_to(
     frame: Option<usize>,
 ) -> Option<Effects> {
     let charges = pop_frames(cx, recording.depth);
+    debug_assert!(
+        frame.is_none_or(|i| i < cx.reshape_log.frames.len()),
+        "finish_to target frame {frame:?} is not open"
+    );
     if let Some(target) = frame.and_then(|i| cx.reshape_log.frames.get_mut(i)) {
         target.merge(&charges);
     }
@@ -280,6 +284,10 @@ fn apply(
     sat: &mut Saturation,
     frame: Option<usize>,
 ) -> bool {
+    debug_assert!(
+        frame.is_none_or(|i| i < cx.reshape_log.frames.len()),
+        "replay target frame {frame:?} is not open"
+    );
     if !gate(cx, effects) {
         #[cfg(test)]
         {
