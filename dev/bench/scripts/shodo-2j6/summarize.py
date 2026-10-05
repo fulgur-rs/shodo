@@ -12,6 +12,13 @@ for r in rows:
     groups[(r["case"], r["size"], r["order"], r["round"], r["label"])].append(r["break_ns_per_call"])
     digests[(r["case"], r["size"])].add((r["output_sha256"], r["warning_sha256"]))
     reps[(r["case"], r["size"])] = r["reps"]
+incomplete = [k for k, v in groups.items() if len(v) != 2]
+if incomplete:
+    sys.exit(f"expected 2 samples per label per round, got {[(k, len(groups[k])) for k in sorted(incomplete)]}")
+for (case, size, order, n) in {k[:4] for k in groups}:
+    for label in ("baseline", "candidate"):
+        if (case, size, order, n, label) not in groups:
+            sys.exit(f"missing {label} samples for {case} {size} {order} round {n}")
 order_of_cases = ["siblings", "outer", "valign", "rtl", "ordinary", "plain"]
 summary = {
     "digest_mismatch": [f"{c}:{s}" for (c, s), d in sorted(digests.items()) if len(d) != 1],

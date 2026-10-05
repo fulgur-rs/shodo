@@ -19,7 +19,7 @@
   - `rtl`: RTL 段落の `siblings`。
   - `ordinary`: `"日日"` の通常テキストと base `"日日"` の ruby の組を `size` 個並べる。breakable（200 組で 134 行）。
   - `plain`: ruby なし。`"日"` を `4 * size` 個並べる対照。
-- 計時範囲は `break_all` の `reps` 回だけ。build、出力 digest、`LayoutContext` の準備は範囲外。`reps` は表のとおり（`siblings` 200 の baseline が 80 ms、1600 で 7 s など、遅い点は 1 回で十分長く、candidate 側は 4–61 ms。baseline と candidate には同じ reps を使った）。計画にあった「siblings 1600 の baseline が約 45 s」は実機では約 7 s だった。
+- 計時範囲は `break_all` の `reps` 回と、各回の結果と `LayoutContext` の解放。build、出力 digest、`LayoutContext` の準備は範囲外。解放を計時外にした使い捨ての probe で測ると、解放は candidate の時間の約 3–6%（siblings 800 で 0.77 ms / 27.8 ms、1600 で 3.3 ms / 58 ms、plain と ordinary 200 で約 3%）だった。解放は両 arm で計時に入り、candidate に不利な向きなので結論は変わらない。`reps` は表のとおり（`siblings` 200 の baseline が 80 ms、1600 で 7 s など、遅い点は 1 回で十分長く、candidate 側は 4–61 ms。baseline と candidate には同じ reps を使った）。計画にあった「siblings 1600 の baseline が約 45 s」は実機では約 7 s だった。
 - 12 ラウンドを ABBA 順で測定した後、BAAB 順で独立に 12 ラウンド測定した。各ラウンドでは同じラベルの 2 サンプルを平均した。全ケースを同じ回数で測り、ラウンドも点も減らしていない。
 - rustc 1.96.0 (ac68faa20 2026-05-25)、AMD Ryzen 5 5600G with Radeon Graphics、Linux 7.2.5-3-omarchy。scaling governor は `performance`。測定中は他の重い処理を走らせていない。全サンプルと環境情報は [raw JSON](data/shodo-2j6-sibling-ruby-accumulator.json) に記録した。
 
@@ -160,7 +160,7 @@ S=dev/bench/scripts/shodo-2j6
 BASE=<baseline の sibling_scale> CAND=<candidate の sibling_scale> OUT=<dir>/samples.jsonl bash $S/run.sh
 python3 $S/summarize.py <dir>/samples.jsonl > <dir>/summary.json
 python3 $S/tables.py <dir>/summary.json > <dir>/tables.md
-# <dir> には binaries.txt（両バイナリの sha256sum 出力）、counts.jsonl、candidate_commit.txt も置く
+# <dir> には binaries.txt（baseline/ と candidate/ という名前のディレクトリに置いた両バイナリの sha256sum 出力）、counts.jsonl、candidate_commit.txt も置く
 python3 $S/assemble.py adopted <candidate commit> <dir> <baseline worktree> docs/records/data/shodo-2j6-sibling-ruby-accumulator.json
 ```
 

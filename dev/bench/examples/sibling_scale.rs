@@ -248,6 +248,10 @@ fn sample(mut args: impl Iterator<Item = String>) {
         signature(&paragraph, inline_size);
     let contexts: Vec<_> = (0..reps).map(|_| LayoutContext::new()).collect();
     let options = LineOptions::default();
+    // Each result and context is dropped inside the timed range. The recorded
+    // shodo-2j6 samples were taken this way; the release is about 3-6% of the
+    // candidate's time and works against the candidate, so it is kept for
+    // reproducibility.
     let start = Instant::now();
     for mut context in contexts {
         black_box(paragraph.break_all(&mut context, &options, inline_size, &AtomicSizes::EMPTY));
