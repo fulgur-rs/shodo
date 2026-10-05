@@ -384,6 +384,8 @@ impl Paragraph {
             return LineResult::Line(entry.line);
         }
         let mut scan = if let Some(end) = planned_end {
+            // An annotation lane (always planned) never hangs, like the ruby
+            // range measurement that sized its column.
             plan::selected(
                 data,
                 start,
@@ -391,7 +393,7 @@ impl Paragraph {
                 offset,
                 indent,
                 token.flags,
-                &options,
+                annotation_align.is_none().then_some(&options),
                 available,
                 atomics,
                 cx,

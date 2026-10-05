@@ -54,24 +54,14 @@ pub(super) fn selected(
     offset: LayoutUnit,
     indent: LayoutUnit,
     flags: u8,
-    options: &LineOptions,
+    options: Option<&LineOptions>,
     available: LayoutUnit,
     atomics: &AtomicSizes,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> Scan {
     let mut scan = selected_raw(
-        data,
-        start,
-        end,
-        offset,
-        indent,
-        flags,
-        Some(options),
-        available,
-        atomics,
-        cx,
-        sat,
+        data, start, end, offset, indent, flags, options, available, atomics, cx, sat,
     );
     crate::ruby::measure::apply(data, start, &mut scan, atomics, cx, sat);
     scan
@@ -370,7 +360,7 @@ impl Paragraph {
                                         LayoutUnit::ZERO,
                                         indent,
                                         flags,
-                                        &options,
+                                        Some(&options),
                                         LayoutUnit::from_f32_round(width, &mut sat),
                                         atomics,
                                         cx,

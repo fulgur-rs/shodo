@@ -1768,3 +1768,37 @@ fn inline_allow_end_reports_only_the_part_that_does_not_fit() {
     assert_eq!(fitting.inline_size(), 48.0);
     assert_eq!(fitting.hang_end(), 0.0);
 }
+
+/// The painted annotation lane is laid out like ruby measurement: a per-run
+/// value must not hang its trailing mark and redistribute the lane.
+#[test]
+fn inline_hanging_does_not_hang_the_ruby_annotation_lane() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let plain = &style.root;
+    // The 48px annotation is wider than `日` and narrower than `日本日本`.
+    for (base, expected) in [
+        ("日", [0.0, 16.0, 32.0]),
+        ("日本日本", [2.65625, 24.0, 45.328125]),
+    ] {
+        for (annotation, hanging) in [("にほ」", LAST), ("にほ、", FORCE_END)] {
+            for tail in ["日", ""] {
+                let lanes = [None, Some(hanging)].map(|hanging| {
+                    let span = with_hanging(&style, hanging);
+                    let para = ruby_then_han(annotation, &span, base, plain, tail);
+                    let line =
+                        first_line(&para, 400.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+                    let annotations: Vec<_> = line.ruby_annotations().collect();
+                    assert_eq!(annotations.len(), 1);
+                    let lane = annotations[0].line();
+                    let positions: Vec<_> =
+                        glyphs(lane).iter().map(|g| g.inline_position).collect();
+                    (line.inline_size(), lane.hang_end(), positions)
+                });
+                let case = format!("{base} {annotation} {tail:?}");
+                assert_eq!(lanes[0], lanes[1], "{case}");
+                assert_eq!(lanes[1].1, 0.0, "{case}");
+                assert_eq!(lanes[1].2, expected, "{case}");
+            }
+        }
+    }
+}
