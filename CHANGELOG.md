@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.14](https://github.com/fulgur-rs/shodo/compare/v0.0.13...v0.0.14) - 2026-10-05
+
+### Fixed
+
+- classify dot and colon punctuation from the shaped glyph
+- measure upright vertical punctuation blanks along the y axis
+- bound nested ruby accumulator slots and pin reverse composition
+- keep the incremental ruby walk fail-closed on cut placement
+
+### Other
+
+- drop a redundant accumulator reset and test-only replay gate
+- report sibling ruby operation counts for the shodo-2j6 record
+- cover sibling ruby accumulator paths against the reference
+- answer clipped ruby ancestors' descendant reads from the accumulator tree
+- re-measure ruby containers only for profile and edge window changes
+- re-measure only ruby containers next to newly selected units
+- measure ruby candidates through the container accumulator
+- add the ruby container accumulator and its segment tree
+- detach shared ruby profile effects and note container dependencies
+- measure ruby containers one at a time behind a descendants view
+- add effect sequencing, repetition and frame-targeted replay
+- split the ruby range cache generation into fills and epoch
+- Merge pull request #223 from fulgur-rs/fix/shodo-d77-deep-ruby-break
+- document the ruby memo bounds, mid-operation reset and nested wall-clock cause
+- assert distinct memo keys for intrinsic atomics
+- bound the ruby through memo to look-ahead probes and release its capacity
+- add shodo-d77 ruby depth probe
+- sharpen ruby memo reach assertions
+- resume the ruby look-ahead walk for growing probe ends (shodo-d77)
+- memoize ruby candidate cores per operation by look-ahead endpoint (shodo-d77)
+- share one selected ruby line profile per candidate with exact replay (shodo-d77)
+- keep ruby metric and neighbor indexes in value slots (shodo-d77)
+- cover float, forced-break and clear points in ruby memo harness
+- add reference path and D^2 guards for ruby candidates (shodo-d77)
+
 ## [0.0.13](https://github.com/fulgur-rs/shodo/compare/v0.0.12...v0.0.13) - 2026-10-05
 
 ### Fixed
