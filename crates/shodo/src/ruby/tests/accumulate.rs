@@ -792,9 +792,17 @@ pub(super) fn pre_style() -> InlineStyle {
     }
 }
 
-pub(super) fn pre_paragraph() -> ParagraphStyle {
+/// `pre_style` with a tab size whose tab steps saturate.
+pub(super) fn huge_pre_style() -> InlineStyle {
+    InlineStyle {
+        tab_size: TabSize::Px(1.0e12),
+        ..pre_style()
+    }
+}
+
+fn pre_paragraph_in(style: &InlineStyle) -> ParagraphStyle {
     ParagraphStyle {
-        root: pre_style(),
+        root: style.clone(),
         ..paragraph_style(false)
     }
 }
@@ -803,21 +811,26 @@ pub(super) fn pre_paragraph() -> ParagraphStyle {
 /// is preserved (the shodo-d77 `nestedtab` probe used `normal`, which
 /// collapses the tab to a space).
 pub(super) fn pre_nested(depth: usize, text: &str) -> Paragraph {
+    pre_nested_in(depth, text, &pre_style())
+}
+
+/// `pre_nested` with every style replaced by `style`.
+pub(super) fn pre_nested_in(depth: usize, text: &str, style: &InlineStyle) -> Paragraph {
     let limits = Limits::default();
-    let mut content = base_text(30, text, &pre_style(), &limits);
+    let mut content = base_text(30, text, style, &limits);
     for level in 1..depth {
-        let mut b = ParagraphBuilder::new(&pre_paragraph(), &limits);
+        let mut b = ParagraphBuilder::new(&pre_paragraph_in(style), &limits);
         b.push_ruby(
             NodeId(100 + level as u64),
-            &pre_style(),
+            style,
             annotated(vec![content], &["に"], RubyOverhang::None, &limits),
         );
         content = RubyContent::from_builder(b);
     }
-    let mut b = ParagraphBuilder::new(&pre_paragraph(), &limits);
+    let mut b = ParagraphBuilder::new(&pre_paragraph_in(style), &limits);
     b.push_ruby(
         NodeId(100),
-        &pre_style(),
+        style,
         annotated(vec![content], &["に"], RubyOverhang::None, &limits),
     );
     finish(b)
@@ -826,17 +839,27 @@ pub(super) fn pre_nested(depth: usize, text: &str) -> Paragraph {
 /// `r` sibling rubies over `base` under `white-space: pre`, after an
 /// optional leading text.
 pub(super) fn pre_siblings(r: usize, lead: Option<&str>, base: &str) -> Paragraph {
+    pre_siblings_in(r, lead, base, &pre_style())
+}
+
+/// `pre_siblings` with every style replaced by `style`.
+pub(super) fn pre_siblings_in(
+    r: usize,
+    lead: Option<&str>,
+    base: &str,
+    style: &InlineStyle,
+) -> Paragraph {
     let limits = Limits::default();
-    let mut b = ParagraphBuilder::new(&pre_paragraph(), &limits);
+    let mut b = ParagraphBuilder::new(&pre_paragraph_in(style), &limits);
     if let Some(text) = lead {
         b.push_text(TextSource::Generated { node: NodeId(1) }, text);
     }
     for i in 0..r as u64 {
         b.push_ruby(
             NodeId(1000 + i),
-            &pre_style(),
+            style,
             annotated(
-                vec![base_text(3000 + i, base, &pre_style(), &limits)],
+                vec![base_text(3000 + i, base, style, &limits)],
                 &["日"],
                 RubyOverhang::None,
                 &limits,
@@ -847,7 +870,7 @@ pub(super) fn pre_siblings(r: usize, lead: Option<&str>, base: &str) -> Paragrap
 }
 
 /// As `tab_siblings`, with a tab size whose conversion saturates: every tab
-/// step charges saturation, so replacing the prefix must invalidate.
+/// step charges saturation.
 pub(super) fn effectful_tab_siblings(limits: &Limits) -> Paragraph {
     let tab = InlineStyle {
         white_space_collapse: WhiteSpaceCollapse::Preserve,
@@ -920,6 +943,44 @@ fn preserved_tabs_keep_sibling_measures_linear() {
     }
 }
 
+/// shodo-tj5: tab steps that saturate (`tab-size: 1e12px`) no longer
+/// invalidate the cache when another start replaces the tab prefix, so the
+/// memo and the accumulator stay linear as with clean tabs (shodo-b7d left
+/// this shape quadratic).
+#[test]
+fn saturating_tabs_keep_measures_linear() {
+    let nested = |depth: usize, mode: Mode| {
+        let mut cx = mode_context(mode);
+        pre_nested_in(depth, "日\t日", &huge_pre_style()).break_all(
+            &mut cx,
+            &LineOptions::default(),
+            96.0,
+            &AtomicSizes::EMPTY,
+        );
+        (cx.ruby_container_measures, cx.ruby_ranges.epoch())
+    };
+    for mode in [Mode::Memo, Mode::Accumulate] {
+        let (all, growth) = doubling(|d| nested(d, mode).0, [16, 32, 64]);
+        assert!(
+            growth.iter().all(|g| *g <= 2.2),
+            "{mode:?}: {growth:?} {all:?}"
+        );
+        assert_eq!(nested(16, mode).1, nested(32, mode).1, "{mode:?}");
+    }
+    let siblings = |r: usize| {
+        let mut cx = mode_context(Mode::Accumulate);
+        pre_siblings_in(r, Some("\t"), "12", &huge_pre_style()).break_all(
+            &mut cx,
+            &LineOptions::default(),
+            96.0,
+            &AtomicSizes::EMPTY,
+        );
+        cx.ruby_container_measures
+    };
+    let (all, growth) = doubling(siblings, [16, 32, 64]);
+    assert!(growth.iter().all(|g| *g <= 2.2), "{growth:?} {all:?}");
+}
+
 /// Values, warnings and saturation of every tab fixture agree across the
 /// reference, memo, accumulator and step-oracle paths, in candidates and
 /// in layout (which covers intrinsic sizes).
@@ -933,6 +994,14 @@ fn tab_fixtures_match_reference() {
         Fixture::new(
             "effectful-tab-siblings",
             effectful_tab_siblings(&Limits::default()),
+        ),
+        Fixture::new(
+            "huge-pre-nested-tab",
+            pre_nested_in(12, "日\t日", &huge_pre_style()),
+        ),
+        Fixture::new(
+            "huge-pre-siblings-lead-tab",
+            pre_siblings_in(12, Some("\t"), "12", &huge_pre_style()),
         ),
     ];
     let pre = PreState {
@@ -961,11 +1030,11 @@ fn tab_fixtures_match_reference() {
     }
 }
 
-/// Review focus 3 of shodo-2j6, under shodo-b7d: replacing a prefix whose
-/// tab steps saturated moves the cache epoch; the step stops replaying and
-/// the accumulator resets.
+/// Review focus 3 of shodo-2j6, under shodo-tj5: replacing a prefix whose
+/// tab steps saturated no longer moves the cache epoch (every query charges
+/// its own tab steps), so the accumulator keeps replaying.
 #[test]
-fn effectful_tab_prefix_replacement_stops_replay() {
+fn effectful_tab_prefix_replacement_keeps_replay() {
     let fixture = Fixture::new(
         "effectful-tab-siblings",
         effectful_tab_siblings(&Limits::default()),
@@ -987,9 +1056,8 @@ fn effectful_tab_prefix_replacement_stops_replay() {
         pre,
     );
     assert_eq!(observed, reference);
-    assert!(counters.resets > 0, "{counters:?}");
-    // The epoch moves past its post-begin value because the saturating tab
-    // prefix was replaced.
+    assert_eq!(counters.resets, 0, "{counters:?}");
+    assert!(counters.replayed > 0, "{counters:?}");
     let mut cx = mode_context(Mode::Accumulate);
     cx.ruby_ranges
         .begin(&fixture.paragraph.data, &AtomicSizes::EMPTY);
@@ -997,9 +1065,10 @@ fn effectful_tab_prefix_replacement_stops_replay() {
     let containers = &fixture.paragraph.data.ruby.containers;
     let starts = [0, containers[1].units.start, containers[2].units.start];
     sweep_in(&fixture.paragraph, &starts, &mut cx);
-    assert!(
-        cx.ruby_ranges.epoch() > epoch,
-        "the replacement must move the epoch"
+    assert_eq!(
+        cx.ruby_ranges.epoch(),
+        epoch,
+        "the replacement keeps the epoch"
     );
     assert_eq!(
         observe_layout_in(&fixture, Mode::Accumulate),
@@ -1202,10 +1271,10 @@ fn saturating_replayed_runs_add_one_value_at_a_time() {
     assert!(cx.ruby_sequential_replays > 0, "{:?}", observed.4);
 }
 
-/// Tab prefixes replaced for alternating starts: with saturating tab steps
-/// the cache epoch moves inside and between steps (past its post-begin
-/// value); every surviving accumulator holds entries of the current epoch
-/// only, and the values match the reference.
+/// Tab prefixes replaced for alternating starts with saturating tab steps:
+/// the cache epoch stays at its post-begin value, every surviving
+/// accumulator holds entries of that epoch, and the values match the
+/// reference.
 #[test]
 fn alternating_tab_starts_keep_entries_of_the_current_epoch() {
     let p = effectful_tab_siblings(&Limits::default());
@@ -1224,9 +1293,10 @@ fn alternating_tab_starts_keep_entries_of_the_current_epoch() {
             (&reference.0, reference.1, reference.2, &reference.3),
             "{mode:?}"
         );
-        assert!(
-            cx.ruby_ranges.epoch() > epoch,
-            "{mode:?}: the starts must replace the saturating tab prefix"
+        assert_eq!(
+            cx.ruby_ranges.epoch(),
+            epoch,
+            "{mode:?}: replacing a saturating tab prefix keeps the epoch"
         );
         // Every surviving accumulator was recorded under the current epoch.
         for key in cx.ruby_memo.accumulator_keys().into_iter().flatten() {
@@ -1296,11 +1366,15 @@ fn epoch_moved_between_steps_resets_on_take() {
         cx.begin_reshape_operation();
         let mut sat = Saturation::default();
         let mut values = Vec::new();
-        // The first ask fills the caches (its entries are not stored), the
-        // second records entries against warm caches, the third may replay.
+        let mut replayed_before_last = 0;
+        // The first ask fills the caches and records entries, the second
+        // replays them, the third replays unless the epoch moved.
         for i in 0..3 {
-            if i == 2 && invalidate {
-                cx.ruby_ranges.vacate_slots();
+            if i == 2 {
+                replayed_before_last = cx.ruby_replayed_containers;
+                if invalidate {
+                    cx.ruby_ranges.vacate_slots();
+                }
             }
             // An exact probe (`through == end`) is not memoized: every ask
             // reaches the accumulator with the same `through`.
@@ -1320,17 +1394,18 @@ fn epoch_moved_between_steps_resets_on_take() {
             cx.take_warnings(),
             std::mem::take(&mut cx.ruby_oracle_misses),
         );
-        (observed, counters(&cx))
+        let last = cx.ruby_replayed_containers - replayed_before_last;
+        (observed, (counters(&cx), last))
     };
     for invalidate in [false, true] {
         let (reference, _) = run(Mode::Reference, invalidate);
         for mode in [Mode::Accumulate, Mode::Verify] {
-            let (observed, counters) = run(mode, invalidate);
+            let (observed, (counters, last)) = run(mode, invalidate);
             assert_eq!(observed, reference, "{mode:?} {invalidate}");
             if mode == Mode::Accumulate {
                 // Without the invalidation the third ask replays everything
                 // but its top position; with it, nothing replays.
-                assert_eq!(counters.replayed > 0, !invalidate, "{counters:?}");
+                assert_eq!(last > 0, !invalidate, "{counters:?} {last}");
             }
         }
     }
@@ -2310,39 +2385,61 @@ fn accumulator_memory_is_bounded_and_released_per_operation() {
     }
 }
 
-/// Carried (review of Task 6): the fills gate observed directly. A step
-/// whose measurements fill the range caches stores no entry (every position
-/// stays unstored); the same step again, against warm caches, stores all.
+/// shodo-tj5: range cache queries charge the same cold or warm, so a step
+/// whose measurements fill the caches stores its entries, and the same step
+/// again replays them with the same effects as the reference.
 #[test]
-fn entries_recorded_while_caches_fill_are_unstored() {
+fn entries_recorded_while_caches_fill_are_stored() {
     let p = digit_siblings(8);
     let data = &p.data;
     let n = data.units.len();
     let key = crate::ruby::accumulate::AccumulatorKey::new(data, &AtomicSizes::EMPTY, 0);
-    let mut cx = mode_context(Mode::Accumulate);
-    cx.begin_reshape_operation();
-    let mut sat = Saturation::default();
-    let mut ask = |cx: &mut LayoutContext| {
-        let fills = cx.ruby_ranges.fills();
+    let ask = |cx: &mut LayoutContext| {
+        let mut sat = Saturation::default();
+        let before = cx.edge_reshape_spent;
         // An exact probe (`through == end`) is not memoized: every ask
         // reaches the accumulator.
-        crate::ruby::measure::candidate_adjustment(data, 0, n, &AtomicSizes::EMPTY, cx, &mut sat);
+        let value = crate::ruby::measure::candidate_adjustment(
+            data,
+            0,
+            n,
+            &AtomicSizes::EMPTY,
+            cx,
+            &mut sat,
+        );
         let acc = cx.ruby_memo.accumulator(key).unwrap();
         (
-            cx.ruby_ranges.fills() != fills,
+            (value, sat, cx.edge_reshape_spent - before),
             acc.len(),
             acc.unstored.len(),
         )
     };
-    let (filled, len, unstored) = ask(&mut cx);
-    assert!(filled && len == 8, "{filled} {len}");
-    assert_eq!(unstored, len, "entries recorded while filling are unstored");
-    let (filled, len, unstored) = ask(&mut cx);
-    assert!(!filled && len == 8, "{filled} {len}");
-    assert_eq!(
-        unstored, 0,
-        "entries recorded against warm caches are stored"
+    let mut cx = mode_context(Mode::Accumulate);
+    cx.begin_reshape_operation();
+    let (cold, len, unstored) = ask(&mut cx);
+    assert_eq!((len, unstored), (8, 0), "entries recorded while filling");
+    let replayed = cx.ruby_replayed_containers;
+    let (warm, _, _) = ask(&mut cx);
+    assert!(
+        cx.ruby_replayed_containers > replayed,
+        "the warm ask replays"
     );
+    assert_eq!(warm, cold);
+    let mut reference = mode_context(Mode::Reference);
+    reference.begin_reshape_operation();
+    let (first, _, _) = {
+        let mut sat = Saturation::default();
+        let value = crate::ruby::measure::candidate_adjustment(
+            data,
+            0,
+            n,
+            &AtomicSizes::EMPTY,
+            &mut reference,
+            &mut sat,
+        );
+        ((value, sat, reference.edge_reshape_spent), 0, 0)
+    };
+    assert_eq!(first, cold);
 }
 
 /// Descendant reads of one unbreakable line of outer-base siblings.
@@ -2486,11 +2583,17 @@ fn j6_operation_counts_report() {
 #[ignore = "report for the shodo-b7d record"]
 fn b7d_operation_counts_report() {
     type Shape = (&'static str, fn(usize) -> Paragraph);
-    let shapes: [Shape; 4] = [
+    let shapes: [Shape; 6] = [
         ("nested", |r| pre_nested(r, "日")),
         ("nestedtab", |r| pre_nested(r, "日\t日")),
         ("siblings", |r| pre_siblings(r, None, "12")),
         ("siblingstab", |r| pre_siblings(r, Some("\t"), "12")),
+        ("nestedhugetab", |r| {
+            pre_nested_in(r, "日\t日", &huge_pre_style())
+        }),
+        ("siblingshugetab", |r| {
+            pre_siblings_in(r, Some("\t"), "12", &huge_pre_style())
+        }),
     ];
     for (shape, build) in shapes {
         for mode in [Mode::Reference, Mode::Memo, Mode::Accumulate] {
@@ -2503,13 +2606,12 @@ fn b7d_operation_counts_report() {
                 p.break_all(&mut cx, &LineOptions::default(), 96.0, &AtomicSizes::EMPTY);
                 let c = counters(&cx);
                 println!(
-                    "{{\"shape\":\"{shape}\",\"mode\":\"{mode:?}\",\"r\":{r},\"container_measures\":{},\"replayed\":{},\"hits\":{},\"width_calls\":{},\"epoch\":{},\"fills\":{}}}",
+                    "{{\"shape\":\"{shape}\",\"mode\":\"{mode:?}\",\"r\":{r},\"container_measures\":{},\"replayed\":{},\"hits\":{},\"width_calls\":{},\"epoch\":{}}}",
                     c.measures,
                     c.replayed,
                     c.hits,
                     cx.ruby_width_calls,
-                    cx.ruby_ranges.epoch(),
-                    cx.ruby_ranges.fills()
+                    cx.ruby_ranges.epoch()
                 );
             }
         }

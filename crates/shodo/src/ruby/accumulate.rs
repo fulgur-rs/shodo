@@ -136,10 +136,12 @@
 //!
 //! # Cache state
 //!
-//! An entry is stored only when its recording moved neither
-//! `RangeCache::fills` nor `RangeCache::epoch`: every cache query it made was
-//! a hit, and stays one until the epoch moves. An accumulator is reset when
-//! the epoch differs from the one its entries were recorded under.
+//! Every `RangeCache` query charges what a cold query of the same range
+//! would (`line::range`), so an entry recorded while the caches filled
+//! replays exactly. As a conservative guard, an entry is stored only when
+//! its recording did not move `RangeCache::epoch` (caches cleared), and an
+//! accumulator is reset when the epoch differs from the one its entries
+//! were recorded under.
 //!
 //! # Speculative index rollback
 //!
@@ -1108,7 +1110,7 @@ impl Step<'_> {
     ) {
         let container = self.containers[pos];
         let full_end = self.data.ruby.containers[container].units.end;
-        let (fills, epoch) = (cx.ruby_ranges.fills(), cx.ruby_ranges.epoch());
+        let epoch = cx.ruby_ranges.epoch();
         self.profile
             .begin_container(crate::line::replay::depth(cx).checked_sub(1));
         let recording = crate::line::replay::begin(cx, sat);
@@ -1139,12 +1141,11 @@ impl Step<'_> {
             self.replays = false;
         }
         let note = self.profile.note();
-        // Stored only if every cache query was a hit (no fill, no
-        // invalidation), so measuring again under the same epoch repeats
-        // exactly these effects.
+        // Range cache queries charge the same cold or warm, so measuring
+        // again under the same epoch repeats exactly these effects.
         // A side read twice with different neighbours has no single key in
         // the D3 index: such an entry is not stored (always measured live).
-        let storable = self.replays && cx.ruby_ranges.fills() == fills && !note.mixed;
+        let storable = self.replays && !note.mixed;
         let own = effects
             .filter(|_| storable)
             .map(|e| e.without_sat(note.sat));

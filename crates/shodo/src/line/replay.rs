@@ -138,6 +138,13 @@ impl Effects {
         self.sat
     }
 
+    /// No charges and no saturation, recorded with an unsuppressed sink:
+    /// replaying is a no-op that any measurement state allows. (A recording
+    /// under a suppressed sink may have dropped a warning, so it never is.)
+    pub(crate) fn is_empty(&self) -> bool {
+        self.charges == Charges::default() && self.sat.is_clean() && !self.suppressed
+    }
+
     /// These effects without `sat` (a part recorded elsewhere).
     pub(crate) fn without_sat(self, sat: Saturation) -> Self {
         Self {
