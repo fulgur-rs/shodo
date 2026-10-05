@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.13](https://github.com/fulgur-rs/shodo/compare/v0.0.12...v0.0.13) - 2026-10-05
+
+### Fixed
+
+- guard proportional quote cluster classification
+- classify proportional closing quotes for pairing
+
 ## [0.0.12](https://github.com/fulgur-rs/shodo/compare/v0.0.11...v0.0.12) - 2026-10-04
 
 ### Added
