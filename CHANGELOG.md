@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.15](https://github.com/fulgur-rs/shodo/compare/v0.0.14...v0.0.15) - 2026-10-05
+
+### Added
+
+- apply hanging-punctuation per inline box
+
+### Fixed
+
+- keep ruby annotation lanes free of per-run hanging
+- keep ruby measurement free of per-run hanging
+- keep run-byte splits before authored bidi controls
+- flag grapheme starts after transparent gaps
+
+### Other
+
+- cover per-run allow_end and root and first-line hanging
+- document hanging-punctuation flags
+- pin the bidi control flag after projected content
+- cover a mixed tab prefix and make the golden update fail loudly
+- run the alternating tab starts check under tab-driven invalidation
+- pin linear ruby measurement and exact replay with preserved tabs
+- move the range cache generation only on tab steps with saturation
+- record tab range widths and saturation before shodo-b7d
+
 ## [0.0.14](https://github.com/fulgur-rs/shodo/compare/v0.0.13...v0.0.14) - 2026-10-05
 
 ### Fixed
