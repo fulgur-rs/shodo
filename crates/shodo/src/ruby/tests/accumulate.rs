@@ -1639,3 +1639,42 @@ fn profile_rule_covers_grouped_neighbour_units() {
         fixture.name
     );
 }
+
+#[test]
+fn outer_base_siblings_match_reference() {
+    let fixture = Fixture::new("outer-siblings", outer_siblings(6));
+    for pre in pre_states(&fixture.paragraph) {
+        let (reference, _) =
+            observe_candidates_in(&fixture.paragraph, &fixture.atomics, Mode::Reference, pre);
+        for mode in [Mode::Accumulate, Mode::Verify] {
+            let (observed, _) =
+                observe_candidates_in(&fixture.paragraph, &fixture.atomics, mode, pre);
+            assert_eq!(observed, reference, "{mode:?} {pre:?}");
+        }
+    }
+    assert_eq!(
+        observe_layout_in(&fixture, Mode::Verify),
+        observe_layout_in(&fixture, Mode::Reference)
+    );
+}
+
+/// The clipped outer ruby is measured at every step; its descendant reads
+/// are range queries, so all ruby work stays near linear.
+#[test]
+fn outer_base_siblings_grow_linearly() {
+    let (all, growth) = doubling(|r| outer_measures(r, Mode::Accumulate), [32, 64, 128]);
+    assert!(
+        growth.iter().all(|g| *g <= 2.6),
+        "measures {growth:?} {all:?}"
+    );
+    let visits = |r: usize| {
+        let mut cx = mode_context(Mode::Accumulate);
+        one_line(&outer_siblings(r), &mut cx);
+        cx.ruby_measure_visits
+    };
+    let (all, growth) = doubling(visits, [32, 64, 128]);
+    assert!(
+        growth.iter().all(|g| *g <= 2.6),
+        "visits {growth:?} {all:?}"
+    );
+}

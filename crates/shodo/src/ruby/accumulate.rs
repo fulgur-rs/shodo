@@ -1096,7 +1096,7 @@ impl Step<'_> {
             .begin_container(crate::line::replay::depth(cx).checked_sub(1));
         let recording = crate::line::replay::begin(cx, sat);
         let fragment = {
-            let completed = Scan {
+            let completed = Tree {
                 acc: &*acc,
                 data: self.data,
                 containers: self.containers,
@@ -1175,10 +1175,13 @@ impl Step<'_> {
     }
 }
 
-/// Completed descendants of a position: the later positions (all already
-/// measured or replayed in this step) whose clipped start lies in a range
-/// and whose clipped end does not pass it, in structural order.
-struct Scan<'a> {
+/// Completed descendants of a position, answered from the segment tree:
+/// the later positions (all already measured or replayed in this step)
+/// whose clipped start lies in a range and whose clipped end does not pass
+/// it, in structural order. Each read is one range query (counted as one
+/// test visit) whenever the tree reproduces the reference loop exactly;
+/// otherwise the reference loop runs (one visit per position).
+struct Tree<'a> {
     acc: &'a Accumulator,
     data: &'a ParagraphData,
     containers: &'a [usize],
@@ -1186,7 +1189,7 @@ struct Scan<'a> {
     from: usize,
 }
 
-impl Scan<'_> {
+impl Tree<'_> {
     /// Positions from `from` whose clipped start lies in `range`; clipped
     /// starts grow with the position (containers are sorted by start).
     fn span(&self, range: &Range<usize>) -> Range<usize> {
@@ -1198,17 +1201,18 @@ impl Scan<'_> {
         let last = later.partition_point(|c| clipped(c) < range.end);
         from + first..from + last
     }
-}
 
-impl Descendants for Scan<'_> {
-    fn add_adjustments(
+    /// The reference loop over `span`, used when the tree cannot prove that
+    /// every position passes the end filter or that no addition saturates.
+    fn add_each(
         &self,
+        span: Range<usize>,
         range: &Range<usize>,
         mut width: LayoutUnit,
         _cx: &mut LayoutContext,
         sat: &mut Saturation,
     ) -> LayoutUnit {
-        for pos in self.span(range) {
+        for pos in span {
             let entry = &self.acc.entries[pos];
             #[cfg(test)]
             {
@@ -1220,14 +1224,47 @@ impl Descendants for Scan<'_> {
         }
         width
     }
+}
 
-    fn union_areas(
+impl Descendants for Tree<'_> {
+    /// Exact from the tree when every present position of the span ends by
+    /// `range.end` (so `forward` is the reference's sequence) and no running
+    /// sum leaves `i32` (so `LayoutUnit::add` never saturates and the sum is
+    /// the plain total); otherwise the reference loop.
+    fn add_adjustments(
         &self,
         range: &Range<usize>,
-        mut area: Bounds,
+        width: LayoutUnit,
         _cx: &mut LayoutContext,
-    ) -> Bounds {
-        for pos in self.span(range) {
+        sat: &mut Saturation,
+    ) -> LayoutUnit {
+        let span = self.span(range);
+        let node = self.acc.query(span.clone());
+        #[cfg(test)]
+        {
+            _cx.ruby_measure_visits += 1;
+        }
+        if node.max_end <= range.end && node.forward.fits(width) {
+            return node.forward.total(width);
+        }
+        self.add_each(span, range, width, _cx, sat)
+    }
+
+    /// `Bounds::union` is a min/max, so the tree's union equals the
+    /// sequential one in any grouping once every present position passes
+    /// the end filter; otherwise the reference loop.
+    fn union_areas(&self, range: &Range<usize>, area: Bounds, _cx: &mut LayoutContext) -> Bounds {
+        let span = self.span(range);
+        let node = self.acc.query(span.clone());
+        #[cfg(test)]
+        {
+            _cx.ruby_measure_visits += 1;
+        }
+        if node.max_end <= range.end {
+            return node.area.map_or(area, |a| area.union(a));
+        }
+        let mut area = area;
+        for pos in span {
             let entry = &self.acc.entries[pos];
             #[cfg(test)]
             {
@@ -1241,10 +1278,13 @@ impl Descendants for Scan<'_> {
     }
 
     fn any_content(&self, range: &Range<usize>) -> bool {
-        self.span(range).any(|pos| {
-            let entry = &self.acc.entries[pos];
-            entry.present && entry.units.end <= range.end && entry.has_content
-        })
+        let span = self.span(range);
+        let node = self.acc.query(span.clone());
+        if node.max_end <= range.end {
+            return node.content;
+        }
+        span.map(|pos| &self.acc.entries[pos])
+            .any(|e| e.present && e.units.end <= range.end && e.has_content)
     }
 }
 
@@ -1504,5 +1544,123 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// `Tree` answers every read like the reference loop over the same
+    /// positions (sum, saturation count, area union, content), at one visit
+    /// when the tree proves the aggregate exact and one more per position
+    /// of the span when it falls back. Positions are filtered by brute force
+    /// here, independent of `Tree::span`.
+    #[test]
+    fn tree_reads_match_the_reference_loop() {
+        let p = crate::ruby::accumulate_tests::outer_siblings(12);
+        let data = &p.data;
+        let containers: Vec<usize> = (0..data.ruby.containers.len()).collect();
+        let mut seed = 0x6a09_e667_f3bc_c908;
+        let (mut fast, mut slow) = ([0usize; 3], [0usize; 3]);
+        // Fallbacks forced by saturation alone (every position passes).
+        let mut saturating = 0;
+        for round in 0..300 {
+            let start = if round % 2 == 0 {
+                0
+            } else {
+                (next(&mut seed) % 6) as usize
+            };
+            let clipped = |c: usize| data.ruby.containers[c].units.start.max(start);
+            let mut acc = Accumulator::default();
+            for &c in &containers {
+                let units = &data.ruby.containers[c].units;
+                let at = clipped(c);
+                let mut e = entry(&mut seed, at);
+                e.units.end = if next(&mut seed).is_multiple_of(3) {
+                    at + 1 + (next(&mut seed) as usize) % units.len()
+                } else {
+                    units.end.max(at + 1)
+                };
+                if round % 3 != 0 {
+                    e.adjustment = LayoutUnit::from_raw((next(&mut seed) % 2000) as i32 - 1000);
+                }
+                acc.push_raw(e);
+            }
+            let limit = acc.entries.iter().map(|e| e.units.end).max().unwrap_or(0) + 1;
+            for _ in 0..20 {
+                let from = (next(&mut seed) as usize) % (containers.len() + 1);
+                let a = (next(&mut seed) as usize) % limit;
+                let b = a + (next(&mut seed) as usize) % (limit - a + 1);
+                let range = a..b;
+                let tree = Tree {
+                    acc: &acc,
+                    data,
+                    containers: &containers,
+                    start,
+                    from,
+                };
+                let span: Vec<usize> = (from..acc.len())
+                    .filter(|&pos| range.contains(&clipped(containers[pos])))
+                    .collect();
+                let all_pass = span.iter().all(|&pos| {
+                    let e = &acc.entries[pos];
+                    !e.present || e.units.end <= range.end
+                });
+                let qualifying: Vec<&Entry> = span
+                    .iter()
+                    .map(|&pos| &acc.entries[pos])
+                    .filter(|e| e.present && e.units.end <= range.end)
+                    .collect();
+                let mut cx = crate::LayoutContext::new();
+
+                let width = value(&mut seed);
+                let mut expected_sat = Saturation::default();
+                let expected = qualifying
+                    .iter()
+                    .fold(width, |w, e| w.add(e.adjustment, &mut expected_sat));
+                let mut sat = Saturation::default();
+                let visits = cx.ruby_measure_visits;
+                let got = tree.add_adjustments(&range, width, &mut cx, &mut sat);
+                assert_eq!(got, expected, "{start} {from} {range:?}");
+                assert_eq!(sat.saturated, expected_sat.saturated, "{range:?}");
+                let exact = all_pass && expected_sat.saturated == 0;
+                let cost = if exact { 1 } else { 1 + span.len() };
+                assert_eq!(cx.ruby_measure_visits - visits, cost, "{range:?}");
+                if exact {
+                    fast[0] += 1
+                } else {
+                    slow[0] += 1
+                }
+                if all_pass && !exact {
+                    saturating += 1;
+                }
+
+                let area = Bounds {
+                    top: LayoutUnit::from_raw(-5),
+                    bottom: LayoutUnit::from_raw(5),
+                };
+                let expected = qualifying.iter().fold(area, |a, e| a.union(e.whole_area));
+                let visits = cx.ruby_measure_visits;
+                let got = tree.union_areas(&range, area, &mut cx);
+                assert_eq!(
+                    (got.top, got.bottom),
+                    (expected.top, expected.bottom),
+                    "{range:?}"
+                );
+                let cost = if all_pass { 1 } else { 1 + span.len() };
+                assert_eq!(cx.ruby_measure_visits - visits, cost, "{range:?}");
+                if all_pass {
+                    fast[1] += 1
+                } else {
+                    slow[1] += 1
+                }
+
+                let expected = qualifying.iter().any(|e| e.has_content);
+                assert_eq!(tree.any_content(&range), expected, "{range:?}");
+                if all_pass { fast[2] += 1 } else { slow[2] += 1 }
+            }
+        }
+        // Both paths of every read are exercised.
+        assert!(
+            fast.iter().chain(&slow).all(|n| *n > 50),
+            "fast {fast:?} slow {slow:?}"
+        );
+        assert!(saturating > 10, "{saturating}");
     }
 }
