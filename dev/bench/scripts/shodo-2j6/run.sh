@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Usage: BASE=<baseline sibling_scale binary> CAND=<candidate binary> OUT=<samples.jsonl> run.sh
-# Runs 12 ABBA rounds, then 12 BAAB rounds; needs jq. Takes about 1.5-2 hours
-# (the baseline's siblings 1600 sample alone is about 45 s).
+# Runs 12 ABBA rounds, then 12 BAAB rounds; needs jq. Takes about 30 minutes
+# (the baseline's siblings 1600 sample alone is about 7 s).
 : "${BASE:?path to the baseline sibling_scale binary}"
 : "${CAND:?path to the candidate sibling_scale binary}"
 : "${OUT:?output samples.jsonl path}"
