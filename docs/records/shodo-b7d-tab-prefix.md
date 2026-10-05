@@ -134,7 +134,8 @@ wall clock に依存しない指標として、ignored テスト `accumulate_tes
 ## 残る最悪形
 
 - 新しい start ごとに、range 内の tab の数に比例して `O(range 内の tab 数 · log n)` の処理が残る。D 個の異なる start と T 個の tab が range に入る形では、全体で `O(D · T · log n)` になる。tab が多い段落では、この項が支配的になりうる。この記録では計測していない。
-- tab の大きさが有効な値（effectful。飽和を出しうる tab-size）の場合は、従来どおり無効化が起きる。この記録の probe は `40px` の通常値で、この形は測っていない。
+- 飽和する tab の step が 1 つでもあれば、新しい start ごとの無効化が従来どおり残り、作業量は二乗に戻る。到達は容易で、CSS 値 1 つ（`tab-size: 1e12px`。sanitize は非負しか強制しない）、tab の位置が約 33.5M px を超えて `raw()` が飽和する場合、装飾（decoration）の飽和でも起きる。この record の probe は `40px` の通常値で、この形は測っていない。
+- sibling ruby は memo だけでは線形になったことがなく（291 / 1,091 / 4,227 / 16,643。tab なしで 3 を足した場合と同じ）、線形なのは accumulator だけである。
 - この 2 つの作業量の上限と fail-closed の扱いは shodo-mc0 に引き継ぐ。
 
 ## 再計測
