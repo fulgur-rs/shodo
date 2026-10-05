@@ -512,7 +512,9 @@ pub(super) fn cursive_siblings(limits: &Limits) -> Paragraph {
 }
 
 /// Preserved tabs between siblings: width queries for different starts
-/// replace the tab prefix (a `RangeCache` invalidation).
+/// replace the tab prefix. The steps stay clean, so the replacement does not
+/// invalidate the `RangeCache` (see `effectful_tab_siblings` for the one that
+/// does).
 pub(super) fn tab_siblings(limits: &Limits) -> Paragraph {
     let tab = InlineStyle {
         white_space_collapse: WhiteSpaceCollapse::Preserve,
@@ -781,11 +783,193 @@ fn suppression_flip_mid_scan_refuses_older_entries() {
     }
 }
 
-/// Review focus 3: a tab prefix replaced while a container is recorded moves
-/// the cache epoch; the step stops replaying and the accumulator resets.
+/// `white-space: pre` with a 40px tab size: tabs stay tabs.
+pub(super) fn pre_style() -> InlineStyle {
+    InlineStyle {
+        white_space_collapse: WhiteSpaceCollapse::Preserve,
+        tab_size: TabSize::Px(40.0),
+        ..style(24.0)
+    }
+}
+
+pub(super) fn pre_paragraph() -> ParagraphStyle {
+    ParagraphStyle {
+        root: pre_style(),
+        ..paragraph_style(false)
+    }
+}
+
+/// As `nested`, under `white-space: pre` throughout, so a tab in `text`
+/// is preserved (the shodo-d77 `nestedtab` probe used `normal`, which
+/// collapses the tab to a space).
+pub(super) fn pre_nested(depth: usize, text: &str) -> Paragraph {
+    let limits = Limits::default();
+    let mut content = base_text(30, text, &pre_style(), &limits);
+    for level in 1..depth {
+        let mut b = ParagraphBuilder::new(&pre_paragraph(), &limits);
+        b.push_ruby(
+            NodeId(100 + level as u64),
+            &pre_style(),
+            annotated(vec![content], &["に"], RubyOverhang::None, &limits),
+        );
+        content = RubyContent::from_builder(b);
+    }
+    let mut b = ParagraphBuilder::new(&pre_paragraph(), &limits);
+    b.push_ruby(
+        NodeId(100),
+        &pre_style(),
+        annotated(vec![content], &["に"], RubyOverhang::None, &limits),
+    );
+    finish(b)
+}
+
+/// `r` sibling rubies over `base` under `white-space: pre`, after an
+/// optional leading text.
+pub(super) fn pre_siblings(r: usize, lead: Option<&str>, base: &str) -> Paragraph {
+    let limits = Limits::default();
+    let mut b = ParagraphBuilder::new(&pre_paragraph(), &limits);
+    if let Some(text) = lead {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, text);
+    }
+    for i in 0..r as u64 {
+        b.push_ruby(
+            NodeId(1000 + i),
+            &pre_style(),
+            annotated(
+                vec![base_text(3000 + i, base, &pre_style(), &limits)],
+                &["日"],
+                RubyOverhang::None,
+                &limits,
+            ),
+        );
+    }
+    finish(b)
+}
+
+/// As `tab_siblings`, with a tab size whose conversion saturates: every tab
+/// step charges saturation, so replacing the prefix must invalidate.
+pub(super) fn effectful_tab_siblings(limits: &Limits) -> Paragraph {
+    let tab = InlineStyle {
+        white_space_collapse: WhiteSpaceCollapse::Preserve,
+        tab_size: TabSize::Px(1.0e12),
+        ..style(24.0)
+    };
+    row(
+        &ParagraphStyle {
+            root: tab.clone(),
+            ..paragraph_style(false)
+        },
+        4,
+        "日本",
+        "にほんご",
+        "\t",
+        RubyOverhang::None,
+        &tab,
+        limits,
+    )
+}
+
+/// shodo-b7d: one preserved tab no longer moves the cache epoch, so the
+/// memo and the accumulator keep their linear container work.
 #[test]
-fn tab_prefix_replacement_mid_step_stops_replay() {
-    let fixture = Fixture::new("tab-siblings", tab_siblings(&Limits::default()));
+fn preserved_tabs_keep_nested_measures_linear() {
+    let measure = |depth: usize, mode: Mode, text: &str| {
+        let mut cx = mode_context(mode);
+        pre_nested(depth, text).break_all(
+            &mut cx,
+            &LineOptions::default(),
+            96.0,
+            &AtomicSizes::EMPTY,
+        );
+        (cx.ruby_container_measures, cx.ruby_ranges.epoch())
+    };
+    for mode in [Mode::Memo, Mode::Accumulate] {
+        let (all, growth) = doubling(|d| measure(d, mode, "日\t日").0, [16, 32, 64]);
+        assert!(
+            growth.iter().all(|g| *g <= 2.2),
+            "{mode:?}: {growth:?} {all:?}"
+        );
+        for depth in [16, 32] {
+            assert_eq!(
+                measure(depth, mode, "日\t日").1,
+                measure(depth, mode, "日").1,
+                "{mode:?} {depth}: tabs must not move the epoch"
+            );
+        }
+    }
+}
+
+#[test]
+fn preserved_tabs_keep_sibling_measures_linear() {
+    for (lead, base) in [(Some("\t"), "12"), (None, "1\t2"), (Some("日\t"), "12")] {
+        let measure = |r: usize| {
+            let mut cx = mode_context(Mode::Accumulate);
+            pre_siblings(r, lead, base).break_all(
+                &mut cx,
+                &LineOptions::default(),
+                96.0,
+                &AtomicSizes::EMPTY,
+            );
+            cx.ruby_container_measures
+        };
+        let (all, growth) = doubling(measure, [16, 32, 64]);
+        assert!(
+            growth.iter().all(|g| *g <= 2.2),
+            "{lead:?} {base:?}: {growth:?} {all:?}"
+        );
+    }
+}
+
+/// Values, warnings and saturation of every tab fixture agree across the
+/// reference, memo, accumulator and step-oracle paths, in candidates and
+/// in layout (which covers intrinsic sizes).
+#[test]
+fn tab_fixtures_match_reference() {
+    let fixtures = [
+        Fixture::new("pre-nested-tab", pre_nested(12, "日\t日")),
+        Fixture::new("pre-siblings-lead-tab", pre_siblings(12, Some("\t"), "12")),
+        Fixture::new("pre-siblings-base-tab", pre_siblings(12, None, "1\t2")),
+        Fixture::new("tab-siblings", tab_siblings(&Limits::default())),
+        Fixture::new(
+            "effectful-tab-siblings",
+            effectful_tab_siblings(&Limits::default()),
+        ),
+    ];
+    let pre = PreState {
+        spent: 0,
+        suppressed: false,
+    };
+    for fixture in &fixtures {
+        let (reference, _) = observe_candidates_in(
+            &fixture.paragraph,
+            &AtomicSizes::EMPTY,
+            Mode::Reference,
+            pre,
+        );
+        let layout = observe_layout_in(fixture, Mode::Reference);
+        for mode in [Mode::Memo, Mode::Accumulate, Mode::Verify] {
+            let (observed, _) =
+                observe_candidates_in(&fixture.paragraph, &AtomicSizes::EMPTY, mode, pre);
+            assert_eq!(observed, reference, "{} {mode:?}", fixture.name);
+            assert_eq!(
+                observe_layout_in(fixture, mode),
+                layout,
+                "{} {mode:?}",
+                fixture.name
+            );
+        }
+    }
+}
+
+/// Review focus 3 of shodo-2j6, under shodo-b7d: replacing a prefix whose
+/// tab steps saturated moves the cache epoch; the step stops replaying and
+/// the accumulator resets.
+#[test]
+fn effectful_tab_prefix_replacement_stops_replay() {
+    let fixture = Fixture::new(
+        "effectful-tab-siblings",
+        effectful_tab_siblings(&Limits::default()),
+    );
     let pre = PreState {
         spent: 0,
         suppressed: false,
@@ -804,10 +988,49 @@ fn tab_prefix_replacement_mid_step_stops_replay() {
     );
     assert_eq!(observed, reference);
     assert!(counters.resets > 0, "{counters:?}");
+    // The epoch moves past its post-begin value because the saturating tab
+    // prefix was replaced.
+    let mut cx = mode_context(Mode::Accumulate);
+    cx.ruby_ranges
+        .begin(&fixture.paragraph.data, &AtomicSizes::EMPTY);
+    let epoch = cx.ruby_ranges.epoch();
+    let containers = &fixture.paragraph.data.ruby.containers;
+    let starts = [0, containers[1].units.start, containers[2].units.start];
+    sweep_in(&fixture.paragraph, &starts, &mut cx);
+    assert!(
+        cx.ruby_ranges.epoch() > epoch,
+        "the replacement must move the epoch"
+    );
     assert_eq!(
         observe_layout_in(&fixture, Mode::Accumulate),
         observe_layout_in(&fixture, Mode::Reference)
     );
+}
+
+/// A prefix replaced without saturation leaves the epoch alone: the
+/// accumulator keeps replaying.
+#[test]
+fn clean_tab_prefix_replacement_keeps_replay() {
+    let fixture = Fixture::new("tab-siblings", tab_siblings(&Limits::default()));
+    let pre = PreState {
+        spent: 0,
+        suppressed: false,
+    };
+    let (reference, _) = observe_candidates_in(
+        &fixture.paragraph,
+        &AtomicSizes::EMPTY,
+        Mode::Reference,
+        pre,
+    );
+    let (observed, counters) = observe_candidates_in(
+        &fixture.paragraph,
+        &AtomicSizes::EMPTY,
+        Mode::Accumulate,
+        pre,
+    );
+    assert_eq!(observed, reference);
+    assert_eq!(counters.resets, 0, "{counters:?}");
+    assert!(counters.replayed > 0, "{counters:?}");
 }
 
 /// Review focus 4: a replayed run whose running total would saturate is
@@ -979,17 +1202,21 @@ fn saturating_replayed_runs_add_one_value_at_a_time() {
     assert!(cx.ruby_sequential_replays > 0, "{:?}", observed.4);
 }
 
-/// Tab prefixes replaced for alternating starts move the cache epoch inside
-/// and between steps; every surviving accumulator holds entries of the
-/// current epoch only, and the values match the reference.
+/// Tab prefixes replaced for alternating starts: with saturating tab steps
+/// the cache epoch moves inside and between steps (past its post-begin
+/// value); every surviving accumulator holds entries of the current epoch
+/// only, and the values match the reference.
 #[test]
 fn alternating_tab_starts_keep_entries_of_the_current_epoch() {
-    let p = tab_siblings(&Limits::default());
+    let p = effectful_tab_siblings(&Limits::default());
     let containers = &p.data.ruby.containers;
     let starts = [0, containers[1].units.start, containers[2].units.start];
     let reference = sweep_from(&p, &starts, Mode::Reference);
     for mode in [Mode::Accumulate, Mode::Verify] {
         let mut cx = mode_context(mode);
+        // The first `begin` invalidates once for the new root; capture the
+        // epoch after it so only tab-driven moves are counted.
+        cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
         let epoch = cx.ruby_ranges.epoch();
         let observed = sweep_in(&p, &starts, &mut cx);
         assert_eq!(
@@ -998,8 +1225,8 @@ fn alternating_tab_starts_keep_entries_of_the_current_epoch() {
             "{mode:?}"
         );
         assert!(
-            cx.ruby_ranges.epoch() != epoch,
-            "the starts must replace the tab prefix"
+            cx.ruby_ranges.epoch() > epoch,
+            "{mode:?}: the starts must replace the saturating tab prefix"
         );
         // Every surviving accumulator was recorded under the current epoch.
         for key in cx.ruby_memo.accumulator_keys().into_iter().flatten() {
@@ -1009,6 +1236,28 @@ fn alternating_tab_starts_keep_entries_of_the_current_epoch() {
                 "{mode:?}"
             );
         }
+    }
+}
+
+/// Clean counterpart: the same alternating starts over 40px tabs replace the
+/// prefix without moving the epoch.
+#[test]
+fn alternating_clean_tab_starts_keep_the_epoch() {
+    let p = tab_siblings(&Limits::default());
+    let containers = &p.data.ruby.containers;
+    let starts = [0, containers[1].units.start, containers[2].units.start];
+    let reference = sweep_from(&p, &starts, Mode::Reference);
+    for mode in [Mode::Accumulate, Mode::Verify] {
+        let mut cx = mode_context(mode);
+        cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+        let epoch = cx.ruby_ranges.epoch();
+        let observed = sweep_in(&p, &starts, &mut cx);
+        assert_eq!(
+            (&observed.0, observed.1, observed.2, &observed.3),
+            (&reference.0, reference.1, reference.2, &reference.3),
+            "{mode:?}"
+        );
+        assert_eq!(cx.ruby_ranges.epoch(), epoch, "{mode:?}");
     }
 }
 
@@ -1752,6 +2001,7 @@ pub(super) fn sibling_fixtures() -> Vec<Fixture> {
             ),
         ),
         Fixture::new("tab-siblings", tab_siblings(&default)),
+        Fixture::new("effectful-tab-siblings", effectful_tab_siblings(&default)),
         Fixture::new("atomic-siblings", atomic_siblings(&limits(None, Some(2)))),
         Fixture::new(
             "first-line-siblings",
@@ -2226,6 +2476,40 @@ fn j6_operation_counts_report() {
                     cx.ruby_scalar_calls,
                     c.dirty,
                     c.resets
+                );
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = "report for the shodo-b7d record"]
+fn b7d_operation_counts_report() {
+    type Shape = (&'static str, fn(usize) -> Paragraph);
+    let shapes: [Shape; 4] = [
+        ("nested", |r| pre_nested(r, "日")),
+        ("nestedtab", |r| pre_nested(r, "日\t日")),
+        ("siblings", |r| pre_siblings(r, None, "12")),
+        ("siblingstab", |r| pre_siblings(r, Some("\t"), "12")),
+    ];
+    for (shape, build) in shapes {
+        for mode in [Mode::Reference, Mode::Memo, Mode::Accumulate] {
+            for r in [16, 32, 64, 128] {
+                if mode == Mode::Reference && r > 64 {
+                    continue;
+                }
+                let p = build(r);
+                let mut cx = mode_context(mode);
+                p.break_all(&mut cx, &LineOptions::default(), 96.0, &AtomicSizes::EMPTY);
+                let c = counters(&cx);
+                println!(
+                    "{{\"shape\":\"{shape}\",\"mode\":\"{mode:?}\",\"r\":{r},\"container_measures\":{},\"replayed\":{},\"hits\":{},\"width_calls\":{},\"epoch\":{},\"fills\":{}}}",
+                    c.measures,
+                    c.replayed,
+                    c.hits,
+                    cx.ruby_width_calls,
+                    cx.ruby_ranges.epoch(),
+                    cx.ruby_ranges.fills()
                 );
             }
         }

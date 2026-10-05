@@ -25,21 +25,23 @@ pub(crate) struct RangeCache {
     /// Bumped whenever a cache fills or clears in a way that changes the side
     /// effects of later queries: a `blocks` hit skips the reshape charges and
     /// saturation of measuring the block, a `sets` hit skips the build's
-    /// saturation, and a tab prefix extends with saturating arithmetic. The
-    /// metric and neighbor index slots are side-effect free and do not count.
+    /// saturation, and a covered tab step skips its saturation. Tab steps
+    /// whose saturation was clean change no effects and do not count, nor do
+    /// the metric and neighbor index slots.
     /// Per-operation reuse (`ruby::memo`) records and replays a measurement
     /// only while this is unchanged, so replayed effects always equal those of
     /// measuring again against the same cache state. Every bump is either a
     /// fill (`fills`) or an invalidation (`epoch`).
     generation: u64,
-    /// Monotone fills: a `blocks` or `sets` insertion, and a tab prefix
-    /// created or extended for its current start. A fill only turns later
+    /// Monotone fills: a `blocks` or `sets` insertion, and a tab step with
+    /// saturation computed for the current prefix. A fill only turns later
     /// misses into hits, so a measurement recorded while no fill and no
     /// invalidation happened stays exact until the next invalidation
     /// (`ruby::accumulate`).
     fills: u64,
     /// Invalidations: caches cleared (`begin` with a new root,
-    /// `vacate_slots`) or a tab prefix replaced for another start.
+    /// `vacate_slots`) or a tab prefix holding a step with saturation
+    /// replaced for another start.
     epoch: u64,
 }
 
@@ -166,11 +168,39 @@ struct Costs {
     tab_prefix: Option<TabPrefix>,
 }
 
+/// Extra advances of the tabs after one range start, grown as later ends
+/// are asked for. Only tab units are stored, so a new start costs work in
+/// the tabs it covers, not in every unit.
 #[derive(Debug)]
 struct TabPrefix {
     start: usize,
+    /// Every tab below `through` is covered.
     through: usize,
+    /// Index into `Costs::tabs` of the first tab at or after `start`.
+    first: usize,
+    /// `extra[k]`: the extra advance of the first `k + 1` covered tabs.
     extra: Vec<i64>,
+    /// Whether computing any covered tab step changed the saturation
+    /// counters: an OR of per-step flags, since the counters wrap.
+    effects: bool,
+}
+
+impl TabPrefix {
+    /// Extra advance of the covered tabs before unit `end` (`end <= through`).
+    fn before(&self, tabs: &[usize], end: usize) -> i64 {
+        let covered = &tabs[self.first..self.first + self.extra.len()];
+        match covered.partition_point(|t| *t < end) {
+            0 => 0,
+            k => self.extra[k - 1],
+        }
+    }
+}
+
+/// Add one tab step's saturation to the caller's counters. Counters only
+/// ever increment; wrapping matches release `+=` and `line::replay`.
+fn absorb(sat: &mut Saturation, step: Saturation) {
+    sat.saturated = sat.saturated.wrapping_add(step.saturated);
+    sat.non_finite = sat.non_finite.wrapping_add(step.non_finite);
 }
 
 fn build(
@@ -341,23 +371,24 @@ pub(super) fn width(
         cx.ruby_ranges.sets.insert(key, costs);
         cx.ruby_ranges.fill();
     }
-    // A prefix for another start is replaced (an invalidation); a missing
-    // prefix is created and a short one extended (fills).
-    let tab_change = cx.ruby_ranges.sets.get(&key).and_then(|costs| {
-        if costs.tabs.is_empty() {
-            return None;
-        }
-        match &costs.tab_prefix {
-            Some(p) if p.start != range.start => Some(true),
-            Some(p) if p.through >= range.end => None,
-            _ => Some(false),
-        }
+    // Each tab step's value and saturation depend only on the paragraph,
+    // the range start and the tab (`clipped_delta` is the same for every
+    // end past the tab: a preserved tab is its own item, so no shared
+    // cluster slice lies after it). A step charges the caller's `sat` only
+    // when it is computed, as before. Discarding or computing a step whose
+    // saturation was clean therefore changes no later query's effects and
+    // moves no generation; an effectful step keeps the old rule: computing
+    // it fills, discarding it for another start invalidates.
+    let discards_effects = cx.ruby_ranges.sets.get(&key).is_some_and(|costs| {
+        costs
+            .tab_prefix
+            .as_ref()
+            .is_some_and(|p| p.start != range.start && p.effects)
     });
-    match tab_change {
-        Some(true) => cx.ruby_ranges.invalidate(),
-        Some(false) => cx.ruby_ranges.fill(),
-        None => {}
+    if discards_effects {
+        cx.ruby_ranges.invalidate();
     }
+    let mut computed_effects = false;
     let costs = cx.ruby_ranges.sets.get_mut(&key)?;
     let mut tab_total = 0_i64;
     if !costs.tabs.is_empty() {
@@ -369,37 +400,62 @@ pub(super) fn width(
             costs.tab_prefix = Some(TabPrefix {
                 start: range.start,
                 through: range.start,
-                extra: vec![0],
+                first: costs.tabs.partition_point(|t| *t < range.start),
+                extra: Vec::new(),
+                effects: false,
             });
         }
         let prefix = costs.tab_prefix.as_mut().unwrap();
-        for i in prefix.through..range.end {
-            #[cfg(test)]
-            {
-                cx.ruby_measure_visits += 1;
+        if prefix.through < range.end {
+            // The start's decoration is the same for every step: measure it
+            // once and charge its saturation per step, as calling it per
+            // step did.
+            let mut decoration: Option<(LayoutUnit, Saturation)> = None;
+            let from = prefix.first + prefix.extra.len();
+            let to = costs.tabs.partition_point(|t| *t < range.end);
+            for &i in &costs.tabs[from..to] {
+                #[cfg(test)]
+                {
+                    cx.ruby_measure_visits += 1;
+                }
+                let previous = prefix.extra.last().copied().unwrap_or(0);
+                let mut step = Saturation::default();
+                let (start_decoration, decoration_sat) = *decoration.get_or_insert_with(|| {
+                    let mut s = Saturation::default();
+                    let w = super::decoration::width(data, range.start, true, &mut s);
+                    (w, s)
+                });
+                let pos = raw(
+                    costs.advances[i] - costs.advances[range.start] + previous,
+                    &mut step,
+                )
+                .add(clipped_delta, &mut step)
+                .add(start_decoration, &mut step)
+                .add(
+                    costs
+                        .spacing
+                        .query(range.start..i, Some(data))
+                        .width(&mut step),
+                    &mut step,
+                );
+                absorb(&mut step, decoration_sat);
+                let extra =
+                    i64::from(super::scan::tab_width(data, &data.units[i], pos, &mut step).raw());
+                prefix.extra.push(previous + extra);
+                if !step.is_clean() {
+                    prefix.effects = true;
+                    computed_effects = true;
+                }
+                absorb(sat, step);
             }
-            let previous = *prefix.extra.last().unwrap();
-            let extra =
-                if matches!(data.units[i].kind, UnitKind::Tab) && data.units[i].combine.is_none() {
-                    let pos = raw(
-                        costs.advances[i] - costs.advances[range.start] + previous,
-                        sat,
-                    )
-                    .add(clipped_delta, sat)
-                    .add(super::decoration::width(data, range.start, true, sat), sat)
-                    .add(
-                        costs.spacing.query(range.start..i, Some(data)).width(sat),
-                        sat,
-                    );
-                    i64::from(super::scan::tab_width(data, &data.units[i], pos, sat).raw())
-                } else {
-                    0
-                };
-            prefix.extra.push(previous + extra);
+            prefix.through = range.end;
         }
-        prefix.through = prefix.through.max(range.end);
-        tab_total = prefix.extra[range.end - range.start];
+        tab_total = prefix.before(&costs.tabs, range.end);
     }
+    if computed_effects {
+        cx.ruby_ranges.fill();
+    }
+    let costs = cx.ruby_ranges.sets.get(&key)?;
     let mut stop = range
         .start
         .max(costs.last_content[range.end])
@@ -419,7 +475,7 @@ pub(super) fn width(
         .as_ref()
         .filter(|p| p.start == range.start)
         .map_or(0, |p| {
-            p.extra[range.end - range.start] - p.extra[hang - range.start]
+            p.before(&costs.tabs, range.end) - p.before(&costs.tabs, hang)
         });
     let trailing = costs.hanging_advances[range.end] - costs.hanging_advances[hang] + trailing_tabs;
     let natural = raw(
@@ -489,7 +545,6 @@ pub(super) fn width(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ParagraphBuilder;
     use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
     use crate::limits::Limits;
     use crate::node::{InlineEdges, NodeId, Sides, TextSource};
@@ -497,6 +552,7 @@ mod tests {
         BoxDecorationBreak, FontFamily, InlineStyle, ParagraphStyle, UnicodeBidi,
         WhiteSpaceCollapse,
     };
+    use crate::{Paragraph, ParagraphBuilder};
 
     fn fonts() -> FontCollection {
         let fonts = FontCollection::with_options(
@@ -937,18 +993,18 @@ mod tests {
         };
         cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
         let (g, f, e) = state(&cx);
-        // Building the costs and creating the tab prefix: two fills.
+        // Building the costs fills; zero-effect tab steps do not.
         query(&mut cx, 0..2);
-        assert_eq!(state(&cx), (g + 2, f + 2, e));
-        // Extending the same start's prefix fills.
+        assert_eq!(state(&cx), (g + 1, f + 1, e));
+        // Extending the same start's prefix without effects changes nothing.
         query(&mut cx, 0..n);
-        assert_eq!(state(&cx), (g + 3, f + 3, e));
+        assert_eq!(state(&cx), (g + 1, f + 1, e));
         // A covered range changes nothing.
         query(&mut cx, 0..3);
-        assert_eq!(state(&cx), (g + 3, f + 3, e));
-        // Another start replaces the prefix: an invalidation.
+        assert_eq!(state(&cx), (g + 1, f + 1, e));
+        // Replacing a prefix without effects changes nothing.
         query(&mut cx, 1..n);
-        assert_eq!(state(&cx), (g + 4, f + 3, e + 1));
+        assert_eq!(state(&cx), (g + 1, f + 1, e));
         // A block measurement fills.
         block_size(
             &p.data,
@@ -958,14 +1014,270 @@ mod tests {
             &mut cx,
             &mut Saturation::default(),
         );
-        assert_eq!(state(&cx), (g + 5, f + 4, e + 1));
+        assert_eq!(state(&cx), (g + 2, f + 2, e));
         // A new atomic revision clears every cache.
         let mut atomics = AtomicSizes::new();
         atomics.insert(NodeId(9), crate::AtomicSize::default());
         cx.ruby_ranges.begin(&p.data, &atomics);
-        assert_eq!(state(&cx), (g + 6, f + 4, e + 2));
+        assert_eq!(state(&cx), (g + 3, f + 2, e + 1));
         // Vacating the slots invalidates.
         cx.ruby_ranges.vacate_slots();
-        assert_eq!(state(&cx), (g + 7, f + 4, e + 3));
+        assert_eq!(state(&cx), (g + 4, f + 2, e + 2));
+    }
+
+    /// Tab steps that saturate keep the old rule: computing one fills,
+    /// discarding a prefix that holds one invalidates.
+    #[test]
+    fn effectful_tab_steps_fill_and_their_discard_invalidates() {
+        let root = InlineStyle {
+            font_families: vec![FontFamily::Named("Shodo Fixture CJK".into())],
+            font_size: 24.0,
+            white_space_collapse: WhiteSpaceCollapse::Preserve,
+            tab_size: crate::style::TabSize::Px(1.0e12),
+            ..Default::default()
+        };
+        let mut b = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: root.clone(),
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "日\t本\t語");
+        let mut cx = LayoutContext::new();
+        let p = b.build(&mut cx, &fonts()).unwrap();
+        let n = p.data.units.len();
+        let state = |cx: &LayoutContext| (cx.ruby_ranges.fills(), cx.ruby_ranges.epoch());
+        let query = |cx: &mut LayoutContext, range: Range<usize>| {
+            let mut sat = Saturation::default();
+            width(&p.data, range, &AtomicSizes::EMPTY, cx, &mut sat).unwrap();
+            sat
+        };
+        cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+        let (f, e) = state(&cx);
+        // Costs build fills once; the saturating first tab fills again.
+        assert!(!query(&mut cx, 0..2).is_clean());
+        assert_eq!(state(&cx), (f + 2, e));
+        // A covered range neither charges nor fills.
+        assert!(query(&mut cx, 0..2).is_clean());
+        assert_eq!(state(&cx), (f + 2, e));
+        // Another start discards the effectful prefix: an invalidation, and
+        // its own saturating steps fill.
+        assert!(!query(&mut cx, 1..n).is_clean());
+        assert_eq!(state(&cx), (f + 3, e + 1));
+    }
+
+    /// A prefix whose early tab steps are clean and a later one saturates:
+    /// the clean extension moves nothing, the saturating extension fills,
+    /// and the latched `effects` flag makes the next start invalidate.
+    #[test]
+    fn mixed_tab_prefix_latches_effects_when_a_later_step_saturates() {
+        let clean = InlineStyle {
+            font_families: vec![FontFamily::Named("Shodo Fixture CJK".into())],
+            font_size: 24.0,
+            white_space_collapse: WhiteSpaceCollapse::Preserve,
+            tab_size: crate::style::TabSize::Px(40.0),
+            ..Default::default()
+        };
+        let huge = InlineStyle {
+            tab_size: crate::style::TabSize::Px(1.0e12),
+            ..clean.clone()
+        };
+        let mut b = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: clean.clone(),
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "日\t本");
+        b.open_inline(NodeId(2), &huge, InlineEdges::default());
+        b.push_text(TextSource::Generated { node: NodeId(3) }, "\t語");
+        b.close_inline();
+        let mut cx = LayoutContext::new();
+        let p = b.build(&mut cx, &fonts()).unwrap();
+        let tabs: Vec<usize> = p
+            .data
+            .units
+            .iter()
+            .enumerate()
+            .filter(|(_, u)| matches!(u.kind, UnitKind::Tab))
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(tabs.len(), 2, "{tabs:?}");
+        let (first, second) = (tabs[0], tabs[1]);
+        let n = p.data.units.len();
+        let state = |cx: &LayoutContext| (cx.ruby_ranges.fills(), cx.ruby_ranges.epoch());
+        let query = |cx: &mut LayoutContext, range: Range<usize>| {
+            let mut sat = Saturation::default();
+            width(&p.data, range, &AtomicSizes::EMPTY, cx, &mut sat).unwrap();
+            sat
+        };
+        cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+        let (f, e) = state(&cx);
+        // Building the costs fills once; the clean first tab adds nothing.
+        assert!(query(&mut cx, 0..first + 1).is_clean());
+        assert_eq!(state(&cx), (f + 1, e));
+        // A clean extension of the same start moves nothing.
+        assert!(query(&mut cx, 0..second).is_clean());
+        assert_eq!(state(&cx), (f + 1, e));
+        // The extension whose new step saturates fills.
+        assert!(!query(&mut cx, 0..n).is_clean());
+        assert_eq!(state(&cx), (f + 2, e));
+        // Covered again: no step is computed, so nothing moves (the total
+        // itself may still saturate the width).
+        query(&mut cx, 0..n);
+        assert_eq!(state(&cx), (f + 2, e));
+        // Another start discards the prefix whose flag latched: invalidate,
+        // and its own saturating step fills.
+        assert!(!query(&mut cx, 1..n).is_clean());
+        assert_eq!(state(&cx), (f + 3, e + 1));
+    }
+
+    /// One paragraph per golden fixture: preserved tabs under different
+    /// tab sizes, a ligature clipped by the range start, hanging trailing
+    /// tabs and a tab interval that saturates.
+    fn tab_golden_paragraphs() -> Vec<(&'static str, Paragraph)> {
+        let fonts = fonts();
+        fonts
+            .register_face(
+                crate::test_support::fonts::LATIN.to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: "Shodo Fixture Latin".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let style = |family: &str, tab_size: crate::style::TabSize| InlineStyle {
+            font_families: vec![FontFamily::Named(family.into())],
+            font_size: 24.0,
+            letter_spacing: 1.5,
+            white_space_collapse: WhiteSpaceCollapse::Preserve,
+            tab_size,
+            ..Default::default()
+        };
+        let build = |root: InlineStyle, texts: &[(u64, &str)]| {
+            let mut b = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    root: root.clone(),
+                    ..Default::default()
+                },
+                &Limits::default(),
+            );
+            for (node, text) in texts {
+                b.push_text(
+                    TextSource::Dom {
+                        node: NodeId(*node),
+                        offset: 40,
+                    },
+                    text,
+                );
+            }
+            b.build(&mut LayoutContext::new(), &fonts).unwrap()
+        };
+        use crate::style::TabSize;
+        vec![
+            (
+                "cjk",
+                build(
+                    style("Shodo Fixture CJK", TabSize::Px(40.0)),
+                    &[(1, "日\t本\t\t語\t \t")],
+                ),
+            ),
+            (
+                "spaces",
+                build(
+                    style("Shodo Fixture CJK", TabSize::Spaces(3.0)),
+                    &[(1, "日本\t語\t日")],
+                ),
+            ),
+            (
+                "ligature",
+                build(
+                    InlineStyle {
+                        font_size: 12.0,
+                        letter_spacing: 0.0,
+                        overflow_wrap: crate::style::OverflowWrap::Anywhere,
+                        ..style("Shodo Fixture Latin", TabSize::Px(40.0))
+                    },
+                    &[(1, "f"), (2, "f"), (3, "i"), (4, "\tWW\tW ")],
+                ),
+            ),
+            (
+                "huge",
+                build(
+                    style("Shodo Fixture CJK", TabSize::Px(1.0e12)),
+                    &[(1, "日\t本\t語\t")],
+                ),
+            ),
+        ]
+    }
+
+    /// Value and saturation of every query of a fixed history, one context
+    /// per fixture (see `tab_golden_paragraphs`).
+    fn tab_golden() -> String {
+        let mut out = String::new();
+        for (name, p) in tab_golden_paragraphs() {
+            if name == "ligature" {
+                assert!(p.data.units.iter().any(|u| {
+                    u.shared_cluster
+                        .as_ref()
+                        .is_some_and(|c| c.slices.len() == 3)
+                }));
+            }
+            let n = p.data.units.len();
+            let mut history = vec![0..2, 0..n, 0..3, 1..n, 0..n, 2..n, n - 2..n, 1..3, 0..n];
+            for start in 0..n {
+                for end in start + 1..=n {
+                    history.push(start..end);
+                }
+            }
+            for end in (1..=n).rev() {
+                history.push(0..end);
+            }
+            let mut cx = LayoutContext::new();
+            cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+            for range in history {
+                let mut sat = Saturation::default();
+                let value = width(
+                    &p.data,
+                    range.clone(),
+                    &AtomicSizes::EMPTY,
+                    &mut cx,
+                    &mut sat,
+                )
+                .map(|w| w.raw());
+                out.push_str(&format!(
+                    "{name} {range:?} {value:?} {} {}\n",
+                    sat.saturated, sat.non_finite
+                ));
+            }
+        }
+        out
+    }
+
+    /// Byte-identity with the previous tab prefix: the golden file was
+    /// captured on the code before shodo-b7d. Regenerate only on purpose
+    /// with `SHODO_UPDATE_GOLDEN=1`.
+    #[test]
+    fn tab_width_queries_match_the_golden_record() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/line/testdata/b7d_tab_golden.txt"
+        );
+        let got = tab_golden();
+        if std::env::var_os("SHODO_UPDATE_GOLDEN").is_some() {
+            std::fs::write(path, &got).unwrap();
+            panic!("golden updated; rerun without SHODO_UPDATE_GOLDEN");
+        }
+        let want = std::fs::read_to_string(path).expect("golden file");
+        assert_eq!(got, want);
+        // The record must exercise saturation, a clipped ligature and tabs.
+        assert!(
+            want.lines()
+                .any(|l| l.starts_with("huge ") && !l.ends_with(" 0 0")),
+            "the huge tab size must saturate"
+        );
     }
 }
