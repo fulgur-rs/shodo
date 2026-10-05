@@ -21,7 +21,7 @@
 - 過去の結果に書かれた旧 SHA は履歴の出所なので上書きしない。
 - 未計測の WPT 合格数は主張しない。
 - upstream のソースコメントは英語、追加 unit test は別の `tests.rs`。raikiri の `docs/superpowers/` は追跡しない。
-- shodo は現在の `target/worktrees/shodo-7ff`、raikiri は `/home/mitz/Work/oss/raikiri-spike/.worktrees/shodo-7ff` の作業ブランチを使う。保存済み S4 checkout を変更しない。
+- shodo は現在の `target/worktrees/shodo-7ff`、raikiri は `<raikiri-spike>/.worktrees/shodo-7ff` の作業ブランチを使う。保存済み S4 checkout を変更しない。
 
 ## Review Focus
 
@@ -129,7 +129,7 @@ assert_eq!(failed_row["counted_as_pass"], false);
 - [ ] WPT commit `97ea26e26a2aac3eec7e770650b25e7049ed4a4e` の `css/CSS2/selectors/first-line-001.xht` と `first-line-pseudo-021.xht` を正の対象として固定する。前者は body の color、後者は子の明示 `color:inherit`。それぞれ元の `rel=match` 参照も固定する。`css/css-pseudo/first-line-opacity-001.html` は未対応値、`css/CSS2/selectors/first-line-inherit-003.xht` は nested block の対象外を記録するケースにする。
 - [ ] テストを実行して記録検査の失敗を確認し、候補描画を実装する。DOM と CSS は元入力のまま、leaf IFC は同じ DOM ID で選ぶ。正の2例では native の通常 layout が返す block の位置/content 幅を共通の測定境界として使い、candidate の文字描画・geometry は shodo の実出力にする。全ページ WPT 合格と、共通 block 境界内の描画比較を混同しない。
 - [ ] native は同じ pin の raikiri-dom 通常 layout と raikiri-paint を使う。candidate は Task 3 の実 CSS caller を使う。双方とも元の bundled WPT font registry を system fonts 無効で使用し、800×600、screen media、同じ文字と resources を記録する。PNG、glyph/font/color/source と line geometry、pixel 差分、入力 SHA、エンジン SHA、lock/toolchain と exact argv を出力する。
-- [ ] `cargo test -p shodo-raikiri --example first_line_wpt` と `cargo run -p shodo-raikiri --example first_line_wpt -- /home/mitz/.cache/raikiri/wpt target/first-line-wpt` を実行する。入力/参照/フォントの pin と raw 結果を資料に保存し、native が対応しているかを結果で判定して必須/追加能力の分類を記録する。
+- [ ] `cargo test -p shodo-raikiri --example first_line_wpt` と `cargo run -p shodo-raikiri --example first_line_wpt -- ~/.cache/raikiri/wpt target/first-line-wpt` を実行する。入力/参照/フォントの pin と raw 結果を資料に保存し、native が対応しているかを結果で判定して必須/追加能力の分類を記録する。
 - [ ] 最終変更に対し CI 相当の workspace tests、accesskit tests、Rust 1.89.0 tests、Python tests、fmt/clippy/doc と wasm build を実行する。変更に影響された snapshot は差分の原因を確認する。新しい結果の記録と caller の説明をコミットする。
 - [ ] raikiri と shodo の変更をレビュー可能な draft PR として提出する。`shodo-7ff` に確定 SHA、検証結果、比較結果、対象範囲を記録し、受け入れ条件がすべて揃ったことを確認して完了処理する。
 

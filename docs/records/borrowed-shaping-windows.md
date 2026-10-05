@@ -58,6 +58,6 @@ sbp5の同じfont/input/harness/lock/toolchain/profile/CPU affinityをbaseline�
 
 baseは89ae7f955aaa7f8795bc246a7e3f3064a459ced3、実装commit37a5758。検証Rustは1.96.0、性能binaryはstable1.97.1。専用probeのexternal dependency versionはworkspace lockと一致する。固定font loaderはsystem discoveryを無効化し、original binaryはtest-only clone計測を追加した未変更production実装から作って保存した。
 
-[検証manifest](data/borrowed-shaping-windows.json)と[raw archive](data/borrowed-shaping-windows-raw.json.gz)に16条件と54 matrix、全時間samples、正確な警告・mapping列、旧・filtered probe source/manifest/lock、全binary SHA256、perf/fault・allocator反実仮想とisolated samples、実装source hash/patch、RED/GREEN・全検証ログを保存する。元成果物はtarget/performance-artifactsのsbp7-probe、sbp7-borrowed-windows、sbp7-snapshots。
+検証manifestとraw archiveに16条件と54 matrix、全時間samples、正確な警告・mapping列、旧・filtered probe source/manifest/lock、全binary SHA256、perf/fault・allocator反実仮想とisolated samples、実装source hash/patch、RED/GREEN・全検証ログを保存する。元成果物はtarget/performance-artifactsのsbp7-probe、sbp7-borrowed-windows、sbp7-snapshots。
 
 raikiri切り替えを止める性能依存は追加していない。保存済みS4 spikeへの変更はない。

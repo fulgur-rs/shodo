@@ -7,7 +7,7 @@ shodo main or merge the integration spike. WPT inputs are pinned to
 `97ea26e26a2aac3eec7e770650b25e7049ed4a4e`; the original ordered registry has
 88 bundled fonts. The comparison uses original HTML, CSS and resources.
 
-The [saved evidence](../../dev/raikiri/data/raikiri-measurements.json) includes both the whole-caller
+The saved evidence includes both the whole-caller
 and initial library collections. The library collection completed 1,446 of
 1,452 process attempts; its 723 successful memory records balance all measured
 owners across 71,052 allocation windows. Both modes have 97 eligible documents

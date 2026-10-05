@@ -81,7 +81,7 @@ The three cases also reduce `paint_spans` allocation counts. Net retained bytes
 and measured peak extra bytes are unchanged, as expected for temporary glyph
 vectors that are dropped before geometry construction returns.
 
-Raw JSONL captures: [before time](data/shodo-im9-4-paint-geometry-before-time.jsonl.gz),
-[after time](data/shodo-im9-4-paint-geometry-after-time.jsonl.gz),
-[before allocations](data/shodo-im9-4-paint-geometry-before-alloc.jsonl.gz),
-[after allocations](data/shodo-im9-4-paint-geometry-after-alloc.jsonl.gz).
+Raw JSONL captures: before time,
+after time,
+before allocations,
+after allocations.

@@ -99,7 +99,7 @@
     }
   },
   "raw_results_sha256": "c84bb55d5d248c01f38309abe5533c8956326ce34734b13aded1448c48982c22",
-  "raw_artifacts": "/home/mitz/Work/oss/shodo/target/performance-artifacts/full-profile-fixed",
+  "raw_artifacts": "target/performance-artifacts/full-profile-fixed",
   "scope": "One full quick release run with explicit release profile and Cargo build fingerprint; diagnostic evidence, no regression threshold or speedup claim. Raw samples and process outputs retained externally.",
   "rows": [
     {

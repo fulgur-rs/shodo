@@ -8,7 +8,7 @@ raikiri統合spikeはマージせず、`shodo-p2m.6` には着手しない。
 ## 前提と選択
 
 baseは `1aa7e5d4900382b7306d11fe91e52670a359f119`。独立worktreeは
-`/home/mitz/Work/oss/shodo/target/worktrees/shodo-vertical`、branchは `feat/vertical-layout`。
+`target/worktrees/shodo-vertical`、branchは `feat/vertical-layout`。
 変更前workspace584テストの成功記録は `target/vertical-artifacts/baseline-workspace-offline.log`。
 MSRVは1.89.0。production dependencyを追加しない。
 

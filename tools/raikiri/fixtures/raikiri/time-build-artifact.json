@@ -1,7 +1,7 @@
 {
   "reason": "compiler-artifact",
-  "package_id": "path+file:///home/mitz/Work/oss/shodo/target/8ei-artifacts/probe#shodo-raikiri-measurement@0.0.0",
-  "manifest_path": "/home/mitz/Work/oss/shodo/target/8ei-artifacts/probe/Cargo.toml",
+  "package_id": "path+file://<repo>/target/8ei-artifacts/probe#shodo-raikiri-measurement@0.0.0",
+  "manifest_path": "target/8ei-artifacts/probe/Cargo.toml",
   "target": {
     "kind": [
       "bin"
@@ -10,7 +10,7 @@
       "bin"
     ],
     "name": "measurement-probe",
-    "src_path": "/home/mitz/Work/oss/shodo/target/worktrees/shodo-8ei/dev/bench/raikiri_probe/main.rs",
+    "src_path": "target/worktrees/shodo-8ei/dev/bench/raikiri_probe/main.rs",
     "edition": "2024",
     "doc": true,
     "doctest": false,
@@ -25,8 +25,8 @@
   },
   "features": [],
   "filenames": [
-    "/home/mitz/Work/oss/shodo/target/first-line-contract/release/measurement-probe"
+    "target/first-line-contract/release/measurement-probe"
   ],
-  "executable": "/home/mitz/Work/oss/shodo/target/first-line-contract/release/measurement-probe",
+  "executable": "target/first-line-contract/release/measurement-probe",
   "fresh": false
 }

@@ -164,7 +164,7 @@ documents.
 
 ## Reproduction
 
-Data: [shodo-zb0-13-missing-font-scalars.tar.gz](data/shodo-zb0-13-missing-font-scalars.tar.gz).
+Data: shodo-zb0-13-missing-font-scalars.tar.gz.
 It contains the digest, alloc and time JSONL, callgrind totals (`cg.txt`,
 `cg.sh`), the latin-1024 `perf stat` runs and binary SHA-256s. Labels: base
 f82e873 (probe only), new 96c6784. Toolchain rustc 1.96.0, valgrind 3.25.1,

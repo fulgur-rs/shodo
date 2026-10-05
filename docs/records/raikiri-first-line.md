@@ -59,13 +59,13 @@ candidate は同じ DOM の first-line cascade を shodo へ渡す。通常 nati
 全ページの WPT 合格数へは加算していない。unsupported / failed は理由を保持し、
 合格扱いしない。
 
-- [入力 pin](../../dev/raikiri/data/first-line-wpt-pins.json)
-- [raw 結果、glyph/font/color/source/geometry、argv](../../dev/raikiri/data/first-line-wpt-results.json)
-- [PNG 一式](../../dev/raikiri/data/first-line-wpt/)
+- [入力 pin](../../dev/raikiri/inputs/first-line-wpt-pins.json)
+- raw 結果、glyph/font/color/source/geometry、argv
+- PNG 一式
 
 ```sh
 cargo +1.91.0 test --locked -p shodo-raikiri --example first_line_wpt
-cargo +1.91.0 run --locked -p shodo-raikiri --example first_line_wpt -- /home/mitz/.cache/raikiri/wpt target/first-line-wpt
+cargo +1.91.0 run --locked -p shodo-raikiri --example first_line_wpt -- ~/.cache/raikiri/wpt target/first-line-wpt
 cargo +1.91.0 run --locked -p shodo-raikiri --example raikiri_contracts -- target/first-line-caller
 ```
 
@@ -86,7 +86,7 @@ Rust 1.96 での Unicode 分類テストの既存不一致を避け、upstream �
 clippy、release cache、accessibility/emoji/ruby 実行、描画 snapshot、allocation、
 指定 benchmark、no-default/complex-scripts、doc、Python（69件、3 skip）、
 fixture 再生成、wasm 3構成、公開 package 内容検査が通過した。
-[実行コマンドと結果](../../dev/raikiri/data/first-line-checks.json) を保存した。
+実行コマンドと結果 を保存した。
 両ブランチは draft PR として提出済み：
 [raikiri #463](https://github.com/fulgur-rs/raikiri/pull/463)、
 [shodo #104](https://github.com/fulgur-rs/shodo/pull/104)。

@@ -10,6 +10,6 @@
 
 CPU affinity 10、stable Rust 1.97.1、release profileで全54 workloadを収集した。378 warm操作、108 cold process、54 memory processすべてについてrunnerの出力・条件・counter整合検証が成功した。収集後のengine hashはreportと一致し、旧shodo-sbp.1 reportは `missing conditions` として拒否された。binary三種、Cargo.lock、toolchain・profile・font・input・harness情報は通常の成果物に保持されている。
 
-[検証manifest](data/source-fingerprint.json) にengine対象全ファイルとbinary/lockのSHA256、測定条件を記録し、[生データarchive](data/source-fingerprint-raw.json.gz) に全matrixとred/green・全Python・fixture検証ログを保存した。元成果物は `/home/mitz/Work/oss/shodo/target/performance-artifacts/sbp2-fingerprint`。測定時点のbaseは `dce8815d8b29e939446368faae99bf4be370a88c` で、runner修正は未コミットだった。
+検証manifest にengine対象全ファイルとbinary/lockのSHA256、測定条件を記録し、生データarchive に全matrixとred/green・全Python・fixture検証ログを保存した。元成果物は `target/performance-artifacts/sbp2-fingerprint`。測定時点のbaseは `dce8815d8b29e939446368faae99bf4be370a88c` で、runner修正は未コミットだった。
 
 Rust engineの動作は変更していない。計測中に別の検証buildが一部並行したため、この時間値だけから速度改善率を主張しない。raikiri切り替えへの性能ブロック依存や、保存済みS4 spikeへの変更はない。

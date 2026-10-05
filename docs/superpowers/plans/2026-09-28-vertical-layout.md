@@ -16,12 +16,12 @@
 
 - MSRVは1.89.0。production dependencyを追加しない。
 - raikiri統合spikeはマージせず、`shodo-p2m.6` には着手しない。
-- 独立worktreeは `/home/mitz/Work/oss/shodo/target/worktrees/shodo-vertical`、branchは `feat/vertical-layout`。
+- 独立worktreeは `target/worktrees/shodo-vertical`、branchは `feat/vertical-layout`。
 - baseは `1aa7e5d4900382b7306d11fe91e52670a359f119`。変更前workspace584テスト成功の記録を引き継ぐ。
 - 全5 mode/3 orientation/TCY/vhea/vmtx/vert/vrt2/centralを実装する。paint-only回転で代替しない。
 - 各taskをnativeで実行する。全task後にbranch全体の独立レビューを一度行う。
 - ユーザーの自律実装指示を適用する。文書を個別に人間レビュー済みとは記録しない。
-- 一度に一つのCargoのみ。共通env: `TMPDIR=/home/mitz/Work/oss/shodo/target/rust-tmp CARGO_BUILD_JOBS=1 CARGO_TARGET_DIR=/home/mitz/Work/oss/shodo/target/first-line-contract CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 RUSTFLAGS='-D warnings'`。
+- 一度に一つのCargoのみ。共通env: `TMPDIR=target/rust-tmp CARGO_BUILD_JOBS=1 CARGO_TARGET_DIR=target/first-line-contract CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 RUSTFLAGS='-D warnings'`。
 - Cargoは `cargo +stable ... --offline`。長い出力は所有ledger/vertical-artifactsへ保存する。
 
 ## Review Focus

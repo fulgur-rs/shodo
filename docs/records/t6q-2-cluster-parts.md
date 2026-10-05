@@ -47,14 +47,14 @@ TDD: 新しいallocator regressionは変更前Latinで8,373 calls / 7,672glyph�
 再現時は同じ環境で次のコマンドを実装前後に実行して各実行ファイルを保存し、coldとmemoryを別々に呼び出す。ベンチ実行中も共通flockを保持する。
 
 ```sh
-export PATH=/home/mitz/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin:/usr/bin:/bin
+export PATH=~/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin:/usr/bin:/bin
 export RUSTC_WRAPPER=
 export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=env
 export CARGO_BUILD_JOBS=1 RUST_TEST_THREADS=2
-export CARGO_TARGET_DIR=/home/mitz/Work/oss/shodo/target/t6q-build/t6q-2
-flock /home/mitz/Work/oss/shodo/target/t6q-control/build.lock nice -n 10 cargo build --offline --locked --release -p shodo-bench --bin shodo-probe
+export CARGO_TARGET_DIR=target/t6q-build/t6q-2
+flock target/t6q-control/build.lock nice -n 10 cargo build --offline --locked --release -p shodo-bench --bin shodo-probe
 # cold binaryを保存してからinstrumented buildを作る
-flock /home/mitz/Work/oss/shodo/target/t6q-control/build.lock nice -n 10 cargo build --offline --locked --release -p shodo-bench --bin shodo-probe --features allocation-counting
+flock target/t6q-control/build.lock nice -n 10 cargo build --offline --locked --release -p shodo-bench --bin shodo-probe --features allocation-counting
 # 保存したcold: --cold INPUT 8 / memory: --memory INPUT 8
 ```
 

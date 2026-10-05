@@ -23,7 +23,7 @@ startup, or whether switching is necessary. Those stay undetermined (see
 
 ## Reproduction
 
-Data: [`raikiri-jt1-reproduction.json`](../../dev/raikiri/data/raikiri-jt1-reproduction.json),
+Data: `raikiri-jt1-reproduction.json`,
 produced by `tools/raikiri/jt1_measure.py reproduce`.
 
 - Inputs: the saved, hash-pinned release time probe (SHA256
@@ -81,7 +81,7 @@ effect, not a parse or cascade effect. The large `layout` ratios (about 3.0 and
 3.4) reflect that layout is a small share of the total `pipeline` time.
 
 Allocations. Data:
-[`raikiri-jt1-attribution.json`](../../dev/raikiri/data/raikiri-jt1-attribution.json),
+`raikiri-jt1-attribution.json`,
 `memory` section, produced by `jt1_measure.py memory` (requested-heap allocator
 counters per window, not RSS; median of the warm samples per run, then the
 median of 3 runs). Candidate over native:

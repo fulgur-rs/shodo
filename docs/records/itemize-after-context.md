@@ -36,6 +36,6 @@ build scope、scale 1の代表値:
 
 他の検証buildが終了してから、CPU affinity 10でCriterionの通常設定（100 samples、warmup 3秒、measurement 5秒）を使い、各入力のscale 1をbefore/after/after/beforeの順に測定した。各runのmedianを2回分まとめたmedianは、Latin-longが474.68 → 456.00 µs、Arabic-longが511.03 → 498.96 µsだった。after/beforeはそれぞれ0.9607、0.9764。このホスト・入力での観測値として記録する。特にArabicのafterは486.76 / 511.15 µsとrun間で揺れており、小さい時間差を一般的な速度保証にしない。測定したbinaryのSHA256を記録し、各A/Bの全7 digestも一致した。
 
-baseは `0c8e916a09adef45cbf1586c3c8fe6cde4115f25`。matrix収集時点の変更は未コミットだった。[検証manifest](data/itemize-after-context.json) と[生データarchive](data/itemize-after-context-raw.json.gz) に修正前後の全matrix、反復probe、時間samples、binary SHA256、source hash、red/green・全体検証ログを保存する。
+baseは `0c8e916a09adef45cbf1586c3c8fe6cde4115f25`。matrix収集時点の変更は未コミットだった。検証manifest と生データarchive に修正前後の全matrix、反復probe、時間samples、binary SHA256、source hash、red/green・全体検証ログを保存する。
 
-元成果物は `/home/mitz/Work/oss/shodo/target/performance-artifacts/` の `sbp2-fingerprint`、`sbp3-after-context`、`sbp3-normal-timing`、`sbp3-snapshots`。raikiri切り替えへの性能ブロック依存や、保存済みS4 spikeへの変更はない。
+元成果物は `target/performance-artifacts/` の `sbp2-fingerprint`、`sbp3-after-context`、`sbp3-normal-timing`、`sbp3-snapshots`。raikiri切り替えへの性能ブロック依存や、保存済みS4 spikeへの変更はない。

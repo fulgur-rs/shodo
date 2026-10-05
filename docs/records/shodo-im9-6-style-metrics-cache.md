@@ -80,7 +80,7 @@ Median `allocated_bytes / calls` during `ParagraphBuilder::build`:
 
 Peak extra and net retained bytes were unchanged for each paired fixture.
 
-Raw JSONL captures: [before time](data/shodo-im9-6-style-metrics-cache-before-time.jsonl.gz),
-[after time](data/shodo-im9-6-style-metrics-cache-after-time.jsonl.gz),
-[before allocations](data/shodo-im9-6-style-metrics-cache-before-alloc.jsonl.gz),
-[after allocations](data/shodo-im9-6-style-metrics-cache-after-alloc.jsonl.gz).
+Raw JSONL captures: before time,
+after time,
+before allocations,
+after allocations.

@@ -54,9 +54,9 @@ the bounded cache is retained.
 
 Raw captures:
 
-- [Before timing](data/shodo-zb0-5-style-metric-instances-before-time.jsonl.gz)
-- [After timing](data/shodo-zb0-5-style-metric-instances-after-time.jsonl.gz)
-- [Before allocations](data/shodo-zb0-5-style-metric-instances-before-alloc.jsonl.gz)
-- [After allocations](data/shodo-zb0-5-style-metric-instances-after-alloc.jsonl.gz)
-- [Before Massif](data/shodo-zb0-5-style-metric-instances-before.massif.gz)
-- [After Massif](data/shodo-zb0-5-style-metric-instances-after.massif.gz)
+- Before timing
+- After timing
+- Before allocations
+- After allocations
+- Before Massif
+- After Massif

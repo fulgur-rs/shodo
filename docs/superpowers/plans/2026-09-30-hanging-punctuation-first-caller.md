@@ -472,8 +472,8 @@ Expected: 9 passed.
 
 - [ ] **Step 4: Run the CLI against the real WPT checkout**
 
-Run: `cargo run -p shodo-raikiri --example hanging_punctuation -- /home/mitz/.cache/raikiri/wpt dev/raikiri/data/hanging-punctuation-first-002.json`
-Expected: prints `...: original test aligns with its reference; none control does not`, exit 0. If it fails, read the JSON `checks`/`resolved` (the file is written before the error) and diagnose. Likely causes: the default WPT font lacks U+2193 so the arrow is a fallback glyph in a second run (still the last glyph, fine); `project` rejecting another non-initial field of the original documents (report it, do not silently reset it); a genuine shodo defect (stop and report, do not weaken checks). Also run `git -C /home/mitz/.cache/raikiri/wpt rev-parse HEAD` and confirm it prints `97ea26e26a2aac3eec7e770650b25e7049ed4a4e`; if not, the evidence is not comparable and must be reported.
+Run: `cargo run -p shodo-raikiri --example hanging_punctuation -- ~/.cache/raikiri/wpt dev/raikiri/data/hanging-punctuation-first-002.json`
+Expected: prints `...: original test aligns with its reference; none control does not`, exit 0. If it fails, read the JSON `checks`/`resolved` (the file is written before the error) and diagnose. Likely causes: the default WPT font lacks U+2193 so the arrow is a fallback glyph in a second run (still the last glyph, fine); `project` rejecting another non-initial field of the original documents (report it, do not silently reset it); a genuine shodo defect (stop and report, do not weaken checks). Also run `git -C ~/.cache/raikiri/wpt rev-parse HEAD` and confirm it prints `97ea26e26a2aac3eec7e770650b25e7049ed4a4e`; if not, the evidence is not comparable and must be reported.
 
 - [ ] **Step 5: Confirm the evidence is reproducible**
 

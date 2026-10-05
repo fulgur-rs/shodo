@@ -16,7 +16,7 @@ It does not adopt or change either S4 spike.
 
 `split` reruns the frozen S4 difference check on the prepared input, then maps
 each reported field to an owner through `owner()`. 14 of the 17 `field_rules`
-entries in `dev/raikiri/data/raikiri-style-diagnostics.json` are base fields
+entries in `dev/raikiri/inputs/raikiri-style-diagnostics.json` are base fields
 (the other 3 are the sibling-issue fields).
 `outline_offset` and the four extra decoration fields (`text_decoration_style`,
 `text_decoration_color`, `text_decoration_thickness`, `text_underline_offset`)

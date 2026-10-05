@@ -13,7 +13,7 @@
 - `dev/bench/examples/combine_empty_passes.rs` で固定フォントの段落を作成した。combine なしの短文・長文、縦書きの TCY 混在、横書きで無効になる TCY、境界で拒否される TCY 候補、`::first-line` 付き、空段落の 7 ケースを測定した。
 - builder と `LayoutContext` を計時前に用意し、1 サンプル内で `builder.build()` を固定回数実行して平均時間を記録した。フォント読込、warm-up build、`break_all`、出力 digest、warning 取得は計時範囲外。
 - 12 ラウンドを ABBA 順（baseline/candidate/candidate/baseline）で測定した後、順序を反転した BAAB 順で独立に 12 ラウンド測定した。各ラウンドでは同じラベルの 2 サンプルを平均した。
-- baseline/candidate の出力 SHA-256 と build/layout warning は、両 run の全ケース・全サンプルで一致した。全測定値と環境情報は [raw JSON](data/shodo-zb0-9-empty-combine-ab.json) に記録した。
+- baseline/candidate の出力 SHA-256 と build/layout warning は、両 run の全ケース・全サンプルで一致した。全測定値と環境情報は raw JSON に記録した。
 - rustc 1.96.0、AMD Ryzen 5 5600G、Linux x86_64。scaling governor は `performance`、boost は有効。
 
 ## 時間

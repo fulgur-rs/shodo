@@ -25,7 +25,7 @@ preflight は、触れた各 scope について「`spent` + その scope に届�
 - builder と `LayoutContext` を計時前に用意し、1 サンプル内で `builder.build()` を固定回数実行して平均を記録した。フォント読込、warm-up build、`break_all`、出力 digest、warning 取得は計時範囲外。
 - 12 ラウンドを ABBA 順（baseline/candidate/candidate/baseline）で測定した後、BAAB 順（candidate/baseline/baseline/candidate）で独立に 12 ラウンド測定した。各ラウンドでは同じラベルの 2 サンプルを平均した。1 サンプルは base ケースで 50–75 ms 程度、`deep-nested-multi` は 2 build で 85 ms 程度。
 - `deep-nested-multi` の `break_all` は 250 段の入れ子で 1 段落あたり 15–25 秒かかる（計時範囲外で、両バイナリとも同じ）。そのため計時サンプルでは digest を省略し（`TCY_PROBE_SKIP_DIGEST`）、出力の一致は smoke 実行と割り当て計測の全 build で確認した。
-- rustc 1.96.0、AMD Ryzen 5 5600G、Linux x86_64。scaling governor は `performance`、boost は有効。測定中に他の重い処理は走らせていない。全測定値と環境情報は [raw JSON](data/shodo-t3t-tcy-probe-reuse-ab.json) に記録した。
+- rustc 1.96.0、AMD Ryzen 5 5600G、Linux x86_64。scaling governor は `performance`、boost は有効。測定中に他の重い処理は走らせていない。全測定値と環境情報は raw JSON に記録した。
 
 ## 時間
 

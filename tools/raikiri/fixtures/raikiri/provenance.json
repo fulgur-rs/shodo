@@ -88,15 +88,15 @@
     "purpose": "unchanged actual release result/fresh-output reference; gzip storage only, not additional benchmark samples"
   },
   "library-candidate.json": {
-    "source": "/home/mitz/Work/oss/shodo/target/8ei-artifacts/library-contract-green/candidate.json",
+    "source": "target/8ei-artifacts/library-contract-green/candidate.json",
     "sha256": "d2414bf17f1383cac2f5eec66373064c7094b46f1d57313c12322da47d5c7dcc",
     "storage": "gzip of unchanged actual dev memory record; test evidence, not release benchmark",
-    "build_log": "/home/mitz/Work/oss/shodo/target/8ei-artifacts/library-memory-field-fix-build.log"
+    "build_log": "target/8ei-artifacts/library-memory-field-fix-build.log"
   },
   "library-native.json": {
-    "source": "/home/mitz/Work/oss/shodo/target/8ei-artifacts/library-contract-green/native.json",
+    "source": "target/8ei-artifacts/library-contract-green/native.json",
     "sha256": "ba62a59e15f92024e7cc6efac1542f148905b579dae48deb3acefa145ead51ad",
     "storage": "gzip of unchanged actual dev memory record; test evidence, not release benchmark",
-    "build_log": "/home/mitz/Work/oss/shodo/target/8ei-artifacts/library-memory-field-fix-build.log"
+    "build_log": "target/8ei-artifacts/library-memory-field-fix-build.log"
   }
 }

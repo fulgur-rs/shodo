@@ -18,7 +18,7 @@
 - Copy exact fields/signatures from the spec. No scalar/glyph approximations, reshaping, snapshot changes or fake DOM offsets.
 - Source inverses are one-to-many; failed adapter exports retain all previous current-position/identity state. All positions are snapshot-scoped.
 - Reuse existing ICU auto vs non-complex-script policy; segmentation uses accepted logical text, not separately split runs/lines.
-- Cargo environment: TMPDIR=/home/mitz/Work/oss/shodo/target/rust-tmp, CARGO_BUILD_JOBS=1, CARGO_TARGET_DIR=/home/mitz/Work/oss/shodo/target/first-line-contract, CARGO_PROFILE_DEV_DEBUG=0, CARGO_PROFILE_TEST_DEBUG=0, CARGO_INCREMENTAL=0, RUSTFLAGS='-D warnings'. Long output goes to owned SDD/artifact logs.
+- Cargo environment: TMPDIR=target/rust-tmp, CARGO_BUILD_JOBS=1, CARGO_TARGET_DIR=target/first-line-contract, CARGO_PROFILE_DEV_DEBUG=0, CARGO_PROFILE_TEST_DEBUG=0, CARGO_INCREMENTAL=0, RUSTFLAGS='-D warnings'. Long output goes to owned SDD/artifact logs.
 - Native execution/TDD; one fresh whole-branch reviewer only after all tasks. One Critical/Important RED→GREEN fix pass plus full suite; exhaustive ruling/cost and deferred minor reporting before scratch deletion.
 
 ## Review Focus

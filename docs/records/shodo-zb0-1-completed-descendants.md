@@ -31,7 +31,7 @@ CPU 0 固定の per-case timing は8組の before/candidate process captureで�
 
 ## 再現データ
 
-[manifest](data/shodo-zb0-1-completed-descendants.json) に条件と集計を保存した。[raw archive](data/shodo-zb0-1-completed-descendants-raw.tar.gz) は全 timing/allocation JSONL、CPU task-clock CSV、candidate patch を含む。archive は54 files、59,309 bytes、SHA256 ed72a88365d0901853aa54645374c48b2bdf394c35f5e4fba5ff95704c5e45d7。harness のSHA256はmanifestに記録した。
+manifest に条件と集計を保存した。raw archive は全 timing/allocation JSONL、CPU task-clock CSV、candidate patch を含む。archive は54 files、59,309 bytes、SHA256 ed72a88365d0901853aa54645374c48b2bdf394c35f5e4fba5ff95704c5e45d7。harness のSHA256はmanifestに記録した。
 
 measurement harness は [ruby_completed_descendants.rs](../../dev/bench/examples/ruby_completed_descendants.rs)。baseline で時間を再測定するコマンド:
 

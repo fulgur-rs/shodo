@@ -41,13 +41,13 @@ separate target directories. Timing was captured twice; the second run used
 the reverse tree order.
 
 ```sh
-KACHE_CACHE_DIR=/home/mitz/tmp/kache \
-  CARGO_TARGET_DIR=/home/mitz/tmp/shodo-im9-8-before-time-target \
+KACHE_CACHE_DIR=~/tmp/kache \
+  CARGO_TARGET_DIR=~/tmp/shodo-im9-8-before-time-target \
   cargo run --release --offline -p shodo-bench \
     --example bidi_input_copy -- time
 
-KACHE_CACHE_DIR=/home/mitz/tmp/kache \
-  CARGO_TARGET_DIR=/home/mitz/tmp/shodo-im9-8-before-alloc-target \
+KACHE_CACHE_DIR=~/tmp/kache \
+  CARGO_TARGET_DIR=~/tmp/shodo-im9-8-before-alloc-target \
   cargo run --release --offline -p shodo-bench --features allocation-counting \
     --example bidi_input_copy -- alloc
 ```
@@ -87,7 +87,7 @@ allocator call, matching its input byte length. The plaintext fixture saves
 live bytes do not change in either fixture. Inputs that need U+2028 replacement
 keep the prior allocation behavior.
 
-Raw captures: [before timing](data/shodo-im9-8-bidi-input-before-time.jsonl.gz),
-[after timing](data/shodo-im9-8-bidi-input-after-time.jsonl.gz),
-[before allocations](data/shodo-im9-8-bidi-input-before-alloc.jsonl.gz),
-[after allocations](data/shodo-im9-8-bidi-input-after-alloc.jsonl.gz).
+Raw captures: before timing,
+after timing,
+before allocations,
+after allocations.

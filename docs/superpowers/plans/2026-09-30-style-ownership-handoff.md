@@ -637,8 +637,8 @@ Expected: 11 passed (9 from Task 1 + 2 new).
 
 - [ ] **Step 4: Run the CLI against the real inputs**
 
-Run: `cargo run -p shodo-raikiri --example style_handoff -- /home/mitz/.cache/raikiri/wpt /home/mitz/Work/oss/shodo/target/worktrees/shodo-s4-v2/target/s4v2/wpt-batch-full/comparison.json dev/raikiri/data/raikiri-style-handoff.json`
-Expected: prints `109 documents, 303 blocks, 0 errors`, exit 0. Before running, confirm `git -C /home/mitz/.cache/raikiri/wpt rev-parse HEAD` prints `97ea26e26a2aac3eec7e770650b25e7049ed4a4e` and `sha256sum` of the comparison file equals `67434d34bbe6928ab3a67ba43b02120b27407d57e9fb00b95af10daefc3ce01d` (record both in the report). If a block fails with `unmapped: <field>` or the counts differ from the classification, report it with the exact message and stop (do not add a field to the ownership table to make it pass without reporting): that is a real finding about the ownership decisions.
+Run: `cargo run -p shodo-raikiri --example style_handoff -- ~/.cache/raikiri/wpt target/worktrees/shodo-s4-v2/target/s4v2/wpt-batch-full/comparison.json dev/raikiri/data/raikiri-style-handoff.json`
+Expected: prints `109 documents, 303 blocks, 0 errors`, exit 0. Before running, confirm `git -C ~/.cache/raikiri/wpt rev-parse HEAD` prints `97ea26e26a2aac3eec7e770650b25e7049ed4a4e` and `sha256sum` of the comparison file equals `67434d34bbe6928ab3a67ba43b02120b27407d57e9fb00b95af10daefc3ce01d` (record both in the report). If a block fails with `unmapped: <field>` or the counts differ from the classification, report it with the exact message and stop (do not add a field to the ownership table to make it pass without reporting): that is a real finding about the ownership decisions.
 
 - [ ] **Step 5: Confirm the evidence is reproducible and self-consistent**
 

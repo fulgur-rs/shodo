@@ -30,6 +30,12 @@ jobs:
       - name: Clear restored snapshot reports
         run: rm -rf target/snapshot-report target/snapshot-checks
       - run: cargo fmt --all --check
+      - name: Check for machine-local home paths
+        run: |
+          if git grep -nIE '/(home|Users)/[A-Za-z0-9_.-]+/'; then
+            echo "::error::tracked files contain absolute home-directory paths (see above); use repository-relative paths or ~/"
+            exit 1
+          fi
       - run: cargo clippy --workspace --all-targets
       - run: cargo clippy --workspace --all-targets --features shodo-harness/accesskit
       - name: Check published package contents

@@ -1,7 +1,7 @@
 //! Vertical writing-mode wiring check: raikiri cascade → adapter → shodo.
 //!
 //! The four `text-autospace-vertical-*` WPT documents (vendored unmodified in
-//! `data/vertical/`) are laid out through the raikiri cascade and shodo's
+//! `inputs/vertical/`) are laid out through the raikiri cascade and shodo's
 //! existing vertical API. The WPT reference is the oracle: a test document and
 //! its reference must produce the same lines and glyph geometry. This is
 //! separate from the unmerged raikiri integration spikes.
@@ -203,7 +203,7 @@ fn main() -> Result<(), String> {
     ] {
         let read = |suffix: &str| {
             std::fs::read_to_string(format!(
-                "{}/data/vertical/{name}{suffix}.html",
+                "{}/inputs/vertical/{name}{suffix}.html",
                 env!("CARGO_MANIFEST_DIR")
             ))
             .map_err(|e| e.to_string())
@@ -228,7 +228,7 @@ mod tests {
 
     fn doc(name: &str) -> String {
         std::fs::read_to_string(format!(
-            "{}/data/vertical/{name}.html",
+            "{}/inputs/vertical/{name}.html",
             env!("CARGO_MANIFEST_DIR")
         ))
         .unwrap()

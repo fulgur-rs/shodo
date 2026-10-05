@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, collections::BTreeSet, path::Path};
 
 const RAIKIRI_PIN: &str = "ab7e619a8f321f03de8b8c8b9342954868e044c8";
 const REASON: &str = "noninitial style not mapped yet";
-const CLASSIFICATION: &str = include_str!("../data/raikiri-style-diagnostics.json");
+const CLASSIFICATION: &str = include_str!("../inputs/raikiri-style-diagnostics.json");
 
 fn error_node(error: &str) -> Result<usize, String> {
     error
