@@ -22,7 +22,7 @@
   - `plain`: ruby なし。`"日日日\t"` を `size` 回繰り返す対照。
 - 計時範囲は `break_all` の `reps` 回と、各回の結果と `LayoutContext` の解放。build、出力 digest、`LayoutContext` の準備は範囲外。解放を計時に含めるのは shodo-2j6 と同じで、より速い arm に不利な向きに働く。
 - 12 ラウンドを ABBA 順で測った後、BAAB 順で独立に 12 ラウンド測った。各ラウンドでは同じラベルの 2 サンプルを平均した。全ケースを同じ回数で測り、ラウンドも点も減らしていない。測定前に、両バイナリが全ケースの最小サイズで同じ `output_sha256` と `warning_sha256` を出すことを確かめた。
-- rustc 1.96.0 (ac68faa20 2026-05-25)、AMD Ryzen 5 5600G with Radeon Graphics、Linux 7.2.5-3-omarchy。scaling governor は `performance`。測定中は他の重い処理を走らせていない。全サンプルと環境情報は [raw JSON](data/shodo-b7d-tab-prefix.json) に記録した。
+- rustc 1.96.0 (ac68faa20 2026-05-25)、AMD Ryzen 5 5600G with Radeon Graphics、Linux 7.2.5-3-omarchy。scaling governor は `performance`。測定中は他の重い処理を走らせていない。全サンプルと環境情報は raw JSON に記録した。
 
 ## 結果
 
@@ -153,7 +153,7 @@ BASE=<baseline の tab_scale> CAND=<candidate の tab_scale> OUT=<dir>/samples.j
 python3 $S/summarize.py <dir>/samples.jsonl > <dir>/summary.json
 python3 $S/tables.py <dir>/summary.json > <dir>/tables.md
 # <dir> には binaries.txt（baseline/ と candidate/ という名前のディレクトリに置いた両バイナリの sha256sum 出力）、counts.jsonl、candidate_commit.txt も置く
-python3 $S/assemble.py <decision> <candidate commit> <dir> <baseline worktree> docs/records/data/shodo-b7d-tab-prefix.json
+python3 $S/assemble.py <decision> <candidate commit> <dir> <baseline worktree> <dir>/shodo-b7d-tab-prefix.json
 ```
 
 `<case>` は `nested`, `nestedtab`, `siblings`, `siblingstab`, `plain` のいずれか。本記録の size と reps は、nested / nestedtab が 20:4、40:2、80:1、160:1、siblings / siblingstab が 200 / 400 / 800 でどれも 1、plain が 200:50 と 800:10。
