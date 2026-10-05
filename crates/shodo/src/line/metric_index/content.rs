@@ -165,7 +165,11 @@ impl MetricIndex {
     }
     fn group_delta(&self, data: &ParagraphData, selection: &Selection, i: usize) -> f64 {
         let g = &self.groups[i];
-        let bounds = selection.partial.get(&i).copied().unwrap_or(g.bounds);
+        let bounds = selection
+            .partial
+            .get(&i)
+            .copied()
+            .unwrap_or_else(|| g.placed());
         // Preserve the accepted solver's floating-point displacement before
         // quantizing the final font-content edge.
         let delta = if g.bottom {

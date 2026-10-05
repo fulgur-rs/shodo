@@ -2,6 +2,7 @@
 //! Top/bottom groups are disjoint; only clipped or replaced groups need a
 //! fresh range query. Every other group reuses its cached complete height.
 mod content;
+mod quirk;
 mod scalar;
 
 use content::{ContentBounds, ContentSummary, content_bounds};
@@ -35,8 +36,19 @@ struct Selection {
 #[derive(Debug)]
 struct Group {
     units: Range<usize>,
-    bounds: Bounds,
+    /// Members that size the line; `None` under the quirk when no member
+    /// does, so the group bakes no height.
+    bounds: Option<Bounds>,
+    /// Every member's profile: positions a group that sizes nothing.
+    ghost: Bounds,
     bottom: bool,
+}
+
+impl Group {
+    /// Bounds that place the group's content.
+    fn placed(&self) -> Bounds {
+        self.bounds.unwrap_or(self.ghost)
+    }
 }
 
 #[derive(Debug)]
@@ -54,6 +66,8 @@ pub(super) struct MetricIndex {
     grouped: Vec<u32>,
     boxes: Vec<RecordProfile>,
     resolver: ProfileResolver,
+    /// Quirks-mode strut contributions; `None` unless `line_height_quirk`.
+    quirk: Option<Box<quirk::QuirkIndex>>,
 }
 
 pub(super) fn unit_record(
@@ -129,6 +143,14 @@ impl MetricIndex {
         let mut group_at = vec![None; data.units.len()];
         let mut boxes = vec![None; data.boxes.len()];
         let mut record_content = vec![None; data.units.len()];
+        let quirk = data.style.line_height_quirk;
+        // Glyph profiles of trimmable units, which size a line only when it
+        // does not end with them: they live in the quirk tree instead.
+        let mut trimmed = if quirk {
+            vec![None; data.units.len()]
+        } else {
+            Vec::new()
+        };
         for (i, u) in data.units.iter().enumerate() {
             #[cfg(test)]
             {
@@ -156,8 +178,21 @@ impl MetricIndex {
                     .map(|(a, d)| content_bounds(data, p, a, d))
             });
             let combination = resolver.combination(data, u);
-            for p in profile.into_iter().chain(combination) {
-                tree[size + i] = tree[size + i].join(Summary::profile(p, active));
+            let is_box = matches!(u.kind, UnitKind::Open { .. } | UnitKind::Close { .. });
+            let trims = quirk && super::quirk::trims(data, i);
+            for (p, record) in profile
+                .map(|p| (p, true))
+                .into_iter()
+                .chain(combination.map(|p| (p, false)))
+            {
+                // Under the quirk a box strut sizes only the lines that credit
+                // it (`quirk::QuirkIndex`), as does a trimmable unit's glyph.
+                let sizes = !(quirk && record && (is_box || trims));
+                if sizes {
+                    tree[size + i] = tree[size + i].join(Summary::profile(p, active));
+                } else if trims {
+                    trimmed[i] = Some(p);
+                }
                 if let UnitKind::Open { box_index } | UnitKind::Close { box_index } = u.kind {
                     boxes[box_index as usize] = Some(p);
                 }
@@ -171,17 +206,21 @@ impl MetricIndex {
                         data.styles[data.boxes[b as usize].style as usize].vertical_align
                             == VerticalAlign::Bottom
                     });
+                    let bounds = Bounds {
+                        top: p.top,
+                        bottom: p.bottom,
+                    };
                     let group = groups.entry(key).or_insert(Group {
                         units: i..i + 1,
-                        bounds: Bounds {
-                            top: p.top,
-                            bottom: p.bottom,
-                        },
+                        bounds: None,
+                        ghost: bounds,
                         bottom,
                     });
                     group.units.end = i + 1;
-                    group.bounds.top = group.bounds.top.min(p.top);
-                    group.bounds.bottom = group.bounds.bottom.max(p.bottom);
+                    group.ghost = union(Some(group.ghost), Some(bounds)).unwrap();
+                    if sizes {
+                        group.bounds = union(group.bounds, Some(bounds));
+                    }
                 }
             }
             nonglyph[size + i] = if matches!(u.kind, UnitKind::Cluster { .. }) {
@@ -202,10 +241,33 @@ impl MetricIndex {
             .enumerate()
             .map(|(i, (key, _))| (*key, i))
             .collect();
-        let groups: Vec<_> = groups.into_iter().map(|(_, g)| g).collect();
+        let mut groups: Vec<_> = groups.into_iter().map(|(_, g)| g).collect();
+        let boxes: Vec<_> = boxes.into_iter().map(Option::unwrap).collect();
+        let quirk = quirk.then(|| {
+            let index = quirk::QuirkIndex::new(data, &boxes, &trimmed);
+            // Credited struts and trimmable glyphs of a wholly selected group
+            // size it on every line that does not end inside it.
+            for (i, u) in data.units.iter().enumerate() {
+                let owner = match u.kind {
+                    UnitKind::Open { box_index } | UnitKind::Close { box_index } => Some(box_index),
+                    _ => u.parent_box,
+                };
+                let raw = index.leaf(i).all.raw;
+                if let Some(g) = owner.and_then(|b| boxes[b as usize].group)
+                    && raw.is_some()
+                {
+                    let group = &mut groups[group_keys[&u64::from(g)]];
+                    group.bounds = union(group.bounds, raw);
+                }
+            }
+            Box::new(index)
+        });
         for group in &groups {
+            let Some(bounds) = group.bounds else {
+                continue;
+            };
             let leaf = &mut tree[size + group.units.end - 1];
-            let height = group.bounds.bottom - group.bounds.top;
+            let height = bounds.bottom - bounds.top;
             nonglyph[size + group.units.end - 1].height =
                 nonglyph[size + group.units.end - 1].height.max(height);
             leaf.height = leaf.height.max(height);
@@ -221,7 +283,6 @@ impl MetricIndex {
             tree[i] = tree[i * 2].join(tree[i * 2 + 1]);
             nonglyph[i] = nonglyph[i * 2].join(nonglyph[i * 2 + 1]);
         }
-        let boxes: Vec<_> = boxes.into_iter().map(Option::unwrap).collect();
         let mut contents = vec![ContentSummary::default(); size * 2];
         for (i, raw) in record_content.into_iter().enumerate() {
             #[cfg(test)]
@@ -240,9 +301,9 @@ impl MetricIndex {
                     1.0
                 };
                 if g.bottom {
-                    leaf.bottom = raw.map(|r| r.shift(-sign * f64::from(g.bounds.bottom)));
+                    leaf.bottom = raw.map(|r| r.shift(-sign * f64::from(g.placed().bottom)));
                 } else {
-                    leaf.top = raw.map(|r| r.shift(-sign * f64::from(g.bounds.top)));
+                    leaf.top = raw.map(|r| r.shift(-sign * f64::from(g.placed().top)));
                 }
             } else {
                 leaf.normal = raw;
@@ -305,6 +366,7 @@ impl MetricIndex {
             grouped,
             boxes,
             resolver,
+            quirk,
         }
     }
 
@@ -322,6 +384,11 @@ impl MetricIndex {
         cx: &mut LayoutContext,
         sat: &mut Saturation,
     ) -> Selection {
+        // First unit of the trailing run that a quirks-mode line trims.
+        let trailing = self
+            .quirk
+            .as_ref()
+            .map(|q| q.trailing_start(range.start, range.end));
         let mut replacements = BTreeMap::<usize, Summary>::new();
         let mut content_replacements = BTreeMap::<usize, ContentSummary>::new();
         let mut removed = Vec::new();
@@ -372,8 +439,12 @@ impl MetricIndex {
                     self.resolver
                         .record(data, &record, std::slice::from_ref(run))
                 {
-                    let entry = replacements.entry(owner).or_default();
-                    *entry = entry.join(Summary::profile(profile, true));
+                    // The overlay glyph of a trimmed trailing space sizes
+                    // nothing, as its original glyph would not.
+                    if !trailing.is_some_and(|t| owner >= t && super::quirk::trims(data, owner)) {
+                        let entry = replacements.entry(owner).or_default();
+                        *entry = entry.join(Summary::profile(profile, true));
+                    }
                     if let Some((a, d)) = crate::ruby::geometry::record_extents(
                         data,
                         &record,
@@ -426,6 +497,45 @@ impl MetricIndex {
         }
         let mut extra = Summary::default();
         let mut group_extra = crate::hashing::FastMap::default();
+        let mut side = quirk::Side::default();
+        if let (Some(q), Some(t)) = (&self.quirk, trailing) {
+            side = q.side(range, t, &removed, cx);
+            // Groups that the trailing run clips. The run holds no Open unit,
+            // so at most the group around its start intersects it.
+            let first = self.groups.partition_point(|g| g.units.end <= t);
+            for (i, g) in self.groups.iter().enumerate().skip(first) {
+                if g.units.start >= range.end {
+                    break;
+                }
+                affected.insert(i);
+            }
+            if let Some((k, lo)) = q.forced(data, range) {
+                let content = q
+                    .query(&(lo..k.min(t)), |l| l.all, cx)
+                    .join(q.query(&(lo.max(t)..k), |l| l.kept, cx))
+                    .content;
+                if !content {
+                    let p = data.units[k]
+                        .parent_box
+                        .map_or(q.root(), |b| self.boxes[b as usize]);
+                    side = side.join(quirk::Side::from(p, true));
+                    if let Some(group) = p.group {
+                        let i = self.group_keys[&u64::from(group)];
+                        affected.insert(i);
+                        group_extra.insert(
+                            i,
+                            Some(Bounds {
+                                top: p.top,
+                                bottom: p.bottom,
+                            }),
+                        );
+                    }
+                }
+            }
+            if q.ruby(range) {
+                side = side.join(quirk::Side::from(q.root(), true));
+            }
+        }
         let mut ancestors = crate::hashing::FastSet::default();
         for unit in [range.start, range.end - 1] {
             let mut cursor = data.units[unit].parent_box;
@@ -441,6 +551,12 @@ impl MetricIndex {
                 let e = data.boxes[b as usize].edges;
                 let active = (e.padding.block_start + e.padding.block_end) != 0.0
                     || (e.border.block_start + e.border.block_end) != 0.0;
+                if self.quirk.is_some() {
+                    // Ancestors size the line only through `side` credits.
+                    extra.active |= active;
+                    cursor = data.boxes[b as usize].parent;
+                    continue;
+                }
                 extra = extra.join(Summary::profile(p, active));
                 if let Some(group) = p.group {
                     let i = self.group_keys[&u64::from(group)];
@@ -476,11 +592,19 @@ impl MetricIndex {
         for i in affected {
             let group = &self.groups[i];
             let selected = range.start.max(group.units.start)..range.end.min(group.units.end);
-            if let Some(bounds) = union(
+            let mut raw = union(
                 self.query(&selected, &replacements, &BTreeSet::new(), &removed, cx)
                     .raw,
                 group_extra.get(&i).copied().flatten(),
-            ) {
+            );
+            if let (Some(q), Some(t)) = (&self.quirk, trailing) {
+                raw = union(raw, q.side(&selected, t, &removed, cx).raw);
+                if raw.is_none() {
+                    // No member sizes the line: place the content only.
+                    partial.insert(i, group.ghost);
+                }
+            }
+            if let Some(bounds) = raw {
                 partial.insert(i, bounds);
                 let height = bounds.bottom - bounds.top;
                 summary.height = summary.height.max(height);
@@ -497,14 +621,23 @@ impl MetricIndex {
         ) && root.text_orientation != TextOrientation::Sideways;
         let (above, below) =
             super::metrics::extents(root, metrics.metrics, metrics.vertical_metrics, upright);
-        let bounds = union(
-            Some(Bounds {
-                top: -above,
-                bottom: below,
-            }),
-            summary.normal,
-        )
-        .unwrap();
+        let bounds = if self.quirk.is_some() {
+            // Root text and credited struts already joined `side`; a line
+            // nothing sizes has a zero-height root.
+            union(side.normal, summary.normal).unwrap_or(Bounds {
+                top: 0.0,
+                bottom: 0.0,
+            })
+        } else {
+            union(
+                Some(Bounds {
+                    top: -above,
+                    bottom: below,
+                }),
+                summary.normal,
+            )
+            .unwrap()
+        };
         let height = (bounds.bottom - bounds.top).max(0.0).max(summary.height);
         let mut above = -bounds.top;
         if height > bounds.bottom - bounds.top {
@@ -539,6 +672,30 @@ mod tests {
     use crate::limits::Limits;
     use crate::node::{InlineEdges, NodeId, Sides, TextSource};
     use crate::style::{FontFamily, InlineStyle, LineHeight, ParagraphStyle};
+
+    #[test]
+    fn quirk_tree_is_absent_without_the_flag() {
+        let fonts = FontCollection::with_options(
+            &Limits::default(),
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        for quirk in [false, true] {
+            let mut b = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    line_height_quirk: quirk,
+                    ..Default::default()
+                },
+                &Limits::default(),
+            );
+            b.push_text(TextSource::Generated { node: NodeId(1) }, "a b ");
+            let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+            let index = MetricIndex::new(&p.data, &AtomicSizes::EMPTY, &mut LayoutContext::new());
+            assert_eq!(index.quirk.is_some(), quirk);
+        }
+    }
 
     #[test]
     fn selected_content_profiles_match_actual_retained_top_bottom_geometry() {
