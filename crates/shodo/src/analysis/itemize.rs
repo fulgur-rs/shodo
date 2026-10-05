@@ -234,7 +234,13 @@ pub(crate) fn itemize(
             let mut prepared = FontCluster::new(cluster);
             let mut matched = HashMap::new();
             let grapheme_offset = scalars[scalar_start].offset;
-            while let Some(&cut) = breaks.graphemes.get(grapheme_cursor) {
+            // Paragraph grapheme cuts sit before transparent markers (isolate
+            // controls of ruby bases and isolating inlines, out-of-flow
+            // placeholders, authored bidi controls), so
+            // after such a gap they never equal the next grapheme's first
+            // scalar. Match the actual character starts instead: exactly one
+            // scalar per paragraph grapheme is then flagged.
+            while let Some(&cut) = breaks.typographic_starts.get(grapheme_cursor) {
                 #[cfg(test)]
                 tests::record_paragraph_grapheme_comparison();
                 if cut >= grapheme_offset {
@@ -242,8 +248,10 @@ pub(crate) fn itemize(
                 }
                 grapheme_cursor += 1;
             }
-            scalars[scalar_start].grapheme_start =
-                breaks.graphemes.get(grapheme_cursor).is_some_and(|cut| {
+            scalars[scalar_start].grapheme_start = breaks
+                .typographic_starts
+                .get(grapheme_cursor)
+                .is_some_and(|cut| {
                     #[cfg(test)]
                     tests::record_paragraph_grapheme_comparison();
                     *cut == grapheme_offset
@@ -798,6 +806,57 @@ mod tests {
             })
             .collect();
         assert_eq!(scalars, [(0, 1, true), (4, 6, false), (6, 7, true)]);
+    }
+
+    /// Paragraph cuts sit before transparent markers; the scalar that actually
+    /// starts the next grapheme must still be flagged after each kind of gap.
+    #[test]
+    fn grapheme_starts_follow_transparent_gaps() {
+        let style = ParagraphStyle::default();
+        let isolate = crate::style::InlineStyle {
+            unicode_bidi: crate::style::UnicodeBidi::Isolate,
+            ..style.root.clone()
+        };
+        let flags = |paragraph: &Paragraph| -> Vec<(char, bool)> {
+            paragraph
+                .data
+                .shape_items
+                .iter()
+                .flat_map(|item| item.scalars.iter().map(|s| (s.c, s.grapheme_start)))
+                .collect()
+        };
+        let gaps = build(&style, |builder| {
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+            builder.push_out_of_flow(NodeId(2), crate::node::OutOfFlowKind::Absolute);
+            builder.push_text(TextSource::Generated { node: NodeId(3) }, "b");
+            builder.open_inline(NodeId(4), &isolate, InlineEdges::default());
+            builder.push_text(TextSource::Generated { node: NodeId(5) }, "c");
+            builder.close_inline();
+            builder.push_text(TextSource::Generated { node: NodeId(6) }, "\u{200e}d");
+        });
+        assert_eq!(gaps.text(), "a\u{fffc}b\u{2066}c\u{2069}\u{200e}d");
+        // An authored control is outside the grapheme projection, so it is not a
+        // grapheme start; the scalar after it is.
+        assert_eq!(
+            flags(&gaps),
+            [
+                ('a', true),
+                ('b', true),
+                ('c', true),
+                ('\u{200e}', false),
+                ('d', true)
+            ]
+        );
+        // A control right after projected content: the cut before it used to
+        // flag the control instead of the next character.
+        let inner = paragraph(WritingMode::HorizontalTb, "x\u{200e}d");
+        assert_eq!(
+            flags(&inner),
+            [('x', true), ('\u{200e}', false), ('d', true)]
+        );
+        // The same holds for a control at the paragraph start.
+        let leading = paragraph(WritingMode::HorizontalTb, "\u{200e}a");
+        assert_eq!(flags(&leading), [('\u{200e}', false), ('a', true)]);
     }
 
     #[test]

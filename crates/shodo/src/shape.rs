@@ -909,6 +909,11 @@ fn shape_inputs<'a>(
         // so the cache never outlives the input.
         let mut cff_origin_deltas = std::collections::HashMap::new();
         let language: Option<harfrust::Language> = style.lang.as_ref().and_then(|l| l.parse().ok());
+        // Authored bidi controls start no paragraph grapheme but are always
+        // their own shaping cluster (itemize/graphemes.rs), so a budget window
+        // may also end right before one.
+        let bidi_controls =
+            icu_properties::CodePointSetData::new::<icu_properties::props::BidiControl>();
         let mut cursor = 0;
         while cursor < input.scalars.len() {
             let start = cursor;
@@ -919,7 +924,8 @@ fn shape_inputs<'a>(
             let mut bytes = 0;
             let mut boundary = start;
             while cursor < input.scalars.len() {
-                if input.scalars[cursor].grapheme_start && cursor > start {
+                let scalar = &input.scalars[cursor];
+                if (scalar.grapheme_start || bidi_controls.contains(scalar.c)) && cursor > start {
                     boundary = cursor;
                 }
                 let next = input.scalars[cursor].c.len_utf8() as u64;
