@@ -1,5 +1,5 @@
 //! Punctuation classification and blank space from the actual shaping face.
-use crate::geometry::{LayoutUnit, Saturation};
+use crate::geometry::{LayoutUnit, Saturation, WritingMode};
 use crate::paragraph::ParagraphData;
 use crate::style::TextSpacingTrim;
 use icu_properties::{
@@ -232,21 +232,18 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
             Size::new(run.font_size),
             LocationRef::new(&run.instance.coords),
         );
-        let nominal = font
-            .charmap()
-            .map('水')
-            .and_then(|g| metrics.advance_width(g))
-            .unwrap_or(run.font_size);
+        let charmap = font.charmap();
+        let nominal_metric = charmap.map('水').and_then(|g| metrics.advance_width(g));
+        let nominal = nominal_metric.unwrap_or(run.font_size);
         // A proportional ideograph face cannot supply a dependable fullwidth
         // measure. Only compare characters that the retained face contains.
-        let proportional = ['卜', '一']
+        let fullwidth_probes =
+            ['卜', '一'].map(|ch| charmap.map(ch).and_then(|g| metrics.advance_width(g)));
+        let proportional = fullwidth_probes
             .iter()
-            .filter_map(|c| {
-                font.charmap()
-                    .map(*c)
-                    .and_then(|g| metrics.advance_width(g))
-            })
-            .any(|w| (w - nominal).abs() > 1.0 / 64.0);
+            .flatten()
+            .any(|width| (*width - nominal).abs() > 1.0 / 64.0);
+        let reliable_fullwidth_metric = nominal_metric.is_some() && !proportional;
         if proportional || run.instance.embolden || run.instance.skew.is_some() {
             continue;
         }
@@ -261,6 +258,25 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
                 continue;
             };
             let p = &mut result[index];
+            let source_char = data.text[offset as usize..].chars().next().unwrap_or('\0');
+            if data.style.writing_mode == WritingMode::HorizontalTb
+                && p.class == PunctuationClass::Closing
+                && matches!(source_char, '\u{2019}' | '\u{201d}')
+                && g == begin + 1
+                && reliable_fullwidth_metric
+                && !run.instance.embolden
+                && run.instance.skew.is_none()
+            {
+                // Use the selected glyph's nominal metric: shaping features
+                // such as author-provided `halt` may change its advance.
+                if let (Some(nominal), Some(glyph)) = (
+                    nominal_metric,
+                    metrics.advance_width(GlyphId::new(data.glyphs.id[begin])),
+                ) && glyph < nominal - 1.0 / 64.0
+                {
+                    p.class = PunctuationClass::Pe;
+                }
+            }
             if !matches!(
                 p.class,
                 PunctuationClass::Opening | PunctuationClass::Closing | PunctuationClass::Middle
@@ -655,347 +671,4 @@ pub(super) fn justify_boundary(data: &ParagraphData, left: u32, right: u32) -> b
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{PunctuationClass as P, classify};
-    use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
-    use crate::limits::Limits;
-    use crate::node::{NodeId, TextSource};
-    use crate::style::{
-        FontFamily, FontMetricKind, FontSizeAdjust, FontVariation, InlineStyle, ParagraphStyle,
-        TextSpacingTrim,
-    };
-    use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult, ParagraphBuilder};
-    use skrifa::{FontRef, MetadataProvider, raw::TableProvider};
-
-    fn cjk_tables() -> Vec<([u8; 4], Vec<u8>)> {
-        let base = crate::test_support::fonts::CJK;
-        (0..u16::from_be_bytes(base[4..6].try_into().unwrap()) as usize)
-            .map(|n| {
-                let at = 12 + n * 16;
-                let offset = u32::from_be_bytes(base[at + 8..at + 12].try_into().unwrap()) as usize;
-                let len = u32::from_be_bytes(base[at + 12..at + 16].try_into().unwrap()) as usize;
-                (
-                    base[at..at + 4].try_into().unwrap(),
-                    base[offset..offset + len].to_vec(),
-                )
-            })
-            .collect()
-    }
-
-    fn cjk_font(tables: &mut [([u8; 4], Vec<u8>)]) -> Vec<u8> {
-        tables.sort_by_key(|t| t.0);
-        let mut bytes = crate::font::sfnt::build_sfnt(tables);
-        bytes[..4].copy_from_slice(b"OTTO");
-        bytes
-    }
-
-    #[test]
-    fn justification_filters_boundaries_inside_an_actual_punctuation_ligature() {
-        use crate::Fragment;
-        use crate::style::{TextAlign, TextJustify};
-        let font = FontRef::new(crate::test_support::fonts::CJK).unwrap();
-        let ids: Vec<_> = ['「', '日', '」']
-            .iter()
-            .map(|c| font.charmap().map(*c).unwrap().to_u32() as u16)
-            .collect();
-        let mut gsub = Vec::new();
-        let words = |bytes: &mut Vec<u8>, values: &[u16]| {
-            for value in values {
-                bytes.extend(value.to_be_bytes());
-            }
-        };
-        // GSUB1.0: DFLT required rlig, one type4/format1 lookup mapping
-        // 「日」 to the retained 日 outline. Each input keeps its source cut.
-        words(&mut gsub, &[1, 0, 10, 30, 44, 1]);
-        gsub.extend(b"DFLT");
-        words(&mut gsub, &[8, 4, 0, 0, 0, 0, 0, 1]);
-        gsub.extend(b"rlig");
-        words(&mut gsub, &[8, 0, 1, 0, 1, 4, 4, 0, 1, 8]);
-        words(
-            &mut gsub,
-            &[1, 8, 1, 14, 1, 1, ids[0], 1, 4, ids[1], 3, ids[1], ids[2]],
-        );
-        let mut tables = cjk_tables();
-        tables.retain(|(tag, _)| tag != b"GSUB");
-        tables.push((*b"GSUB", gsub));
-        let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
-        fonts
-            .register_face(
-                cjk_font(&mut tables),
-                0,
-                FontFaceDescriptor {
-                    family: "Ligature".into(),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-        let style = ParagraphStyle {
-            root: InlineStyle {
-                font_families: vec![FontFamily::Named("Ligature".into())],
-                font_size: 16.,
-                lang: Some("ja".into()),
-                text_spacing_trim: TextSpacingTrim::SpaceAll,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let mut builder = ParagraphBuilder::new(&style, &limits);
-        builder.push_text(TextSource::Generated { node: NodeId(1) }, "「日」");
-        let p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
-        assert_eq!(
-            p.data.glyphs.id,
-            [ids[1] as u32],
-            "fixture must actually ligate"
-        );
-        let options = crate::style::LineOptions {
-            text_align: TextAlign::JustifyAll,
-            text_justify: TextJustify::InterCharacter,
-            ..Default::default()
-        };
-        let LineResult::Line(line) = p.next_line(
-            &mut LayoutContext::new(),
-            p.start_token(),
-            &options,
-            &LineConstraint::new(48.),
-            &AtomicSizes::EMPTY,
-        ) else {
-            panic!("line")
-        };
-        assert_eq!(line.text_range(), 0..9);
-        assert_eq!(line.inline_size(), 16.);
-        let run = line
-            .fragments()
-            .find_map(|f| {
-                if let Fragment::GlyphRun(r) = f {
-                    Some(r)
-                } else {
-                    None
-                }
-            })
-            .unwrap();
-        let glyphs: Vec<_> = run.glyphs().collect();
-        assert_eq!(glyphs.len(), 1);
-        assert_eq!(glyphs[0].inline_position, 16.);
-    }
-
-    #[test]
-    fn fallback_variation_and_size_adjust_use_the_actual_blank() {
-        let mut tables = cjk_tables();
-        let count = FontRef::new(crate::test_support::fonts::CJK)
-            .unwrap()
-            .maxp()
-            .unwrap()
-            .num_glyphs();
-        let mut fvar = Vec::new();
-        for value in [1u16, 0, 16, 2, 1, 20, 0, 8] {
-            fvar.extend(value.to_be_bytes());
-        }
-        fvar.extend(b"wght");
-        for value in [100i32, 400, 900] {
-            fvar.extend((value << 16).to_be_bytes());
-        }
-        fvar.extend([0, 0, 1, 0]);
-        // A real HVAR table adds 600 font units to every advance at wght=900.
-        // The outlines retain their original bounds, so halfwidth trimming
-        // becomes unsafe after the ic-width adjustment keeps advances at 32px.
-        let mut hvar = Vec::new();
-        for value in [1u16, 0] {
-            hvar.extend(value.to_be_bytes());
-        }
-        for value in [20u32, 0, 0, 0] {
-            hvar.extend(value.to_be_bytes());
-        }
-        hvar.extend(1u16.to_be_bytes());
-        hvar.extend(12u32.to_be_bytes());
-        hvar.extend(1u16.to_be_bytes());
-        hvar.extend(22u32.to_be_bytes());
-        for value in [1u16, 1, 0, 16384, 16384, count, 1, 1, 0] {
-            hvar.extend(value.to_be_bytes());
-        }
-        for _ in 0..count {
-            hvar.extend(600i16.to_be_bytes());
-        }
-        tables.push((*b"fvar", fvar));
-        tables.push((*b"HVAR", hvar));
-        let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
-        fonts
-            .register_face(
-                crate::test_support::fonts::LATIN.to_vec(),
-                0,
-                FontFaceDescriptor {
-                    family: "Latin".into(),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-        fonts
-            .register_face(
-                cjk_font(&mut tables),
-                0,
-                FontFaceDescriptor {
-                    family: "Variable".into(),
-                    weight: (100., 900.),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-        for (weight, expected, blank) in [(400., 80., 16.), (900., 96., 0.)] {
-            let style = ParagraphStyle {
-                root: InlineStyle {
-                    font_families: vec![
-                        FontFamily::Named("Latin".into()),
-                        FontFamily::Named("Variable".into()),
-                    ],
-                    font_size: 16.,
-                    lang: Some("ja".into()),
-                    font_variations: vec![FontVariation {
-                        tag: *b"wght",
-                        value: weight,
-                    }],
-                    font_size_adjust: Some(FontSizeAdjust {
-                        metric: FontMetricKind::IcWidth,
-                        value: 2.,
-                    }),
-                    text_spacing_trim: TextSpacingTrim::Normal,
-                    ..Default::default()
-                },
-                ..Default::default()
-            };
-            let mut builder = ParagraphBuilder::new(&style, &limits);
-            builder.push_text(TextSource::Generated { node: NodeId(1) }, "「「日");
-            let para = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
-            assert_eq!(
-                para.data.punctuation[0].advance.to_f32(),
-                32.,
-                "weight {weight}"
-            );
-            assert_eq!(
-                para.data.punctuation[0].left.to_f32(),
-                blank,
-                "weight {weight}"
-            );
-            // The default location is represented by empty normalized coords.
-            if weight == 900. {
-                assert!(para.data.runs.iter().all(|r| r.instance.coords.len() == 1));
-            }
-            let LineResult::Line(line) = para.next_line(
-                &mut LayoutContext::new(),
-                para.start_token(),
-                &Default::default(),
-                &LineConstraint::new(200.),
-                &AtomicSizes::EMPTY,
-            ) else {
-                panic!("line")
-            };
-            assert_eq!(line.inline_size(), expected, "weight {weight}");
-            assert_eq!(line.text_range(), 0..9);
-        }
-    }
-
-    #[test]
-    fn proportional_punctuation_keeps_its_advance_and_ink() {
-        let font = FontRef::new(crate::test_support::fonts::CJK).unwrap();
-        let opening = font.charmap().map('「').unwrap().to_u32() as usize;
-        let mut tables = cjk_tables();
-        let hmtx = &mut tables.iter_mut().find(|t| t.0 == *b"hmtx").unwrap().1;
-        hmtx[opening * 4..opening * 4 + 2].copy_from_slice(&800u16.to_be_bytes());
-        let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
-        fonts
-            .register_face(
-                cjk_font(&mut tables),
-                0,
-                FontFaceDescriptor {
-                    family: "Proportional".into(),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-        let style = ParagraphStyle {
-            root: InlineStyle {
-                font_families: vec![FontFamily::Named("Proportional".into())],
-                font_size: 20.,
-                lang: Some("ja".into()),
-                text_spacing_trim: TextSpacingTrim::TrimAll,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let mut builder = ParagraphBuilder::new(&style, &limits);
-        builder.push_text(TextSource::Generated { node: NodeId(1) }, "「「日");
-        let para = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
-        assert_eq!(para.data.punctuation[0].advance.to_f32(), 16.);
-        assert_eq!(para.data.punctuation[0].left.to_f32(), 0.);
-        let LineResult::Line(line) = para.next_line(
-            &mut LayoutContext::new(),
-            para.start_token(),
-            &Default::default(),
-            &LineConstraint::new(200.),
-            &AtomicSizes::EMPTY,
-        ) else {
-            panic!("line")
-        };
-        assert_eq!(line.inline_size(), 52.);
-    }
-
-    #[test]
-    fn chinese_punctuation_respects_script_and_region_subtags() {
-        for lang in [
-            "zh-Hant",
-            "zh-Hant-HK",
-            "ZH-hant-tw",
-            "zh-TW",
-            "zh-HK",
-            "zh-MO",
-            "zh-TW-x-test",
-        ] {
-            for ch in ['、', '。', '，', '．', '：', '；'] {
-                assert_eq!(classify(ch, Some(lang)), P::Middle, "{lang}: {ch}");
-            }
-        }
-        for lang in [
-            "zh",
-            "zh-CN",
-            "zh-Hans-CN",
-            "zh-Hans-TW",
-            "zh-SG",
-            "zh-Hans-x-test",
-        ] {
-            for ch in ['、', '。', '，', '．', '：', '；'] {
-                assert_eq!(classify(ch, Some(lang)), P::Closing, "{lang}: {ch}");
-            }
-        }
-        for lang in [
-            None,
-            Some("ja-JP"),
-            Some("en-Hant"),
-            Some("zhx"),
-            Some("zh-u-rg-twzzzz"),
-        ] {
-            assert_eq!(classify('、', lang), P::Closing, "{lang:?}");
-        }
-        for lang in [None, Some("ja-JP"), Some("en-Hant"), Some("zhx")] {
-            assert_eq!(classify('：', lang), P::Middle, "{lang:?}");
-        }
-    }
-}
+mod tests;
