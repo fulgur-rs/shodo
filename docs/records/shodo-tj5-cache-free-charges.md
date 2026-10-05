@@ -33,7 +33,7 @@
 
 - `"N values saturated"` の N: 飽和する tab の step は、カバー済みの問い合わせでも課金されるようになったので増える。`build` の飽和は最初の問い合わせにまとめてではなく、範囲ごとに課金される。tab の golden（`line/testdata/b7d_tab_golden.txt`）は `huge` の 19 行だけが変わり、値は 1 つも変わらず、飽和の件数だけが変わった（例: `0..6` が 1 → 6、`0..2` が 0 → 1）。probe では `nestedhugetab` 20 段が 10372 → 10493、`siblingshugetab` が 3 → 4。
 - reshape 予算: `blocks` のヒットも課金するので、操作ごとの予算（`max_reshape_window_bytes × 64`、既定で 262,144 bytes）に以前より早く届きうる。届けば `"line edge reshape budget exceeded; keeping shared glyphs"` が早く出て、共有グリフを保つ（fail-closed の方向）。比べた probe とテストの fixture では予算に届かず、出力は変わらなかった。
-- 警告を出した `blocks` の計測は保存しないので、同じ範囲を再び測ると再び警告する（ほかのキャッシュを持たない経路、たとえば `width` の `windows::delta` と同じ）。警告の上限（既定 `max_warnings: Some(1024)`）に達して sink が抑制されると、抑制状態つきで保存されるようになる。
+- 警告を出した `blocks` の計測は保存しないので、同じ範囲を再び測ると再び警告する（ほかのキャッシュを持たない経路、たとえば `width` の `windows::delta` と同じ）。window 予算の警告のように毎回決まって出る警告は、main では 1 回だったものが上限まで繰り返されるので、警告の上限（既定 `max_warnings: Some(1024)`）に早く届き、ほかの種類の警告がそのぶん早く打ち切られうる。上限に達して sink が抑制されると、抑制状態つきで保存されるようになる。
 
 ## 方法
 
@@ -88,6 +88,8 @@ ignored テスト `accumulate_tests::b7d_operation_counts_report`（`fills` の�
 ## テスト
 
 - `line::range::tests::block_size_charges_the_same_cold_and_warm`: 全範囲で、cold、warm、`vacate_slots` の後、新しいコンテキストの `(高さ, Saturation, spent)` が同じ。予算を課金する範囲が実際にあることも確かめる。
+- `line::range::tests::refused_block_replays_measure_like_a_fresh_context`: 予算の上限の直前（`spent = 上限 − 1`）と抑制された sink のもとで、ゲートが再生を拒否したエントリが計測し直され、キャッシュを持たないコンテキストと `(高さ, Saturation, spent, 警告)` が同じになる。警告を出した計測の次の問い合わせも同じ。
+- `line::replay::tests::only_unsuppressed_recordings_without_effects_are_empty` と、tab の golden の中で同じ (fixture, 範囲) の行が同じ値と件数を持つことの確認。
 - `line::range::tests::width_charges_do_not_depend_on_query_order`: 全範囲の履歴を前から、後ろから、1 つずつ新しいコンテキストで問い合わせて、範囲ごとの `(値, Saturation, spent)` が同じ。tab-size 40px、飽和する単位を 1 つ持つ段落、tab-size 1e12px の 3 通り。
 - `line::range::tests::covered_tab_steps_charge_like_computed_ones`、`only_cleared_caches_move_the_epoch`: 旧規則のテスト（fill と無効化の規則）を新しい規則に書き換えたもの。
 - `ruby::memo_tests::cold_cache_fills_are_memoized`（旧 `cold_cache_fills_are_not_memoized`）、`ruby::accumulate_tests::entries_recorded_while_caches_fill_are_stored`（旧 `..._unstored`）、`effectful_tab_prefix_replacement_keeps_replay`（旧 `..._stops_replay`）。
