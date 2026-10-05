@@ -489,7 +489,6 @@ pub(super) fn width(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ParagraphBuilder;
     use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
     use crate::limits::Limits;
     use crate::node::{InlineEdges, NodeId, Sides, TextSource};
@@ -497,6 +496,7 @@ mod tests {
         BoxDecorationBreak, FontFamily, InlineStyle, ParagraphStyle, UnicodeBidi,
         WhiteSpaceCollapse,
     };
+    use crate::{Paragraph, ParagraphBuilder};
 
     fn fonts() -> FontCollection {
         let fonts = FontCollection::with_options(
@@ -967,5 +967,151 @@ mod tests {
         // Vacating the slots invalidates.
         cx.ruby_ranges.vacate_slots();
         assert_eq!(state(&cx), (g + 7, f + 4, e + 3));
+    }
+
+    /// One paragraph per golden fixture: preserved tabs under different
+    /// tab sizes, a ligature clipped by the range start, hanging trailing
+    /// tabs and a tab interval that saturates.
+    fn tab_golden_paragraphs() -> Vec<(&'static str, Paragraph)> {
+        let fonts = fonts();
+        fonts
+            .register_face(
+                crate::test_support::fonts::LATIN.to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: "Shodo Fixture Latin".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let style = |family: &str, tab_size: crate::style::TabSize| InlineStyle {
+            font_families: vec![FontFamily::Named(family.into())],
+            font_size: 24.0,
+            letter_spacing: 1.5,
+            white_space_collapse: WhiteSpaceCollapse::Preserve,
+            tab_size,
+            ..Default::default()
+        };
+        let build = |root: InlineStyle, texts: &[(u64, &str)]| {
+            let mut b = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    root: root.clone(),
+                    ..Default::default()
+                },
+                &Limits::default(),
+            );
+            for (node, text) in texts {
+                b.push_text(
+                    TextSource::Dom {
+                        node: NodeId(*node),
+                        offset: 40,
+                    },
+                    text,
+                );
+            }
+            b.build(&mut LayoutContext::new(), &fonts).unwrap()
+        };
+        use crate::style::TabSize;
+        vec![
+            (
+                "cjk",
+                build(
+                    style("Shodo Fixture CJK", TabSize::Px(40.0)),
+                    &[(1, "日\t本\t\t語\t \t")],
+                ),
+            ),
+            (
+                "spaces",
+                build(
+                    style("Shodo Fixture CJK", TabSize::Spaces(3.0)),
+                    &[(1, "日本\t語\t日")],
+                ),
+            ),
+            (
+                "ligature",
+                build(
+                    InlineStyle {
+                        font_size: 12.0,
+                        letter_spacing: 0.0,
+                        overflow_wrap: crate::style::OverflowWrap::Anywhere,
+                        ..style("Shodo Fixture Latin", TabSize::Px(40.0))
+                    },
+                    &[(1, "f"), (2, "f"), (3, "i"), (4, "\tWW\tW ")],
+                ),
+            ),
+            (
+                "huge",
+                build(
+                    style("Shodo Fixture CJK", TabSize::Px(1.0e12)),
+                    &[(1, "日\t本\t語\t")],
+                ),
+            ),
+        ]
+    }
+
+    /// Value and saturation of every query of a fixed history, one context
+    /// per fixture (see `tab_golden_paragraphs`).
+    fn tab_golden() -> String {
+        let mut out = String::new();
+        for (name, p) in tab_golden_paragraphs() {
+            if name == "ligature" {
+                assert!(p.data.units.iter().any(|u| {
+                    u.shared_cluster
+                        .as_ref()
+                        .is_some_and(|c| c.slices.len() == 3)
+                }));
+            }
+            let n = p.data.units.len();
+            let mut history = vec![0..2, 0..n, 0..3, 1..n, 0..n, 2..n, n - 2..n, 1..3, 0..n];
+            for start in 0..n {
+                for end in start + 1..=n {
+                    history.push(start..end);
+                }
+            }
+            for end in (1..=n).rev() {
+                history.push(0..end);
+            }
+            let mut cx = LayoutContext::new();
+            cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+            for range in history {
+                let mut sat = Saturation::default();
+                let value = width(
+                    &p.data,
+                    range.clone(),
+                    &AtomicSizes::EMPTY,
+                    &mut cx,
+                    &mut sat,
+                )
+                .map(|w| w.raw());
+                out.push_str(&format!(
+                    "{name} {range:?} {value:?} {} {}\n",
+                    sat.saturated, sat.non_finite
+                ));
+            }
+        }
+        out
+    }
+
+    /// Byte-identity with the previous tab prefix: the golden file was
+    /// captured on the code before shodo-b7d. Regenerate only on purpose
+    /// with `SHODO_UPDATE_GOLDEN=1`.
+    #[test]
+    fn tab_width_queries_match_the_golden_record() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/line/testdata/b7d_tab_golden.txt"
+        );
+        let got = tab_golden();
+        if std::env::var_os("SHODO_UPDATE_GOLDEN").is_some() {
+            std::fs::write(path, &got).unwrap();
+        }
+        let want = std::fs::read_to_string(path).expect("golden file");
+        assert_eq!(got, want);
+        // The record must exercise saturation, a clipped ligature and tabs.
+        assert!(
+            want.lines()
+                .any(|l| l.starts_with("huge ") && !l.ends_with(" 0 0")),
+            "the huge tab size must saturate"
+        );
     }
 }
