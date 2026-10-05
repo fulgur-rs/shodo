@@ -160,6 +160,9 @@ impl RangeCache {
             if let Some(mut alt) = self.alt.take() {
                 if alt.root == Some(root) {
                     // Both revisions' caches stay whole: no invalidation.
+                    // Memo and accumulator keys include the atomic revision,
+                    // so their entries only ever meet their own revision's
+                    // caches.
                     self.swap(&mut alt);
                     self.alt = Some(alt);
                     return;

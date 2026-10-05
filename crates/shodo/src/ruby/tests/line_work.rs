@@ -253,3 +253,169 @@ fn alternating_intrinsic_revisions_keep_both_range_caches() {
     let (all, growth) = doubling(intrinsic_builds, [16, 32, 64]);
     assert!(growth.iter().all(|g| *g <= 2.2), "{growth:?} {all:?}");
 }
+
+/// `r` sibling rubies, then `f` × ("日" + a float that clears both sides).
+fn ruby_then_clearing_floats(r: usize, f: usize) -> (Paragraph, AtomicIntrinsics) {
+    use crate::node::{NodeId, OutOfFlowKind, TextSource};
+    let mut b = crate::ParagraphBuilder::new(&paragraph_style(false), &Limits::default());
+    let mut inputs = AtomicIntrinsics::new();
+    for i in 0..r as u64 {
+        b.push_ruby(
+            NodeId(1000 + i),
+            &style(24.0),
+            annotated(
+                vec![base_text(
+                    300_000 + i,
+                    "12",
+                    &style(24.0),
+                    &Limits::default(),
+                )],
+                &["日"],
+                crate::ruby::RubyOverhang::None,
+                &Limits::default(),
+            ),
+        );
+    }
+    for i in 0..f as u64 {
+        b.push_text(
+            TextSource::Generated {
+                node: NodeId(500_000 + i),
+            },
+            "日",
+        );
+        b.push_out_of_flow(NodeId(900_000 + i), OutOfFlowKind::Float);
+        inputs.insert_float(
+            NodeId(900_000 + i),
+            crate::paragraph::FloatIntrinsic {
+                min_content: 1.0,
+                max_content: 1.0,
+                side: Default::default(),
+                clear: crate::paragraph::FloatClear::Both,
+            },
+        );
+    }
+    (finish(b), inputs)
+}
+
+/// Review of shodo-mc0: every float that clears probes the whole row from
+/// `total_unit` between word probes from another start, so the single walk
+/// restarts and visits every container again. Walk steps are charged: an
+/// operation's total walk work stays within its allowance.
+#[test]
+fn restarted_walks_are_charged() {
+    let (p, inputs) = ruby_then_clearing_floats(64, 512);
+    let options = LineOptions::default();
+    let mut unlimited = mode_context(Mode::Accumulate);
+    let p = with_factor(p, None);
+    p.intrinsic_sizes(&mut unlimited, &options, &inputs);
+    unlimited.begin_reshape_operation();
+    let p = with_factor(p, Some(1));
+    let mut limited = mode_context(Mode::Accumulate);
+    p.intrinsic_sizes(&mut limited, &options, &inputs);
+    limited.begin_reshape_operation();
+    let work = limited.ruby_line_work_log.last().unwrap().clone();
+    assert!(work.exhausted(), "{work:?}");
+    // Without the limit the restarted walks alone exceed what factor 1
+    // allows, and with it they stop there.
+    assert!(unlimited.ruby_walk_steps > work.extent() * 2);
+    assert!(
+        limited.ruby_walk_steps <= work.extent() + work.walk(),
+        "{} {work:?}",
+        limited.ruby_walk_steps
+    );
+}
+
+/// Siblings over "12" with a float after the `at`-th ruby.
+fn siblings_with_float(r: usize, at: usize) -> Paragraph {
+    use crate::node::{NodeId, OutOfFlowKind};
+    let mut b = crate::ParagraphBuilder::new(&paragraph_style(false), &Limits::default());
+    for i in 0..r as u64 {
+        b.push_ruby(
+            NodeId(1000 + i),
+            &style(24.0),
+            annotated(
+                vec![base_text(3000 + i, "12", &style(24.0), &Limits::default())],
+                &["日"],
+                crate::ruby::RubyOverhang::None,
+                &Limits::default(),
+            ),
+        );
+        if i as usize == at {
+            b.push_out_of_flow(NodeId(9000), OutOfFlowKind::Float);
+        }
+    }
+    finish(b)
+}
+
+/// A line result signature and its warnings.
+type Observed = (String, Vec<Warning>);
+
+/// `next_line` from the start at `wide` then `narrow` in one context, and at
+/// `narrow` in a fresh one, with `fail_index` forcing the narrow call's
+/// speculative `PartialLine::index` to fail. Returns both results and the
+/// index failures the retained context handled.
+fn retained_and_cold(
+    p: &Paragraph,
+    wide: f32,
+    narrow: f32,
+    fail_index: bool,
+) -> (Observed, Observed, usize) {
+    let options = LineOptions::default();
+    let line = |cx: &mut LayoutContext, width: f32| {
+        let result = p.next_line(
+            cx,
+            p.start_token(),
+            &options,
+            &LineConstraint::new(width),
+            &AtomicSizes::EMPTY,
+        );
+        (result_signature(result), cx.take_warnings())
+    };
+    let mut retained = mode_context(Mode::Accumulate);
+    line(&mut retained, wide);
+    retained.fail_next_index = fail_index;
+    let got = line(&mut retained, narrow);
+    let mut cold = mode_context(Mode::Accumulate);
+    (got, line(&mut cold, narrow), retained.index_failures)
+}
+
+/// Review of shodo-mc0: when a speculative `PartialLine::index` of a retained
+/// wider line fails, the narrower call scans again from the ruby work state
+/// it had before indexing, with an empty memo, and matches a call without
+/// the retained line. (The reshape budget keeps the index's charges, as on
+/// main.) The failure is forced after the index's probes; with these
+/// fixtures the restore is defense in depth: no case here diverges without
+/// it, but the branch runs.
+#[test]
+fn failed_index_rescans_like_a_cold_call() {
+    let mut failures = 0;
+    for factor in [1, 2, 3, 4, 8] {
+        for (p, narrow) in [
+            (profile_churn(48), [96.0f32, 300.0]),
+            (digit_siblings(32), [96.0, 400.0]),
+        ] {
+            let p = with_factor(p, Some(factor));
+            for narrow in narrow {
+                let (got, cold, failed) = retained_and_cold(&p, 1.0e7, narrow, true);
+                failures += failed;
+                assert_eq!(got, cold, "factor {factor} {narrow}");
+            }
+        }
+    }
+    assert!(failures > 0, "some retained line must fail its index");
+}
+
+/// The float placement probe after `index` is measured outside the
+/// allowance, so a float's position does not depend on a retained line.
+#[test]
+fn float_probe_after_index_matches_a_cold_call() {
+    for factor in [1, 2, 4] {
+        for at in [0, 15, 30] {
+            let p = with_factor(siblings_with_float(32, at), Some(factor));
+            for (wide, narrow) in [(1.0e7f32, 400.0f32), (2000.0, 600.0)] {
+                let (got, cold, _) = retained_and_cold(&p, wide, narrow, false);
+                assert_eq!(got, cold, "factor {factor} at {at} {wide} -> {narrow}");
+            }
+        }
+    }
+}

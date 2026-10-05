@@ -182,7 +182,15 @@ pub(crate) fn candidate_adjustment(
     // Fit probes grow `end` for a fixed `start`: resume the previous walk.
     let mut walk = cx.ruby_memo.take_walk();
     let through = super::memo::advance(&mut walk, data, start, end);
-    super::line_work::walked(cx, walk.as_ref().map_or(0, |w| w.visited().len()));
+    if let Some(w) = walk.as_ref() {
+        // A restarted walk (a new start) visits its containers again.
+        super::line_work::charge(cx, w.steps());
+        #[cfg(test)]
+        {
+            cx.ruby_walk_steps += w.steps();
+        }
+        super::line_work::walked(cx, w.visited().len());
+    }
     let key = super::memo::MemoKey::new(data, atomics, start, through);
     let epoch = cx.ruby_ranges.epoch();
     let core = match cx.ruby_memo.get(&key) {
@@ -242,6 +250,23 @@ pub(crate) fn candidate_adjustment(
     };
     cx.ruby_memo.put_walk(walk);
     lookahead(data, start, end, through, core, atomics, cx, sat)
+}
+
+/// `candidate_adjustment` outside the operation's work allowance, for a
+/// single probe per call (linear, like `apply`): it neither reads nor moves
+/// the admission state, though its measurements are charged.
+pub(crate) fn candidate_adjustment_exempt(
+    data: &ParagraphData,
+    start: usize,
+    end: usize,
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    let exempt = std::mem::replace(&mut cx.ruby_line_work.exempt, true);
+    let adjustment = candidate_adjustment(data, start, end, atomics, cx, sat);
+    cx.ruby_line_work.exempt = exempt;
+    adjustment
 }
 
 pub(crate) fn candidate_inner(

@@ -371,7 +371,12 @@ impl PartialLine {
                 );
             }
         }
-        if !sat.is_clean()
+        #[cfg(test)]
+        let forced = std::mem::take(&mut cx.fail_next_index);
+        #[cfg(not(test))]
+        let forced = false;
+        if forced
+            || !sat.is_clean()
             || warning_checkpoint.is_none()
             || cx.warnings.checkpoint() != warning_checkpoint
             || prefix.last().unwrap().raw() as i64 + indent.raw() as i64 > i32::MAX as i64
@@ -603,6 +608,10 @@ pub(super) fn resolve(
             // on the retained line (`ruby::line_work`).
             cx.ruby_line_work = ruby_work_before;
             cx.ruby_memo.clear();
+            #[cfg(test)]
+            {
+                cx.index_failures += 1;
+            }
             if valid {
                 return resolve(
                     para,
@@ -646,8 +655,10 @@ pub(super) fn resolve(
         let delta = windows.iter().fold(LayoutUnit::ZERO, |sum, window| {
             sum.add(window.delta(i, sat), sat)
         });
+        // One probe per call, after `index`, whose work state differs between
+        // a retained and a fresh call: measure it outside the allowance.
         let ruby_delta =
-            crate::ruby::measure::candidate_adjustment(&data, start, i, atomics, cx, sat);
+            crate::ruby::measure::candidate_adjustment_exempt(&data, start, i, atomics, cx, sat);
         return Err((node, ordinal, position.add(delta, sat).add(ruby_delta, sat)));
     }
     let (hang_start, trailing) =

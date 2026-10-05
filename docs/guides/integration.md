@@ -198,8 +198,8 @@ the context; past it the line keeps shared glyphs and warns.
 Ruby line measurement is bounded the same way. Each `next_line` or
 `intrinsic_sizes` call may measure ruby containers `max_ruby_line_work` times
 (16 by default) per unit its fit probes cover plus per container of its widest
-container walk, and measures a walk wider than 16,384 containers for one end per
-start only. Past that, the rest of the call fits lines (and measures intrinsic
+container walk, and measures a walk wider than 16,384 containers for one
+look-ahead end per start only. Past that, the rest of the call fits lines (and measures intrinsic
 sizes) without ruby annotation adjustments and warns once ("ruby line
 measurement budget exceeded; fitting without ruby adjustments"); accepted lines
 still place their ruby exactly, so only the break position (or the intrinsic

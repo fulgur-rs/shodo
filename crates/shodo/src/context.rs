@@ -26,12 +26,12 @@ pub struct LayoutContext {
     pub(crate) ruby_memo: crate::ruby::memo::RubyMemo,
     /// Ruby line-measurement work of the current operation (shodo-mc0).
     pub(crate) ruby_line_work: crate::ruby::line_work::LineWork,
-    /// The ruby line-measurement work state of every operation that charged
-    /// any, as it was when the next one began.
     /// Admit every ruby probe: tests that sweep every range of a paragraph
     /// in one operation (not a layout call) check reuse exactness alone.
     #[cfg(test)]
     pub(crate) ruby_line_work_disabled: bool,
+    /// The ruby line-measurement work state of every operation that charged
+    /// any, as it was when the next one began.
     #[cfg(test)]
     pub(crate) ruby_line_work_log: Vec<crate::ruby::line_work::LineWork>,
     #[cfg(test)]
@@ -50,6 +50,15 @@ pub struct LayoutContext {
     /// reuse path must match exactly.
     #[cfg(test)]
     pub(crate) ruby_reference: bool,
+    /// Make the next `PartialLine::index` fail after its probes.
+    #[cfg(test)]
+    pub(crate) fail_next_index: bool,
+    /// `PartialLine::index` failures handled by a fresh scan.
+    #[cfg(test)]
+    pub(crate) index_failures: usize,
+    /// Containers re-applied or visited by `ruby::memo::advance` walks.
+    #[cfg(test)]
+    pub(crate) ruby_walk_steps: u64,
     /// Units of the range costs built by `line::range::build`.
     #[cfg(test)]
     pub(crate) ruby_range_build_units: usize,

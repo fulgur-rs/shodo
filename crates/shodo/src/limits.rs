@@ -35,7 +35,7 @@ pub struct Limits {
     /// as a factor (16): the call may measure ruby containers this many times
     /// per unit its fit probes cover plus per container of its widest
     /// container walk, and measures a walk wider than 16,384 containers for
-    /// one end per start only. Past it, the rest of the call fits lines (and
+    /// one look-ahead end per start and atomic revision only. Past it, the rest of the call fits lines (and
     /// measures intrinsic sizes) without ruby annotation adjustments and
     /// warns, rather than failing line layout; accepted lines still place
     /// their ruby exactly. Zero always fits without the adjustments; `None`

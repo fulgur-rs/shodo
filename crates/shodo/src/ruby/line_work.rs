@@ -9,33 +9,45 @@
 //!
 //! Each `next_line` or `intrinsic_sizes` call therefore gets an allowance of
 //! `Limits::max_ruby_line_work` (a factor) times the units its fit probes
-//! cover (the last end minus the first start) plus the widest container
-//! walk it has made. Every live container measurement
-//! (`measure::measure_one`) and every position an accumulator adds one at a
-//! time costs one unit. A probe is admitted only while the spent units are
+//! cover (the last end minus the first start; `intrinsic_sizes` with a
+//! first line mixes the unit indices of its two datasets, which can at most
+//! double the span) plus the widest container walk it has made. Every live
+//! container measurement (`measure::measure_one`), every container a walk
+//! (`memo::advance`) re-applies or visits (a restarted walk visits them all
+//! again) and every position an accumulator adds one at a time costs one
+//! unit. A probe is admitted only while the spent units are
 //! below the allowance; once one is refused, the rest of the call answers
 //! every adjustment-only probe with zero (sticky, so no later probe resumes
 //! a walk that skipped steps) and the sink takes one warning.
 //!
 //! A walk wider than an accumulator keeps (`accumulate::MAX_CONTAINERS`,
-//! 16,384) is measured for at most one `through` per start and atomic
-//! revision in an operation: the through memo alone would measure every
-//! container of such a walk again at each step, so the next probe that
-//! would is refused the same way.
+//! 16,384) is measured for at most one look-ahead end (`through`) per start
+//! and atomic revision in an operation (asking for that same end again
+//! measures it again): the through memo alone would measure every container
+//! of such a walk again at each step, so a probe with another end is
+//! refused the same way.
 //!
 //! A probe admitted just below the allowance measures at most the
-//! containers of its walk, so the fit probes of a call spend at most the
-//! allowance plus one walk; an accepted line then measures its own
-//! containers once more (linear).
+//! containers of its walk and the annotation-lane containers nested in
+//! them, so the fit probes of a call spend at most the allowance plus one
+//! such walk. An accepted line then measures its own containers once more,
+//! and the float placement probe after `PartialLine::index` is measured
+//! outside the allowance (one probe per call; linear either way).
 //!
 //! The refusal is a function of the call's own probe sequence and of the
 //! state the exact-replay gates read (`edge_reshape_spent`, sink
-//! suppression), never of caches left by earlier calls: the per-operation
-//! memo and accumulators start empty, range cache hits charge like misses
-//! (shodo-tj5), a scan that warned is never retained as a `PartialLine`, a
-//! failed speculative `PartialLine::index` restores this state and clears the
-//! memo before scanning again, and the allowance uses maxima, so repeating a
-//! probe never raises it.
+//! suppression), not of the contents of caches left by earlier calls: the
+//! per-operation memo and accumulators start empty, range cache hits charge
+//! like misses (shodo-tj5), and a scan that warned is never retained as a
+//! `PartialLine`. A retained line changes the probe sequence only through
+//! `PartialLine::index`. Its probes are a superset of a fresh narrower
+//! scan's (repeated probes add work but never allowance: it uses maxima),
+//! so an index that is not refused means the fresh scan would not be
+//! either; a failed index restores this state and clears the memo before
+//! scanning again. One input remains shared with main's reshape budget: a
+//! failed index keeps its reshape charges (`edge_reshape_spent` is not
+//! restored, as before this limit), and the replay gates of the rescan read
+//! them.
 //!
 //! Accepted lines measure their ruby in full (`measure::candidate` through
 //! `apply`), so the ruby geometry of a placed line is exact; only the fit
@@ -67,6 +79,9 @@ pub(crate) struct LineWork {
     wide: Vec<(usize, u64, usize)>,
     /// A probe was refused: every later probe of the operation is too.
     exhausted: bool,
+    /// Admit without reading or updating the state
+    /// (`measure::candidate_adjustment_exempt`).
+    pub(crate) exempt: bool,
 }
 
 impl LineWork {
@@ -77,6 +92,7 @@ impl LineWork {
         self.last = 0;
         self.walk = 0;
         self.exhausted = false;
+        self.exempt = false;
         self.wide.clear();
     }
 
@@ -126,6 +142,9 @@ pub(crate) fn admit(
         return true;
     }
     let work = &mut cx.ruby_line_work;
+    if work.exempt {
+        return true;
+    }
     if !work.exhausted {
         let first = work.first.map_or(start, |first| first.min(start));
         work.first = Some(first);
@@ -172,6 +191,9 @@ pub(crate) fn admit_walk(
         return true;
     }
     let work = &mut cx.ruby_line_work;
+    if work.exempt {
+        return true;
+    }
     match work
         .wide
         .iter()
