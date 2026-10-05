@@ -244,9 +244,12 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
             .flatten()
             .any(|width| (*width - nominal).abs() > 1.0 / 64.0);
         let reliable_fullwidth_metric = nominal_metric.is_some() && !proportional;
-        if proportional || run.instance.embolden || run.instance.skew.is_some() {
+        if proportional {
             continue;
         }
+        // Synthetic emboldening and slanting keep the outline position, so
+        // the glyph still classifies punctuation, but its blanks are unsafe.
+        let synthetic = run.instance.embolden || run.instance.skew.is_some();
         let mut g = run.glyphs.start as usize;
         while g < run.glyphs.end as usize {
             let begin = g;
@@ -320,6 +323,29 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
             let Some((left, right)) = bounds else {
                 continue;
             };
+            if matches!(
+                source_char,
+                '\u{3001}' | '\u{3002}' | '\u{ff0c}' | '\u{ff0e}' | '\u{ff1a}' | '\u{ff1b}'
+            ) {
+                // Dot and colon punctuation is closing or middle punctuation
+                // depending on where the glyph draws it. A glyph that fills
+                // the em, such as an upright vertical colon without a `vert`
+                // form, or one drawn in the trailing half takes part in
+                // neither. Compare with the face metric, not the rounded
+                // advance, so the class does not flip with the font size.
+                // Clusters that cannot be measured keep the language class.
+                let half = nominal / 2.0;
+                p.class = if right <= half {
+                    PunctuationClass::Closing
+                } else if left < half && right - left <= half && left >= half / 2.0 {
+                    PunctuationClass::Middle
+                } else {
+                    PunctuationClass::Other
+                };
+            }
+            if synthetic {
+                continue;
+            }
             let half = advance.div_i32(2);
             match p.class {
                 PunctuationClass::Opening if left >= half.to_f32() => p.left = half,
@@ -654,6 +680,8 @@ pub(super) fn justify_boundary(data: &ParagraphData, left: u32, right: u32) -> b
                     .is_some_and(|l| l.eq_ignore_ascii_case("ja"))
             },
         );
+        // Expansion opportunities depend on the character, not the glyph, so
+        // this keeps the language class even where `build` measured another.
         let protected = matches!(
             classify(ch, language),
             PunctuationClass::Opening

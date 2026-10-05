@@ -3355,6 +3355,91 @@ fn vertical_spacing_fonts(family: &str) -> (Limits, FontCollection) {
 }
 
 #[test]
+fn colon_punctuation_class_follows_the_shaped_glyph() {
+    use crate::line::punctuation::PunctuationClass as P;
+    use crate::node::{NodeId, TextSource};
+    use crate::style::{FontFamily, InlineStyle, ParagraphStyle, TextSpacingTrim};
+
+    let (limits, fonts) = vertical_spacing_fonts("Colon CJK");
+    let punctuation = |mode, lang: &str, text: &str| {
+        let style = ParagraphStyle {
+            writing_mode: mode,
+            root: InlineStyle {
+                font_families: vec![FontFamily::Named("Colon CJK".into())],
+                font_size: 20.0,
+                lang: Some(lang.into()),
+                text_spacing_trim: TextSpacingTrim::Normal,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        let crate::LineResult::Line(line) = paragraph.next_line(
+            &mut crate::LayoutContext::new(),
+            paragraph.start_token(),
+            &Default::default(),
+            &crate::LineConstraint::new(400.0),
+            &crate::AtomicSizes::EMPTY,
+        ) else {
+            panic!("expected one line")
+        };
+        (paragraph.data.punctuation[1], line.inline_size())
+    };
+    let layout = |mode, lang: &str, text: &str| {
+        let (punctuation, size) = punctuation(mode, lang, text);
+        (punctuation.class, size)
+    };
+
+    // Rotated or centered glyphs keep the language convention.
+    assert_eq!(
+        layout(WritingMode::HorizontalTb, "ja", "水；（水"),
+        (P::Middle, 70.0)
+    );
+    assert_eq!(
+        layout(WritingMode::HorizontalTb, "zh-Hans", "水；（水"),
+        (P::Closing, 70.0)
+    );
+    assert_eq!(
+        layout(WritingMode::VerticalRl, "ja", "水：（水"),
+        (P::Middle, 70.0)
+    );
+    // Upright vertical colons and semicolons fill more than half of the
+    // vertical em, so they are neither closing nor middle punctuation and
+    // leave the following bracket fullwidth.
+    for (lang, text) in [
+        ("ja", "水；（水"),
+        ("zh-Hans", "水：（水"),
+        ("zh-Hans", "水；（水"),
+        ("zh-Hant", "水：（水"),
+        ("zh-Hant", "水；（水"),
+    ] {
+        let (colon, size) = punctuation(WritingMode::VerticalRl, lang, text);
+        assert_eq!((colon.class, size), (P::Other, 80.0), "{lang} {text}");
+        assert_eq!(
+            (colon.left, colon.right),
+            (LayoutUnit::ZERO, LayoutUnit::ZERO)
+        );
+    }
+    // The dot convention also comes from the glyph in both flows.
+    assert_eq!(
+        layout(WritingMode::HorizontalTb, "zh-Hant", "水。（水"),
+        (P::Middle, 70.0)
+    );
+    assert_eq!(
+        layout(WritingMode::VerticalRl, "ja", "水。（水"),
+        (P::Closing, 70.0)
+    );
+    assert_eq!(
+        layout(WritingMode::VerticalRl, "zh-Hant", "水。（水"),
+        (P::Middle, 70.0)
+    );
+}
+
+#[test]
 fn vertical_normal_keeps_wrapped_opening_from_another_inline_fullwidth() {
     use crate::node::{InlineEdges, NodeId, TextSource};
     use crate::style::{FontFamily, InlineStyle, ParagraphStyle, TextSpacingTrim};
@@ -3395,4 +3480,63 @@ fn vertical_normal_keeps_wrapped_opening_from_another_inline_fullwidth() {
     // `normal` does not trim the start of a line, even though the opening
     // bracket would pair with the closing bracket on the previous line.
     assert_eq!(sizes, [80.0, 40.0]);
+}
+
+#[test]
+fn colon_punctuation_class_follows_synthetic_and_sideways_glyphs() {
+    use crate::line::punctuation::PunctuationClass as P;
+    use crate::node::{InlineEdges, NodeId, TextSource};
+    use crate::style::{FontFamily, InlineStyle, ParagraphStyle, TextOrientation, TextSpacingTrim};
+
+    let (limits, fonts) = vertical_spacing_fonts("Synthetic colon CJK");
+    let layout = |orientation, bold_colon: bool| {
+        let root = InlineStyle {
+            font_families: vec![FontFamily::Named("Synthetic colon CJK".into())],
+            font_size: 20.0,
+            lang: Some("ja".into()),
+            text_spacing_trim: TextSpacingTrim::Normal,
+            text_orientation: orientation,
+            ..Default::default()
+        };
+        let style = ParagraphStyle {
+            writing_mode: WritingMode::VerticalRl,
+            root: root.clone(),
+            ..Default::default()
+        };
+        let mut colon = root.clone();
+        if bold_colon {
+            colon.font_weight = 700.0;
+        }
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        builder.open_inline(NodeId(1), &colon, InlineEdges::default());
+        builder.push_text(TextSource::Generated { node: NodeId(2) }, "水；");
+        builder.close_inline();
+        builder.push_text(TextSource::Generated { node: NodeId(3) }, "（水");
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        let crate::LineResult::Line(line) = paragraph.next_line(
+            &mut crate::LayoutContext::new(),
+            paragraph.start_token(),
+            &Default::default(),
+            &crate::LineConstraint::new(400.0),
+            &crate::AtomicSizes::EMPTY,
+        ) else {
+            panic!("expected one line")
+        };
+        let synthetic = paragraph.data.runs.iter().any(|run| run.instance.embolden);
+        (
+            paragraph.data.punctuation[1].class,
+            line.inline_size(),
+            synthetic,
+        )
+    };
+
+    // Synthetic emboldening keeps the upright semicolon filling the em.
+    assert_eq!(layout(TextOrientation::Mixed, true), (P::Other, 80.0, true));
+    // Sideways text measures the rotated horizontal glyph instead.
+    assert_eq!(
+        layout(TextOrientation::Sideways, false),
+        (P::Middle, 70.0, false)
+    );
 }
