@@ -86,4 +86,7 @@ name = "d77_scale"
 name = "sibling_scale"
 
 [[example]]
+name = "mc0_scale"
+
+[[example]]
 name = "tab_scale"

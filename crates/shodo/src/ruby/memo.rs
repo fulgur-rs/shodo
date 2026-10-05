@@ -391,11 +391,18 @@ pub(crate) struct WalkState {
     clipped: Vec<usize>,
     /// First container index a resumed walk may still visit.
     resume: usize,
+    /// Containers the latest `advance` re-applied or visited: its work.
+    steps: u64,
 }
 
 impl WalkState {
     pub(crate) fn visited(&self) -> &[usize] {
         &self.visited
+    }
+
+    /// Containers the latest `advance` re-applied or newly visited.
+    pub(crate) fn steps(&self) -> u64 {
+        self.steps
     }
 }
 
@@ -487,6 +494,7 @@ pub(crate) fn advance(
             visited: Vec::new(),
             clipped: Vec::new(),
             resume: 0,
+            steps: 0,
         });
     }
     let WalkState {
@@ -494,8 +502,11 @@ pub(crate) fn advance(
         visited,
         clipped,
         resume,
+        steps,
         ..
     } = state.as_mut().expect("walk state was just ensured");
+    // Re-applied plus newly visited containers.
+    *steps = clipped.len() as u64;
     let mut through = end;
     // Re-apply the clipped prefix containers; the unclipped ones are
     // identities for every bound at least as large as before (point 3).
@@ -523,6 +534,7 @@ pub(crate) fn advance(
             }
             *through = extend(ruby, *through);
             visited.push(container);
+            *steps += 1;
             *resume = container + 1;
         },
     );

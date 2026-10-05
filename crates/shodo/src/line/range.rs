@@ -42,15 +42,93 @@ pub(crate) struct RangeCache {
     /// fill replays exactly after it. Reuse across measurements
     /// (`ruby::accumulate`) still resets on an invalidation, conservatively.
     epoch: u64,
+    /// The caches of the same dataset under the previous atomic revision.
+    /// `intrinsic_sizes` measures min and max content with separate atomics
+    /// and switches at every forced break and cleared float: dropping the
+    /// caches at each switch rebuilt the paragraph's indexes every time,
+    /// quadratic in the paragraph (shodo-mc0). At most one is kept, and only
+    /// once the revisions alternate (holding both costs memory and fresh
+    /// allocations, measurably slower for a single switch).
+    alt: Option<Box<Stash>>,
+    /// The root whose caches the last revision change of the same dataset
+    /// dropped. Returning to it starts keeping `alt`.
+    dropped: Option<(u64, usize, u64)>,
+    /// Override of `MAX_BLOCKS`.
+    #[cfg(test)]
+    pub(crate) block_cap: Option<usize>,
 }
 
+/// The caches of one root, stashed by `RangeCache::begin`.
+#[derive(Debug, Default)]
+struct Stash {
+    root: Option<(u64, usize, u64)>,
+    sets: crate::hashing::FastMap<(u64, usize), Costs>,
+    metrics: crate::hashing::FastMap<(u64, usize), Option<Box<super::metric_index::MetricIndex>>>,
+    blocks: crate::hashing::FastMap<BlockKey, LayoutUnit>,
+    block_effects: crate::hashing::FastMap<BlockKey, (LayoutUnit, crate::line::replay::Effects)>,
+    neighbors:
+        crate::hashing::FastMap<(u64, usize), Option<Box<crate::ruby::overhang::NeighborIndex>>>,
+}
+
+/// Entries kept in `blocks` and `block_effects` together. Reaching it clears
+/// both before the next insert. A hit has exactly the side effects of a
+/// fresh measurement (shodo-tj5), so clearing changes no result, charge or
+/// warning, only how often a block is measured. At most about 16,384 × 60
+/// bytes (key, value and `Effects`), roughly 1 MiB.
+const MAX_BLOCKS: usize = 16_384;
+
+/// A clear releases maps whose capacity grew beyond this.
+const RETAINED_BLOCKS: usize = 256;
+
 impl RangeCache {
+    fn block_cap(&self) -> usize {
+        #[cfg(test)]
+        if let Some(cap) = self.block_cap {
+            return cap;
+        }
+        MAX_BLOCKS
+    }
+
+    /// Entries in the block caches.
+    #[cfg(test)]
+    pub(crate) fn block_entries(&self) -> usize {
+        self.blocks.len() + self.block_effects.len()
+    }
+
+    /// Make room for one more block entry under `key`.
+    fn reserve_block(&mut self, key: &BlockKey) {
+        if self.blocks.contains_key(key) || self.block_effects.contains_key(key) {
+            return;
+        }
+        if self.blocks.len() + self.block_effects.len() < self.block_cap() {
+            return;
+        }
+        self.blocks.clear();
+        self.block_effects.clear();
+        if self.blocks.capacity() > RETAINED_BLOCKS {
+            self.blocks.shrink_to(RETAINED_BLOCKS);
+        }
+        if self.block_effects.capacity() > RETAINED_BLOCKS {
+            self.block_effects.shrink_to(RETAINED_BLOCKS);
+        }
+    }
+
     pub(crate) fn epoch(&self) -> u64 {
         self.epoch
     }
 
     fn invalidate(&mut self) {
         self.epoch = self.epoch.wrapping_add(1);
+    }
+
+    /// Exchange the current caches with `stash`.
+    fn swap(&mut self, stash: &mut Stash) {
+        std::mem::swap(&mut self.root, &mut stash.root);
+        std::mem::swap(&mut self.sets, &mut stash.sets);
+        std::mem::swap(&mut self.metrics, &mut stash.metrics);
+        std::mem::swap(&mut self.blocks, &mut stash.blocks);
+        std::mem::swap(&mut self.block_effects, &mut stash.block_effects);
+        std::mem::swap(&mut self.neighbors, &mut stash.neighbors);
     }
 
     pub(crate) fn begin(&mut self, data: &ParagraphData, atomics: &AtomicSizes) {
@@ -62,7 +140,8 @@ impl RangeCache {
         // Retained nested annotation layout revisits datasets already indexed
         // as children of this root. Keep their scalar tables together, without
         // treating child materialization as a new independent paragraph. A new
-        // dataset or changed atomic revision still replaces the whole cache.
+        // dataset replaces the whole cache; a changed atomic revision of the
+        // same dataset stashes it, and the stashed revision comes back whole.
         let key = (root.0, root.1);
         if self.root.is_some_and(|owner| owner.2 == root.2)
             && (self.sets.contains_key(&key)
@@ -71,15 +150,45 @@ impl RangeCache {
         {
             return;
         }
-        if self.root != Some(root) {
-            self.sets.clear();
-            self.blocks.clear();
-            self.block_effects.clear();
-            self.metrics.clear();
-            self.neighbors.clear();
-            self.root = Some(root);
-            self.invalidate();
+        if self.root == Some(root) {
+            return;
         }
+        let same_dataset = self
+            .root
+            .is_some_and(|owner| (owner.0, owner.1) == (root.0, root.1));
+        if same_dataset {
+            if let Some(mut alt) = self.alt.take() {
+                if alt.root == Some(root) {
+                    // Both revisions' caches stay whole: no invalidation.
+                    // Memo and accumulator keys include the atomic revision,
+                    // so their entries only ever meet their own revision's
+                    // caches.
+                    self.swap(&mut alt);
+                    self.alt = Some(alt);
+                    return;
+                }
+                // A third revision: the stashed one is dropped below.
+            } else if self.dropped == Some(root) {
+                // Back to the revision dropped last: the revisions alternate,
+                // so keep the current caches for the next switch. A single
+                // switch (the usual intrinsic call) keeps nothing extra.
+                let mut stash = Box::<Stash>::default();
+                self.swap(&mut stash);
+                self.alt = Some(stash);
+                self.root = Some(root);
+                self.invalidate();
+                return;
+            }
+        }
+        self.dropped = if same_dataset { self.root } else { None };
+        self.sets.clear();
+        self.blocks.clear();
+        self.block_effects.clear();
+        self.metrics.clear();
+        self.neighbors.clear();
+        self.alt = None;
+        self.root = Some(root);
+        self.invalidate();
     }
 
     /// Empty every index slot while keeping its key. The scalar caches are
@@ -87,6 +196,8 @@ impl RangeCache {
     /// instead of being answered from a cached result.
     #[cfg(test)]
     pub(crate) fn vacate_slots(&mut self) {
+        self.alt = None;
+        self.dropped = None;
         self.sets.clear();
         self.blocks.clear();
         self.block_effects.clear();
@@ -139,6 +250,9 @@ pub(crate) fn block_size(
     let height = measure_block(data, range, ruby, atomics, cx, sat);
     let effects = super::replay::finish(cx, recording, sat);
     let cache = &mut cx.ruby_ranges;
+    if effects.is_some() {
+        cache.reserve_block(&key);
+    }
     match effects {
         Some(effects) if effects.is_empty() => {
             cache.block_effects.remove(&key);
@@ -265,6 +379,10 @@ fn difference(a: Saturation, b: Saturation) -> Saturation {
 /// Build the range costs of a paragraph. Charges nothing: the saturation
 /// of measuring each unit is kept in `Costs::saturated` for the queries.
 fn build(data: &ParagraphData, atomics: &AtomicSizes, cx: &mut LayoutContext) -> Costs {
+    #[cfg(test)]
+    {
+        cx.ruby_range_build_units += data.units.len();
+    }
     let mut advances = vec![0_i64];
     let mut hanging_advances = vec![0_i64];
     let mut hanging_units = Vec::new();
@@ -1223,6 +1341,47 @@ mod tests {
             }
         }
         assert!(charged > 0, "some range must charge the reshape budget");
+    }
+
+    /// shodo-mc0: the block caches stay within their cap, and crossing it
+    /// (a clear before the insert) leaves every query's height, saturation,
+    /// spent bytes and warnings equal to a context that never cached.
+    #[test]
+    fn block_cap_crossing_matches_a_fresh_context() {
+        let p = charging_paragraph(crate::style::TabSize::Px(40.0), false);
+        let n = p.data.units.len();
+        let measure = |cx: &mut LayoutContext, range: Range<usize>| {
+            cx.begin_reshape_operation();
+            let mut sat = Saturation::default();
+            let height = block_size(
+                &p.data,
+                range,
+                &Default::default(),
+                &AtomicSizes::EMPTY,
+                cx,
+                &mut sat,
+            );
+            (height, sat, cx.edge_reshape_spent, cx.take_warnings())
+        };
+        let mut capped = LayoutContext::new();
+        capped.ruby_ranges.block_cap = Some(2);
+        capped.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+        let mut clears = 0;
+        for _ in 0..2 {
+            for start in 0..n {
+                for end in start + 1..=n {
+                    let before = capped.ruby_ranges.block_entries();
+                    let got = measure(&mut capped, start..end);
+                    let after = capped.ruby_ranges.block_entries();
+                    clears += usize::from(after < before);
+                    assert!(after <= 2, "{after} entries");
+                    let mut fresh = LayoutContext::new();
+                    fresh.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+                    assert_eq!(got, measure(&mut fresh, start..end), "{start}..{end}");
+                }
+            }
+        }
+        assert!(clears > 0, "the cap must be crossed");
     }
 
     /// shodo-tj5: a `blocks` entry with effects whose replay the gate refuses

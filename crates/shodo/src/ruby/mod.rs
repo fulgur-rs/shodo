@@ -15,6 +15,7 @@ pub(crate) mod hit;
 pub use hit::RubyHit;
 mod index;
 pub(crate) mod input;
+pub(crate) mod line_work;
 pub(crate) mod measure;
 pub(crate) mod memo;
 pub(crate) mod overhang;
@@ -58,3 +59,7 @@ mod memo_tests;
 #[cfg(test)]
 #[path = "tests/accumulate.rs"]
 mod accumulate_tests;
+
+#[cfg(test)]
+#[path = "tests/line_work.rs"]
+mod line_work_tests;

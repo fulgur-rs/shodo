@@ -606,6 +606,8 @@ pub(super) fn sweep_in(p: &Paragraph, starts: &[usize], cx: &mut LayoutContext) 
     let data = &p.data;
     let n = data.units.len();
     let mut sat = Saturation::default();
+    // Sweeps check reuse exactness, not the work allowance (shodo-mc0).
+    cx.ruby_line_work_disabled = true;
     cx.begin_reshape_operation();
     let mut values = Vec::new();
     for end in 1..=n {
@@ -1171,6 +1173,8 @@ fn repeated_profile_calls_replay_with_their_charges() {
     let n = data.units.len();
     let run = |mode: Mode, pre: PreState| {
         let mut cx = mode_context(mode);
+        // Every range in one operation: reuse exactness, not the allowance.
+        cx.ruby_line_work_disabled = true;
         if pre.suppressed {
             cx.warnings.set_max(Some(0));
             cx.warnings
@@ -2313,6 +2317,8 @@ fn cap_overflow_falls_back_and_releases_the_accumulator() {
     let run = |mode: Mode, cap: Option<usize>| {
         let mut cx = mode_context(mode);
         cx.ruby_accumulate_cap = cap;
+        // The memo fallback's exactness, not the wide-walk refusal.
+        cx.ruby_line_work_disabled = true;
         let mut sat = Saturation::default();
         cx.begin_reshape_operation();
         let values: Vec<_> = (1..=n)
