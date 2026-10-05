@@ -46,8 +46,13 @@ pub(crate) struct RangeCache {
     /// `intrinsic_sizes` measures min and max content with separate atomics
     /// and switches at every forced break and cleared float: dropping the
     /// caches at each switch rebuilt the paragraph's indexes every time,
-    /// quadratic in the paragraph (shodo-mc0). At most one is kept.
+    /// quadratic in the paragraph (shodo-mc0). At most one is kept, and only
+    /// once the revisions alternate (holding both costs memory and fresh
+    /// allocations, measurably slower for a single switch).
     alt: Option<Box<Stash>>,
+    /// The root whose caches the last revision change of the same dataset
+    /// dropped. Returning to it starts keeping `alt`.
+    dropped: Option<(u64, usize, u64)>,
     /// Override of `MAX_BLOCKS`.
     #[cfg(test)]
     pub(crate) block_cap: Option<usize>,
@@ -148,26 +153,31 @@ impl RangeCache {
         if self.root == Some(root) {
             return;
         }
-        if self
+        let same_dataset = self
             .root
-            .is_some_and(|owner| (owner.0, owner.1) == (root.0, root.1))
-        {
-            let mut stash = match self.alt.take() {
-                Some(mut alt) if alt.root == Some(root) => {
+            .is_some_and(|owner| (owner.0, owner.1) == (root.0, root.1));
+        if same_dataset {
+            if let Some(mut alt) = self.alt.take() {
+                if alt.root == Some(root) {
                     // Both revisions' caches stay whole: no invalidation.
                     self.swap(&mut alt);
                     self.alt = Some(alt);
                     return;
                 }
-                // A third revision drops the stashed one.
-                _ => Box::<Stash>::default(),
-            };
-            self.swap(&mut stash);
-            self.alt = Some(stash);
-            self.root = Some(root);
-            self.invalidate();
-            return;
+                // A third revision: the stashed one is dropped below.
+            } else if self.dropped == Some(root) {
+                // Back to the revision dropped last: the revisions alternate,
+                // so keep the current caches for the next switch. A single
+                // switch (the usual intrinsic call) keeps nothing extra.
+                let mut stash = Box::<Stash>::default();
+                self.swap(&mut stash);
+                self.alt = Some(stash);
+                self.root = Some(root);
+                self.invalidate();
+                return;
+            }
         }
+        self.dropped = if same_dataset { self.root } else { None };
         self.sets.clear();
         self.blocks.clear();
         self.block_effects.clear();
@@ -184,6 +194,7 @@ impl RangeCache {
     #[cfg(test)]
     pub(crate) fn vacate_slots(&mut self) {
         self.alt = None;
+        self.dropped = None;
         self.sets.clear();
         self.blocks.clear();
         self.block_effects.clear();
