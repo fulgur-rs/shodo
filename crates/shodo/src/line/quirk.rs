@@ -34,13 +34,13 @@ pub(crate) fn end_edge(data: &ParagraphData, b: u32) -> bool {
 
 /// Text the unit's `parent_box` directly contains on a line whose trailing
 /// run starts at `t`.
-pub(crate) fn text(data: &ParagraphData, i: usize, t: usize) -> bool {
+fn text(data: &ParagraphData, i: usize, t: usize) -> bool {
     matches!(data.units[i].kind, UnitKind::Cluster { .. } | UnitKind::Tab)
         && !(i >= t && trims(data, i))
 }
 
 /// Content that keeps a forced break from contributing its parent's strut.
-pub(crate) fn content(data: &ParagraphData, i: usize, t: usize) -> bool {
+fn content(data: &ParagraphData, i: usize, t: usize) -> bool {
     match data.units[i].kind {
         UnitKind::Atomic { .. } => true,
         UnitKind::Open { box_index } => start_edge(data, box_index),

@@ -507,6 +507,8 @@ impl MetricIndex {
                 if g.units.start >= range.end {
                     break;
                 }
+                // Constant time relies on no group starting inside the run.
+                debug_assert!(i - first < 2, "trailing run starts groups");
                 affected.insert(i);
             }
             if let Some((k, lo)) = q.forced(data, range) {
