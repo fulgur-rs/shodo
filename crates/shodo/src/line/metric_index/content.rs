@@ -340,8 +340,16 @@ pub(crate) struct ContainerNote {
     /// height and above.
     pub(crate) profile: bool,
     /// Visual neighbours `(before, after)` whose allowance was computed
-    /// (`ruby::overhang::allowances`).
+    /// (`ruby::overhang::allowances`): `around` over the clipped ruby target,
+    /// in line-relative order. A slot is meaningful only where `read` is set.
     pub(crate) neighbours: [Option<usize>; 2],
+    /// Sides whose neighbour an allowance read, so that a read `None` (a line
+    /// edge) differs from a side never read.
+    pub(crate) read: [bool; 2],
+    /// A side was read twice with different neighbours; one slot cannot
+    /// describe the dependency (never the case while every allowance of a
+    /// container queries the same target).
+    pub(crate) mixed: bool,
     /// Some allowance read a visual neighbour (possibly none at a line edge).
     pub(crate) neighbour_dependent: bool,
 }
@@ -395,10 +403,15 @@ impl ProfileShare {
         after: Option<Option<usize>>,
     ) {
         if let Some(d) = &mut self.detached {
-            for (slot, side) in d.note.neighbours.iter_mut().zip([before, after]) {
+            let note = &mut d.note;
+            for (i, side) in [before, after].into_iter().enumerate() {
                 if let Some(unit) = side {
-                    d.note.neighbour_dependent = true;
-                    *slot = unit;
+                    if note.read[i] && note.neighbours[i] != unit {
+                        note.mixed = true;
+                    }
+                    note.neighbour_dependent = true;
+                    note.read[i] = true;
+                    note.neighbours[i] = unit;
                 }
             }
         }

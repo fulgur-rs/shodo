@@ -34,13 +34,11 @@
 //!
 //! - D1 new: positions visited for the first time.
 //! - D2 clipped: positions whose clipped units changed.
-//! - D3 neighbour: neighbour-dependent positions that contain a visual
-//!   neighbour of a newly selected event unit. With fixed levels, UAX #9
-//!   swaps two units iff the minimum level between them is odd, for every
-//!   range holding both, so a longer line only inserts the new units into
-//!   the old visual order; the neighbours that change are those adjacent
-//!   to an inserted event unit, and the containers whose edge they are
-//!   contain them.
+//! - D3 neighbour: for every newly selected event unit `x` and each side
+//!   `s`, the neighbour-dependent positions that read side `s` and whose
+//!   recorded side-`s` neighbour (`None` at a line edge included) equals
+//!   side `s` of `overhang::visual_neighbours(selected, x)`. See "Why D3 is
+//!   sufficient" below.
 //! - D4 profile: profile-dependent positions when height or above changed.
 //! - D5 edge: positions whose units or neighbour units intersect a partial
 //!   group, removal or replacement that differs from the previous step.
@@ -48,6 +46,37 @@
 //!   whose live measurement changed its values.
 //!
 //! Positions without a replayable entry ("unstored") are always dirty.
+//!
+//! # Why D3 is sufficient
+//!
+//! An allowance records `around(selected, target)` (`ContainerNote::
+//! neighbours`): the last event unit visually before the target's visually
+//! first unit and the first event unit visually after its visually last
+//! unit. That edge unit may be a non-event (an `Open`/`Close` without
+//! inline-axis edges, say), so the recorded neighbours are not the visual
+//! neighbours of any single unit (`visual_neighbours`), and "the containers
+//! holding a neighbour of a new event" can miss a changed target.
+//!
+//! What holds instead, for a target whose clipped units did not change (a
+//! changed target is D2 dirty) and a fixed `start`: with fixed levels, UAX #9
+//! swaps two units iff the minimum level between them is odd, for every
+//! range holding both, so a longer selection only inserts the new units into
+//! the old visual order. If the target's side-`s` neighbour changed from
+//! `b0`, an event unit was inserted between `b0` (or the line edge) and the
+//! target's edge unit, and it is a new one: an old event there would have
+//! been `b0`. Of those inserted events, the one closest to `b0` has only new
+//! events and non-events between itself and `b0`, so its own side-`s`
+//! neighbour is `b0` (`None` when `b0` is `None`). Hence a changed position
+//! recorded a side-`s` neighbour equal to side `s` of some new event's
+//! visual neighbours, which is what D3 looks up in `Accumulator::neighbours`.
+//! Neither an event inside the target nor a visually contiguous target is
+//! needed (brute-forced in `ruby::accumulate_tests`). Both queries use the
+//! same index and the same `rtl` (the base level), so their sides agree.
+//!
+//! The rule is applied conservatively: an entry whose allowances read one
+//! side twice with different neighbours (`ContainerNote::mixed`) is not
+//! stored, so it is measured live at every step. Changes of the neighbours'
+//! own geometry follow the profile and are covered by the profile rules.
 //!
 //! # Replay
 //!
@@ -107,6 +136,13 @@ pub(crate) const RETAINED_CONTAINERS: usize = 256;
 /// Heap bound per position, including `Vec` doubling slack.
 #[cfg(test)]
 pub(crate) const BYTES_PER_CONTAINER: usize = 640;
+/// Neighbour key of a side read at a line edge (no neighbour).
+pub(crate) const NO_NEIGHBOUR: u32 = u32::MAX;
+
+/// Key of a recorded or queried neighbour in `Accumulator::neighbours`.
+pub(crate) fn neighbour_key(unit: Option<u32>) -> u32 {
+    unit.unwrap_or(NO_NEIGHBOUR)
+}
 
 /// Identity of an accumulator: dataset (id and address), atomic revision and
 /// the probes' fixed `start`.
@@ -140,7 +176,7 @@ impl AccumulatorKey {
 }
 
 /// Why a position is measured live (test histogram `cx.ruby_dirty`).
-#[allow(dead_code)] // Neighbour, Profile and Edge are marked from Tasks 7-8.
+#[allow(dead_code)] // Profile and Edge are marked from Task 8.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Dirty {
     Unstored = 0,
@@ -291,8 +327,11 @@ pub(crate) struct Entry {
     pub(crate) calls: u32,
     /// Nearest enclosing visited position.
     pub(crate) parent: Option<u32>,
-    /// Visual neighbours read by allowances.
+    /// Recorded allowance neighbours `(before, after)` (`around` over the
+    /// clipped target); a slot is meaningful only where `read` is set.
     pub(crate) neighbours: [Option<u32>; 2],
+    /// Sides whose neighbour an allowance read.
+    pub(crate) read: [bool; 2],
     pub(crate) neighbour_dependent: bool,
     /// Read a top/bottom group (depends on the profile's height and above).
     pub(crate) profile: bool,
@@ -313,6 +352,7 @@ impl Entry {
             calls: 0,
             parent,
             neighbours: [None, None],
+            read: [false; 2],
             neighbour_dependent: false,
             profile: false,
         }
@@ -335,6 +375,7 @@ impl Entry {
             && self.own == other.own
             && self.calls == other.calls
             && self.neighbours == other.neighbours
+            && self.read == other.read
             && self.neighbour_dependent == other.neighbour_dependent
             && self.profile == other.profile
     }
@@ -381,8 +422,9 @@ pub(crate) struct Accumulator {
     pub(crate) unstored: BTreeSet<u32>,
     /// Profile-dependent positions.
     pub(crate) profile: BTreeSet<u32>,
-    /// `(neighbour unit, position)` of neighbour-dependent positions.
-    pub(crate) neighbours: BTreeSet<(u32, u32)>,
+    /// `(side, neighbour key, position)` of every side a neighbour-dependent
+    /// position read; the key is the unit, or `NO_NEIGHBOUR` at a line edge.
+    pub(crate) neighbours: BTreeSet<(u8, u32, u32)>,
     /// Number of neighbour-dependent positions.
     pub(crate) dependents: usize,
     /// Enclosing chain of the latest appended position.
@@ -534,8 +576,11 @@ impl Accumulator {
         let old = &self.entries[pos];
         if old.neighbour_dependent {
             self.dependents -= 1;
-            for unit in old.neighbours.iter().flatten() {
-                self.neighbours.remove(&(*unit, p));
+            for side in 0..2 {
+                if old.read[side] {
+                    let key = neighbour_key(old.neighbours[side]);
+                    self.neighbours.remove(&(side as u8, key, p));
+                }
             }
         }
         self.profile.remove(&p);
@@ -549,8 +594,11 @@ impl Accumulator {
         }
         if entry.neighbour_dependent {
             self.dependents += 1;
-            for unit in entry.neighbours.iter().flatten() {
-                self.neighbours.insert((*unit, p));
+            for side in 0..2 {
+                if entry.read[side] {
+                    let key = neighbour_key(entry.neighbours[side]);
+                    self.neighbours.insert((side as u8, key, p));
+                }
             }
         }
         if entry.present && entry.units.end < full_end {
@@ -581,7 +629,7 @@ impl Accumulator {
             + self.nodes.capacity() * size_of::<Node>()
             + self.open.capacity() * size_of::<u32>()
             + (self.clipped.len() + self.unstored.len() + self.profile.len()) * 2 * size_of::<u32>()
-            + self.neighbours.len() * 2 * size_of::<(u32, u32)>()
+            + self.neighbours.len() * 2 * size_of::<(u8, u32, u32)>()
     }
 }
 
@@ -751,11 +799,8 @@ impl Step<'_> {
         }
     }
 
-    /// D2 and D6, and, conservatively, every position whenever a newly
-    /// selected event unit or a changed profile could have changed anything
-    /// else (replaced by D3-D5 in later commits). Neither the neighbour
-    /// notes of the entries nor `overhang::visual_neighbours` are read here:
-    /// any new event unit dirties every position.
+    /// D2, D3 and D6, and, conservatively, every position whenever the
+    /// profile digest changed (replaced by D4-D5 in the next commit).
     fn classify(
         &self,
         acc: &Accumulator,
@@ -772,14 +817,37 @@ impl Step<'_> {
                 mark(dirty, top, pos, Dirty::Clipped, cx);
             }
         }
-        let events =
-            (acc.through..self.selected.end).any(|x| super::overhang::is_event(self.data, x));
-        if events || acc.digest.as_ref() != Some(digest) {
+        self.neighbours(acc, dirty, cx);
+        if acc.digest.as_ref() != Some(digest) {
             for pos in 0..top as u32 {
                 mark(dirty, top, pos, Dirty::Full, cx);
             }
         }
         self.close(acc, dirty, cx);
+    }
+
+    /// D3: for every newly selected event unit and each side, the positions
+    /// that read that side and recorded the unit's neighbour on it (see the
+    /// module documentation). `visual_neighbours` answers for the single
+    /// unit; the recorded keys are `around` over whole targets.
+    fn neighbours(&self, acc: &Accumulator, dirty: &mut BTreeSet<u32>, cx: &mut LayoutContext) {
+        if acc.dependents == 0 {
+            return;
+        }
+        for x in acc.through..self.selected.end {
+            if !super::overhang::is_event(self.data, x) {
+                continue;
+            }
+            let (before, after) =
+                super::overhang::visual_neighbours(self.data, &self.selected, x, cx);
+            for (side, unit) in [before, after].into_iter().enumerate() {
+                let key = neighbour_key(unit.map(|u| u as u32));
+                let side = side as u8;
+                for &(_, _, pos) in acc.neighbours.range((side, key, 0)..=(side, key, u32::MAX)) {
+                    mark(dirty, self.top, pos, Dirty::Neighbour, cx);
+                }
+            }
+        }
     }
 
     /// D6: the ancestors of every dirty position.
@@ -939,7 +1007,9 @@ impl Step<'_> {
         // Stored only if every cache query was a hit (no fill, no
         // invalidation), so measuring again under the same epoch repeats
         // exactly these effects.
-        let storable = self.replays && cx.ruby_ranges.fills() == fills;
+        // A side read twice with different neighbours has no single key in
+        // the D3 index: such an entry is not stored (always measured live).
+        let storable = self.replays && cx.ruby_ranges.fills() == fills && !note.mixed;
         let own = effects
             .filter(|_| storable)
             .map(|e| e.without_sat(note.sat));
@@ -958,6 +1028,7 @@ impl Step<'_> {
                     calls: note.calls,
                     parent,
                     neighbours,
+                    read: note.read,
                     neighbour_dependent: note.neighbour_dependent,
                     profile: note.profile,
                 }
@@ -966,6 +1037,7 @@ impl Step<'_> {
                 own,
                 calls: note.calls,
                 neighbours,
+                read: note.read,
                 neighbour_dependent: note.neighbour_dependent,
                 profile: note.profile,
                 ..Entry::placeholder(parent)
@@ -1113,6 +1185,7 @@ mod tests {
             calls: (next(seed) % 4) as u32,
             parent: None,
             neighbours: [None, None],
+            read: [false; 2],
             neighbour_dependent: false,
             profile: false,
         }
@@ -1192,11 +1265,14 @@ mod tests {
         e.own = None;
         e.profile = true;
         e.neighbour_dependent = true;
-        e.neighbours = [Some(0), Some(9)];
+        e.neighbours = [Some(0), None];
+        e.read = [true, true];
         let end = e.units.end;
         acc.store(1, e.clone(), end);
         assert!(acc.unstored.contains(&1) && acc.profile.contains(&1));
-        assert!(acc.neighbours.contains(&(0, 1)) && acc.neighbours.contains(&(9, 1)));
+        assert!(
+            acc.neighbours.contains(&(0, 0, 1)) && acc.neighbours.contains(&(1, NO_NEIGHBOUR, 1))
+        );
         assert!(!acc.clipped.contains(&1));
         assert_eq!(acc.dependents, 1);
         e.own = Some(effects(1, false));
@@ -1204,7 +1280,7 @@ mod tests {
         e.neighbour_dependent = false;
         acc.store(1, e, end + 1);
         assert!(!acc.unstored.contains(&1) && !acc.profile.contains(&1));
-        assert!(!acc.neighbours.iter().any(|(_, p)| *p == 1));
+        assert!(!acc.neighbours.iter().any(|(_, _, p)| *p == 1));
         assert!(acc.clipped.contains(&1));
         assert_eq!(acc.dependents, 0);
     }

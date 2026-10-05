@@ -4,7 +4,9 @@ use super::memo_tests::*;
 use crate::geometry::{Direction, LayoutUnit, Saturation};
 use crate::limits::Limits;
 use crate::node::{NodeId, TextSource};
+use crate::ruby::accumulate::Dirty;
 use crate::ruby::*;
+use crate::style::UnicodeBidi;
 use crate::style::{InlineStyle, LineOptions, ParagraphStyle, TabSize, WhiteSpaceCollapse};
 use crate::{AtomicSizes, LayoutContext, LineConstraint, Paragraph, ParagraphBuilder};
 use std::ops::Range;
@@ -1081,4 +1083,259 @@ fn epoch_moved_between_steps_resets_on_take() {
             }
         }
     }
+}
+
+/// Brute force of the claim D3 relies on, over UAX #9 reorderings of fixed
+/// levels: when `start..old` grows to `start..new`, a target's recorded side
+/// `s` neighbour changes only to a newly selected event unit, and its old
+/// value (`None` included) is side `s` of the visual neighbours of some new
+/// event unit. Targets without event units and visually split targets are
+/// included. Returns the number of side changes seen.
+fn check_d3_premise(seed: u64, cases: usize, max_len: u64, max_level: u64) -> usize {
+    use crate::line::spacing_summary::VisualNeighbors;
+    let mut seed = seed;
+    let mut next = || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed
+    };
+    let mut changes = 0;
+    let mut check = |levels: &[u8], events: &[bool], start: usize| {
+        let len = levels.len();
+        let index = VisualNeighbors::new(levels.iter().zip(events).map(|(l, e)| (*l, *e)));
+        for old in start + 1..len {
+            for new in old + 1..=len {
+                for rtl in [false, true] {
+                    let mut sides: [Vec<Option<usize>>; 2] = [Vec::new(), Vec::new()];
+                    for x in (old..new).filter(|x| events[*x]) {
+                        let (before, after) = index.around(&(start..new), &(x..x + 1), rtl);
+                        sides[0].push(before);
+                        sides[1].push(after);
+                    }
+                    for t0 in start..old {
+                        for t1 in t0 + 1..=old {
+                            let target = t0..t1;
+                            let was = index.around(&(start..old), &target, rtl);
+                            let now = index.around(&(start..new), &target, rtl);
+                            for (side, (w, n)) in
+                                [(was.0, now.0), (was.1, now.1)].into_iter().enumerate()
+                            {
+                                if w == n {
+                                    continue;
+                                }
+                                changes += 1;
+                                assert!(
+                                    sides[side].contains(&w)
+                                        && n.is_some_and(|u| (old..new).contains(&u) && events[u]),
+                                    "levels {levels:?} events {events:?} {start}..{old}->{new} \
+                                     target {target:?} rtl {rtl} side {side}: {was:?} -> {now:?}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
+    // The shape that refutes "a changed target holds a neighbour of a new
+    // event": target 2..4 is visually split and starts at non-event 3.
+    check(&[2, 2, 2, 1, 1], &[true, true, true, false, true], 1);
+    for _ in 0..cases {
+        let len = 2 + (next() % (max_len - 1)) as usize;
+        let levels: Vec<u8> = (0..len).map(|_| (next() % (max_level + 1)) as u8).collect();
+        let events: Vec<bool> = (0..len).map(|_| next() % 3 != 0).collect();
+        let start = (next() as usize) % (len - 1);
+        check(&levels, &events, start);
+    }
+    changes
+}
+
+#[test]
+fn growing_selections_change_recorded_neighbours_only_through_new_event_units() {
+    let changes = check_d3_premise(0x51f1_5e3d_2b1a_9c07, 3000, 8, 3);
+    assert!(changes > 0);
+}
+
+/// The larger sweep behind D3 (60 000 cases, lengths up to 10, levels up to
+/// 4); run with `--ignored` (seconds in release, minutes in debug).
+#[test]
+#[ignore]
+fn growing_selections_change_recorded_neighbours_only_through_new_event_units_sweep() {
+    let changes = check_d3_premise(0x2545_f491_4f6c_dd1d, 60_000, 10, 4);
+    assert!(changes > 0);
+}
+
+/// Sibling rubies whose readings are wider than their one-glyph bases, with
+/// plain neighbours: overhang `Auto` reads the visual neighbours.
+pub(super) fn overhang_siblings(paragraph: &ParagraphStyle) -> Paragraph {
+    row(
+        paragraph,
+        4,
+        "日",
+        "にほんご",
+        "本",
+        RubyOverhang::Auto,
+        &style(24.0),
+        &Limits::default(),
+    )
+}
+
+/// Overhang siblings separated by isolated Latin text in an RTL paragraph:
+/// the visual neighbours come from bidi reordering.
+pub(super) fn rtl_isolate_siblings() -> Paragraph {
+    let limits = Limits::default();
+    let mut b = ParagraphBuilder::new(
+        &ParagraphStyle {
+            direction: Direction::Rtl,
+            ..paragraph_style(false)
+        },
+        &limits,
+    );
+    for i in 0..4u64 {
+        b.open_inline(
+            NodeId(4000 + i),
+            &InlineStyle {
+                unicode_bidi: UnicodeBidi::Isolate,
+                ..style(24.0)
+            },
+            Default::default(),
+        );
+        b.push_text(
+            TextSource::Generated {
+                node: NodeId(2000 + i),
+            },
+            "ab",
+        );
+        b.close_inline();
+        b.push_ruby(
+            NodeId(1000 + i),
+            &style(24.0),
+            annotated(
+                vec![base_text(3000 + i, "日", &style(24.0), &limits)],
+                &["にほんご"],
+                RubyOverhang::Auto,
+                &limits,
+            ),
+        );
+    }
+    b.push_text(TextSource::Generated { node: NodeId(1999) }, "cd");
+    finish(b)
+}
+
+/// Overhang siblings with nothing between them: a ruby's trailing side is
+/// read at the line edge (`None`) until the next ruby is selected, so D3
+/// must find it through the recorded `None` key.
+pub(super) fn adjacent_overhang_siblings(paragraph: &ParagraphStyle) -> Paragraph {
+    row(
+        paragraph,
+        4,
+        "日",
+        "にほんご",
+        "",
+        RubyOverhang::Auto,
+        &style(24.0),
+        &Limits::default(),
+    )
+}
+
+/// D3 against the reference and the step oracle on overhang siblings. With
+/// plain text between the rubies no clean position's recorded neighbour
+/// ever changes (the trailing text is selected while its ruby is still the
+/// top position), so D3 marks nothing there; adjacent rubies need marks.
+/// The new-event fallback is gone: no `Full` mark unless the profile digest
+/// changed, which the isolates of `rtl_isolate_siblings` do (open partial
+/// groups; D4-D5 replace that fallback in the next commit).
+#[test]
+fn neighbour_rule_matches_reference_on_overhang_siblings() {
+    let rtl = ParagraphStyle {
+        direction: Direction::Rtl,
+        ..paragraph_style(false)
+    };
+    // (fixture, D3 must mark, digest stable on every step)
+    let fixtures = [
+        (
+            Fixture::new(
+                "overhang-siblings",
+                overhang_siblings(&paragraph_style(false)),
+            ),
+            false,
+            true,
+        ),
+        (
+            Fixture::new("overhang-siblings-rtl", overhang_siblings(&rtl)),
+            false,
+            true,
+        ),
+        (
+            Fixture::new("rtl-isolate-siblings", rtl_isolate_siblings()),
+            false,
+            false,
+        ),
+        (
+            Fixture::new(
+                "adjacent-overhang-siblings",
+                adjacent_overhang_siblings(&paragraph_style(false)),
+            ),
+            true,
+            true,
+        ),
+        (
+            Fixture::new(
+                "adjacent-overhang-siblings-rtl",
+                adjacent_overhang_siblings(&rtl),
+            ),
+            true,
+            true,
+        ),
+    ];
+    for (fixture, marks, stable) in &fixtures {
+        let mut dirty = [0; 8];
+        for pre in pre_states(&fixture.paragraph) {
+            let (reference, _) =
+                observe_candidates_in(&fixture.paragraph, &fixture.atomics, Mode::Reference, pre);
+            for mode in [Mode::Accumulate, Mode::Verify] {
+                let (observed, counters) =
+                    observe_candidates_in(&fixture.paragraph, &fixture.atomics, mode, pre);
+                assert_eq!(observed, reference, "{} {mode:?} {pre:?}", fixture.name);
+                for (sum, d) in dirty.iter_mut().zip(counters.dirty) {
+                    *sum += d;
+                }
+            }
+        }
+        if *marks {
+            assert!(
+                dirty[Dirty::Neighbour as usize] > 0,
+                "{}: D3 must mark positions {dirty:?}",
+                fixture.name
+            );
+        }
+        if *stable {
+            assert_eq!(
+                dirty[Dirty::Full as usize],
+                0,
+                "{}: {dirty:?}",
+                fixture.name
+            );
+        }
+        assert_eq!(
+            observe_layout_in(fixture, Mode::Verify),
+            observe_layout_in(fixture, Mode::Reference),
+            "{}",
+            fixture.name
+        );
+    }
+}
+
+/// With D1-D3 and D6 the sibling shapes measure each container a bounded
+/// number of times per line: container measures grow linearly.
+#[test]
+fn sibling_container_measures_grow_linearly_with_the_accumulator() {
+    let (all, growth) = doubling(|r| sibling_measures(r, Mode::Accumulate), [16, 32, 64]);
+    assert!(
+        growth.iter().all(|g| *g < 2.5),
+        "siblings {growth:?} {all:?}"
+    );
+    let (all, growth) = doubling(|r| outer_measures(r, Mode::Accumulate), [16, 32, 64]);
+    assert!(growth.iter().all(|g| *g < 2.5), "outer {growth:?} {all:?}");
 }

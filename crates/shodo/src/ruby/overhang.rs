@@ -192,11 +192,11 @@ fn put_neighbors(data: &ParagraphData, index: Box<NeighborIndex>, cx: &mut Layou
     *cx.ruby_ranges.neighbors.entry(key).or_default() = Some(index);
 }
 
-/// Visual neighbours of `unit` among the event units of `selected`, in
-/// line-relative order.
-// Consumed by the container accumulator (shodo-2j6 Task 5 onwards); only
-// tests call it until then.
-#[allow(dead_code)]
+/// Visual neighbours of the single `unit` among the event units of
+/// `selected`, in line-relative order. Not interchangeable with the
+/// neighbours an allowance records (`around` over a whole clipped ruby
+/// target, whose visual edge may be a non-event unit); the accumulator's D3
+/// rule (`ruby::accumulate`) relates the two.
 pub(crate) fn visual_neighbours(
     data: &ParagraphData,
     selected: &Range<usize>,
