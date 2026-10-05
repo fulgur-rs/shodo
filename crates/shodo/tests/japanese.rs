@@ -1473,3 +1473,154 @@ fn rtl_slice_padding_blocks_the_actual_logical_hanging_edge() {
         assert_eq!(line.inline_size(), 52.0 + expected_start);
     }
 }
+
+fn with_hanging(style: &ParagraphStyle, hanging: Option<HangingPunctuation>) -> InlineStyle {
+    InlineStyle {
+        hanging_punctuation: hanging,
+        ..style.root.clone()
+    }
+}
+
+const LAST: HangingPunctuation = HangingPunctuation {
+    first: false,
+    force_end: false,
+    allow_end: false,
+    last: true,
+};
+
+#[test]
+fn inline_last_hangs_a_trailing_span_without_paragraph_options() {
+    // WPT css-text/hanging-punctuation/hanging-punctuation-inline-001.html
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let span = with_hanging(&style, Some(LAST));
+    let para = japanese_with(style, Limits::default(), |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "日本日本")
+            .open_inline(NodeId(2), &span, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(3) }, "」")
+            .close_inline();
+    });
+    let line = first_line(&para, 64.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(line.text_range(), 0..15);
+    assert_eq!(line.inline_size(), 64.0);
+    assert_eq!(line.hang_end(), 16.0);
+}
+
+#[test]
+fn inline_hanging_override_stays_in_its_run() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let span = with_hanging(&style, Some(LAST));
+    let para = japanese_with(style, Limits::default(), |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "日")
+            .open_inline(NodeId(2), &span, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(3) }, "」")
+            .close_inline()
+            .push_text(TextSource::Generated { node: NodeId(4) }, "本」");
+    });
+    let line = first_line(&para, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(line.text_range(), 0..12);
+    assert_eq!(line.inline_size(), 64.0);
+    assert_eq!(line.hang_end(), 0.0);
+}
+
+#[test]
+fn inline_override_replaces_paragraph_options() {
+    let paragraph_last = LineOptions {
+        hanging_punctuation: LAST,
+        ..Default::default()
+    };
+    for (hanging, expected_size, expected_hang) in [
+        (None, 32.0, 16.0),
+        (Some(HangingPunctuation::default()), 48.0, 0.0),
+    ] {
+        let style = japanese_style(TextSpacingTrim::SpaceAll);
+        let span = with_hanging(&style, hanging);
+        let para = japanese_with(style, Limits::default(), |b| {
+            b.open_inline(NodeId(2), &span, InlineEdges::default())
+                .push_text(TextSource::Generated { node: NodeId(3) }, "日本」")
+                .close_inline();
+        });
+        let line = first_line(&para, 100.0, &paragraph_last, &AtomicSizes::EMPTY);
+        assert_eq!(line.inline_size(), expected_size, "{hanging:?}");
+        assert_eq!(line.hang_end(), expected_hang, "{hanging:?}");
+    }
+}
+
+#[test]
+fn inline_first_hangs_its_opening_on_the_first_line() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let span = with_hanging(
+        &style,
+        Some(HangingPunctuation {
+            first: true,
+            ..Default::default()
+        }),
+    );
+    let para = japanese_with(style, Limits::default(), |b| {
+        b.open_inline(NodeId(2), &span, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(3) }, "「日本")
+            .push_forced_break(NodeId(4))
+            .push_text(TextSource::Generated { node: NodeId(5) }, "「日本")
+            .close_inline();
+    });
+    let options = LineOptions::default();
+    let first = first_line(&para, 100.0, &options, &AtomicSizes::EMPTY);
+    assert_eq!(first.inline_size(), 48.0);
+    assert_eq!(first.hang_start(), 16.0);
+    let LineResult::Line(second) = para.next_line(
+        &mut LayoutContext::new(),
+        first.break_token(),
+        &options,
+        &LineConstraint::new(100.0),
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!("expected second line")
+    };
+    assert_eq!(second.hang_start(), 0.0);
+    assert_eq!(second.inline_size(), 48.0);
+}
+
+#[test]
+fn inline_force_end_also_changes_intrinsic_sizes() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let span = with_hanging(
+        &style,
+        Some(HangingPunctuation {
+            force_end: true,
+            ..Default::default()
+        }),
+    );
+    let para = japanese_with(style, Limits::default(), |b| {
+        b.open_inline(NodeId(2), &span, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(3) }, "日本、")
+            .close_inline();
+    });
+    let sizes = para.intrinsic_sizes(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        &AtomicIntrinsics::default(),
+    );
+    assert_eq!((sizes.min_content, sizes.max_content), (16.0, 32.0));
+}
+
+#[test]
+fn rtl_inline_hanging_uses_the_run_values() {
+    let mut style = japanese_style(TextSpacingTrim::TrimBoth);
+    style.direction = shodo::geometry::Direction::Rtl;
+    let span = with_hanging(
+        &style,
+        Some(HangingPunctuation {
+            first: true,
+            last: true,
+            ..Default::default()
+        }),
+    );
+    let para = japanese_with(style, Limits::default(), |b| {
+        b.open_inline(NodeId(2), &span, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(3) }, "「日本」")
+            .close_inline();
+    });
+    let line = first_line(&para, 32., &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(line.text_range(), 0..12);
+    assert_eq!(line.inline_size(), 40.);
+    assert_eq!((line.hang_start(), line.hang_end()), (8., 8.));
+}

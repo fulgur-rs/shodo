@@ -1,7 +1,7 @@
 //! Punctuation classification and blank space from the actual shaping face.
 use crate::geometry::{LayoutUnit, Saturation, WritingMode};
 use crate::paragraph::ParagraphData;
-use crate::style::TextSpacingTrim;
+use crate::style::{HangingPunctuation, TextSpacingTrim};
 use icu_properties::{
     CodePointMapData,
     props::{BidiMirroringGlyph, EastAsianWidth, GeneralCategory},
@@ -29,6 +29,9 @@ pub(crate) struct Punctuation {
     pub(crate) class: PunctuationClass,
     pub(crate) size: f32,
     pub(crate) trim: TextSpacingTrim,
+    /// Unresolved per-box value; `edges` falls back to `LineOptions` so
+    /// changing line options needs no rebuild.
+    pub(crate) hanging: Option<HangingPunctuation>,
     pub(crate) left: LayoutUnit,
     pub(crate) right: LayoutUnit,
     pub(crate) advance: LayoutUnit,
@@ -165,6 +168,7 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
                 class: classify(shaped, style.lang.as_deref()),
                 size: style.font_size,
                 trim: style.text_spacing_trim,
+                hanging: style.hanging_punctuation,
                 first: matches!(
                     gc,
                     GeneralCategory::OpenPunctuation
@@ -475,7 +479,8 @@ pub(super) fn edges(
             {
                 value.start_trim = (if ltr { p.left } else { p.right }).max(LayoutUnit::ZERO);
             }
-            if flags & BreakToken::FIRST_LINE != 0 && options.hanging_punctuation.first && p.first {
+            let hanging = p.hanging.unwrap_or(options.hanging_punctuation);
+            if flags & BreakToken::FIRST_LINE != 0 && hanging.first && p.first {
                 value.hang_start = p
                     .layout_advance(sat)
                     .sub(value.start_trim, sat)
@@ -528,11 +533,10 @@ pub(super) fn edges(
                     .min(remaining);
             }
             let advance = remaining.sub(value.end_trim, sat).max(LayoutUnit::ZERO);
-            if options.hanging_punctuation.force_end && p.stop
-                || last && options.hanging_punctuation.last && p.last
-            {
+            let hanging = p.hanging.unwrap_or(options.hanging_punctuation);
+            if hanging.force_end && p.stop || last && hanging.last && p.last {
                 value.hang_end = advance;
-            } else if options.hanging_punctuation.allow_end && p.stop {
+            } else if hanging.allow_end && p.stop {
                 value.hang_end = need
                     .sub(value.end_trim, sat)
                     .max(LayoutUnit::ZERO)
