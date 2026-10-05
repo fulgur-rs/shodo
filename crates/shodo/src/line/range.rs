@@ -42,9 +42,54 @@ pub(crate) struct RangeCache {
     /// fill replays exactly after it. Reuse across measurements
     /// (`ruby::accumulate`) still resets on an invalidation, conservatively.
     epoch: u64,
+    /// Override of `MAX_BLOCKS`.
+    #[cfg(test)]
+    pub(crate) block_cap: Option<usize>,
 }
 
+/// Entries kept in `blocks` and `block_effects` together. Reaching it clears
+/// both before the next insert. A hit has exactly the side effects of a
+/// fresh measurement (shodo-tj5), so clearing changes no result, charge or
+/// warning, only how often a block is measured. At most about 16,384 × 60
+/// bytes (key, value and `Effects`), roughly 1 MiB.
+const MAX_BLOCKS: usize = 16_384;
+
+/// A clear releases maps whose capacity grew beyond this.
+const RETAINED_BLOCKS: usize = 256;
+
 impl RangeCache {
+    fn block_cap(&self) -> usize {
+        #[cfg(test)]
+        if let Some(cap) = self.block_cap {
+            return cap;
+        }
+        MAX_BLOCKS
+    }
+
+    /// Entries in the block caches.
+    #[cfg(test)]
+    pub(crate) fn block_entries(&self) -> usize {
+        self.blocks.len() + self.block_effects.len()
+    }
+
+    /// Make room for one more block entry under `key`.
+    fn reserve_block(&mut self, key: &BlockKey) {
+        if self.blocks.contains_key(key) || self.block_effects.contains_key(key) {
+            return;
+        }
+        if self.blocks.len() + self.block_effects.len() < self.block_cap() {
+            return;
+        }
+        self.blocks.clear();
+        self.block_effects.clear();
+        if self.blocks.capacity() > RETAINED_BLOCKS {
+            self.blocks.shrink_to(RETAINED_BLOCKS);
+        }
+        if self.block_effects.capacity() > RETAINED_BLOCKS {
+            self.block_effects.shrink_to(RETAINED_BLOCKS);
+        }
+    }
+
     pub(crate) fn epoch(&self) -> u64 {
         self.epoch
     }
@@ -139,6 +184,9 @@ pub(crate) fn block_size(
     let height = measure_block(data, range, ruby, atomics, cx, sat);
     let effects = super::replay::finish(cx, recording, sat);
     let cache = &mut cx.ruby_ranges;
+    if effects.is_some() {
+        cache.reserve_block(&key);
+    }
     match effects {
         Some(effects) if effects.is_empty() => {
             cache.block_effects.remove(&key);
@@ -1223,6 +1271,47 @@ mod tests {
             }
         }
         assert!(charged > 0, "some range must charge the reshape budget");
+    }
+
+    /// shodo-mc0: the block caches stay within their cap, and crossing it
+    /// (a clear before the insert) leaves every query's height, saturation,
+    /// spent bytes and warnings equal to a context that never cached.
+    #[test]
+    fn block_cap_crossing_matches_a_fresh_context() {
+        let p = charging_paragraph(crate::style::TabSize::Px(40.0), false);
+        let n = p.data.units.len();
+        let measure = |cx: &mut LayoutContext, range: Range<usize>| {
+            cx.begin_reshape_operation();
+            let mut sat = Saturation::default();
+            let height = block_size(
+                &p.data,
+                range,
+                &Default::default(),
+                &AtomicSizes::EMPTY,
+                cx,
+                &mut sat,
+            );
+            (height, sat, cx.edge_reshape_spent, cx.take_warnings())
+        };
+        let mut capped = LayoutContext::new();
+        capped.ruby_ranges.block_cap = Some(2);
+        capped.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+        let mut clears = 0;
+        for _ in 0..2 {
+            for start in 0..n {
+                for end in start + 1..=n {
+                    let before = capped.ruby_ranges.block_entries();
+                    let got = measure(&mut capped, start..end);
+                    let after = capped.ruby_ranges.block_entries();
+                    clears += usize::from(after < before);
+                    assert!(after <= 2, "{after} entries");
+                    let mut fresh = LayoutContext::new();
+                    fresh.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+                    assert_eq!(got, measure(&mut fresh, start..end), "{start}..{end}");
+                }
+            }
+        }
+        assert!(clears > 0, "the cap must be crossed");
     }
 
     /// shodo-tj5: a `blocks` entry with effects whose replay the gate refuses
