@@ -65,7 +65,9 @@ A box that does not contribute is ignored only for sizing the line box;
 descendants still align to its font metrics. Matching Chromium, a
 `box-decoration-break: clone` edge repeated on a continuation line does not
 count, although CSS Inline 3 §5.3 speaks of fragments. Known differences from
-Chromium: descendants aligned `top`/`bottom` (and empty `text-top` /
-`text-bottom` children) do not yet credit their ancestors for the forced-break
-rule (shodo-9kt), and list-item lines do not force the root strut
-(shodo-qu8).
+Chromium: the forced-break rule does not yet follow Blink's handling of
+vertical-align descendants (shodo-9kt). A `top`/`bottom`-aligned descendant
+with content does not keep its ancestor's forced break from contributing in
+Chromium, but does in shodo (shodo is shorter); an empty `top` or `text-top`
+child does keep it from contributing in Chromium, but not in shodo (shodo is
+taller). List-item lines do not force the root strut (shodo-qu8).
