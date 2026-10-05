@@ -39,9 +39,12 @@
 //!   recorded side-`s` neighbour (`None` at a line edge included) equals
 //!   side `s` of `overhang::visual_neighbours(selected, x)`. See "Why D3 is
 //!   sufficient" below.
-//! - D4 profile: profile-dependent positions when height or above changed.
-//! - D5 edge: positions whose units or neighbour units intersect a partial
-//!   group, removal or replacement that differs from the previous step.
+//! - D4 profile: profile-dependent positions (`ContainerNote::profile`)
+//!   when the profile's height or above changed.
+//! - D5 edge: positions whose units or recorded neighbour units intersect a
+//!   partial group, removal or replacement that differs from the previous
+//!   step (`SelectionDigest::changed_ranges`). See "Why D4 and D5 are
+//!   sufficient" below.
 //! - D6 ancestor: ancestors of every dirty position, and of every position
 //!   whose live measurement changed its values.
 //!
@@ -73,10 +76,52 @@
 //! needed (brute-forced in `ruby::accumulate_tests`). Both queries use the
 //! same index and the same `rtl` (the base level), so their sides agree.
 //!
+//! Only the sides an allowance read are indexed. That is sound because which
+//! sides a position reads does not depend on the neighbours or the profile:
+//! `overhang::allowances` decides `leading_side`/`trailing_side` from
+//! `columns.edges(target)` and the clipped bases and columns alone, and
+//! whether it runs at all (`lane_overhang`: overhang `Auto`, a positive
+//! excess, a nonzero cap) depends on range-cache widths of the clipped
+//! units and on the completed descendants' adjustments. A position none of
+//! whose clipped units or descendants changed (D2, D6) therefore reads the
+//! same sides as recorded, so a side it never read cannot start mattering
+//! without the position being dirty for another reason.
+//!
 //! The rule is applied conservatively: an entry whose allowances read one
 //! side twice with different neighbours (`ContainerNote::mixed`) is not
 //! stored, so it is measured live at every step. Changes of the neighbours'
-//! own geometry follow the profile and are covered by the profile rules.
+//! own geometry follow the profile and are covered by D4 and D5.
+//!
+//! # Why D4 and D5 are sufficient
+//!
+//! Every read of the selected profile goes through `content_shared`, for the
+//! clipped bases (and the column or ruby boxes) of the container, and for
+//! the single unit and enclosing boxes of every neighbour an allowance
+//! measures (`overhang::neighbor_bounds`), all under the position's
+//! detached share, so one `ContainerNote` covers them all. Of the profile it
+//! reads only what `SelectionDigest` holds:
+//! - height and above, only through top/bottom groups: shifted group content
+//!   summaries of a range, `group_delta` of a partial group's raw content,
+//!   and `box_delta` of a grouped box (column, ruby or neighbour box, or an
+//!   ancestor whose paint is added). Each of these sets
+//!   `ContainerNote::profile` (`grouped` prefix count, box groups, grouped
+//!   ancestors), so D4 marks every position whose values can follow them
+//!   (a partial group's raw content counts because every unit with content
+//!   inside a group's span belongs to the group, so `grouped` sees it);
+//! - the partial groups, removals and replacements, only where they
+//!   intersect a queried range (`content_query` visits no other unit), or
+//!   through the partial bounds of the group of a box. A queried range lies
+//!   in the container's units or is a recorded neighbour unit, and a grouped
+//!   box holds a unit of the container (column and ruby boxes, ancestors of
+//!   a base edge) or the neighbour unit (neighbour boxes), so its group's
+//!   units (contiguous, and holding every unit of the box) intersect the
+//!   container's units or that neighbour unit. D5 marks every position
+//!   whose (unclipped, so possibly more) units or indexed neighbour units
+//!   intersect a range that differs between the digests; a neighbour is
+//!   measured only on a read side, and read sides are indexed.
+//!
+//! Hence a position that D1-D5 leave clean reads the same profile values as
+//! when it was recorded; D6 adds the ancestors.
 //!
 //! # Replay
 //!
@@ -176,7 +221,8 @@ impl AccumulatorKey {
 }
 
 /// Why a position is measured live (test histogram `cx.ruby_dirty`).
-#[allow(dead_code)] // Profile and Edge are marked from Task 8.
+/// Index 7 of the histogram is unused (it counted a removed fallback that
+/// marked every position).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Dirty {
     Unstored = 0,
@@ -186,7 +232,6 @@ pub(crate) enum Dirty {
     Profile = 4,
     Edge = 5,
     Ancestor = 6,
-    Full = 7,
 }
 
 /// Running sums of a sequence of adjustments: the total and the extremes
@@ -612,6 +657,31 @@ impl Accumulator {
         self.entries[pos as usize].parent
     }
 
+    /// Innermost visited position whose container holds `unit`. `containers`
+    /// is the walk's visit order (sorted by container start, properly
+    /// nested), so every container holding `unit` encloses the last visited
+    /// one starting at or before it.
+    pub(crate) fn owner(
+        &self,
+        data: &ParagraphData,
+        containers: &[usize],
+        unit: usize,
+    ) -> Option<u32> {
+        let visited = &containers[..self.len()];
+        let last = visited.partition_point(|c| data.ruby.containers[*c].units.start <= unit);
+        let mut pos = last.checked_sub(1).map(|p| p as u32);
+        while let Some(p) = pos {
+            if data.ruby.containers[containers[p as usize]]
+                .units
+                .contains(&unit)
+            {
+                return Some(p);
+            }
+            pos = self.parent(p);
+        }
+        None
+    }
+
     #[cfg(test)]
     pub(crate) fn push_raw(&mut self, entry: Entry) {
         debug_assert!(self.entries.len() < MAX_CONTAINERS, "accumulator cap");
@@ -799,8 +869,8 @@ impl Step<'_> {
         }
     }
 
-    /// D2, D3 and D6, and, conservatively, every position whenever the
-    /// profile digest changed (replaced by D4-D5 in the next commit).
+    /// D2-D6 for the positions kept from the previous step (see the module
+    /// documentation).
     fn classify(
         &self,
         acc: &Accumulator,
@@ -818,12 +888,60 @@ impl Step<'_> {
             }
         }
         self.neighbours(acc, dirty, cx);
-        if acc.digest.as_ref() != Some(digest) {
-            for pos in 0..top as u32 {
-                mark(dirty, top, pos, Dirty::Full, cx);
+        if let Some(old) = acc.digest.as_ref() {
+            // D4: every group moves with the profile's height and above.
+            if old.profile_changed(digest) {
+                for &pos in acc.profile.range(..top as u32) {
+                    mark(dirty, top, pos, Dirty::Profile, cx);
+                }
+            }
+            // D5: changed partial groups, edge-window removals and
+            // replacements.
+            for range in old.changed_ranges(digest) {
+                self.edge(acc, &range, dirty, cx);
             }
         }
         self.close(acc, dirty, cx);
+    }
+
+    /// D5: positions whose units or recorded neighbour units intersect
+    /// `range`. A container's units are compared unclipped, which can only
+    /// mark more than needed.
+    fn edge(
+        &self,
+        acc: &Accumulator,
+        range: &Range<usize>,
+        dirty: &mut BTreeSet<u32>,
+        cx: &mut LayoutContext,
+    ) {
+        if range.is_empty() {
+            return;
+        }
+        let top = self.top;
+        // A container intersecting `range` holds `range.start` (the
+        // innermost such container and its ancestors) or starts inside it.
+        let mut owner = acc.owner(self.data, self.containers, range.start);
+        while let Some(q) = owner {
+            mark(dirty, top, q, Dirty::Edge, cx);
+            owner = acc.parent(q);
+        }
+        let visited = &self.containers[..acc.len()];
+        let start_of = |c: &usize| self.data.ruby.containers[*c].units.start;
+        let first = visited.partition_point(|c| start_of(c) <= range.start);
+        let last = visited.partition_point(|c| start_of(c) < range.end);
+        for pos in first..last {
+            mark(dirty, top, pos as u32, Dirty::Edge, cx);
+        }
+        // Neighbour units are read through `content_shared` too
+        // (`overhang::allowances`); only read sides are indexed, and a
+        // neighbour is measured only on a read side.
+        let lo = u32::try_from(range.start).unwrap_or(u32::MAX);
+        let hi = u32::try_from(range.end).unwrap_or(u32::MAX);
+        for side in 0..2u8 {
+            for &(_, _, pos) in acc.neighbours.range((side, lo, 0)..(side, hi, 0)) {
+                mark(dirty, top, pos, Dirty::Edge, cx);
+            }
+        }
     }
 
     /// D3: for every newly selected event unit and each side, the positions

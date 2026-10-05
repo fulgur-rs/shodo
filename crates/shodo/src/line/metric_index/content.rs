@@ -421,7 +421,6 @@ impl ProfileShare {
 /// The parts of a selected line profile that container geometry reads,
 /// compared between accumulator steps (`ruby::accumulate`). Floats are
 /// compared by their bits, unquantized.
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct SelectionDigest {
     pub(crate) height: u32,
@@ -437,7 +436,6 @@ pub(crate) struct SelectionDigest {
 /// `ContentSummary` bounds (normal, top, bottom, raw) as `(top, bottom)` bits.
 pub(crate) type SummaryBits = [Option<(u64, u64)>; 4];
 
-#[cfg_attr(not(test), allow(dead_code))]
 impl SelectionDigest {
     /// The profile's height or above changed: every group moves.
     pub(crate) fn profile_changed(&self, other: &Self) -> bool {

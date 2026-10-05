@@ -7,8 +7,10 @@ use crate::node::{NodeId, TextSource};
 use crate::ruby::accumulate::Dirty;
 use crate::ruby::*;
 use crate::style::UnicodeBidi;
-use crate::style::{InlineStyle, LineOptions, ParagraphStyle, TabSize, WhiteSpaceCollapse};
-use crate::{AtomicSizes, LayoutContext, LineConstraint, Paragraph, ParagraphBuilder};
+use crate::style::{
+    InlineStyle, LineOptions, ParagraphStyle, TabSize, VerticalAlign, WhiteSpaceCollapse,
+};
+use crate::{AtomicSize, AtomicSizes, LayoutContext, LineConstraint, Paragraph, ParagraphBuilder};
 use std::ops::Range;
 
 /// `r` sibling rubies over "12", each with the reading "日": one
@@ -1243,16 +1245,16 @@ pub(super) fn adjacent_overhang_siblings(paragraph: &ParagraphStyle) -> Paragrap
 /// plain text between the rubies no clean position's recorded neighbour
 /// ever changes (the trailing text is selected while its ruby is still the
 /// top position), so D3 marks nothing there; adjacent rubies need marks.
-/// The new-event fallback is gone: no `Full` mark unless the profile digest
-/// changed, which the isolates of `rtl_isolate_siblings` do (open partial
-/// groups; D4-D5 replace that fallback in the next commit).
+/// No fallback marks every position any more (histogram index 7, formerly
+/// `Full`, stays zero): profile digest changes, which `rtl_isolate_siblings`
+/// has, are handled by D4-D5.
 #[test]
 fn neighbour_rule_matches_reference_on_overhang_siblings() {
     let rtl = ParagraphStyle {
         direction: Direction::Rtl,
         ..paragraph_style(false)
     };
-    // (fixture, D3 must mark, digest stable on every step)
+    // (fixture, D3 must mark, no all-positions fallback)
     let fixtures = [
         (
             Fixture::new(
@@ -1270,7 +1272,7 @@ fn neighbour_rule_matches_reference_on_overhang_siblings() {
         (
             Fixture::new("rtl-isolate-siblings", rtl_isolate_siblings()),
             false,
-            false,
+            true,
         ),
         (
             Fixture::new(
@@ -1311,12 +1313,7 @@ fn neighbour_rule_matches_reference_on_overhang_siblings() {
             );
         }
         if *stable {
-            assert_eq!(
-                dirty[Dirty::Full as usize],
-                0,
-                "{}: {dirty:?}",
-                fixture.name
-            );
+            assert_eq!(dirty[7], 0, "{}: {dirty:?}", fixture.name);
         }
         assert_eq!(
             observe_layout_in(fixture, Mode::Verify),
@@ -1327,8 +1324,8 @@ fn neighbour_rule_matches_reference_on_overhang_siblings() {
     }
 }
 
-/// With D1-D3 and D6 the sibling shapes measure each container a bounded
-/// number of times per line: container measures grow linearly.
+/// With D1-D6 the sibling shapes measure each container a bounded number of
+/// times per line: container measures grow linearly.
 #[test]
 fn sibling_container_measures_grow_linearly_with_the_accumulator() {
     let (all, growth) = doubling(|r| sibling_measures(r, Mode::Accumulate), [16, 32, 64]);
@@ -1338,4 +1335,307 @@ fn sibling_container_measures_grow_linearly_with_the_accumulator() {
     );
     let (all, growth) = doubling(|r| outer_measures(r, Mode::Accumulate), [16, 32, 64]);
     assert!(growth.iter().all(|g| *g < 2.5), "outer {growth:?} {all:?}");
+    // Adjacent overhang siblings: the shape where D3 marks.
+    let adjacent = |r: usize| {
+        let mut cx = mode_context(Mode::Accumulate);
+        let p = row(
+            &paragraph_style(false),
+            r,
+            "日",
+            "にほんご",
+            "",
+            RubyOverhang::Auto,
+            &style(24.0),
+            &Limits::default(),
+        );
+        one_line(&p, &mut cx);
+        assert!(
+            cx.ruby_dirty[Dirty::Neighbour as usize] > 0,
+            "{r}: D3 marks"
+        );
+        cx.ruby_container_measures
+    };
+    let (all, growth) = doubling(adjacent, [16, 32, 64]);
+    assert!(
+        growth.iter().all(|g| *g < 2.5),
+        "adjacent {growth:?} {all:?}"
+    );
+}
+
+/// Overhang siblings inside a top/bottom aligned span that also holds a
+/// larger glyph, then a distant tall plain glyph and more siblings: the
+/// clipped span's partial bounds change as the line grows inside it (D5)
+/// and the tall glyph changes the profile's height and above (D4).
+pub(super) fn grouped_siblings(align: VerticalAlign) -> Paragraph {
+    let limits = Limits::default();
+    let ruby = |b: &mut ParagraphBuilder, i: u64| {
+        b.push_ruby(
+            NodeId(1000 + i),
+            &style(24.0),
+            annotated(
+                vec![base_text(3000 + i, "日本", &style(24.0), &limits)],
+                &["にほんご"],
+                RubyOverhang::Auto,
+                &limits,
+            ),
+        );
+        b.push_text(
+            TextSource::Generated {
+                node: NodeId(2000 + i),
+            },
+            "、",
+        );
+    };
+    let mut b = ParagraphBuilder::new(&paragraph_style(false), &limits);
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "日");
+    b.open_inline(
+        NodeId(40),
+        &InlineStyle {
+            vertical_align: align,
+            ..style(24.0)
+        },
+        Default::default(),
+    );
+    ruby(&mut b, 0);
+    ruby(&mut b, 1);
+    b.open_inline(NodeId(41), &style(40.0), Default::default());
+    b.push_text(TextSource::Generated { node: NodeId(42) }, "語");
+    b.close_inline();
+    ruby(&mut b, 2);
+    b.close_inline();
+    b.push_text(TextSource::Generated { node: NodeId(43) }, "本");
+    b.open_inline(NodeId(44), &style(64.0), Default::default());
+    b.push_text(TextSource::Generated { node: NodeId(45) }, "日");
+    b.close_inline();
+    ruby(&mut b, 3);
+    ruby(&mut b, 4);
+    finish(b)
+}
+
+#[test]
+fn profile_and_edge_rules_match_reference() {
+    let fixtures = [
+        Fixture::new("grouped-top", grouped_siblings(VerticalAlign::Top)),
+        Fixture::new("grouped-bottom", grouped_siblings(VerticalAlign::Bottom)),
+        Fixture::new("cursive-siblings", cursive_siblings(&Limits::default())),
+        Fixture::new(
+            "cursive-siblings-6",
+            cursive_siblings(&limits(Some(6), None)),
+        ),
+    ];
+    let (mut profile, mut edge, mut full) = (0, 0, 0);
+    for fixture in &fixtures {
+        for pre in pre_states(&fixture.paragraph) {
+            let (reference, _) =
+                observe_candidates_in(&fixture.paragraph, &fixture.atomics, Mode::Reference, pre);
+            for mode in [Mode::Accumulate, Mode::Verify] {
+                let (observed, counters) =
+                    observe_candidates_in(&fixture.paragraph, &fixture.atomics, mode, pre);
+                assert_eq!(observed, reference, "{} {mode:?} {pre:?}", fixture.name);
+                profile += counters.dirty[Dirty::Profile as usize];
+                edge += counters.dirty[Dirty::Edge as usize];
+                full += counters.dirty[7];
+            }
+        }
+        assert_eq!(
+            observe_layout_in(fixture, Mode::Verify),
+            observe_layout_in(fixture, Mode::Reference),
+            "{}",
+            fixture.name
+        );
+    }
+    assert!(profile > 0 && edge > 0, "profile {profile} edge {edge}");
+    assert_eq!(full, 0, "no conservative fallback remains");
+}
+
+/// Container work grows linearly with the sibling count (the reference and
+/// the memo grow quadratically:
+/// `sibling_container_measures_are_quadratic_without_the_accumulator`).
+#[test]
+fn sibling_container_measures_grow_linearly() {
+    let (all, growth) = doubling(|r| sibling_measures(r, Mode::Accumulate), [32, 64, 128]);
+    assert!(
+        growth.iter().all(|g| *g <= 2.6),
+        "break_all: {growth:?} {all:?}"
+    );
+    let one = |r: usize| {
+        let mut cx = mode_context(Mode::Accumulate);
+        one_line(&digit_siblings(r), &mut cx);
+        cx.ruby_container_measures
+    };
+    let (all, growth) = doubling(one, [32, 64, 128]);
+    assert!(
+        growth.iter().all(|g| *g <= 2.6),
+        "next_line: {growth:?} {all:?}"
+    );
+}
+
+/// A plain glyph of `normal` px, a ruby whose trailing neighbour opens a
+/// top-aligned span, then siblings inside the span before an atomic inline
+/// of `block` px (no descent) that grows the span's partial bounds without
+/// changing the line's height or above: D5 alone must mark the siblings in
+/// the span (their units) and the first ruby (its neighbour unit).
+pub(super) fn partial_group_siblings(normal: f32, block: f32) -> Fixture {
+    let limits = Limits::default();
+    let ruby = |b: &mut ParagraphBuilder, i: u64| {
+        b.push_ruby(
+            NodeId(1000 + i),
+            &style(24.0),
+            annotated(
+                vec![base_text(3000 + i, "日", &style(24.0), &limits)],
+                &["にほんご"],
+                RubyOverhang::Auto,
+                &limits,
+            ),
+        );
+    };
+    let text = |b: &mut ParagraphBuilder, node: u64, text: &str| {
+        b.push_text(TextSource::Generated { node: NodeId(node) }, text);
+    };
+    let mut b = ParagraphBuilder::new(&paragraph_style(false), &limits);
+    b.open_inline(NodeId(44), &style(normal), Default::default());
+    text(&mut b, 45, "日");
+    b.close_inline();
+    ruby(&mut b, 0);
+    b.open_inline(
+        NodeId(40),
+        &InlineStyle {
+            vertical_align: VerticalAlign::Top,
+            ..style(24.0)
+        },
+        Default::default(),
+    );
+    text(&mut b, 46, "本");
+    ruby(&mut b, 1);
+    text(&mut b, 47, "、");
+    ruby(&mut b, 2);
+    text(&mut b, 48, "、");
+    b.push_atomic(NodeId(99), &style(24.0), Default::default());
+    text(&mut b, 49, "、");
+    ruby(&mut b, 3);
+    b.close_inline();
+    text(&mut b, 50, "本");
+    let mut fixture = Fixture::new(format!("partial-group-{normal}-{block}"), finish(b));
+    fixture.atomics.insert(
+        NodeId(99),
+        AtomicSize {
+            inline_size: 24.0,
+            block_size: block,
+            ..Default::default()
+        },
+    );
+    fixture
+}
+
+/// D5 against the reference and the step oracle where the partial bounds
+/// of a top-aligned span change while the line's height and above do not
+/// (D4 does not fire for those steps). Without D5's container branch the
+/// siblings inside the span miss; without its neighbour branch the ruby
+/// before the span, whose trailing neighbour is the span's first glyph,
+/// misses (checked by disabling each branch while writing this test).
+#[test]
+fn edge_rule_covers_partial_groups_on_units_and_neighbour_units() {
+    for block in [56.0, 60.0] {
+        let fixture = partial_group_siblings(48.0, block);
+        let mut dirty = [0; 8];
+        for pre in pre_states(&fixture.paragraph) {
+            let (reference, _) =
+                observe_candidates_in(&fixture.paragraph, &fixture.atomics, Mode::Reference, pre);
+            for mode in [Mode::Accumulate, Mode::Verify] {
+                let (observed, counters) =
+                    observe_candidates_in(&fixture.paragraph, &fixture.atomics, mode, pre);
+                assert_eq!(observed, reference, "{} {mode:?} {pre:?}", fixture.name);
+                for (sum, d) in dirty.iter_mut().zip(counters.dirty) {
+                    *sum += d;
+                }
+            }
+        }
+        assert!(
+            dirty[Dirty::Edge as usize] > 0,
+            "{}: {dirty:?}",
+            fixture.name
+        );
+        assert_eq!(dirty[7], 0, "{}: {dirty:?}", fixture.name);
+        assert_eq!(
+            observe_layout_in(&fixture, Mode::Verify),
+            observe_layout_in(&fixture, Mode::Reference),
+            "{}",
+            fixture.name
+        );
+    }
+}
+
+/// A ruby whose trailing neighbour is the only glyph of a top-aligned span,
+/// then a plain ruby and a tall plain glyph of `tall` px and another ruby:
+/// the tall glyph changes the line's height and above, moving the span's
+/// glyph; the first ruby reads the profile only through that neighbour.
+pub(super) fn grouped_neighbour_siblings(tall: f32) -> Paragraph {
+    let limits = Limits::default();
+    let ruby = |b: &mut ParagraphBuilder, i: u64| {
+        b.push_ruby(
+            NodeId(1000 + i),
+            &style(24.0),
+            annotated(
+                vec![base_text(3000 + i, "日", &style(24.0), &limits)],
+                &["にほんご"],
+                RubyOverhang::Auto,
+                &limits,
+            ),
+        );
+    };
+    let text = |b: &mut ParagraphBuilder, node: u64, text: &str| {
+        b.push_text(TextSource::Generated { node: NodeId(node) }, text);
+    };
+    let mut b = ParagraphBuilder::new(&paragraph_style(false), &limits);
+    text(&mut b, 45, "本");
+    ruby(&mut b, 0);
+    b.open_inline(
+        NodeId(40),
+        &InlineStyle {
+            vertical_align: VerticalAlign::Top,
+            ..style(24.0)
+        },
+        Default::default(),
+    );
+    text(&mut b, 46, "本");
+    b.close_inline();
+    ruby(&mut b, 1);
+    text(&mut b, 47, "、");
+    b.open_inline(NodeId(44), &style(tall), Default::default());
+    text(&mut b, 48, "日");
+    b.close_inline();
+    ruby(&mut b, 2);
+    text(&mut b, 49, "本");
+    finish(b)
+}
+
+/// D4 against the reference and the step oracle where the first ruby reads
+/// the profile only through its grouped neighbour unit
+/// (`overhang::neighbor_bounds` under the container's share). Without D4
+/// that ruby misses at every step the tall glyph enters (checked by
+/// disabling D4 while writing this test).
+#[test]
+fn profile_rule_covers_grouped_neighbour_units() {
+    let fixture = Fixture::new("grouped-neighbour", grouped_neighbour_siblings(48.0));
+    let mut dirty = [0; 8];
+    for pre in pre_states(&fixture.paragraph) {
+        let (reference, _) =
+            observe_candidates_in(&fixture.paragraph, &fixture.atomics, Mode::Reference, pre);
+        for mode in [Mode::Accumulate, Mode::Verify] {
+            let (observed, counters) =
+                observe_candidates_in(&fixture.paragraph, &fixture.atomics, mode, pre);
+            assert_eq!(observed, reference, "{} {mode:?} {pre:?}", fixture.name);
+            for (sum, d) in dirty.iter_mut().zip(counters.dirty) {
+                *sum += d;
+            }
+        }
+    }
+    assert!(dirty[Dirty::Profile as usize] > 0, "{dirty:?}");
+    assert_eq!(dirty[7], 0, "{dirty:?}");
+    assert_eq!(
+        observe_layout_in(&fixture, Mode::Verify),
+        observe_layout_in(&fixture, Mode::Reference),
+        "{}",
+        fixture.name
+    );
 }
