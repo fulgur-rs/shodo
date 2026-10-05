@@ -57,7 +57,8 @@ line only when, on that line:
 - its own inline-start border or padding (on the line holding its start) or
   inline-end border or padding (on the line holding its end) is nonzero —
   margins never count;
-- it holds a forced break and nothing else of its own content on that line;
+- it holds a forced break and nothing else in the box on that line (text,
+  atomic inlines, or border/padding edges of its descendants count too);
 - it is the root inline box and the line holds ruby.
 
 A box that does not contribute is ignored only for sizing the line box;
