@@ -498,6 +498,16 @@ pub struct InlineStyle {
     pub tab_size: TabSize,
     pub text_autospace: TextAutospace,
     pub text_spacing_trim: TextSpacingTrim,
+    /// Computed `hanging-punctuation` of this inline box. `None` uses
+    /// [`LineOptions::hanging_punctuation`]; `Some` replaces it for the
+    /// characters of this box, so `Some(HangingPunctuation::default())` is
+    /// CSS `none` even when the paragraph enables hanging. Each edge
+    /// character uses the value of the box it belongs to.
+    /// `ParagraphStyle::root.hanging_punctuation = Some(..)` therefore
+    /// overrides `LineOptions` for root-level text. The value is ignored in
+    /// [`ParagraphStyle::first_line`]: `hanging-punctuation` does not apply
+    /// to `::first-line`.
+    pub hanging_punctuation: Option<HangingPunctuation>,
     pub vertical_align: VerticalAlign,
     pub direction: Direction,
     pub unicode_bidi: UnicodeBidi,
@@ -554,6 +564,7 @@ impl Default for InlineStyle {
             tab_size: TabSize::default(),
             text_autospace: TextAutospace::default(),
             text_spacing_trim: TextSpacingTrim::default(),
+            hanging_punctuation: None,
             vertical_align: VerticalAlign::default(),
             direction: Direction::default(),
             unicode_bidi: UnicodeBidi::default(),
@@ -630,11 +641,18 @@ pub struct TextIndent {
     pub each_line: bool,
 }
 
+/// CSS `hanging-punctuation` flags; set them paragraph-wide via
+/// [`LineOptions::hanging_punctuation`] or per box via
+/// [`InlineStyle::hanging_punctuation`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct HangingPunctuation {
+    /// Hangs one eligible opening mark on the first formatted line.
     pub first: bool,
+    /// Excludes a comma/stop's remaining advance even if it fits.
     pub force_end: bool,
+    /// Excludes only the part of a comma/stop that exceeds the available width.
     pub allow_end: bool,
+    /// Hangs one eligible ending mark on the final line.
     pub last: bool,
 }
 
@@ -663,6 +681,8 @@ pub struct LineOptions {
     pub text_align_last: TextAlignLast,
     pub text_justify: TextJustify,
     pub text_indent: TextIndent,
+    /// Paragraph-wide `hanging-punctuation`, used for characters whose
+    /// [`InlineStyle::hanging_punctuation`] is `None`.
     pub hanging_punctuation: HangingPunctuation,
     pub text_wrap_style: TextWrapStyle,
     pub text_box_trim: TextBoxTrim,

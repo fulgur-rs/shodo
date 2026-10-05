@@ -9,7 +9,8 @@ use shodo::style::{
 };
 use shodo::{
     AtomicIntrinsics, AtomicSizes, LayoutContext, LineConstraint, LineResult, Paragraph,
-    ParagraphBuilder,
+    ParagraphBuilder, Ruby, RubyAlign, RubyAnnotation, RubyBase, RubyContent, RubyLevel, RubySpan,
+    RubyStyle, RubyVisibility,
 };
 
 fn japanese_with(
@@ -1471,5 +1472,333 @@ fn rtl_slice_padding_blocks_the_actual_logical_hanging_edge() {
             (expected_start, expected_end)
         );
         assert_eq!(line.inline_size(), 52.0 + expected_start);
+    }
+}
+
+fn with_hanging(style: &ParagraphStyle, hanging: Option<HangingPunctuation>) -> InlineStyle {
+    InlineStyle {
+        hanging_punctuation: hanging,
+        ..style.root.clone()
+    }
+}
+
+const LAST: HangingPunctuation = HangingPunctuation {
+    first: false,
+    force_end: false,
+    allow_end: false,
+    last: true,
+};
+
+#[test]
+fn inline_last_hangs_a_trailing_span_without_paragraph_options() {
+    // WPT css-text/hanging-punctuation/hanging-punctuation-inline-001.html
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let span = with_hanging(&style, Some(LAST));
+    let para = japanese_with(style, Limits::default(), |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "日本日本")
+            .open_inline(NodeId(2), &span, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(3) }, "」")
+            .close_inline();
+    });
+    let line = first_line(&para, 64.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(line.text_range(), 0..15);
+    assert_eq!(line.inline_size(), 64.0);
+    assert_eq!(line.hang_end(), 16.0);
+}
+
+#[test]
+fn inline_hanging_override_stays_in_its_run() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let span = with_hanging(&style, Some(LAST));
+    let para = japanese_with(style, Limits::default(), |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "日")
+            .open_inline(NodeId(2), &span, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(3) }, "」")
+            .close_inline()
+            .push_text(TextSource::Generated { node: NodeId(4) }, "本」");
+    });
+    let line = first_line(&para, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(line.text_range(), 0..12);
+    assert_eq!(line.inline_size(), 64.0);
+    assert_eq!(line.hang_end(), 0.0);
+}
+
+#[test]
+fn inline_override_replaces_paragraph_options() {
+    let paragraph_last = LineOptions {
+        hanging_punctuation: LAST,
+        ..Default::default()
+    };
+    for (hanging, expected_size, expected_hang) in [
+        (None, 32.0, 16.0),
+        (Some(HangingPunctuation::default()), 48.0, 0.0),
+    ] {
+        let style = japanese_style(TextSpacingTrim::SpaceAll);
+        let span = with_hanging(&style, hanging);
+        let para = japanese_with(style, Limits::default(), |b| {
+            b.open_inline(NodeId(2), &span, InlineEdges::default())
+                .push_text(TextSource::Generated { node: NodeId(3) }, "日本」")
+                .close_inline();
+        });
+        let line = first_line(&para, 100.0, &paragraph_last, &AtomicSizes::EMPTY);
+        assert_eq!(line.inline_size(), expected_size, "{hanging:?}");
+        assert_eq!(line.hang_end(), expected_hang, "{hanging:?}");
+    }
+}
+
+#[test]
+fn inline_first_hangs_its_opening_on_the_first_line() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let span = with_hanging(
+        &style,
+        Some(HangingPunctuation {
+            first: true,
+            ..Default::default()
+        }),
+    );
+    let para = japanese_with(style, Limits::default(), |b| {
+        b.open_inline(NodeId(2), &span, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(3) }, "「日本")
+            .push_forced_break(NodeId(4))
+            .push_text(TextSource::Generated { node: NodeId(5) }, "「日本")
+            .close_inline();
+    });
+    let options = LineOptions::default();
+    let first = first_line(&para, 100.0, &options, &AtomicSizes::EMPTY);
+    assert_eq!(first.inline_size(), 48.0);
+    assert_eq!(first.hang_start(), 16.0);
+    let LineResult::Line(second) = para.next_line(
+        &mut LayoutContext::new(),
+        first.break_token(),
+        &options,
+        &LineConstraint::new(100.0),
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!("expected second line")
+    };
+    assert_eq!(second.hang_start(), 0.0);
+    assert_eq!(second.inline_size(), 48.0);
+}
+
+#[test]
+fn inline_force_end_also_changes_intrinsic_sizes() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let span = with_hanging(
+        &style,
+        Some(HangingPunctuation {
+            force_end: true,
+            ..Default::default()
+        }),
+    );
+    let para = japanese_with(style, Limits::default(), |b| {
+        b.open_inline(NodeId(2), &span, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(3) }, "日本、")
+            .close_inline();
+    });
+    let sizes = para.intrinsic_sizes(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        &AtomicIntrinsics::default(),
+    );
+    assert_eq!((sizes.min_content, sizes.max_content), (16.0, 32.0));
+}
+
+#[test]
+fn rtl_inline_hanging_uses_the_run_values() {
+    let mut style = japanese_style(TextSpacingTrim::TrimBoth);
+    style.direction = shodo::geometry::Direction::Rtl;
+    let span = with_hanging(
+        &style,
+        Some(HangingPunctuation {
+            first: true,
+            last: true,
+            ..Default::default()
+        }),
+    );
+    let para = japanese_with(style, Limits::default(), |b| {
+        b.open_inline(NodeId(2), &span, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(3) }, "「日本」")
+            .close_inline();
+    });
+    let line = first_line(&para, 32., &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(line.text_range(), 0..12);
+    assert_eq!(line.inline_size(), 40.);
+    assert_eq!((line.hang_start(), line.hang_end()), (8., 8.));
+}
+
+/// One ruby pairing `base` with `annotation`, each in its own style,
+/// followed by plain `tail` text (none when empty).
+fn ruby_then_han(
+    annotation: &str,
+    annotation_style: &InlineStyle,
+    base: &str,
+    base_style: &InlineStyle,
+    tail: &str,
+) -> Paragraph {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let limits = Limits::default();
+    let root = style.root.clone();
+    japanese_with(style, limits.clone(), |b| {
+        let ruby = Ruby::new(
+            vec![RubyBase {
+                node: NodeId(11),
+                content: RubyContent::text(
+                    TextSource::Generated { node: NodeId(12) },
+                    base,
+                    base_style,
+                    &limits,
+                ),
+                align: RubyAlign::default(),
+            }],
+            vec![RubyLevel {
+                annotations: vec![RubyAnnotation {
+                    node: NodeId(13),
+                    content: RubyContent::text(
+                        TextSource::Generated { node: NodeId(14) },
+                        annotation,
+                        annotation_style,
+                        &limits,
+                    ),
+                    span: RubySpan::Auto,
+                    visibility: RubyVisibility::Visible,
+                }],
+                style: RubyStyle::default(),
+            }],
+        )
+        .unwrap();
+        b.push_ruby(NodeId(10), &root, ruby);
+        if !tail.is_empty() {
+            b.push_text(TextSource::Generated { node: NodeId(20) }, tail);
+        }
+    })
+}
+
+const FORCE_END: HangingPunctuation = HangingPunctuation {
+    first: false,
+    force_end: true,
+    allow_end: false,
+    last: false,
+};
+
+/// Ruby range measurement never hangs: a per-run value inside a mid-line
+/// ruby must not shrink the ruby and pull the following text over it.
+#[test]
+fn inline_hanging_does_not_shrink_mid_line_ruby_measurement() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let plain = &style.root;
+    for (annotation, hanging) in [("にほ」", LAST), ("にほ、", FORCE_END)] {
+        let span = with_hanging(&style, Some(hanging));
+        let para = ruby_then_han(annotation, &span, "日", plain, "日");
+        let line = first_line(&para, 200.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(line.inline_size(), 56.0, "{annotation}");
+        assert_eq!(line.hang_end(), 0.0, "{annotation}");
+        assert_eq!(glyphs(&line).last().unwrap().inline_position, 40.0);
+    }
+}
+
+#[test]
+fn inline_hanging_does_not_shrink_a_mid_line_ruby_base() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let plain = &style.root;
+    let span = with_hanging(&style, Some(FORCE_END));
+    let base = ruby_then_han("に", plain, "日本、", plain, "日");
+    let hung = ruby_then_han("に", plain, "日本、", &span, "日");
+    for para in [&base, &hung] {
+        let line = first_line(para, 200.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(line.inline_size(), 64.0);
+        assert_eq!(line.hang_end(), 0.0);
+        assert_eq!(glyphs(&line).last().unwrap().inline_position, 48.0);
+    }
+}
+
+#[test]
+fn inline_hanging_still_hangs_a_ruby_base_at_the_line_end() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let paragraph = LineOptions {
+        hanging_punctuation: FORCE_END,
+        ..Default::default()
+    };
+    for (hanging, options) in [(Some(FORCE_END), LineOptions::default()), (None, paragraph)] {
+        let base = with_hanging(&style, hanging);
+        let para = ruby_then_han("に", &style.root, "日本、", &base, "");
+        let line = first_line(&para, 200.0, &options, &AtomicSizes::EMPTY);
+        assert_eq!(line.inline_size(), 32.0, "{hanging:?}");
+        assert_eq!(line.hang_end(), 16.0, "{hanging:?}");
+    }
+}
+
+#[test]
+fn root_hanging_applies_but_first_line_hanging_is_ignored() {
+    // hanging-punctuation does not apply to ::first-line.
+    let mut first = japanese_style(TextSpacingTrim::SpaceAll);
+    first.first_line = Some(with_hanging(&first, Some(LAST)));
+    let mut root = japanese_style(TextSpacingTrim::SpaceAll);
+    root.root.hanging_punctuation = Some(LAST);
+    for (style, expected_size, expected_hang) in [(first, 48.0, 0.0), (root, 32.0, 16.0)] {
+        let para = japanese_with(style, Limits::default(), |b| {
+            b.push_text(TextSource::Generated { node: NodeId(1) }, "日本」");
+        });
+        let line = first_line(&para, 100.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        assert_eq!(line.inline_size(), expected_size);
+        assert_eq!(line.hang_end(), expected_hang);
+    }
+}
+
+#[test]
+fn inline_allow_end_reports_only_the_part_that_does_not_fit() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let span = with_hanging(
+        &style,
+        Some(HangingPunctuation {
+            allow_end: true,
+            ..Default::default()
+        }),
+    );
+    let para = japanese_with(style, Limits::default(), |b| {
+        b.open_inline(NodeId(2), &span, InlineEdges::default())
+            .push_text(TextSource::Generated { node: NodeId(3) }, "日本、")
+            .close_inline();
+    });
+    let options = LineOptions::default();
+    let narrow = first_line(&para, 44.0, &options, &AtomicSizes::EMPTY);
+    assert_eq!(narrow.inline_size(), 44.0);
+    assert_eq!(narrow.hang_end(), 4.0);
+    assert_eq!(narrow.text_range(), 0..9);
+    let fitting = first_line(&para, 48.0, &options, &AtomicSizes::EMPTY);
+    assert_eq!(fitting.inline_size(), 48.0);
+    assert_eq!(fitting.hang_end(), 0.0);
+}
+
+/// The painted annotation lane is laid out like ruby measurement: a per-run
+/// value must not hang its trailing mark and redistribute the lane.
+#[test]
+fn inline_hanging_does_not_hang_the_ruby_annotation_lane() {
+    let style = japanese_style(TextSpacingTrim::SpaceAll);
+    let plain = &style.root;
+    // The 48px annotation is wider than `日` and narrower than `日本日本`.
+    for (base, expected) in [
+        ("日", [0.0, 16.0, 32.0]),
+        ("日本日本", [2.65625, 24.0, 45.328125]),
+    ] {
+        for (annotation, hanging) in [("にほ」", LAST), ("にほ、", FORCE_END)] {
+            for tail in ["日", ""] {
+                let lanes = [None, Some(hanging)].map(|hanging| {
+                    let span = with_hanging(&style, hanging);
+                    let para = ruby_then_han(annotation, &span, base, plain, tail);
+                    let line =
+                        first_line(&para, 400.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+                    let annotations: Vec<_> = line.ruby_annotations().collect();
+                    assert_eq!(annotations.len(), 1);
+                    let lane = annotations[0].line();
+                    let positions: Vec<_> =
+                        glyphs(lane).iter().map(|g| g.inline_position).collect();
+                    (line.inline_size(), lane.hang_end(), positions)
+                });
+                let case = format!("{base} {annotation} {tail:?}");
+                assert_eq!(lanes[0], lanes[1], "{case}");
+                assert_eq!(lanes[1].1, 0.0, "{case}");
+                assert_eq!(lanes[1].2, expected, "{case}");
+            }
+        }
     }
 }

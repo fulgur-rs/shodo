@@ -82,6 +82,13 @@ Set the fields of `LineOptions::hanging_punctuation`:
 - `force_end` excludes a comma/stop's remaining advance even if it fits.
 - `allow_end` excludes only the part of a comma/stop that exceeds the available width.
 
+To apply a box's own computed value, set `InlineStyle::hanging_punctuation`.
+`None` uses the paragraph's `LineOptions` value; `Some` replaces it for that
+box's characters (`Some(HangingPunctuation::default())` is CSS `none`). Each
+line-edge character uses the value of the box it belongs to, so a trailing
+`<span style="hanging-punctuation: last">」</span>` hangs while sibling text
+keeps the paragraph value.
+
 For the fixture's 16px fullwidth advances, `日本、` naturally measures48px.
 With `SpaceAll`, `allow_end` and44px available, the accepted line measures44px
 and reports `hang_end()==4`; at48px available the hang is zero. With `force_end`

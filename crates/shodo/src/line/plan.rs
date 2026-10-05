@@ -54,7 +54,7 @@ pub(super) fn selected(
     offset: LayoutUnit,
     indent: LayoutUnit,
     flags: u8,
-    options: &LineOptions,
+    options: Option<&LineOptions>,
     available: LayoutUnit,
     atomics: &AtomicSizes,
     cx: &mut LayoutContext,
@@ -68,6 +68,7 @@ pub(super) fn selected(
 }
 
 /// Ordinary unit costs without recursively applying this range's ruby groups.
+/// `options` is `None` for ruby range measurement (see `punctuation::edges`).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn selected_raw(
     data: &ParagraphData,
@@ -76,7 +77,7 @@ pub(super) fn selected_raw(
     offset: LayoutUnit,
     indent: LayoutUnit,
     flags: u8,
-    options: &LineOptions,
+    options: Option<&LineOptions>,
     available: LayoutUnit,
     atomics: &AtomicSizes,
     cx: &mut LayoutContext,
@@ -359,7 +360,7 @@ impl Paragraph {
                                         LayoutUnit::ZERO,
                                         indent,
                                         flags,
-                                        &options,
+                                        Some(&options),
                                         LayoutUnit::from_f32_round(width, &mut sat),
                                         atomics,
                                         cx,
