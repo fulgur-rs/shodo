@@ -22,9 +22,9 @@ const FAMILIES: [&str; 3] = [
 
 /// `max_reshape_window_bytes` is charged per operation against this many
 /// windows (`EDGE_RESHAPE_LINE_WINDOWS` in `line/windows.rs`).
-const RESHAPE_WINDOWS: u64 = 64;
+pub(super) const RESHAPE_WINDOWS: u64 = 64;
 
-fn fonts() -> FontCollection {
+pub(super) fn fonts() -> FontCollection {
     let fonts = FontCollection::with_options(
         &Limits::default(),
         FontOptions {
@@ -51,7 +51,7 @@ fn fonts() -> FontCollection {
     fonts
 }
 
-fn style(size: f32) -> InlineStyle {
+pub(super) fn style(size: f32) -> InlineStyle {
     InlineStyle {
         font_size: size,
         font_families: FAMILIES
@@ -62,14 +62,14 @@ fn style(size: f32) -> InlineStyle {
     }
 }
 
-fn anywhere(size: f32) -> InlineStyle {
+pub(super) fn anywhere(size: f32) -> InlineStyle {
     InlineStyle {
         line_break: LineBreak::Anywhere,
         ..style(size)
     }
 }
 
-fn limits(window: Option<u64>, warnings: Option<u64>) -> Limits {
+pub(super) fn limits(window: Option<u64>, warnings: Option<u64>) -> Limits {
     Limits {
         max_reshape_window_bytes: window,
         max_warnings: warnings,
@@ -77,7 +77,7 @@ fn limits(window: Option<u64>, warnings: Option<u64>) -> Limits {
     }
 }
 
-fn paragraph_style(first_line: bool) -> ParagraphStyle {
+pub(super) fn paragraph_style(first_line: bool) -> ParagraphStyle {
     ParagraphStyle {
         root: style(24.0),
         first_line: first_line.then(|| style(30.0)),
@@ -85,7 +85,12 @@ fn paragraph_style(first_line: bool) -> ParagraphStyle {
     }
 }
 
-fn base_text(node: u64, text: &str, style: &InlineStyle, limits: &Limits) -> RubyContent {
+pub(super) fn base_text(
+    node: u64,
+    text: &str,
+    style: &InlineStyle,
+    limits: &Limits,
+) -> RubyContent {
     RubyContent::text(
         TextSource::Generated { node: NodeId(node) },
         text,
@@ -96,7 +101,7 @@ fn base_text(node: u64, text: &str, style: &InlineStyle, limits: &Limits) -> Rub
 
 /// One level of annotations: one reading per base pairs them (`Auto`),
 /// a single reading spans every base (`All`).
-fn annotated(
+pub(super) fn annotated(
     bases: Vec<RubyContent>,
     readings: &[&str],
     overhang: RubyOverhang,
@@ -137,14 +142,14 @@ fn annotated(
     .unwrap()
 }
 
-fn finish(b: ParagraphBuilder) -> Paragraph {
+pub(super) fn finish(b: ParagraphBuilder) -> Paragraph {
     b.build(&mut LayoutContext::new(), &fonts()).unwrap()
 }
 
 /// `depth` rubies nested inside each other's single base. The innermost base
 /// holds `text`; with default line breaking the outermost container's only
 /// cuts are its own start and end, so every probe looks ahead to its end.
-fn nested(depth: usize, limits: &Limits, text: &str, base: &InlineStyle) -> Paragraph {
+pub(super) fn nested(depth: usize, limits: &Limits, text: &str, base: &InlineStyle) -> Paragraph {
     assert!(depth > 0);
     let mut content = base_text(30, text, base, limits);
     for level in 1..depth {
@@ -165,7 +170,7 @@ fn nested(depth: usize, limits: &Limits, text: &str, base: &InlineStyle) -> Para
     finish(b)
 }
 
-fn siblings(limits: &Limits) -> Paragraph {
+pub(super) fn siblings(limits: &Limits) -> Paragraph {
     let mut b = ParagraphBuilder::new(&paragraph_style(false), limits);
     b.push_text(TextSource::Generated { node: NodeId(1) }, "日");
     for i in 0..4u64 {
@@ -191,7 +196,7 @@ fn siblings(limits: &Limits) -> Paragraph {
 
 /// Cursive bases make every edge window unsafe, so candidates charge the
 /// reshape budget; RTL paragraphs exercise mixed bidi.
-fn arabic(limits: &Limits, direction: Direction) -> Paragraph {
+pub(super) fn arabic(limits: &Limits, direction: Direction) -> Paragraph {
     let mut b = ParagraphBuilder::new(
         &ParagraphStyle {
             direction,
@@ -219,7 +224,7 @@ fn arabic(limits: &Limits, direction: Direction) -> Paragraph {
 
 /// An atomic inline inside the base: without a caller size every selected
 /// range reports `MissingAtomicSize`.
-fn atomic_base(limits: &Limits, first_line: bool) -> Paragraph {
+pub(super) fn atomic_base(limits: &Limits, first_line: bool) -> Paragraph {
     let mut base = ParagraphBuilder::new(&paragraph_style(false), limits);
     base.push_text(TextSource::Generated { node: NodeId(30) }, "日");
     base.push_atomic(NodeId(99), &style(24.0), Default::default());
@@ -240,7 +245,7 @@ fn atomic_base(limits: &Limits, first_line: bool) -> Paragraph {
     finish(b)
 }
 
-fn vertical_align(limits: &Limits) -> Paragraph {
+pub(super) fn vertical_align(limits: &Limits) -> Paragraph {
     let mut base = ParagraphBuilder::new(&paragraph_style(false), limits);
     base.open_inline(
         NodeId(40),
@@ -280,7 +285,7 @@ fn vertical_align(limits: &Limits) -> Paragraph {
 
 /// A reading wider than its base with plain-text neighbors on both sides:
 /// `RubyOverhang::Auto` queries neighbor allowances.
-fn overhang(limits: &Limits) -> Paragraph {
+pub(super) fn overhang(limits: &Limits) -> Paragraph {
     let mut b = ParagraphBuilder::new(&paragraph_style(false), limits);
     b.push_text(TextSource::Generated { node: NodeId(1) }, "日");
     b.push_ruby(
@@ -403,15 +408,15 @@ fn sized(inline_size: f32) -> AtomicSizes {
     atomics
 }
 
-struct Fixture {
-    name: String,
-    paragraph: Paragraph,
-    atomics: AtomicSizes,
-    intrinsic: AtomicIntrinsics,
+pub(super) struct Fixture {
+    pub(super) name: String,
+    pub(super) paragraph: Paragraph,
+    pub(super) atomics: AtomicSizes,
+    pub(super) intrinsic: AtomicIntrinsics,
 }
 
 impl Fixture {
-    fn new(name: impl Into<String>, paragraph: Paragraph) -> Self {
+    pub(super) fn new(name: impl Into<String>, paragraph: Paragraph) -> Self {
         Self {
             name: name.into(),
             paragraph,
@@ -421,7 +426,7 @@ impl Fixture {
     }
 }
 
-fn fixtures() -> Vec<Fixture> {
+pub(super) fn fixtures() -> Vec<Fixture> {
     let default = Limits::default();
     let mut out = Vec::new();
     for depth in [1, 3] {
@@ -484,15 +489,15 @@ fn fixtures() -> Vec<Fixture> {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct PreState {
+pub(super) struct PreState {
     /// Bytes already charged in the operation before the first probe.
-    spent: u64,
+    pub(super) spent: u64,
     /// The context's warning sink is already suppressed.
-    suppressed: bool,
+    pub(super) suppressed: bool,
 }
 
 #[derive(Debug, PartialEq)]
-struct Observed {
+pub(super) struct Observed {
     values: Vec<LayoutUnit>,
     warnings: Vec<Warning>,
     sat: Saturation,
@@ -502,20 +507,36 @@ struct Observed {
     reset_values: Vec<LayoutUnit>,
     reset_warnings: Vec<Warning>,
     reset_spent: u64,
+    /// Step-oracle mismatches over both sweeps.
+    misses: Vec<String>,
 }
 
 /// Every `(start, end)` probe with a growing `end` per start, then one
 /// shrinking sweep, all inside one operation; then all of it again in a new
 /// operation on the same context. Also returns the memo hits.
-fn observe_candidates(
+pub(super) fn observe_candidates(
     p: &Paragraph,
     atomics: &AtomicSizes,
     reference: bool,
     pre: PreState,
 ) -> (Observed, usize) {
+    let mode = if reference {
+        Mode::Reference
+    } else {
+        Mode::Accumulate
+    };
+    let (observed, counters) = observe_candidates_in(p, atomics, mode, pre);
+    (observed, counters.hits)
+}
+
+pub(super) fn observe_candidates_in(
+    p: &Paragraph,
+    atomics: &AtomicSizes,
+    mode: Mode,
+    pre: PreState,
+) -> (Observed, Counters) {
     let data = &p.data;
-    let mut cx = LayoutContext::new();
-    cx.ruby_reference = reference;
+    let mut cx = mode_context(mode);
     if pre.suppressed {
         cx.warnings.set_max(Some(0));
         cx.warnings.push(WarningKind::Unsupported, "pre-existing");
@@ -538,8 +559,9 @@ fn observe_candidates(
         reset_values,
         reset_warnings: cx.warnings.as_slice().to_vec(),
         reset_spent: cx.edge_reshape_spent,
+        misses: std::mem::take(&mut cx.ruby_oracle_misses),
     };
-    (observed, cx.ruby_memo_hits)
+    (observed, counters(&cx))
 }
 
 fn sweep(
@@ -565,7 +587,7 @@ fn sweep(
     values
 }
 
-fn pre_states(p: &Paragraph) -> Vec<PreState> {
+pub(super) fn pre_states(p: &Paragraph) -> Vec<PreState> {
     let spents = match p.data.limits.max_reshape_window_bytes {
         Some(window) => {
             let limit = window.saturating_mul(RESHAPE_WINDOWS);
@@ -583,7 +605,7 @@ fn pre_states(p: &Paragraph) -> Vec<PreState> {
         .collect()
 }
 
-fn signature(line: &Line) -> String {
+pub(super) fn signature(line: &Line) -> String {
     format!(
         "{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
         line.text_range(),
@@ -609,17 +631,54 @@ fn signature(line: &Line) -> String {
     )
 }
 
-fn result_signature(result: LineResult) -> String {
+pub(super) fn result_signature(result: LineResult) -> String {
     match result {
         LineResult::Line(line) => signature(&line),
         other => format!("{other:?}"),
     }
 }
 
-fn context(reference: bool) -> LayoutContext {
+/// Which measurement path a context takes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Mode {
+    /// Every probe measured in full (`cx.ruby_reference`).
+    Reference,
+    /// The per-through memo alone (the shodo-d77 path).
+    Memo,
+    /// The default path: the memo and the container accumulator.
+    Accumulate,
+}
+
+pub(super) fn mode_context(mode: Mode) -> LayoutContext {
     let mut cx = LayoutContext::new();
-    cx.ruby_reference = reference;
+    cx.ruby_reference = mode == Mode::Reference;
     cx
+}
+
+pub(super) fn context(reference: bool) -> LayoutContext {
+    mode_context(if reference {
+        Mode::Reference
+    } else {
+        Mode::Accumulate
+    })
+}
+
+/// Test counters of one context.
+#[derive(Clone, Debug, Default)]
+pub(super) struct Counters {
+    pub(super) hits: usize,
+}
+
+pub(super) fn counters(cx: &LayoutContext) -> Counters {
+    Counters {
+        hits: cx.ruby_memo_hits,
+    }
+}
+
+/// Step-oracle mismatches of `cx` since the last call (always empty on the
+/// reference path), recorded next to the warnings they accompany.
+fn oracle(cx: &mut LayoutContext) -> String {
+    format!("oracle: {:?}", std::mem::take(&mut cx.ruby_oracle_misses))
 }
 
 /// Fixtures whose scan is retained, so the 1000 -> 999 retry must index it.
@@ -655,16 +714,27 @@ fn first_line_through_floats(
     panic!("too many floats");
 }
 
+pub(super) fn observe_layout(fixture: &Fixture, reference: bool) -> Vec<String> {
+    observe_layout_in(
+        fixture,
+        if reference {
+            Mode::Reference
+        } else {
+            Mode::Accumulate
+        },
+    )
+}
+
 /// `break_all` with warm and cold contexts, a wide-then-narrow retry of the
 /// same token (drives `PartialLine::index`), floats followed through their
 /// cursors, and intrinsic sizes.
-fn observe_layout(fixture: &Fixture, reference: bool) -> Vec<String> {
+pub(super) fn observe_layout_in(fixture: &Fixture, mode: Mode) -> Vec<String> {
     let p = &fixture.paragraph;
     let options = LineOptions::default();
     let mut out = Vec::new();
-    let mut warm = context(reference);
+    let mut warm = mode_context(mode);
     for width in [24.0f32, 48.0, 96.0, 1000.0] {
-        let mut cold = context(reference);
+        let mut cold = mode_context(mode);
         for cx in [&mut warm, &mut cold] {
             let lines = p.break_all(cx, &options, width, &fixture.atomics);
             out.push(format!(
@@ -672,9 +742,10 @@ fn observe_layout(fixture: &Fixture, reference: bool) -> Vec<String> {
                 lines.iter().map(signature).collect::<Vec<_>>()
             ));
             out.push(format!("warnings: {:?}", cx.take_warnings()));
+            out.push(oracle(cx));
         }
     }
-    let mut retry = context(reference);
+    let mut retry = mode_context(mode);
     for width in [1000.0f32, 999.0, 60.0, 30.0] {
         retry.cache_prepare_visits = 0;
         let result = p.next_line(
@@ -693,24 +764,38 @@ fn observe_layout(fixture: &Fixture, reference: bool) -> Vec<String> {
         }
         out.push(format!("next_line {width}: {}", result_signature(result)));
         out.push(format!("warnings: {:?}", retry.take_warnings()));
+        out.push(oracle(&mut retry));
     }
     for width in [1000.0f32, 60.0] {
-        let mut cx = context(reference);
+        let mut cx = mode_context(mode);
         first_line_through_floats(p, &mut cx, width, &fixture.atomics, &mut out);
+        out.push(oracle(&mut cx));
     }
-    let mut intrinsic = context(reference);
+    let mut intrinsic = mode_context(mode);
     out.push(format!(
         "intrinsic: {:?}",
         p.intrinsic_sizes(&mut intrinsic, &options, &fixture.intrinsic)
     ));
     out.push(format!("warnings: {:?}", intrinsic.take_warnings()));
+    out.push(oracle(&mut intrinsic));
     out
+}
+
+pub(super) fn observe_warm(all: &[Fixture], reference: bool) -> Vec<String> {
+    observe_warm_in(
+        all,
+        if reference {
+            Mode::Reference
+        } else {
+            Mode::Accumulate
+        },
+    )
 }
 
 /// One warm context across operations that `shrink_to` between them, and one
 /// that alternates paragraphs. Both modes must share `all`: font ids differ
 /// between font collections.
-fn observe_warm(all: &[Fixture], reference: bool) -> Vec<String> {
+pub(super) fn observe_warm_in(all: &[Fixture], mode: Mode) -> Vec<String> {
     let options = LineOptions::default();
     let mut out = Vec::new();
     let operations = |cx: &mut LayoutContext, fixture: &Fixture, out: &mut Vec<String>| {
@@ -741,9 +826,10 @@ fn observe_warm(all: &[Fixture], reference: bool) -> Vec<String> {
             p.intrinsic_sizes(cx, &options, &fixture.intrinsic)
         ));
         out.push(format!("warnings: {:?}", cx.take_warnings()));
+        out.push(oracle(cx));
     };
     for fixture in all {
-        let mut cx = context(reference);
+        let mut cx = mode_context(mode);
         for bytes in [usize::MAX, 4096, 0] {
             operations(&mut cx, fixture, &mut out);
             cx.shrink_to(bytes);
@@ -751,7 +837,7 @@ fn observe_warm(all: &[Fixture], reference: bool) -> Vec<String> {
         operations(&mut cx, fixture, &mut out);
     }
     let pick = |name: &str| all.iter().find(|f| f.name == name).unwrap();
-    let mut cx = context(reference);
+    let mut cx = mode_context(mode);
     for name in [
         "siblings",
         "nested3",
@@ -1357,7 +1443,7 @@ fn memo_recomputes_when_replay_would_cross_reshape_budget() {
 /// word every unit is a prohibited break, which a fitting scan never probes
 /// with an edge window, while `PartialLine::index` measures the edge windows
 /// of every unit: the index charges far more of the reshape budget.
-fn cursive_words(limits: &Limits, words: usize) -> Paragraph {
+pub(super) fn cursive_words(limits: &Limits, words: usize) -> Paragraph {
     let mut b = ParagraphBuilder::new(&paragraph_style(false), limits);
     b.open_inline(NodeId(3), &style(6.0), Default::default());
     b.push_text(
@@ -1874,7 +1960,7 @@ fn memo_stays_bounded_on_long_paragraphs() {
 
 /// `n` two-base sibling rubies: a one-line scan has about three look-ahead
 /// endpoints per ruby, so 400 rubies overflow `MAX_ENTRIES`.
-fn many_siblings(n: usize) -> Paragraph {
+pub(super) fn many_siblings(n: usize) -> Paragraph {
     let default = Limits::default();
     let mut b = ParagraphBuilder::new(&paragraph_style(false), &default);
     for i in 0..n as u64 {

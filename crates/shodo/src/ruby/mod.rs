@@ -53,3 +53,7 @@ mod metric_tests;
 #[cfg(test)]
 #[path = "tests/memo.rs"]
 mod memo_tests;
+
+#[cfg(test)]
+#[path = "tests/accumulate.rs"]
+mod accumulate_tests;

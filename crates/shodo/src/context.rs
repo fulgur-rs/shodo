@@ -56,6 +56,13 @@ pub struct LayoutContext {
     /// Ruby candidate cores answered from `ruby_memo`.
     #[cfg(test)]
     pub(crate) ruby_memo_hits: usize,
+    /// Containers measured by `ruby::measure::measure_one`.
+    #[cfg(test)]
+    pub(crate) ruby_container_measures: usize,
+    /// Step-oracle mismatches (clean containers whose live measurement
+    /// differed from their entry).
+    #[cfg(test)]
+    pub(crate) ruby_oracle_misses: Vec<String>,
 }
 
 impl LayoutContext {
