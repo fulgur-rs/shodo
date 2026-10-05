@@ -8,7 +8,7 @@
 2. **accumulator の上限（16,384 container）を超える walk の制限。** through memo だけでは毎 step その walk の全 container を測り直すので、start と atomic revision ごとに 1 つの `through` だけを測り、別の `through` を測ろうとした probe で 1. と同じく打ち切る。
 3. **キャッシュの保持。** `RangeCache` の `blocks` / `block_effects` に件数の上限（両方で 16,384、超えたら全消去して大きい容量を解放）を入れた。また、`intrinsic_sizes` が min / max の atomics を切り替えるたびにキャッシュ全体を捨てて段落の索引を作り直していたので、revision が行き来したら直前の revision のキャッシュを 1 つだけ退避して戻せるようにした（作業量の制限ではなく、二次の作業そのものをなくす修正）。最初の切り替えでは従来どおり捨てる。最初から退避すると、切り替えが 1 回だけのふつうの `intrinsic_sizes`（ruby 2,000 個、atomics あり）が約 10% 遅くなった（新しい revision の索引が、古い索引を持ったまま新しい領域に確保される。同じバイナリで退避を実行時に切り替えて 71.1 ms 対 63.9 ms）。
 
-既定の上限は、テスト全体（`cargo test --workspace`）のすべての操作で、上限に届いた操作の作業量比（実測の最大 2.34、「既定値」）の約 7 倍にした。比べた正常系の fixture と probe では、出力と警告が main と byte 一致した。
+既定の上限は、テスト全体（`cargo test --workspace`）で上限に届かなかった操作の作業量比の最大（3.21、「既定値」）の約 5 倍にした。比べた正常系の fixture と probe では、出力と警告が main と byte 一致した。
 
 ## 実測（main、ba8444d）
 
@@ -39,6 +39,7 @@ shodo-2j6、shodo-b7d、shodo-tj5 の「残る最悪形」と本件で見つけ�
 | 予算の境界をまたいだ計測（受理と拒否が混じる）の再生不能 | 2j6 (6)、tj5 (3) | 各計測が reshape 予算を消費するので回数は有界 | 予算で有界 |
 | saturate する和の逐次加算 | 2j6 (7) | 再生される run を 1 つずつ足す（計測なし） | 足した position 数を課金 |
 | 16,384 container を超える walk | 2j6 (8) | through memo で毎 step 全 container を計測（二次） | start / revision ごとに 1 つの `through` だけ計測 |
+| clear する float ごとの walk の作り直し（`intrinsic_sizes`） | 本件のレビュー | float ごとに行全体の container を歩き直す。O(float 数 · container 数) | walk の歩数を課金し、予算で有界。作り直しそのものは残る（「残るもの」） |
 | `blocks` / `block_effects` の map | tj5 (1) | 段落を変えるまで上限なし | 16,384 件で全消去（約 1 MiB）。退避した revision の分を含めて最大 2 倍 |
 | `blocks` のヒットも reshape 予算を消費 | tj5 (5) | 操作ごとの reshape 予算（262,144 bytes）で fail-closed | 変更なし |
 
@@ -48,7 +49,7 @@ shodo-2j6、shodo-b7d、shodo-tj5 の「残る最悪形」と本件で見つけ�
 
 ### どこで課金するか
 
-- 課金: `ruby::measure::measure_one` の 1 回（live の container 計測）を 1 単位、accumulator の saturate する逐次加算で足した position 1 つを 1 単位とする。shodo-2j6 の test 専用カウンタ `ruby_container_measures` と同じ点。
+- 課金: `ruby::measure::measure_one` の 1 回（live の container 計測）、`memo::advance` の walk が再適用または新しく訪れた container 1 つ、accumulator の saturate する逐次加算で足した position 1 つを、それぞれ 1 単位とする。計測は shodo-2j6 の test 専用カウンタ `ruby_container_measures` と同じ点。walk の課金はレビューで足した。`intrinsic_sizes` で clear する float があると、float ごとに `total_unit` からの probe が word の probe と交互になり、1 つしかない walk の状態が毎回作り直されて行全体を歩き直す。この walk は計測を伴わない（accumulator が clean な run を再生する）ので、計測だけを数えると課金されなかった（レビューの実験で ruby 16,000 個 + clear する float 64,000 個の 1 回の `intrinsic_sizes` が 10.4 s、拒否されない）。
 - 判定: `candidate_adjustment` の reuse 経路の入口。累計が許容量以上なら、その probe と操作の残りの probe を拒否する（sticky）。1 つの probe の途中では止めないので、memo と accumulator の状態が中途半端になることはない。
 - 許容量: `factor ×（span + walk）`。span は操作内で受理した probe の「最大の end − 最小の start」、walk は 1 つの probe が訪れた container 数の最大値。どちらも最大値なので、同じ probe を繰り返しても増えない。
   - 最初の案は「最長の probe 範囲（end − start）」だったが、`intrinsic_sizes` は word ごとに start が変わるので範囲が短いまま計測が段落全体で積み上がり、ordinary 16,000 の `intrinsic_sizes` が上限に届いた（main では 0.5 s で正常）。覆う範囲（最大の end − 最小の start）に変えた。
@@ -70,13 +71,15 @@ shodo-2j6、shodo-b7d、shodo-tj5 の「残る最悪形」と本件で見つけ�
 
 - memo と accumulator は操作ごとに空から始まる。`RangeCache` のヒットはミスと同じ副作用（shodo-tj5）で、計測の回数を変えない。退避した revision のキャッシュも同じ。
 - 警告を出した scan は `PartialLine` として保持されない（既存の `safe` 判定）。
-- `PartialLine::index` が失敗したら（警告が出た場合を含む）、作業量の状態を index の前に戻し、ruby memo を消してから scan し直す。cold の呼び出しと同じ状態から始まる。index が成功したなら、狭い幅の cold の scan の probe 列はその prefix で、許容量は最大値で決まるので、cold も上限に届かない。
+- 保持された行が probe 列を変えるのは `PartialLine::index` だけ。index の probe は狭い幅の cold の scan の probe を含み（hyphen の位置では同じ probe を 2 回聞き、`through == end` の probe は memo に保存されないので測り直す）、繰り返しは作業を足すが許容量（最大値）は増やさない。したがって index が拒否されなければ cold の scan も拒否されない。index が失敗したら（警告が出た場合を含む）、作業量の状態を index の前に戻し、ruby memo を消してから scan し直す。
+- index の後の float の位置の probe（1 回の呼び出しに 1 回）は、保持の有無で作業量の状態が違うので、許容量の外で測る（計測は課金するが判定に使わない）。`apply` と同じく線形。
+- 残る共有の入力: 失敗した index の reshape 予算の課金（`edge_reshape_spent`）は戻さない（main と同じ）。scan し直したときの再生の gate はそれを読むので、live の計測回数がそこで変わりうる。index の失敗を強制するテスト（下記）では食い違いは見つからず、戻す処理を消しても通る。戻す処理は防御として置いている。
 - 抑制状態: 警告を出した計測は抑制されていない sink では保存されず、抑制された sink では保存されるので、live の計測回数が sink の状態で変わりうる。shodo-tj5 で課金の入力として認めた状態と同じ。
-- テスト: `degraded_layout_does_not_depend_on_earlier_calls`（cold、温まったコンテキスト、広い幅で保持した `PartialLine` の後で、行・警告・intrinsic が一致）。
+- テスト: `degraded_layout_does_not_depend_on_earlier_calls`（cold、温まったコンテキスト、広い幅で保持した `PartialLine` の後で、行・警告・intrinsic が一致）、`failed_index_rescans_like_a_cold_call`、`float_probe_after_index_matches_a_cold_call`。
 
 ## 既定値
 
-テスト専用の記録（`LayoutContext::ruby_line_work_log`）と一時的な計測で、`cargo test --workspace` のすべての操作の「spent /（span + walk）」を集めた（全範囲を 1 操作で掃くテスト用の sweep を除く。下記）。上限に届かなかった操作の最大は 2.34（ruby を 4 個含む小さな fixture）で、ふつうは 1 以下（兄弟 ruby の accumulator は container あたり約 3 回の計測、span は ruby あたり約 5 unit）。既定値 16 はその約 7 倍。
+一時的な計測で、`cargo test --workspace` のすべての操作の「spent /（span + walk）」を集めた（全範囲を 1 操作で掃くテスト用の sweep を除く。下記）。walk の課金を足した後で、上限に届かなかった操作の最大は 3.21（足す前は 2.34。ruby を数個含む小さな fixture と churn の小さいサイズ）で、ふつうは 1 前後（兄弟 ruby の accumulator は container あたり約 3 回の計測と 1 歩、span は ruby あたり約 5 unit）。既定値 16 はその約 5 倍。
 
 probe での時間（candidate、1 回ずつ）。
 
@@ -92,6 +95,8 @@ probe での時間（candidate、1 回ずつ）。
 ## 結果
 
 ### 出力と警告（baseline と candidate の digest 比較、1 回ずつ）
+
+レビューの修正（`2f25e1a`）の後に、`mc0_scale` の intrinsic（breaks 400、breaksatomic 200、ordinary 2,000 / 20,000、siblings 2,000 / 17,000、churn 500、pairs 500）と break（siblings 4,000 / 16,000、ordinary 2,000、plain 2,000、breaks 2,000）、`sibling_scale` / `d77_scale` / `tab_scale` の全ケースを比べ直し、すべて一致した。以下は修正前の比較。
 
 一致: `sibling_scale` の siblings 200 / 800、outer 100 / 400、valign 200、rtl 200、ordinary 200 / 800、plain 200 / 800。`d77_scale` の nested 20 / 80、nestedtab 40、siblings 100、ordinary 200 / 800、plain 800。`tab_scale` の nested 40、nestedtab 40、siblings 200、siblingstab 200、plain 200、nestedhugetab 20、siblingshugetab 100。`mc0_scale` の siblings 4,000 / 16,000（break）、siblings 2,000 / 17,000（intrinsic）、ordinary 2,000（break、intrinsic）、ordinary 20,000（intrinsic）、plain 2,000（break、intrinsic）、breaks 200 / 400 / 2,000（intrinsic と break）、breaksatomic 200（intrinsic、break）、pairs 500 / 1,000、churn 64 / 128 / 256 / 512（幅 1e7）、churn 500 / 2,000（幅 96、intrinsic）、churnplain 2,000。
 
@@ -121,7 +126,9 @@ baseline は `ba8444d`（main）に `mc0_scale.rs`（`MC0_FACTOR` のブロッ�
 
 `sibling_scale siblings 800` の +1.4%（2/10）は task-clock で +0.4% で、本件のコードは ruby の調整用 probe ごとに比較と最大値の更新を数回足すだけなので、揺らぎと考える（退避の修正の前の candidate で同じ方法で測った 10 ラウンドでは −3.7%、9/10 で速かった。そのときの `intrinsic` 3 ケースの +7–10% が退避のコストで、「結論」の修正で消えた）。
 
-大きい敵対形状は 1 回ずつ（同じ方法の別の実行、別のセッションのビルドで load が高かった）: churn 4,000（幅 1e7）59.3 s → 0.87 s、siblings 17,000 64.7 s → 0.95 s、siblings 32,000 は baseline が 900 s で打ち切り、candidate 1.41 s。breaks 1,000（intrinsic、atomics あり）は baseline 30.3 s、candidate 49 ms。
+大きい敵対形状は 1 回ずつ（同じ方法の別の実行、別のセッションのビルドで load が高かった）: churn 4,000（幅 1e7）59.3 s → 0.87 s、siblings 17,000 64.7 s → 0.95 s、siblings 32,000 は baseline が 900 s で打ち切り、candidate 1.41 s。breaks 1,000（intrinsic、atomics あり）は baseline 30.3 s、candidate 49 ms。レビューの修正の後の candidate（1 回ずつ）: churn 1,000 0.49 s、churn 4,000 0.62 s、siblings 17,000 0.85 s、siblings 32,000 1.27 s、いずれも警告 1 件。
+
+レビューの修正の後に同じ方法で 10 ラウンド測り直した（siblings 800 +3.7%（2/10、task-clock −0.4%）、ordinary 800 +0.6%、d77 nested 80 −3.1%、mc0 ordinary 2,000 intrinsic −1.3%、siblings 2,000 intrinsic +1.4%、ordinary 2,000 break −1.6%、siblings 16,000 break +0.2%）。siblings 800 は `mc0_scale` で baseline、candidate、candidate の `MC0_FACTOR=none` を 20 回ずつ交互に測り、中央値が 30.22 / 30.14 / 30.13 ms で差がなかった。
 
 ## テスト
 
@@ -134,6 +141,9 @@ baseline は `ba8444d`（main）に `mc0_scale.rs`（`MC0_FACTOR` のブロッ�
   - `default_allowance_is_not_reached_by_the_fixtures`: memo の等価性 fixture すべての `observe_layout_in`（warm / cold の `break_all`、`PartialLine::index` を通る再試行、float、intrinsic）と siblings 256、churn 32 で警告が出ない。
   - `one_wide_walk_is_measured_and_the_next_probe_refused`: accumulator の上限を 4 にして siblings 16 の行が 1 回警告し、`intrinsic_sizes`（行の終わりを 2 回聞く）は警告せず上限なしと一致。
   - `alternating_intrinsic_revisions_keep_both_range_caches`: 強制改行で区切った ruby の段と呼び出し元の atomics で、`build` の unit 数が倍化ごとに 2.2 倍以下（修正前は 3.96 倍）。
+  - `restarted_walks_are_charged`: ruby 64 個 + clear する float 512 個の `intrinsic_sizes` で、factor 1 なら上限に届き、walk の歩数が許容量以内。上限なしの歩数は許容量の 2 倍を超える。課金を外すと落ちる。
+  - `failed_index_rescans_like_a_cold_call`: 保持した広い行の後の狭い呼び出しで index の失敗を強制し（test 専用の `fail_next_index`）、cold と一致。失敗の経路を通ったことも確かめる。
+  - `float_probe_after_index_matches_a_cold_call`: float を含む兄弟 ruby で、保持した行の後と cold の float の位置が一致。
 - 既存の reference 比較（`line_layout_paths_match_reference`、`warm_context_paths_match_reference`、`sibling_fixtures_match_reference_with_the_step_oracle_*` の `observe_layout_in` など）は既定値のまま通る。参照経路は上限で劣化しないので、既定値でどれかが上限に届けばここで食い違う。
 
 ## 残るもの
@@ -141,6 +151,7 @@ baseline は `ba8444d`（main）に `mc0_scale.rs`（`MC0_FACTOR` のブロッ�
 - 操作の回数 × 予算: 予算は操作ごと。行ごとに上限まで使う段落の総作業量は、入力に線形だが定数は factor に比例する。reshape 予算と同じ形。
 - 1 回の container 計測のコストは container の大きさに比例しうる（build 時の上限で有界）。課金は回数で、大きさで重み付けしない（重み付けすると 1,000 組の ruby の `intrinsic_sizes` のような正常入力が上限に届く）。
 - tab prefix の新しい start ごとの O(tab 数 · log n) は課金していない（操作内では線形、上の表）。
+- clear する float ごとの walk の作り直しは、課金で有界にしただけで、作り直しそのものは残る（word と段の 2 つの start に walk の状態を 1 つずつ持てば消える。shodo-5wa）。
 - 劣化した行は ruby のはみ出しを無視して fit するので、行がはみ出しうる。正確な代替値（たとえば container ごとの上界）は入れていない。
 - 警告 sink の抑制状態への依存（上記）。
 
