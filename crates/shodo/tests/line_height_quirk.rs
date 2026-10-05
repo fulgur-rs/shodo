@@ -715,8 +715,6 @@ fn vertical_align_children_of_suppressed_boxes_keep_matching_cases() {
             "{outer:?}/{inner:?}"
         );
     }
-    // DI (<span lh40><span va:text-top></span><br></span>) is left
-    // unpinned: Chromium 152 gives 0 while the forced-break rule gives 40.
 }
 
 /// Known differences from Chromium 152 (shodo-9kt): Blink credits a parent
@@ -807,6 +805,22 @@ fn known_pending_vertical_align_differences() {
             b.close_inline();
         }),
         [2.0]
+    );
+    // DI: <span lh40><span va:text-top></span><br></span> — Chromium 0
+    // (shodo-9kt); the forced-break rule credits the lh40 span.
+    let text_top = InlineStyle {
+        vertical_align: VerticalAlign::TextTop,
+        ..span(20.0)
+    };
+    assert_eq!(
+        q(WIDE, |b, _| {
+            b.open_inline(NodeId(2), &span(40.0), InlineEdges::default());
+            b.open_inline(NodeId(4), &text_top, InlineEdges::default());
+            b.close_inline();
+            b.push_forced_break(NodeId(3));
+            b.close_inline();
+        }),
+        [40.0]
     );
     // CO: <span lh40 va:top></span><br> — Chromium 0; shodo credits the root.
     assert_eq!(
