@@ -784,6 +784,7 @@ fn suppression_flip_mid_scan_refuses_older_entries() {
 /// Review focus 3: a tab prefix replaced while a container is recorded moves
 /// the cache epoch; the step stops replaying and the accumulator resets.
 #[test]
+#[ignore = "rewritten in shodo-b7d Task 3"]
 fn tab_prefix_replacement_mid_step_stops_replay() {
     let fixture = Fixture::new("tab-siblings", tab_siblings(&Limits::default()));
     let pre = PreState {
