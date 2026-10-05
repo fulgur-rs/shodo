@@ -22,8 +22,9 @@ use shodo::limits::Limits;
 use shodo::node::{NodeId, TextSource};
 use shodo::style::{FontFamily, InlineStyle, LineOptions, ParagraphStyle, VerticalAlign};
 use shodo::{
-    AtomicIntrinsics, AtomicSizes, LayoutContext, ParagraphBuilder, Ruby, RubyAlign,
-    RubyAnnotation, RubyBase, RubyContent, RubyLevel, RubySpan, RubyStyle, RubyVisibility,
+    AtomicIntrinsic, AtomicIntrinsics, AtomicSizes, LayoutContext, ParagraphBuilder, Ruby,
+    RubyAlign, RubyAnnotation, RubyBase, RubyContent, RubyLevel, RubySpan, RubyStyle,
+    RubyVisibility,
 };
 use std::time::Instant;
 
@@ -177,7 +178,12 @@ fn builder(case: &str, size: usize, limits: &Limits) -> ParagraphBuilder {
             .unwrap();
             top.push_ruby(NodeId(9), &style(), ruby);
         }
-        "breaks" => {
+        "breaks" | "breaksatomic" => {
+            if case == "breaksatomic" {
+                // One atomic inline: intrinsic sizes then size atomics for
+                // the min and the max content separately.
+                top.push_atomic(NodeId(9_000_000), &style(), Default::default());
+            }
             // A ruby, then `size` forced breaks after short text: intrinsic
             // sizes alternate the min/max atomic revisions at every break.
             digit_ruby(&mut top, 0, &paragraph, limits);
@@ -232,7 +238,15 @@ fn sample(mut args: impl Iterator<Item = String>) {
             )
         }
         "intrinsic" => {
-            let sizes = paragraph.intrinsic_sizes(&mut cx, &options, &AtomicIntrinsics::EMPTY);
+            let mut inputs = AtomicIntrinsics::new();
+            inputs.insert_atomic(
+                NodeId(9_000_000),
+                AtomicIntrinsic {
+                    min_content: 10.0,
+                    max_content: 20.0,
+                },
+            );
+            let sizes = paragraph.intrinsic_sizes(&mut cx, &options, &inputs);
             op_ns = start.elapsed().as_nanos();
             (
                 format!("{:?} {:?}", sizes.min_content, sizes.max_content).into_bytes(),
