@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "cwd": "/home/mitz/Work/oss/shodo/target/worktrees/shodo-vertical",
+  "cwd": "target/worktrees/shodo-vertical",
   "reviewed_head": "b9baab2d5b692068255d93489456655aa08efefd",
   "purpose": "post-review one fix pass",
   "common_env": {
-    "TMPDIR": "/home/mitz/Work/oss/shodo/target/rust-tmp",
+    "TMPDIR": "target/rust-tmp",
     "CARGO_BUILD_JOBS": "1",
-    "CARGO_TARGET_DIR": "/home/mitz/Work/oss/shodo/target/first-line-contract",
+    "CARGO_TARGET_DIR": "target/first-line-contract",
     "CARGO_PROFILE_DEV_DEBUG": "0",
     "CARGO_PROFILE_TEST_DEBUG": "0",
     "CARGO_INCREMENTAL": "0",
@@ -26,7 +26,7 @@
       ],
       "env": {},
       "started_at": "2026-09-28T02:05:10.154571+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-sideways-origin.log",
+      "log": "target/vertical-artifacts/post-review-sideways-origin.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 0.461
@@ -42,7 +42,7 @@
       ],
       "env": {},
       "started_at": "2026-09-28T02:05:10.615694+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-fmt.log",
+      "log": "target/vertical-artifacts/post-review-fmt.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 1.045
@@ -59,7 +59,7 @@
       ],
       "env": {},
       "started_at": "2026-09-28T02:05:11.661333+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-clippy.log",
+      "log": "target/vertical-artifacts/post-review-clippy.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 22.112
@@ -75,7 +75,7 @@
       ],
       "env": {},
       "started_at": "2026-09-28T02:05:33.773710+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-workspace.log",
+      "log": "target/vertical-artifacts/post-review-workspace.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 120.874
@@ -94,7 +94,7 @@
         "RUSTDOCFLAGS": "-D warnings"
       },
       "started_at": "2026-09-28T02:07:34.648005+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-doc.log",
+      "log": "target/vertical-artifacts/post-review-doc.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 4.388
@@ -112,7 +112,7 @@
       ],
       "env": {},
       "started_at": "2026-09-28T02:07:39.036087+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-no-default.log",
+      "log": "target/vertical-artifacts/post-review-no-default.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 14.549
@@ -132,7 +132,7 @@
       ],
       "env": {},
       "started_at": "2026-09-28T02:07:53.585163+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-complex-scripts.log",
+      "log": "target/vertical-artifacts/post-review-complex-scripts.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 15.514
@@ -155,7 +155,7 @@
       ],
       "env": {},
       "started_at": "2026-09-28T02:08:09.099688+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-allocator.log",
+      "log": "target/vertical-artifacts/post-review-allocator.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 1.896
@@ -176,7 +176,7 @@
         "SHODO_BENCH_CASE": "latin-short"
       },
       "started_at": "2026-09-28T02:08:10.996045+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-benchmark-ci.log",
+      "log": "target/vertical-artifacts/post-review-benchmark-ci.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 7.784
@@ -194,11 +194,11 @@
         "--offline",
         "--",
         "--output",
-        "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-snapshots-final-check"
+        "target/vertical-artifacts/post-review-snapshots-final-check"
       ],
       "env": {},
       "started_at": "2026-09-28T02:08:18.780741+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-snapshot-matrix.log",
+      "log": "target/vertical-artifacts/post-review-snapshot-matrix.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 19.993
@@ -216,7 +216,7 @@
       ],
       "env": {},
       "started_at": "2026-09-28T02:08:38.791784+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-fixture-python.log",
+      "log": "target/vertical-artifacts/post-review-fixture-python.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 44.41
@@ -234,7 +234,7 @@
       ],
       "env": {},
       "started_at": "2026-09-28T02:09:23.229614+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-benchmark-python.log",
+      "log": "target/vertical-artifacts/post-review-benchmark-python.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 0.58
@@ -248,7 +248,7 @@
       ],
       "env": {},
       "started_at": "2026-09-28T02:09:23.810799+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-sfnt-check.log",
+      "log": "target/vertical-artifacts/post-review-sfnt-check.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 0.068
@@ -264,7 +264,7 @@
       ],
       "env": {},
       "started_at": "2026-09-28T02:09:23.879359+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-sfnt-reproduce.log",
+      "log": "target/vertical-artifacts/post-review-sfnt-reproduce.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 1.633
@@ -283,7 +283,7 @@
       ],
       "env": {},
       "started_at": "2026-09-28T02:09:25.513012+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-wasm.log",
+      "log": "target/vertical-artifacts/post-review-wasm.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 3.106
@@ -298,10 +298,10 @@
         "--offline"
       ],
       "env": {
-        "CARGO_TARGET_DIR": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/msrv-1.89-target"
+        "CARGO_TARGET_DIR": "target/vertical-artifacts/msrv-1.89-target"
       },
       "started_at": "2026-09-28T02:09:28.621071+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-msrv-workspace.log",
+      "log": "target/vertical-artifacts/post-review-msrv-workspace.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 258.055
@@ -321,10 +321,10 @@
       "env": {
         "SHODO_BENCH_CASE": "latin-short",
         "SHODO_BENCH_QUICK": "1",
-        "SHODO_BENCH_OUTPUT": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-criterion-latin-short"
+        "SHODO_BENCH_OUTPUT": "target/vertical-artifacts/post-review-criterion-latin-short"
       },
       "started_at": "2026-09-28T02:13:46.683334+00:00",
-      "log": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-benchmark-measure.log",
+      "log": "target/vertical-artifacts/post-review-benchmark-measure.log",
       "status": "passed",
       "exit_code": 0,
       "seconds": 33.353
@@ -357,7 +357,7 @@
       "rebuild_widths",
       "reuse_widths"
     ],
-    "digests": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/post-review-criterion-latin-short/digests.json"
+    "digests": "target/vertical-artifacts/post-review-criterion-latin-short/digests.json"
   },
   "cargo_lock_sha256": "78082b8530a99d9e2bd6028270089462bb3618a16e122b0a687f063c706a43c3",
   "verified_source_sha256": {
@@ -608,7 +608,7 @@
   },
   "independent_review": {
     "head": "b9baab2d5b692068255d93489456655aa08efefd",
-    "report": "/home/mitz/Work/oss/shodo/target/vertical-artifacts/final-review.md",
+    "report": "target/vertical-artifacts/final-review.md",
     "important": 2,
     "fixed": 2,
     "deferred_minors": 2,

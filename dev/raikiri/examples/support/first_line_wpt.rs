@@ -233,7 +233,7 @@ fn candidate(
     ))
 }
 pub fn run(root: &Path, out: &Path) -> Result<(), String> {
-    let pins: Value = serde_json::from_str(include_str!("../../data/first-line-wpt-pins.json"))
+    let pins: Value = serde_json::from_str(include_str!("../../inputs/first-line-wpt-pins.json"))
         .map_err(|e| e.to_string())?;
     verify_assets(root, pins["assets"].as_array().ok_or("missing assets")?)?;
     let expected: BTreeSet<_> = pins["font_paths"]

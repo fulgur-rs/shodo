@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Investigation only: no changes under `crates/`, `dev/`, or to either saved S4 spike, the pinned WPT checkout, the saved `target/8ei-artifacts/` inputs, or the WPT baseline. Outputs of runs go to a scratch directory outside the repo (`/home/mitz/tmp/jt1-artifacts/`, disk-backed; never `/tmp`, which is tmpfs).
+- Investigation only: no changes under `crates/`, `dev/`, or to either saved S4 spike, the pinned WPT checkout, the saved `target/8ei-artifacts/` inputs, or the WPT baseline. Outputs of runs go to a scratch directory outside the repo (`~/tmp/jt1-artifacts/`, disk-backed; never `/tmp`, which is tmpfs).
 - Source comments and docs are written in English.
 - Pins: candidate `fe67a281210fbc52d22032911ac3584405aa8198`, raikiri `ab7e619a8f321f03de8b8c8b9342954868e044c8`, WPT `97ea26e26a2aac3eec7e770650b25e7049ed4a4e`; time binary SHA256 `7caf472b3d40d670c270e4a97291a05c8ecc76056fefa222e26b7be9d66d7d30` (`target/8ei-artifacts/pipeline-release/measurement-probe-time`). The runner must verify the binary hash before running and refuse a mismatch.
 - Documents (WPT-relative ids): `css/css-text/hyphens/reference/hyphens-out-of-flow-001-ref.html` and `css/css-text/hyphens/reference/hyphens-auto-001-ref.html`. Do not substitute simplified fixtures.
@@ -270,13 +270,13 @@ git commit -m "test(tools): add shodo-jt1 paired-ratio and perf attribution help
 **Files:**
 - Create: `tools/raikiri/jt1_measure.py`
 - Create: `dev/raikiri/data/raikiri-jt1-reproduction.json` (generated summary, committed)
-- Raw outputs: `/home/mitz/tmp/jt1-artifacts/reproduction/` (not committed)
+- Raw outputs: `~/tmp/jt1-artifacts/reproduction/` (not committed)
 
 **Interfaces:**
 - Consumes (Task 1): `jt1_attribution.process_median_ns`, `jt1_attribution.paired_summary` (import by inserting the tools/raikiri directory on `sys.path`).
 - Produces: the CLI `python3 tools/raikiri/jt1_measure.py reproduce --scratch DIR --output SUMMARY.json` and, in Task 3, `... perf --scratch DIR --output SUMMARY.json`; a summary JSON with keys `environment`, `operations.<op>.<doc>` (paired summary or an explicit failure record), and `memory`.
 
-Fixed inputs: time binary `/home/mitz/Work/oss/shodo/target/8ei-artifacts/pipeline-release/measurement-probe-time`; memory binary `.../pipeline-release/measurement-probe-memory`; WPT `/home/mitz/.cache/raikiri/wpt`; selection `/home/mitz/Work/oss/shodo/target/8ei-artifacts/selected-pages.json`. These are read-only inputs outside the worktree.
+Fixed inputs: time binary `target/8ei-artifacts/pipeline-release/measurement-probe-time`; memory binary `.../pipeline-release/measurement-probe-memory`; WPT `~/.cache/raikiri/wpt`; selection `target/8ei-artifacts/selected-pages.json`. These are read-only inputs outside the worktree.
 
 - [ ] **Step 1: Implement the runner (reproduce subcommand)**
 
@@ -298,11 +298,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import jt1_attribution as attribution  # noqa: E402
 
-ARTIFACTS = Path("/home/mitz/Work/oss/shodo/target/8ei-artifacts")
+ROOT = Path(__file__).resolve().parents[2]
+ARTIFACTS = Path(os.environ.get("JT1_ARTIFACTS", ROOT / "target" / "8ei-artifacts"))
 TIME_BINARY = ARTIFACTS / "pipeline-release" / "measurement-probe-time"
 MEMORY_BINARY = ARTIFACTS / "pipeline-release" / "measurement-probe-memory"
 TIME_BINARY_SHA256 = "7caf472b3d40d670c270e4a97291a05c8ecc76056fefa222e26b7be9d66d7d30"
-WPT = Path("/home/mitz/.cache/raikiri/wpt")
+WPT = Path(os.environ.get("RAIKIRI_WPT", Path.home() / ".cache" / "raikiri" / "wpt"))
 SELECTION = ARTIFACTS / "selected-pages.json"
 DOCUMENTS = [
     "css/css-text/hyphens/reference/hyphens-out-of-flow-001-ref.html",
@@ -422,7 +423,7 @@ if __name__ == "__main__":
 
 Run (a plain, separate command; scratch is disk-backed):
 
-`python3 -c "import sys; sys.path.insert(0,'tools/raikiri'); import jt1_measure as m, pathlib; out=pathlib.Path('/home/mitz/tmp/jt1-artifacts/smoke'); out.mkdir(parents=True,exist_ok=True); r=m.run_probe(m.TIME_BINARY,'time','native',m.DOCUMENTS[0],out/'one.json','pipeline'); print(r['ok'], m.attribution.process_median_ns(r['report'],'pipeline'))"`
+`python3 -c "import sys; sys.path.insert(0,'tools/raikiri'); import jt1_measure as m, pathlib; out=pathlib.Path('~/tmp/jt1-artifacts/smoke'); out.mkdir(parents=True,exist_ok=True); r=m.run_probe(m.TIME_BINARY,'time','native',m.DOCUMENTS[0],out/'one.json','pipeline'); print(r['ok'], m.attribution.process_median_ns(r['report'],'pipeline'))"`
 
 Expected: `True <a number of nanoseconds near 900000>`. Then do the same for `layout` and `isolated` on both engines and print, for each, whether it succeeded and, for `isolated`, `list(report['samples'][1]['initial_text_pipeline'].keys())`. If `isolated`'s window is not `initial_text_pipeline.duration_ns` (the object may nest a `measurement` key), fix `WINDOWS["isolated"]` handling in `jt1_attribution.warm_samples_ns` (extend it to a small path tuple) with a unit test using the real fixture `isolated-native-time`; if `isolated` is unsupported for these documents (non-zero exit), keep the recorded failure as evidence. Record everything you observe in the report.
 
@@ -430,14 +431,14 @@ Expected: `True <a number of nanoseconds near 900000>`. Then do the same for `la
 
 Run: `cat /proc/loadavg` and `python3 -c "import sys; sys.path.insert(0,'tools/raikiri'); import jt1_measure as m; b=m.cpu_busy(); print(sorted(b.items(), key=lambda x: x[1])[:3])"`. If the least busy CPU is over 25% busy the runner refuses on its own; in that case wait (use `sleep` in a separate command, at most a few minutes at a time) and retry up to 5 times, then report BLOCKED with the observed loads instead of lowering the threshold.
 
-Run: `python3 tools/raikiri/jt1_measure.py reproduce --scratch /home/mitz/tmp/jt1-artifacts/reproduction --output /home/mitz/tmp/jt1-artifacts/reproduction/summary.json`
+Run: `python3 tools/raikiri/jt1_measure.py reproduce --scratch ~/tmp/jt1-artifacts/reproduction --output ~/tmp/jt1-artifacts/reproduction/summary.json`
 Expected: prints one `ratio median X.XXX` line per operation/document (or `FAILED`) and `environment: quiet|loaded`. This is 192 short process runs.
 
 - [ ] **Step 4: Examine and copy the summary**
 
-Read the summary (`python3 -c "import json; d=json.load(open('/home/mitz/tmp/jt1-artifacts/reproduction/summary.json')); print(json.dumps({op:{doc.rsplit('/',1)[1]:(v.get('paired_ratio_median'), v.get('paired_ratio_min'), v.get('paired_ratio_max'), v.get('pairs_candidate_slower'), v.get('failed')) for doc,v in docs.items()} for op,docs in d['operations'].items()}, indent=1)); print(d['environment'])"`). Compare the `pipeline` medians with the saved 1.361 (out-of-flow) and 1.342 (auto). Do not adjust anything to make them agree. If the run is labelled `loaded`, note it; you may re-run once when quieter and keep both, labelled.
+Read the summary (`python3 -c "import json; d=json.load(open('~/tmp/jt1-artifacts/reproduction/summary.json')); print(json.dumps({op:{doc.rsplit('/',1)[1]:(v.get('paired_ratio_median'), v.get('paired_ratio_min'), v.get('paired_ratio_max'), v.get('pairs_candidate_slower'), v.get('failed')) for doc,v in docs.items()} for op,docs in d['operations'].items()}, indent=1)); print(d['environment'])"`). Compare the `pipeline` medians with the saved 1.361 (out-of-flow) and 1.342 (auto). Do not adjust anything to make them agree. If the run is labelled `loaded`, note it; you may re-run once when quieter and keep both, labelled.
 
-Copy it: `cp /home/mitz/tmp/jt1-artifacts/reproduction/summary.json dev/raikiri/data/raikiri-jt1-reproduction.json` and check it has no absolute scratch paths (`grep -c "jt1-artifacts" dev/raikiri/data/raikiri-jt1-reproduction.json` prints 0; if `argv` paths leaked in, they come only from the raw files, not the summary).
+Copy it: `cp ~/tmp/jt1-artifacts/reproduction/summary.json dev/raikiri/data/raikiri-jt1-reproduction.json` and check it has no absolute scratch paths (`grep -c "jt1-artifacts" dev/raikiri/data/raikiri-jt1-reproduction.json` prints 0; if `argv` paths leaked in, they come only from the raw files, not the summary).
 
 - [ ] **Step 5: Lint and commit**
 
@@ -455,7 +456,7 @@ git commit -m "feat(tools): reproduce the saved S4 candidate pipeline/layout inc
 **Files:**
 - Modify: `tools/raikiri/jt1_measure.py` (add the `memory` and `perf` subcommands)
 - Create: `dev/raikiri/data/raikiri-jt1-attribution.json` (generated, committed)
-- Raw outputs: `/home/mitz/tmp/jt1-artifacts/attribution/` (not committed)
+- Raw outputs: `~/tmp/jt1-artifacts/attribution/` (not committed)
 
 **Interfaces:**
 - Consumes (Task 1/2): `attribution.aggregate`, `attribution.perf_samples`, `run_probe`, `MEMORY_BINARY`, `TIME_BINARY`, `DOCUMENTS`.
@@ -463,17 +464,17 @@ git commit -m "feat(tools): reproduce the saved S4 candidate pipeline/layout inc
 
 - [ ] **Step 1: Discover the memory record shape, then write its unit test**
 
-Run the memory binary once: `python3 -c "import sys; sys.path.insert(0,'tools/raikiri'); import jt1_measure as m, pathlib, json; out=pathlib.Path('/home/mitz/tmp/jt1-artifacts/attribution'); out.mkdir(parents=True,exist_ok=True); r=m.run_probe(m.MEMORY_BINARY,'memory','native',m.DOCUMENTS[0],out/'probe.json','pipeline'); print(r['ok']); s=r['report']['samples'][1]; print(json.dumps(s['parse_cascade_layout'])[:600])"`.
+Run the memory binary once: `python3 -c "import sys; sys.path.insert(0,'tools/raikiri'); import jt1_measure as m, pathlib, json; out=pathlib.Path('~/tmp/jt1-artifacts/attribution'); out.mkdir(parents=True,exist_ok=True); r=m.run_probe(m.MEMORY_BINARY,'memory','native',m.DOCUMENTS[0],out/'probe.json','pipeline'); print(r['ok']); s=r['report']['samples'][1]; print(json.dumps(s['parse_cascade_layout'])[:600])"`.
 Identify the per-window allocation fields (requested bytes, allocation count, operation-relative peak, retained net bytes). Add `window_memory(report, operation)` to `tools/raikiri/jt1_attribution.py` returning those numbers for the warm samples (median across warm samples per field), and a unit test in `test_jt1_attribution.py` against the real memory fixtures `pipeline-native` and `pipeline-candidate` (check exact numbers against a hand computation of one field from the fixture, not just types). Write the test first, see it fail, then implement; keep the existing tests green. Requested-heap accounting is not RSS; say so in the docstring.
 
 - [ ] **Step 2: Add the `memory` subcommand**
 
-For each operation in `pipeline`, `layout`, `isolated`, each document, each engine: run the memory binary 3 times (independent processes, engine order alternating), save raw outputs under the scratch directory, and write `window_memory` results (per run and their median) into the output JSON with the binary path and SHA256 (compute and record; the memory binary has no saved pin in this plan, so record its hash rather than refusing). A failed or unsupported combination is recorded as `{"failed": ...}` exactly as in Task 2. Run it: `python3 tools/raikiri/jt1_measure.py memory --scratch /home/mitz/tmp/jt1-artifacts/attribution --output /home/mitz/tmp/jt1-artifacts/attribution/memory.json` (no timing is taken, so machine load does not matter here).
+For each operation in `pipeline`, `layout`, `isolated`, each document, each engine: run the memory binary 3 times (independent processes, engine order alternating), save raw outputs under the scratch directory, and write `window_memory` results (per run and their median) into the output JSON with the binary path and SHA256 (compute and record; the memory binary has no saved pin in this plan, so record its hash rather than refusing). A failed or unsupported combination is recorded as `{"failed": ...}` exactly as in Task 2. Run it: `python3 tools/raikiri/jt1_measure.py memory --scratch ~/tmp/jt1-artifacts/attribution --output ~/tmp/jt1-artifacts/attribution/memory.json` (no timing is taken, so machine load does not matter here).
 
 - [ ] **Step 3: Add the `perf` subcommand and run it**
 
 For each engine and document: run the time binary's `pipeline` operation 200 times under one `perf record`, flat (no `-g`, no `--call-graph`):
-`perf record -F 20000 -o <scratch>/perf-<engine>-<slug>.data -- bash -c 'for i in $(seq 200); do "$0" time "$1" "$2" "$3" "$4" /dev/null pipeline >/dev/null 2>&1; done' <binary> <engine> <wpt> <selection> <doc>` — verify that the probe accepts `/dev/null` as OUTPUT; if it does not, write to a scratch file that is overwritten each iteration. Then `perf report -i <data> --stdio --no-children --comm measurement-probe-time --sort sym` and parse with `attribution.perf_samples` / `attribution.aggregate`. Check `perf_event_paranoid` allows it (it is 2: user-space profiling of your own processes works). Pin to the least-busy CPU as in Task 2 and record the environment label. Normalize by dividing bucket counts by the 200 runs, give per-engine bucket tables and `candidate_minus_native` per bucket, plus each engine's total sample count. Because whole processes are sampled, the setup outside the measured windows is included: say so in the JSON `scope` field and only interpret differences. Also save the top 25 symbols per engine/document (name and samples) so a reader can see what a bucket contains. Run it: `python3 tools/raikiri/jt1_measure.py perf --scratch /home/mitz/tmp/jt1-artifacts/attribution --output /home/mitz/tmp/jt1-artifacts/attribution/perf.json`.
+`perf record -F 20000 -o <scratch>/perf-<engine>-<slug>.data -- bash -c 'for i in $(seq 200); do "$0" time "$1" "$2" "$3" "$4" /dev/null pipeline >/dev/null 2>&1; done' <binary> <engine> <wpt> <selection> <doc>` — verify that the probe accepts `/dev/null` as OUTPUT; if it does not, write to a scratch file that is overwritten each iteration. Then `perf report -i <data> --stdio --no-children --comm measurement-probe-time --sort sym` and parse with `attribution.perf_samples` / `attribution.aggregate`. Check `perf_event_paranoid` allows it (it is 2: user-space profiling of your own processes works). Pin to the least-busy CPU as in Task 2 and record the environment label. Normalize by dividing bucket counts by the 200 runs, give per-engine bucket tables and `candidate_minus_native` per bucket, plus each engine's total sample count. Because whole processes are sampled, the setup outside the measured windows is included: say so in the JSON `scope` field and only interpret differences. Also save the top 25 symbols per engine/document (name and samples) so a reader can see what a bucket contains. Run it: `python3 tools/raikiri/jt1_measure.py perf --scratch ~/tmp/jt1-artifacts/attribution --output ~/tmp/jt1-artifacts/attribution/perf.json`.
 
 - [ ] **Step 4: Combine into one committed summary**
 

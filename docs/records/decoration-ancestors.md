@@ -49,6 +49,6 @@ shodo-sbp.3の保存済み成果物をbaselineに、同じcoverage version 2・f
 
 baseは `65d3fafb0e4315db28f179cfcb8db33140d0ce12`。計測時点の変更は未コミットだった。通常のRust検証は1.96.0、性能binaryはstable 1.97.1。専用probeのdependency versionはworkspace lockと一致する。system/web fontsを含む既定featureをビルドするが、固定font loaderはsystem discoveryを無効化している。
 
-[検証manifest](data/decoration-ancestors.json) と[生データarchive](data/decoration-ancestors-raw.json.gz) に全54 matrix、専用60条件、時間raw samples、probe source/manifest/lock、binary SHA256、実装source hash/diff、回帰・全体検証ログを保存する。元成果物は `/home/mitz/Work/oss/shodo/target/performance-artifacts/` の `sbp4-probe`、`sbp4-decoration-ancestors`、`sbp4-snapshots`。保存したbefore binaryは初期のcfg(test)回帰を追加したソースからビルドし、実行時の旧width実装は変更していない。
+検証manifest と生データarchive に全54 matrix、専用60条件、時間raw samples、probe source/manifest/lock、binary SHA256、実装source hash/diff、回帰・全体検証ログを保存する。元成果物は `target/performance-artifacts/` の `sbp4-probe`、`sbp4-decoration-ancestors`、`sbp4-snapshots`。保存したbefore binaryは初期のcfg(test)回帰を追加したソースからビルドし、実行時の旧width実装は変更していない。
 
 raikiri切り替えへの性能ブロック依存や、保存済みS4 spikeへの変更はない。

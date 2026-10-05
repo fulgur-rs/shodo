@@ -12,7 +12,7 @@
 - baseline/candidate は別々の release バイナリとして構築し、SHA-256 はそれぞれ `072b59c5ac3d2de21f4ab3b1ec1e11ade1cccf3410c959a354ff4939ccbd46a5` と `af30db4e8e20505c3f197a95c3861859738deb1e8b86ad83b8f7df3013355598`。
 - `dev/bench/examples/ruby_content_restore.rs` で固定 CJK フォント、16 annotation lanes を持つ Ruby 段落を作成した。RawItem 数、入れ子深さ、style 数をそれぞれ変えた9ケースを測定した。
 - 1サンプル内で同じ条件の `builder.build()` を32回実行し、その平均時間を記録した。6サンプルを ABBA 順（baseline/candidate/candidate/baseline、向きを交互に反転）に測定した。fixture 構築、出力 digest、`break_all`、warning 取得は計時範囲外。
-- baseline/candidate の build output SHA-256 と build/layout warnings は全ケースで一致した。全測定値と環境情報は [raw JSON](data/shodo-zb0-8-input-cost-ab.json) に記録した。
+- baseline/candidate の build output SHA-256 と build/layout warnings は全ケースで一致した。全測定値と環境情報は raw JSON に記録した。
 - rustc 1.96.0、AMD Ryzen 5 5600G、Linux x86_64。CPU frequency scaling は有効。
 
 ## 時間

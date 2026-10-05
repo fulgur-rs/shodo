@@ -14,11 +14,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import jt1_attribution as attribution  # noqa: E402
 
-ARTIFACTS = Path("/home/mitz/Work/oss/shodo/target/8ei-artifacts")
+ROOT = Path(__file__).resolve().parents[2]
+ARTIFACTS = Path(os.environ.get("JT1_ARTIFACTS", ROOT / "target" / "8ei-artifacts"))
 TIME_BINARY = ARTIFACTS / "pipeline-release" / "measurement-probe-time"
 MEMORY_BINARY = ARTIFACTS / "pipeline-release" / "measurement-probe-memory"
 TIME_BINARY_SHA256 = "7caf472b3d40d670c270e4a97291a05c8ecc76056fefa222e26b7be9d66d7d30"
-WPT = Path("/home/mitz/.cache/raikiri/wpt")
+WPT = Path(os.environ.get("RAIKIRI_WPT", Path.home() / ".cache" / "raikiri" / "wpt"))
 SELECTION = ARTIFACTS / "selected-pages.json"
 DOCUMENTS = [
     "css/css-text/hyphens/reference/hyphens-out-of-flow-001-ref.html",

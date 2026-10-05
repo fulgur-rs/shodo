@@ -82,4 +82,4 @@ hit14、workspace1078、既定featureなし625、complex-only628、fmt、全targ
 
 sbp6と同じfont/input/harness/lock/toolchain/profile/CPU affinityで通常54casesを収集し、warm/memory各7digestと最終source fingerprint ed629685f7919a4633725d326859f3492b2614141fd5cbf40d6daf69228ca1fdを照合した。検証Rust1.96.0、性能stable1.97.1。beforeはbase productionそのもの。afterはbase+tracked diffに加えnew-source-filesを同じhashで保存し、65cf3e1へ同じsourceをcommitした。最終captureは65cf3e1+tracked refinement diffを保存し、同じ最終sourceを872d52fへcommitした。
 
-[manifest](data/selection-source-index.json)と[raw](data/selection-source-index-raw.json.gz)に全93/54cases、raw samples、source/config/lock、変更Rust全文、4binary SHA256、RED/GREEN・全required logs・native ledger・照合scriptを保存する。元成果物target/performance-artifacts/sbp9-selection-probe、sbp9-selection-source-final、sbp9-snapshots-final（初回sbp9-selection-source/sbp9-snapshotsも保存）も保持する。
+manifestとrawに全93/54cases、raw samples、source/config/lock、変更Rust全文、4binary SHA256、RED/GREEN・全required logs・native ledger・照合scriptを保存する。元成果物target/performance-artifacts/sbp9-selection-probe、sbp9-selection-source-final、sbp9-snapshots-final（初回sbp9-selection-source/sbp9-snapshotsも保存）も保持する。

@@ -90,13 +90,13 @@ S4 selection.
 Full per-process warm samples, allocation counters, pair ordering, command
 arguments with machine-local paths removed, input/binary hashes, and selection
 geometry differences are in
-[`raikiri-7dt-current-main-comparison.json`](../../dev/raikiri/data/raikiri-7dt-current-main-comparison.json).
+`raikiri-7dt-current-main-comparison.json`.
 Current-main build inputs and binary provenance are recorded in
-[`raikiri-7dt-current-provenance.json`](../../dev/raikiri/data/raikiri-7dt-current-provenance.json).
+`raikiri-7dt-current-provenance.json`.
 The standalone selections are
-[`raikiri-7dt-saved-selection.json`](../../dev/raikiri/data/raikiri-7dt-saved-selection.json)
+`raikiri-7dt-saved-selection.json`
 and
-[`raikiri-7dt-current-selection.json`](../../dev/raikiri/data/raikiri-7dt-current-selection.json).
+`raikiri-7dt-current-selection.json`.
 
 ## Limits
 

@@ -20,7 +20,7 @@ For cold timings, matching caches are disabled. Registration and the first
 match are timed separately. Eight baseline/indexed pairs per workload and face
 count were run with execution order alternated; the table reports medians.
 The raw samples are in
-[`data/shodo-im9-2-font-match-indexes-cold.csv`](data/shodo-im9-2-font-match-indexes-cold.csv).
+`data/shodo-im9-2-font-match-indexes-cold.csv`.
 
 For allocation measurements, five baseline/indexed pairs were run per case,
 again alternating order. The bench `CountingAllocator` reports requested Rust
@@ -28,7 +28,7 @@ allocator blocks, not RSS. Registration and cache-miss matching are measured in
 separate scopes. Input family strings, queries, and font byte copies are
 prepared outside those scopes. The warm-hit check uses a one-family key, primes
 the result, and measures a subsequent hit. Raw scope results are in
-[`data/shodo-im9-2-font-match-indexes-memory.csv`](data/shodo-im9-2-font-match-indexes-memory.csv).
+`data/shodo-im9-2-font-match-indexes-memory.csv`.
 
 ## Release timings
 

@@ -16,7 +16,7 @@
 
 ## 集計結果
 
-時間はprocess内sample中央値の、各状態2 processの中央値。比率は候補／変更前。requested bytesはscope内の要求量で、RSSではない。全40条件の集計と悪化も [manifest](data/edge-cache-eviction.json) に残す。
+時間はprocess内sample中央値の、各状態2 processの中央値。比率は候補／変更前。requested bytesはscope内の要求量で、RSSではない。全40条件の集計と悪化も manifest に残す。
 
 | 条件 | 時間比 | 実layout shaper 変更前→候補 | gross bytes 変更前→候補 | net bytes 変更前→候補 | peak extra bytes 変更前→候補 |
 |---|---:|---:|---:|---:|---:|

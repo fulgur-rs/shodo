@@ -48,6 +48,6 @@ shodo-sbp.4をbaselineとし、同じfont/input/harness/lock/toolchain/profile/C
 
 baseは973293d9aa5df544b7f801217ac79f4a1fdb06b7、実装commitは8a5f7f5と4e69f9a。検証Rustは1.96.0、性能binaryはstable1.97.1。専用probeのexternal dependency versionはworkspace lockと一致する。固定font loaderはsystem discoveryを無効化している。original binaryはtest-only counter追加後の未変更production実装から作り、以降は保存binaryを実行した。
 
-[検証manifest](data/ruby-candidate-ranges.json)と[生データarchive](data/ruby-candidate-ranges-raw.json.gz)に全段階の割当・時間・digest、54 matrix、probe source/manifest/lock、binary SHA256、source hash/patch、RED/GREENと全体検証ログを保存する。元成果物はtarget/performance-artifactsのsbp5-probe、sbp5-ruby-candidates、sbp5-snapshots。
+検証manifestと生データarchiveに全段階の割当・時間・digest、54 matrix、probe source/manifest/lock、binary SHA256、source hash/patch、RED/GREENと全体検証ログを保存する。元成果物はtarget/performance-artifactsのsbp5-probe、sbp5-ruby-candidates、sbp5-snapshots。
 
 raikiri切り替えを止める性能依存は追加していない。保存済みS4 spikeへの変更はない。

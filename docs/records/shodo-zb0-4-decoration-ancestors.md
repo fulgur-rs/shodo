@@ -13,7 +13,7 @@ baseline は `adf02f0dda2cb41837f371eef5b70b7389e28eea`、候補は `c91a6acbb20
 
 depth64 の4境界・edge queryで parent-link reads は480、legacy Vec＋`contains` oracle の作業カウントは6,592だった。fixture build と font load は allocator scope の外。総割り当て要求は減ったが、scope 終了時の live bytes と peak-extra bytes は変わらない。
 
-時間は run-level median 4回分をさらに集約した参考値。8×32 は3,266,671→3,242,411 ns/layout、16×64 は20,311,015→19,643,353 ns/layout。run間の揺れが大きく、16×64候補の1 runには35,183,472 ns/layoutの外れ値があるため、一定の速度向上は主張しない。全raw samplesと個別run medianは[archive](data/shodo-zb0-4-decoration-ancestors.json.gz)に保存した。
+時間は run-level median 4回分をさらに集約した参考値。8×32 は3,266,671→3,242,411 ns/layout、16×64 は20,311,015→19,643,353 ns/layout。run間の揺れが大きく、16×64候補の1 runには35,183,472 ns/layoutの外れ値があるため、一定の速度向上は主張しない。全raw samplesと個別run medianはarchiveに保存した。
 
 ## Valgrind Massif
 
@@ -25,4 +25,4 @@ Valgrind 3.25.1 で両 release binary を `--tool=massif --time-unit=B --stacks=
 
 最終rebase後に `cargo test --workspace` が成功した。rebase前には workspace feature/accesskit、Clippy、format、no-default-feature、complex-scripts-only、allocation regression も成功。差分は独立reviewで Ready to merge と判定され、Critical/Important 指摘はなかった。
 
-[raw measurements、full output snapshots、Massif snapshot series、probe source、manifest](data/shodo-zb0-4-decoration-ancestors.json.gz)
+raw measurements、full output snapshots、Massif snapshot series、probe source、manifest

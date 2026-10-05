@@ -6,10 +6,10 @@ actual error node's field names, values and initial values, keeping its root,
 DOM identity and original input hashes. This is a diagnosis of the residual
 style gate, not a layout engine, a production adapter, or a WPT verdict.
 
-[The complete classification](../../dev/raikiri/data/raikiri-style-diagnostics.json) contains all
+[The complete classification](../../dev/raikiri/inputs/raikiri-style-diagnostics.json) contains all
 109 documents and 303 blocks, including mixed causes. It retains every residual
 value, 111 original resource records, the original 88-font registry, and six
-original documents' parser warnings. [Input pins](../../dev/raikiri/data/raikiri-style-input-pins.json)
+original documents' parser warnings. Input pins
 retain the independently checked font paths, sizes and hashes. Neither WPT
 inputs nor font bytes were replaced with development fixtures.
 
@@ -21,12 +21,12 @@ this repository's root; output paths below are disposable development artifacts.
 ```sh
 mkdir -p target/style-diagnosis
 cargo run -p shodo-raikiri --example raikiri_style_diffs -- \
-  /home/mitz/.cache/raikiri/wpt \
+  ~/.cache/raikiri/wpt \
   target/worktrees/shodo-s4-v2/target/s4v2/wpt-batch-full/comparison.json \
   target/style-diagnosis/residual.json
 python3 tools/raikiri/classify_raikiri_styles.py \
   target/style-diagnosis/residual.json target/style-diagnosis/classified.json
-cmp target/style-diagnosis/classified.json dev/raikiri/data/raikiri-style-diagnostics.json
+cmp target/style-diagnosis/classified.json dev/raikiri/inputs/raikiri-style-diagnostics.json
 ```
 
 The WPT path and original comparison are local investigation inputs, not files

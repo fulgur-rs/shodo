@@ -29,7 +29,7 @@
 
 実時間は `Instant` で各操作 8 回 warmup、4 反復/サンプル、21 サンプル/ブロックを取り、BASE→変更後→変更後→BASE の 4 ブロックを CPU 10 に固定して交互実行した。表は各版 42 サンプルの中央値。割り当ては別の `allocation-counting` build で 21 回測定し、表の値は全 21 回で一致した。保持量は行結果を捨てた後、`LayoutContext` を生かしたまま allocator scope を閉じた正味要求 byte。ピークは scope 開始時の live bytes からの最大増分で、RSS ではない。計測機は AMD Ryzen 5 5600G / Rust 1.96.0 / Linux 7.2.5。高い共用機負荷による時間揺れがあり、小さい差の有意性は主張しない。長文の高さ retry と幅縮小の方向は両ブロックで一致した。
 
-行 range、break reason、glyph ID/cluster/座標/advance、geometry、break token、およびその token から fresh `LayoutContext` で得る次行出力の署名は全 16 ケース・6 capture で一致した。連続行ケースは同じ context で終端まで測定している。生サンプルと各 capture の署名は [`scan-cache-cost-raw.json.gz`](data/scan-cache-cost-raw.json.gz)、全数値は [`scan-cache-cost-summary.json`](data/scan-cache-cost-summary.json)、コミット・lockfile・プローブ・binary の SHA-256 と環境は [`scan-cache-cost-manifest.json`](data/scan-cache-cost-manifest.json) に保存した。両固定コミットには同一プローブを `dev/bench/examples` にコピーし、BASE で offline 生成した `Cargo.lock` を変更後にもコピーした。実行コマンドは以下（両 worktree で同じ）。
+行 range、break reason、glyph ID/cluster/座標/advance、geometry、break token、およびその token から fresh `LayoutContext` で得る次行出力の署名は全 16 ケース・6 capture で一致した。連続行ケースは同じ context で終端まで測定している。生サンプルと各 capture の署名は `scan-cache-cost-raw.json.gz`、全数値は `scan-cache-cost-summary.json`、コミット・lockfile・プローブ・binary の SHA-256 と環境は `scan-cache-cost-manifest.json` に保存した。両固定コミットには同一プローブを `dev/bench/examples` にコピーし、BASE で offline 生成した `Cargo.lock` を変更後にもコピーした。実行コマンドは以下（両 worktree で同じ）。
 
 ```sh
 cargo build --offline --locked -p shodo-bench --release --example scan_cache_cost

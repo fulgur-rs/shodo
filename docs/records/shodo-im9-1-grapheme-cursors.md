@@ -6,7 +6,7 @@ The probe builds `"a".repeat(N)` with the pinned `latin-short` fixture style and
 `Shodo Fixture Latin` font from `dev/fixtures`. Limits and layout options use
 their defaults. Each cold timing is one fresh process. Fifteen baseline/cursor
 pairs were run with their order alternated; raw timings are in
-[`data/shodo-im9-1-grapheme-cursors-samples.csv`](data/shodo-im9-1-grapheme-cursors-samples.csv)
+`data/shodo-im9-1-grapheme-cursors-samples.csv`
 and the table reports each version's median. `build` and `all_lines` are timed
 separately. The allocation run
 measures the `build` scope with the bench `CountingAllocator`; these are

@@ -29,7 +29,7 @@ BASE はマージ済み `cd8ed49791049f5b6ee34c0d88c3a5f3a690c289`、修正コ�
 
 各測定は段落構築後に fresh `LayoutContext` で開始し、時間区間は context の破棄まで含めた。時間は 8 warmup、4 反復/サンプル、21 サンプル/ブロックを BASE→修正→修正→BASE で CPU 10 に固定して取得し、各版 42 サンプルの中央値を表にした。割当は別の `allocation-counting` binary で各版 21 回取得し、対象フィールドは 21 回すべて一致した。保持量は行結果を捨てて context を生かしたまま scope を閉じた正味要求 byte、ピークは開始時 live bytes からの最大増分であり、RSS ではない。CPU は AMD Ryzen 5 5600G、Rust 1.96.0、Linux 7.2.5。固定の合成入力と共用機上の計測であり、実アプリ全般の速度や公式 WPT PASS 数は推定しない。
 
-全 16 ケース・6 capture の行 range、break reason、glyph ID/cluster/座標/advance、geometry、break token、および token から fresh context で得た次行出力の署名は一致した。連続行ケースでは同じ context で終端まで進む。長文 deep shrink と可視 SHY overlay の回帰テストは fresh 行と glyph を比較する。既存の justified・float・warning・first-line retry テストを含むワークスペーステストも通過した。全署名・raw samples は [`scan-cache-shrink-raw.json.gz`](data/scan-cache-shrink-raw.json.gz)、集計は [`scan-cache-shrink-summary.json`](data/scan-cache-shrink-summary.json)、コミット・tree・lockfile・フォント・プローブ・4 binary・6 stdout の SHA-256 と環境は [`scan-cache-shrink-manifest.json`](data/scan-cache-shrink-manifest.json) に記録した。
+全 16 ケース・6 capture の行 range、break reason、glyph ID/cluster/座標/advance、geometry、break token、および token から fresh context で得た次行出力の署名は一致した。連続行ケースでは同じ context で終端まで進む。長文 deep shrink と可視 SHY overlay の回帰テストは fresh 行と glyph を比較する。既存の justified・float・warning・first-line retry テストを含むワークスペーステストも通過した。全署名・raw samples は `scan-cache-shrink-raw.json.gz`、集計は `scan-cache-shrink-summary.json`、コミット・tree・lockfile・フォント・プローブ・4 binary・6 stdout の SHA-256 と環境は `scan-cache-shrink-manifest.json` に記録した。
 
 再実行は両固定コミットを別 worktree に配置し、修正版の `dev/bench/examples/scan_cache_cost.rs` と同一の offline `Cargo.lock` を BASE にコピーして行う。
 

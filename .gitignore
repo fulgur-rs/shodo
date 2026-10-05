@@ -5,3 +5,7 @@
 /.beads/
 /.codex/
 /.agents/
+
+# Raw measurement data stays local; records cite it by name only.
+/docs/records/data/
+/dev/raikiri/data/

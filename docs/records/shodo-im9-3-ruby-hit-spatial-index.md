@@ -28,7 +28,7 @@ The candidate-visit regression covers R=16/64/256/1024: a separated annotation h
 
 Allocation values count requested allocator bytes, not RSS. Retained bytes are measured after constructing and retaining the `LineLayout`; peak extra bytes include temporary construction storage. Across all R values, 2,000 ruby-hit queries request 16,010 bytes in both versions (2,001 allocation calls, including the returned hit path). Ruby-miss and body-hit scopes each report the same 10-byte single-call harness event before and after. The new query index adds no measured query allocation.
 
-Raw before/after timing and allocation samples are in [`data`](data/): `shodo-im9-3-ruby-hit-spatial-index-{before,after}-{timing,memory}.json`. The probe is [ruby_hit_index.rs](../../dev/bench/examples/ruby_hit_index.rs). Reproduce from the repository root with:
+Raw before/after timing and allocation samples are in `data`: `shodo-im9-3-ruby-hit-spatial-index-{before,after}-{timing,memory}.json`. The probe is [ruby_hit_index.rs](../../dev/bench/examples/ruby_hit_index.rs). Reproduce from the repository root with:
 
 ```sh
 cargo run --offline --release --manifest-path dev/bench/Cargo.toml --example ruby_hit_index

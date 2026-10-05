@@ -45,7 +45,7 @@ cargo +stable run -p shodo-raikiri --example source_coverage -- \
 
 ## 証拠と後続作業
 
-[全167ブロックの記録](../../dev/raikiri/data/raikiri-source-coverage.json) は文書・root/tag・処理済みテキスト・受け入れた行区間・子ID/区間/subtreeを保持する。[元入力のpin](../../dev/raikiri/data/raikiri-source-input-pins.json) はresource、348元ファイル、88フォント、generic順とCSS footprintを保持する。
+全167ブロックの記録 は文書・root/tag・処理済みテキスト・受け入れた行区間・子ID/区間/subtreeを保持する。元入力のpin はresource、348元ファイル、88フォント、generic順とCSS footprintを保持する。
 
 - raikiri: `ab7e619a8f321f03de8b8c8b9342954868e044c8`
 - WPT: `97ea26e26a2aac3eec7e770650b25e7049ed4a4e`

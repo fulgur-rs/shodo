@@ -34,4 +34,4 @@ The largest difference is 304 bytes of allocator extra heap; useful heap is unch
 
 The optimization is retained for its measured allocation reduction with equal output and no peak increase. Timing alone is not conclusive.
 
-Raw samples, Massif files, output hashes, toolchain and binary hashes are in [the capture archive](data/shodo-zb0-6-whitespace-flags.tar.gz). The benchmark source is `dev/bench/examples/whitespace_flags.rs`.
+Raw samples, Massif files, output hashes, toolchain and binary hashes are in the capture archive. The benchmark source is `dev/bench/examples/whitespace_flags.rs`.

@@ -48,6 +48,11 @@ CSS or WPT conformance.
 
 Measurement and diagnostic records in `docs/records/`; they describe the
 recorded machine, toolchain, and scope at the time, not a live guarantee.
+The raw data that records cite under `docs/records/data/` and
+`dev/raikiri/data/` has been removed from the tree; recover it from commit
+`1b2e1b7` with `git restore --source=1b2e1b7 -- docs/records/data dev/raikiri/data`.
+Both directories are ignored, so new raw data stays local. Inputs that the
+raikiri examples read at build time live in `dev/raikiri/inputs/`.
 
 | Topic | Record |
 | --- | --- |

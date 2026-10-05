@@ -12,7 +12,7 @@
 
 ## Global constraints
 
-- Base635269db13d45e9d8a391fb7cf2cb854363e81e4, shodo-p2m.8, owned /home/mitz/Work/oss/shodo/target/worktrees/shodo-benchmark feat/performance-harness (relocated from /tmp/shodo-benchmark after shared tmp quota failure). .6 excluded; S4 untouched/unmerged.
+- Base635269db13d45e9d8a391fb7cf2cb854363e81e4, shodo-p2m.8, owned target/worktrees/shodo-benchmark feat/performance-harness (relocated from /tmp/shodo-benchmark after shared tmp quota failure). .6 excluded; S4 untouched/unmerged.
 - Rust1.89 floor; dev crate publish=false; root default members and normal library dependency graph unchanged.
 - Release opt3/debug0/incrementalfalse; fixed complex-scripts feature, no web/system discovery; same fixed face bytes and source/settings hashes on every path.
 - Criterion time excludes output drops and benchmark string/metadata setup; allocator binary separate feature/build; raw counters mean allocator-visible requested bytes, not RSS/native/stack memory.

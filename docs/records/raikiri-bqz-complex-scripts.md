@@ -50,4 +50,4 @@ collected. The saved S4 feature baseline and original inputs remain unchanged;
 this evidence does not add a mandatory shodo-p2m.6 dependency.
 
 Machine-readable counts, row hashes, source hashes, and build provenance are in
-[the experiment data](data/raikiri-bqz-complex-scripts.json).
+the experiment data.

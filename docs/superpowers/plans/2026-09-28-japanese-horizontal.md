@@ -18,8 +18,8 @@ scan/cache/planned/intrinsicと採用行のglyph配置に同じ判断を適用�
 - raikiri統合spikeはマージせず、`shodo-p2m.6` に着手しない。
 - 四項目すべてを実装し、paint-onlyの補正やcache回避で置き換えない。
 - 段落準備は線形。候補評価で全文再走査やvisual reorderを追加しない。
-- 所有workspaceは `/home/mitz/Work/oss/shodo/target/worktrees/shodo-japanese`、branch `feat/japanese-horizontal`、base `48a2aea9b2a65b2cb4a3ffadfaf2465362ee020d`。
-- TMPDIRは `/home/mitz/Work/oss/shodo/target/rust-tmp`。一度に一つのCargoを実行する。
+- 所有workspaceは `target/worktrees/shodo-japanese`、branch `feat/japanese-horizontal`、base `48a2aea9b2a65b2cb4a3ffadfaf2465362ee020d`。
+- TMPDIRは `target/rust-tmp`。一度に一つのCargoを実行する。
 - 実行方法はnative。各taskを自身で実装し、最後にbranch全体の独立レビューを一度実施する。
 - ユーザーのissue自律実装の指示を適用する。個別の文書承認を得たとは記録しない。
 

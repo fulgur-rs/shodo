@@ -161,7 +161,7 @@ behavior.
 
 ## Reproduction
 
-Data: [shodo-zb0-7-shape-window-prep.tar.gz](data/shodo-zb0-7-shape-window-prep.tar.gz).
+Data: shodo-zb0-7-shape-window-prep.tar.gz.
 It contains the digest, alloc and time JSONL, callgrind and DHAT totals,
 binary SHA-256s, the source revision of each label, and the scripts
 (`snap.sh <label>`, `callgrind.sh base ctx prep`, `dhat.sh`, `time.sh`,

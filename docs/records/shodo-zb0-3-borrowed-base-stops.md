@@ -4,7 +4,7 @@
 
 ## 固定フォント A/B
 
-baseline は `729da9da81d35c70e9fc8e0b30d4088c64a9ce82`、候補は `perf/shodo-zb0-3-caret-slice`。Rust 1.96.0 の release build で、同じ固定 Latin font と同じベンチを使い、baseline/candidate それぞれで通常順と逆順を1 runずつ測った。各 run は1 sampleにつき128回 `LineLayout::new` を計測し、9 samples の median を記録する。各呼び出しの elapsed を読み取ってから layout を drop する。font load、fixture 構築、drop、allocation counting は時間計測外。全ケースで base は128文字。可視 depth 1/4/8 と、可視 Ruby が0になる hidden depth 4 を測った。raw samples は [JSON データ](data/shodo-zb0-3-borrowed-base-stops.json) に保存した。
+baseline は `729da9da81d35c70e9fc8e0b30d4088c64a9ce82`、候補は `perf/shodo-zb0-3-caret-slice`。Rust 1.96.0 の release build で、同じ固定 Latin font と同じベンチを使い、baseline/candidate それぞれで通常順と逆順を1 runずつ測った。各 run は1 sampleにつき128回 `LineLayout::new` を計測し、9 samples の median を記録する。各呼び出しの elapsed を読み取ってから layout を drop する。font load、fixture 構築、drop、allocation counting は時間計測外。全ケースで base は128文字。可視 depth 1/4/8 と、可視 Ruby が0になる hidden depth 4 を測った。raw samples は JSON データ に保存した。
 
 | ケース | baseline median の2 run平均 | 候補 median の2 run平均 | 差分 |
 | --- | ---: | ---: | ---: |

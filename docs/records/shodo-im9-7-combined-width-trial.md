@@ -19,7 +19,7 @@ fixture with its `hwid` GSUB feature record renamed. Each build used 64 inline
 groups; setup, font registration, output hashing, and warning collection were
 outside the timed or allocation-measured build scope. There were three warmup
 builds, 21 timing samples, and 9 allocation samples per fixture. Both builds
-used `CARGO_TARGET_DIR=/home/mitz/tmp/cargo-target`.
+used `CARGO_TARGET_DIR=~/tmp/cargo-target`.
 
 The timing median is the middle of 21 `ParagraphBuilder::build` durations.
 Allocation medians are requested Rust allocation bytes (`gross`), net bytes,
@@ -69,7 +69,7 @@ the same `LimitExceeded.actual`; Ruby base-scoped glyph caps retain the regular
 trial and final-shaping path. The implementation does not retain trial stores
 for multiple groups at once.
 
-Raw captures: [before timing](data/shodo-im9-7-combined-width-before-time.jsonl.gz),
-[after timing](data/shodo-im9-7-combined-width-after-time.jsonl.gz),
-[before allocations](data/shodo-im9-7-combined-width-before-alloc.jsonl.gz),
-[after allocations](data/shodo-im9-7-combined-width-after-alloc.jsonl.gz).
+Raw captures: before timing,
+after timing,
+before allocations,
+after allocations.

@@ -23,7 +23,7 @@
 - 計時範囲は `break_all` の `reps` 回だけ。build、出力 digest、`LayoutContext` の準備は範囲外。1 サンプルの `reps` は表のとおり（baseline の 1 サンプルが約 50–250 ms になるよう選んだが、`nested` 80/160、`nestedtab` 40 以上、`siblings` は 1 回でも 0.15–3.5 秒かかり、その candidate 側は 7–330 ms）。
 - 12 ラウンドを ABBA 順（baseline/candidate/candidate/baseline）で測定した後、BAAB 順（candidate/baseline/baseline/candidate）で独立に 12 ラウンド測定した。各ラウンドでは同じラベルの 2 サンプルを平均した。全ケースを同じ回数で測り、遅い点を減らしていない。
 - 最大の深さは 160。ruby 1 段が入れ子の深さ 2 を使い、既定の `NestingDepth` 上限 512 で 240 段を超えると build が失敗するため、320 以上は測れない。
-- rustc 1.96.0 (ac68faa20 2026-05-25)、AMD Ryzen 5 5600G with Radeon Graphics、Linux 7.2.5-3-omarchy。scaling governor は `performance`。測定中に他の重い処理は走らせていない。全サンプルと環境情報は [raw JSON](data/shodo-d77-ruby-through-memo.json) に記録した。
+- rustc 1.96.0 (ac68faa20 2026-05-25)、AMD Ryzen 5 5600G with Radeon Graphics、Linux 7.2.5-3-omarchy。scaling governor は `performance`。測定中に他の重い処理は走らせていない。全サンプルと環境情報は raw JSON に記録した。
 
 ## 時間
 
@@ -132,7 +132,7 @@ S=dev/bench/scripts/shodo-d77
 BASE=<baseline の d77_scale> CAND=<candidate の d77_scale> OUT=<dir>/samples.jsonl bash $S/run.sh
 python3 $S/summarize.py <dir>/samples.jsonl > <dir>/summary.json
 # <dir> には binaries.txt（両バイナリの sha256sum 出力）と counts.jsonl（操作数の出力）も置く
-python3 $S/assemble.py adopted <candidate commit> <dir> <baseline worktree> docs/records/data/shodo-d77-ruby-through-memo.json
+python3 $S/assemble.py adopted <candidate commit> <dir> <baseline worktree> <dir>/shodo-d77-ruby-through-memo.json
 ```
 
 集計スクリプトは `dev/bench/scripts/shodo-d77/` にある。本記録の数値はこれらと同じ処理（測定時は絶対パスを埋め込んだ版）で生成した。

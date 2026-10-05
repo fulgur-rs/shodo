@@ -50,4 +50,4 @@ sbp7と同じfont/input/harness/lock/toolchain/profile/CPU affinityで全54ケ�
 
 base550c4a23e4fca6b0a735c59291198adb714af2b2、実装0669ad93a78a4192ef82754e9d748a1630c1d405。検証Rust1.96.0、性能stable1.97.1。専用probe外部依存のversionはworkspace lockと一致する。original binaryはpointer回帰だけ追加した未変更productionから保存した。
 
-[manifest](data/borrowed-caret-cuts.json)と[raw archive](data/borrowed-caret-cuts-raw.json.gz)に全28/54ケース、query signatures、時間/割当samples、source/config/lock、4binary SHA256、RED/GREEN・required logsを含む。元成果物はtarget/performance-artifacts/sbp8-probe、sbp8-caret-cuts、sbp8-snapshots。切替を止める性能依存やS4 spike変更は追加していない。
+manifestとraw archiveに全28/54ケース、query signatures、時間/割当samples、source/config/lock、4binary SHA256、RED/GREEN・required logsを含む。元成果物はtarget/performance-artifacts/sbp8-probe、sbp8-caret-cuts、sbp8-snapshots。切替を止める性能依存やS4 spike変更は追加していない。

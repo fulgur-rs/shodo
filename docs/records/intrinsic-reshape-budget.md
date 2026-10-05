@@ -34,6 +34,6 @@ Rustの通常検証は1.96.0、matrixと独立probeはstable 1.97.1。matrixはw
 
 runnerの既存source hashには実装本体の欠落があるため、別途 `crates/shodo/src` の全Rustソース、crate/workspace manifest、lockの114ファイルを実行前後にhashし、一致を確認した。合成SHA256は `fccb98c7cab20b6be2dd048378d1c9cead14696039da487a734cd88682d94d03`。対象は `0fc9056dd4b9ae6c5387b52677856466e83f6968` を基点とした `fix/sbp1-intrinsic-budget` の修正ソースで、測定時点では未コミットだった。
 
-[検証manifest](data/intrinsic-reshape-budget.json) に各コマンド、probe、file hashを記録し、[生データarchive](data/intrinsic-reshape-budget-raw.json.gz) に全matrixのraw samples・digest・metadata、独立probeのソースと出力、red/greenログ、全体検証ログ、snapshot結果を保存した。元runner成果物は `/tmp/shodo-sbp1-matrix`、snapshot比較レポートは `/tmp/shodo-sbp1-snapshots/index.html`。独立コードレビューで指摘はなかった。
+検証manifest に各コマンド、probe、file hashを記録し、生データarchive に全matrixのraw samples・digest・metadata、独立probeのソースと出力、red/greenログ、全体検証ログ、snapshot結果を保存した。元runner成果物は `/tmp/shodo-sbp1-matrix`、snapshot比較レポートは `/tmp/shodo-sbp1-snapshots/index.html`。独立コードレビューで指摘はなかった。
 
 この修正は出力の決定性を回復するもので、速度改善率は主張しない。raikiri本番切り替えやS4への性能ブロック依存は追加しない。runnerのsource fingerprint修正は独立issue `shodo-sbp.2` の対象として残す。

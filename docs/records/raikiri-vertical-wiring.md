@@ -19,7 +19,7 @@ All raikiri enums are `#[non_exhaustive]`; unknown values are errors.
 
 `dev/raikiri/examples/vertical_wiring.rs` runs the cascade → adapter → shodo
 path on the four original documents, vendored unmodified in
-`dev/raikiri/data/vertical/` (SHA-256 checked against
+`dev/raikiri/inputs/vertical/` (SHA-256 checked against
 `raikiri-style-diagnostics.json`). The WPT reference is the oracle. The
 container's `cssom_writing_mode` selects the paragraph mode; each child `div`
 is one paragraph and each `span` an inline box with its own mapped style.
