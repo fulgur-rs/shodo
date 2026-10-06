@@ -64,7 +64,7 @@ fn span_expansion_preserves_the_exact_fixed_point_width() {
     );
 }
 
-fn style(size: f32) -> InlineStyle {
+pub(super) fn style(size: f32) -> InlineStyle {
     InlineStyle {
         font_size: size,
         line_break: LineBreak::Anywhere,
@@ -73,7 +73,7 @@ fn style(size: f32) -> InlineStyle {
     }
 }
 
-fn ruby(base: RubyContent, reading: &str) -> Ruby {
+pub(super) fn ruby(base: RubyContent, reading: &str) -> Ruby {
     Ruby::new(
         vec![RubyBase {
             node: NodeId(10),
@@ -104,7 +104,7 @@ fn ruby(base: RubyContent, reading: &str) -> Ruby {
     .unwrap()
 }
 
-fn base(text: &str) -> RubyContent {
+pub(super) fn base(text: &str) -> RubyContent {
     RubyContent::text(
         TextSource::Dom {
             node: NodeId(10),
@@ -116,7 +116,7 @@ fn base(text: &str) -> RubyContent {
     )
 }
 
-fn fonts() -> FontCollection {
+pub(super) fn fonts() -> FontCollection {
     let fonts = FontCollection::with_options(
         &Limits::default(),
         FontOptions {

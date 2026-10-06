@@ -123,6 +123,26 @@ pub(super) fn trailing(
     (begin, sum)
 }
 
+/// Start of the backward run `trailing` scans, without widths and without
+/// `finalize` resetting it when the hanging advance is zero. Every unit in
+/// `start..end` that `trailing` would hang lies at or after it; quirks-mode
+/// text presence (`line::quirk`) uses it so zero-width spaces still trim.
+pub(crate) fn trailing_start(data: &ParagraphData, start: usize, end: usize) -> usize {
+    let mut begin = end;
+    let mut blocked = obstructed(data, end);
+    for i in (start..end).rev() {
+        if let UnitKind::Close { box_index } = data.units[i].kind {
+            let e = data.boxes[box_index as usize].edges;
+            blocked |= e.padding.inline_end != 0.0 || e.border.inline_end != 0.0;
+        } else if !(hangable(data, i) && (!preserved(data, i) || !blocked)) && !transparent(data, i)
+        {
+            break;
+        }
+        begin = i;
+    }
+    begin
+}
+
 /// Logical trailing spaces/tabs, including both retained and hanging advances.
 /// Inline end edges and transparent markers do not contribute to this measure.
 pub(crate) fn trailing_advance(

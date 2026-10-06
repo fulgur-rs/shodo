@@ -86,18 +86,7 @@ type Built = (Vec<FragmentRecord>, Vec<TabSlot>);
 /// Collapsible terminal spaces retain their source/glyph advance, but are
 /// removed from inline background and border geometry (CSS Text 3 §4.1.2).
 fn trims_box(data: &ParagraphData, i: usize, hang_start: usize) -> bool {
-    let unit = &data.units[i];
-    i >= hang_start
-        && unit.combine.is_none()
-        && matches!(
-            unit.kind,
-            UnitKind::Cluster { space: true, .. } | UnitKind::Tab
-        )
-        && matches!(
-            data.styles[data.items[unit.item as usize].style as usize].white_space_collapse,
-            crate::style::WhiteSpaceCollapse::Collapse
-                | crate::style::WhiteSpaceCollapse::PreserveBreaks
-        )
+    i >= hang_start && super::quirk::trims(data, i)
 }
 
 /// Builds the records of one line in logical order.

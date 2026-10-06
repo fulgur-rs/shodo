@@ -333,15 +333,26 @@ pub(crate) fn measure(
         data.style.writing_mode,
         crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
     ) && root.text_orientation != crate::style::TextOrientation::Sideways;
-    let (mut above, mut below) = extents(
-        root,
-        root_metrics.metrics,
-        root_metrics.vertical_metrics,
-        root_upright,
-    );
+    let quirk = data
+        .style
+        .line_height_quirk
+        .then(|| super::quirk::Struts::line(data, units.clone()));
+    let root_strut = quirk.as_ref().is_none_or(|q| q.root);
+    let (mut above, mut below) = if root_strut {
+        extents(
+            root,
+            root_metrics.metrics,
+            root_metrics.vertical_metrics,
+            root_upright,
+        )
+    } else {
+        // Nothing has sized the line yet; real contributions replace these.
+        (f32::NEG_INFINITY, f32::NEG_INFINITY)
+    };
     let mut resolver = ProfileResolver::new(data, units.clone());
     let mut empty = true;
     let mut groups: crate::hashing::FastMap<u32, (f32, f32)> = crate::hashing::FastMap::default();
+    let mut ghosts: crate::hashing::FastMap<u32, (f32, f32)> = crate::hashing::FastMap::default();
     let mut combination_bases = Vec::new();
     for (offset, u) in data.units[units.clone()].iter().enumerate() {
         empty &= !matches!(u.kind, UnitKind::Tab | UnitKind::ForcedBreak);
@@ -404,7 +415,21 @@ pub(crate) fn measure(
             group,
             own_group,
         } = profile;
-        if let Some(g) = group {
+        let sizes = match (&r.kind, &quirk) {
+            (RecordKind::InlineBox { box_index, .. }, Some(q)) => q.contributes(Some(*box_index)),
+            // A space removed at the line end sizes nothing, not even with
+            // its own glyph extents (Chromium W/BI/j).
+            (RecordKind::Glyphs { text, .. }, Some(q)) => !q.trimmed(data, text),
+            _ => true,
+        };
+        if !sizes {
+            if let Some(g) = group {
+                // Position-only bounds for a group no member sizes.
+                let v = ghosts.entry(g).or_insert((top, bottom));
+                v.0 = v.0.min(top);
+                v.1 = v.1.max(bottom);
+            }
+        } else if let Some(g) = group {
             let v = groups.entry(g).or_insert((top, bottom));
             v.0 = v.0.min(top);
             v.1 = v.1.max(bottom);
@@ -416,6 +441,10 @@ pub(crate) fn measure(
         }
         shifts.push(base);
         memberships.push((group, own_group));
+    }
+    if above == f32::NEG_INFINITY {
+        above = 0.0;
+        below = 0.0;
     }
     // Negative half-leading is meaningful: a zero-height strut can still
     // have a positive ascent and an equally negative descent.
@@ -440,16 +469,17 @@ pub(crate) fn measure(
         above = above.max(bottom_height - below);
     }
     let mut deltas = crate::hashing::FastMap::default();
-    for (g, (top, bottom)) in groups {
-        let align = data.styles[data.boxes[g as usize].style as usize].vertical_align;
-        deltas.insert(
-            g,
-            if align == VerticalAlign::Bottom {
+    // Sized groups first; a ghost (position-only) group only places a group
+    // that no member sized.
+    for (g, (top, bottom)) in groups.into_iter().chain(ghosts) {
+        if let std::collections::hash_map::Entry::Vacant(slot) = deltas.entry(g) {
+            let align = data.styles[data.boxes[g as usize].style as usize].vertical_align;
+            slot.insert(if align == VerticalAlign::Bottom {
                 height - above - bottom
             } else {
                 -above - top
-            },
-        );
+            });
+        }
     }
     for (i, (g, own)) in memberships.into_iter().enumerate() {
         if let Some(g) = g {

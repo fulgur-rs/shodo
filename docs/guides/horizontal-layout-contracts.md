@@ -43,3 +43,31 @@ the [Japanese layout contract](japanese-layout.md); vertical typography is
 described in the [vertical output contract](vertical-layout.md). [Ruby layout](ruby.md)
 adds coordinated annotation lanes and ink overflow. Emphasis placement belongs
 to the renderer.
+
+## Quirks-mode line height
+
+`ParagraphStyle::line_height_quirk` implements the line height calculation
+quirk of quirks and limited-quirks documents. It is decided per line and per
+inline box, the root inline box included. A box contributes its strut to a
+line only when, on that line:
+
+- it directly contains text or preserved white space (collapsible spaces
+  removed at the line end do not count; hidden soft hyphens and other
+  zero-width characters do);
+- its own inline-start border or padding (on the line holding its start) or
+  inline-end border or padding (on the line holding its end) is nonzero —
+  margins never count;
+- it holds a forced break and nothing else in the box on that line (text,
+  atomic inlines, or border/padding edges of its descendants count too);
+- it is the root inline box and the line holds ruby.
+
+A box that does not contribute is ignored only for sizing the line box;
+descendants still align to its font metrics. Matching Chromium, a
+`box-decoration-break: clone` edge repeated on a continuation line does not
+count, although CSS Inline 3 §5.3 speaks of fragments. Known differences from
+Chromium: the forced-break rule does not yet follow Blink's handling of
+vertical-align descendants (shodo-9kt). A `top`/`bottom`-aligned descendant
+with content does not keep its ancestor's forced break from contributing in
+Chromium, but does in shodo (shodo is shorter); an empty `top` or `text-top`
+child does keep it from contributing in Chromium, but not in shodo (shodo is
+taller). List-item lines do not force the root strut (shodo-qu8).

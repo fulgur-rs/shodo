@@ -596,6 +596,16 @@ pub struct ParagraphStyle {
     /// `RichText::push_with_first_line` for caller-resolved descendant styles;
     /// those explicit inputs override the value-based fallback.
     pub first_line: Option<InlineStyle>,
+    /// The line height calculation quirk of quirks and limited-quirks mode
+    /// (Quirks Mode Standard §3.3-3.4; CSS Inline 3 §5.3). When set, on each
+    /// line an inline box, the root inline box included, contributes its
+    /// strut only if that line holds text it directly contains, its own
+    /// inline-start or inline-end border or padding, a forced break with
+    /// nothing else in the box on that line, or (root only) ruby. Its
+    /// descendants still align to its metrics. As in Chromium, a cloned
+    /// `box-decoration-break` edge repeated on a continuation line does not
+    /// count, and margins never count.
+    pub line_height_quirk: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

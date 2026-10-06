@@ -53,6 +53,10 @@ mod measure_tests;
 mod metric_tests;
 
 #[cfg(test)]
+#[path = "tests/quirk.rs"]
+mod quirk_tests;
+
+#[cfg(test)]
 #[path = "tests/memo.rs"]
 mod memo_tests;
 
