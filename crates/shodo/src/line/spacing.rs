@@ -276,26 +276,28 @@ pub(crate) fn build(
 }
 
 pub(crate) fn needed(data: &ParagraphData) -> bool {
-    !data.styles.iter().all(|s| {
-        #[cfg(test)]
-        data.spacing_setup_visits
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        s.letter_spacing == 0.0 && s.word_spacing == 0.0 && s.word_spacing_percent == 0.0
-    }) || data.unit_spacing.iter().any(|s| {
-        #[cfg(test)]
-        data.spacing_setup_visits
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        s.summary.cost != 0
-            || [s.summary.first, s.summary.last]
-                .into_iter()
-                .flatten()
-                .any(|e| {
-                    let p = e.punctuation(data);
-                    e.class == super::autospace::Class::Ideograph
-                        || p.trim != crate::style::TextSpacingTrim::SpaceAll
-                            && (p.left != LayoutUnit::ZERO || p.right != LayoutUnit::ZERO)
-                })
-    })
+    !data.autospace_spaces.is_empty()
+        || !data.styles.iter().all(|s| {
+            #[cfg(test)]
+            data.spacing_setup_visits
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            s.letter_spacing == 0.0 && s.word_spacing == 0.0 && s.word_spacing_percent == 0.0
+        })
+        || data.unit_spacing.iter().any(|s| {
+            #[cfg(test)]
+            data.spacing_setup_visits
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            s.summary.cost != 0
+                || [s.summary.first, s.summary.last]
+                    .into_iter()
+                    .flatten()
+                    .any(|e| {
+                        let p = e.punctuation(data);
+                        e.class == super::autospace::Class::Ideograph
+                            || p.trim != crate::style::TextSpacingTrim::SpaceAll
+                                && (p.left != LayoutUnit::ZERO || p.right != LayoutUnit::ZERO)
+                    })
+        })
 }
 
 pub(crate) fn last_content(data: &ParagraphData) -> Option<usize> {

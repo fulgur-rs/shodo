@@ -256,34 +256,262 @@ impl Tree {
 /// Arguments are in physical left→right visual order, independent of block
 /// direction. Prefix edge counts prevent a repeated ancestor walk per gap.
 pub(super) fn gap(data: &ParagraphData, a: Edge, b: Edge, blocked: bool) -> i64 {
-    if blocked
-        || !((a.class == Class::Ideograph && matches!(b.class, Class::Letter | Class::Digit))
-            || (b.class == Class::Ideograph && matches!(a.class, Class::Letter | Class::Digit)))
-    {
+    if blocked {
         return 0;
     }
+    let other = match (a.class, b.class) {
+        (Class::Ideograph, other) | (other, Class::Ideograph) => other,
+        _ => Class::Other,
+    };
+    if !matches!(other, Class::Letter | Class::Digit) && data.autospace_spaces.is_empty() {
+        return 0;
+    }
+    let style = boundary_style(data, a, b);
+    let Some(style) = style else { return 0 };
+    let (alpha, numeric, punctuation) = classes(data.styles[style].text_autospace);
+    let inter_script = (other == Class::Letter && alpha) || (other == Class::Digit && numeric);
+    let amount = if punctuation && let Some(space) = french_space(data, a, b) {
+        let (word, narrow) = data.autospace_spaces[style];
+        if space {
+            narrow
+        } else {
+            word + data.styles[style].used_word_spacing(data.style_metrics[style].space)
+        }
+    } else if inter_script {
+        data.style_metrics[style].ic * 0.125
+    } else {
+        0.0
+    };
+    i64::from(LayoutUnit::from_f32_round(amount, &mut Saturation::default()).raw())
+}
+
+/// The innermost containing element controls both the selected classes and
+/// French content language, even if a descendant has another language.
+fn boundary_style(data: &ParagraphData, a: Edge, b: Edge) -> Option<usize> {
+    let tree = &data.spacing_tree;
     let left = a.box_node as usize;
     let right = b.box_node as usize;
-    let tree = &data.spacing_tree;
     let common = tree.common(left, right);
     if tree.right[left] != tree.right[common] || tree.left[right] != tree.left[common] {
-        return 0;
+        return None;
     }
-    let style = if common == 0 {
+    Some(if common == 0 {
         0
     } else {
         data.boxes[common - 1].style as usize
-    };
-    if data.styles[style].text_autospace == TextAutospace::NoAutospace {
-        return 0;
+    })
+}
+
+fn classes(value: TextAutospace) -> (bool, bool, bool) {
+    match value {
+        TextAutospace::Normal | TextAutospace::Auto => (true, true, false),
+        TextAutospace::NoAutospace => (false, false, false),
+        TextAutospace::Custom {
+            ideograph_alpha,
+            ideograph_numeric,
+            punctuation,
+        } => (ideograph_alpha, ideograph_numeric, punctuation),
     }
-    i64::from(
-        LayoutUnit::from_f32_round(
-            data.style_metrics[style].ic * 0.125,
-            &mut Saturation::default(),
+}
+
+pub(crate) fn french_punctuation(style: &crate::style::InlineStyle) -> bool {
+    classes(style.text_autospace).2
+        && style
+            .lang
+            .as_deref()
+            .and_then(|tag| tag.split('-').next())
+            .is_some_and(|primary| primary.eq_ignore_ascii_case("fr"))
+}
+
+/// `false` denotes NBSP; `true` denotes narrow NBSP. These spaces are layout
+/// reservations, never characters inserted into the source or mapping.
+fn french_space(data: &ParagraphData, a: Edge, b: Edge) -> Option<bool> {
+    use super::spacing_summary::Kind;
+    if !matches!(a.kind, Kind::Text | Kind::Cursive)
+        || !matches!(b.kind, Kind::Text | Kind::Cursive)
+    {
+        return None;
+    }
+    let style = boundary_style(data, a, b)?;
+    if !french_punctuation(&data.styles[style]) {
+        return None;
+    }
+    let character = |edge: Edge| {
+        data.breaks
+            .typographic_starts
+            .get(edge.punct as usize)
+            .and_then(|offset| data.text[*offset as usize..].chars().next())
+            .map(|ch| {
+                // Use the guillemet's displayed shape after bidi mirroring.
+                if data.units[edge.unit as usize].level % 2 == 1 {
+                    match ch {
+                        '«' => '»',
+                        '»' => '«',
+                        _ => ch,
+                    }
+                } else {
+                    ch
+                }
+            })
+    };
+    let (a, b) = (character(a)?, character(b)?);
+    let gc = CodePointMapData::<GeneralCategory>::new();
+    let separator = |ch| {
+        matches!(
+            gc.get(ch),
+            GeneralCategory::SpaceSeparator
+                | GeneralCategory::LineSeparator
+                | GeneralCategory::ParagraphSeparator
         )
-        .raw(),
-    )
+    };
+    if separator(a) || separator(b) || a == '\u{200b}' || b == '\u{200b}' {
+        return None;
+    }
+    // A punctuation sequence (e.g. ?!) takes one preceding thin space;
+    // an empty pair of guillemets has no quoted content to space.
+    if matches!(b, ';' | '!' | '?') && !matches!(a, ';' | '!' | '?' | '«') {
+        Some(true)
+    } else if b == ':' || b == '»' && a != '«' || a == '«' && b != '»' {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// Resolve additional font probes only when French punctuation is selected.
+/// Normal inter-script spacing retains its existing metric cache and cost.
+pub(crate) fn initialize(data: &mut ParagraphData, warnings: &mut crate::limits::WarningSink) {
+    if !data.styles.iter().any(french_punctuation) {
+        return;
+    }
+    data.autospace_spaces = data
+        .styles
+        .iter()
+        .enumerate()
+        .map(|(index, style)| {
+            if french_punctuation(style) {
+                super::font_metrics::autospace_spaces(
+                    &data.fonts,
+                    style,
+                    data.style_metrics[index],
+                    warnings,
+                )
+            } else {
+                (0.0, 0.0)
+            }
+        })
+        .collect();
+    // Protect the source boundary corresponding to every potential French
+    // gap, including emergency breaks and source splits inside ligatures.
+    // Transparent inline/bidi markers do not reset the previous character.
+    let mut previous: Option<(Edge, u8)> = None;
+    let mut item = 0;
+    let mut cuts = Vec::new();
+    let mut marker = 0;
+    let mut unit_cursor = 0;
+    for (index, &offset) in data.breaks.typographic_starts.iter().enumerate() {
+        let Some(ch) = data.text[offset as usize..].chars().next() else {
+            continue;
+        };
+        while item < data.items.len() && data.items[item].text.end <= offset {
+            item += 1;
+        }
+        if item == data.items.len() {
+            break;
+        }
+        // Empty boxes with edges block spacing just like visible boxes.
+        while marker < item {
+            let candidate = &data.items[marker];
+            if matches!(candidate.kind, crate::analysis::ItemKind::OpenInline { .. }) {
+                let node = data.spacing_tree.item_nodes[marker] as usize;
+                if node != 0 && !data.spacing_tree.has_content[node] {
+                    let edges = data.boxes[node - 1].edges;
+                    if [
+                        edges.margin.inline_start,
+                        edges.margin.inline_end,
+                        edges.border.inline_start,
+                        edges.border.inline_end,
+                        edges.padding.inline_start,
+                        edges.padding.inline_end,
+                    ]
+                    .iter()
+                    .any(|v| *v != 0.0)
+                    {
+                        previous = None;
+                    }
+                }
+            }
+            marker += 1;
+        }
+        if matches!(
+            data.items[item].kind,
+            crate::analysis::ItemKind::OutOfFlow { .. }
+        ) {
+            continue;
+        }
+        if !matches!(data.items[item].kind, crate::analysis::ItemKind::Text) {
+            previous = None;
+            continue;
+        }
+        let gc = CodePointMapData::<GeneralCategory>::new().get(ch);
+        if matches!(gc, GeneralCategory::Control) {
+            previous = None;
+            continue;
+        }
+        if gc == GeneralCategory::Format && ch != '\u{200b}' {
+            continue;
+        }
+        while unit_cursor < data.units.len() && data.units[unit_cursor].text.end <= offset {
+            unit_cursor += 1;
+        }
+        let level = data
+            .units
+            .get(unit_cursor)
+            .map_or(data.base_level, |unit| unit.level);
+        let edge = Edge {
+            unit: unit_cursor as u32,
+            punct: index as u32,
+            box_node: data.spacing_tree.item_nodes[item],
+            ..Default::default()
+        };
+        if let Some((prev, previous_level)) = previous
+            && data.combine_at_text(offset).is_none()
+        {
+            // The lower embedding level controls the source pair's order,
+            // including a nested LTR run inside an RTL paragraph.
+            let space = if previous_level.min(level) % 2 == 1 {
+                french_space(data, edge, prev)
+            } else {
+                french_space(data, prev, edge)
+            };
+            if space.is_some() {
+                cuts.push(
+                    data.breaks.graphemes[prev.punct as usize + 1]..=data.breaks.graphemes[index],
+                );
+            }
+        }
+        previous = if data.combine_at_text(offset).is_some() {
+            None
+        } else {
+            Some((edge, level))
+        };
+    }
+    let protected = |offset| {
+        let index = cuts.partition_point(|range| *range.end() < offset);
+        cuts.get(index).is_some_and(|range| range.contains(&offset))
+    };
+    for opportunity in &mut data.breaks.opportunities {
+        if protected(opportunity.offset) {
+            opportunity.class = crate::analysis::units::BreakClass::Prohibited;
+            opportunity.min_content = false;
+        }
+    }
+    for unit in &mut data.units {
+        if protected(unit.text.end) {
+            unit.break_after = crate::analysis::units::BreakClass::Prohibited;
+            unit.emergency_min_content = false;
+        }
+    }
 }
 
 /// Space reserved after a visual unit, owned by its common ancestor with

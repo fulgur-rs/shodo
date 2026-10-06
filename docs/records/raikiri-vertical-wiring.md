@@ -13,7 +13,7 @@ the caller S4 adopts). Neither S4 spike was modified.
 | `cssom_writing_mode` | `ParagraphStyle.writing_mode` | Must be `cssom_writing_mode`: the renderer-facing `writing_mode` is normalized to horizontal and silently drops vertical text |
 | `text_orientation` | `InlineStyle.text_orientation` | `mixed`/`upright`/`sideways` 1:1 |
 | `text_combine_upright` | `InlineStyle.text_combine_upright` | `none`/`all` 1:1 |
-| `text_autospace` | `InlineStyle.text_autospace` | Only `normal` and `no-autospace`; `auto` and explicit boundary sets are rejected (no shodo equivalent) |
+| `text_autospace` | `InlineStyle.text_autospace` | `normal`, `no-autospace`, `auto`, and explicit class sets map directly; `replace` is rejected (see [shodo-48t](shodo-48t-autospace.md)) |
 
 All raikiri enums are `#[non_exhaustive]`; unknown values are errors.
 
@@ -51,7 +51,7 @@ documents.
 - Vertical is not dropped: forcing the same document to `horizontal-tb`
   yields `Horizontal` runs. Mapping `vertical-rl` to horizontal in the
   adapter was tried and failed 4 tests.
-- `text-autospace: auto` is rejected (not treated as `normal`).
+- `text-autospace: auto` uses shodo’s `Auto` policy, currently equivalent to `Normal`.
 
 ## TCY limits
 
@@ -73,8 +73,8 @@ composed. Other reasons a candidate is not composed are not diagnosed.
   4 documents found by shodo-zt3. Re-judge after native is measured.
 - shodo-39u (autospace on upright vertical text): fixed in shodo core; the
   document now matches its reference.
-- `text-autospace: auto` and custom boundary sets are unsupported and fail
-  closed.
+- `text-autospace: auto` and custom boundary sets now map directly;
+  `replace` remains unsupported and fails explicitly.
 
 ## Not measured
 

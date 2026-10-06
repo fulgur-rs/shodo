@@ -800,6 +800,7 @@ impl Line {
                 node: *node,
                 kind: *kind,
                 inline_position: record.inline_start.to_f32(),
+                block_offset: self.block_offset,
             }),
         }
     }

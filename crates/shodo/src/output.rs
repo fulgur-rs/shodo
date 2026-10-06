@@ -181,6 +181,11 @@ pub struct AnchorFragment {
     pub node: NodeId,
     pub kind: OutOfFlowKind,
     pub inline_position: f32,
+    /// Logical block offset of the accepted line in its layout container.
+    /// This includes the caller's [`crate::LineConstraint::block_offset`].
+    /// Convert it together with `inline_position` using the line's writing
+    /// mode and used direction; do not add the line offset a second time.
+    pub block_offset: f32,
 }
 
 /// A run of glyphs from one font, one element and one bidi level.

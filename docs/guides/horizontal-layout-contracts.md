@@ -138,5 +138,10 @@ count, although CSS Inline 3 §5.3 speaks of fragments. The forced-break
 credit follows Blink's pending vertical-align handling (shodo-9kt): a
 `top`/`bottom` child does not prevent a baseline ancestor's break strut,
 whereas an empty `text-top`/`text-bottom` child does. Empty immediate shifts
-(`sub`, `super`, `middle`, lengths) do not credit ancestors. List-item lines
-do not force the root strut (shodo-qu8).
+(`sub`, `super`, `middle`, lengths) do not credit ancestors. Set
+`ParagraphStyle::force_root_strut = true` on list-item paragraphs to keep
+the root strut on every nonempty line, including continuation lines, as
+[Blink does](https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/layout/inline/logical_line_builder.cc).
+This leaves child inline strut suppression enabled. The flag defaults to
+false and has no additional effect when `line_height_quirk` is disabled;
+genuinely empty lines remain empty.

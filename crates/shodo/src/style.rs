@@ -312,10 +312,29 @@ impl Default for TabSize {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// Character-class-based spacing, applied after bidi reordering without
+/// modifying paragraph text or its source mapping.
+///
+/// All values use CSS `insert` behavior: any existing Unicode separator
+/// suppresses automatic spacing. Replacing authored spaces is not supported.
 pub enum TextAutospace {
+    /// Insert 0.125ic between ideographs and non-ideographic letters/numerals.
     #[default]
     Normal,
+    /// Platform policy; currently uses the same spacing as [`Self::Normal`].
+    Auto,
+    /// Disable automatic spacing.
     NoAutospace,
+    /// Select independent boundary classes. An empty set disables spacing.
+    Custom {
+        /// Space ideograph/non-ideographic letter boundaries.
+        ideograph_alpha: bool,
+        /// Space ideograph/non-ideographic decimal numeral boundaries.
+        ideograph_numeric: bool,
+        /// Apply French non-breaking punctuation spacing when the boundary's
+        /// innermost containing element has a French content language.
+        punctuation: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -608,6 +627,12 @@ pub struct ParagraphStyle {
     /// `box-decoration-break` edge repeated on a continuation line does not
     /// count, and margins never count.
     pub line_height_quirk: bool,
+    /// Keep the root inline box's strut on every nonempty line, including
+    /// continuations, when [`Self::line_height_quirk`] is enabled. Set this
+    /// for CSS list-item paragraphs to match browser quirks-mode layout.
+    /// Child inline boxes still follow the quirk's per-fragment rules.
+    /// With the quirk disabled the root strut already contributes normally.
+    pub force_root_strut: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

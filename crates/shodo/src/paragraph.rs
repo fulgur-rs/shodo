@@ -99,6 +99,7 @@ pub(crate) struct ParagraphData {
     pub(crate) combine_spans: Vec<crate::analysis::combine::CombineSpan>,
     pub(crate) combine_geometry: crate::analysis::combine::Geometry,
     pub(crate) style_metrics: Vec<crate::line::font_metrics::StyleMetrics>,
+    pub(crate) autospace_spaces: Vec<(f32, f32)>,
     pub(crate) unit_spacing: Vec<crate::line::spacing::UnitSpacing>,
     pub(crate) punctuation: Vec<crate::line::punctuation::Punctuation>,
     pub(crate) last_content_unit: Option<usize>,

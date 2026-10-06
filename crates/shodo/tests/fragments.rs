@@ -638,6 +638,75 @@ fn out_of_flow_boxes_leave_anchors() {
 }
 
 #[test]
+fn out_of_flow_anchors_retain_the_accepted_line_block_offset() {
+    use shodo::geometry::{Direction, WritingMode};
+
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        for direction in [Direction::Ltr, Direction::Rtl] {
+            let mut style = style();
+            style.writing_mode = mode;
+            style.root.direction = direction;
+            let p = para_with_style(&style, |b| {
+                b.push_text(dom(1), "a")
+                    .push_out_of_flow(NodeId(2), OutOfFlowKind::Absolute)
+                    .push_forced_break(NodeId(3))
+                    .push_text(dom(4), "b")
+                    .push_out_of_flow(NodeId(5), OutOfFlowKind::Absolute);
+            });
+            let lines = p.break_all(
+                &mut LayoutContext::new(),
+                &LineOptions::default(),
+                100.0,
+                &AtomicSizes::EMPTY,
+            );
+            assert_eq!(lines.len(), 2);
+            for (line, expected) in lines.iter().zip([0.0, 10.0]) {
+                let anchor = line
+                    .fragments()
+                    .find_map(|f| match f {
+                        Fragment::OutOfFlowAnchor(a) => Some(a),
+                        _ => None,
+                    })
+                    .unwrap();
+                assert_eq!(anchor.block_offset, expected, "{mode:?} {direction:?}");
+            }
+
+            // Retained anchors include the caller's actual placement, including
+            // negative offsets; they do not derive it from the paragraph index.
+            let constraint = LineConstraint {
+                block_offset: -12.5,
+                ..LineConstraint::new(100.0)
+            };
+            let LineResult::Line(line) = p.next_line(
+                &mut LayoutContext::new(),
+                p.start_token(),
+                &LineOptions::default(),
+                &constraint,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!("expected an accepted line")
+            };
+            let anchor = line
+                .fragments()
+                .find_map(|f| match f {
+                    Fragment::OutOfFlowAnchor(a) => Some(a),
+                    _ => None,
+                })
+                .unwrap();
+            assert_eq!(anchor.block_offset, -12.5);
+            let retained = line.clone();
+            drop(line);
+            assert!(retained.fragments().any(|f| matches!(f,
+                Fragment::OutOfFlowAnchor(a) if a.block_offset == -12.5)));
+        }
+    }
+}
+
+#[test]
 fn non_finite_edges_become_zero_with_a_warning() {
     let edges = InlineEdges {
         padding: Sides {
