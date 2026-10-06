@@ -16,6 +16,31 @@ pub struct Prepared {
     pub options: s::LineOptions,
 }
 
+fn hanging_punctuation(value: css::HangingPunctuation) -> Result<s::HangingPunctuation, String> {
+    use css::HangingPunctuation as H;
+    match value {
+        H::None
+        | H::First
+        | H::Last
+        | H::ForceEnd
+        | H::AllowEnd
+        | H::FirstLast
+        | H::FirstForceEnd
+        | H::FirstAllowEnd
+        | H::ForceEndLast
+        | H::AllowEndLast
+        | H::FirstForceEndLast
+        | H::FirstAllowEndLast => Ok(s::HangingPunctuation {
+            first: value.first(),
+            last: value.last(),
+            force_end: value.force_end(),
+            allow_end: value.allow_end(),
+        }),
+        // Future non-exhaustive variants need an explicit caller mapping.
+        _ => Err("unsupported source hanging-punctuation".into()),
+    }
+}
+
 fn text_style(
     cv: &ComputedValues,
     profile: diagnostic::InputProfile,
@@ -26,7 +51,7 @@ fn text_style(
     // Nine noninitial fields were observed across all 167 original IFCs, and
     // hanging-punctuation is mapped explicitly below. Root sizing is already
     // retained by the original measured width.
-    remaining.font_family = initial.font_family;
+    remaining.font_family = initial.font_family.clone();
     remaining.font_size = initial.font_size;
     remaining.font_weight = initial.font_weight;
     remaining.line_height = initial.line_height;
@@ -36,12 +61,22 @@ fn text_style(
     remaining.text_autospace = initial.text_autospace;
     remaining.word_space_transform = initial.word_space_transform;
     remaining.word_break = initial.word_break;
-    // Block-container property; the IFC root's value is mapped into
-    // `LineOptions` by `project`, so descendants' inherited copies are not
-    // residual style.
+    // Each inline box retains the computed flags, including explicit none.
+    // The IFC root delegates its computed flags to LineOptions in project.
     remaining.hanging_punctuation = initial.hanging_punctuation;
     if remaining != ComputedValues::initial() {
-        return Err("computed style outside the verified ordinary-source input footprint".into());
+        let fields = diagnostic::public_differences(&remaining, &initial)
+            .into_iter()
+            .map(|difference| difference.field)
+            .collect::<Vec<_>>();
+        return Err(format!(
+            "computed style outside the verified ordinary-source input footprint: {}",
+            if fields.is_empty() {
+                "private computed style".to_owned()
+            } else {
+                fields.join(", ")
+            }
+        ));
     }
     let font_families = cv
         .font_family
@@ -102,6 +137,7 @@ fn text_style(
         text_autospace,
         word_break,
         word_space_transform,
+        hanging_punctuation: Some(hanging_punctuation(cv.hanging_punctuation)?),
         ..Default::default()
     })
 }
@@ -149,19 +185,13 @@ pub fn project(
     };
     let mut root_style = text_style(root_cv, diagnostic::InputProfile::MeasuredBlock)?;
     root_style.lang = language(root);
+    // Root-level text follows LineOptions; nested inlines keep their explicit
+    // computed override. This also preserves the root-only diagnostic control.
+    root_style.hanging_punctuation = None;
     let paragraph_style = s::ParagraphStyle {
         direction: root_style.direction,
         root: root_style,
         ..Default::default()
-    };
-    let hanging_first = match root_cv.hanging_punctuation {
-        css::HangingPunctuation::None => false,
-        css::HangingPunctuation::First => true,
-        // `HangingPunctuation` is non-exhaustive; fail closed for values
-        // this caller does not map.
-        _ => {
-            return Err("hanging-punctuation outside the verified source input footprint".into());
-        }
     };
     let options = s::LineOptions {
         text_align: match root_cv.text_align {
@@ -171,10 +201,7 @@ pub fn project(
             css::TextAlign::Right => s::TextAlign::Right,
             _ => return Err("text-align outside the verified source input footprint".into()),
         },
-        hanging_punctuation: s::HangingPunctuation {
-            first: hanging_first,
-            ..Default::default()
-        },
+        hanging_punctuation: hanging_punctuation(root_cv.hanging_punctuation)?,
         ..Default::default()
     };
     let mut builder = ParagraphBuilder::new(&paragraph_style, limits);
@@ -267,6 +294,36 @@ mod tests {
     use super::*;
 
     #[test]
+    fn hanging_punctuation_inline_mapping_retains_all_twelve_keyword_sets() {
+        use css::HangingPunctuation as H;
+        for (value, first, last, force_end, allow_end) in [
+            (H::None, false, false, false, false),
+            (H::First, true, false, false, false),
+            (H::Last, false, true, false, false),
+            (H::ForceEnd, false, false, true, false),
+            (H::AllowEnd, false, false, false, true),
+            (H::FirstLast, true, true, false, false),
+            (H::FirstForceEnd, true, false, true, false),
+            (H::FirstAllowEnd, true, false, false, true),
+            (H::ForceEndLast, false, true, true, false),
+            (H::AllowEndLast, false, true, false, true),
+            (H::FirstForceEndLast, true, true, true, false),
+            (H::FirstAllowEndLast, true, true, false, true),
+        ] {
+            let mut values = ComputedValues::initial();
+            values.hanging_punctuation = value;
+            let expected = s::HangingPunctuation {
+                first,
+                last,
+                force_end,
+                allow_end,
+            };
+            let projected = text_style(&values, diagnostic::InputProfile::Plain).unwrap();
+            assert_eq!(projected.hanging_punctuation, Some(expected), "{value:?}");
+        }
+    }
+
+    #[test]
     fn manual_word_break_projects_from_pinned_raikiri_style() {
         let mut values = ComputedValues::initial();
         values.word_break = css::WordBreak::Manual;
@@ -283,5 +340,161 @@ mod tests {
             projected.word_space_transform,
             s::WordSpaceTransform::IdeographicSpaceAutoPhrase
         );
+    }
+
+    #[test]
+    fn original_wpt_bytes_parse_and_project_hanging_without_hiding_other_fields() {
+        use sha2::{Digest, Sha256};
+        let directory =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("inputs/hanging-punctuation");
+        let fonts = shodo_fixtures::load_fonts(&Limits::default()).unwrap();
+        for (asset, hash) in [
+            (
+                "fonts/ahem.css",
+                "5d8b9526d7be573871022125d5ec44f4893e4d851c26ab3fb6df44219422111c",
+            ),
+            (
+                "fonts/Ahem.ttf",
+                "b719ecb31c5b21fc573c03f6421c74ac63c271a5a3ff841e34f9705fb94b8448",
+            ),
+        ] {
+            assert_eq!(
+                format!(
+                    "{:x}",
+                    Sha256::digest(std::fs::read(directory.join(asset)).unwrap())
+                ),
+                hash,
+                "original resource changed: {asset}"
+            );
+        }
+        for (file, hash, (first, last, force_end, allow_end)) in [
+            (
+                "hanging-punctuation-last.html",
+                "9a1f7573c815df95191d5118335c219f77472742543798c0e8d0412f7a9ca042",
+                (false, true, false, false),
+            ),
+            (
+                "hanging-punctuation-last-whitespace.html",
+                "88bc75b0bd7d1d394d20d9f6ef9b1bca361c6357d8fa201de412f90726fa65d5",
+                (false, true, false, false),
+            ),
+            (
+                "hanging-punctuation-first-and-last-together.html",
+                "9521a981499b7567e1bc418e6149064f305789cd450aed005b401333bee666c8",
+                (true, true, false, false),
+            ),
+            (
+                "hanging-punctuation-force-end-001.xht",
+                "28adae1b68c8e56837f157261da80c7ea8c8fb27b8b67791ba6df584bf3c6476",
+                (false, false, true, false),
+            ),
+            (
+                "hanging-punctuation-allow-end-001.xht",
+                "6bddf4b8e0779358c005b16f3eb0e34322f70bef2e39c6a03a961e1bdf9940d5",
+                (false, false, false, true),
+            ),
+        ] {
+            let bytes = std::fs::read(directory.join(file)).unwrap();
+            assert_eq!(
+                format!("{:x}", Sha256::digest(&bytes)),
+                hash,
+                "original source changed: {file}"
+            );
+            let input = super::super::offline::parse_screen(&directory, file).unwrap();
+            let expected = s::HangingPunctuation {
+                first,
+                last,
+                force_end,
+                allow_end,
+            };
+            let mut mapped = 0;
+            let mut color_rejections = 0;
+            for (node, cv) in input.cascade.computed.iter().enumerate() {
+                if cv.hanging_punctuation == css::HangingPunctuation::None {
+                    continue;
+                }
+                assert_eq!(
+                    hanging_punctuation(cv.hanging_punctuation).unwrap(),
+                    expected,
+                    "{file}: node {node}"
+                );
+                mapped += 1;
+                let profile = match cv.display {
+                    css::DisplayValue::Block => diagnostic::InputProfile::MeasuredBlock,
+                    css::DisplayValue::InlineBlock => diagnostic::InputProfile::Atomic,
+                    _ => diagnostic::InputProfile::Plain,
+                };
+                match text_style(cv, profile) {
+                    Ok(style) => assert_eq!(style.hanging_punctuation, Some(expected)),
+                    Err(error) => {
+                        assert!(error.contains("computed style outside"), "{file}: {error}");
+                        if cv.color != ComputedValues::initial().color {
+                            assert!(
+                                error.contains("color"),
+                                "paint ownership was hidden: {file}: {error}"
+                            );
+                            color_rejections += 1;
+                        }
+                        assert!(!error.contains("hanging_punctuation"), "{file}: {error}");
+                        assert!(!error.contains("private computed style"), "{file}: {error}");
+                    }
+                }
+            }
+            assert!(
+                mapped > 0,
+                "original hanging declaration was dropped: {file}"
+            );
+            if last {
+                assert!(
+                    color_rejections > 0,
+                    "original color was silently discarded: {file}"
+                );
+            }
+            if force_end || allow_end {
+                let roots: Vec<_> = (0..input.parsed.dom.node_count())
+                    .filter(|&node| {
+                        input
+                            .parsed
+                            .dom
+                            .get_node(node)
+                            .is_some_and(|element| element.attribute("class") == Some("test"))
+                    })
+                    .collect();
+                assert!(!roots.is_empty());
+                for root in roots {
+                    let prepared = project(
+                        &input,
+                        root,
+                        400.0,
+                        &mut LayoutContext::new(),
+                        &fonts.collection,
+                        &Limits::default(),
+                    )
+                    .unwrap();
+                    assert_eq!(prepared.options.hanging_punctuation, expected);
+                    assert!(!prepared.paragraph.text().is_empty());
+                }
+            }
+            // The real native IFC path accepts all original hanging styles.
+            // This proves assignment, not painted reference equivalence; the
+            // force/allow Japanese fonts are not bundled in this small input.
+            let native_fonts =
+                raikiri_dom::build_wpt_font_collection(&directory.join("fonts")).unwrap();
+            let mut document = input.parsed.dom;
+            document.set_font_collection(native_fonts);
+            raikiri_dom::layout_single_page(
+                &mut document,
+                &input.cascade,
+                raikiri_traits::PageBox::new(),
+            )
+            .unwrap_or_else(|error| {
+                panic!("native IFC rejected original style in {file}: {error:?}")
+            });
+            assert_eq!(
+                std::fs::read(directory.join(file)).unwrap(),
+                bytes,
+                "replay changed source: {file}"
+            );
+        }
     }
 }

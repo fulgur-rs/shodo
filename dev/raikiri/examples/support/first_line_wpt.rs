@@ -9,7 +9,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const ENGINE: &str = "a62ea75b65a8547bcd0e7874addeeebee5b0beee";
+const ENGINE: &str = "fe9aea9ade56ff046d38a6dddd31d02303466bfc";
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 pub fn hash(bytes: &[u8]) -> String {
@@ -143,37 +143,53 @@ fn native(root: &Path, id: &str, tag: &str) -> Result<(Vec<u8>, [f32; 3], Value)
     let mut page = PageBox::new();
     page.width = WIDTH as f32;
     page.height = HEIGHT as f32;
-    let fonts = raikiri_dom::build_wpt_font_ctx(&root.join("fonts")).map_err(|e| e.to_string())?;
-    raikiri_dom::layout_single_page(&mut dom, &input.cascade, page, fonts)
+    let fonts =
+        raikiri_dom::build_wpt_font_collection(&root.join("fonts")).map_err(|e| e.to_string())?;
+    dom.set_font_collection(fonts);
+    raikiri_dom::layout_single_page(&mut dom, &input.cascade, page)
         .map_err(|e| format!("native layout: {e:?}"))?;
     let common = boundary(&dom, root_id)?;
     let mut lines = Vec::new();
     for id in 0..dom.node_count() {
-        let node = dom.get_node(id).unwrap();
-        if let Some(layout) = node.text_layout() {
-            for line in layout.lines() {
-                let runs:Vec<_>=line.items().filter_map(|item|match item {
-                    parley::layout::PositionedLayoutItem::GlyphRun(g)=>{
-                        let run=g.run(); let font=run.font();
-                        Some(json!({"font_sha256":hash(font.data.data()),"font_index":font.index,"font_size":run.font_size(),
-                            "baseline":g.baseline(),"inline_offset":g.offset(),"advance":g.advance(),
-                            "glyphs":g.positioned_glyphs().map(|p|json!({"id":p.id,"x":p.x,"y":p.y,"advance":p.advance})).collect::<Vec<_>>()}))
-                    },_=>None}).collect();
-                let cv = &input.cascade.computed[id];
-                lines.push(json!({"text_node":id,"source":node.text_content(),"color":[cv.color.r,cv.color.g,cv.color.b,cv.color.a],
-                    "line_metrics":format!("{:?}",line.metrics()),"runs":runs}));
+        let Some(positioned) = raikiri_dom::PositionedLines::new(&dom, &input.cascade, id, None)
+        else {
+            continue;
+        };
+        for line in positioned.lines() {
+            let mut runs = Vec::new();
+            for positioned_run in &line.runs {
+                let run = &positioned_run.run;
+                let font = run.font_data().ok_or("native IFC glyph run has no font")?;
+                let color = run.paint_style().color;
+                let glyphs: Vec<_> = positioned_run.glyphs.iter().zip(run.glyphs()).map(|(position, glyph)| {
+                    json!({"id":position.id,"x":position.x + positioned_run.offset.0 + line.offset.0,
+                        "y":position.y + positioned_run.offset.1 + line.offset.1,"advance":glyph.advance,
+                        "cluster":glyph.cluster})
+                }).collect();
+                runs.push(json!({"text_node":positioned_run.owner,
+                    "source":dom.get_node(positioned_run.owner).and_then(|node| node.text_content()),
+                    "color":color,
+                    "font_sha256":hash(font.data.data()),"font_index":font.index,"font_size":run.font_size(),
+                    "range":run.text_range(),"glyphs":glyphs}));
             }
+            lines.push(json!({"ifc_root":id,"line_index":line.index,
+                "range":line.line.text_range(),"width":line.line.inline_size(),
+                "block_offset":line.line.block_offset(),"runs":runs}));
         }
     }
+    let mut paint_result = Ok(());
     let rgba = anyrender::render_to_buffer::<anyrender_vello_cpu::VelloCpuImageRenderer, _>(
-        |painter| raikiri_paint::paint_single_page(painter, &dom, &input.cascade, page),
+        |painter| {
+            paint_result = raikiri_paint::paint_single_page(painter, &dom, &input.cascade, page);
+        },
         WIDTH,
         HEIGHT,
     );
+    paint_result.map_err(|error| format!("native paint: {error:?}"))?;
     Ok((
         rgba,
         common,
-        json!({"resources":input.resources,"lines":lines}),
+        json!({"resources":input.resources,"line_source":"native shodo IFC positioned lines","lines":lines}),
     ))
 }
 fn candidate(

@@ -19,6 +19,7 @@ use std::{
     path::Path,
 };
 
+// Revision of the frozen diagnostic input, not the current runtime.
 const RAIKIRI_PIN: &str = "ab7e619a8f321f03de8b8c8b9342954868e044c8";
 
 fn targets(case: &Value) -> Vec<&Value> {
@@ -310,7 +311,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .sum();
     let complete = errors == 0 && reported == expected_blocks;
     let report = json!({"scope":"ordinary original IFC processed-source coverage including explicit child-block handoffs; child layout/paint and whole-page WPT conformance remain unverified",
-        "raikiri_revision":RAIKIRI_PIN,"original_comparison_sha256":format!("{:x}",Sha256::digest(&source)),
+        "raikiri_revision":"fe9aea9ade56ff046d38a6dddd31d02303466bfc","original_raikiri_revision":RAIKIRI_PIN,"original_comparison_sha256":format!("{:x}",Sha256::digest(&source)),
         "viewport_css_px":original["viewport_css_px"],"expected_documents":selected.len(),"expected_blocks":expected_blocks,
         "reported_blocks":reported,"input_errors":errors,"complete":complete,"cases":records,"input_footprint":footprint,
         "font_registry_sha256":font_registry.hashes,"generic_families":font_registry.generics,

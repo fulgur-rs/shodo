@@ -1,5 +1,10 @@
 # Representative caller wiring of hanging-punctuation none/first
 
+This is the historical `none | first` record. Full grammar, inline ownership,
+and the current native registration policy are documented in
+[shodo-9an-hanging-punctuation.md](shodo-9an-hanging-punctuation.md).
+The measurements below retain their original pins and scope.
+
 `dev/raikiri/examples/hanging_punctuation.rs` is a development-only
 representative caller. It shows that raikiri's already-parsed
 `hanging-punctuation: none | first` reaches shodo's `LineOptions` and
