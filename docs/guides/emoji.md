@@ -66,6 +66,16 @@ inline/block coordinates. Apply the line's writing mode and direction through
 The public local glyph matrix uses x-right/y-down; outline rasterizers often need
 a y flip. Bitmap PNG coordinates already use y-down and must not be flipped again.
 
+To choose a paint backend for a run, read `GlyphRunView::color_glyph_formats()`,
+or `FontCollection::color_glyph_formats(id)` once per face. `ColorGlyphFormats`
+reports COLR v0, COLR v1, CBDT/CBLC, sbix and SVG tables whose headers parse and
+list at least one glyph. shodo reads only those headers: it exposes no layers,
+paint graphs or bitmaps, so the renderer reads the glyph data from `font_data()`
+itself. A face can mix color and outline glyphs, so look up each glyph ID in the
+chosen table and fall back to the outline when it is absent. Matching ranks faces
+by table presence alone, so a face chosen for emoji presentation can still report
+no usable format.
+
 The shared [caller painter](../../dev/harness/src/glyph_paint.rs) first
 looks up the accepted glyph in a CBDT strike. It chooses a suitable strike through
 skrifa, scales bitmap pixels by font size/strike ppem, applies the strike bearings,

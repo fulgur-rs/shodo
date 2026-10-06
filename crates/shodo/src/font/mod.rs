@@ -43,6 +43,7 @@
 
 mod ch;
 mod check;
+mod color;
 mod descriptor;
 mod matching;
 mod metrics;
@@ -52,6 +53,7 @@ mod web_font;
 pub use web_font::decode_web_font;
 mod structure;
 pub use ch::ChLength;
+pub use color::ColorGlyphFormats;
 pub use descriptor::FontFaceDescriptor;
 pub(crate) use matching::FontCluster;
 pub use matching::{FontMatch, FontPresentation, FontQuery};
@@ -541,6 +543,13 @@ impl FontCollection {
         } else {
             self.layer.parent.as_ref().and_then(|p| p.font_data(id))
         }
+    }
+
+    /// Color glyph tables of a face in this layer or its shared layer, read
+    /// from its table headers on each call. See [`ColorGlyphFormats`].
+    pub fn color_glyph_formats(&self, id: FontId) -> Option<ColorGlyphFormats> {
+        self.font_data(id)
+            .map(|data| ColorGlyphFormats::from_font_data(&data))
     }
 
     /// Incremented by every successful font registration in this layer.

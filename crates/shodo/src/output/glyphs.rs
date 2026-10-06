@@ -292,6 +292,15 @@ impl<'a> GlyphRunView<'a> {
         self.data().fonts.font_data(self.font())
     }
 
+    /// Color glyph tables of this run's face; see
+    /// [`crate::font::ColorGlyphFormats`]. Reads the table headers on each
+    /// call, so cache the result per [`Self::font`] when painting many runs.
+    pub fn color_glyph_formats(&self) -> crate::font::ColorGlyphFormats {
+        self.font_data()
+            .map(|data| crate::font::ColorGlyphFormats::from_font_data(&data))
+            .unwrap_or_default()
+    }
+
     pub fn bidi_level(&self) -> u8 {
         self.record.level
     }
