@@ -232,6 +232,95 @@ pub(crate) fn record_extents(
     })
 }
 
+/// Reserved mark outsets from the primary font edge. Before-side outsets
+/// are negative, so ordinary bounds unions aggregate the outward extremes.
+pub(crate) fn record_emphasis(
+    data: &ParagraphData,
+    record: &FragmentRecord,
+    runs: &[ShapedRun],
+    sat: &mut Saturation,
+) -> [Option<Bounds>; 2] {
+    let RecordKind::Glyphs {
+        run, source, item, ..
+    } = &record.kind
+    else {
+        return [None, None];
+    };
+    let style = data.items[*item as usize].style;
+    let Some(mark) = data.styles[style as usize].text_emphasis else {
+        return [None, None];
+    };
+    let run = match source {
+        GlyphSource::Overlay { run: Some(i), .. } => &runs[*i as usize],
+        _ => &data.runs[*run as usize],
+    };
+    let upright = run.orientation == crate::shape::orientation::RunOrientation::Upright;
+    let size = data.style_metrics[style as usize].size;
+    let (a, d) = if run.orientation == crate::shape::orientation::RunOrientation::Combined {
+        let half = size / 2.0;
+        if crate::line::metrics::emphasis_over(mark.position, data.style.writing_mode) {
+            (size, half)
+        } else {
+            (half, size)
+        }
+    } else {
+        crate::line::metrics::emphasized(data, style, run.font, upright, (0.0, 0.0))
+    };
+    let before = crate::line::metrics::emphasis_over(mark.position, data.style.writing_mode)
+        != (data.style.writing_mode == WritingMode::VerticalLr);
+    let (a, d) = fixed_extents(data, a, d, sat);
+    let (primary_a, primary_d) =
+        record_primary_extents(data, record, runs, sat).expect("glyph primary edges");
+    if before {
+        let edge = primary_a.sub(a, sat);
+        [
+            Some(Bounds {
+                top: edge,
+                bottom: edge,
+            }),
+            None,
+        ]
+    } else {
+        let edge = d.sub(primary_d, sat);
+        [
+            None,
+            Some(Bounds {
+                top: edge,
+                bottom: edge,
+            }),
+        ]
+    }
+}
+
+/// Primary font edges used by emphasis painting, in logical block coordinates.
+pub(crate) fn record_primary_extents(
+    data: &ParagraphData,
+    record: &FragmentRecord,
+    runs: &[ShapedRun],
+    sat: &mut Saturation,
+) -> Option<(LayoutUnit, LayoutUnit)> {
+    let RecordKind::Glyphs {
+        run, source, item, ..
+    } = &record.kind
+    else {
+        return None;
+    };
+    let run = match source {
+        GlyphSource::Overlay { run: Some(i), .. } => &runs[*i as usize],
+        _ => &data.runs[*run as usize],
+    };
+    let metrics = data.style_metrics[data.items[*item as usize].style as usize];
+    let half = metrics.size / 2.0;
+    let (a, d) = match run.orientation {
+        crate::shape::orientation::RunOrientation::Combined => (half, half),
+        crate::shape::orientation::RunOrientation::Upright => metrics
+            .vertical_metrics
+            .map_or((half, half), |v| (v.ascent, v.descent)),
+        _ => (metrics.metrics.ascent, metrics.metrics.descent),
+    };
+    Some(fixed_extents(data, a, d, sat))
+}
+
 pub(crate) struct LaneBlock {
     pub(crate) block: LayoutUnit,
     pub(crate) inline_size: Option<LayoutUnit>,
@@ -240,6 +329,7 @@ pub(crate) struct BlockLayout {
     pub(crate) lanes: Vec<Vec<LaneBlock>>,
     pub(crate) shift: LayoutUnit,
     pub(crate) advance: LayoutUnit,
+    pub(crate) emphasis_offsets: Vec<(LayoutUnit, LayoutUnit)>,
 }
 
 /// Resolve line-relative sides once for both width allowances and placement.
@@ -296,6 +386,7 @@ pub(crate) struct Tracks {
     pub(crate) base: Bounds,
     pub(crate) whole: Bounds,
     pub(crate) contribution: Bounds,
+    pub(crate) annotation_extents: (LayoutUnit, LayoutUnit),
 }
 
 /// The same track stack serves indexed clearance and retained child output.
@@ -311,6 +402,8 @@ pub(crate) fn tracks(
     right_columns: &std::collections::HashMap<(usize, usize), usize>,
     heights: &[LayoutUnit],
     has_content: bool,
+    original_base: Bounds,
+    emphasis: [Option<Bounds>; 2],
     sat: &mut Saturation,
 ) -> Tracks {
     let mut selected: Vec<_> = lanes
@@ -330,6 +423,7 @@ pub(crate) fn tracks(
             base: empty,
             whole: empty,
             contribution: empty,
+            annotation_extents: (LayoutUnit::ZERO, LayoutUnit::ZERO),
         };
     }
     let before = level_sides(data, ruby);
@@ -406,18 +500,46 @@ pub(crate) fn tracks(
             ((i64::from(extra.raw()) * i64::from(over.raw())) / i64::from(total.raw())) as i32,
         )
     };
-    let own = Bounds {
+    let mut own = Bounds {
         top: base.top.sub(half, sat).sub(extra_over, sat),
         bottom: base
             .bottom
             .add(remainder, sat)
             .add(extra.sub(extra_over, sat), sat),
     };
+    let annotation_extents = (
+        original_base.top.sub(whole.top, sat).max(LayoutUnit::ZERO),
+        whole
+            .bottom
+            .sub(original_base.bottom, sat)
+            .max(LayoutUnit::ZERO),
+    );
+    // Only the occupied side moves its marks to the outer annotation edge.
+    // Independent marks are already included by the ordinary line profile.
+    if annotation_extents.0 != LayoutUnit::ZERO
+        && let Some(mark) = emphasis[0]
+    {
+        let edge = whole.top.add(mark.top, sat);
+        own = own.union(Bounds {
+            top: edge,
+            bottom: edge,
+        });
+    }
+    if annotation_extents.1 != LayoutUnit::ZERO
+        && let Some(mark) = emphasis[1]
+    {
+        let edge = whole.bottom.add(mark.bottom, sat);
+        own = own.union(Bounds {
+            top: edge,
+            bottom: edge,
+        });
+    }
     Tracks {
         lanes: selected,
         base,
         whole,
         contribution: own,
+        annotation_extents,
     }
 }
 
@@ -430,6 +552,7 @@ pub(crate) fn layout(
 ) -> BlockLayout {
     let data = frame.data;
     let mut lanes = Vec::with_capacity(measure.fragments.len());
+    let mut offsets = Vec::new();
     let bounds = index::RecordBounds::new(frame, sat);
     let mut whole = index::CompletedBounds::default();
     let mut contribution = Bounds {
@@ -454,6 +577,8 @@ pub(crate) fn layout(
             base = Some(base.map_or(area, |b| b.union(area)));
         }
         let mut base = base.unwrap_or_else(|| frame.box_content(ruby.box_index, sat));
+        let original_base = base;
+        let emphasis = bounds.emphasis(frame, &fragment.units);
         if fragment.has_content {
             base = whole.include_children(&fragment.units, base);
         }
@@ -471,11 +596,23 @@ pub(crate) fn layout(
             &fragment.right_columns,
             heights,
             fragment.has_content,
+            original_base,
+            emphasis,
             sat,
         );
         if fragment.has_content {
             whole.insert(fragment.units.clone(), fragment.container, result.whole);
             contribution = contribution.union(result.contribution);
+        }
+        if emphasis.iter().any(Option::is_some) {
+            offsets.push((
+                fragment.units.clone(),
+                [
+                    (result.annotation_extents.0 != LayoutUnit::ZERO).then_some(result.whole.top),
+                    (result.annotation_extents.1 != LayoutUnit::ZERO)
+                        .then_some(result.whole.bottom),
+                ],
+            ));
         }
         lanes.push(result.lanes);
     }
@@ -483,6 +620,7 @@ pub(crate) fn layout(
         lanes,
         shift: LayoutUnit::ZERO.sub(contribution.top, sat),
         advance: contribution.height(sat),
+        emphasis_offsets: index::emphasis_offsets(frame, offsets, sat),
     }
 }
 

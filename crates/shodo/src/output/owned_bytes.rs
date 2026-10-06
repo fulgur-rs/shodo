@@ -38,6 +38,7 @@ impl Budget {
             return None;
         }
         self.vec(&l.ruby)?;
+        self.vec(&l.emphasis_offsets)?;
         self.vec(&l.ruby_caret_gaps)?;
         self.vec(&l.displaced)?;
         self.vec(&l.fragments)?;

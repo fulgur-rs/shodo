@@ -414,6 +414,77 @@ fn oversized_geometry_is_not_retained_and_accepted_line_is_independent() {
 }
 
 #[test]
+fn emphasis_offset_capacity_obeys_completed_budget_in_root_and_ruby_child() {
+    use crate::output::ruby::{RubyAnnotationRecord, RubyTransform};
+    use crate::{RubyVisibility, geometry::LayoutUnit};
+
+    let (p, _) = paragraph("alpha", &Limits::default(), false, false);
+    let options = LineOptions::default();
+    let constraint = LineConstraint::new(1000.);
+    let line = p
+        .break_all(
+            &mut LayoutContext::new(),
+            &options,
+            1000.,
+            &AtomicSizes::EMPTY,
+        )
+        .remove(0);
+    let header = std::mem::size_of::<super::CompletedLine>()
+        + std::mem::size_of::<Option<Box<super::CompletedLine>>>();
+    let budget = super::MAX_BYTES - header;
+    let element = std::mem::size_of::<(LayoutUnit, LayoutUnit)>();
+    for child in [false, true] {
+        for exceeds in [false, true] {
+            let mut trial = line.clone();
+            if child {
+                trial.ruby.push(RubyAnnotationRecord {
+                    container: NodeId(2),
+                    base_nodes: Vec::new(),
+                    node: Some(NodeId(3)),
+                    level: 0,
+                    base_text: 0..5,
+                    paragraph: p.clone(),
+                    line: line.clone(),
+                    visibility: RubyVisibility::Visible,
+                    transform: RubyTransform {
+                        inline_inline: 1.,
+                        inline_block: 0.,
+                        block_inline: 0.,
+                        block_block: 1.,
+                        inline_offset: 0.,
+                        block_offset: 0.,
+                    },
+                });
+            }
+            let ordinary = trial.owned_heap_bytes(usize::MAX).unwrap();
+            let capacity = (budget - ordinary) / element + usize::from(exceeds);
+            let offsets = if child {
+                &mut trial.ruby[0].line.emphasis_offsets
+            } else {
+                &mut trial.emphasis_offsets
+            };
+            // Unused capacity is still owned, even when no marks are painted.
+            *offsets = Vec::with_capacity(capacity);
+            let requested = ordinary + offsets.capacity() * element;
+            assert_eq!(trial.owned_heap_bytes(usize::MAX), Some(requested));
+            assert_eq!(trial.owned_heap_bytes(budget).is_none(), exceeds);
+            let key = super::Key::new(
+                &p,
+                p.start_token(),
+                options,
+                &constraint,
+                &AtomicSizes::EMPTY,
+            );
+            assert_eq!(
+                super::CompletedLine::retain(key, trial).is_none(),
+                exceeds,
+                "child={child}, exceeds={exceeds}, requested={requested}, budget={budget}"
+            );
+        }
+    }
+}
+
+#[test]
 fn resource_and_saturating_retries_keep_fresh_warning_order_and_budget_reset() {
     for mode in 0..4 {
         let mut limits = Limits::default();

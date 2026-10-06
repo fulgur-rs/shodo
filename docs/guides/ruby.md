@@ -118,9 +118,14 @@ added. For one baseline-aligned base with content height B, line-height H and
 over/under stacks O/U, untrimmed line advance is `max(H, B + O + U)`. Excess
 leading goes to the occupied side or proportionally to both. Nested ruby,
 vertical alignment and text-box trimming preserve annotation clearance.
+Base emphasis marks add their reserved extent outside annotations on the same
+line-relative side. Nested annotations are counted once; marks do not change
+annotation font-content bounds or the opposite-side mark offset. Unused
+container leading absorbs the combined ruby and emphasis contribution.
 `max_block_size` applies to the resulting advance.
 
-`Line::overflow_rect()` includes visible annotation ink and can extend beyond
+`Line::overflow_rect()` includes visible annotation ink and nominal painted
+emphasis em boxes, including transformed child-line marks, and can extend beyond
 the advance box. It remains line-local; strokes, antialiasing and decorations
 may extend it further. The renderer decides canvas size and clipping policy.
 

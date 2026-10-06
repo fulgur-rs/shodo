@@ -16,8 +16,21 @@ fn paragraph(count: usize) -> Paragraph {
     paragraph_with_text(count, "a", WritingMode::HorizontalTb)
 }
 fn paragraph_with_text(count: usize, text: &str, mode: WritingMode) -> Paragraph {
+    paragraph_with_emphasis(count, text, mode, false)
+}
+fn paragraph_with_emphasis(
+    count: usize,
+    text: &str,
+    mode: WritingMode,
+    emphasis: bool,
+) -> Paragraph {
     let limits = Limits::default();
     let style = InlineStyle {
+        text_emphasis: emphasis.then_some(crate::style::TextEmphasis {
+            shape: crate::style::TextEmphasisShape::Dot,
+            filled: true,
+            position: crate::style::TextEmphasisPosition::OverRight,
+        }),
         line_break: LineBreak::Anywhere,
         font_families: vec![FontFamily::Named("Geometry Test".into())],
         ..Default::default()
@@ -361,6 +374,33 @@ fn indexed_bounds_keep_atomic_overlay_and_saturated_extents() {
                 let b = got.unwrap();
                 assert_eq!(b.top.to_f32(), -91.0);
                 assert_eq!(b.bottom.to_f32(), 167.0);
+            }
+        }
+    }
+}
+
+#[test]
+fn emphasized_sibling_geometry_uses_bounded_interval_queries() {
+    for count in [64, 128] {
+        let paragraph = paragraph_with_emphasis(count, "a", WritingMode::VerticalRl, true);
+        VISITS.with(|n| n.set(0));
+        let lines = paragraph.break_all(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            1_000_000.0,
+            &AtomicSizes::EMPTY,
+        );
+        let visits = VISITS.with(|n| n.get());
+        assert_eq!(lines.len(), 1);
+        let records = lines[0].fragments.len();
+        assert_eq!(lines[0].emphasis_offsets.len(), records);
+        assert!(
+            visits <= 32 * (records + count),
+            "count={count}, records={records}, visits={visits}"
+        );
+        for fragment in lines[0].fragments() {
+            if let crate::Fragment::GlyphRun(run) = fragment {
+                assert!(run.emphasis_mark().unwrap().offset > run.font_size() / 2.0);
             }
         }
     }

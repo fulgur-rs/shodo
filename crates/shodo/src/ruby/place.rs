@@ -254,6 +254,7 @@ pub(crate) fn format(
         heights.push(child_heights);
     }
     let layout = super::geometry::layout(&frame, measure, &heights, sat);
+    line.emphasis_offsets = layout.emphasis_offsets;
     let mut annotations = Vec::new();
     for (children, blocks) in retained.into_iter().zip(layout.lanes) {
         for (mut child, block) in children.into_iter().zip(blocks) {

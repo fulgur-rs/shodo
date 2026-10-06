@@ -316,3 +316,63 @@ fn fallback_runs_trim_toward_their_own_em_box() {
     let baseline = l.baseline(BaselineKind::Alphabetic);
     assert!((baseline - expected).abs() < 0.02, "{baseline}");
 }
+
+#[test]
+fn overflow_includes_synthetic_emphasis_boxes_but_skips_excluded_characters() {
+    let mut root = style();
+    root.root.line_height = LineHeight::Px(4.0);
+    root.root.text_emphasis = emphasis(TextEmphasisPosition::OverRight);
+    let make = |text: &str| {
+        let p = build(&root, |b| {
+            b.push_text(TextSource::Generated { node: NodeId(1) }, text);
+        });
+        first_line(&p, 1000.0, &LineOptions::default(), &AtomicSizes::EMPTY)
+    };
+    let line = make("a");
+    let bounds = line.overflow_rect();
+    assert_eq!(
+        bounds,
+        shodo::geometry::LogicalRect {
+            inline_start: 2.5,
+            block_start: 0.0,
+            inline_size: 5.0,
+            block_size: 5.0
+        }
+    );
+    let excluded = make(".");
+    assert_eq!(excluded.overflow_rect(), Default::default());
+}
+
+#[test]
+fn nominal_mark_overflow_uses_untrimmed_paint_edges_and_combined_square() {
+    let mut root = style();
+    root.root.line_height = LineHeight::Px(40.0);
+    root.root.text_emphasis = emphasis(TextEmphasisPosition::UnderRight);
+    let p = build(&root, |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+    });
+    let line = first_line(&p, 1000.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(line.block_size(), 40.0, "leading absorbs the mark");
+    assert_eq!(
+        line.overflow_rect(),
+        shodo::geometry::LogicalRect {
+            inline_start: 2.5,
+            block_start: 25.0,
+            inline_size: 5.0,
+            block_size: 5.0
+        }
+    );
+    root.writing_mode = WritingMode::VerticalLr;
+    root.root.line_height = LineHeight::Px(10.0);
+    root.root.text_combine_upright = shodo::style::TextCombineUpright::All;
+    root.root.text_emphasis = emphasis(TextEmphasisPosition::OverRight);
+    let p = build(&root, |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "12");
+    });
+    let line = first_line(&p, 1000.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    let square = line.text_combinations().next().unwrap().square;
+    let bounds = line.overflow_rect();
+    assert_eq!(bounds.inline_start, square.inline_start + 2.5);
+    assert_eq!(bounds.block_start, square.block_start + square.block_size);
+    assert_eq!((bounds.inline_size, bounds.block_size), (5.0, 5.0));
+}

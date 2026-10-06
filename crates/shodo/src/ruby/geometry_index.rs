@@ -16,12 +16,14 @@ pub(super) struct RecordBounds {
     boxes: HashMap<u32, Bounds>,
     glyphs: Intervals,
     atomics: Intervals,
+    marks: [Intervals; 2],
 }
 impl RecordBounds {
     pub(super) fn new(frame: &Frame<'_>, sat: &mut Saturation) -> Self {
         let mut pending = BTreeMap::<u32, Bounds>::new();
         let mut glyphs = Vec::new();
         let mut atomics = Vec::new();
+        let mut marks = [Vec::new(), Vec::new()];
         for (i, record) in frame.records.iter().enumerate() {
             visit();
             let Some(bounds) = frame.record_bounds(i, sat) else {
@@ -35,6 +37,14 @@ impl RecordBounds {
             }
             match &record.kind {
                 RecordKind::Glyphs { text, .. } => {
+                    for (side, area) in super::record_emphasis(frame.data, record, frame.runs, sat)
+                        .into_iter()
+                        .enumerate()
+                    {
+                        if let Some(area) = area {
+                            marks[side].push((text.start as usize..text.end as usize, area));
+                        }
+                    }
                     glyphs.push((text.start as usize..text.end as usize, bounds))
                 }
                 RecordKind::Atomic { unit, .. } => {
@@ -62,7 +72,19 @@ impl RecordBounds {
             boxes,
             glyphs: Intervals::new(glyphs),
             atomics: Intervals::new(atomics),
+            marks: marks.map(Intervals::new),
         }
+    }
+    pub(super) fn emphasis(&self, frame: &Frame<'_>, units: &Range<usize>) -> [Option<Bounds>; 2] {
+        if self.marks.iter().all(|i| i.tree[1].is_none()) {
+            return [None, None];
+        }
+        let selected = &frame.data.units[units.clone()];
+        let Some(first) = selected.first() else {
+            return [None, None];
+        };
+        let range = first.text.start as usize..selected.last().unwrap().text.end as usize;
+        std::array::from_fn(|i| self.marks[i].overlapping(&range))
     }
     pub(super) fn column(
         &self,
@@ -179,4 +201,61 @@ impl CompletedBounds {
     pub(super) fn insert(&mut self, units: Range<usize>, container: usize, bounds: Bounds) {
         self.0.insert((units.start, container), (units.end, bounds));
     }
+}
+
+/// Index annotation outer edges once, then measure clearance from each paint
+/// record's own primary font edge. A nested outer track encloses its children.
+pub(super) fn emphasis_offsets(
+    frame: &Frame<'_>,
+    entries: Vec<(Range<usize>, [Option<crate::geometry::LayoutUnit>; 2])>,
+    sat: &mut Saturation,
+) -> Vec<(crate::geometry::LayoutUnit, crate::geometry::LayoutUnit)> {
+    use crate::geometry::LayoutUnit;
+    if entries.is_empty() {
+        return Vec::new();
+    }
+    let mut sides = [Vec::new(), Vec::new()];
+    for (units, edges) in entries {
+        let selected = &frame.data.units[units];
+        let Some(first) = selected.first() else {
+            continue;
+        };
+        let range = first.text.start as usize..selected.last().unwrap().text.end as usize;
+        for (side, edge) in edges.into_iter().enumerate() {
+            if let Some(edge) = edge {
+                sides[side].push((
+                    range.clone(),
+                    Bounds {
+                        top: edge,
+                        bottom: edge,
+                    },
+                ));
+            }
+        }
+    }
+    let sides = sides.map(Intervals::new);
+    frame
+        .records
+        .iter()
+        .enumerate()
+        .map(|(i, record)| {
+            let RecordKind::Glyphs { text, .. } = &record.kind else {
+                return (LayoutUnit::ZERO, LayoutUnit::ZERO);
+            };
+            let range = text.start as usize..text.end as usize;
+            let center = frame.baseline.add(frame.shifts[i], sat);
+            let (a, d) = super::record_primary_extents(frame.data, record, frame.runs, sat)
+                .expect("glyph primary edges");
+            let top = center.sub(a, sat);
+            let bottom = center.add(d, sat);
+            (
+                sides[0].overlapping(&range).map_or(LayoutUnit::ZERO, |b| {
+                    top.sub(b.top, sat).max(LayoutUnit::ZERO)
+                }),
+                sides[1].overlapping(&range).map_or(LayoutUnit::ZERO, |b| {
+                    b.bottom.sub(bottom, sat).max(LayoutUnit::ZERO)
+                }),
+            )
+        })
+        .collect()
 }

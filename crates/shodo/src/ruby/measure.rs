@@ -612,6 +612,8 @@ pub(super) fn measure_one(
         &right_columns,
         &heights,
         has_content,
+        geometry.area,
+        geometry.marks,
         sat,
     );
     let sides = super::geometry::level_sides(data, ruby);
