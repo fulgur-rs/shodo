@@ -53,6 +53,22 @@ space where only 0.1875px fit the accepted line. The independent bare-profile
 rounding is preserved, while reusable space is clipped to the accepted box.
 Final complete verification will be recorded below.
 
+After integrating main's public `force_root_strut`, synthetic tests cover its
+false/true behavior, top/bottom-aligned groups, atomic over/under reservations,
+and combined text in both vertical modes. A tab-only combined square regression
+failed with zero overflow where its accepted profile reserved a 5px mark;
+including retained external squares without requiring glyph records made it
+pass. The complete synthetic suite now has 13 tests. Four fixed-font tests cover
+the original dimensions, fractional leading, hidden/collapsed/opposite ruby,
+and nested root/child geometry.
+
+The 64/128-sibling resource test observes one accepted annotation scan per root
+or child fragment; 128 repeated public queries add no scans. A rejected-line
+test confirms two retries and acceptance move cached vectors and preserve
+geometry without scanning content again. Fixed geometry is charged in the
+existing root/child `Line` headers; the existing 64KiB capacity boundary test
+continues to cover retained storage.
+
 ## Implementation rulings
 
 - Preserve the separately quantized emphasis-free solver's exact result. The

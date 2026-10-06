@@ -189,6 +189,35 @@ impl Line {
                     Some(content.map_or((top, bottom), |old| (old.0.min(top), old.1.max(bottom))));
             }
         }
+        // Combined tabs need no glyph records, but their external square and
+        // one reserved mark still occupy layout space. Glyph-backed squares
+        // union with the same edges; retained ruby offsets above remain outermost.
+        for combination in &self.combinations {
+            let square = combination.square;
+            let top = LayoutUnit::from_f32_round(square.block_start, sat);
+            let bottom = LayoutUnit::from_f32_round(square.block_start + square.block_size, sat);
+            content =
+                Some(content.map_or((top, bottom), |old| (old.0.min(top), old.1.max(bottom))));
+            let index = self
+                .data
+                .combine_spans
+                .partition_point(|span| span.text.end <= combination.text_range.start as u32);
+            let span = &self.data.combine_spans[index];
+            let style = self.data.items[span.item as usize].style;
+            if let Some(mark) = self.data.styles[style as usize].text_emphasis {
+                let before = crate::line::metrics::emphasis_over(
+                    mark.position,
+                    self.data.style.writing_mode,
+                ) != (self.data.style.writing_mode == WritingMode::VerticalLr);
+                let size = LayoutUnit::from_f32_round(span.em / 2., sat);
+                let edge = if before {
+                    top.sub(size, sat)
+                } else {
+                    bottom.add(size, sat)
+                };
+                include(&mut annotation[usize::from(!before)], edge, before);
+            }
+        }
         let g = &mut self.annotation_geometry;
         let mut content = content.unwrap_or((self.baseline, self.baseline));
         if let Some(edge) = annotation[0] {

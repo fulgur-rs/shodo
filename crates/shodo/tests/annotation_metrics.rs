@@ -295,6 +295,176 @@ fn quirk_without_root_strut_keeps_small_annotation_overflow() {
 }
 
 #[test]
+fn forced_root_strut_controls_the_bare_box_and_root_em_floor() {
+    for forced in [false, true] {
+        let mut root = style();
+        root.line_height_quirk = true;
+        root.force_root_strut = forced;
+        root.root.font_size = 100.;
+        root.root.line_height = LineHeight::Px(120.);
+        let mut small = marked(5.).root;
+        small.font_size = 5.;
+        let p = build(&root, |b| {
+            b.open_inline(NodeId(2), &small, shodo::node::InlineEdges::default())
+                .push_text(TextSource::Generated { node: NodeId(3) }, "a")
+                .close_inline();
+        });
+        let line = first_line(&p, 1000., &LineOptions::default(), &AtomicSizes::EMPTY);
+        let m = line.annotation_metrics();
+        assert_eq!(
+            (
+                line.block_size(),
+                m.unannotated_block_start,
+                m.unannotated_block_end,
+                m.overflow_over,
+                m.overflow_under,
+                m.space_over,
+                m.space_under
+            ),
+            if forced {
+                (120., 0., 120., 0., 0., 10., 10.)
+            } else {
+                (7.5, 2.5, 7.5, 2.5, 0., 0., 0.)
+            },
+            "forced={forced}"
+        );
+    }
+}
+
+#[test]
+fn top_and_bottom_groups_never_offer_their_occupied_leading() {
+    use shodo::style::VerticalAlign;
+    for align in [VerticalAlign::Top, VerticalAlign::Bottom] {
+        let mut root = style();
+        root.root.line_height = LineHeight::Px(40.);
+        let mut child = marked(5.).root;
+        child.font_size = 5.;
+        child.vertical_align = align;
+        let p = build(&root, |b| {
+            b.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+            b.open_inline(NodeId(2), &child, shodo::node::InlineEdges::default())
+                .push_text(TextSource::Generated { node: NodeId(3) }, "b")
+                .close_inline();
+        });
+        let line = first_line(&p, 1000., &LineOptions::default(), &AtomicSizes::EMPTY);
+        let m = line.annotation_metrics();
+        assert_eq!(
+            (m.unannotated_block_start, m.unannotated_block_end),
+            (0., 40.)
+        );
+        assert_eq!((m.overflow_over, m.overflow_under), (0., 0.));
+        assert_eq!(
+            (m.space_over, m.space_under),
+            if align == VerticalAlign::Top {
+                (0., 15.)
+            } else {
+                (15., 0.)
+            },
+            "{align:?}"
+        );
+    }
+}
+
+#[test]
+fn atomic_over_marks_reserve_space_but_under_marks_follow_existing_exclusion() {
+    for position in [
+        TextEmphasisPosition::OverRight,
+        TextEmphasisPosition::UnderRight,
+    ] {
+        let mut root = style();
+        root.root.line_height = LineHeight::Px(40.);
+        let mut child = marked(40.).root;
+        child.text_emphasis.as_mut().unwrap().position = position;
+        let p = build(&root, |b| {
+            b.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+            b.push_atomic(NodeId(2), &child, shodo::node::InlineEdges::default());
+        });
+        let mut sizes = AtomicSizes::new();
+        sizes.insert(
+            NodeId(2),
+            shodo::AtomicSize {
+                inline_size: 10.,
+                block_size: 8.,
+                ..Default::default()
+            },
+        );
+        let line = first_line(&p, 1000., &LineOptions::default(), &sizes);
+        let m = line.annotation_metrics();
+        assert_eq!((m.overflow_over, m.overflow_under), (0., 0.));
+        assert_eq!(
+            (m.space_over, m.space_under),
+            if position == TextEmphasisPosition::OverRight {
+                (10., 15.)
+            } else {
+                (15., 15.)
+            }
+        );
+    }
+}
+
+#[test]
+fn combined_text_reserves_one_square_and_one_mark_on_the_requested_side() {
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        for position in [
+            TextEmphasisPosition::OverRight,
+            TextEmphasisPosition::OverLeft,
+        ] {
+            let mut root = marked(40.);
+            root.writing_mode = mode;
+            root.root.text_combine_upright = shodo::style::TextCombineUpright::All;
+            root.root.text_emphasis.as_mut().unwrap().position = position;
+            let p = build(&root, |b| {
+                b.push_text(TextSource::Generated { node: NodeId(1) }, "123456");
+            });
+            let line = first_line(&p, 1000., &LineOptions::default(), &AtomicSizes::EMPTY);
+            assert_eq!(line.text_combinations().len(), 1);
+            let m = line.annotation_metrics();
+            assert_eq!((m.overflow_over, m.overflow_under), (0., 0.));
+            assert_eq!(
+                (m.space_over, m.space_under),
+                if position == TextEmphasisPosition::OverRight {
+                    (10., 15.)
+                } else {
+                    (15., 10.)
+                },
+                "{mode:?} {position:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_tab_only_combination_still_exposes_its_reserved_mark_geometry() {
+    let mut root = marked(4.);
+    root.writing_mode = WritingMode::VerticalRl;
+    root.root.text_combine_upright = shodo::style::TextCombineUpright::All;
+    root.root.white_space_collapse = shodo::style::WhiteSpaceCollapse::Preserve;
+    let p = build(&root, |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "\t");
+    });
+    let line = first_line(&p, 1000., &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(line.text_combinations().len(), 1);
+    let m = line.annotation_metrics();
+    assert_eq!(
+        (
+            line.block_size(),
+            m.unannotated_block_start,
+            m.unannotated_block_end
+        ),
+        (15., 5., 15.)
+    );
+    assert_eq!(
+        (
+            m.overflow_over,
+            m.overflow_under,
+            m.space_over,
+            m.space_under
+        ),
+        (5., 0., 0., 0.)
+    );
+}
+
+#[test]
 fn annotation_metrics_separate_bare_box_overflow_and_unused_leading() {
     for (mark, expected_over) in [(false, 15.0), (true, 10.0)] {
         let mut root = marked(40.0);

@@ -48,6 +48,99 @@ fn mark(position: TextEmphasisPosition) -> Option<TextEmphasis> {
     })
 }
 
+fn pair(base: RubyContent, reading: RubyContent) -> Ruby {
+    Ruby::new(
+        vec![RubyBase {
+            node: NodeId(10),
+            content: base,
+            align: RubyAlign::Start,
+        }],
+        vec![RubyLevel {
+            annotations: vec![RubyAnnotation {
+                node: NodeId(20),
+                content: reading,
+                span: RubySpan::All,
+                visibility: RubyVisibility::Visible,
+            }],
+            style: RubyStyle {
+                overhang: shodo::RubyOverhang::None,
+                ..Default::default()
+            },
+        }],
+    )
+    .unwrap()
+}
+
+#[test]
+fn nested_reading_edges_and_child_metrics_are_retained_without_double_counting() {
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let mut base = style(1, 24.);
+        base.text_emphasis = mark(TextEmphasisPosition::OverRight);
+        let reading = style(1, 12.);
+        let small = style(1, 6.);
+        let child_style = ParagraphStyle {
+            root: reading.clone(),
+            writing_mode: mode,
+            ..Default::default()
+        };
+        let mut child = ParagraphBuilder::new(&child_style, &Limits::default());
+        child.push_ruby(
+            NodeId(30),
+            &reading,
+            pair(content(31, "に", &reading), content(32, "い", &small)),
+        );
+        let root = ParagraphStyle {
+            root: style(1, 24.),
+            writing_mode: mode,
+            ..Default::default()
+        };
+        let mut b = ParagraphBuilder::new(&root, &Limits::default());
+        b.push_ruby(
+            NodeId(8),
+            &root.root,
+            pair(content(1, "日", &base), RubyContent::from_builder(child)),
+        );
+        let line = layout(b).remove(0);
+        let m = line.annotation_metrics();
+        assert_eq!(line.block_size(), 54.);
+        assert_eq!(
+            (m.unannotated_block_start, m.unannotated_block_end),
+            if mode == WritingMode::VerticalRl {
+                (30., 54.)
+            } else {
+                (0., 24.)
+            }
+        );
+        assert_eq!(
+            (
+                m.overflow_over,
+                m.overflow_under,
+                m.space_over,
+                m.space_under
+            ),
+            (30., 0., 0., 0.)
+        );
+        let child = line
+            .fragments()
+            .find_map(|f| match f {
+                shodo::Fragment::RubyAnnotation(a) => Some(a),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(child.line().block_size(), 18.);
+        let c = child.line().annotation_metrics();
+        assert_eq!(
+            (
+                c.overflow_over,
+                c.overflow_under,
+                c.space_over,
+                c.space_under
+            ),
+            (6., 0., 0., 0.)
+        );
+    }
+}
+
 #[test]
 fn original_four_pixel_latin_lines_have_fixed_point_geometry_without_spare_leading() {
     let mut inline = style(0, 10.);
