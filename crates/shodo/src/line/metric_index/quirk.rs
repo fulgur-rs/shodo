@@ -99,8 +99,13 @@ pub(super) fn root_strut(data: &ParagraphData) -> RecordProfile {
         data.style.writing_mode,
         WritingMode::VerticalRl | WritingMode::VerticalLr
     ) && root.text_orientation != TextOrientation::Sideways;
-    let (above, below) =
-        super::super::metrics::extents(root, metrics.metrics, metrics.vertical_metrics, upright);
+    let (above, below) = super::super::metrics::sized_extents(
+        data,
+        root,
+        metrics.metrics,
+        metrics.vertical_metrics,
+        upright,
+    );
     RecordProfile {
         top: -above,
         bottom: below,

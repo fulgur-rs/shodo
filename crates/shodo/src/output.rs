@@ -213,6 +213,28 @@ pub struct Cluster {
     pub flags: ClusterFlags,
 }
 
+/// Where a glyph run's emphasis marks go, from [`GlyphRunView::emphasis_mark`].
+///
+/// The line box reserves `font_size` beyond the text on the marks' side, the
+/// outset Blink adds; positive half-leading can absorb it. Draw one mark per
+/// typographic character whose cluster is not
+/// [`ClusterFlags::emphasis_excluded`], centered on the character in the
+/// inline direction, using the em box of `character` at `font_size`. Its
+/// near edge sits `offset` from the run's baseline toward the marks' side.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EmphasisMark {
+    /// The mark for the style's shape and fill (CSS Text Decoration 3 §3.1).
+    pub character: char,
+    /// Half the text's font size, the size the line box reserves.
+    pub font_size: f32,
+    /// Whether the marks sit on the line-over side rather than line-under.
+    pub line_over: bool,
+    /// Distance from the baseline to the text's edge on the marks' side: the
+    /// run's ascent or descent, or half the em for upright and combined text
+    /// without vertical metrics.
+    pub offset: f32,
+}
+
 /// Source classification; whitespace and punctuation describe the first
 /// scalar. A multi-character shaping cluster is emphasis-excluded only when
 /// every constituent character is excluded. Renderers still place emphasis

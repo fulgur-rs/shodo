@@ -41,8 +41,26 @@ Nominal overflow does not include renderer-added strokes, antialiasing or
 decoration effects. Japanese punctuation spacing and hanging are described in
 the [Japanese layout contract](japanese-layout.md); vertical typography is
 described in the [vertical output contract](vertical-layout.md). [Ruby layout](ruby.md)
-adds coordinated annotation lanes and ink overflow. Emphasis placement belongs
-to the renderer.
+adds coordinated annotation lanes and ink overflow.
+
+## Emphasis marks
+
+`InlineStyle::text_emphasis` reserves line-box extent the way Blink's
+`InlineBoxState::ComputeTextMetrics` does. The root strut, each inline box's
+strut and each text run add a mark of half their font size to the font ascent
+(line-over side) or descent (line-under side), then keep the larger of that and
+the half-leading extents on each side. Positive half-leading absorbs the mark;
+with negative half-leading the font extents return on both sides. Horizontal
+text uses the over/under keyword; vertical text puts `right` on the line-over
+side and `left` on the line-under side. `vertical-align` positions, including
+`text-top` and `text-bottom`, and `LineMetrics::text_over`/`text_under` ignore
+the marks.
+
+The renderer draws the marks. `GlyphRunView::emphasis_mark()` returns the mark
+character, its size, its line-relative side and the distance from the baseline
+to the text edge it sits outside; draw one mark per typographic character whose
+cluster is not `emphasis_excluded`. Ruby annotations do not move out of the mark
+area, and `Line::overflow_rect` does not include the marks.
 
 ## Quirks-mode line height
 
