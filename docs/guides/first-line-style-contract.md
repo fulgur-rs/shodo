@@ -73,10 +73,13 @@ continuation may start with a generated float anchor before its first text run.
 
 Shodo has no `::first-letter` style input. `shodo::first_letter_range(text,
 preserve_breaks)` returns the byte range of the first letter instead: one
-extended grapheme cluster with its preceding and following punctuation, and
-Zs spaces between them, using Chromium's character classes. Pass the text that
-starts the block's first formatted line, after white-space processing; set
-`preserve_breaks` when `white-space` preserves segment breaks. Split the
+extended grapheme cluster with its preceding and following punctuation, using
+Chromium's character classes and the spaces Chromium allows between them.
+Text that is only punctuation has no first letter. Like Chromium, pass the
+source text that starts the block's first formatted line before white-space
+collapsing; set `preserve_breaks` when `white-space` preserves segment breaks.
+Chromium joins following punctuation only within one text node, while the
+helper joins it across the text it is given. Split the
 returned range into its own inline with the resolved pseudo-element style.
 `::first-letter` inherits from `::first-line`, so open it with
 `open_inline_with_first_line` and supply both resolved variants.

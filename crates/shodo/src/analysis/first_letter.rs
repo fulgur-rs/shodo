@@ -20,12 +20,16 @@ use icu_segmenter::GraphemeClusterSegmenter;
 ///   U+0020, U+00A0, U+3000 and a few word separators can sit between the
 ///   letter and following punctuation; trailing spaces are never included.
 /// - Other white space after the preceding punctuation, such as a line feed
-///   or U+3000, ends the search with `None`. Text that is only punctuation is
-///   returned whole.
+///   or U+3000, ends the search with `None`, and so does text that is only
+///   punctuation and spaces.
 ///
-/// The caller supplies the text that starts the block's first formatted line,
-/// in content order and after white-space processing, and splits the returned
-/// range into its own inline box with the pseudo-element's style. Floated
+/// Like Chromium, the scan expects source text before white-space collapsing:
+/// collapsed text turns a tab or line feed after an opening quote into a
+/// space, which joins the letter instead of ending the search. Pass the text
+/// that starts the block's first formatted line, in content order, and split
+/// the returned range into its own inline box with the pseudo-element's style.
+/// Chromium joins following punctuation only within one text node; this scan
+/// joins it across the text it is given. Floated
 /// first letters (drop caps) and `initial-letter` are box-tree work for the
 /// caller. Pass `preserve_breaks` when `white-space` preserves segment breaks:
 /// then a leading line feed is not skipped, so the first line has no letter.
@@ -40,7 +44,7 @@ use icu_segmenter::GraphemeClusterSegmenter;
 /// let text = "  \u{201C}Call me Ishmael.\u{201D}";
 /// let range = shodo::first_letter_range(text, false).unwrap();
 /// assert_eq!(&text[range], "\u{201C}C");
-/// assert_eq!(shodo::first_letter_range("\u{201C}\u{201D}", false), Some(0..6));
+/// assert_eq!(shodo::first_letter_range("\u{201C}\u{201D}", false), None);
 /// assert_eq!(shodo::first_letter_range(" ", false), None);
 /// ```
 pub fn first_letter_range(text: &str, preserve_breaks: bool) -> Option<Range<usize>> {
@@ -109,15 +113,15 @@ pub fn first_letter_range(text: &str, preserve_breaks: bool) -> Option<Range<usi
 
     let mut cluster = next();
     let mut punctuated = false;
-    while let Some((_, ch, end)) = cluster {
+    // Chromium carries leading punctuation that reaches the end of a text
+    // node into the next one, and creates no pseudo-element when no letter
+    // follows anywhere.
+    while let Some((_, ch, _)) = cluster {
         if !(preceding_punctuation(ch) || (punctuated && separator(ch))) {
             break;
         }
         punctuated = true;
         cluster = next();
-        if cluster.is_none() {
-            return Some(start..start + end);
-        }
     }
     let (_, ch, mut end) = cluster?;
     if space(ch) || is_new_line(ch) {
@@ -206,9 +210,34 @@ mod tests {
     }
 
     #[test]
-    fn punctuation_only_text_is_whole() {
-        assert_eq!(letter("..."), Some("..."));
-        assert_eq!(letter(" \u{201C}\u{201D}"), Some("\u{201C}\u{201D}"));
+    fn punctuation_only_text_has_no_letter() {
+        assert_eq!(letter("..."), None);
+        assert_eq!(letter(" \u{201C}\u{201D}"), None);
+        assert_eq!(letter("\u{201C} "), None);
+    }
+
+    #[test]
+    fn space_and_cluster_edge_cases() {
+        assert_eq!(letter("(\u{a0}A"), Some("(\u{a0}A"));
+        assert_eq!(letter("\u{201C}\tA"), None);
+        assert_eq!(letter("A\u{2009}\u{2009}!x"), Some("A\u{2009}\u{2009}!"));
+        assert_eq!(letter("A\u{2009}\u{2009}x"), Some("A"));
+        assert_eq!(letter("A\u{1680}!"), Some("A\u{1680}!"));
+        // U+1361 is Po, so it joins as punctuation despite its exclusion from
+        // the spaces.
+        assert_eq!(letter("A\u{1361}!"), Some("A\u{1361}!"));
+        assert_eq!(letter("A\u{2003}!"), Some("A\u{2003}!"));
+        assert_eq!(letter("A\u{3000}!"), Some("A"));
+        assert_eq!(
+            letter("\u{1F1EF}\u{1F1F5}\u{1F1FA}"),
+            Some("\u{1F1EF}\u{1F1F5}")
+        );
+        assert_eq!(letter(" \u{301}A"), Some("\u{301}"));
+        assert_eq!(letter("\u{2028}A"), Some("A"));
+        // NEL is a paragraph separator, not white space, as in Chromium.
+        assert_eq!(letter("\u{85}A"), Some("\u{85}"));
+        assert_eq!(first_letter_range("\r\nA", true), None);
+        assert_eq!(first_letter_range("\r\nA", false), Some(2..3));
     }
 
     #[test]
