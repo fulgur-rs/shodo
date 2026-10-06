@@ -109,3 +109,57 @@ quirks suite pass after this integration.
   per-side overflow/space. Its [inline layout caller](https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/layout/inline/inline_layout_algorithm.cc)
   borrows the minimum of the meeting sides. This API exposes local inputs while
   leaving neighboring-line policy with the caller.
+
+## Final validation
+
+The reviewed runtime source is `0512131`, based on main `132696d`; independent
+source review reported no remaining Critical, Important or Minor findings. The
+final test-literal spelling `14. + 1. / 256.` preserves the exact f32 boundary
+while satisfying Clippy's excessive-precision lint. Runtime source is unchanged
+after that review.
+
+The dedicated-target default workspace run passed 1654 tests in 98 suites with
+zero failures and nine ignored. Eight are existing library diagnostic/performance
+probes; the ninth is main's opt-in
+`original_wpt_fonts_preserve_normal_and_match_explicit_trim_all`, which requires
+original WPT fonts and `SHODO_181_WPT_ROOT`. No q57 regression is ignored.
+The log contains rebuilt workspace sources and all q57 public, capacity, cache,
+atomic lookup and scaling regressions.
+The accesskit-enabled workspace run passed 1670 tests in 99 suites, again with
+zero failures and the same nine ignored; it includes the final boundary-test
+expression.
+
+Workspace all-targets Clippy with warnings denied passed for default and
+`shodo-harness/accesskit`. Workspace rustdoc with warnings denied passed for
+both configurations. Package listing contains 197 paths, all inside the CI
+allowlist; formatting, diff whitespace and machine-home-path checks passed.
+The public annotation suite passed 15 tests each with no default features and
+with only `complex-scripts`; the same-value fractional-leading regression also
+passed after its literal-spelling change.
+
+Reproduction uses Rust 1.97.1, jobs 2, `TMPDIR=~/tmp` and a dedicated Cargo target.
+Before using the copied third-party cache, all five workspace packages were
+cleaned to force recompilation from this worktree:
+
+```sh
+export TMPDIR="$HOME/tmp"
+export CARGO_BUILD_JOBS=2
+export CARGO_TARGET_DIR="$HOME/tmp/shodo-q57-goal-target"
+cargo clean -p shodo -p shodo-fixtures -p shodo-harness -p shodo-raikiri -p shodo-bench
+cargo test --workspace
+cargo test --workspace --features shodo-harness/accesskit
+cargo test -p shodo --no-default-features --test annotation_metrics
+cargo test -p shodo --no-default-features --features complex-scripts --test annotation_metrics
+cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --features shodo-harness/accesskit -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --features shodo-harness/accesskit
+cargo fmt --all --check
+git diff --check
+```
+
+After transcribing results and reproduction conditions, all 34 task-owned raw
+logs/package listings were removed. The isolated worktree and
+`~/tmp/shodo-q57-goal-target` remain for the parent's PR/CI handoff and subsequent
+cleanup. The original scratch reproduction, other worktrees, original font
+assets and other tasks' outputs were preserved.

@@ -225,7 +225,7 @@ fn original_four_pixel_latin_lines_have_fixed_point_geometry_without_spare_leadi
 #[test]
 fn independently_rounded_bare_box_does_not_expose_space_past_the_accepted_edge() {
     let mut inline = style(0, 10.);
-    inline.line_height = LineHeight::Px(14.00390625);
+    inline.line_height = LineHeight::Px(14. + 1. / 256.);
     inline.text_emphasis = mark(TextEmphasisPosition::OverRight);
     let root = ParagraphStyle {
         root: inline,

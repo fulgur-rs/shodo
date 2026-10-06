@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Expose `Line::annotation_metrics` with per-side annotation overflow and unused
+  leading for caller-owned spacing between lines and blocks.
 - Add `ParagraphBuilder::push_forced_break_with_style` for an independent
   break strut, and `Line::forced_break` to read its node and effective style.
 

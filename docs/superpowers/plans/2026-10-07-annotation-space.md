@@ -36,15 +36,15 @@
 `unannotated_block_start`, `unannotated_block_end`, `overflow_over`,
 `overflow_under`, `space_over`, `space_under`, all `f32`.
 
-- [ ] Add contract tests: synthetic 40px/10px plain space 15/15, over marks 10/15;
+- [x] Add contract tests: synthetic 40px/10px plain space 15/15, over marks 10/15;
   4px emphasized line bare box 8..12 and overflow 8/0; adjacent 14px marked
   lines expose 3px overflow and 2px opposite space so caller can borrow 2px.
-- [ ] Run focused tests and confirm the missing public API fails compilation.
-- [ ] Implement emphasis-free accepted profile, fixed geometry capture and public API;
+- [x] Run focused tests and confirm the missing public API fails compilation.
+- [x] Implement emphasis-free accepted profile, fixed geometry capture and public API;
   include atomic/combined text, hidden/nested ruby, accepted displacements and em trimming.
-- [ ] Add/run real-font tests for scratch dimensions, vertical reflection, large
+- [x] Add/run real-font tests for scratch dimensions, vertical reflection, large
   leading, first-line retries, mixed/top/bottom content, and hidden/collapsed ruby.
-- [ ] Add/run retained budget and repeated-query/scaling module tests.
-- [ ] Run default workspace tests, fmt, default/accesskit Clippy with warnings denied,
+- [x] Add/run retained budget and repeated-query/scaling module tests.
+- [x] Run default workspace tests, fmt, default/accesskit Clippy with warnings denied,
   and warnings-denied workspace docs; record evidence and remove owned raw logs.
-- [ ] Commit the verified branch and hand it to the parent for review/PR/CI/merge.
+- [x] Commit the verified branch and hand it to the parent for review/PR/CI/merge.
