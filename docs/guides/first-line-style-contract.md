@@ -69,6 +69,25 @@ The accepted token continues into normal styles, even where uppercase expands
 `Line::text()` and `Line::offset_mapping()` with that line's ranges; a normal
 continuation may start with a generated float anchor before its first text run.
 
+## First-letter text
+
+Shodo has no `::first-letter` style input. `shodo::first_letter_range(text,
+preserve_breaks)` returns the byte range of the first letter instead: one
+extended grapheme cluster with its preceding and following punctuation, using
+Chromium's character classes and the spaces Chromium allows between them.
+Text that is only punctuation has no first letter. Like Chromium, pass the
+source text that starts the block's first formatted line before white-space
+collapsing; set `preserve_breaks` when `white-space` preserves segment breaks.
+Chromium joins following punctuation only within one text node, while the
+helper joins it across the text it is given. Split the
+returned range into its own inline with the resolved pseudo-element style.
+`::first-letter` inherits from `::first-line`, so open it with
+`open_inline_with_first_line` and supply both resolved variants.
+Floated first letters and `initial-letter` stay in the caller's box tree. The
+range excludes leading white space; Chromium styles it with the pseudo-element,
+so use `0..range.end` to match that. Language-specific digraphs such as Dutch
+"IJ" are not combined.
+
 ## Compatibility and migration
 
 Existing `open_inline`, `RichText::push` and `ParagraphStyle::first_line`

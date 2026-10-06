@@ -143,6 +143,7 @@ mod shape;
 mod test_support;
 
 pub use analysis::breaks::{LineBreakContext, LineBreakOverride, SoftBreakOpportunity};
+pub use analysis::first_letter::first_letter_range;
 pub use builder::{ParagraphBuilder, RichText};
 pub use context::LayoutContext;
 pub use output::{

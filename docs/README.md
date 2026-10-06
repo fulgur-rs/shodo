@@ -12,7 +12,7 @@ their integration contracts. For API reference, run
 | --- | --- |
 | Fonts, incremental layout, output lifetime, limits, and hit testing | [Integration guide](guides/integration.md) |
 | Width and processed-grapheme limits for lines | [Character-limited lines](guides/grapheme-limited-lines.md) |
-| Exact caller-resolved normal and `::first-line` styles | [First-line style contract](guides/first-line-style-contract.md) |
+| Exact caller-resolved normal and `::first-line` styles, and `::first-letter` text | [First-line style contract](guides/first-line-style-contract.md) |
 | Shared ligatures and Arabic glyph ownership across source nodes | [Shared glyph contract](guides/shared-glyph-contract.md) |
 | Line metrics, spacing, source positions, and regression evidence | [Horizontal output contracts](guides/horizontal-layout-contracts.md) |
 | Japanese breaks, punctuation spacing, hanging, and justification | [Japanese horizontal layout](guides/japanese-layout.md) |
