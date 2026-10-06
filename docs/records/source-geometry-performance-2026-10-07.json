@@ -1,0 +1,2137 @@
+{
+  "date": "2026-10-07",
+  "decision": "adopt source geometry allocation reduction and ordered selection streaming",
+  "baseline_commit": "65ae1a0453f3a6594ceff4887152e5fbf201afcb",
+  "candidate_source_sha256": {
+    ".github/workflows/ci.yml": "017093741b0473d7403ec878720a0473c04d897cb8cec69cef163c19c7a518de",
+    "crates/shodo/src/hit/index.rs": "999778d530c836499362d1af7b45a35327fb9db28b6d67d45b6e52d06723d0cd",
+    "crates/shodo/src/hit/mod.rs": "46203a0898afbacf7bd2bd41308b1ed1403c33d1919ee09b1118ba7862643a1f",
+    "crates/shodo/src/hit/selection.rs": "c5af1b0b00fd855f6a46c39e3a5a78470c9f71f3966e0987b64d27418cc655de",
+    "dev/bench/examples/source_geometry.rs": "949f4e1be9f4de8fccb401fda48891b34f7b52d92aaea4d13a14302d9a181433",
+    "dev/bench/tests/selection_allocations.rs": "84ec3bea0fbae777823cc91d76850b89c94f55457e62704f3b8719f418df5c5f",
+    "dev/bench/tests/paint_geometry_allocations.rs": "e6eb93932f72076bab6338688ea75bb1c32118e0e8d282ffb1d30aa840cb1a19",
+    "dev/bench/tests/ruby_base_caret_range.rs": "9c254ea1f88bc6f63ddc68084f10812873759aa1c34f4b2a26df4f07b3660c9c"
+  },
+  "scope": {
+    "changes": [
+      "Merge adjacent raw source clusters in place instead of allocating a second full cluster vector.",
+      "Yield paint segment tuples as an iterator instead of collecting a duplicate vector.",
+      "Stream horizontal merges for source-ordered segments already sorted by the original merge key; compact both fallback merge passes in place.",
+      "Cache eligibility per immutable line index; retain original two-sort fallback for bidi/unordered geometry."
+    ],
+    "public_api_changes": false,
+    "font_corpus_snapshot_dependency_changes": false
+  },
+  "environment": {
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+    "cpu": "AMD Ryzen 5 5600G, x86_64 Linux, 6 cores / 12 threads",
+    "profile": "release, default shodo-bench features (complex-scripts)",
+    "valgrind": "3.25.1",
+    "hyperfine": "1.20.0",
+    "font_policy": "fixed fixture manifest/checksums, system_fonts=false, Limits::default()",
+    "cargo_lock_sha256": "7f6eb934a9044db268e4fa51fe520717a926b49d51cf5ce360f653c2c4ba0c40",
+    "fixture_manifest_sha256": "8ff4c966f09124494ae8a6be9bed079575f88a571b9ae430d433ce35936cf0f1",
+    "binary_sha256": {
+      "baseline-source_geometry-alloc": "2287564fbb9c755ac714179bdd7d6edb831e78cf897552c82a1fe3328d57a9fb",
+      "baseline-source_geometry-time": "512299b05d8c72319ab97238457ed242dd92447f0adfb3df49beb47b410962b1",
+      "baseline-paint_geometry-alloc": "5c934c0ae92a6b998ee7d0afdf5a26439af5109695bd1f945c4b53891e23379d",
+      "baseline-paint_geometry-time": "b3a8d62560576056173dc78030cb9567156db9e3d2b1269836b7d57138fec7ac",
+      "final-source_geometry-alloc": "e6c75bd7ab5635d709ef169de8ed281efe3b28bb5a79d95d039cb80e22456199",
+      "final-source_geometry-time": "6ef823c8bcc61891362d70250b6eb06106bf1a5e3d10e359da164fd42f0eb224",
+      "final-paint_geometry-alloc": "c3824de842d9764c8b58fdc81251a7bd783eacef4c7722dac35addec6de5d3bd",
+      "final-paint_geometry-time": "9f5d57bc2e6c3e0d5c11f3105020dff55dd0f667aaa5cef080cfcbabc44ee4ab"
+    }
+  },
+  "measurement": {
+    "allocation": "3 independent process samples per side and condition, one operation per sample; allocator result captured before JSON construction. Preparation and hashes excluded; output drop included. All calls/bytes/net/peak samples identical per condition.",
+    "timing": "Separate normal-allocator executables, pinned to logical CPU 10. Six ABBA blocks, 12 process samples per side and condition; 8 warmups before measured iterations. Scope elapsed captured before JSON construction; fixture loading, preparation and validation hashes excluded. Output drop included; build includes input insertion. No concurrent task-owned builds/tests/profiles during elapsed measurement.",
+    "build_isolation": "Baseline and candidate use distinct CARGO_TARGET_DIR directories. A trial with a shared target reused the candidate executable for baseline; identical binary hashes and counters exposed this, and those comparison results were discarded. Final pair has distinct hashes and baseline/candidate regression allocation counts.",
+    "limitations": [
+      "Shared desktop CPU is not isolated from external load; ratios describe these scopes and workloads only.",
+      "Gross allocated bytes are temporary allocator traffic, not process RSS or universal retained-memory savings.",
+      "Long contiguous selection output remains one rectangle; sparse/bidi output size and sort complexity still depend on geometry.",
+      "Existing paint probe retains results at scope end while source_geometry includes result drop; compare only matching scopes.",
+      "Memcheck could not start because ld-linux-x86-64.so.2 lacks the mandatory memcmp symbol; no memory-safety claim derives from it.",
+      "The eligibility boolean adds 8 retained bytes per line on this build. latin-long hit index net/peak increase by 1152 bytes (144 lines), while gross allocation traffic decreases. Paint net/peak are unchanged because returned spans dominate."
+    ],
+    "raw_artifacts_policy": "Raw traces, binaries, logs and worktrees are temporary; normalized measurements, hashes, conditions and reproduction steps are retained in this record before cleanup."
+  },
+  "results": [
+    {
+      "operation": "selection",
+      "case": "plain",
+      "scale": 1024,
+      "iterations": 4000,
+      "samples_per_side": 12,
+      "timing": {
+        "baseline": {
+          "median_ns_per_iteration": 8590.766749999999,
+          "min_ns_per_iteration": 8538.296,
+          "max_ns_per_iteration": 8656.997
+        },
+        "final": {
+          "median_ns_per_iteration": 4883.964125,
+          "min_ns_per_iteration": 4868.43225,
+          "max_ns_per_iteration": 4892.10975
+        },
+        "ratio_final_over_baseline": 0.5685131801535644,
+        "samples_ns_per_iteration": {
+          "baseline": [
+            8576.85025,
+            8604.9975,
+            8621.56825,
+            8578.63125,
+            8538.296,
+            8614.39175,
+            8546.27575,
+            8602.90225,
+            8552.57925,
+            8611.21375,
+            8569.15,
+            8656.997
+          ],
+          "final": [
+            4875.05025,
+            4892.10975,
+            4885.31725,
+            4883.1695,
+            4878.55975,
+            4885.85875,
+            4883.36175,
+            4884.5665,
+            4875.01525,
+            4868.43225,
+            4891.44625,
+            4887.83175
+          ]
+        }
+      },
+      "allocation": {
+        "baseline": {
+          "calls": 13,
+          "allocated_bytes": 49280,
+          "deallocated_bytes": 49280,
+          "net_bytes": 0,
+          "peak_extra_bytes": 32768
+        },
+        "final": {
+          "calls": 2,
+          "allocated_bytes": 128,
+          "deallocated_bytes": 128,
+          "net_bytes": 0,
+          "peak_extra_bytes": 128
+        }
+      },
+      "geometry": {
+        "float_reports": 0,
+        "glyphs": 1024,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 1,
+        "runs": 1,
+        "sha256": "7a9a43f3cd5b515680e4b55d5f48e7c9a02af2777ebe2a5cd4b7aa7eae022234",
+        "synthetic_glyphs": 0
+      },
+      "paint_sha256": "9f4392ebada6f65e03902cf626ca9c57227e1afad62b49c39cb59aaa6d026809",
+      "selection_sha256": "f756c6701faf179afde08d2fc479fc43a3e933c307a9e40e40c6b37a57bbc00b"
+    },
+    {
+      "operation": "selection",
+      "case": "plain",
+      "scale": 16384,
+      "iterations": 2000,
+      "samples_per_side": 12,
+      "timing": {
+        "baseline": {
+          "median_ns_per_iteration": 131749.089,
+          "min_ns_per_iteration": 131381.9685,
+          "max_ns_per_iteration": 133012.5255
+        },
+        "final": {
+          "median_ns_per_iteration": 76478.85325,
+          "min_ns_per_iteration": 76054.163,
+          "max_ns_per_iteration": 76932.7735
+        },
+        "ratio_final_over_baseline": 0.5804886685022922,
+        "samples_ns_per_iteration": {
+          "baseline": [
+            133012.5255,
+            132009.941,
+            131720.121,
+            131955.8465,
+            131730.423,
+            132300.0405,
+            131874.268,
+            131767.755,
+            131682.719,
+            131473.744,
+            131580.4665,
+            131381.9685
+          ],
+          "final": [
+            76932.7735,
+            76308.4325,
+            76742.6215,
+            76054.163,
+            76421.511,
+            76573.877,
+            76195.703,
+            76425.492,
+            76580.058,
+            76361.689,
+            76722.332,
+            76532.2145
+          ]
+        }
+      },
+      "allocation": {
+        "baseline": {
+          "calls": 17,
+          "allocated_bytes": 786560,
+          "deallocated_bytes": 786560,
+          "net_bytes": 0,
+          "peak_extra_bytes": 524288
+        },
+        "final": {
+          "calls": 2,
+          "allocated_bytes": 128,
+          "deallocated_bytes": 128,
+          "net_bytes": 0,
+          "peak_extra_bytes": 128
+        }
+      },
+      "geometry": {
+        "float_reports": 0,
+        "glyphs": 16384,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 1,
+        "runs": 1,
+        "sha256": "83bbd22269fd23d6da4dffadfdfee2b11ee9b1e360538bce01abb0bf4cdacde0",
+        "synthetic_glyphs": 0
+      },
+      "paint_sha256": "8da53ad5838226ec5d8b5eb78df4a8b8b4a8056c809f659a1e362aae320b0af0",
+      "selection_sha256": "3f184b2300026c9df85b91e30efdd9b383286a2feea582c028350d852b67849d"
+    },
+    {
+      "operation": "paint",
+      "case": "latin-long",
+      "scale": 8,
+      "iterations": 200,
+      "samples_per_side": 12,
+      "timing": {
+        "baseline": {
+          "median_ns_per_iteration": 1014642.8475,
+          "min_ns_per_iteration": 1007803.49,
+          "max_ns_per_iteration": 1032580.515
+        },
+        "final": {
+          "median_ns_per_iteration": 958233.7050000001,
+          "min_ns_per_iteration": 948481.305,
+          "max_ns_per_iteration": 978056.66
+        },
+        "ratio_final_over_baseline": 0.9444049276659392,
+        "samples_ns_per_iteration": {
+          "baseline": [
+            1015023.675,
+            1020994.34,
+            1015514.68,
+            1007803.49,
+            1017641.1,
+            1012018.26,
+            1032580.515,
+            1010870.015,
+            1014262.02,
+            1011267.085,
+            1025451.13,
+            1011893.24
+          ],
+          "final": [
+            957225.15,
+            954839.605,
+            960302.505,
+            957026.445,
+            978056.66,
+            959242.26,
+            960884.665,
+            962004.27,
+            954102.05,
+            951223.055,
+            959924.645,
+            948481.305
+          ]
+        }
+      },
+      "allocation": {
+        "baseline": {
+          "calls": 3457,
+          "allocated_bytes": 6475456,
+          "deallocated_bytes": 6475456,
+          "net_bytes": 0,
+          "peak_extra_bytes": 1189620
+        },
+        "final": {
+          "calls": 2593,
+          "allocated_bytes": 5038912,
+          "deallocated_bytes": 5038912,
+          "net_bytes": 0,
+          "peak_extra_bytes": 1189620
+        }
+      },
+      "geometry": {
+        "float_reports": 0,
+        "glyphs": 7672,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 144,
+        "runs": 240,
+        "sha256": "3104559e88f5ea7b5ee5cf9708d3b2b6e7cceff17066ed4f428ab7169681e712",
+        "synthetic_glyphs": 0
+      },
+      "paint_sha256": "fc7e4666501b7b3a8d23166d1bfa26a91239a155950ba9450bb165fe8534f450",
+      "selection_sha256": "9ba5cb2e841918004350b50f6e7e5f0aef1eaa48820e8af9eced61cabbce7cd7"
+    },
+    {
+      "operation": "index",
+      "case": "latin-long",
+      "scale": 8,
+      "iterations": 150,
+      "samples_per_side": 12,
+      "timing": {
+        "baseline": {
+          "median_ns_per_iteration": 1225860.5133333334,
+          "min_ns_per_iteration": 1215889.26,
+          "max_ns_per_iteration": 1251198.9733333334
+        },
+        "final": {
+          "median_ns_per_iteration": 1150232.75,
+          "min_ns_per_iteration": 1141740.34,
+          "max_ns_per_iteration": 1169842.0933333333
+        },
+        "ratio_final_over_baseline": 0.93830638762669,
+        "samples_ns_per_iteration": {
+          "baseline": [
+            1220553.0133333334,
+            1251198.9733333334,
+            1219037.8533333333,
+            1221573.68,
+            1236665.24,
+            1226384.58,
+            1215889.26,
+            1225336.4466666668,
+            1232087.6266666667,
+            1235908.5933333333,
+            1244070.1666666667,
+            1221049.3866666667
+          ],
+          "final": [
+            1153049.12,
+            1169842.0933333333,
+            1146938.64,
+            1141740.34,
+            1151359.8066666666,
+            1159587.5066666666,
+            1149105.6933333334,
+            1147288.8,
+            1144904.7733333334,
+            1156914.32,
+            1147610.0866666667,
+            1153177.6333333333
+          ]
+        }
+      },
+      "allocation": {
+        "baseline": {
+          "calls": 4035,
+          "allocated_bytes": 5478272,
+          "deallocated_bytes": 5478272,
+          "net_bytes": 0,
+          "peak_extra_bytes": 1916288
+        },
+        "final": {
+          "calls": 3315,
+          "allocated_bytes": 4336640,
+          "deallocated_bytes": 4336640,
+          "net_bytes": 0,
+          "peak_extra_bytes": 1917440
+        }
+      },
+      "geometry": {
+        "float_reports": 0,
+        "glyphs": 7672,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 144,
+        "runs": 240,
+        "sha256": "3104559e88f5ea7b5ee5cf9708d3b2b6e7cceff17066ed4f428ab7169681e712",
+        "synthetic_glyphs": 0
+      },
+      "paint_sha256": "fc7e4666501b7b3a8d23166d1bfa26a91239a155950ba9450bb165fe8534f450",
+      "selection_sha256": "9ba5cb2e841918004350b50f6e7e5f0aef1eaa48820e8af9eced61cabbce7cd7"
+    },
+    {
+      "operation": "combined",
+      "case": "latin-long",
+      "scale": 8,
+      "iterations": 150,
+      "samples_per_side": 12,
+      "timing": {
+        "baseline": {
+          "median_ns_per_iteration": 2296314.88,
+          "min_ns_per_iteration": 2279566.6,
+          "max_ns_per_iteration": 2335661.6133333333
+        },
+        "final": {
+          "median_ns_per_iteration": 2136646.5666666664,
+          "min_ns_per_iteration": 2127334.18,
+          "max_ns_per_iteration": 2203497.42
+        },
+        "ratio_final_over_baseline": 0.9304675875577946,
+        "samples_ns_per_iteration": {
+          "baseline": [
+            2297177.22,
+            2303321.22,
+            2279566.6,
+            2315998.953333333,
+            2314598.34,
+            2293333.446666667,
+            2284582.38,
+            2335661.6133333333,
+            2295635.52,
+            2293442.4066666667,
+            2287336.5866666664,
+            2296994.24
+          ],
+          "final": [
+            2152873.566666667,
+            2135067.3733333335,
+            2170230.8866666667,
+            2164549.26,
+            2127334.18,
+            2138547.04,
+            2130364.973333333,
+            2133871.1733333333,
+            2203497.42,
+            2127725.78,
+            2138225.76,
+            2127824.966666667
+          ]
+        }
+      },
+      "allocation": {
+        "baseline": {
+          "calls": 7492,
+          "allocated_bytes": 11953728,
+          "deallocated_bytes": 11953728,
+          "net_bytes": 0,
+          "peak_extra_bytes": 1916288
+        },
+        "final": {
+          "calls": 5908,
+          "allocated_bytes": 9375552,
+          "deallocated_bytes": 9375552,
+          "net_bytes": 0,
+          "peak_extra_bytes": 1917440
+        }
+      },
+      "geometry": {
+        "float_reports": 0,
+        "glyphs": 7672,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 144,
+        "runs": 240,
+        "sha256": "3104559e88f5ea7b5ee5cf9708d3b2b6e7cceff17066ed4f428ab7169681e712",
+        "synthetic_glyphs": 0
+      },
+      "paint_sha256": "fc7e4666501b7b3a8d23166d1bfa26a91239a155950ba9450bb165fe8534f450",
+      "selection_sha256": "9ba5cb2e841918004350b50f6e7e5f0aef1eaa48820e8af9eced61cabbce7cd7"
+    },
+    {
+      "operation": "selection",
+      "case": "arabic-long",
+      "scale": 8,
+      "iterations": 1000,
+      "samples_per_side": 12,
+      "timing": {
+        "baseline": {
+          "median_ns_per_iteration": 74041.661,
+          "min_ns_per_iteration": 72421.126,
+          "max_ns_per_iteration": 74785.297
+        },
+        "final": {
+          "median_ns_per_iteration": 39803.6155,
+          "min_ns_per_iteration": 39326.227,
+          "max_ns_per_iteration": 41080.584
+        },
+        "ratio_final_over_baseline": 0.5375840433941643,
+        "samples_ns_per_iteration": {
+          "baseline": [
+            73998.986,
+            72421.126,
+            73613.164,
+            74325.439,
+            73297.537,
+            74785.297,
+            74084.336,
+            72949.85,
+            74152.644,
+            73776.881,
+            74703.649,
+            74531.83
+          ],
+          "final": [
+            41080.584,
+            39917.881,
+            39377.633,
+            39832.391,
+            39326.227,
+            39741.314,
+            39774.84,
+            39342.012,
+            39658.688,
+            39848.596,
+            40618.981,
+            40648.875
+          ]
+        }
+      },
+      "allocation": {
+        "baseline": {
+          "calls": 773,
+          "allocated_bytes": 209280,
+          "deallocated_bytes": 209280,
+          "net_bytes": 0,
+          "peak_extra_bytes": 1088
+        },
+        "final": {
+          "calls": 194,
+          "allocated_bytes": 12416,
+          "deallocated_bytes": 12416,
+          "net_bytes": 0,
+          "peak_extra_bytes": 128
+        }
+      },
+      "geometry": {
+        "float_reports": 0,
+        "glyphs": 6040,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 97,
+        "runs": 192,
+        "sha256": "1126923a8347056e6230840a9a05a3fcd1a8feb730a73deb8e5dff4130c558f6",
+        "synthetic_glyphs": 0
+      },
+      "paint_sha256": "dcfa1c80bb6090628ca0b4e66e2286361ed9eb22437f40533cbca137efe04e51",
+      "selection_sha256": "3185df8b1a20d11e3d9b6557e17591ea488833bfdb11257b72c17573d01fb900"
+    },
+    {
+      "operation": "selection",
+      "case": "preserved-tabs",
+      "scale": 8,
+      "iterations": 4000,
+      "samples_per_side": 12,
+      "timing": {
+        "baseline": {
+          "median_ns_per_iteration": 4784.322125000001,
+          "min_ns_per_iteration": 4675.25975,
+          "max_ns_per_iteration": 6735.519
+        },
+        "final": {
+          "median_ns_per_iteration": 3005.623875,
+          "min_ns_per_iteration": 2947.67025,
+          "max_ns_per_iteration": 3099.3555
+        },
+        "ratio_final_over_baseline": 0.6282235594661176,
+        "samples_ns_per_iteration": {
+          "baseline": [
+            4729.3195,
+            4719.66325,
+            4675.25975,
+            4791.63825,
+            4688.1285,
+            4791.9875,
+            4740.87875,
+            4886.1905,
+            4777.006,
+            4797.52275,
+            6735.519,
+            5033.47525
+          ],
+          "final": [
+            2948.491,
+            3021.077,
+            2947.67025,
+            3042.06525,
+            3091.9695,
+            2973.8095,
+            2991.42775,
+            3008.15575,
+            3049.52125,
+            2967.768,
+            3003.092,
+            3099.3555
+          ]
+        }
+      },
+      "allocation": {
+        "baseline": {
+          "calls": 136,
+          "allocated_bytes": 13312,
+          "deallocated_bytes": 13312,
+          "net_bytes": 0,
+          "peak_extra_bytes": 320
+        },
+        "final": {
+          "calls": 64,
+          "allocated_bytes": 6144,
+          "deallocated_bytes": 6144,
+          "net_bytes": 0,
+          "peak_extra_bytes": 320
+        }
+      },
+      "geometry": {
+        "float_reports": 0,
+        "glyphs": 176,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 24,
+        "runs": 31,
+        "sha256": "d0bc69cf2b26f7247a53a8c321003ca91222ff2a40208411c8e0d67420bc974d",
+        "synthetic_glyphs": 0
+      },
+      "paint_sha256": "3b33dd9e26e11b38e0e7c3fee652680d284f3be254045da7d5be58aeb1cb299e",
+      "selection_sha256": "0f5bb17bcb91720b224caf784e122a52e0b07e63b845b5d92da039a4227bd382"
+    },
+    {
+      "operation": "build",
+      "case": "japanese-long",
+      "scale": 8,
+      "iterations": 60,
+      "samples_per_side": 12,
+      "timing": {
+        "baseline": {
+          "median_ns_per_iteration": 5492663.041666667,
+          "min_ns_per_iteration": 5451782.966666667,
+          "max_ns_per_iteration": 5529793.6
+        },
+        "final": {
+          "median_ns_per_iteration": 5513689.766666668,
+          "min_ns_per_iteration": 5444032.533333333,
+          "max_ns_per_iteration": 5582164.283333333
+        },
+        "ratio_final_over_baseline": 1.003828147629027,
+        "samples_ns_per_iteration": {
+          "baseline": [
+            5528009.05,
+            5505233.9,
+            5451782.966666667,
+            5521099.1,
+            5529793.6,
+            5504332.9,
+            5453310.233333333,
+            5476184.366666666,
+            5484181.566666666,
+            5466597.033333333,
+            5492867.916666667,
+            5492458.166666667
+          ],
+          "final": [
+            5542251.533333333,
+            5487707.55,
+            5456570.816666666,
+            5444032.533333333,
+            5552461.666666667,
+            5546669.216666667,
+            5526775.15,
+            5546879.933333334,
+            5464821.816666666,
+            5582164.283333333,
+            5466946.25,
+            5500604.383333334
+          ]
+        }
+      },
+      "allocation": {
+        "baseline": {
+          "calls": 16919,
+          "allocated_bytes": 4111273,
+          "deallocated_bytes": 4111273,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2057632
+        },
+        "final": {
+          "calls": 16919,
+          "allocated_bytes": 4111273,
+          "deallocated_bytes": 4111273,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2057632
+        }
+      },
+      "geometry": {
+        "float_reports": 0,
+        "glyphs": 4128,
+        "height_retries": 0,
+        "intrinsic_measurements": 0,
+        "lines": 1,
+        "runs": 1920,
+        "sha256": "3a0a700fbed3e20724d23c9dda0e4c11b6be2cfc70aeae2c41a6032e4c17d656",
+        "synthetic_glyphs": 0
+      },
+      "paint_sha256": "7b96dfbbec3c89dfa9da1599d4fb37d98888622b50e40ca1135620bdac9ec56f",
+      "selection_sha256": "6ab8dfdf48114191b6e1bc4b3dd3a6c380f8edc94ca6731f3b9b7fc911d563d8"
+    }
+  ],
+  "existing_paint_geometry_output_equivalence": {
+    "rows_compared": 96,
+    "conditions": 32,
+    "samples_per_condition": 3,
+    "all_paint_caret_selection_geometry_warnings_match": true,
+    "sample_zero_results": [
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 7672,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 144,
+            "runs": 240,
+            "sha256": "3104559e88f5ea7b5ee5cf9708d3b2b6e7cceff17066ed4f428ab7169681e712",
+            "synthetic_glyphs": 0
+          },
+          "id": "latin-long",
+          "operation": "paint_spans",
+          "paint": "fc7e4666501b7b3a8d23166d1bfa26a91239a155950ba9450bb165fe8534f450",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 3457,
+            "allocated_bytes": 6475456,
+            "net_bytes": 1183104,
+            "peak_extra_bytes": 1189620
+          },
+          "final": {
+            "calls": 2593,
+            "allocated_bytes": 5038912,
+            "net_bytes": 1183104,
+            "peak_extra_bytes": 1189620
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 7672,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 144,
+            "runs": 240,
+            "sha256": "3104559e88f5ea7b5ee5cf9708d3b2b6e7cceff17066ed4f428ab7169681e712",
+            "synthetic_glyphs": 0
+          },
+          "id": "latin-long",
+          "layout": "9828bc44ff46752ed42f8ee0eb6754988a92e77155f599f14d141017fc72e2c5",
+          "operation": "LineLayout::new",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 4035,
+            "allocated_bytes": 5478272,
+            "net_bytes": 1912832,
+            "peak_extra_bytes": 1916288
+          },
+          "final": {
+            "calls": 3315,
+            "allocated_bytes": 4336640,
+            "net_bytes": 1913984,
+            "peak_extra_bytes": 1917440
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 6040,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 97,
+            "runs": 192,
+            "sha256": "1126923a8347056e6230840a9a05a3fcd1a8feb730a73deb8e5dff4130c558f6",
+            "synthetic_glyphs": 0
+          },
+          "id": "arabic-long",
+          "operation": "paint_spans",
+          "paint": "dcfa1c80bb6090628ca0b4e66e2286361ed9eb22437f40533cbca137efe04e51",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 2316,
+            "allocated_bytes": 4438396,
+            "net_bytes": 789784,
+            "peak_extra_bytes": 797196
+          },
+          "final": {
+            "calls": 1737,
+            "allocated_bytes": 3479692,
+            "net_bytes": 789784,
+            "peak_extra_bytes": 797196
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 6040,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 97,
+            "runs": 192,
+            "sha256": "1126923a8347056e6230840a9a05a3fcd1a8feb730a73deb8e5dff4130c558f6",
+            "synthetic_glyphs": 0
+          },
+          "id": "arabic-long",
+          "layout": "52425dd8f65a4075886f80fd430cb835ef1e0413ffeb4f8f7d2c85e96c551088",
+          "operation": "LineLayout::new",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 2704,
+            "allocated_bytes": 3774072,
+            "net_bytes": 1394752,
+            "peak_extra_bytes": 1397080
+          },
+          "final": {
+            "calls": 2222,
+            "allocated_bytes": 3012224,
+            "net_bytes": 1395528,
+            "peak_extra_bytes": 1397856
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 144,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 5,
+            "runs": 8,
+            "sha256": "a5b5b76bbd107268226caf29ab53a134eb643d7746e05c3e44cb878cadebd546",
+            "synthetic_glyphs": 0
+          },
+          "id": "combining-latin",
+          "operation": "paint_spans",
+          "paint": "d9f48334dbedf0a9c8f398ee2b1b95d469839bfde366dcf9894eabff28373830",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 100,
+            "allocated_bytes": 159372,
+            "net_bytes": 29304,
+            "peak_extra_bytes": 35308
+          },
+          "final": {
+            "calls": 75,
+            "allocated_bytes": 124220,
+            "net_bytes": 29304,
+            "peak_extra_bytes": 35308
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 144,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 5,
+            "runs": 8,
+            "sha256": "a5b5b76bbd107268226caf29ab53a134eb643d7746e05c3e44cb878cadebd546",
+            "synthetic_glyphs": 0
+          },
+          "id": "combining-latin",
+          "layout": "9adc780468329951a6b8405374a05f72ff503cf629ad4bb5e63b6bd184e7c1e4",
+          "operation": "LineLayout::new",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 117,
+            "allocated_bytes": 127640,
+            "net_bytes": 40768,
+            "peak_extra_bytes": 41232
+          },
+          "final": {
+            "calls": 97,
+            "allocated_bytes": 99776,
+            "net_bytes": 40808,
+            "peak_extra_bytes": 41272
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 632,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 17,
+            "runs": 17,
+            "sha256": "82e33cd96d0f76b8040a5549e12c6e3d6980cf9f98d7f2db1d9b09a175eae519",
+            "synthetic_glyphs": 0
+          },
+          "id": "nested-atomic",
+          "operation": "paint_spans",
+          "paint": "4de4e1692373f3aad7af303eaa95c5e72bbfc50746a508e4ae51adcb9dbb9c44",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 413,
+            "allocated_bytes": 714260,
+            "net_bytes": 132504,
+            "peak_extra_bytes": 138032
+          },
+          "final": {
+            "calls": 314,
+            "allocated_bytes": 553636,
+            "net_bytes": 132504,
+            "peak_extra_bytes": 138032
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 632,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 17,
+            "runs": 17,
+            "sha256": "82e33cd96d0f76b8040a5549e12c6e3d6980cf9f98d7f2db1d9b09a175eae519",
+            "synthetic_glyphs": 0
+          },
+          "id": "nested-atomic",
+          "layout": "db286a80bde872d9b91caac1160efdc7cfe1bff3c18482e3e2e1b23e6615bdc0",
+          "operation": "LineLayout::new",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 464,
+            "allocated_bytes": 584056,
+            "net_bytes": 185536,
+            "peak_extra_bytes": 185944
+          },
+          "final": {
+            "calls": 382,
+            "allocated_bytes": 456448,
+            "net_bytes": 185672,
+            "peak_extra_bytes": 186080
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 176,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 24,
+            "runs": 31,
+            "sha256": "d0bc69cf2b26f7247a53a8c321003ca91222ff2a40208411c8e0d67420bc974d",
+            "synthetic_glyphs": 0
+          },
+          "id": "preserved-tabs",
+          "operation": "paint_spans",
+          "paint": "3b33dd9e26e11b38e0e7c3fee652680d284f3be254045da7d5be58aeb1cb299e",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 305,
+            "allocated_bytes": 159104,
+            "net_bytes": 41536,
+            "peak_extra_bytes": 42360
+          },
+          "final": {
+            "calls": 225,
+            "allocated_bytes": 122496,
+            "net_bytes": 41536,
+            "peak_extra_bytes": 42368
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 176,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 24,
+            "runs": 31,
+            "sha256": "d0bc69cf2b26f7247a53a8c321003ca91222ff2a40208411c8e0d67420bc974d",
+            "synthetic_glyphs": 0
+          },
+          "id": "preserved-tabs",
+          "layout": "85b4162ace2a8803e36048caf16166c7a7bd80146246a202790eba6ceaf63239",
+          "operation": "LineLayout::new",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 403,
+            "allocated_bytes": 156192,
+            "net_bytes": 64192,
+            "peak_extra_bytes": 64768
+          },
+          "final": {
+            "calls": 347,
+            "allocated_bytes": 129760,
+            "net_bytes": 64384,
+            "peak_extra_bytes": 64960
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 1,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "0f1bd5cfa6ac378f3c3148fd45d31543c8d610b0b72227e4164cc1f33c5ac5c2",
+            "synthetic_glyphs": 0
+          },
+          "id": "single-glyph",
+          "operation": "paint_spans",
+          "paint": "28dd1b2c931ee9d2140bf813b5fbe063a562633f09d42b8982e92d4e40a61655",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 7,
+            "allocated_bytes": 1616,
+            "net_bytes": 536,
+            "peak_extra_bytes": 976
+          },
+          "final": {
+            "calls": 5,
+            "allocated_bytes": 1240,
+            "net_bytes": 536,
+            "peak_extra_bytes": 984
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 1,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "0f1bd5cfa6ac378f3c3148fd45d31543c8d610b0b72227e4164cc1f33c5ac5c2",
+            "synthetic_glyphs": 0
+          },
+          "id": "single-glyph",
+          "layout": "a9784350a080acf4d0bb7dee34624edf958bcae1b98d07c6a6891be282de992b",
+          "operation": "LineLayout::new",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 10,
+            "allocated_bytes": 1336,
+            "net_bytes": 704,
+            "peak_extra_bytes": 728
+          },
+          "final": {
+            "calls": 9,
+            "allocated_bytes": 1088,
+            "net_bytes": 712,
+            "peak_extra_bytes": 736
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 13,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "3c30db9df11b4d0a62a7735444c29dbf2b96e3e270eff7c4b7c24ff4c4cdbe2f",
+            "synthetic_glyphs": 0
+          },
+          "id": "combining-marks",
+          "operation": "paint_spans",
+          "paint": "77f2acc2207aef449f0ce6c929d97da5847f1809217f294207e6ac79299537e1",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 15,
+            "allocated_bytes": 8912,
+            "net_bytes": 2072,
+            "peak_extra_bytes": 2896
+          },
+          "final": {
+            "calls": 11,
+            "allocated_bytes": 6616,
+            "net_bytes": 2072,
+            "peak_extra_bytes": 2904
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 13,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "3c30db9df11b4d0a62a7735444c29dbf2b96e3e270eff7c4b7c24ff4c4cdbe2f",
+            "synthetic_glyphs": 0
+          },
+          "id": "combining-marks",
+          "layout": "a43b309de1c7d6294adb5c15ee901bca619d673ab63e5bdff753cf1130f162f9",
+          "operation": "LineLayout::new",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 21,
+            "allocated_bytes": 9080,
+            "net_bytes": 3520,
+            "peak_extra_bytes": 3792
+          },
+          "final": {
+            "calls": 18,
+            "allocated_bytes": 7296,
+            "net_bytes": 3528,
+            "peak_extra_bytes": 3800
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 1,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "5f90c1395084af82281b33d69b652069c4f4659a3600615cea1ded1307c75b7f",
+            "synthetic_glyphs": 0
+          },
+          "id": "gdef-ligature",
+          "operation": "paint_spans",
+          "paint": "05c8ba43d20d3891d0b58da612605eb343c00bf350ab3b33c215569a52ee1471",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 8,
+            "allocated_bytes": 1624,
+            "net_bytes": 536,
+            "peak_extra_bytes": 976
+          },
+          "final": {
+            "calls": 6,
+            "allocated_bytes": 1248,
+            "net_bytes": 536,
+            "peak_extra_bytes": 984
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 1,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "5f90c1395084af82281b33d69b652069c4f4659a3600615cea1ded1307c75b7f",
+            "synthetic_glyphs": 0
+          },
+          "id": "gdef-ligature",
+          "layout": "261d2c9f98ad69e906b1af9243884637ff99849e7ea0ba4221cd3252ad95e6f2",
+          "operation": "LineLayout::new",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 12,
+            "allocated_bytes": 1856,
+            "net_bytes": 1088,
+            "peak_extra_bytes": 1112
+          },
+          "final": {
+            "calls": 11,
+            "allocated_bytes": 1608,
+            "net_bytes": 1096,
+            "peak_extra_bytes": 1120
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 48,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "29ab084d5a4ba6a43d379dab33755d0aaaebac7ce2ee0b33b536412d9984c6e6",
+            "synthetic_glyphs": 0
+          },
+          "id": "rtl-arabic",
+          "operation": "paint_spans",
+          "paint": "8d4128eb62e016ed972662dbe5b757820a79e289b8fcb212727226893e8efc73",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 24,
+            "allocated_bytes": 44240,
+            "net_bytes": 8216,
+            "peak_extra_bytes": 14680
+          },
+          "final": {
+            "calls": 18,
+            "allocated_bytes": 34264,
+            "net_bytes": 8216,
+            "peak_extra_bytes": 14680
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 48,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "29ab084d5a4ba6a43d379dab33755d0aaaebac7ce2ee0b33b536412d9984c6e6",
+            "synthetic_glyphs": 0
+          },
+          "id": "rtl-arabic",
+          "layout": "923c651245c164ee8db56b3260b73d59b033e5c64e10c8a990164c28a5ecc87d",
+          "operation": "LineLayout::new",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 31,
+            "allocated_bytes": 37368,
+            "net_bytes": 12608,
+            "peak_extra_bytes": 14032
+          },
+          "final": {
+            "calls": 26,
+            "allocated_bytes": 29440,
+            "net_bytes": 12616,
+            "peak_extra_bytes": 14040
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 60,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "8e4a96a5e52b2e65439be29fe3f28e1b1cc7e69c8a65d005e3c46945ea67c483",
+            "synthetic_glyphs": 0
+          },
+          "id": "spacing",
+          "operation": "paint_spans",
+          "paint": "5a1bb04070db0bfbb276f7ae3a789048585fda675491a99a00fd8ca8afc79b7b",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 24,
+            "allocated_bytes": 45776,
+            "net_bytes": 8216,
+            "peak_extra_bytes": 16216
+          },
+          "final": {
+            "calls": 18,
+            "allocated_bytes": 35800,
+            "net_bytes": 8216,
+            "peak_extra_bytes": 16216
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 60,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "8e4a96a5e52b2e65439be29fe3f28e1b1cc7e69c8a65d005e3c46945ea67c483",
+            "synthetic_glyphs": 0
+          },
+          "id": "spacing",
+          "layout": "1d60d9b1580097d9798416870e21ed2ce9ef53a348bfc52396c192a1ca183869",
+          "operation": "LineLayout::new",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 31,
+            "allocated_bytes": 38904,
+            "net_bytes": 14144,
+            "peak_extra_bytes": 15568
+          },
+          "final": {
+            "calls": 26,
+            "allocated_bytes": 30976,
+            "net_bytes": 14152,
+            "peak_extra_bytes": 15576
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 480,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 24,
+            "runs": 24,
+            "sha256": "9a8e17107988be0cea6e997fa610d056719132d7d1d8868dbc87320fc2b7751b",
+            "synthetic_glyphs": 0
+          },
+          "id": "justification",
+          "operation": "paint_spans",
+          "paint": "7601fd4765f31761cbecd395b6935c8b3081136dc521504d61f6063645e8bbfc",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 420,
+            "allocated_bytes": 456432,
+            "net_bytes": 86592,
+            "peak_extra_bytes": 87920
+          },
+          "final": {
+            "calls": 306,
+            "allocated_bytes": 355392,
+            "net_bytes": 86592,
+            "peak_extra_bytes": 87936
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 480,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 24,
+            "runs": 24,
+            "sha256": "9a8e17107988be0cea6e997fa610d056719132d7d1d8868dbc87320fc2b7751b",
+            "synthetic_glyphs": 0
+          },
+          "id": "justification",
+          "layout": "4fe3dd9d0c9ef83dc5eaadd9c2d46ce07430344f28848798d01ad59ab082619e",
+          "operation": "LineLayout::new",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 525,
+            "allocated_bytes": 382272,
+            "net_bytes": 133632,
+            "peak_extra_bytes": 134208
+          },
+          "final": {
+            "calls": 435,
+            "allocated_bytes": 302592,
+            "net_bytes": 133824,
+            "peak_extra_bytes": 134400
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 6,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 2,
+            "runs": 2,
+            "sha256": "572df633a1c6eb34037e5148b3960f275a1892840d462c140b36f92bffcf06ae",
+            "synthetic_glyphs": 0
+          },
+          "id": "soft-hyphen-overlay",
+          "operation": "paint_spans",
+          "paint": "d7affa17db14731bc9e61f2f656e1d78b3c03e5935fb63638f779209fcd1cd5f",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 14,
+            "allocated_bytes": 3236,
+            "net_bytes": 1072,
+            "peak_extra_bytes": 1512
+          },
+          "final": {
+            "calls": 10,
+            "allocated_bytes": 2484,
+            "net_bytes": 1072,
+            "peak_extra_bytes": 1520
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 6,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 2,
+            "runs": 2,
+            "sha256": "572df633a1c6eb34037e5148b3960f275a1892840d462c140b36f92bffcf06ae",
+            "synthetic_glyphs": 0
+          },
+          "id": "soft-hyphen-overlay",
+          "layout": "b968258f1df56f2905b00e3332afa4795095df22da8e31fd8313840ce08b0ac4",
+          "operation": "LineLayout::new",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 20,
+            "allocated_bytes": 3828,
+            "net_bytes": 2304,
+            "peak_extra_bytes": 2352
+          },
+          "final": {
+            "calls": 18,
+            "allocated_bytes": 3332,
+            "net_bytes": 2320,
+            "peak_extra_bytes": 2368
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 5,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 2,
+            "sha256": "da6425da060e5ffd398e128f8440e3fef1f6a6d45e15737217b27e5bc6d6420b",
+            "synthetic_glyphs": 0
+          },
+          "id": "ruby-padding",
+          "operation": "paint_spans",
+          "paint": "0370ad97bd7f98698660e2223249b68e0bae0bb960c04994f284f18500a599c5",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 8,
+            "allocated_bytes": 1668,
+            "net_bytes": 536,
+            "peak_extra_bytes": 1028
+          },
+          "final": {
+            "calls": 6,
+            "allocated_bytes": 1292,
+            "net_bytes": 536,
+            "peak_extra_bytes": 1036
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 5,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 2,
+            "sha256": "da6425da060e5ffd398e128f8440e3fef1f6a6d45e15737217b27e5bc6d6420b",
+            "synthetic_glyphs": 0
+          },
+          "id": "ruby-padding",
+          "layout": "dde5db57067e2d72136f3dce634a44d1b797b6bdd509dcc91335ef5beceae3f6",
+          "operation": "LineLayout::new",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 27,
+            "allocated_bytes": 5016,
+            "net_bytes": 3216,
+            "peak_extra_bytes": 3240
+          },
+          "final": {
+            "calls": 25,
+            "allocated_bytes": 4520,
+            "net_bytes": 3232,
+            "peak_extra_bytes": 3256
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 4,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "7a291e0214535b6a2b7d7f5a5bb5e0f07d5b3ce6a63b6c2c60465c5d5a237a6d",
+            "synthetic_glyphs": 0
+          },
+          "id": "vertical-combine",
+          "operation": "paint_spans",
+          "paint": "b9acdf0bf91373250f49ed10effc420fac29e7963c5654847b997e7781cf2629",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 7,
+            "allocated_bytes": 1616,
+            "net_bytes": 536,
+            "peak_extra_bytes": 976
+          },
+          "final": {
+            "calls": 5,
+            "allocated_bytes": 1240,
+            "net_bytes": 536,
+            "peak_extra_bytes": 984
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 4,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "7a291e0214535b6a2b7d7f5a5bb5e0f07d5b3ce6a63b6c2c60465c5d5a237a6d",
+            "synthetic_glyphs": 0
+          },
+          "id": "vertical-combine",
+          "layout": "01f141185a4eff583da64744404cd4d03165785f00515dbbf9fd5c4244a0ca30",
+          "operation": "LineLayout::new",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 16,
+            "allocated_bytes": 2368,
+            "net_bytes": 1552,
+            "peak_extra_bytes": 1576
+          },
+          "final": {
+            "calls": 15,
+            "allocated_bytes": 2120,
+            "net_bytes": 1560,
+            "peak_extra_bytes": 1584
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 1024,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "0e374817b8ac294a50d65db446fbaf60fe6fb3d46f70cc6b2bd80c87b820cb8b",
+            "synthetic_glyphs": 0
+          },
+          "id": "long-run",
+          "operation": "paint_spans",
+          "paint": "99d35c10e16dfb775238bd0b70769f5069dfbd01ca9f4e5639d2e705da18ac6a",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 41,
+            "allocated_bytes": 818384,
+            "net_bytes": 131096,
+            "peak_extra_bytes": 262488
+          },
+          "final": {
+            "calls": 31,
+            "allocated_bytes": 654808,
+            "net_bytes": 131096,
+            "peak_extra_bytes": 262488
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 1024,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "0e374817b8ac294a50d65db446fbaf60fe6fb3d46f70cc6b2bd80c87b820cb8b",
+            "synthetic_glyphs": 0
+          },
+          "id": "long-run",
+          "layout": "e6ab989befcf9b98d6031226ffc6659be41693098c24d73bfb24250e20b8a5bc",
+          "operation": "LineLayout::new",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 55,
+            "allocated_bytes": 810488,
+            "net_bytes": 229696,
+            "peak_extra_bytes": 254160
+          },
+          "final": {
+            "calls": 46,
+            "allocated_bytes": 679680,
+            "net_bytes": 229704,
+            "peak_extra_bytes": 254168
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 256,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 256,
+            "sha256": "f32965ebe579bd1b7aefc1147cd2eed37402850a36f2e4678a25c93d2660a741",
+            "synthetic_glyphs": 0
+          },
+          "id": "many-short-runs",
+          "operation": "paint_spans",
+          "paint": "874f0f7a2fe8c7a8de2fed3765ff3a8ccec95294d2716820b39872cfe2c786db",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 48,
+            "allocated_bytes": 274092,
+            "net_bytes": 32792,
+            "peak_extra_bytes": 90664
+          },
+          "final": {
+            "calls": 40,
+            "allocated_bytes": 233396,
+            "net_bytes": 32792,
+            "peak_extra_bytes": 90664
+          }
+        }
+      },
+      {
+        "identity": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 256,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 256,
+            "sha256": "f32965ebe579bd1b7aefc1147cd2eed37402850a36f2e4678a25c93d2660a741",
+            "synthetic_glyphs": 0
+          },
+          "id": "many-short-runs",
+          "layout": "f05f040b6ec2a193d0761770a2697da90d969ea65fe8d5a922f96c10a6858782",
+          "operation": "LineLayout::new",
+          "warnings": [
+            "build:[]",
+            "layout:[]"
+          ]
+        },
+        "allocation": {
+          "baseline": {
+            "calls": 44,
+            "allocated_bytes": 198136,
+            "net_bytes": 57664,
+            "peak_extra_bytes": 63696
+          },
+          "final": {
+            "calls": 37,
+            "allocated_bytes": 165632,
+            "net_bytes": 57672,
+            "peak_extra_bytes": 63704
+          }
+        }
+      }
+    ]
+  },
+  "callgrind": {
+    "command_template": "valgrind --tool=callgrind --callgrind-out-file=\"$perf_dir/$version-selection.callgrind\" \"$perf_dir/$version-source_geometry-time\" selection plain 16384 100",
+    "scope": "whole process; selection_rects inclusive count includes warmup and validation calls as well as the 100 measured iterations; instructions are not elapsed time",
+    "results": {
+      "baseline": {
+        "whole_process_instructions": 2355897110,
+        "selection_rects_inclusive_instructions": 219888026
+      },
+      "final": {
+        "whole_process_instructions": 2223072389,
+        "selection_rects_inclusive_instructions": 90283310
+      }
+    }
+  },
+  "hyperfine": [
+    {
+      "condition": "index-latin-long-8",
+      "runs_per_side": 10,
+      "warmups_per_side": 3,
+      "scope": "whole process including fixture loading, preparation, warmups and validation hashes",
+      "baseline": {
+        "mean": 0.24710721406,
+        "stddev": 0.0022518839560523893,
+        "median": 0.24676403946,
+        "min": 0.24375118596,
+        "max": 0.25103367696000006,
+        "times": [
+          0.24682001996,
+          0.24641911196000002,
+          0.24670805896,
+          0.24858792696,
+          0.24375118596,
+          0.24377982296,
+          0.24667383496,
+          0.25103367696000006,
+          0.24851528896,
+          0.24878321296000003
+        ],
+        "exit_codes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "final": {
+        "mean": 0.23540262346000002,
+        "stddev": 0.002120680535592985,
+        "median": 0.23545671846,
+        "min": 0.23224791696,
+        "max": 0.23829310796,
+        "times": [
+          0.23819420896000001,
+          0.23829310796,
+          0.23421131796,
+          0.23547431896,
+          0.23716679396,
+          0.23639752496,
+          0.23338400896,
+          0.23543911796,
+          0.23224791696,
+          0.23321791796000002
+        ],
+        "exit_codes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "condition": "paint-latin-long-8",
+      "runs_per_side": 10,
+      "warmups_per_side": 3,
+      "scope": "whole process including fixture loading, preparation, warmups and validation hashes",
+      "baseline": {
+        "mean": 0.26273196772,
+        "stddev": 0.0009674183310003783,
+        "median": 0.26261243572000004,
+        "min": 0.26169582972000005,
+        "max": 0.26485106072000003,
+        "times": [
+          0.26186967272,
+          0.26195900372,
+          0.26316850372,
+          0.26169582972000005,
+          0.26269474672000004,
+          0.26485106072000003,
+          0.26214723572000004,
+          0.26258620972,
+          0.26263866172000006,
+          0.26370875272000005
+        ],
+        "exit_codes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "final": {
+        "mean": 0.25096504782,
+        "stddev": 0.0009274206062639464,
+        "median": 0.25080300172000003,
+        "min": 0.24957555172,
+        "max": 0.25219402672,
+        "times": [
+          0.25193364572000004,
+          0.25188210072,
+          0.25062350072,
+          0.25219402672,
+          0.25012711472000004,
+          0.25058892772,
+          0.24957555172,
+          0.25174981472,
+          0.24999329272000004,
+          0.25098250272
+        ],
+        "exit_codes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "condition": "selection-plain-16384",
+      "runs_per_side": 10,
+      "warmups_per_side": 3,
+      "scope": "whole process including fixture loading, preparation, warmups and validation hashes",
+      "baseline": {
+        "mean": 0.36273069048,
+        "stddev": 0.0008261292554485925,
+        "median": 0.36255050538,
+        "min": 0.36115270488,
+        "max": 0.36399971188,
+        "times": [
+          0.36115270488,
+          0.36250175388,
+          0.36385150088,
+          0.36256098188,
+          0.36233356788000004,
+          0.36254002888000003,
+          0.36332473288,
+          0.36270751588,
+          0.36399971188,
+          0.36233440588
+        ],
+        "exit_codes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "final": {
+        "mean": 0.25103609718000003,
+        "stddev": 0.001132544164550275,
+        "median": 0.25130009638,
+        "min": 0.24900395388000002,
+        "max": 0.25252922088,
+        "times": [
+          0.25069125988,
+          0.25043926088,
+          0.24900395388000002,
+          0.24949181788000002,
+          0.25252922088,
+          0.25194965088,
+          0.25162976288,
+          0.25120280288,
+          0.25139738988,
+          0.25202585188
+        ],
+        "exit_codes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    }
+  ],
+  "rejected_experiment": {
+    "change": "per-run punctuation outline bounds cache",
+    "reason": "Existing japanese-long scale8 has little reuse within each run; allocations and instructions increased. Repeated single-run punctuation regression proved reuse but did not establish benefit for this corpus. Cache and related test instrumentation were removed.",
+    "allocation_before_after": {
+      "calls": [
+        16919,
+        17303
+      ],
+      "allocated_bytes": [
+        4111273,
+        4155817
+      ]
+    },
+    "callgrind_punctuation_inclusive_instructions": [
+      301197019,
+      303606248
+    ],
+    "callgrind_bounds_inclusive_instructions": [
+      193177920,
+      193088064
+    ]
+  },
+  "regression_evidence": {
+    "selection_allocation_red": "Original code: 1024-character full selection 13 calls / 49280 bytes, exceeding 512-byte bound. Final passes 1024/4096/16384 chars, short/full selections, forward/reversed endpoints, with independent caret-based rectangle expectation.",
+    "source_geometry_allocation_red": "Original code: 1024-character paint 41 calls / 818412 bytes, exceeding 716800-byte bound. Final paint and hit allocation guards pass at 1024/4096 characters.",
+    "ruby_guard": "Eight line-layout constructions improve from 47 to 40 allocations each; tighten call cap to <=320 and byte cap to <1650000 (observed 1621248).",
+    "semantic_coverage": "Existing exhaustive selection oracle and GDEF/grapheme/bidi/TCY/ruby/vertical cases, plus unchanged fixed glyph snapshots. Independent static review reported no critical/important findings.",
+    "normal_workspace_note": "Normal workspace run during implementation included one subsequently removed punctuation experiment test; final accesskit/no-default/complex-only runs use the final engine source."
+  },
+  "validation": [
+    {
+      "command": "cargo test --offline --locked --workspace",
+      "exit_code": 0,
+      "passed": 1682,
+      "test_targets": 100,
+      "ignored": 9
+    },
+    {
+      "command": "cargo test --offline --locked --workspace --features shodo-harness/accesskit",
+      "exit_code": 0,
+      "passed": 1697,
+      "test_targets": 101,
+      "ignored": 9
+    },
+    {
+      "command": "cargo test --offline --locked --release -p shodo --no-default-features",
+      "exit_code": 0,
+      "passed": 1146,
+      "test_targets": 35,
+      "ignored": 9
+    },
+    {
+      "command": "cargo test --offline --locked --release -p shodo --no-default-features --features complex-scripts",
+      "exit_code": 0,
+      "passed": 1148,
+      "test_targets": 35,
+      "ignored": 9
+    },
+    {
+      "command": "cargo test --offline --locked --release -p shodo-bench --features allocation-counting --test allocator --test probe --test ruby_hit_path_allocations --test ruby_base_caret_range --test ruby_base_decoration --test style_memory --test suppressed_warning_format --test selection_allocations --test paint_geometry_allocations",
+      "exit_code": 0,
+      "passed": 17,
+      "test_targets": 9,
+      "ignored": 0
+    },
+    {
+      "command": "cargo fmt --all --check",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo clippy --offline --locked --workspace --all-targets -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo clippy --offline --locked --workspace --all-targets --features shodo-harness/accesskit -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo clippy --offline --locked -p shodo-bench --all-targets --features allocation-counting -- -D warnings -A clippy::bool_comparison -A clippy::needless_question_mark",
+      "exit_code": 0,
+      "note": "Two existing warnings in suppressed_warning_format.rs and font_match_probe.rs were allowed for this extra feature check; changed targets remained warning-free."
+    },
+    {
+      "command": "RUSTDOCFLAGS=\"-D warnings\" cargo doc --offline --locked --workspace --no-deps --features shodo-harness/accesskit",
+      "exit_code": 0
+    }
+  ],
+  "reproduction": [
+    "mkdir -p \"$HOME/tmp\"; perf_dir=$(mktemp -d -p \"$HOME/tmp\" shodo-source-geometry.XXXXXX); export TMPDIR=\"$HOME/tmp\"",
+    "Create separate baseline (65ae1a0453f3a6594ceff4887152e5fbf201afcb) and candidate checkouts. Copy the candidate source_geometry example into baseline so both use exactly the same harness.",
+    "In each checkout, use a distinct CARGO_TARGET_DIR=\"$perf_dir/$version-target\" and CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=/usr/bin/env. Run cargo build --offline --locked --release -p shodo-bench --example source_geometry --example paint_geometry --features allocation-counting, then copy both executables to \"$perf_dir/$version-$example-alloc\". Rebuild without allocation-counting and copy timing executables separately.",
+    "Run source_geometry OPERATION CASE SCALE ITERATIONS using the conditions and iteration counts in results; allocations use ITERATIONS=1 and 3 samples, timing uses taskset -c 10 and ABBA repeated six times. Verify geometry/paint/selection hashes match in every result.",
+    "Run SHODO_GEOMETRY_SAMPLES=3 \"$perf_dir/$version-paint_geometry-alloc\"; compare all fields except measure for the 96 rows.",
+    "Run hyperfine --warmup 3 --runs 10 --export-json \"$perf_dir/hyperfine.json\" \"taskset -c 10 $perf_dir/baseline-source_geometry-time selection plain 16384 2000\" \"taskset -c 10 $perf_dir/final-source_geometry-time selection plain 16384 2000\".",
+    "After preserving conditions/results, remove only the temporary files and disposable worktrees created for this reproduction."
+  ],
+  "raw_result_sha256": {
+    "final-allocations.json": "3fbd17c08f6834d9fdfce96d185f050ec63b3cebfbf0cd24088e450fd92594f4",
+    "final-timing.json": "2a1b28b9bd3ddf53185a4d7db04b2800da7a3161d804eb0534e4612b8b745f2b",
+    "baseline-final-paint.jsonl": "f4ba1ecdab0a37082c9686a729043f43789ceab9a22d5855f1bcd382546523d9",
+    "final-final-paint.jsonl": "8b71efdc413bb9d6b9081e3d96aa022f1fd271f47b299771429106c5bdca1a23",
+    "baseline-selection.callgrind": "d65e88e484a573e309e2b2b193d7f60b72496401a715c026b2abfc69af504929",
+    "final-selection.callgrind": "1c1c0098177d783095672b1a418c134862f2916b35a5ecee8cadf3af8181a358"
+  }
+}

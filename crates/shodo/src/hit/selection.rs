@@ -1,5 +1,27 @@
 use super::{LineLayout, TextPosition};
 use crate::geometry::LogicalRect;
+
+pub(super) fn inline_order(a: &LogicalRect, b: &LogicalRect) -> std::cmp::Ordering {
+    a.block_start
+        .total_cmp(&b.block_start)
+        .then(a.block_size.total_cmp(&b.block_size))
+        .then(a.inline_start.total_cmp(&b.inline_start))
+}
+
+fn merge_inline(previous: &mut LogicalRect, rect: &LogicalRect) -> bool {
+    if previous.block_start == rect.block_start
+        && previous.block_size == rect.block_size
+        && rect.inline_start <= previous.inline_start + previous.inline_size
+    {
+        previous.inline_size = (rect.inline_start + rect.inline_size)
+            .max(previous.inline_start + previous.inline_size)
+            - previous.inline_start;
+        true
+    } else {
+        false
+    }
+}
+
 impl LineLayout<'_> {
     /// Select source order across the supplied line datasets. Reverse endpoints
     /// are normalized. Bidi gaps remain separate; only touching equal-height
@@ -28,51 +50,38 @@ impl LineLayout<'_> {
                     && s.text.end > from
                     && s.rect.inline_size > 0.0
                     && s.rect.block_size > 0.0
+                    && (!index.selection_sorted
+                        || !rects
+                            .last_mut()
+                            .is_some_and(|previous| merge_inline(previous, &s.rect)))
                 {
                     rects.push(s.rect);
                 }
             });
-            rects.sort_by(|a, b| {
-                a.block_start
-                    .total_cmp(&b.block_start)
-                    .then(a.block_size.total_cmp(&b.block_size))
-                    .then(a.inline_start.total_cmp(&b.inline_start))
-            });
-            let mut merged: Vec<LogicalRect> = Vec::new();
-            for rect in rects {
-                if let Some(previous) = merged.last_mut()
-                    && previous.block_start == rect.block_start
-                    && previous.block_size == rect.block_size
-                    && rect.inline_start <= previous.inline_start + previous.inline_size
-                {
-                    previous.inline_size = (rect.inline_start + rect.inline_size)
-                        .max(previous.inline_start + previous.inline_size)
-                        - previous.inline_start;
-                } else {
-                    merged.push(rect);
-                }
+            if !index.selection_sorted {
+                rects.sort_by(inline_order);
+                rects.dedup_by(|rect, previous| merge_inline(previous, rect));
             }
-            merged.sort_by(|a, b| {
+            rects.sort_by(|a, b| {
                 a.inline_start
                     .total_cmp(&b.inline_start)
                     .then(a.inline_size.total_cmp(&b.inline_size))
                     .then(a.block_start.total_cmp(&b.block_start))
             });
-            let mut final_rects: Vec<LogicalRect> = Vec::new();
-            for rect in merged {
-                if let Some(previous) = final_rects.last_mut()
-                    && previous.inline_start == rect.inline_start
+            rects.dedup_by(|rect, previous| {
+                if previous.inline_start == rect.inline_start
                     && previous.inline_size == rect.inline_size
                     && rect.block_start <= previous.block_start + previous.block_size
                 {
                     previous.block_size = (rect.block_start + rect.block_size)
                         .max(previous.block_start + previous.block_size)
                         - previous.block_start;
+                    true
                 } else {
-                    final_rects.push(rect);
+                    false
                 }
-            }
-            result.extend(final_rects);
+            });
+            result.extend(rects);
         }
         result
     }
