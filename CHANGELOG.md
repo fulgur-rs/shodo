@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.16](https://github.com/fulgur-rs/shodo/compare/v0.0.15...v0.0.16) - 2026-10-06
+
+### Added
+
+- add the quirks-mode line strut predicate
+- add ParagraphStyle::line_height_quirk
+- bound ruby line measurement work per layout call
+
+### Fixed
+
+- apply the quirks-mode strut rule to ruby metric probes
+- suppress quirks-mode struts per line in retained metrics
+- charge restarted ruby walks and exempt the float placement probe
+- keep ruby range caches for both intrinsic atomic revisions
+- cap the ruby block size caches
+- charge ruby range cache hits like cold measurements
+
+### Other
+
+- pin DI as a known vertical-align difference
+- move ruby quirk parity tests into their own module
+- pin remaining quirks matrix cases and the ruby root strut
+- narrow quirk helpers and assert the trailing group bound
+- compute vertical-align group deltas once
+- pin shifts of suppressed and ghost vertical-align groups
+- rewrap the max_ruby_line_work field docs
+- stash range caches only once atomic revisions alternate
+- Merge pull request #232 from fulgur-rs/fix/shodo-tj5-cache-free-charges
+- pin refused block replays against a cache-free context
+
 ## [0.0.15](https://github.com/fulgur-rs/shodo/compare/v0.0.14...v0.0.15) - 2026-10-05
 
 ### Added
