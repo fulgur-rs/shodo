@@ -120,7 +120,10 @@ fn assert_quirk_parity(p: &Paragraph, atomics: &AtomicSizes) -> usize {
     for start in 0..n {
         if !matches!(
             p.data.units[start].kind,
-            UnitKind::Cluster { .. } | UnitKind::Atomic { .. } | UnitKind::Open { .. }
+            UnitKind::Cluster { .. }
+                | UnitKind::Atomic { .. }
+                | UnitKind::Open { .. }
+                | UnitKind::Close { .. }
         ) {
             continue;
         }
@@ -156,6 +159,22 @@ fn assert_quirk_parity(p: &Paragraph, atomics: &AtomicSizes) -> usize {
                 &mut sat,
             );
             assert_eq!(indexed.to_f32(), actual.block_size(), "{range:?}");
+            // With no ruby annotation expansion the scalar profile also
+            // exposes the baseline, including a zero-height pending line.
+            if p.data.ruby.containers.is_empty() {
+                let scalar = crate::line::metric_index::measure(
+                    &p.data,
+                    range.clone(),
+                    atomics,
+                    &mut cx,
+                    &mut sat,
+                );
+                assert_eq!(
+                    scalar.baseline.to_f32(),
+                    actual.baseline(crate::geometry::BaselineKind::Alphabetic),
+                    "baseline {range:?}"
+                );
+            }
             compared += 1;
         }
     }
@@ -290,4 +309,112 @@ fn quirk_index_matches_retained_with_hyphenated_edges() {
         b.push_text(TextSource::Generated { node: NodeId(2) }, "日\u{ad} ");
     });
     assert!(assert_quirk_parity(&p, &AtomicSizes::EMPTY) > 10);
+}
+
+#[test]
+fn pending_vertical_align_index_matches_retained_ranges() {
+    use crate::style::{LineHeight, VerticalAlign};
+    let mut atomics = AtomicSizes::new();
+    atomics.insert(
+        NodeId(90),
+        crate::AtomicSize {
+            inline_size: 2.0,
+            block_size: 2.0,
+            ..Default::default()
+        },
+    );
+    for outer in [
+        VerticalAlign::Baseline,
+        VerticalAlign::Top,
+        VerticalAlign::Bottom,
+    ] {
+        for inner in [
+            VerticalAlign::Baseline,
+            VerticalAlign::Top,
+            VerticalAlign::Bottom,
+            VerticalAlign::TextTop,
+            VerticalAlign::TextBottom,
+            VerticalAlign::Sub,
+            VerticalAlign::Middle,
+            VerticalAlign::Length(0.0),
+        ] {
+            for content in [false, true] {
+                let p = quirk_paragraph(true, |b| {
+                    let parent = InlineStyle {
+                        line_height: LineHeight::Px(60.0),
+                        vertical_align: outer,
+                        ..style(24.0)
+                    };
+                    let child = InlineStyle {
+                        vertical_align: inner,
+                        ..style(24.0)
+                    };
+                    b.open_inline(NodeId(100), &parent, Default::default());
+                    // A baseline ancestor between p and a pending child.
+                    b.open_inline(NodeId(101), &style(24.0), Default::default());
+                    b.open_inline(NodeId(102), &child, Default::default());
+                    if content {
+                        b.push_atomic(NodeId(90), &child, Default::default());
+                    }
+                    b.close_inline();
+                    b.close_inline();
+                    b.push_forced_break(NodeId(3));
+                    b.close_inline();
+                    b.push_forced_break(NodeId(4));
+                });
+                assert!(
+                    assert_quirk_parity(&p, &atomics) > 5,
+                    "{outer:?}/{inner:?}/{content}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn pending_forced_break_queries_do_not_rescan_descendants() {
+    use crate::style::{LineHeight, VerticalAlign};
+    let mut visits = Vec::new();
+    for count in [64, 128] {
+        let p = quirk_paragraph(true, |b| {
+            b.open_inline(
+                NodeId(100),
+                &InlineStyle {
+                    line_height: LineHeight::Px(60.0),
+                    ..style(24.0)
+                },
+                Default::default(),
+            );
+            for i in 0..count {
+                b.open_inline(
+                    NodeId(200 + i),
+                    &InlineStyle {
+                        vertical_align: VerticalAlign::Top,
+                        ..style(24.0)
+                    },
+                    Default::default(),
+                );
+                b.close_inline();
+            }
+            b.push_forced_break(NodeId(3));
+            b.close_inline();
+        });
+        let end = p.data.units.len() - 1;
+        let mut cx = LayoutContext::new();
+        for i in 0..count as usize {
+            let metrics = crate::line::metric_index::measure(
+                &p.data,
+                1 + 2 * i..end,
+                &AtomicSizes::EMPTY,
+                &mut cx,
+                &mut Saturation::default(),
+            );
+            assert_eq!(metrics.block_size.to_f32(), 60.0);
+        }
+        visits.push(cx.ruby_measure_visits);
+    }
+    assert!(
+        visits[1] < 3 * visits[0],
+        "pending descendants rescanned: {visits:?}"
+    );
 }

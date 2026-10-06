@@ -8,6 +8,7 @@
 //! The trailing run start, forced break credit and ruby root credit are
 //! answered from arrays precomputed in `new`.
 use super::super::metrics::RecordProfile;
+use super::super::quirk::{ContentCredit, CreditBox, content_credit};
 use super::scalar::{Bounds, union};
 use crate::LayoutContext;
 use crate::analysis::units::UnitKind;
@@ -21,7 +22,7 @@ pub(super) struct Side {
     pub(super) normal: Option<Bounds>,
     pub(super) raw: Option<Bounds>,
     /// Content that keeps a forced break from crediting its parent's strut.
-    pub(super) content: bool,
+    pub(super) content: ContentCredit,
 }
 
 impl Side {
@@ -29,12 +30,12 @@ impl Side {
         Self {
             normal: union(self.normal, o.normal),
             raw: union(self.raw, o.raw),
-            content: self.content || o.content,
+            content: self.content.join(o.content),
         }
     }
 
     /// Mirrors `Summary::profile`: only ungrouped profiles size the root.
-    pub(super) fn from(p: RecordProfile, content: bool) -> Self {
+    pub(super) fn from(p: RecordProfile, content: ContentCredit) -> Self {
         let bounds = Some(Bounds {
             top: p.top,
             bottom: p.bottom,
@@ -83,6 +84,8 @@ pub(super) struct QuirkIndex {
     forced: Vec<Option<u32>>,
     /// Open unit of each box.
     opens: Vec<u32>,
+    /// Static ancestor barriers, used by forced-break credit queries.
+    credit_boxes: Vec<CreditBox>,
     /// Prefix count of units covered by a ruby container.
     ruby: Vec<u32>,
     root: RecordProfile,
@@ -122,6 +125,14 @@ impl QuirkIndex {
         let size = n.max(1).next_power_of_two();
         let mut tree = vec![Leaf::default(); size * 2];
         let mut opens = vec![0u32; data.boxes.len()];
+        // Boxes are in preorder (build_units pushes parents before children).
+        let mut credit_boxes: Vec<CreditBox> = Vec::with_capacity(data.boxes.len());
+        for b in &data.boxes {
+            let parent = b
+                .parent
+                .map_or(CreditBox::ROOT, |p| credit_boxes[p as usize]);
+            credit_boxes.push(parent.child(data.styles[b.style as usize].vertical_align));
+        }
         let mut forced = Vec::with_capacity(n);
         let mut covered = vec![0i32; n + 1];
         for ruby in &data.ruby.containers {
@@ -138,10 +149,24 @@ impl QuirkIndex {
                 UnitKind::ForcedBreak => Some(i as u32),
                 _ => forced.last().copied().flatten(),
             });
+            let owner = match u.kind {
+                UnitKind::Open { box_index } | UnitKind::Close { box_index } => {
+                    credit_boxes[box_index as usize]
+                }
+                _ => u
+                    .parent_box
+                    .map_or(CreditBox::ROOT, |b| credit_boxes[b as usize]),
+            };
+            let credit = content_credit(data, i, owner);
+            let content = Side {
+                content: credit,
+                ..Default::default()
+            };
             tree[size + i] = match u.kind {
                 UnitKind::Cluster { .. } | UnitKind::Tab => {
-                    let strut = Side::from(u.parent_box.map_or(root, |b| boxes[b as usize]), true);
-                    let all = trimmed[i].map_or(strut, |p| strut.join(Side::from(p, true)));
+                    let strut =
+                        Side::from(u.parent_box.map_or(root, |b| boxes[b as usize]), credit);
+                    let all = trimmed[i].map_or(strut, |p| strut.join(Side::from(p, credit)));
                     Leaf {
                         all,
                         bare: strut,
@@ -153,10 +178,7 @@ impl QuirkIndex {
                     }
                 }
                 UnitKind::Atomic { .. } => {
-                    let side = Side {
-                        content: true,
-                        ..Default::default()
-                    };
+                    let side = content;
                     Leaf {
                         all: side,
                         bare: side,
@@ -166,18 +188,24 @@ impl QuirkIndex {
                 UnitKind::Open { box_index } => {
                     opens[box_index as usize] = i as u32;
                     if start_edge(data, box_index) {
-                        let side = Side::from(boxes[box_index as usize], true);
+                        let side = Side::from(boxes[box_index as usize], credit);
                         Leaf {
                             all: side,
                             bare: side,
                             kept: side,
                         }
                     } else {
-                        Leaf::default()
+                        // Empty pending children credit ancestors, but never
+                        // contribute their own strut through this Open.
+                        Leaf {
+                            all: content,
+                            bare: content,
+                            kept: content,
+                        }
                     }
                 }
                 UnitKind::Close { box_index } if end_edge(data, box_index) => {
-                    let side = Side::from(boxes[box_index as usize], true);
+                    let side = Side::from(boxes[box_index as usize], credit);
                     Leaf {
                         all: side,
                         bare: side,
@@ -255,6 +283,7 @@ impl QuirkIndex {
             obstructed,
             forced,
             opens,
+            credit_boxes,
             ruby,
             root,
         }
@@ -276,6 +305,12 @@ impl QuirkIndex {
     /// Whether a ruby container covers a unit of `range`.
     pub(super) fn ruby(&self, range: &Range<usize>) -> bool {
         self.ruby[range.end] > self.ruby[range.start]
+    }
+
+    pub(super) fn credited(&self, parent: Option<u32>, content: ContentCredit) -> bool {
+        parent
+            .map_or(CreditBox::ROOT, |b| self.credit_boxes[b as usize])
+            .credited(content)
     }
 
     /// The last forced break of `range` and the first unit whose content

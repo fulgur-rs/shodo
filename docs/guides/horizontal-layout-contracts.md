@@ -57,17 +57,20 @@ line only when, on that line:
 - its own inline-start border or padding (on the line holding its start) or
   inline-end border or padding (on the line holding its end) is nonzero —
   margins never count;
-- it holds a forced break and nothing else in the box on that line (text,
-  atomic inlines, or border/padding edges of its descendants count too);
+- it holds a forced break and has no metrics credited by earlier content
+  in its on-line subtree. Text, atomic inlines and inline border/padding
+  edges credit ancestors without an intervening `top`/`bottom` box. Empty
+  `text-top`/`text-bottom` children also credit their parent; `top`/`bottom`
+  children credit the nearest `top`/`bottom` ancestor or the root, even when
+  empty. Root and `top`/`bottom` boxes receive any such subtree credit;
 - it is the root inline box and the line holds ruby.
 
 A box that does not contribute is ignored only for sizing the line box;
 descendants still align to its font metrics. Matching Chromium, a
 `box-decoration-break: clone` edge repeated on a continuation line does not
-count, although CSS Inline 3 §5.3 speaks of fragments. Known differences from
-Chromium: the forced-break rule does not yet follow Blink's handling of
-vertical-align descendants (shodo-9kt). A `top`/`bottom`-aligned descendant
-with content does not keep its ancestor's forced break from contributing in
-Chromium, but does in shodo (shodo is shorter); an empty `top` or `text-top`
-child does keep it from contributing in Chromium, but not in shodo (shodo is
-taller). List-item lines do not force the root strut (shodo-qu8).
+count, although CSS Inline 3 §5.3 speaks of fragments. The forced-break
+credit follows Blink's pending vertical-align handling (shodo-9kt): a
+`top`/`bottom` child does not prevent a baseline ancestor's break strut,
+whereas an empty `text-top`/`text-bottom` child does. Empty immediate shifts
+(`sub`, `super`, `middle`, lengths) do not credit ancestors. List-item lines
+do not force the root strut (shodo-qu8).

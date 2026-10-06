@@ -717,11 +717,10 @@ fn vertical_align_children_of_suppressed_boxes_keep_matching_cases() {
     }
 }
 
-/// Known differences from Chromium 152 (shodo-9kt): Blink credits a parent
-/// through pending top/bottom (and empty text-top/bottom) descendants. Flip
-/// these when shodo-9kt lands.
+/// Chromium 152: pending top/bottom descendants bypass baseline ancestors,
+/// while empty text-top/bottom children still keep a br from adding a strut.
 #[test]
-fn known_pending_vertical_align_differences() {
+fn pending_vertical_align_controls_forced_break_struts() {
     let top = InlineStyle {
         vertical_align: VerticalAlign::Top,
         ..span(20.0)
@@ -736,7 +735,7 @@ fn known_pending_vertical_align_differences() {
             b.push_forced_break(NodeId(3));
             b.close_inline();
         }),
-        [2.0]
+        [40.0]
     );
     // BB: <span lh40><img va:top><br></span> — Chromium 40.
     assert_eq!(
@@ -746,7 +745,7 @@ fn known_pending_vertical_align_differences() {
             b.push_forced_break(NodeId(3));
             b.close_inline();
         }),
-        [2.0]
+        [40.0]
     );
     // CP: <span lh40><span va:top></span><br></span> — Chromium 40.
     assert_eq!(
@@ -773,7 +772,7 @@ fn known_pending_vertical_align_differences() {
             b.push_forced_break(NodeId(3));
             b.close_inline();
         }),
-        [2.0]
+        [40.0]
     );
     // CL: <span lh40><span lh10><span va:top><img></span></span><br></span>
     // — Chromium 40.
@@ -788,7 +787,7 @@ fn known_pending_vertical_align_differences() {
             b.push_forced_break(NodeId(3));
             b.close_inline();
         }),
-        [2.0]
+        [40.0]
     );
     // CE: <span lh60><span lh40 va:top><img></span><br></span> — Chromium 60.
     let top40 = InlineStyle {
@@ -804,10 +803,10 @@ fn known_pending_vertical_align_differences() {
             b.push_forced_break(NodeId(3));
             b.close_inline();
         }),
-        [2.0]
+        [60.0]
     );
     // DI: <span lh40><span va:text-top></span><br></span> — Chromium 0
-    // (shodo-9kt); the forced-break rule credits the lh40 span.
+    // because the empty child is pending on its parent.
     let text_top = InlineStyle {
         vertical_align: VerticalAlign::TextTop,
         ..span(20.0)
@@ -820,17 +819,72 @@ fn known_pending_vertical_align_differences() {
             b.push_forced_break(NodeId(3));
             b.close_inline();
         }),
-        [40.0]
+        [0.0]
     );
-    // CO: <span lh40 va:top></span><br> — Chromium 0; shodo credits the root.
+    // CO: <span lh40 va:top></span><br> — Chromium 0.
     assert_eq!(
         q(WIDE, |b, _| {
             b.open_inline(NodeId(2), &top40, InlineEdges::default());
             b.close_inline();
             b.push_forced_break(NodeId(3));
         }),
-        [20.0]
+        [0.0]
     );
+}
+
+#[test]
+fn only_pending_alignments_credit_empty_children() {
+    // Chromium 152, quirks: only alignments queued by ApplyBaselineShift
+    // have metrics without content. Immediate baseline shifts stay empty.
+    for (align, nested, root_height, top_parent) in [
+        (VerticalAlign::Baseline, 40.0, 20.0, 40.0),
+        (VerticalAlign::Sub, 40.0, 20.0, 40.0),
+        (VerticalAlign::Super, 40.0, 20.0, 40.0),
+        (VerticalAlign::Middle, 40.0, 20.0, 40.0),
+        (VerticalAlign::Length(0.0), 40.0, 20.0, 40.0),
+        (VerticalAlign::TextTop, 0.0, 0.0, 0.0),
+        (VerticalAlign::TextBottom, 0.0, 0.0, 0.0),
+        (VerticalAlign::Top, 40.0, 0.0, 0.0),
+        (VerticalAlign::Bottom, 40.0, 0.0, 0.0),
+    ] {
+        let child = InlineStyle {
+            vertical_align: align,
+            ..span(20.0)
+        };
+        for (parent_align, height) in [
+            (VerticalAlign::Baseline, nested),
+            (VerticalAlign::Top, top_parent),
+            (VerticalAlign::Bottom, top_parent),
+        ] {
+            assert_eq!(
+                q(WIDE, |b, _| {
+                    b.open_inline(
+                        NodeId(2),
+                        &InlineStyle {
+                            vertical_align: parent_align,
+                            ..span(40.0)
+                        },
+                        InlineEdges::default(),
+                    );
+                    b.open_inline(NodeId(4), &child, InlineEdges::default());
+                    b.close_inline();
+                    b.push_forced_break(NodeId(3));
+                    b.close_inline();
+                }),
+                [height],
+                "{parent_align:?}/{align:?}"
+            );
+        }
+        assert_eq!(
+            q(WIDE, |b, _| {
+                b.open_inline(NodeId(4), &child, InlineEdges::default());
+                b.close_inline();
+                b.push_forced_break(NodeId(3));
+            }),
+            [root_height],
+            "root/{align:?}"
+        );
+    }
 }
 
 /// First atomic's (top offset from the line's alphabetic baseline, gap from
