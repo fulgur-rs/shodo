@@ -28,10 +28,10 @@ fn hidden_long_base_does_not_allocate_caret_copies() {
 
     let hidden_allocations = construction_allocations(&hidden);
 
-    assert_eq!(
-        hidden_allocations.calls,
-        8 * 47,
-        "each hidden long-base layout should avoid its one old Vec allocation: {hidden_allocations:?}"
+    assert!(
+        hidden_allocations.calls <= 8 * 40,
+        "each hidden long-base layout should avoid caret copies and duplicate \
+         cluster storage: {hidden_allocations:?}"
     );
-    assert!(hidden_allocations.allocated_bytes < 2_012_352);
+    assert!(hidden_allocations.allocated_bytes < 1_650_000);
 }

@@ -29,6 +29,7 @@ pub(super) struct LineIndex {
     pub(super) visual: Vec<usize>,
     pub(super) segments: Vec<Segment>,
     pub(super) source: super::source::SourceIndex,
+    pub(super) selection_sorted: bool,
     range: Range<u32>,
     spatial: super::spatial::Tree,
     combined: Vec<CombineHit>,
@@ -285,10 +286,8 @@ impl LineGeometry {
             );
         }
         raw.sort_by_key(|r| r.text.start);
-        let mut combined: Vec<RawCluster> = Vec::new();
-        for cluster in raw {
-            if let Some(previous) = combined.last_mut()
-                && previous.text.end == cluster.text.start
+        raw.dedup_by(|cluster, previous| {
+            if previous.text.end == cluster.text.start
                 && previous.block_axis == cluster.block_axis
                 && line
                     .data
@@ -305,11 +304,12 @@ impl LineGeometry {
                     .max(cluster.rect.block_start + cluster.rect.block_size);
                 previous.rect.block_start = previous.rect.block_start.min(cluster.rect.block_start);
                 previous.rect.block_size = end - previous.rect.block_start;
+                true
             } else {
-                combined.push(cluster);
+                false
             }
-        }
-        for cluster in combined {
+        });
+        for cluster in raw {
             let cuts = caret_cuts(line, &cluster.text);
             result.add(
                 number,
@@ -444,6 +444,7 @@ impl LineIndex {
             visual: Vec::new(),
             segments: geometry.segments,
             source: super::source::SourceIndex::Ordered,
+            selection_sorted: false,
             range: range.start as u32..range.end as u32,
             spatial: super::spatial::Tree::new(std::iter::empty(), false),
             combined: Vec::new(),
@@ -585,6 +586,13 @@ impl LineIndex {
             false,
         );
         result.source = super::source::SourceIndex::new(&result.segments);
+        // Ordered source queries visit a contiguous segment slice. Only this
+        // order can be merged while gathering, without buffering every glyph.
+        result.selection_sorted = matches!(result.source, super::source::SourceIndex::Ordered)
+            && result
+                .segments
+                .windows(2)
+                .all(|pair| super::selection::inline_order(&pair[0].rect, &pair[1].rect).is_le());
         result.spatial = super::spatial::Tree::new(
             result
                 .segments
@@ -893,7 +901,7 @@ mod tests {
                         .map(|s| (s.text, s.rect))
                         .collect();
                     INDEX_BUILDS.with(|count| count.set(0));
-                    let actual = crate::hit::paint_segments(&line);
+                    let actual: Vec<_> = crate::hit::paint_segments(&line).collect();
                     assert_eq!(actual, expected);
                     assert!(!actual.is_empty());
                     assert_eq!(
