@@ -3,6 +3,7 @@
 pub(crate) mod bidi;
 pub(crate) mod breaks;
 pub(crate) mod combine;
+pub(crate) mod first_letter;
 pub(crate) mod itemize;
 mod transform;
 mod transform_context;
