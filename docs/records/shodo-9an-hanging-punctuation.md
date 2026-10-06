@@ -98,4 +98,51 @@ It is not recorded as a passing local workspace run. Workspace/private and
 HTTP-feature rustdoc passed locally. The auxiliary comment lint has three
 unchanged baseline findings and no added finding.
 
-Shodo final workspace validation is recorded after verification.
+Shodo verification used Rust/Cargo 1.97.1, a fresh dedicated target directory,
+and two build jobs. The following completed successfully:
+
+- `cargo test --workspace --locked`: 96 completed suites, 1659 passed,
+  zero failed, nine ignored.
+- `cargo test -p shodo-raikiri --example hanging_punctuation --locked`:
+  24 passed, including original resource hashes and the actual block/inline
+  display profiles.
+- `cargo test -p shodo-raikiri --all-targets --locked`: 12 completed suites,
+  141 passed, zero failed or ignored.
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`.
+- `RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked`.
+- `cargo fmt --all -- --check` and `git diff --check`.
+
+The full workspace test ran on `c081cfb`; the subsequent focused/all-targets
+runs, clippy and docs include the final original-input test strengthening and
+`hang_end` diagnostic JSON field. The latter fixes an example's non-test
+dead-code error: both hanging amounts now appear in its measurement output.
+
+Both representative runtime commands completed successfully against original
+WPT `97ea26e26a2aac3eec7e770650b25e7049ed4a4e` and the merge pin above:
+
+```sh
+cargo run -p shodo-raikiri --example hanging_punctuation --locked -- \
+  "$WPT_ROOT" "$OUTPUT_DIR/hanging-punctuation.json"
+cargo run -p shodo-raikiri --example first_line_wpt --locked -- \
+  "$WPT_ROOT" "$OUTPUT_DIR/first-line"
+```
+
+The first command reproduced all four original first-002 checks: glyph
+retention, leading-advance hanging, reference arrow alignment and the
+non-aligning `none` control. Its JSON includes both hanging amounts.
+
+The migrated first-line diagnostic verified the original 88-font inventory,
+registered 88 distinct byte hashes and reported native Shodo IFC positioned
+lines. These are new measurements with the current native engine, separate
+from the historical Parley measurements:
+
+| Original test | Caller classification | Native/reference exact | Caller/reference exact |
+| --- | --- | --- | --- |
+| `first-line-001.xht` | inline-match | false | true |
+| `first-line-pseudo-021.xht` | inline-match | false | true |
+| `first-line-opacity-001.html` | unsupported opacity | true | unmeasured |
+| `first-line-inherit-003.xht` | unsupported first-line descendant structure | true | unmeasured |
+
+Every row retains `counted_as_pass: false`; `full_page_wpt_passes` remains zero.
+The changed native API is exercised without converting partial inline matches
+or remaining unsupported styles into conformance claims.

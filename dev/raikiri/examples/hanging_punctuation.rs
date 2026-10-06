@@ -148,7 +148,7 @@ fn run(wpt: &std::path::Path, output: &std::path::Path) -> Result<(), String> {
     });
     let passed = checks.as_object().unwrap().values().all(|v| v == true);
     let describe = |l: &LineMeasure| {
-        serde_json::json!({"hang_start": l.hang_start,
+        serde_json::json!({"hang_start": l.hang_start, "hang_end": l.hang_end,
             "glyphs": l.glyphs.iter().map(|g| serde_json::json!({
                 "inline_position": g.inline_position, "advance": g.advance, "cluster": g.cluster
             })).collect::<Vec<_>>()})

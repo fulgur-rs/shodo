@@ -348,6 +348,25 @@ mod tests {
         let directory =
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("inputs/hanging-punctuation");
         let fonts = shodo_fixtures::load_fonts(&Limits::default()).unwrap();
+        for (asset, hash) in [
+            (
+                "fonts/ahem.css",
+                "5d8b9526d7be573871022125d5ec44f4893e4d851c26ab3fb6df44219422111c",
+            ),
+            (
+                "fonts/Ahem.ttf",
+                "b719ecb31c5b21fc573c03f6421c74ac63c271a5a3ff841e34f9705fb94b8448",
+            ),
+        ] {
+            assert_eq!(
+                format!(
+                    "{:x}",
+                    Sha256::digest(std::fs::read(directory.join(asset)).unwrap())
+                ),
+                hash,
+                "original resource changed: {asset}"
+            );
+        }
         for (file, hash, (first, last, force_end, allow_end)) in [
             (
                 "hanging-punctuation-last.html",
@@ -400,7 +419,12 @@ mod tests {
                     "{file}: node {node}"
                 );
                 mapped += 1;
-                match text_style(cv, diagnostic::InputProfile::MeasuredBlock) {
+                let profile = match cv.display {
+                    css::DisplayValue::Block => diagnostic::InputProfile::MeasuredBlock,
+                    css::DisplayValue::InlineBlock => diagnostic::InputProfile::Atomic,
+                    _ => diagnostic::InputProfile::Plain,
+                };
+                match text_style(cv, profile) {
                     Ok(style) => assert_eq!(style.hanging_punctuation, Some(expected)),
                     Err(error) => {
                         assert!(error.contains("computed style outside"), "{file}: {error}");
