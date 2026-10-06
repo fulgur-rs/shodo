@@ -1397,7 +1397,7 @@ dependencies = [
  "raikiri-style",
  "raikiri-traits",
  "rayon",
- "shodo 0.0.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "shodo 0.0.18",
  "skrifa",
  "smol_str",
  "stacker",
@@ -1421,7 +1421,7 @@ dependencies = [
  "raikiri-svg",
  "raikiri-traits",
  "rustc-hash",
- "shodo 0.0.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "shodo 0.0.18",
  "smol_str",
  "taffy",
  "url",
@@ -1440,7 +1440,7 @@ dependencies = [
  "raikiri-style",
  "raikiri-svg",
  "raikiri-traits",
- "shodo 0.0.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "shodo 0.0.18",
  "taffy",
  "url",
 ]
@@ -1733,6 +1733,25 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 [[package]]
 name = "shodo"
 version = "0.0.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d76194319284cb186078905c396bbaabfd5f022af66b4d462d657c29330c40aa"
+dependencies = [
+ "foldhash",
+ "fontique",
+ "harfrust",
+ "icu_casemap",
+ "icu_locale_core",
+ "icu_normalizer",
+ "icu_properties",
+ "icu_segmenter",
+ "peniko",
+ "skrifa",
+ "unicode-bidi",
+]
+
+[[package]]
+name = "shodo"
+version = "0.0.19"
 dependencies = [
  "accesskit",
  "brotli",
@@ -1753,25 +1772,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "shodo"
-version = "0.0.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d76194319284cb186078905c396bbaabfd5f022af66b4d462d657c29330c40aa"
-dependencies = [
- "foldhash",
- "fontique",
- "harfrust",
- "icu_casemap",
- "icu_locale_core",
- "icu_normalizer",
- "icu_properties",
- "icu_segmenter",
- "peniko",
- "skrifa",
- "unicode-bidi",
-]
-
-[[package]]
 name = "shodo-bench"
 version = "0.0.0"
 dependencies = [
@@ -1779,7 +1779,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "shodo 0.0.18",
+ "shodo 0.0.19",
  "shodo-fixtures",
 ]
 
@@ -1792,7 +1792,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "shodo 0.0.18",
+ "shodo 0.0.19",
  "skrifa",
 ]
 
@@ -1806,7 +1806,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "shodo 0.0.18",
+ "shodo 0.0.19",
  "shodo-fixtures",
  "skrifa",
  "taffy",
@@ -1830,7 +1830,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "shodo 0.0.18",
+ "shodo 0.0.19",
  "shodo-fixtures",
  "shodo-harness",
  "skrifa",

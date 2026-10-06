@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.19](https://github.com/fulgur-rs/shodo/compare/v0.0.18...v0.0.19) - 2026-10-06
+
+### Added
+
+- expose local annotation overflow and reusable leading
+
+### Fixed
+
+- preserve accepted annotation geometry at composition boundaries
+
+### Other
+
+- Merge remote-tracking branch 'origin/main' into feat/shodo-q57-annotation-space
+- verify annotation space across retained and aligned content
+- Merge remote-tracking branch 'origin/main' into feat/shodo-q57-annotation-space
+- Fix emphasis clearance outside same-side ruby annotations
+
 ### Added
 
 - Expose `Line::annotation_metrics` with per-side annotation overflow and unused
