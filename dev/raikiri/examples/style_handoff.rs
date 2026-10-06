@@ -15,6 +15,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, collections::BTreeSet, path::Path};
 
+// Revision of the frozen diagnostic input, not the current runtime.
 const RAIKIRI_PIN: &str = "ab7e619a8f321f03de8b8c8b9342954868e044c8";
 const REASON: &str = "noninitial style not mapped yet";
 const CLASSIFICATION: &str = include_str!("../inputs/raikiri-style-diagnostics.json");
@@ -156,7 +157,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         && block_count as u64 == classification["blocks"].as_u64().unwrap_or(0);
     let report = json!({
         "scope": "ownership split of the frozen S4 residual style gate over the original blocks; no layout, paint, WPT verdict or cutover-necessity claim",
-        "raikiri_revision": RAIKIRI_PIN,
+        "raikiri_revision": "fe9aea9ade56ff046d38a6dddd31d02303466bfc",
+        "original_raikiri_revision": RAIKIRI_PIN,
         "original_comparison_sha256": format!("{:x}", Sha256::digest(&source)),
         "documents": selected.len(), "blocks": block_count,
         "unmapped_errors": errors, "field_counts_match_classification": counts.is_ok(),

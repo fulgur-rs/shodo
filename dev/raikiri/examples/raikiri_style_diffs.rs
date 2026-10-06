@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeSet, path::Path};
 
+// Revision of the frozen diagnostic input, not the current runtime.
 const RAIKIRI_PIN: &str = "ab7e619a8f321f03de8b8c8b9342954868e044c8";
 const REASON: &str = "noninitial style not mapped yet";
 const PROFILE_SHA: &str = "4a225616ca97c1b83eeadff6c5228cc23c32ab36a033bb3a4f8d66ecdf4f977f";
@@ -170,7 +171,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .sum();
     let complete = errors == 0 && reported_blocks == expected_blocks;
     let report = json!({"scope":"original screen cascade and frozen S4 residual gate only; no layout/paint or WPT pass verdict",
-        "raikiri_revision":RAIKIRI_PIN,"s4_style_source_sha256":PROFILE_SHA,
+        "raikiri_revision":"fe9aea9ade56ff046d38a6dddd31d02303466bfc","original_raikiri_revision":RAIKIRI_PIN,"s4_style_source_sha256":PROFILE_SHA,
         "original_comparison_sha256":format!("{:x}",Sha256::digest(&source)),
         "viewport_css_px":comparison["viewport_css_px"],
         "expected_documents":selected.len(),"expected_blocks":expected_blocks,

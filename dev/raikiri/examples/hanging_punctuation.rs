@@ -1,4 +1,4 @@
-//! Representative raikiri caller check for `hanging-punctuation: none | first`.
+//! Representative raikiri caller checks for the full hanging-punctuation grammar.
 //! Development-only; it does not adopt or change either S4 spike.
 #[allow(dead_code)]
 #[path = "support/raikiri_style_diffs.rs"]
@@ -28,6 +28,7 @@ struct G {
 #[derive(Clone, Debug)]
 struct LineMeasure {
     hang_start: f32,
+    hang_end: f32,
     glyphs: Vec<G>,
 }
 
@@ -42,7 +43,9 @@ fn find_by_attr(input: &offline::ScreenInput, name: &str, value: &str) -> Result
 }
 
 /// Lay out the IFC rooted at `root` through the caller path. `force_none`
-/// replaces the resolved options with the default (`none`) as a control.
+/// replaces the root's resolved options with the default (`none`) as a control.
+/// Nested inline computed overrides remain active; the original first-002
+/// control measures root-level text.
 fn measure(
     input: &offline::ScreenInput,
     root: usize,
@@ -85,6 +88,7 @@ fn measure(
             }
             lines.push(LineMeasure {
                 hang_start: line.hang_start(),
+                hang_end: line.hang_end(),
                 glyphs,
             });
         }
@@ -95,7 +99,7 @@ fn measure(
 const TEST: &str = "css/css-text/hanging-punctuation/hanging-punctuation-first-002.html";
 const REFERENCE: &str =
     "css/css-text/hanging-punctuation/reference/hanging-punctuation-first-002-ref.html";
-const RAIKIRI_PIN: &str = "ab7e619a8f321f03de8b8c8b9342954868e044c8";
+const RAIKIRI_PIN: &str = "fe9aea9ade56ff046d38a6dddd31d02303466bfc";
 /// The pinned screen viewport used by the original comparison.
 const VIEWPORT_WIDTH: f32 = 800.0;
 
@@ -227,6 +231,7 @@ mod tests {
     fn line(hang: f32, xs: &[f32]) -> LineMeasure {
         LineMeasure {
             hang_start: hang,
+            hang_end: 0.0,
             glyphs: xs
                 .iter()
                 .map(|&x| G {
@@ -338,5 +343,119 @@ mod tests {
             false,
         );
         assert!(lines[0].hang_start > 0.0);
+    }
+
+    #[test]
+    fn full_keyword_sets_reach_root_options() {
+        for (css, first, last, force_end, allow_end) in [
+            ("none", false, false, false, false),
+            ("first", true, false, false, false),
+            ("last", false, true, false, false),
+            ("force-end", false, false, true, false),
+            ("allow-end", false, false, false, true),
+            ("first last", true, true, false, false),
+            ("first force-end", true, false, true, false),
+            ("first allow-end", true, false, false, true),
+            ("force-end last", false, true, true, false),
+            ("allow-end last", false, true, false, true),
+            ("first force-end last", true, true, true, false),
+            ("first allow-end last", true, true, false, true),
+        ] {
+            let html = format!(
+                "<!doctype html><style>{BASE}#root{{hanging-punctuation:{css}}}</style><div id=root>日</div>"
+            );
+            let dir = TempDir::new(&html);
+            let input = offline::parse_screen(&dir.0, "index.html").unwrap();
+            let root = find_by_attr(&input, "id", "root").unwrap();
+            assert_eq!(
+                input.cascade.computed[root]
+                    .hanging_punctuation
+                    .as_css_str(),
+                css
+            );
+            let fonts = shodo_fixtures::load_fonts(&Limits::default()).unwrap();
+            let prepared = replay::project(
+                &input,
+                root,
+                400.0,
+                &mut LayoutContext::new(),
+                &fonts.collection,
+                &Limits::default(),
+            )
+            .unwrap();
+            assert_eq!(
+                prepared.options.hanging_punctuation,
+                HangingPunctuation {
+                    first,
+                    last,
+                    force_end,
+                    allow_end
+                },
+                "{css}"
+            );
+        }
+    }
+
+    #[test]
+    fn combined_first_last_hangs_both_retained_edge_glyphs() {
+        let lines = lines("#root{hanging-punctuation:first last}", "「日」", false);
+        assert_eq!(lines[0].glyphs.len(), 3);
+        assert!(lines[0].hang_start > 0.0);
+        assert!(lines[0].hang_end > 0.0);
+    }
+
+    #[test]
+    fn inline_none_clears_inherited_first_and_last() {
+        let lines = lines(
+            "#root{hanging-punctuation:first last}",
+            "<span style='hanging-punctuation:none'>「日」</span>",
+            false,
+        );
+        assert_eq!(lines[0].hang_start, 0.0);
+        assert_eq!(lines[0].hang_end, 0.0);
+    }
+
+    #[test]
+    fn inline_combination_overrides_root_none_and_inherits_to_descendants() {
+        let lines = lines(
+            "#root{hanging-punctuation:none}",
+            "<span style='hanging-punctuation:first last'><span>「日」</span></span>",
+            false,
+        );
+        assert!(lines[0].hang_start > 0.0);
+        assert!(lines[0].hang_end > 0.0);
+    }
+
+    #[test]
+    fn force_end_hangs_a_stop_and_allow_end_keeps_it_when_it_fits() {
+        let forced = lines("#root{hanging-punctuation:force-end}", "日。", false);
+        let allowed = lines("#root{hanging-punctuation:allow-end}", "日。", false);
+        assert_eq!(forced[0].glyphs.len(), 2);
+        assert!(forced[0].hang_end > 0.0);
+        assert_eq!(allowed[0].hang_end, 0.0);
+    }
+
+    #[test]
+    fn force_none_control_changes_root_text_and_keeps_inline_override() {
+        let root_text = lines("#root{hanging-punctuation:first}", "「日", true);
+        assert_eq!(root_text[0].hang_start, 0.0);
+        let inline_text = lines(
+            "#root{hanging-punctuation:none}",
+            "<span style='hanging-punctuation:first'>「日</span>",
+            true,
+        );
+        assert!(inline_text[0].hang_start > 0.0);
+    }
+
+    #[test]
+    fn allow_end_hangs_the_stop_when_needed_to_fit_the_original_line() {
+        let allowed = lines(
+            "#root{font-size:400px;hanging-punctuation:allow-end}",
+            "日。",
+            false,
+        );
+        assert_eq!(allowed.len(), 1);
+        assert_eq!(allowed[0].glyphs.len(), 2);
+        assert!(allowed[0].hang_end > 0.0);
     }
 }
