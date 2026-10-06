@@ -312,10 +312,29 @@ impl Default for TabSize {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// Character-class-based spacing, applied after bidi reordering without
+/// modifying paragraph text or its source mapping.
+///
+/// All values use CSS `insert` behavior: any existing Unicode separator
+/// suppresses automatic spacing. Replacing authored spaces is not supported.
 pub enum TextAutospace {
+    /// Insert 0.125ic between ideographs and non-ideographic letters/numerals.
     #[default]
     Normal,
+    /// Platform policy; currently uses the same spacing as [`Self::Normal`].
+    Auto,
+    /// Disable automatic spacing.
     NoAutospace,
+    /// Select independent boundary classes. An empty set disables spacing.
+    Custom {
+        /// Space ideograph/non-ideographic letter boundaries.
+        ideograph_alpha: bool,
+        /// Space ideograph/non-ideographic decimal numeral boundaries.
+        ideograph_numeric: bool,
+        /// Apply French non-breaking punctuation spacing when the boundary's
+        /// innermost containing element has a French content language.
+        punctuation: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

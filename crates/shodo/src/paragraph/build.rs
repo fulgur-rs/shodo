@@ -780,6 +780,7 @@ fn build_data(
         combine_spans,
         combine_geometry,
         style_metrics,
+        autospace_spaces: Vec::new(),
         unit_spacing: Vec::new(),
         punctuation: Vec::new(),
         last_content_unit: None,
@@ -817,8 +818,9 @@ fn finalize_data(
     warnings: &mut WarningSink,
     sat: &mut Saturation,
 ) {
-    crate::line::reshape::initialize_slices(data, cx, warnings, sat);
     data.spacing_tree = crate::line::autospace::Tree::build(data);
+    crate::line::autospace::initialize(data, warnings);
+    crate::line::reshape::initialize_slices(data, cx, warnings, sat);
     data.punctuation = crate::line::punctuation::build(data, sat);
     (data.unit_spacing, data.internal_autospace_gaps) = crate::line::spacing::build(data, sat);
     data.last_content_unit = crate::line::spacing::last_content(data);

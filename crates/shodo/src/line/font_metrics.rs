@@ -443,6 +443,47 @@ pub(crate) fn resolve_styles(
     resolved
 }
 
+/// Font-derived widths for the virtual French NBSP and narrow NBSP.
+/// Missing glyphs fall back to the resolved word space and one fifth of the
+/// effective primary em, respectively.
+pub(crate) fn autospace_spaces(
+    fonts: &FontCollection,
+    style: &InlineStyle,
+    metrics: StyleMetrics,
+    warnings: &mut WarningSink,
+) -> (f32, f32) {
+    let query = FontQuery {
+        families: style.font_families.clone(),
+        weight: style.font_weight,
+        width: style.font_width,
+        style: style.font_style,
+        language: style.lang.clone(),
+        synthesis: style.font_synthesis,
+        ..Default::default()
+    };
+    let mut cache = ProbeInstanceCache::default();
+    let mut probe = |ch: char| {
+        let mut encoded = [0; 4];
+        let found = fonts.match_cluster(&query, ch.encode_utf8(&mut encoded))?;
+        let data = fonts.font_data(found.id)?;
+        let face = FontRef::from_index(data.data.as_ref(), data.index).ok()?;
+        let glyph = face.charmap().map(ch)?;
+        let (instance, size) = cache.resolve(
+            fonts,
+            found,
+            data.data.as_ref(),
+            data.index,
+            style,
+            warnings,
+        );
+        face.glyph_metrics(Size::new(size), LocationRef::new(&instance.coords))
+            .advance_width(glyph)
+    };
+    let word = probe('\u{a0}').unwrap_or(metrics.space);
+    let narrow = probe('\u{202f}').unwrap_or(metrics.size * 0.2);
+    (word, narrow)
+}
+
 /// Resolve the character's fallback face and its actual adjusted instance,
 /// including explicit variations, optical size and HVAR glyph advances.
 fn character_advance(
@@ -523,6 +564,94 @@ mod tests {
         InlineStyle {
             font_families: vec![FontFamily::Named("Latin".into())],
             ..Default::default()
+        }
+    }
+
+    #[test]
+    fn autospace_spaces_use_font_glyphs_and_effective_size_with_missing_glyph_fallback() {
+        // Add a deliberately wide U+202F mapping to the last real Format 4
+        // segment (Sigma). This keeps the fixture self-contained and proves
+        // the inserted gap follows the font instead of a fixed em fraction.
+        let mut bytes = LATIN.to_vec();
+        let u16_at = |bytes: &[u8], at| u16::from_be_bytes(bytes[at..at + 2].try_into().unwrap());
+        let u32_at =
+            |bytes: &[u8], at| u32::from_be_bytes(bytes[at..at + 4].try_into().unwrap()) as usize;
+        let record = (0..u16_at(&bytes, 4) as usize)
+            .map(|i| 12 + 16 * i)
+            .find(|at| &bytes[*at..*at + 4] == b"cmap")
+            .unwrap();
+        let cmap = u32_at(&bytes, record + 8);
+        let format4 = cmap + u32_at(&bytes, cmap + 8);
+        assert_eq!(u16_at(&bytes, format4), 4);
+        let count = u16_at(&bytes, format4 + 6) as usize / 2;
+        let index = count - 2;
+        let end = format4 + 14 + index * 2;
+        let start = format4 + 16 + count * 2 + index * 2;
+        let delta = format4 + 16 + count * 4 + index * 2;
+        let range = format4 + 16 + count * 6 + index * 2;
+        assert_eq!(u16_at(&bytes, start), 0x03a3);
+        assert_eq!(u16_at(&bytes, end), 0x03a3);
+        if u16_at(&bytes, range) == 0 {
+            let replacement = u16_at(&bytes, delta)
+                .wrapping_add(0x03a3)
+                .wrapping_sub(0x202f);
+            bytes[delta..delta + 2].copy_from_slice(&replacement.to_be_bytes());
+        }
+        bytes[start..start + 2].copy_from_slice(&0x202fu16.to_be_bytes());
+        bytes[end..end + 2].copy_from_slice(&0x202fu16.to_be_bytes());
+        let collection = FontCollection::with_options(
+            &Limits::default(),
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        collection
+            .register_face(
+                bytes.clone(),
+                0,
+                FontFaceDescriptor {
+                    family: "Latin".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let face = FontRef::from_index(&bytes, 0).unwrap();
+        for size_adjust in [
+            None,
+            Some(FontSizeAdjust {
+                metric: FontMetricKind::ExHeight,
+                value: 0.8,
+            }),
+        ] {
+            let style = InlineStyle {
+                font_size: 20.0,
+                font_size_adjust: size_adjust,
+                ..style()
+            };
+            let mut warnings = WarningSink::default();
+            let metrics = resolve(&collection, &style, &mut warnings);
+            let (word, narrow) = autospace_spaces(&collection, &style, metrics, &mut warnings);
+            let glyph_metrics = face.glyph_metrics(Size::new(metrics.size), LocationRef::default());
+            assert_eq!(
+                word,
+                glyph_metrics
+                    .advance_width(face.charmap().map('\u{a0}').unwrap())
+                    .unwrap()
+            );
+            assert_eq!(
+                narrow,
+                glyph_metrics
+                    .advance_width(face.charmap().map('\u{202f}').unwrap())
+                    .unwrap()
+            );
+            assert_ne!(narrow, metrics.size * 0.2);
+            let ordinary = fonts();
+            let metrics = resolve(&ordinary, &style, &mut warnings);
+            assert_eq!(
+                autospace_spaces(&ordinary, &style, metrics, &mut warnings).1,
+                metrics.size * 0.2
+            );
         }
     }
 
