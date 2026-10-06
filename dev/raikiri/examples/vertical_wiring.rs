@@ -360,10 +360,64 @@ mod tests {
     }
 
     #[test]
-    fn autospace_auto_is_rejected() {
+    fn autospace_auto_and_explicit_sets_reach_shodo() {
         let fonts = load_fonts(&Default::default()).unwrap();
-        let html = doc("text-autospace-vertical-upright-001")
-            .replace("text-autospace: normal", "text-autospace: auto");
-        assert!(fixture_lines(&html, &fonts.collection).is_err());
+        let original = doc("text-autospace-vertical-upright-001");
+        let normal = fixture_lines(&original, &fonts.collection).unwrap();
+        for value in [
+            "auto",
+            "ideograph-alpha",
+            "ideograph-numeric",
+            "punctuation",
+            "ideograph-alpha ideograph-numeric insert",
+        ] {
+            let html = original.replace(
+                "text-autospace: normal",
+                &format!("text-autospace: {value}"),
+            );
+            same(&fixture_lines(&html, &fonts.collection).unwrap(), &normal).unwrap();
+        }
+        let horizontal = original.replace("vertical-rl", "horizontal-tb");
+        let plain = fixture_lines(
+            &horizontal.replace("text-autospace: normal", "text-autospace: no-autospace"),
+            &fonts.collection,
+        )
+        .unwrap();
+        for (value, alpha, numeric) in [
+            ("auto", true, true),
+            ("ideograph-alpha", true, false),
+            ("ideograph-numeric", false, true),
+            ("punctuation", false, false),
+        ] {
+            let selected = fixture_lines(
+                &horizontal.replace(
+                    "text-autospace: normal",
+                    &format!("text-autospace: {value}"),
+                ),
+                &fonts.collection,
+            )
+            .unwrap();
+            assert_eq!(selected.len(), plain.len());
+            for (index, (actual, natural)) in selected.iter().zip(&plain).enumerate() {
+                let expected_gap = if (index % 2 == 0 && alpha) || (index % 2 == 1 && numeric) {
+                    5.0
+                } else {
+                    0.0
+                };
+                assert!(
+                    close(actual.inline_size, natural.inline_size + expected_gap),
+                    "value {value}, line {index}: {actual:?} vs {natural:?}"
+                );
+            }
+        }
+        let replace = original.replace(
+            "text-autospace: normal",
+            "text-autospace: ideograph-alpha replace",
+        );
+        assert!(
+            fixture_lines(&replace, &fonts.collection)
+                .unwrap_err()
+                .contains("replace")
+        );
     }
 }

@@ -36,12 +36,28 @@ pub fn text_combine_upright(value: r::TextCombineUpright) -> Result<TextCombineU
     }
 }
 
-/// Only `normal` and `no-autospace` have a shodo equivalent; `auto` and
-/// explicit boundary sets are rejected instead of being treated as `normal`.
+/// Preserve the selected classes; only insert behavior is supported.
 pub fn text_autospace(value: r::TextAutospace) -> Result<TextAutospace, String> {
     match value {
         r::TextAutospace::Normal => Ok(TextAutospace::Normal),
+        r::TextAutospace::Auto => Ok(TextAutospace::Auto),
         r::TextAutospace::NoAutospace => Ok(TextAutospace::NoAutospace),
+        r::TextAutospace::Custom {
+            ideograph_alpha,
+            ideograph_numeric,
+            punctuation,
+            mode,
+        } => match mode {
+            r::TextAutospaceMode::None | r::TextAutospaceMode::Insert => {
+                Ok(TextAutospace::Custom {
+                    ideograph_alpha,
+                    ideograph_numeric,
+                    punctuation,
+                })
+            }
+            r::TextAutospaceMode::Replace => Err("text-autospace replace unsupported".into()),
+            _ => Err("text-autospace mode unsupported".into()),
+        },
         _ => Err("text-autospace value unsupported".into()),
     }
 }
@@ -88,7 +104,7 @@ mod tests {
     }
 
     #[test]
-    fn autospace_auto_and_custom_are_rejected() {
+    fn autospace_keywords_and_classes_map_without_accepting_replace() {
         assert_eq!(
             text_autospace(r::TextAutospace::Normal),
             Ok(TextAutospace::Normal)
@@ -97,15 +113,37 @@ mod tests {
             text_autospace(r::TextAutospace::NoAutospace),
             Ok(TextAutospace::NoAutospace)
         );
-        assert!(text_autospace(r::TextAutospace::Auto).is_err());
-        assert!(
-            text_autospace(r::TextAutospace::Custom {
-                ideograph_alpha: true,
-                ideograph_numeric: true,
-                punctuation: true,
-                mode: r::TextAutospaceMode::None,
-            })
-            .is_err()
+        assert_eq!(
+            text_autospace(r::TextAutospace::Auto),
+            Ok(TextAutospace::Auto)
         );
+        for mask in 0..8 {
+            for mode in [
+                r::TextAutospaceMode::None,
+                r::TextAutospaceMode::Insert,
+                r::TextAutospaceMode::Replace,
+            ] {
+                let (ideograph_alpha, ideograph_numeric, punctuation) =
+                    (mask & 1 != 0, mask & 2 != 0, mask & 4 != 0);
+                let actual = text_autospace(r::TextAutospace::Custom {
+                    ideograph_alpha,
+                    ideograph_numeric,
+                    punctuation,
+                    mode,
+                });
+                if mode == r::TextAutospaceMode::Replace {
+                    assert!(actual.unwrap_err().contains("replace"));
+                } else {
+                    assert_eq!(
+                        actual,
+                        Ok(TextAutospace::Custom {
+                            ideograph_alpha,
+                            ideograph_numeric,
+                            punctuation
+                        })
+                    );
+                }
+            }
+        }
     }
 }
