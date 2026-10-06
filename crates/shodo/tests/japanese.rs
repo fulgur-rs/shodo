@@ -805,6 +805,49 @@ fn first_hanging_is_also_excluded_from_intrinsic_sizes() {
 }
 
 #[test]
+fn horizontal_isolated_punctuation_keeps_initial_spacing_and_matches_explicit_halt() {
+    for language in [None, Some("ja")] {
+        for punctuation in ['（', '）', '、', '・', '。', '「', '」'] {
+            let layout = |trim, explicit| {
+                let mut style = japanese_style(trim);
+                style.root.font_size = 20.0;
+                style.root.lang = language.map(Into::into);
+                let mut inner = style.root.clone();
+                if explicit {
+                    inner.font_features.push(shodo::style::FontFeature {
+                        tag: *b"halt",
+                        value: 1,
+                    });
+                }
+                let paragraph = japanese_with(style, Limits::default(), |builder| {
+                    builder.push_text(TextSource::Generated { node: NodeId(1) }, "水");
+                    builder.open_inline(NodeId(2), &inner, InlineEdges::default());
+                    builder.push_text(
+                        TextSource::Generated { node: NodeId(3) },
+                        &punctuation.to_string(),
+                    );
+                    builder.close_inline();
+                    builder.push_text(TextSource::Generated { node: NodeId(4) }, "水");
+                });
+                let line = first_line(
+                    &paragraph,
+                    800.0,
+                    &LineOptions::default(),
+                    &AtomicSizes::EMPTY,
+                );
+                (line.inline_size(), glyphs(&line))
+            };
+            let normal = layout(TextSpacingTrim::Normal, false);
+            let reference = layout(TextSpacingTrim::SpaceAll, true);
+            let trim_all = layout(TextSpacingTrim::TrimAll, false);
+            assert_eq!(normal.0, 60.0, "{punctuation} {language:?}");
+            assert_eq!(reference.0, 50.0, "{punctuation} {language:?}");
+            assert_eq!(trim_all, reference, "{punctuation} {language:?}");
+        }
+    }
+}
+
+#[test]
 fn spacing_trim_values_control_fullwidth_edges_and_middle_punctuation() {
     for (trim, width, first, final_position) in [
         (TextSpacingTrim::Normal, 48.0, 0.0, 32.0),
