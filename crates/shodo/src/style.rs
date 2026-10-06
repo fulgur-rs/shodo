@@ -397,7 +397,9 @@ pub enum TextEmphasisPosition {
     UnderLeft,
 }
 
-/// `text-emphasis`; affects the line box height, so it is layout input.
+/// `text-emphasis`. Lines grow where emphasized text and its marks overflow
+/// the line box, as in Chromium 152; see
+/// [`crate::GlyphRunView::emphasis_mark`] for drawing them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TextEmphasis {
     pub shape: TextEmphasisShape,

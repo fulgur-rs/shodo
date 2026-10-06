@@ -418,3 +418,89 @@ fn pending_forced_break_queries_do_not_rescan_descendants() {
         "pending descendants rescanned: {visits:?}"
     );
 }
+
+#[test]
+fn emphasis_index_matches_retained_ranges() {
+    use crate::style::{
+        LineHeight, TextCombineUpright, TextEmphasis, TextEmphasisPosition as P, TextEmphasisShape,
+    };
+    let mark = |position| {
+        Some(TextEmphasis {
+            shape: TextEmphasisShape::Dot,
+            filled: true,
+            position,
+        })
+    };
+    for mode in [
+        crate::geometry::WritingMode::HorizontalTb,
+        crate::geometry::WritingMode::VerticalRl,
+        crate::geometry::WritingMode::VerticalLr,
+    ] {
+        for quirk in [false, true] {
+            // Marks on root text only, then on inline box text and a
+            // composition only, so neither hides the other's overflow.
+            for root_mark in [true, false] {
+                let inner = |position| if root_mark { None } else { mark(position) };
+                let mut b = ParagraphBuilder::new(
+                    &ParagraphStyle {
+                        writing_mode: mode,
+                        root: InlineStyle {
+                            line_height: LineHeight::Px(20.0),
+                            text_emphasis: if root_mark { mark(P::OverRight) } else { None },
+                            ..style(24.0)
+                        },
+                        line_height_quirk: quirk,
+                        ..Default::default()
+                    },
+                    &Limits::default(),
+                );
+                b.push_text(TextSource::Generated { node: NodeId(1) }, "日 ");
+                b.open_inline(
+                    NodeId(100),
+                    &InlineStyle {
+                        line_height: LineHeight::Px(4.0),
+                        text_emphasis: inner(P::UnderLeft),
+                        ..style(12.0)
+                    },
+                    Default::default(),
+                );
+                b.push_text(TextSource::Generated { node: NodeId(2) }, "本 語 ");
+                b.close_inline();
+                b.push_text(TextSource::Generated { node: NodeId(5) }, "日 ");
+                b.open_inline(
+                    NodeId(101),
+                    &InlineStyle {
+                        text_emphasis: inner(P::OverLeft),
+                        ..style(40.0)
+                    },
+                    Default::default(),
+                );
+                b.close_inline();
+                b.push_text(TextSource::Generated { node: NodeId(6) }, "日 ");
+                b.open_inline(
+                    NodeId(102),
+                    &InlineStyle {
+                        text_combine_upright: TextCombineUpright::All,
+                        text_emphasis: inner(P::UnderRight),
+                        ..style(32.0)
+                    },
+                    Default::default(),
+                );
+                // One character: the parity walk would cut a longer composition.
+                b.push_text(TextSource::Generated { node: NodeId(3) }, "1");
+                b.close_inline();
+                b.push_text(TextSource::Generated { node: NodeId(4) }, " 日");
+                // A forced break that only the root strut sizes.
+                b.open_inline(NodeId(103), &style(12.0), Default::default());
+                b.close_inline();
+                b.push_forced_break(NodeId(7));
+                b.push_text(TextSource::Generated { node: NodeId(8) }, "日");
+                let p = b.build(&mut LayoutContext::new(), &fonts()).unwrap();
+                assert!(
+                    assert_quirk_parity(&p, &AtomicSizes::EMPTY) > 20,
+                    "{mode:?} {quirk} {root_mark}"
+                );
+            }
+        }
+    }
+}

@@ -21,6 +21,107 @@ pub(crate) fn extents(
     vertical: Option<crate::font::VerticalFontMetrics>,
     upright: bool,
 ) -> (f32, f32) {
+    let (a, d, lead) = font_extents(s, m, vertical, upright);
+    (a + lead, d + lead)
+}
+
+/// Extents of an emphasized text record: `leaded` united with its marks.
+///
+/// Chromium 152 treats marks like ruby annotations
+/// (`ComputeAnnotationOverflow`): they never enter the root or inline box
+/// struts, and lines grow only where text plus marks overflows the line box.
+/// A mark is half the font size and sits outside the text's em box, the
+/// primary font's ascent or descent trimmed toward its normalized
+/// typographic height in whole pixels. The unmarked side keeps `leaded`.
+pub(crate) fn emphasized(
+    data: &ParagraphData,
+    style: u32,
+    run_font: crate::font::FontId,
+    upright: bool,
+    leaded: (f32, f32),
+) -> (f32, f32) {
+    let s = &data.styles[style as usize];
+    let Some(emphasis) = s.text_emphasis else {
+        return leaded;
+    };
+    let metrics = data.style_metrics[style as usize];
+    // Trim toward the em box of the font that set the run, which can be a
+    // fallback of the primary font whose edges it starts from.
+    let em_ascent = if run_font == metrics.font {
+        metrics.em_ascent
+    } else {
+        super::font_metrics::em_ascent(&data.fonts, run_font, metrics.size)
+            .unwrap_or(metrics.em_ascent)
+    };
+    // Blink's `AdjustTextOverUnderOffsetsForEmHeight` trims the font edge to
+    // the em box in whole pixels, never more than their difference.
+    let trim = |edge: f32, em: f32| edge - (edge - em).max(0.0).floor();
+    let (over, under) = if upright {
+        let half = metrics.size / 2.0;
+        metrics.vertical_metrics.map_or((half, half), |v| {
+            (trim(v.ascent, half), trim(v.descent, half))
+        })
+    } else {
+        (
+            trim(metrics.metrics.ascent, em_ascent),
+            trim(metrics.metrics.descent, metrics.size - em_ascent),
+        )
+    };
+    emphasize(data, emphasis, metrics.size, (over, under), leaded)
+}
+
+/// Adds marks of `size / 2` outside `content` on their side.
+fn emphasize(
+    data: &ParagraphData,
+    emphasis: crate::style::TextEmphasis,
+    size: f32,
+    content: (f32, f32),
+    leaded: (f32, f32),
+) -> (f32, f32) {
+    let mark = size / 2.0;
+    if emphasis_over(emphasis.position, data.style.writing_mode) {
+        (leaded.0.max(content.0 + mark), leaded.1)
+    } else {
+        (leaded.0, leaded.1.max(content.1 + mark))
+    }
+}
+
+/// Whether marks sit on the line-over side (Blink
+/// `ComputedStyle::GetTextEmphasisLineLogicalSide`). Horizontal text uses the
+/// over or under keyword. Vertical modes put `right` on the line-over side,
+/// except `sideways-lr`, whose line-over side is on the left.
+pub(crate) fn emphasis_over(
+    position: crate::style::TextEmphasisPosition,
+    mode: crate::geometry::WritingMode,
+) -> bool {
+    use crate::geometry::WritingMode as W;
+    use crate::style::TextEmphasisPosition as P;
+    match mode {
+        W::HorizontalTb => matches!(position, P::OverRight | P::OverLeft),
+        W::SidewaysLr => matches!(position, P::OverLeft | P::UnderLeft),
+        W::VerticalRl | W::VerticalLr | W::SidewaysRl => {
+            matches!(position, P::OverRight | P::UnderRight)
+        }
+    }
+}
+
+/// Extents of a combined square, whose internal line-height is 1em, with the
+/// emphasis marks of its text outside the square.
+fn combination_extents(data: &ParagraphData, style: u32, em: f32) -> (f32, f32) {
+    let half = em / 2.0;
+    match data.styles[style as usize].text_emphasis {
+        Some(emphasis) => emphasize(data, emphasis, em, (half, half), (half, half)),
+        None => (half, half),
+    }
+}
+
+/// Font ascent, descent and half-leading.
+fn font_extents(
+    s: &InlineStyle,
+    m: FontMetrics,
+    vertical: Option<crate::font::VerticalFontMetrics>,
+    upright: bool,
+) -> (f32, f32, f32) {
     let (a, d, gap) = if upright {
         vertical.map_or((s.font_size / 2.0, s.font_size / 2.0, 0.0), |v| {
             (v.ascent, v.descent, v.line_gap)
@@ -34,7 +135,7 @@ pub(crate) fn extents(
         LineHeight::Number(n) => n * s.font_size,
     };
     let lead = (h - a - d) / 2.0;
-    (a + lead, d + lead)
+    (a, d, lead)
 }
 
 fn shift(s: &InlineStyle, parent: StyleMetrics, parent_upright: bool, a: f32, d: f32) -> f32 {
@@ -164,10 +265,12 @@ impl ProfileResolver {
         let (base, group) = unit
             .parent_box
             .map_or((0.0, None), |b| box_shift(data, b, &mut self.boxes));
-        let base = base + data.combine_center_shift(data.items[unit.item as usize].style);
+        let style = data.items[unit.item as usize].style;
+        let base = base + data.combine_center_shift(style);
+        let (over, under) = combination_extents(data, style, span.em);
         Some(RecordProfile {
-            top: base - span.em / 2.0,
-            bottom: base + span.em / 2.0,
+            top: base - over,
+            bottom: base + under,
             shift: base,
             group,
             own_group: None,
@@ -195,18 +298,16 @@ impl ProfileResolver {
                     .instance
                     .metrics
                     .unwrap_or_else(|| data.fonts.metrics(shaped.font, shaped.font_size));
-                let (a, d) = if shaped.orientation
-                    == crate::shape::orientation::RunOrientation::Combined
-                {
-                    (s.font_size / 2.0, s.font_size / 2.0)
-                } else {
-                    extents(
-                        s,
-                        metrics,
-                        shaped.instance.vertical_metrics,
-                        shaped.orientation == crate::shape::orientation::RunOrientation::Upright,
-                    )
-                };
+                let style = data.items[*item as usize].style;
+                let (a, d) =
+                    if shaped.orientation == crate::shape::orientation::RunOrientation::Combined {
+                        combination_extents(data, style, s.font_size)
+                    } else {
+                        let upright = shaped.orientation
+                            == crate::shape::orientation::RunOrientation::Upright;
+                        let leaded = extents(s, metrics, shaped.instance.vertical_metrics, upright);
+                        emphasized(data, style, shaped.font, upright, leaded)
+                    };
                 let (base, group) = self
                     .parents
                     .get(item)
@@ -289,8 +390,18 @@ impl ProfileResolver {
                 } else {
                     None
                 };
+                // Blink grows a line for the marks of an emphasized atomic
+                // inline above its margin box; under marks never reach past
+                // the line box there (`ComputeAnnotationOverflow`).
+                let style = data.items[item as usize].style;
+                let mark = match s.text_emphasis {
+                    Some(emphasis) if emphasis_over(emphasis.position, data.style.writing_mode) => {
+                        data.style_metrics[style as usize].size / 2.0
+                    }
+                    _ => 0.0,
+                };
                 (
-                    baseline,
+                    baseline + mark,
                     height - baseline,
                     base + dominant_shift
                         + shift(
@@ -366,9 +477,11 @@ pub(crate) fn measure(
             let (base, group) = u
                 .parent_box
                 .map_or((0.0, None), |b| box_shift(data, b, &mut resolver.boxes));
-            let base = base + data.combine_center_shift(data.items[u.item as usize].style);
-            let top = base - span.em / 2.0;
-            let bottom = base + span.em / 2.0;
+            let style = data.items[u.item as usize].style;
+            let base = base + data.combine_center_shift(style);
+            let (over, under) = combination_extents(data, style, span.em);
+            let top = base - over;
+            let bottom = base + under;
             if let Some(group) = group {
                 let bounds = groups.entry(group).or_insert((top, bottom));
                 bounds.0 = bounds.0.min(top);

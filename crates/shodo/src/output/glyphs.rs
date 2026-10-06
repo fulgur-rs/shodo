@@ -267,6 +267,44 @@ impl<'a> GlyphRunView<'a> {
         self.run_data().font_size
     }
 
+    /// Emphasis marks of this run's style, or `None` without
+    /// `text-emphasis`. See [`crate::EmphasisMark`] for placement.
+    pub fn emphasis_mark(&self) -> Option<crate::EmphasisMark> {
+        use crate::style::TextEmphasisShape as S;
+        let emphasis = self.data().styles[self.style_index() as usize].text_emphasis?;
+        let character = match (emphasis.shape, emphasis.filled) {
+            (S::Dot, true) => '\u{2022}',
+            (S::Dot, false) => '\u{25E6}',
+            (S::Circle, true) => '\u{25CF}',
+            (S::Circle, false) => '\u{25CB}',
+            (S::DoubleCircle, true) => '\u{25C9}',
+            (S::DoubleCircle, false) => '\u{25CE}',
+            (S::Triangle, true) => '\u{25B2}',
+            (S::Triangle, false) => '\u{25B3}',
+            (S::Sesame, true) => '\u{FE45}',
+            (S::Sesame, false) => '\u{FE46}',
+            (S::Custom(character), _) => character,
+        };
+        let line_over =
+            crate::line::metrics::emphasis_over(emphasis.position, self.data().style.writing_mode);
+        // Blink paints from the style's primary font, not a fallback run font.
+        let metrics = self.data().style_metrics[self.style_index() as usize];
+        let half = metrics.size / 2.0;
+        let (ascent, descent) = match self.orientation() {
+            crate::GlyphOrientation::Combined => (half, half),
+            crate::GlyphOrientation::Upright => metrics
+                .vertical_metrics
+                .map_or((half, half), |v| (v.ascent, v.descent)),
+            _ => (metrics.metrics.ascent, metrics.metrics.descent),
+        };
+        Some(crate::EmphasisMark {
+            character,
+            font_size: half,
+            line_over,
+            offset: if line_over { ascent } else { descent },
+        })
+    }
+
     /// Normalized variation coordinates in the face's axis order.
     pub fn normalized_coords(&self) -> &'a [crate::font::NormalizedCoord] {
         &self.run_data().instance.coords
