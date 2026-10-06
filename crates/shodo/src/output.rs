@@ -86,7 +86,7 @@ pub struct Line {
     pub(crate) block_shifts: Vec<LayoutUnit>,
     pub(crate) empty: bool,
     pub(crate) tabs: Vec<fragments::TabSlot>,
-    combinations: Vec<TextCombination>,
+    pub(crate) combinations: Vec<TextCombination>,
     pub(crate) positions: Option<(u32, Vec<LayoutUnit>)>,
     pub(crate) glyph_spacing: Option<(u32, Vec<crate::line::spacing::GlyphSpacing>)>,
     pub(crate) overlay: Option<Box<GlyphStore>>,

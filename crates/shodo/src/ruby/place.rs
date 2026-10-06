@@ -270,6 +270,9 @@ pub(crate) fn format(
         }
     }
     line.baseline = line.baseline.add(layout.shift, sat);
+    for combination in &mut line.combinations {
+        combination.square.block_start += layout.shift.to_f32();
+    }
     line.annotation_geometry.start = line.annotation_geometry.start.add(layout.shift, sat);
     line.annotation_geometry.end = line.annotation_geometry.end.add(layout.shift, sat);
     line.block_size = layout.advance;

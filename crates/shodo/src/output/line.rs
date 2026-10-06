@@ -441,7 +441,7 @@ impl Line {
         }
     }
 
-    pub(crate) fn measure_metrics(&mut self, sat: &mut Saturation) -> bool {
+    pub(crate) fn measure_metrics(&mut self, sat: &mut Saturation) -> (bool, Option<usize>) {
         let metrics = crate::line::metrics::measure(
             &self.data,
             self.units.start as usize..self.units.end as usize,
@@ -477,7 +477,7 @@ impl Line {
         self.block_shifts = metrics.shifts;
         self.empty = metrics.empty;
         self.measure_combinations(&metrics.combination_shifts);
-        metrics.root_strut
+        (metrics.root_strut, metrics.trimmed_trailing)
     }
 
     fn measure_combinations(&mut self, shifts: &crate::hashing::FastMap<usize, LayoutUnit>) {
@@ -713,14 +713,18 @@ impl Line {
                 item: *item,
                 text: (text.start, text.end),
             }),
-            RecordKind::Atomic { node, size, .. } => {
+            RecordKind::Atomic {
+                node,
+                size,
+                baseline_kind,
+                ..
+            } => {
                 let margin_block = size.margins.block_start + size.margins.block_end;
                 let height = size.block_size + margin_block;
-                let kind = self.data.baseline_kind(*node);
                 // Missing baselines are synthesized from the margin box
                 // (CSS Inline 3): bottom for alphabetic, middle for central.
-                let baseline_from_top = size.baseline.unwrap_or(match kind {
-                    Some(BaselineKind::Central) => height / 2.0,
+                let baseline_from_top = size.baseline.unwrap_or(match baseline_kind {
+                    BaselineKind::Central => height / 2.0,
                     _ => height,
                 });
                 let line_baseline = (self.baseline + self.block_shifts[index]).to_f32();

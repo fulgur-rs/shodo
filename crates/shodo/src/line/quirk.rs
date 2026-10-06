@@ -140,12 +140,16 @@ impl Struts {
 
     /// Whether every unit of a glyph record's text is trimmed at the line end.
     pub(crate) fn trimmed(&self, data: &ParagraphData, text: &Range<u32>) -> bool {
+        Self::trimmed_at(data, text, self.trailing)
+    }
+
+    pub(crate) fn trimmed_at(data: &ParagraphData, text: &Range<u32>, trailing: usize) -> bool {
         let first = data.units.partition_point(|u| u.text.end <= text.start);
         let covered = data.units[first..]
             .iter()
             .take_while(|u| u.text.start < text.end)
             .count();
-        covered > 0 && first >= self.trailing && (first..first + covered).all(|i| trims(data, i))
+        covered > 0 && first >= trailing && (first..first + covered).all(|i| trims(data, i))
     }
 
     fn mark(&mut self, b: Option<u32>) {

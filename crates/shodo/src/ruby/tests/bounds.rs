@@ -327,6 +327,7 @@ fn indexed_bounds_keep_atomic_overlay_and_saturated_extents() {
     records.push(FragmentRecord {
         kind: RecordKind::Atomic {
             node: NodeId(99),
+            baseline_kind: crate::geometry::BaselineKind::Alphabetic,
             size: crate::AtomicSize {
                 inline_size: 10.0,
                 block_size: 200.0,

@@ -69,6 +69,23 @@ geometry without scanning content again. Fixed geometry is charged in the
 existing root/child `Line` headers; the existing 64KiB capacity boundary test
 continues to cover retained storage.
 
+Independent review identified three additional compositions, all reproduced
+before their fixes: ruby's global translation left a tab-only combined square
+unmoved and lost 5px of under-side overflow; a quirks-trimmed trailing 40px space
+restored excluded metrics (29px phantom overflow and 9px under space instead of
+0px and 15px); valid strongly asymmetric font metrics offered 13px of leading
+inside a 4px line. Retained squares now move with the baseline, the selected
+solver passes its trailing boundary to the shared trimming predicate, and
+reusable space is capped to the full intersection length.
+
+The initial full workspace run on `9db9088` stopped at the library suite:
+735 passed, one failed, eight ignored. The failure was the existing atomic
+baseline lookup resource bound: the annotation scan repeated a lookup already
+done by metrics. Atomic records now resolve and retain their baseline kind once
+at construction for metric probes, retained geometry and output views to share.
+The existing unchanged focused bound then passed. This failed run is not final
+verification of the corrected source.
+
 ## Implementation rulings
 
 - Preserve the separately quantized emphasis-free solver's exact result. The

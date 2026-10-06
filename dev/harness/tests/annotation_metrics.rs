@@ -142,6 +142,41 @@ fn nested_reading_edges_and_child_metrics_are_retained_without_double_counting()
 }
 
 #[test]
+fn ruby_translation_moves_a_tab_only_combined_square_and_its_mark() {
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let inline = style(1, 10.);
+        let root = ParagraphStyle {
+            root: inline.clone(),
+            writing_mode: mode,
+            ..Default::default()
+        };
+        let mut combined = inline.clone();
+        combined.text_combine_upright = shodo::style::TextCombineUpright::All;
+        combined.white_space_collapse = shodo::style::WhiteSpaceCollapse::Preserve;
+        combined.text_emphasis = mark(TextEmphasisPosition::UnderLeft);
+        let mut b = ParagraphBuilder::new(&root, &Limits::default());
+        b.push_ruby(
+            NodeId(8),
+            &inline,
+            pair(content(1, "日", &inline), content(2, "に", &inline)),
+        );
+        b.open_inline(NodeId(3), &combined, Default::default())
+            .push_text(TextSource::Generated { node: NodeId(4) }, "\t")
+            .close_inline();
+        let line = layout(b).remove(0);
+        let m = line.annotation_metrics();
+        assert_eq!((m.overflow_over, m.overflow_under), (10., 5.), "{mode:?}");
+        assert_eq!((m.space_over, m.space_under), (0., 0.));
+        let square = line.text_combinations().next().unwrap().square;
+        assert_eq!(
+            (square.block_start, square.block_size),
+            (m.unannotated_block_start, 10.),
+            "accepted square shares the baseline translation"
+        );
+    }
+}
+
+#[test]
 fn original_four_pixel_latin_lines_have_fixed_point_geometry_without_spare_leading() {
     let mut inline = style(0, 10.);
     inline.line_height = LineHeight::Px(4.);
@@ -205,6 +240,64 @@ fn independently_rounded_bare_box_does_not_expose_space_past_the_accepted_edge()
     // fit the accepted line even if the independent bare box rounded farther.
     assert_eq!(m.space_under, 0.1875);
     assert!(m.space_under <= line.block_size() - line.metrics().baseline - 2.9375);
+}
+
+#[test]
+fn extreme_valid_font_edges_cannot_offer_more_than_the_shared_line_box() {
+    let mut bytes = include_bytes!("../../fixtures/assets/fonts/latin.ttf").to_vec();
+    let count = u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize;
+    for tag in [b"hhea", b"OS/2"] {
+        let entry = (0..count)
+            .map(|i| 12 + 16 * i)
+            .find(|&i| &bytes[i..i + 4] == tag)
+            .unwrap();
+        let start = u32::from_be_bytes(bytes[entry + 8..entry + 12].try_into().unwrap()) as usize;
+        let offsets = if tag == b"hhea" {
+            [4, 6, 8]
+        } else {
+            [68, 70, 72]
+        };
+        for (offset, value) in offsets.into_iter().zip([500i16, -4500, 0]) {
+            bytes[start + offset..start + offset + 2].copy_from_slice(&value.to_be_bytes());
+        }
+        if tag == b"OS/2" {
+            let flags = u16::from_be_bytes(bytes[start + 62..start + 64].try_into().unwrap()) | 128;
+            bytes[start + 62..start + 64].copy_from_slice(&flags.to_be_bytes());
+        }
+    }
+    let limits = Limits::default();
+    let fonts = shodo::font::FontCollection::with_options(
+        &limits,
+        shodo::font::FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts.register(bytes).unwrap();
+    let mut inline = style(0, 10.);
+    inline.line_height = LineHeight::Px(4.);
+    let root = ParagraphStyle {
+        root: inline,
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&root, &limits);
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+    let line = b
+        .build(&mut LayoutContext::new(), &fonts)
+        .unwrap()
+        .break_all(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            1000.,
+            &AtomicSizes::EMPTY,
+        )
+        .remove(0);
+    assert_eq!(line.block_size(), 4.);
+    assert_eq!(line.metrics().baseline, -18.);
+    let m = line.annotation_metrics();
+    assert_eq!((m.overflow_over, m.overflow_under), (0., 0.));
+    assert!(m.space_over <= 4. && m.space_under <= 4., "{m:?}");
+    assert_eq!((m.space_over, m.space_under), (0., 4.));
 }
 
 #[test]

@@ -465,6 +465,28 @@ fn a_tab_only_combination_still_exposes_its_reserved_mark_geometry() {
 }
 
 #[test]
+fn quirk_trimmed_trailing_space_does_not_restore_excluded_annotation_geometry() {
+    let mut root = style();
+    root.line_height_quirk = true;
+    root.root.line_height = LineHeight::Px(40.);
+    let plain = build(&root, |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+    });
+    let expected = first_line(&plain, 1000., &LineOptions::default(), &AtomicSizes::EMPTY);
+    let mut large = marked(4.).root;
+    large.font_size = 40.;
+    let p = build(&root, |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+        b.open_inline(NodeId(2), &large, Default::default())
+            .push_text(TextSource::Generated { node: NodeId(3) }, " ")
+            .close_inline();
+    });
+    let actual = first_line(&p, 1000., &LineOptions::default(), &AtomicSizes::EMPTY);
+    assert_eq!(actual.block_size(), expected.block_size());
+    assert_eq!(actual.annotation_metrics(), expected.annotation_metrics());
+}
+
+#[test]
 fn annotation_metrics_separate_bare_box_overflow_and_unused_leading() {
     for (mark, expected_over) in [(false, 15.0), (true, 10.0)] {
         let mut root = marked(40.0);

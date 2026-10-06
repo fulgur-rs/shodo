@@ -14,6 +14,7 @@ pub(crate) struct LineMetrics {
     pub(crate) combination_shifts: crate::hashing::FastMap<usize, LayoutUnit>,
     pub(crate) empty: bool,
     pub(crate) root_strut: bool,
+    pub(crate) trimmed_trailing: Option<usize>,
 }
 
 pub(crate) fn extents(
@@ -384,7 +385,12 @@ impl ProfileResolver {
                 let (base, group) = box_shift(data, *box_index, &mut self.boxes);
                 (a, d, base, group, None)
             }
-            RecordKind::Atomic { node, size, .. } => {
+            RecordKind::Atomic {
+                node,
+                baseline_kind,
+                size,
+                ..
+            } => {
                 let (item, parent_box) = self.atomic_styles[node];
                 let s = &data.styles[data.items[item as usize].style as usize];
                 let parent_style = parent_box.map_or(0, |p| data.boxes[p as usize].style) as usize;
@@ -398,7 +404,7 @@ impl ProfileResolver {
                 let (base, group) =
                     parent_box.map_or((0.0, None), |b| box_shift(data, b, &mut self.boxes));
                 let height = size.block_size + size.margins.block_start + size.margins.block_end;
-                let central = data.baseline_kind(*node) == Some(BaselineKind::Central);
+                let central = *baseline_kind == BaselineKind::Central;
                 let baseline = size
                     .baseline
                     .unwrap_or(if central { height / 2.0 } else { height });
@@ -699,5 +705,6 @@ fn measure_profile(
         combination_shifts,
         empty,
         root_strut,
+        trimmed_trailing: quirk.map(|q| q.trailing),
     }
 }

@@ -70,6 +70,7 @@ impl Line {
         &mut self,
         mut annotation: [Option<LayoutUnit>; 2],
         root_strut: bool,
+        trimmed_trailing: Option<usize>,
         sat: &mut Saturation,
     ) {
         if self.empty {
@@ -80,6 +81,13 @@ impl Line {
         for (index, record) in self.fragments.iter().enumerate() {
             #[cfg(test)]
             super::annotation_probe::record();
+            if let RecordKind::Glyphs { text, .. } = &record.kind
+                && trimmed_trailing.is_some_and(|trailing| {
+                    crate::line::quirk::Struts::trimmed_at(&self.data, text, trailing)
+                })
+            {
+                continue;
+            }
             let center = self.baseline.add(self.block_shifts[index], sat);
             let extents = match &record.kind {
                 RecordKind::Glyphs {
@@ -245,15 +253,16 @@ impl Line {
                 edge.sub(g.end, sat).max(LayoutUnit::ZERO)
             }),
         ];
+        let start = g.start.max(LayoutUnit::ZERO);
+        let end = g.end.min(self.block_size);
+        let available = end.sub(start, sat).max(LayoutUnit::ZERO);
         let space = [
             content
                 .0
-                .sub(g.start.max(LayoutUnit::ZERO), sat)
-                .max(LayoutUnit::ZERO),
-            g.end
-                .min(self.block_size)
-                .sub(content.1, sat)
-                .max(LayoutUnit::ZERO),
+                .sub(start, sat)
+                .max(LayoutUnit::ZERO)
+                .min(available),
+            end.sub(content.1, sat).max(LayoutUnit::ZERO).min(available),
         ];
         let reverse = self.data.style.writing_mode == WritingMode::VerticalLr;
         g.overflow = if reverse {

@@ -217,10 +217,14 @@ pub(crate) fn record_extents(
                 ),
             )
         }
-        RecordKind::Atomic { size, node, .. } => {
+        RecordKind::Atomic {
+            size,
+            baseline_kind,
+            ..
+        } => {
             let height = size.block_size + size.margins.block_start + size.margins.block_end;
             let baseline = size.baseline.unwrap_or(
-                if data.baseline_kind(*node) == Some(crate::geometry::BaselineKind::Central) {
+                if *baseline_kind == crate::geometry::BaselineKind::Central {
                     height / 2.0
                 } else {
                     height

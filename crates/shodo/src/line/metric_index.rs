@@ -95,6 +95,9 @@ pub(super) fn unit_record(
         },
         UnitKind::Atomic { node } => RecordKind::Atomic {
             node: *node,
+            baseline_kind: data
+                .baseline_kind(*node)
+                .unwrap_or(crate::geometry::BaselineKind::Alphabetic),
             size: crate::sanitize::atomic(
                 atomics.get(*node).copied().unwrap_or_default(),
                 &mut crate::limits::WarningSink::new(Some(0)),
