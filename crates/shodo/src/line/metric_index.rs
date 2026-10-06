@@ -516,11 +516,11 @@ impl MetricIndex {
                     .query(&(lo..k.min(t)), |l| l.all, cx)
                     .join(q.query(&(lo.max(t)..k), |l| l.kept, cx))
                     .content;
-                if !content {
+                if !q.credited(data.units[k].parent_box, content) {
                     let p = data.units[k]
                         .parent_box
                         .map_or(q.root(), |b| self.boxes[b as usize]);
-                    side = side.join(quirk::Side::from(p, true));
+                    side = side.join(quirk::Side::from(p, Default::default()));
                     if let Some(group) = p.group {
                         let i = self.group_keys[&u64::from(group)];
                         affected.insert(i);
@@ -535,7 +535,7 @@ impl MetricIndex {
                 }
             }
             if q.ruby(range) {
-                side = side.join(quirk::Side::from(q.root(), true));
+                side = side.join(quirk::Side::from(q.root(), Default::default()));
             }
         }
         let mut ancestors = crate::hashing::FastSet::default();

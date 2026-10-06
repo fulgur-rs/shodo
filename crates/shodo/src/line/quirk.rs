@@ -3,7 +3,7 @@
 //! metrics and the ruby metric index share one definition.
 use crate::analysis::units::UnitKind;
 use crate::paragraph::ParagraphData;
-use crate::style::WhiteSpaceCollapse;
+use crate::style::{VerticalAlign, WhiteSpaceCollapse};
 use std::ops::Range;
 
 /// A collapsible space or tab that is removed when it ends a line. Whether
@@ -39,13 +39,88 @@ fn text(data: &ParagraphData, i: usize, t: usize) -> bool {
         && !(i >= t && trims(data, i))
 }
 
-/// Content that keeps a forced break from contributing its parent's strut.
-fn content(data: &ParagraphData, i: usize, t: usize) -> bool {
+/// Inclusive box depth and the depth of its nearest top/bottom ancestor.
+/// The root is depth zero and always receives pending top/bottom children.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct CreditBox {
+    depth: u32,
+    top_bottom: u32,
+    boundary: bool,
+}
+
+impl CreditBox {
+    pub(crate) const ROOT: Self = Self {
+        depth: 0,
+        top_bottom: 0,
+        boundary: true,
+    };
+
+    pub(crate) fn child(self, align: VerticalAlign) -> Self {
+        let depth = self.depth + 1;
+        let boundary = matches!(align, VerticalAlign::Top | VerticalAlign::Bottom);
+        Self {
+            depth,
+            top_bottom: if boundary { depth } else { self.top_bottom },
+            boundary,
+        }
+    }
+
+    /// Baseline ancestors cannot receive metrics across a top/bottom box.
+    /// Root and top/bottom boxes also receive pending descendants, even empty
+    /// ones. This mirrors Blink's HasMetrics / ApplyBaselineShift.
+    pub(crate) fn credited(self, content: ContentCredit) -> bool {
+        content.0 < if self.boundary { u32::MAX } else { self.depth }
+    }
+}
+
+/// Minimum top/bottom depth of content units; MAX denotes no content.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ContentCredit(u32);
+
+impl Default for ContentCredit {
+    fn default() -> Self {
+        Self(u32::MAX)
+    }
+}
+
+impl ContentCredit {
+    pub(crate) fn join(self, other: Self) -> Self {
+        Self(self.0.min(other.0))
+    }
+}
+
+/// Content credit only: a pending Open does not add the child's own strut.
+/// `owner` includes the box itself for Open/Close, and the parent otherwise.
+/// Trimming is decided by the caller, independently of this static credit.
+pub(crate) fn content_credit(data: &ParagraphData, i: usize, owner: CreditBox) -> ContentCredit {
+    let pending = |align| {
+        matches!(
+            align,
+            VerticalAlign::Top
+                | VerticalAlign::Bottom
+                | VerticalAlign::TextTop
+                | VerticalAlign::TextBottom
+        )
+    };
     match data.units[i].kind {
-        UnitKind::Atomic { .. } => true,
-        UnitKind::Open { box_index } => start_edge(data, box_index),
-        UnitKind::Close { box_index } => end_edge(data, box_index),
-        _ => text(data, i, t),
+        UnitKind::Cluster { .. } | UnitKind::Tab => ContentCredit(owner.top_bottom),
+        UnitKind::Atomic { .. } => {
+            let align =
+                data.styles[data.items[data.units[i].item as usize].style as usize].vertical_align;
+            ContentCredit(owner.child(align).top_bottom)
+        }
+        UnitKind::Open { box_index }
+            if start_edge(data, box_index)
+                || pending(
+                    data.styles[data.boxes[box_index as usize].style as usize].vertical_align,
+                ) =>
+        {
+            ContentCredit(owner.top_bottom)
+        }
+        UnitKind::Close { box_index } if end_edge(data, box_index) => {
+            ContentCredit(owner.top_bottom)
+        }
+        _ => ContentCredit::default(),
     }
 }
 
@@ -87,8 +162,50 @@ impl Struts {
         let t = super::whitespace::trailing_start(data, units.start, units.end);
         s.trailing = t;
         let mut forced = None;
+        // Seed continuation ancestors once. Each Open/Close then updates the
+        // stack in O(1), so credit calculation is linear in the line and its
+        // boundary ancestry, without rescanning descendant subtrees.
+        let mut ancestors = Vec::new();
+        let mut cursor = units.clone().next().and_then(|i| match data.units[i].kind {
+            UnitKind::Close { box_index } => Some(box_index),
+            _ => data.units[i].parent_box,
+        });
+        while let Some(b) = cursor {
+            ancestors.push(b);
+            cursor = data.boxes[b as usize].parent;
+        }
+        let mut stack = vec![(CreditBox::ROOT, ContentCredit::default())];
+        for b in ancestors.into_iter().rev() {
+            let align = data.styles[data.boxes[b as usize].style as usize].vertical_align;
+            let owner = stack.last().expect("root credit frame").0.child(align);
+            stack.push((owner, ContentCredit::default()));
+        }
         for i in units.clone() {
             let u = &data.units[i];
+            match u.kind {
+                UnitKind::Open { box_index } => {
+                    let parent = stack.last_mut().expect("root credit frame");
+                    let owner = parent.0.child(
+                        data.styles[data.boxes[box_index as usize].style as usize].vertical_align,
+                    );
+                    parent.1 = parent.1.join(content_credit(data, i, owner));
+                    stack.push((owner, ContentCredit::default()));
+                }
+                UnitKind::Close { .. } => {
+                    let (owner, content) = stack.pop().expect("closing credit frame");
+                    let parent = stack.last_mut().expect("root credit frame");
+                    parent.1 = parent.1.join(content).join(content_credit(data, i, owner));
+                }
+                UnitKind::ForcedBreak => {
+                    let (owner, content) = *stack.last().expect("root credit frame");
+                    forced = Some((u.parent_box, !owner.credited(content)));
+                }
+                _ if !(i >= t && trims(data, i)) => {
+                    let parent = stack.last_mut().expect("root credit frame");
+                    parent.1 = parent.1.join(content_credit(data, i, parent.0));
+                }
+                _ => {}
+            }
             match u.kind {
                 UnitKind::Open { box_index } if start_edge(data, box_index) => {
                     s.mark(Some(box_index))
@@ -96,22 +213,12 @@ impl Struts {
                 UnitKind::Close { box_index } if end_edge(data, box_index) => {
                     s.mark(Some(box_index))
                 }
-                UnitKind::ForcedBreak => forced = Some(i),
                 _ if text(data, i, t) => s.mark(u.parent_box),
                 _ => {}
             }
         }
-        if let Some(k) = forced {
-            let p = data.units[k].parent_box;
-            let lo = p.map_or(units.start, |b| {
-                (units.start..k)
-                    .rev()
-                    .find(|i| matches!(data.units[*i].kind, UnitKind::Open { box_index } if box_index == b))
-                    .map_or(units.start, |open| open + 1)
-            });
-            if !(lo..k).any(|i| content(data, i, t)) {
-                s.mark(p);
-            }
+        if let Some((p, true)) = forced {
+            s.mark(p);
         }
         if !s.root && ruby_on_line(data, &units) {
             s.root = true;
