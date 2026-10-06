@@ -498,10 +498,13 @@ impl Paragraph {
         line.glyph_spacing = glyph_spacing;
         line.displaced = displaced;
         reshape::apply(&mut line, cx, &mut sat);
-        line.measure_metrics(&mut sat);
-        if let Some(measure) = ruby_measure {
-            crate::ruby::place::format(data, &measure, &mut line, atomics, cx, &mut sat);
-        }
+        let root_strut = line.measure_metrics(&mut sat);
+        let annotation_edges = if let Some(measure) = ruby_measure {
+            crate::ruby::place::format(data, &measure, &mut line, atomics, cx, &mut sat)
+        } else {
+            [None, None]
+        };
+        line.measure_annotations(annotation_edges, root_strut, &mut sat);
         cx.warnings.record_saturation(&sat);
         if constraint
             .max_block_size

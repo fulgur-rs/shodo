@@ -43,7 +43,7 @@ pub(crate) fn format(
     atomics: &AtomicSizes,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
-) {
+) -> [Option<LayoutUnit>; 2] {
     let box_origins: HashMap<_, _> = line
         .fragments
         .iter()
@@ -270,6 +270,8 @@ pub(crate) fn format(
         }
     }
     line.baseline = line.baseline.add(layout.shift, sat);
+    line.annotation_geometry.start = line.annotation_geometry.start.add(layout.shift, sat);
+    line.annotation_geometry.end = line.annotation_geometry.end.add(layout.shift, sat);
     line.block_size = layout.advance;
     if annotations
         .iter()
@@ -278,4 +280,7 @@ pub(crate) fn format(
         line.empty = false;
     }
     line.ruby = annotations;
+    layout
+        .annotation_edges
+        .map(|edge| edge.map(|edge| edge.add(layout.shift, sat)))
 }

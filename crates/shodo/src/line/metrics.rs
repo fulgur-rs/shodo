@@ -13,6 +13,7 @@ pub(crate) struct LineMetrics {
     pub(crate) shifts: Vec<LayoutUnit>,
     pub(crate) combination_shifts: crate::hashing::FastMap<usize, LayoutUnit>,
     pub(crate) empty: bool,
+    pub(crate) root_strut: bool,
 }
 
 pub(crate) fn extents(
@@ -45,29 +46,46 @@ pub(crate) fn emphasized(
         return leaded;
     };
     let metrics = data.style_metrics[style as usize];
+    let content = if upright {
+        let half = metrics.size / 2.0;
+        metrics
+            .vertical_metrics
+            .map_or((half, half), |v| (v.ascent, v.descent))
+    } else {
+        (metrics.metrics.ascent, metrics.metrics.descent)
+    };
+    let content = em_content_extents(data, style, run_font, metrics.size, upright, content);
+    emphasize(data, emphasis, metrics.size, content, leaded)
+}
+
+/// Font-content edges trimmed toward the used face's normalized em height.
+pub(crate) fn em_content_extents(
+    data: &ParagraphData,
+    style: u32,
+    run_font: crate::font::FontId,
+    size: f32,
+    upright: bool,
+    content: (f32, f32),
+) -> (f32, f32) {
+    let metrics = data.style_metrics[style as usize];
     // Trim toward the em box of the font that set the run, which can be a
     // fallback of the primary font whose edges it starts from.
-    let em_ascent = if run_font == metrics.font {
+    let em_ascent = if run_font == metrics.font && size == metrics.size {
         metrics.em_ascent
     } else {
-        super::font_metrics::em_ascent(&data.fonts, run_font, metrics.size)
-            .unwrap_or(metrics.em_ascent)
+        super::font_metrics::em_ascent(&data.fonts, run_font, size).unwrap_or(metrics.em_ascent)
     };
     // Blink's `AdjustTextOverUnderOffsetsForEmHeight` trims the font edge to
     // the em box in whole pixels, never more than their difference.
     let trim = |edge: f32, em: f32| edge - (edge - em).max(0.0).floor();
-    let (over, under) = if upright {
-        let half = metrics.size / 2.0;
-        metrics.vertical_metrics.map_or((half, half), |v| {
-            (trim(v.ascent, half), trim(v.descent, half))
-        })
+    if upright {
+        (trim(content.0, size / 2.0), trim(content.1, size / 2.0))
     } else {
         (
-            trim(metrics.metrics.ascent, em_ascent),
-            trim(metrics.metrics.descent, metrics.size - em_ascent),
+            trim(content.0, em_ascent),
+            trim(content.1, size - em_ascent),
         )
-    };
-    emphasize(data, emphasis, metrics.size, (over, under), leaded)
+    }
 }
 
 /// Adds marks of `size / 2` outside `content` on their side.
@@ -232,6 +250,7 @@ pub(crate) struct ProfileResolver {
     boxes: crate::hashing::FastMap<u32, (f32, Option<u32>)>,
     parents: crate::hashing::FastMap<u32, Option<u32>>,
     atomic_styles: crate::hashing::FastMap<crate::node::NodeId, (u32, Option<u32>)>,
+    exclude_emphasis: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -255,6 +274,14 @@ impl ProfileResolver {
         result
     }
 
+    fn combination_extents(&self, data: &ParagraphData, style: u32, em: f32) -> (f32, f32) {
+        if self.exclude_emphasis {
+            (em / 2.0, em / 2.0)
+        } else {
+            combination_extents(data, style, em)
+        }
+    }
+
     pub(crate) fn combination(
         &mut self,
         data: &ParagraphData,
@@ -267,7 +294,7 @@ impl ProfileResolver {
             .map_or((0.0, None), |b| box_shift(data, b, &mut self.boxes));
         let style = data.items[unit.item as usize].style;
         let base = base + data.combine_center_shift(style);
-        let (over, under) = combination_extents(data, style, span.em);
+        let (over, under) = self.combination_extents(data, style, span.em);
         Some(RecordProfile {
             top: base - over,
             bottom: base + under,
@@ -301,12 +328,16 @@ impl ProfileResolver {
                 let style = data.items[*item as usize].style;
                 let (a, d) =
                     if shaped.orientation == crate::shape::orientation::RunOrientation::Combined {
-                        combination_extents(data, style, s.font_size)
+                        self.combination_extents(data, style, s.font_size)
                     } else {
                         let upright = shaped.orientation
                             == crate::shape::orientation::RunOrientation::Upright;
                         let leaded = extents(s, metrics, shaped.instance.vertical_metrics, upright);
-                        emphasized(data, style, shaped.font, upright, leaded)
+                        if self.exclude_emphasis {
+                            leaded
+                        } else {
+                            emphasized(data, style, shaped.font, upright, leaded)
+                        }
                     };
                 let (base, group) = self
                     .parents
@@ -395,7 +426,10 @@ impl ProfileResolver {
                 // the line box there (`ComputeAnnotationOverflow`).
                 let style = data.items[item as usize].style;
                 let mark = match s.text_emphasis {
-                    Some(emphasis) if emphasis_over(emphasis.position, data.style.writing_mode) => {
+                    Some(emphasis)
+                        if !self.exclude_emphasis
+                            && emphasis_over(emphasis.position, data.style.writing_mode) =>
+                    {
                         data.style_metrics[style as usize].size / 2.0
                     }
                     _ => 0.0,
@@ -438,6 +472,27 @@ pub(crate) fn measure(
     overlay_runs: &[crate::shape::ShapedRun],
     sat: &mut Saturation,
 ) -> LineMetrics {
+    measure_profile(data, units, records, overlay_runs, false, sat)
+}
+
+pub(crate) fn measure_unannotated(
+    data: &ParagraphData,
+    units: Range<usize>,
+    records: &[FragmentRecord],
+    overlay_runs: &[crate::shape::ShapedRun],
+    sat: &mut Saturation,
+) -> LineMetrics {
+    measure_profile(data, units, records, overlay_runs, true, sat)
+}
+
+fn measure_profile(
+    data: &ParagraphData,
+    units: Range<usize>,
+    records: &[FragmentRecord],
+    overlay_runs: &[crate::shape::ShapedRun],
+    exclude_emphasis: bool,
+    sat: &mut Saturation,
+) -> LineMetrics {
     let root = &data.styles[0];
     let root_metrics = data.style_metrics[0];
     let root_upright = matches!(
@@ -461,6 +516,7 @@ pub(crate) fn measure(
         (f32::NEG_INFINITY, f32::NEG_INFINITY)
     };
     let mut resolver = ProfileResolver::new(data, units.clone());
+    resolver.exclude_emphasis = exclude_emphasis;
     let mut empty = true;
     let mut groups: crate::hashing::FastMap<u32, (f32, f32)> = crate::hashing::FastMap::default();
     let mut ghosts: crate::hashing::FastMap<u32, (f32, f32)> = crate::hashing::FastMap::default();
@@ -479,7 +535,7 @@ pub(crate) fn measure(
                 .map_or((0.0, None), |b| box_shift(data, b, &mut resolver.boxes));
             let style = data.items[u.item as usize].style;
             let base = base + data.combine_center_shift(style);
-            let (over, under) = combination_extents(data, style, span.em);
+            let (over, under) = resolver.combination_extents(data, style, span.em);
             let top = base - over;
             let bottom = base + under;
             if let Some(group) = group {
@@ -642,5 +698,6 @@ pub(crate) fn measure(
             .collect(),
         combination_shifts,
         empty,
+        root_strut,
     }
 }

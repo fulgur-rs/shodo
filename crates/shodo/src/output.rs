@@ -1,5 +1,6 @@
 //! Line layout output.
 
+mod annotations;
 mod ellipsis;
 mod glyphs;
 mod line;
@@ -8,6 +9,23 @@ mod owned_bytes;
 pub(crate) mod owner_probe;
 mod paint;
 pub(crate) mod ruby;
+pub use annotations::AnnotationMetrics;
+
+#[cfg(test)]
+pub(crate) mod annotation_probe {
+    thread_local! {
+        static VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+    pub(crate) fn record() {
+        VISITS.with(|n| n.set(n.get() + 1));
+    }
+    pub(crate) fn reset() {
+        VISITS.with(|n| n.set(0));
+    }
+    pub(crate) fn count() -> usize {
+        VISITS.with(std::cell::Cell::get)
+    }
+}
 pub use ellipsis::Truncation;
 pub use paint::{DecorationRect, PaintSpan};
 pub use ruby::{RubyAnnotationView, RubyTransform};
@@ -46,6 +64,7 @@ pub struct Line {
     pub(crate) _clone_probe: clone_probe::CloneProbe,
     pub(crate) ruby: Vec<ruby::RubyAnnotationRecord>,
     pub(crate) emphasis_offsets: Vec<(LayoutUnit, LayoutUnit)>,
+    pub(crate) annotation_geometry: annotations::Geometry,
     pub(crate) ruby_caret_gaps: Vec<crate::ruby::align::CaretGap>,
     pub(crate) data: Arc<ParagraphData>,
     pub(crate) break_token: BreakToken,

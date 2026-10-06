@@ -384,6 +384,7 @@ fn emphasized_sibling_geometry_uses_bounded_interval_queries() {
     for count in [64, 128] {
         let paragraph = paragraph_with_emphasis(count, "a", WritingMode::VerticalRl, true);
         VISITS.with(|n| n.set(0));
+        crate::output::annotation_probe::reset();
         let lines = paragraph.break_all(
             &mut LayoutContext::new(),
             &Default::default(),
@@ -393,6 +394,25 @@ fn emphasized_sibling_geometry_uses_bounded_interval_queries() {
         let visits = VISITS.with(|n| n.get());
         assert_eq!(lines.len(), 1);
         let records = lines[0].fragments.len();
+        let annotation_visits = crate::output::annotation_probe::count();
+        let all_records = records
+            + lines[0]
+                .ruby
+                .iter()
+                .map(|a| a.line.fragments.len())
+                .sum::<usize>();
+        assert_eq!(
+            annotation_visits, all_records,
+            "one accepted content scan per root/child record"
+        );
+        for _ in 0..128 {
+            std::hint::black_box(lines[0].annotation_metrics());
+        }
+        assert_eq!(
+            crate::output::annotation_probe::count(),
+            annotation_visits,
+            "cached queries do not rescan content or ruby"
+        );
         assert_eq!(lines[0].emphasis_offsets.len(), records);
         assert!(
             visits <= 32 * (records + count),
