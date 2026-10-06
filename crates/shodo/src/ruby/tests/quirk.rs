@@ -437,8 +437,8 @@ fn emphasis_index_matches_retained_ranges() {
         crate::geometry::WritingMode::VerticalLr,
     ] {
         for quirk in [false, true] {
-            // Marks on the root strut only, then on inline boxes and a
-            // composition only, so neither hides the other's outset.
+            // Marks on root text only, then on inline box text and a
+            // composition only, so neither hides the other's overflow.
             for root_mark in [true, false] {
                 let inner = |position| if root_mark { None } else { mark(position) };
                 let mut b = ParagraphBuilder::new(

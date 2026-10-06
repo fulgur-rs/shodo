@@ -25,73 +25,85 @@ pub(crate) fn extents(
     (a + lead, d + lead)
 }
 
-/// Line-box extents of a box or text in `s`: [`extents`] united with its
-/// emphasis mark outset. Blink's `InlineBoxState::ComputeTextMetrics` adds the
-/// mark to the font extents without leading, then takes the larger of that and
-/// the leaded extents on each side, so positive half-leading absorbs the mark.
-/// Baseline positioning (`text-top`, `text-bottom`) keeps [`extents`].
-pub(crate) fn sized_extents(
-    data: &ParagraphData,
-    s: &InlineStyle,
-    m: FontMetrics,
-    vertical: Option<crate::font::VerticalFontMetrics>,
-    upright: bool,
-) -> (f32, f32) {
-    let (a, d, lead) = font_extents(s, m, vertical, upright);
-    emphasized(data, s, (a, d), (a + lead, d + lead))
-}
-
-/// Unites leaded extents with the font extents plus the emphasis mark on its
-/// line-relative side.
+/// Extents of an emphasized text record: `leaded` united with its marks.
+///
+/// Chromium 152 treats marks like ruby annotations
+/// (`ComputeAnnotationOverflow`): they never enter the root or inline box
+/// struts, and lines grow only where text plus marks overflows the line box.
+/// A mark is half the font size and sits outside the text's em box, the
+/// primary font's ascent or descent trimmed toward its normalized
+/// typographic height in whole pixels. The unmarked side keeps `leaded`.
 pub(crate) fn emphasized(
     data: &ParagraphData,
-    s: &InlineStyle,
-    font: (f32, f32),
+    style: u32,
+    upright: bool,
     leaded: (f32, f32),
 ) -> (f32, f32) {
+    let s = &data.styles[style as usize];
     let Some(emphasis) = s.text_emphasis else {
         return leaded;
     };
-    let mark = emphasis_mark_extent(s);
-    let (over, under) = if emphasis_over(emphasis.position, data.style.writing_mode) {
-        (font.0 + mark, font.1)
+    let metrics = data.style_metrics[style as usize];
+    // Blink's `AdjustTextOverUnderOffsetsForEmHeight` trims the font edge to
+    // the em box in whole pixels, never more than their difference.
+    let trim = |edge: f32, em: f32| edge - (edge - em).max(0.0).floor();
+    let (over, under) = if upright {
+        let half = metrics.size / 2.0;
+        metrics.vertical_metrics.map_or((half, half), |v| {
+            (trim(v.ascent, half), trim(v.descent, half))
+        })
     } else {
-        (font.0, font.1 + mark)
+        (
+            trim(metrics.metrics.ascent, metrics.em_ascent),
+            trim(metrics.metrics.descent, metrics.size - metrics.em_ascent),
+        )
     };
-    (leaded.0.max(over), leaded.1.max(under))
+    emphasize(data, emphasis, metrics.size, (over, under), leaded)
 }
 
-/// Block extent the marks of `s` reserve. Blink sizes the mark from its font's
-/// em-normalized typographic height at half the text's font size.
-pub(crate) fn emphasis_mark_extent(s: &InlineStyle) -> f32 {
-    s.font_size / 2.0
+/// Adds marks of `size / 2` outside `content` on their side.
+fn emphasize(
+    data: &ParagraphData,
+    emphasis: crate::style::TextEmphasis,
+    size: f32,
+    content: (f32, f32),
+    leaded: (f32, f32),
+) -> (f32, f32) {
+    let mark = size / 2.0;
+    if emphasis_over(emphasis.position, data.style.writing_mode) {
+        (leaded.0.max(content.0 + mark), leaded.1)
+    } else {
+        (leaded.0, leaded.1.max(content.1 + mark))
+    }
 }
 
-/// Whether marks sit on the line-over side. Horizontal text uses the over or
-/// under keyword; vertical text puts `right` over and `left` under.
+/// Whether marks sit on the line-over side (Blink
+/// `ComputedStyle::GetTextEmphasisLineLogicalSide`). Horizontal text uses the
+/// over or under keyword. Vertical modes put `right` on the line-over side,
+/// except `sideways-lr`, whose line-over side is on the left.
 pub(crate) fn emphasis_over(
     position: crate::style::TextEmphasisPosition,
     mode: crate::geometry::WritingMode,
 ) -> bool {
+    use crate::geometry::WritingMode as W;
     use crate::style::TextEmphasisPosition as P;
     match mode {
-        crate::geometry::WritingMode::HorizontalTb => {
-            matches!(position, P::OverRight | P::OverLeft)
+        W::HorizontalTb => matches!(position, P::OverRight | P::OverLeft),
+        W::SidewaysLr => matches!(position, P::OverLeft | P::UnderLeft),
+        W::VerticalRl | W::VerticalLr | W::SidewaysRl => {
+            matches!(position, P::OverRight | P::UnderRight)
         }
-        _ => matches!(position, P::OverRight | P::UnderRight),
     }
 }
 
 /// Extents of a combined square, whose internal line-height is 1em, with the
-/// emphasis mark of its text.
+/// emphasis marks of its text outside the square.
 fn combination_extents(data: &ParagraphData, style: u32, em: f32) -> (f32, f32) {
     let half = em / 2.0;
-    emphasized(
-        data,
-        &data.styles[style as usize],
-        (half, half),
-        (half, half),
-    )
+    match data.styles[style as usize].text_emphasis {
+        Some(emphasis) => emphasize(data, emphasis, em, (half, half), (half, half)),
+        None => (half, half),
+    }
 }
 
 /// Font ascent, descent and half-leading.
@@ -277,20 +289,16 @@ impl ProfileResolver {
                     .instance
                     .metrics
                     .unwrap_or_else(|| data.fonts.metrics(shaped.font, shaped.font_size));
-                let (a, d) = if shaped.orientation
-                    == crate::shape::orientation::RunOrientation::Combined
-                {
-                    let half = s.font_size / 2.0;
-                    emphasized(data, s, (half, half), (half, half))
-                } else {
-                    sized_extents(
-                        data,
-                        s,
-                        metrics,
-                        shaped.instance.vertical_metrics,
-                        shaped.orientation == crate::shape::orientation::RunOrientation::Upright,
-                    )
-                };
+                let style = data.items[*item as usize].style;
+                let (a, d) =
+                    if shaped.orientation == crate::shape::orientation::RunOrientation::Combined {
+                        combination_extents(data, style, s.font_size)
+                    } else {
+                        let upright = shaped.orientation
+                            == crate::shape::orientation::RunOrientation::Upright;
+                        let leaded = extents(s, metrics, shaped.instance.vertical_metrics, upright);
+                        emphasized(data, style, upright, leaded)
+                    };
                 let (base, group) = self
                     .parents
                     .get(item)
@@ -327,8 +335,7 @@ impl ProfileResolver {
                     crate::geometry::WritingMode::VerticalRl
                         | crate::geometry::WritingMode::VerticalLr
                 ) && s.text_orientation != crate::style::TextOrientation::Sideways;
-                let (a, d) = sized_extents(
-                    data,
+                let (a, d) = extents(
                     s,
                     style_metrics.metrics,
                     style_metrics.vertical_metrics,
@@ -424,8 +431,7 @@ pub(crate) fn measure(
         .then(|| super::quirk::Struts::line(data, units.clone()));
     let root_strut = quirk.as_ref().is_none_or(|q| q.root);
     let (mut above, mut below) = if root_strut {
-        sized_extents(
-            data,
+        extents(
             root,
             root_metrics.metrics,
             root_metrics.vertical_metrics,

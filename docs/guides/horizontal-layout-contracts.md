@@ -45,22 +45,30 @@ adds coordinated annotation lanes and ink overflow.
 
 ## Emphasis marks
 
-`InlineStyle::text_emphasis` reserves line-box extent the way Blink's
-`InlineBoxState::ComputeTextMetrics` does. The root strut, each inline box's
-strut and each text run add a mark of half their font size to the font ascent
-(line-over side) or descent (line-under side), then keep the larger of that and
-the half-leading extents on each side. Positive half-leading absorbs the mark;
-with negative half-leading the font extents return on both sides. Horizontal
-text uses the over/under keyword; vertical text puts `right` on the line-over
-side and `left` on the line-under side. `vertical-align` positions, including
-`text-top` and `text-bottom`, and `LineMetrics::text_over`/`text_under` ignore
-the marks.
+`InlineStyle::text_emphasis` follows Chromium 152, which lays marks out like
+ruby annotations (`ComputeAnnotationOverflow`): they never enter the root or
+inline box struts, so an emphasized empty inline or a line without emphasized
+text keeps its height. A mark is half the font size and sits outside the text's
+em box: the style's primary font ascent or descent, trimmed in whole pixels
+toward its OS/2 typographic height normalized to 1em. A line grows only where an emphasized text
+run plus its marks overflows the line box on the marks' side, so half-leading
+absorbs marks and the other side is unchanged. Horizontal text uses the
+over/under keyword; vertical text puts `right` on the line-over side, except
+`sideways-lr`, whose line-over side is the left. `vertical-align` positions,
+including `text-top` and `text-bottom`, and `LineMetrics::text_over`/`text_under`
+ignore the marks.
+
+Chromium also lets the previous line's or block's unused leading absorb a line's
+overflow, and the next line's for under marks; shodo sizes each line alone, as
+it does for ruby. Chromium rounds font metrics to pixels first, so its results
+can differ by a pixel. Unmarked text on a line with marks
+does not add its em box, marks do not stack outside ruby annotations on the same
+side, and `Line::overflow_rect` does not include the marks.
 
 The renderer draws the marks. `GlyphRunView::emphasis_mark()` returns the mark
 character, its size, its line-relative side and the distance from the baseline
-to the text edge it sits outside; draw one mark per typographic character whose
-cluster is not `emphasis_excluded`. Ruby annotations do not move out of the mark
-area, and `Line::overflow_rect` does not include the marks.
+to the primary font edge Blink paints it outside; draw one mark per typographic
+character whose cluster is not `emphasis_excluded`.
 
 ## Quirks-mode line height
 

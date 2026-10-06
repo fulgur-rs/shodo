@@ -68,6 +68,10 @@ pub(crate) struct StyleMetrics {
     pub(crate) space: f32,
     pub(crate) ch: f32,
     pub(crate) ic: f32,
+    /// Ascent of the primary font's em box at `size`: its OS/2 typographic
+    /// ascent, or hhea ascent, normalized so ascent plus descent is 1em. Only
+    /// emphasized styles read the OS/2 table; others use the hhea ratio.
+    pub(crate) em_ascent: f32,
 }
 
 const PROBE_INSTANCE_CACHE_CAPACITY: usize = 4;
@@ -195,6 +199,8 @@ impl Hash for StyleMetricsKey<'_> {
             }
             None => 0_u8.hash(state),
         }
+        // Only emphasized styles resolve the em box.
+        style.text_emphasis.is_some().hash(state);
     }
 }
 
@@ -256,6 +262,7 @@ fn same_metric_inputs(a: &InlineStyle, b: &InlineStyle) -> bool {
         && same_variations
         && a.font_optical_sizing == b.font_optical_sizing
         && same_size_adjust
+        && a.text_emphasis.is_some() == b.text_emphasis.is_some()
 }
 
 pub(crate) fn resolve(
@@ -316,27 +323,60 @@ pub(crate) fn resolve(
             style,
             warnings,
         );
+        let metrics = fonts
+            .metrics_with_coords(font, size, &instance.coords)
+            .expect("retained primary face");
+        // Only emphasis marks read the em box; skip the face otherwise.
+        let typo_ratio = style.text_emphasis.and_then(|_| {
+            #[cfg(test)]
+            crate::font::record_metric_font_ref_open();
+            FontRef::from_index(data.data.as_ref(), data.index)
+                .ok()
+                .and_then(|face| em_ascent_ratio(&face))
+        });
+        let em_ascent =
+            typo_ratio.unwrap_or_else(|| hhea_ratio(metrics.ascent, metrics.descent)) * size;
         return StyleMetrics {
             font,
             size,
             space,
             ch,
             ic,
-            metrics: fonts
-                .metrics_with_coords(font, size, &instance.coords)
-                .expect("retained primary face"),
+            metrics,
             vertical_metrics: fonts.vertical_metrics(font, size, &instance.coords),
+            em_ascent,
         };
     }
     let font = fonts.primary_font();
+    let metrics = fonts.metrics(font, style.font_size);
     StyleMetrics {
         font,
         size: style.font_size,
         space,
         ch,
         ic,
-        metrics: fonts.metrics(font, style.font_size),
+        metrics,
         vertical_metrics: None,
+        em_ascent: hhea_ratio(metrics.ascent, metrics.descent) * style.font_size,
+    }
+}
+
+/// Blink's `NormalizedTypoAscentAndDescent`: the typographic ascent's share
+/// of the em, or `None` without usable OS/2 typographic metrics.
+fn em_ascent_ratio(face: &FontRef<'_>) -> Option<f32> {
+    use skrifa::raw::TableProvider;
+    let os2 = face.os2().ok()?;
+    let ascent = f32::from(os2.s_typo_ascender());
+    let height = ascent - f32::from(os2.s_typo_descender());
+    (height > 0.0).then(|| ascent / height)
+}
+
+fn hhea_ratio(ascent: f32, descent: f32) -> f32 {
+    let height = ascent + descent;
+    if height > 0.0 && height.is_finite() {
+        ascent / height
+    } else {
+        0.5
     }
 }
 

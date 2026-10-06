@@ -621,13 +621,8 @@ impl MetricIndex {
             data.style.writing_mode,
             WritingMode::VerticalRl | WritingMode::VerticalLr
         ) && root.text_orientation != TextOrientation::Sideways;
-        let (above, below) = super::metrics::sized_extents(
-            data,
-            root,
-            metrics.metrics,
-            metrics.vertical_metrics,
-            upright,
-        );
+        let (above, below) =
+            super::metrics::extents(root, metrics.metrics, metrics.vertical_metrics, upright);
         let bounds = if self.quirk.is_some() {
             // Root text and credited struts already joined `side`; a line
             // nothing sizes has a zero-height root.

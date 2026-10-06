@@ -397,8 +397,8 @@ pub enum TextEmphasisPosition {
     UnderLeft,
 }
 
-/// `text-emphasis`. The marks reserve line-box extent on their line-relative
-/// side (half the font size, absorbed by positive half-leading); see
+/// `text-emphasis`. Lines grow where emphasized text and its marks overflow
+/// the line box, as in Chromium 152; see
 /// [`crate::GlyphRunView::emphasis_mark`] for drawing them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TextEmphasis {

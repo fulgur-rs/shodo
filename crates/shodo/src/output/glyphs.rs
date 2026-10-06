@@ -271,8 +271,7 @@ impl<'a> GlyphRunView<'a> {
     /// `text-emphasis`. See [`crate::EmphasisMark`] for placement.
     pub fn emphasis_mark(&self) -> Option<crate::EmphasisMark> {
         use crate::style::TextEmphasisShape as S;
-        let style = &self.data().styles[self.style_index() as usize];
-        let emphasis = style.text_emphasis?;
+        let emphasis = self.data().styles[self.style_index() as usize].text_emphasis?;
         let character = match (emphasis.shape, emphasis.filled) {
             (S::Dot, true) => '\u{2022}',
             (S::Dot, false) => '\u{25E6}',
@@ -288,20 +287,19 @@ impl<'a> GlyphRunView<'a> {
         };
         let line_over =
             crate::line::metrics::emphasis_over(emphasis.position, self.data().style.writing_mode);
-        let half = self.font_size() / 2.0;
+        // Blink paints from the style's primary font, not a fallback run font.
+        let metrics = self.data().style_metrics[self.style_index() as usize];
+        let half = metrics.size / 2.0;
         let (ascent, descent) = match self.orientation() {
             crate::GlyphOrientation::Combined => (half, half),
-            crate::GlyphOrientation::Upright => self
-                .vertical_metrics()
+            crate::GlyphOrientation::Upright => metrics
+                .vertical_metrics
                 .map_or((half, half), |v| (v.ascent, v.descent)),
-            _ => {
-                let metrics = self.metrics();
-                (metrics.ascent, metrics.descent)
-            }
+            _ => (metrics.metrics.ascent, metrics.metrics.descent),
         };
         Some(crate::EmphasisMark {
             character,
-            font_size: crate::line::metrics::emphasis_mark_extent(style),
+            font_size: half,
             line_over,
             offset: if line_over { ascent } else { descent },
         })

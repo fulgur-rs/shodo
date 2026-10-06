@@ -44,10 +44,10 @@ fn half_leading_absorbs_marks() {
     root.root.line_height = LineHeight::Px(40.0);
     root.root.text_emphasis = emphasis(TextEmphasisPosition::OverRight);
     assert_eq!(measure(&root, "ab"), (40.0, 23.0));
-    // With negative half-leading, both sides fall back to the font extents,
-    // and the marked side adds the mark.
+    // Marks overflow a short line box on their side only; the strut does not
+    // carry them.
     root.root.line_height = LineHeight::Px(4.0);
-    assert_eq!(measure(&root, "ab"), (15.0, 13.0));
+    assert_eq!(measure(&root, "ab"), (12.0, 13.0));
     root.root.text_emphasis = None;
     assert_eq!(measure(&root, "ab"), (4.0, 5.0));
 }
@@ -68,44 +68,32 @@ fn emphasized_inline_extends_the_line() {
         (l.block_size(), l.baseline(BaselineKind::Alphabetic)),
         (15.0, 13.0)
     );
-    // An empty emphasized inline still sizes the line with its strut.
+    // Inline box struts carry no marks, so an empty emphasized inline does
+    // not grow the line (Chromium 152).
     let p = build(&root, |b| {
         b.push_text(TextSource::Generated { node: NodeId(1) }, "a");
         b.open_inline(NodeId(2), &child, InlineEdges::default())
             .close_inline();
     });
     let l = first_line(&p, 1000.0, &LineOptions::default(), &AtomicSizes::EMPTY);
-    assert_eq!(l.block_size(), 15.0);
+    assert_eq!(l.block_size(), 10.0);
 }
 
 #[test]
 fn vertical_marks_use_the_left_or_right_keyword() {
+    use TextEmphasisPosition as P;
+    use WritingMode as W;
     for (mode, position, over) in [
-        (
-            WritingMode::VerticalRl,
-            TextEmphasisPosition::OverRight,
-            true,
-        ),
-        (
-            WritingMode::VerticalRl,
-            TextEmphasisPosition::UnderRight,
-            true,
-        ),
-        (
-            WritingMode::VerticalRl,
-            TextEmphasisPosition::OverLeft,
-            false,
-        ),
-        (
-            WritingMode::VerticalLr,
-            TextEmphasisPosition::UnderRight,
-            true,
-        ),
-        (
-            WritingMode::VerticalLr,
-            TextEmphasisPosition::UnderLeft,
-            false,
-        ),
+        (W::VerticalRl, P::OverRight, true),
+        (W::VerticalRl, P::UnderRight, true),
+        (W::VerticalRl, P::OverLeft, false),
+        (W::VerticalLr, P::UnderRight, true),
+        (W::VerticalLr, P::UnderLeft, false),
+        (W::SidewaysRl, P::OverRight, true),
+        (W::SidewaysRl, P::OverLeft, false),
+        // Line-over is on the left in sideways-lr.
+        (W::SidewaysLr, P::UnderLeft, true),
+        (W::SidewaysLr, P::OverRight, false),
     ] {
         let mut root = style();
         root.writing_mode = mode;
@@ -113,8 +101,8 @@ fn vertical_marks_use_the_left_or_right_keyword() {
         root.root.text_emphasis = emphasis(position);
         let (size, baseline) = measure(&root, "ab");
         assert_eq!(size, plain_size + 5.0, "{mode:?} {position:?}");
-        // Line-over is block-start in vertical-rl and block-end in vertical-lr.
-        let shifted = over == (mode == WritingMode::VerticalRl);
+        // Line-over is block-start except in vertical-lr.
+        let shifted = over == (mode != W::VerticalLr);
         let expected = plain_baseline + if shifted { 5.0 } else { 0.0 };
         assert_eq!(baseline, expected, "{mode:?} {position:?}");
     }
@@ -192,4 +180,59 @@ fn runs_describe_their_marks() {
         panic!("one run")
     };
     assert_eq!((mark.character, mark.line_over), ('\u{25CB}', true));
+}
+
+#[test]
+fn marks_sit_outside_the_normalized_em_box() {
+    use shodo::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use shodo::limits::Limits;
+    use shodo::style::FontFamily;
+    // The fixture's typographic ascent is 1069 of a 1362 unit em, so its
+    // normalized em ascent is below its 1069 unit hhea ascent.
+    let fonts = FontCollection::with_options(
+        &Limits::default(),
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            include_bytes!("../../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Fixture".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut root = style();
+    root.root.font_families = vec![FontFamily::Named("Fixture".into())];
+    let line = |root: &ParagraphStyle| {
+        let mut b = shodo::ParagraphBuilder::new(root, &Limits::default());
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "ab");
+        let p = b.build(&mut shodo::LayoutContext::new(), &fonts).unwrap();
+        let l = first_line(&p, 1000.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        (l.block_size(), l.baseline(BaselineKind::Alphabetic))
+    };
+    let (plain, baseline) = line(&root);
+    // Ascent 10.69 trims 2 whole pixels toward the 7.85px em ascent; descent
+    // 2.93 is less than a pixel above the 2.15px em descent and stays. Chromium
+    // 152 gives 16 and 19 for 14px lines after rounding the metrics.
+    let ascent = 10.0 * 1069.0 / 1000.0;
+    let descent = 10.0 * 293.0 / 1000.0;
+    root.root.text_emphasis = emphasis(TextEmphasisPosition::OverRight);
+    let (size, marked_baseline) = line(&root);
+    assert!(
+        (marked_baseline - (ascent - 2.0 + 5.0)).abs() < 0.02,
+        "{marked_baseline}"
+    );
+    assert!(
+        (size - plain - (marked_baseline - baseline)).abs() < 0.02,
+        "{size}"
+    );
+    root.root.text_emphasis = emphasis(TextEmphasisPosition::UnderRight);
+    let (size, under_baseline) = line(&root);
+    assert_eq!(under_baseline, baseline);
+    assert!((size - (baseline + descent + 5.0)).abs() < 0.02, "{size}");
 }
