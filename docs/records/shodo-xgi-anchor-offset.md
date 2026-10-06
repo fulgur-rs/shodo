@@ -22,7 +22,7 @@ vertical-rl and vertical-lr, LTR/RTL, the first and second line (offsets
 Commands used with the real stable toolchain, cached offline dependencies,
 `TMPDIR=~/tmp`, and the goal's own Cargo output directory:
 
-- `cargo test --offline --locked --workspace`: 1595 passed, 0 failed,
+- `cargo test --offline --locked --workspace`: 1593 passed, 0 failed,
   8 ignored.
 - `cargo test --offline --locked -p shodo --test fragments out_of_flow`:
   2 passed.
@@ -40,7 +40,11 @@ Independent review found no blocking issues. Sideways modes, retry and
 ellipsis were inspected for unchanged offset propagation but are not
 additional assertions in the new test.
 
-An earlier workspace verification was interrupted when a concurrent build
-replaced a test executable in a shared output directory. The complete run
-reported above used a dedicated output directory and succeeded. No fixture
-or test expectation was changed to resolve that environment failure.
+Earlier verification attempts reused a shared output directory: a concurrent
+build replaced a test executable, and a copied cache subsequently retained
+another worktree's workspace binaries. Their results are excluded. Before
+the complete run above, all five workspace packages were cleaned in the
+dedicated output directory while retaining third-party dependencies. The
+build log confirms this worktree's source paths and the new anchor test;
+the other worktree's added strut tests are absent. No fixture or test
+expectation was changed to resolve these environment failures.
