@@ -29,6 +29,8 @@ pub(crate) struct Item {
     pub(crate) text: Range<u32>,
     pub(crate) style: u32,
     pub(crate) node: Option<NodeId>,
+    /// A forced break supplied with its own style instead of its container's.
+    pub(crate) own_break_style: bool,
 }
 
 #[derive(Clone, Debug)]

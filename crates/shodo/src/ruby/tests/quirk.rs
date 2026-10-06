@@ -372,6 +372,111 @@ fn pending_vertical_align_index_matches_retained_ranges() {
 }
 
 #[test]
+fn styled_break_index_matches_retained_ranges_and_baselines() {
+    use crate::geometry::WritingMode;
+    use crate::style::{LineHeight, TextOrientation, VerticalAlign};
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        for quirk in [false, true] {
+            for outer in [
+                VerticalAlign::Baseline,
+                VerticalAlign::Top,
+                VerticalAlign::Bottom,
+            ] {
+                for align in [
+                    VerticalAlign::Baseline,
+                    VerticalAlign::Top,
+                    VerticalAlign::Bottom,
+                    VerticalAlign::TextTop,
+                    VerticalAlign::TextBottom,
+                    VerticalAlign::Middle,
+                    VerticalAlign::Length(9.0),
+                ] {
+                    let p = quirk_paragraph_in(mode, quirk, |b| {
+                        b.open_inline(
+                            NodeId(100),
+                            &InlineStyle {
+                                line_height: LineHeight::Px(60.0),
+                                vertical_align: outer,
+                                ..style(24.0)
+                            },
+                            Default::default(),
+                        );
+                        b.open_inline(NodeId(101), &style(24.0), Default::default());
+                        b.push_text(TextSource::Generated { node: NodeId(1) }, "x ");
+                        b.push_forced_break_with_style(
+                            NodeId(3),
+                            &InlineStyle {
+                                line_height: LineHeight::Px(40.0),
+                                vertical_align: align,
+                                text_orientation: TextOrientation::Sideways,
+                                ..style(12.0)
+                            },
+                        );
+                        b.close_inline().close_inline();
+                        b.push_forced_break_with_style(NodeId(4), &style(12.0));
+                    });
+                    assert!(
+                        assert_quirk_parity(&p, &AtomicSizes::EMPTY) > 5,
+                        "{mode:?}/{quirk}/{outer:?}/{align:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn styled_break_index_queries_do_not_rescan_prefixes() {
+    use crate::style::LineHeight;
+    let mut visits = Vec::new();
+    for count in [64, 128] {
+        let p = quirk_paragraph(true, |b| {
+            b.open_inline(
+                NodeId(100),
+                &InlineStyle {
+                    line_height: LineHeight::Px(60.0),
+                    ..style(24.0)
+                },
+                Default::default(),
+            );
+            b.push_text(
+                TextSource::Generated { node: NodeId(1) },
+                &"x ".repeat(count),
+            );
+            b.push_forced_break_with_style(
+                NodeId(3),
+                &InlineStyle {
+                    line_height: LineHeight::Px(40.0),
+                    ..style(24.0)
+                },
+            );
+            b.close_inline();
+        });
+        let end = p.data.units.len() - 1;
+        let mut cx = LayoutContext::new();
+        for start in 1..count {
+            let metrics = crate::line::metric_index::measure(
+                &p.data,
+                start..end,
+                &AtomicSizes::EMPTY,
+                &mut cx,
+                &mut Saturation::default(),
+            );
+            assert_eq!(metrics.block_size.to_f32(), 60.0);
+        }
+        visits.push(cx.ruby_measure_visits);
+    }
+    assert!(
+        visits[1] < 3 * visits[0],
+        "styled break prefixes rescanned: {visits:?}"
+    );
+}
+
+#[test]
 fn pending_forced_break_queries_do_not_rescan_descendants() {
     use crate::style::{LineHeight, VerticalAlign};
     let mut visits = Vec::new();

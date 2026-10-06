@@ -198,7 +198,13 @@ impl Struts {
                 }
                 UnitKind::ForcedBreak => {
                     let (owner, content) = *stack.last().expect("root credit frame");
-                    forced = Some((u.parent_box, !owner.credited(content)));
+                    // Explicit break profiles size themselves, not empty
+                    // ancestor boxes. Direct root breaks keep its usual rule.
+                    let inherited = !data.items[u.item as usize].own_break_style;
+                    forced = Some((
+                        u.parent_box,
+                        (inherited || u.parent_box.is_none()) && !owner.credited(content),
+                    ));
                 }
                 _ if !(i >= t && trims(data, i)) => {
                     let parent = stack.last_mut().expect("root credit frame");

@@ -181,6 +181,7 @@ mod tests {
                 text: 0..text.len() as u32,
                 style: 0,
                 node: None,
+                own_break_style: false,
             }],
             mapping: None,
             indivisible: Vec::new(),

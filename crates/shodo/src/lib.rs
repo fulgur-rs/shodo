@@ -148,8 +148,9 @@ pub use builder::{ParagraphBuilder, RichText};
 pub use context::LayoutContext;
 pub use output::{
     AnchorFragment, AtomicFragment, BreakReason, Cluster, ClusterFlags, DecorationRect,
-    EmphasisMark, Fragment, Glyph, GlyphRunView, GlyphTransform, Glyphs, InlineBoxFragment, Line,
-    LineMetrics, PaintSpan, RubyAnnotationView, RubyTransform, TextCombination, Truncation,
+    EmphasisMark, ForcedBreak, Fragment, Glyph, GlyphRunView, GlyphTransform, Glyphs,
+    InlineBoxFragment, Line, LineMetrics, PaintSpan, RubyAnnotationView, RubyTransform,
+    TextCombination, Truncation,
 };
 pub use paragraph::{
     AtomicIntrinsic, AtomicIntrinsics, AtomicSize, AtomicSizes, BreakPlan, BreakToken, FloatClear,

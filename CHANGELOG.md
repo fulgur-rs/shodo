@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `ParagraphBuilder::push_forced_break_with_style` for an independent
+  break strut, and `Line::forced_break` to read its node and effective style.
+
 ## [0.0.18](https://github.com/fulgur-rs/shodo/compare/v0.0.17...v0.0.18) - 2026-10-06
 
 ### Added

@@ -172,7 +172,10 @@ impl MetricIndex {
             };
             tree[size + i].active = active;
             let record = unit_record(data, i, atomics, &mut sat);
-            let profile = record.as_ref().and_then(|r| resolver.record(data, r, &[]));
+            let profile = record
+                .as_ref()
+                .and_then(|r| resolver.record(data, r, &[]))
+                .or_else(|| resolver.forced_break(data, u));
             record_content[i] = record.as_ref().zip(profile).and_then(|(r, p)| {
                 crate::ruby::geometry::record_extents(data, r, &[], &mut sat)
                     .map(|(a, d)| content_bounds(data, p, a, d))

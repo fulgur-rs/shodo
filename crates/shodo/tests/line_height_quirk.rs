@@ -118,6 +118,164 @@ fn q(width: f32, input: impl FnOnce(&mut ParagraphBuilder, &mut Doc)) -> Vec<f32
 const WIDE: f32 = 1000.0;
 
 #[test]
+fn styled_break_credits_itself_without_crediting_text_free_ancestors() {
+    assert_eq!(
+        q(WIDE, |b, _| {
+            b.open_inline(NodeId(2), &span(40.0), InlineEdges::default());
+            b.open_inline(NodeId(4), &span(60.0), InlineEdges::default());
+            b.push_forced_break_with_style(NodeId(3), &span(10.0));
+            b.close_inline().close_inline();
+        }),
+        [10.0]
+    );
+}
+
+#[test]
+fn styled_break_directly_in_root_keeps_the_root_break_rule() {
+    assert_eq!(
+        q(WIDE, |b, _| {
+            b.push_forced_break_with_style(NodeId(3), &span(10.0));
+        }),
+        [20.0]
+    );
+    assert_eq!(
+        q(WIDE, |b, d| {
+            d.img(b, VerticalAlign::Baseline);
+            b.push_forced_break_with_style(NodeId(3), &span(10.0));
+        }),
+        [10.0]
+    );
+}
+
+#[test]
+fn styled_break_owns_a_strut_even_after_text_or_an_atomic() {
+    for atomic in [false, true] {
+        assert_eq!(
+            q(WIDE, |b, d| {
+                b.open_inline(NodeId(2), &span(10.0), InlineEdges::default());
+                if atomic {
+                    d.img(b, VerticalAlign::Baseline);
+                } else {
+                    text(b, "x");
+                }
+                b.push_forced_break_with_style(NodeId(3), &span(40.0));
+                b.close_inline();
+            }),
+            [40.0]
+        );
+    }
+}
+
+#[test]
+fn styled_break_keeps_its_own_strut_when_it_interns_to_the_parent_style() {
+    assert_eq!(
+        q(WIDE, |b, d| {
+            b.open_inline(NodeId(2), &span(40.0), InlineEdges::default());
+            d.img(b, VerticalAlign::Baseline);
+            b.push_forced_break_with_style(NodeId(3), &span(40.0));
+            b.close_inline();
+        }),
+        [40.0]
+    );
+}
+
+#[test]
+fn styled_break_metadata_needs_no_wrapper_and_is_absent_on_the_terminal_line() {
+    let p = build(&root(true), |b| {
+        b.push_forced_break_with_style(NodeId(3), &span(40.0));
+    });
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        WIDE,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0].block_size(), 40.0);
+    assert_eq!(lines[0].forced_break().unwrap().node, NodeId(3));
+    assert_eq!(lines[0].fragments().len(), 0);
+
+    // A real ancestor's pending close produces the terminal empty line.
+    let p = build(&root(true), |b| {
+        b.open_inline(NodeId(2), &span(60.0), InlineEdges::default());
+        b.push_forced_break_with_style(NodeId(3), &span(40.0));
+        b.close_inline();
+    });
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        WIDE,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(lines.len(), 2);
+    assert_eq!(lines[0].forced_break().unwrap().node, NodeId(3));
+    assert_eq!(lines[1].block_size(), 0.0);
+    assert!(lines[1].forced_break().is_none());
+}
+
+#[test]
+fn styled_break_metadata_tracks_first_line_style_and_keeps_text_style() {
+    let mut style = root(true);
+    style.first_line = Some(span(30.0));
+    let p = build(&style, |b| {
+        b.open_inline(NodeId(2), &span(40.0), InlineEdges::default());
+        b.push_forced_break_with_style(NodeId(3), &span(20.0));
+        b.push_forced_break_with_style(NodeId(4), &span(10.0));
+        text(b, "x");
+        b.close_inline();
+    });
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        WIDE,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(
+        lines.iter().map(|l| l.block_size()).collect::<Vec<_>>(),
+        [30.0, 10.0, 40.0]
+    );
+    for (i, line) in lines[..2].iter().enumerate() {
+        let br = line.forced_break().unwrap();
+        assert_eq!(br.node, NodeId(3 + i as u64));
+        assert_eq!(
+            br.style.line_height,
+            LineHeight::Px(if i == 0 { 30.0 } else { 10.0 })
+        );
+        assert_eq!(&line.text()[br.text_range], "\n");
+        assert!(br.has_own_style);
+        assert_eq!(line.fragments().len(), 1, "only the existing ancestor box");
+        assert!(
+            line.fragments()
+                .all(|f| matches!(f, shodo::Fragment::InlineBox(_)))
+        );
+    }
+    assert!(lines[2].forced_break().is_none());
+}
+
+#[test]
+fn legacy_and_preserved_break_metadata_use_the_current_style() {
+    let mut style = root(true);
+    style.root.white_space_collapse = WhiteSpaceCollapse::Preserve;
+    let p = build(&style, |b| {
+        b.push_forced_break(NodeId(3));
+        text(b, "\nx");
+    });
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        WIDE,
+        &AtomicSizes::EMPTY,
+    );
+    for (i, line) in lines[..2].iter().enumerate() {
+        let br = line.forced_break().unwrap();
+        assert_eq!(br.node, if i == 0 { NodeId(3) } else { NodeId(1) });
+        assert_eq!(br.style.line_height, LineHeight::Px(20.0));
+        assert!(!br.has_own_style);
+    }
+    assert!(lines[2].forced_break().is_none());
+}
+
+#[test]
 fn issue_repro_first_fragment_is_text_free() {
     // a: <span lh40><img><br>x</span> = 2 + 40
     assert_eq!(

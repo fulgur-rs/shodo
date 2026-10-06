@@ -26,6 +26,34 @@ impl fmt::Debug for Line {
 }
 
 impl Line {
+    /// Metadata of the forced break at the end of this line, or `None` when
+    /// the ending unit is not a break, including the terminal empty line
+    /// after a trailing break. Character-limited lines may also end in a
+    /// break even though forced breaks do not control their line endings.
+    ///
+    /// The node lets callers resolve clear behavior without a wrapper inline
+    /// box. For fragmentation, use the containing line's [`Self::block_size`],
+    /// [`Self::block_offset`] and [`Self::break_token`]. The break does not add a
+    /// painting fragment or a separate box rectangle. This query allocates
+    /// nothing and retains the effective first-line style through the line.
+    pub fn forced_break(&self) -> Option<super::ForcedBreak<'_>> {
+        let unit = self.units.end.checked_sub(1)?;
+        if unit < self.units.start {
+            return None;
+        }
+        let unit = &self.data.units[unit as usize];
+        if !matches!(unit.kind, crate::analysis::units::UnitKind::ForcedBreak) {
+            return None;
+        }
+        let item = &self.data.items[unit.item as usize];
+        Some(super::ForcedBreak {
+            node: item.node?,
+            style: &self.data.styles[item.style as usize],
+            text_range: unit.text.start as usize..unit.text.end as usize,
+            has_own_style: item.own_break_style,
+        })
+    }
+
     /// Writing mode used by this line's logical coordinates and glyph transforms.
     pub fn writing_mode(&self) -> crate::geometry::WritingMode {
         self.data.style.writing_mode

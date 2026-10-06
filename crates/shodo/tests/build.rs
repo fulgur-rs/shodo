@@ -79,6 +79,54 @@ fn builder_errors_surface_from_build() {
 }
 
 #[test]
+fn styled_breaks_obey_item_style_and_style_byte_limits() {
+    let br = InlineStyle {
+        font_size: 42.0,
+        ..Default::default()
+    };
+    for (limits, expected) in [
+        (
+            Limits {
+                max_items: Some(0),
+                ..Limits::default()
+            },
+            LimitKind::Items,
+        ),
+        (
+            Limits {
+                max_styles: Some(1),
+                ..Limits::default()
+            },
+            LimitKind::Styles,
+        ),
+        (
+            Limits {
+                max_style_bytes: Some(0),
+                ..Limits::default()
+            },
+            LimitKind::StyleBytes,
+        ),
+    ] {
+        let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+        b.push_forced_break_with_style(NodeId(3), &br);
+        // The first failure remains latched, including on further large styles.
+        b.push_forced_break_with_style(NodeId(4), &br);
+        let error = b.build(&mut LayoutContext::new(), &fonts()).unwrap_err();
+        assert_eq!(error.kind, expected);
+    }
+    let limits = Limits {
+        max_styles: Some(1),
+        ..Limits::default()
+    };
+    let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+    b.push_forced_break_with_style(NodeId(3), &InlineStyle::default());
+    assert_eq!(
+        b.build(&mut LayoutContext::new(), &fonts()).unwrap().text(),
+        "\n"
+    );
+}
+
+#[test]
 fn shaped_glyph_limit_is_enforced_at_build() {
     let limits = Limits {
         max_shaped_glyphs: Some(2),
