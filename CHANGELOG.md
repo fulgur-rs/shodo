@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.18](https://github.com/fulgur-rs/shodo/compare/v0.0.17...v0.0.18) - 2026-10-06
+
+### Added
+
+- add Line::truncate_with_ellipsis for text-overflow: ellipsis
+- reserve line-box extent for emphasis marks
+- add first_letter_range for ::first-letter text
+- report the color glyph formats a face carries
+
+### Fixed
+
+- harden ellipsis truncation for spacing, boxes and long lines
+- mark emphasized atomics and trim fallback runs to their em box
+- lay out emphasis marks as annotation overflow like Chromium 152
+- match Chromium for punctuation-only text and raw input
+- read color record arrays and document what the formats skip
+
 ## [0.0.17](https://github.com/fulgur-rs/shodo/compare/v0.0.16...v0.0.17) - 2026-10-06
 
 ### Fixed
