@@ -189,6 +189,7 @@ fn process_in_context_with_flags(
                     text: at..at,
                     style: *style,
                     node: *node,
+                    own_break_style: false,
                 })?;
             }
             RawItem::Text {
@@ -247,9 +248,14 @@ fn process_in_context_with_flags(
                 p.open_bidi_scopes()?;
                 p.after_space = true;
             }
-            RawItem::ForcedBreak { node, style } => {
+            RawItem::ForcedBreak {
+                node,
+                style,
+                own_style,
+            } => {
                 p.close_bidi_scopes()?;
                 p.generated(ItemKind::ForcedBreak, '\n', *style, *node)?;
+                p.items.last_mut().expect("generated break").own_break_style = *own_style;
                 p.open_bidi_scopes()?;
                 p.after_space = true;
             }
@@ -350,6 +356,7 @@ impl Processor<'_> {
             text: at..at,
             style,
             node: Some(node),
+            own_break_style: false,
         })?;
         Ok(())
     }
@@ -373,6 +380,7 @@ impl Processor<'_> {
             text,
             style,
             node: Some(node),
+            own_break_style: false,
         })?;
         Ok(())
     }
@@ -459,6 +467,7 @@ impl Processor<'_> {
                     text: start..self.pos(),
                     style: style_index,
                     node: Some(node),
+                    own_break_style: false,
                 })?;
                 self.after_space = matches!(kind, ItemKind::ForcedBreak);
                 if matches!(kind, ItemKind::ForcedBreak) {
@@ -512,6 +521,7 @@ impl Processor<'_> {
                     text: start..end,
                     style,
                     node: Some(node),
+                    own_break_style: false,
                 })?;
             }
         }

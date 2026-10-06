@@ -56,6 +56,21 @@ pub enum BreakReason {
     End,
 }
 
+/// The forced break ending a [`Line`], including preserved text newlines.
+/// This is metadata, separate from the painting [`Fragment`] sequence.
+#[derive(Clone, Debug)]
+pub struct ForcedBreak<'a> {
+    /// Caller-supplied break identity, or the source node of a text newline.
+    pub node: NodeId,
+    /// Effective style for this line, including first-line inherited overrides.
+    pub style: &'a crate::style::InlineStyle,
+    /// The break's processed UTF-8 range in [`Line::text`].
+    pub text_range: Range<usize>,
+    /// True for [`crate::ParagraphBuilder::push_forced_break_with_style`].
+    /// Ordinary forced breaks and preserved text newlines use their container.
+    pub has_own_style: bool,
+}
+
 /// One laid-out line. Owns a reference to its paragraph's data, so it can
 /// outlive the `Paragraph` handle and be sent between threads.
 #[derive(Clone)]

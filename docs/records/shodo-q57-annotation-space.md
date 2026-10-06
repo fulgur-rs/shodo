@@ -86,6 +86,14 @@ at construction for metric probes, retained geometry and output views to share.
 The existing unchanged focused bound then passed. This failed run is not final
 verification of the corrected source.
 
+Main `132696d` (styled forced breaks) was merged with published history preserved.
+The public export and profile-resolver conflicts preserve both APIs and both
+profile paths. A six-case matrix combines a marked 5px child with an independently
+styled 40px break in horizontal/vertical-rl/vertical-lr and forced-root false/true.
+The bare 40px strut survives; adding emphasis to the text-free break itself adds
+no annotation reservation. The 15-test annotation suite and existing 25-test
+quirks suite pass after this integration.
+
 ## Implementation rulings
 
 - Preserve the separately quantized emphasis-free solver's exact result. The

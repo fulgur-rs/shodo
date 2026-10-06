@@ -122,6 +122,7 @@ fn assert_quirk_parity(p: &Paragraph, atomics: &AtomicSizes) -> usize {
             p.data.units[start].kind,
             UnitKind::Cluster { .. }
                 | UnitKind::Atomic { .. }
+                | UnitKind::ForcedBreak
                 | UnitKind::Open { .. }
                 | UnitKind::Close { .. }
         ) {
@@ -369,6 +370,308 @@ fn pending_vertical_align_index_matches_retained_ranges() {
             }
         }
     }
+}
+
+#[test]
+fn styled_break_only_range_has_indexed_and_retained_baseline_parity() {
+    use crate::geometry::WritingMode;
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        for force_root_strut in [false, true] {
+            let mut b = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    writing_mode: mode,
+                    line_height_quirk: true,
+                    force_root_strut,
+                    ..Default::default()
+                },
+                &Limits::default(),
+            );
+            b.push_forced_break_with_style(NodeId(3), &style(12.0));
+            let p = b.build(&mut LayoutContext::new(), &fonts()).unwrap();
+            assert_eq!(
+                assert_quirk_parity(&p, &AtomicSizes::EMPTY),
+                1,
+                "the break-only range must compare both height and baseline: {mode:?}/{force_root_strut}"
+            );
+        }
+    }
+}
+
+#[test]
+fn styled_break_root_strut_combinations_match_retained_ranges() {
+    use crate::geometry::WritingMode;
+    use crate::style::LineHeight;
+    let root = InlineStyle {
+        line_height: LineHeight::Px(20.0),
+        ..style(10.0)
+    };
+    let mut atomics = AtomicSizes::new();
+    atomics.insert(
+        NodeId(90),
+        crate::AtomicSize {
+            inline_size: 2.0,
+            block_size: 2.0,
+            ..Default::default()
+        },
+    );
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        for force_root_strut in [false, true] {
+            for nested in [false, true] {
+                for atomic in [false, true] {
+                    for first_line in [false, true] {
+                        let mut b = ParagraphBuilder::new(
+                            &ParagraphStyle {
+                                root: root.clone(),
+                                writing_mode: mode,
+                                line_height_quirk: true,
+                                force_root_strut,
+                                first_line: first_line.then(|| InlineStyle {
+                                    line_height: LineHeight::Px(30.0),
+                                    ..root.clone()
+                                }),
+                                ..Default::default()
+                            },
+                            &Limits::default(),
+                        );
+                        if nested {
+                            for (node, height) in [(100, 80.0), (101, 60.0)] {
+                                b.open_inline(
+                                    NodeId(node),
+                                    &InlineStyle {
+                                        line_height: LineHeight::Px(height),
+                                        ..root.clone()
+                                    },
+                                    Default::default(),
+                                );
+                            }
+                        }
+                        if atomic {
+                            b.push_atomic(NodeId(90), &root, Default::default());
+                        }
+                        for node in [3, 4] {
+                            b.push_forced_break_with_style(
+                                NodeId(node),
+                                &InlineStyle {
+                                    line_height: LineHeight::Px(10.0),
+                                    ..root.clone()
+                                },
+                            );
+                        }
+                        if nested {
+                            b.close_inline().close_inline();
+                        }
+                        let p = b.build(&mut LayoutContext::new(), &fonts()).unwrap();
+                        assert!(assert_quirk_parity(&p, &atomics) >= 2);
+                        if let Some(first) = &p.data.first_line {
+                            let alternate = Paragraph {
+                                data: std::sync::Arc::clone(&first.data),
+                            };
+                            assert!(assert_quirk_parity(&alternate, &atomics) >= 2);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn styled_break_with_same_side_emphasis_ruby_matches_retained_ranges() {
+    use crate::geometry::WritingMode;
+    use crate::style::{LineHeight, TextEmphasis, TextEmphasisPosition, TextEmphasisShape};
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        for force_root_strut in [false, true] {
+            for over in [false, true] {
+                for first_line in [false, true] {
+                    let marked = InlineStyle {
+                        line_height: LineHeight::Px(20.0),
+                        text_emphasis: Some(TextEmphasis {
+                            shape: TextEmphasisShape::Dot,
+                            filled: true,
+                            position: if over {
+                                TextEmphasisPosition::OverRight
+                            } else {
+                                TextEmphasisPosition::UnderLeft
+                            },
+                        }),
+                        ..style(20.0)
+                    };
+                    let mut annotation = ruby(
+                        RubyContent::text(
+                            TextSource::Generated { node: NodeId(10) },
+                            "日",
+                            &marked,
+                            &Limits::default(),
+                        ),
+                        "に",
+                    );
+                    annotation.levels[0].style.position = if over {
+                        RubyPosition::Over
+                    } else {
+                        RubyPosition::Under
+                    };
+                    let mut b = ParagraphBuilder::new(
+                        &ParagraphStyle {
+                            root: marked.clone(),
+                            writing_mode: mode,
+                            line_height_quirk: true,
+                            force_root_strut,
+                            first_line: first_line.then(|| InlineStyle {
+                                line_height: LineHeight::Px(30.0),
+                                ..marked.clone()
+                            }),
+                            ..Default::default()
+                        },
+                        &Limits::default(),
+                    );
+                    b.push_ruby(NodeId(2), &marked, annotation);
+                    b.push_text(TextSource::Generated { node: NodeId(3) }, "語");
+                    b.open_inline(
+                        NodeId(100),
+                        &InlineStyle {
+                            line_height: LineHeight::Px(200.0),
+                            ..style(20.0)
+                        },
+                        Default::default(),
+                    );
+                    b.push_forced_break_with_style(
+                        NodeId(4),
+                        &InlineStyle {
+                            line_height: LineHeight::Px(100.0),
+                            ..style(20.0)
+                        },
+                    );
+                    b.close_inline();
+                    b.push_forced_break_with_style(NodeId(5), &style(10.0));
+                    let p = b.build(&mut LayoutContext::new(), &fonts()).unwrap();
+                    assert!(assert_quirk_parity(&p, &AtomicSizes::EMPTY) >= 5);
+                    if let Some(first) = &p.data.first_line {
+                        let alternate = Paragraph {
+                            data: std::sync::Arc::clone(&first.data),
+                        };
+                        assert!(assert_quirk_parity(&alternate, &AtomicSizes::EMPTY) >= 5);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn styled_break_index_matches_retained_ranges_and_baselines() {
+    use crate::geometry::WritingMode;
+    use crate::style::{LineHeight, TextOrientation, VerticalAlign};
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        for quirk in [false, true] {
+            for outer in [
+                VerticalAlign::Baseline,
+                VerticalAlign::Top,
+                VerticalAlign::Bottom,
+            ] {
+                for align in [
+                    VerticalAlign::Baseline,
+                    VerticalAlign::Top,
+                    VerticalAlign::Bottom,
+                    VerticalAlign::TextTop,
+                    VerticalAlign::TextBottom,
+                    VerticalAlign::Middle,
+                    VerticalAlign::Length(9.0),
+                ] {
+                    let p = quirk_paragraph_in(mode, quirk, |b| {
+                        b.open_inline(
+                            NodeId(100),
+                            &InlineStyle {
+                                line_height: LineHeight::Px(60.0),
+                                vertical_align: outer,
+                                ..style(24.0)
+                            },
+                            Default::default(),
+                        );
+                        b.open_inline(NodeId(101), &style(24.0), Default::default());
+                        b.push_text(TextSource::Generated { node: NodeId(1) }, "x ");
+                        b.push_forced_break_with_style(
+                            NodeId(3),
+                            &InlineStyle {
+                                line_height: LineHeight::Px(40.0),
+                                vertical_align: align,
+                                text_orientation: TextOrientation::Sideways,
+                                ..style(12.0)
+                            },
+                        );
+                        b.close_inline().close_inline();
+                        b.push_forced_break_with_style(NodeId(4), &style(12.0));
+                    });
+                    assert!(
+                        assert_quirk_parity(&p, &AtomicSizes::EMPTY) > 5,
+                        "{mode:?}/{quirk}/{outer:?}/{align:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn styled_break_index_queries_do_not_rescan_prefixes() {
+    use crate::style::LineHeight;
+    let mut visits = Vec::new();
+    for count in [64, 128] {
+        let p = quirk_paragraph(true, |b| {
+            b.open_inline(
+                NodeId(100),
+                &InlineStyle {
+                    line_height: LineHeight::Px(60.0),
+                    ..style(24.0)
+                },
+                Default::default(),
+            );
+            b.push_text(
+                TextSource::Generated { node: NodeId(1) },
+                &"x ".repeat(count),
+            );
+            b.push_forced_break_with_style(
+                NodeId(3),
+                &InlineStyle {
+                    line_height: LineHeight::Px(40.0),
+                    ..style(24.0)
+                },
+            );
+            b.close_inline();
+        });
+        let end = p.data.units.len() - 1;
+        let mut cx = LayoutContext::new();
+        for start in 1..count {
+            let metrics = crate::line::metric_index::measure(
+                &p.data,
+                start..end,
+                &AtomicSizes::EMPTY,
+                &mut cx,
+                &mut Saturation::default(),
+            );
+            assert_eq!(metrics.block_size.to_f32(), 60.0);
+        }
+        visits.push(cx.ruby_measure_visits);
+    }
+    assert!(
+        visits[1] < 3 * visits[0],
+        "styled break prefixes rescanned: {visits:?}"
+    );
 }
 
 #[test]

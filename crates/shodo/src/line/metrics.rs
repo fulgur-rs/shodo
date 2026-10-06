@@ -283,6 +283,65 @@ impl ProfileResolver {
         }
     }
 
+    /// An explicit styled break is a text-free inline of its own, without a
+    /// box record. Its strut uses the same ancestor displacement and alignment
+    /// rules as other inline content in retained and indexed measurements.
+    pub(crate) fn forced_break(
+        &mut self,
+        data: &ParagraphData,
+        unit: &crate::analysis::units::Unit,
+    ) -> Option<RecordProfile> {
+        let item = &data.items[unit.item as usize];
+        if !matches!(unit.kind, UnitKind::ForcedBreak) || !item.own_break_style {
+            return None;
+        }
+        let s = &data.styles[item.style as usize];
+        let metrics = data.style_metrics[item.style as usize];
+        let parent_style = unit.parent_box.map_or(0, |b| data.boxes[b as usize].style) as usize;
+        let vertical = matches!(
+            data.style.writing_mode,
+            crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
+        );
+        let upright = vertical && s.text_orientation != crate::style::TextOrientation::Sideways;
+        let parent_upright = vertical
+            && data.styles[parent_style].text_orientation
+                != crate::style::TextOrientation::Sideways;
+        let (a, d) = extents(s, metrics.metrics, metrics.vertical_metrics, upright);
+        let center = (metrics.metrics.ascent - metrics.metrics.descent) / 2.0;
+        let dominant = match (parent_upright, upright) {
+            (true, false) => center,
+            (false, true) => -center,
+            _ => 0.0,
+        };
+        let (base, group) = unit
+            .parent_box
+            .map_or((0.0, None), |b| box_shift(data, b, &mut self.boxes));
+        let base = base
+            + dominant
+            + shift(
+                s,
+                data.style_metrics[parent_style],
+                parent_upright,
+                a - dominant,
+                d + dominant,
+            );
+        Some(RecordProfile {
+            top: base - a,
+            bottom: base + d,
+            shift: base,
+            group,
+            own_group: if group.is_none() {
+                match s.vertical_align {
+                    VerticalAlign::Top => Some(false),
+                    VerticalAlign::Bottom => Some(true),
+                    _ => None,
+                }
+            } else {
+                None
+            },
+        })
+    }
+
     pub(crate) fn combination(
         &mut self,
         data: &ParagraphData,
@@ -527,8 +586,22 @@ fn measure_profile(
     let mut groups: crate::hashing::FastMap<u32, (f32, f32)> = crate::hashing::FastMap::default();
     let mut ghosts: crate::hashing::FastMap<u32, (f32, f32)> = crate::hashing::FastMap::default();
     let mut combination_bases = Vec::new();
+    let mut own_groups: crate::hashing::FastMap<usize, (f32, f32, bool)> =
+        crate::hashing::FastMap::default();
     for (offset, u) in data.units[units.clone()].iter().enumerate() {
         empty &= !matches!(u.kind, UnitKind::Tab | UnitKind::ForcedBreak);
+        if let Some(p) = resolver.forced_break(data, u) {
+            if let Some(group) = p.group {
+                let bounds = groups.entry(group).or_insert((p.top, p.bottom));
+                bounds.0 = bounds.0.min(p.top);
+                bounds.1 = bounds.1.max(p.bottom);
+            } else if let Some(bottom) = p.own_group {
+                own_groups.insert(records.len() + offset, (p.top, p.bottom, bottom));
+            } else {
+                above = above.max(-p.top);
+                below = below.max(p.bottom);
+            }
+        }
         if let Some(index) = u.combine
             && data.combine_spans[index as usize].units.start == units.start + offset
         {
@@ -556,8 +629,6 @@ fn measure_profile(
         }
     }
     let mut shifts = Vec::with_capacity(records.len());
-    let mut own_groups: crate::hashing::FastMap<usize, (f32, f32, bool)> =
-        crate::hashing::FastMap::default();
     let mut memberships = Vec::with_capacity(records.len());
     for (i, r) in records.iter().enumerate() {
         match &r.kind {

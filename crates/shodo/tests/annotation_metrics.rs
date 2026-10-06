@@ -487,6 +487,65 @@ fn quirk_trimmed_trailing_space_does_not_restore_excluded_annotation_geometry() 
 }
 
 #[test]
+fn styled_break_struts_are_preserved_without_inventing_text_free_marks() {
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        for forced in [false, true] {
+            let mut root = style();
+            root.writing_mode = mode;
+            root.line_height_quirk = true;
+            root.force_root_strut = forced;
+            root.root.line_height = LineHeight::Px(20.);
+            let mut child = marked(5.).root;
+            child.font_size = 5.;
+            let mut br = marked(40.).root;
+            br.font_size = 40.;
+            let make = |break_style: &shodo::style::InlineStyle| {
+                build(&root, |b| {
+                    b.open_inline(NodeId(2), &child, Default::default())
+                        .push_text(TextSource::Generated { node: NodeId(3) }, "a")
+                        .push_forced_break_with_style(NodeId(4), break_style)
+                        .close_inline();
+                })
+            };
+            let p = make(&br);
+            let actual = first_line(&p, 1000., &LineOptions::default(), &AtomicSizes::EMPTY);
+            br.text_emphasis = None;
+            let plain_break = make(&br);
+            let expected = first_line(
+                &plain_break,
+                1000.,
+                &LineOptions::default(),
+                &AtomicSizes::EMPTY,
+            );
+            assert_eq!(actual.annotation_metrics(), expected.annotation_metrics());
+            let m = actual.annotation_metrics();
+            assert_eq!(
+                (
+                    actual.block_size(),
+                    m.unannotated_block_end - m.unannotated_block_start
+                ),
+                (40., 40.)
+            );
+            assert_eq!((m.overflow_over, m.overflow_under), (0., 0.));
+            assert_eq!(
+                (m.space_over, m.space_under),
+                match (mode, forced) {
+                    (WritingMode::HorizontalTb, false) => (25.5, 7.),
+                    (WritingMode::HorizontalTb, true) => (15., 7.),
+                    (_, false) => (15., 17.5),
+                    (_, true) => (15., 15.),
+                },
+                "{mode:?} forced={forced}"
+            );
+        }
+    }
+}
+
+#[test]
 fn annotation_metrics_separate_bare_box_overflow_and_unused_leading() {
     for (mark, expected_over) in [(false, 15.0), (true, 10.0)] {
         let mut root = marked(40.0);

@@ -476,6 +476,7 @@ mod tests {
             text: start..end,
             style,
             node: None,
+            own_break_style: false,
         }
     }
 
@@ -485,6 +486,7 @@ mod tests {
             text: at..at,
             style,
             node: None,
+            own_break_style: false,
         }
     }
 
