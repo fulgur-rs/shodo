@@ -87,7 +87,7 @@ pub(crate) fn annotation_breaks(builder: &mut ParagraphBuilder) -> Result<(), Li
                 text.push_str(&builder.text[range.start as usize..range.end as usize]);
                 *range = start..text.len() as u32;
             }
-            RawItem::ForcedBreak { node, style } | RawItem::BlockInInline { node, style } => {
+            RawItem::ForcedBreak { node, style, .. } | RawItem::BlockInInline { node, style } => {
                 let start = text.len() as u32;
                 text.push('\n');
                 *item = RawItem::Text {

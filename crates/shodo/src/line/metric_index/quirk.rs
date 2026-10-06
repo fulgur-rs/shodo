@@ -324,6 +324,11 @@ impl QuirkIndex {
         if k < range.start {
             return None;
         }
+        if data.items[data.units[k].item as usize].own_break_style
+            && data.units[k].parent_box.is_some()
+        {
+            return None;
+        }
         let lo = data.units[k].parent_box.map_or(range.start, |b| {
             range.start.max(self.opens[b as usize] as usize + 1)
         });

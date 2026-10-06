@@ -145,3 +145,27 @@ the root strut on every nonempty line, including continuation lines, as
 This leaves child inline strut suppression enabled. The flag defaults to
 false and has no additional effect when `line_height_quirk` is disabled;
 genuinely empty lines remain empty.
+
+### Breaks with their own styles
+
+Use `ParagraphBuilder::push_forced_break_with_style(node, &style)` for a
+`<br>` with its own computed font or line-height. Its independent strut
+contributes even after other content. Under `line_height_quirk`, the break
+does not credit a text-free ancestor inline box; existing text and edge
+credits still apply. The root's forced-break rule remains applicable when
+the root directly contains the break. With the quirk disabled, the break's
+strut joins the normal root and ancestor struts. Following text keeps its
+enclosing inline style. The supplied style uses the same interning, resource
+limits and inherited first-line overrides as other explicit inline styles.
+
+`push_forced_break(node)` retains the current inline style and its existing
+container-strut behavior. Preserved text newlines also keep that behavior.
+
+`Line::forced_break()` returns the ending break's node, effective style,
+processed text range and `has_own_style` flag. It returns `None` when the
+ending unit is not a forced break, including the terminal empty line after
+a trailing break. The metadata does not add a painting fragment or an
+inline box. Callers can resolve `clear` from the node and use the containing
+line's block size, block offset and break token for fragmentation. No
+separate break rectangle is provided. A line laid out with first-line
+styles exposes those effective styles in the break metadata.

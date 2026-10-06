@@ -51,6 +51,7 @@ pub(crate) enum RawItem {
     ForcedBreak {
         node: NodeId,
         style: u32,
+        own_style: bool,
     },
 }
 
@@ -406,11 +407,61 @@ impl ParagraphBuilder {
         self
     }
 
-    /// A forced line break such as `<br>`.
+    /// A forced line break such as `<br>`, using the current inline style.
+    /// Under [`ParagraphStyle::line_height_quirk`], the containing inline
+    /// box supplies the break's strut when no earlier content credits its
+    /// metrics on this line. Use
+    /// [`Self::push_forced_break_with_style`] for a break with its own style.
     pub fn push_forced_break(&mut self, node: NodeId) -> &mut Self {
         if self.reserve_item() {
             let style = self.current_style();
-            self.items.push(RawItem::ForcedBreak { node, style });
+            self.items.push(RawItem::ForcedBreak {
+                node,
+                style,
+                own_style: false,
+            });
+        }
+        self
+    }
+
+    /// Append a forced line break with its own resolved inline style.
+    ///
+    /// Its font and line-height supply an independent strut, including under
+    /// [`ParagraphStyle::line_height_quirk`]. Text-free ancestor inline boxes
+    /// do not gain a strut from this break. A break directly inside the root
+    /// retains the root's ordinary forced-break strut rule. Without the quirk,
+    /// root and ancestor struts continue to contribute normally.
+    ///
+    /// This does not open an inline box or change the style of following text.
+    /// Styles are copied, interned and charged against the builder's limits.
+    /// First-line inherited overrides apply as for other explicit inline
+    /// styles. Read the ending break's identity and effective style through
+    /// [`crate::Line::forced_break`]; clear and fragmentation remain caller work.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use shodo::limits::Limits;
+    /// use shodo::node::NodeId;
+    /// use shodo::style::{InlineStyle, LineHeight, ParagraphStyle};
+    /// use shodo::ParagraphBuilder;
+    ///
+    /// let mut builder = ParagraphBuilder::new(
+    ///     &ParagraphStyle { line_height_quirk: true, ..Default::default() },
+    ///     &Limits::default(),
+    /// );
+    /// let br_style = InlineStyle { line_height: LineHeight::Px(24.0), ..Default::default() };
+    /// builder.push_forced_break_with_style(NodeId(7), &br_style);
+    /// ```
+    pub fn push_forced_break_with_style(&mut self, node: NodeId, style: &InlineStyle) -> &mut Self {
+        if self.reserve_item()
+            && let Some(style) = self.intern(style)
+        {
+            self.items.push(RawItem::ForcedBreak {
+                node,
+                style,
+                own_style: true,
+            });
         }
         self
     }
