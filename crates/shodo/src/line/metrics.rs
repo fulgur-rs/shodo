@@ -36,6 +36,7 @@ pub(crate) fn extents(
 pub(crate) fn emphasized(
     data: &ParagraphData,
     style: u32,
+    run_font: crate::font::FontId,
     upright: bool,
     leaded: (f32, f32),
 ) -> (f32, f32) {
@@ -44,6 +45,14 @@ pub(crate) fn emphasized(
         return leaded;
     };
     let metrics = data.style_metrics[style as usize];
+    // Trim toward the em box of the font that set the run, which can be a
+    // fallback of the primary font whose edges it starts from.
+    let em_ascent = if run_font == metrics.font {
+        metrics.em_ascent
+    } else {
+        super::font_metrics::em_ascent(&data.fonts, run_font, metrics.size)
+            .unwrap_or(metrics.em_ascent)
+    };
     // Blink's `AdjustTextOverUnderOffsetsForEmHeight` trims the font edge to
     // the em box in whole pixels, never more than their difference.
     let trim = |edge: f32, em: f32| edge - (edge - em).max(0.0).floor();
@@ -54,8 +63,8 @@ pub(crate) fn emphasized(
         })
     } else {
         (
-            trim(metrics.metrics.ascent, metrics.em_ascent),
-            trim(metrics.metrics.descent, metrics.size - metrics.em_ascent),
+            trim(metrics.metrics.ascent, em_ascent),
+            trim(metrics.metrics.descent, metrics.size - em_ascent),
         )
     };
     emphasize(data, emphasis, metrics.size, (over, under), leaded)
@@ -297,7 +306,7 @@ impl ProfileResolver {
                         let upright = shaped.orientation
                             == crate::shape::orientation::RunOrientation::Upright;
                         let leaded = extents(s, metrics, shaped.instance.vertical_metrics, upright);
-                        emphasized(data, style, upright, leaded)
+                        emphasized(data, style, shaped.font, upright, leaded)
                     };
                 let (base, group) = self
                     .parents
@@ -381,8 +390,18 @@ impl ProfileResolver {
                 } else {
                     None
                 };
+                // Blink grows a line for the marks of an emphasized atomic
+                // inline above its margin box; under marks never reach past
+                // the line box there (`ComputeAnnotationOverflow`).
+                let style = data.items[item as usize].style;
+                let mark = match s.text_emphasis {
+                    Some(emphasis) if emphasis_over(emphasis.position, data.style.writing_mode) => {
+                        data.style_metrics[style as usize].size / 2.0
+                    }
+                    _ => 0.0,
+                };
                 (
-                    baseline,
+                    baseline + mark,
                     height - baseline,
                     base + dominant_shift
                         + shift(

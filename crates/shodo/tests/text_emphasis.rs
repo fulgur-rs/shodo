@@ -236,3 +236,83 @@ fn marks_sit_outside_the_normalized_em_box() {
     assert_eq!(under_baseline, baseline);
     assert!((size - (baseline + descent + 5.0)).abs() < 0.02, "{size}");
 }
+
+#[test]
+fn emphasized_atomics_grow_the_line_over_their_margin_box() {
+    let root = style();
+    let mut marked = root.root.clone();
+    marked.text_emphasis = emphasis(TextEmphasisPosition::OverRight);
+    let mut atomics = AtomicSizes::new();
+    atomics.insert(
+        NodeId(2),
+        shodo::AtomicSize {
+            inline_size: 5.0,
+            block_size: 20.0,
+            ..Default::default()
+        },
+    );
+    let line = |style: &shodo::style::InlineStyle| {
+        let p = build(&root, |b| {
+            b.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+            b.push_atomic(NodeId(2), style, InlineEdges::default());
+        });
+        let l = first_line(&p, 1000.0, &LineOptions::default(), &atomics);
+        (l.block_size(), l.baseline(BaselineKind::Alphabetic))
+    };
+    assert_eq!(line(&root.root), (22.0, 20.0));
+    assert_eq!(line(&marked), (27.0, 25.0));
+    // Chromium 152 never grows a line for under marks of an atomic inline.
+    marked.text_emphasis = emphasis(TextEmphasisPosition::UnderRight);
+    assert_eq!(line(&marked), (22.0, 20.0));
+}
+
+#[test]
+fn fallback_runs_trim_toward_their_own_em_box() {
+    use shodo::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use shodo::limits::Limits;
+    use shodo::style::FontFamily;
+    let fonts = FontCollection::with_options(
+        &Limits::default(),
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    for (bytes, family) in [
+        (
+            &include_bytes!("../../../dev/fixtures/assets/fonts/latin.ttf")[..],
+            "Latin",
+        ),
+        (
+            &include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf")[..],
+            "CJK",
+        ),
+    ] {
+        fonts
+            .register_face(
+                bytes.to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: family.into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+    let mut root = style();
+    root.root.font_size = 40.0;
+    root.root.font_families = vec![
+        FontFamily::Named("Latin".into()),
+        FontFamily::Named("CJK".into()),
+    ];
+    root.root.text_emphasis = emphasis(TextEmphasisPosition::OverRight);
+    let mut b = shodo::ParagraphBuilder::new(&root, &Limits::default());
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "日本");
+    let p = b.build(&mut shodo::LayoutContext::new(), &fonts).unwrap();
+    let l = first_line(&p, 1000.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    // Like Blink: the Latin primary ascent (42.76px) trims 7 whole pixels
+    // toward the CJK face's 35.2px em ascent, then the 20px mark.
+    let expected = 40.0 * 1.069 - 7.0 + 20.0;
+    let baseline = l.baseline(BaselineKind::Alphabetic);
+    assert!((baseline - expected).abs() < 0.02, "{baseline}");
+}

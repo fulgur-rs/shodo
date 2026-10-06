@@ -368,7 +368,20 @@ fn em_ascent_ratio(face: &FontRef<'_>) -> Option<f32> {
     let os2 = face.os2().ok()?;
     let ascent = f32::from(os2.s_typo_ascender());
     let height = ascent - f32::from(os2.s_typo_descender());
-    (height > 0.0).then(|| ascent / height)
+    (ascent > 0.0 && ascent <= height).then(|| ascent / height)
+}
+
+/// Em box ascent of `font` at `size`, for runs set in a fallback face.
+pub(crate) fn em_ascent(fonts: &FontCollection, font: FontId, size: f32) -> Option<f32> {
+    let data = fonts.font_data(font)?;
+    #[cfg(test)]
+    crate::font::record_metric_font_ref_open();
+    let face = FontRef::from_index(data.data.as_ref(), data.index).ok()?;
+    let ratio = em_ascent_ratio(&face).unwrap_or_else(|| {
+        let metrics = fonts.metrics(font, size);
+        hhea_ratio(metrics.ascent, metrics.descent)
+    });
+    Some(ratio * size)
 }
 
 fn hhea_ratio(ascent: f32, descent: f32) -> f32 {
