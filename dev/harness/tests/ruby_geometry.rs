@@ -1767,3 +1767,391 @@ fn sideways_modes_retain_actual_alphabetic_font_content_metrics() {
         );
     }
 }
+
+#[test]
+fn emphasis_stacks_outside_same_side_ruby_without_doubling_line_height() {
+    use shodo::style::{TextEmphasis, TextEmphasisPosition, TextEmphasisShape};
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        for (position, mark_position, same_side) in [
+            (RubyPosition::Over, TextEmphasisPosition::OverRight, true),
+            (RubyPosition::Under, TextEmphasisPosition::UnderLeft, true),
+            (RubyPosition::Under, TextEmphasisPosition::OverRight, false),
+        ] {
+            // Vertical emphasis uses the left/right keyword.
+            let mut marked = style(24.0);
+            marked.line_height = LineHeight::Px(24.0);
+            marked.text_emphasis = Some(TextEmphasis {
+                shape: TextEmphasisShape::Dot,
+                filled: true,
+                position: mark_position,
+            });
+            let root = ParagraphStyle {
+                root: style(24.0),
+                writing_mode: mode,
+                ..Default::default()
+            };
+            let mut b = ParagraphBuilder::new(&root, &Limits::default());
+            let ruby = Ruby::new(
+                vec![RubyBase {
+                    node: NodeId(10),
+                    content: RubyContent::text(
+                        TextSource::Generated { node: NodeId(10) },
+                        "日",
+                        &marked,
+                        &Limits::default(),
+                    ),
+                    align: RubyAlign::Start,
+                }],
+                vec![RubyLevel {
+                    annotations: vec![RubyAnnotation {
+                        node: NodeId(20),
+                        content: content(20, "に", 12.0),
+                        span: RubySpan::All,
+                        visibility: RubyVisibility::Visible,
+                    }],
+                    style: RubyStyle {
+                        position,
+                        overhang: RubyOverhang::None,
+                        ..Default::default()
+                    },
+                }],
+            )
+            .unwrap();
+            b.push_ruby(NodeId(8), &style(24.0), ruby);
+            let line = layout(b, &AtomicSizes::EMPTY);
+            let run = line
+                .fragments()
+                .find_map(|f| match f {
+                    Fragment::GlyphRun(r) => Some(r),
+                    _ => None,
+                })
+                .unwrap();
+            let mark = run.emphasis_mark().unwrap();
+            let mut plain = ParagraphBuilder::new(&root, &Limits::default());
+            plain.push_text(TextSource::Generated { node: NodeId(10) }, "日");
+            let plain = layout(plain, &AtomicSizes::EMPTY);
+            let run_plain = plain
+                .fragments()
+                .find_map(|f| match f {
+                    Fragment::GlyphRun(r) => Some(r),
+                    _ => None,
+                })
+                .unwrap();
+            let annotation_extent = line.ruby_annotations().next().unwrap().line().block_size();
+            let primary_edge = if mode == WritingMode::HorizontalTb {
+                if mark.line_over {
+                    run_plain.metrics().ascent
+                } else {
+                    run_plain.metrics().descent
+                }
+            } else {
+                12.0
+            };
+            assert!(
+                (mark.offset - primary_edge - if same_side { annotation_extent } else { 0.0 })
+                    .abs()
+                    < 0.02,
+                "{mode:?}/{position:?}: {mark:?}"
+            );
+            if mode != WritingMode::HorizontalTb {
+                assert_eq!(line.block_size(), 48.0, "{mode:?}/{position:?}");
+            }
+        }
+    }
+}
+
+fn marked_base_ruby(base: RubyContent, reading_node: u64) -> Ruby {
+    Ruby::new(
+        vec![RubyBase {
+            node: NodeId(10),
+            content: base,
+            align: RubyAlign::Start,
+        }],
+        vec![RubyLevel {
+            annotations: vec![RubyAnnotation {
+                node: NodeId(reading_node),
+                content: content(reading_node, "に", 12.0),
+                span: RubySpan::All,
+                visibility: RubyVisibility::Visible,
+            }],
+            style: RubyStyle {
+                position: RubyPosition::Over,
+                overhang: RubyOverhang::None,
+                ..Default::default()
+            },
+        }],
+    )
+    .unwrap()
+}
+
+#[test]
+fn nested_emphasis_offsets_are_local_and_marks_are_reserved_once() {
+    use shodo::style::{TextEmphasis, TextEmphasisPosition, TextEmphasisShape};
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let mut marked = style(24.0);
+        marked.text_emphasis = Some(TextEmphasis {
+            shape: TextEmphasisShape::Circle,
+            filled: true,
+            position: TextEmphasisPosition::OverRight,
+        });
+        let root = ParagraphStyle {
+            root: style(24.0),
+            writing_mode: mode,
+            ..Default::default()
+        };
+        let mut inner = ParagraphBuilder::new(&root, &Limits::default());
+        inner.push_ruby(
+            NodeId(81),
+            &style(24.0),
+            marked_base_ruby(
+                RubyContent::text(
+                    TextSource::Generated { node: NodeId(10) },
+                    "日",
+                    &marked,
+                    &Limits::default(),
+                ),
+                20,
+            ),
+        );
+        let mut b = ParagraphBuilder::new(&root, &Limits::default());
+        b.push_ruby(
+            NodeId(8),
+            &style(24.0),
+            marked_base_ruby(RubyContent::from_builder(inner), 30),
+        );
+        b.open_inline(NodeId(40), &marked, Default::default())
+            .push_text(TextSource::Generated { node: NodeId(41) }, "本")
+            .close_inline();
+        let line = layout(b, &AtomicSizes::EMPTY);
+        assert_eq!(
+            line.block_size(),
+            60.0,
+            "{mode:?}: marks occupy one 12px extent outside two 12px ruby levels"
+        );
+        let runs: Vec<_> = line
+            .fragments()
+            .filter_map(|f| match f {
+                Fragment::GlyphRun(r) => Some(r),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(runs.len(), 2);
+        assert_eq!(runs[0].emphasis_mark().unwrap().offset, 36.0);
+        assert_eq!(
+            runs[1].emphasis_mark().unwrap().offset,
+            12.0,
+            "plain sibling must not inherit ruby extent"
+        );
+        let bounds = line.overflow_rect();
+        for run in runs {
+            let mark = run.emphasis_mark().unwrap();
+            let before = mark.line_over != (mode == WritingMode::VerticalLr);
+            let start = if before {
+                run.baseline() - mark.offset - mark.font_size
+            } else {
+                run.baseline() + mark.offset
+            };
+            assert!(bounds.block_start <= start);
+            assert!(bounds.block_start + bounds.block_size >= start + mark.font_size);
+        }
+    }
+}
+
+#[test]
+fn first_line_emphasis_reserves_ruby_clearance_and_block_retries_match() {
+    use shodo::style::{TextEmphasis, TextEmphasisPosition, TextEmphasisShape};
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let mut first = style(24.0);
+    first.text_emphasis = Some(TextEmphasis {
+        shape: TextEmphasisShape::Dot,
+        filled: true,
+        position: TextEmphasisPosition::OverRight,
+    });
+    let root = ParagraphStyle {
+        root: style(24.0),
+        writing_mode: WritingMode::VerticalRl,
+        ..Default::default()
+    };
+    let mut base = ParagraphBuilder::new(
+        &ParagraphStyle {
+            first_line: Some(first),
+            ..root.clone()
+        },
+        &Limits::default(),
+    );
+    base.push_text(TextSource::Generated { node: NodeId(10) }, "日");
+    let mut b = ParagraphBuilder::new(&root, &Limits::default());
+    b.push_ruby(
+        NodeId(8),
+        &style(24.0),
+        marked_base_ruby(RubyContent::from_builder(base), 20),
+    );
+    b.push_forced_break(NodeId(50));
+    b.push_ruby(
+        NodeId(9),
+        &style(24.0),
+        marked_base_ruby(content(11, "本", 24.0), 21),
+    );
+    let p = b
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let mut constraint = LineConstraint::new(1000.0);
+    constraint.max_block_size = Some(47.0);
+    let mut cx = LayoutContext::new();
+    for _ in 0..2 {
+        let result = p.next_line(
+            &mut cx,
+            p.start_token(),
+            &Default::default(),
+            &constraint,
+            &AtomicSizes::EMPTY,
+        );
+        let LineResult::BlockSizeExceeded { needed_block_size } = result else {
+            panic!("first-line emphasis must reserve 48px")
+        };
+        assert_eq!(needed_block_size, 48.0);
+    }
+    constraint.max_block_size = Some(48.0);
+    let LineResult::Line(first) = p.next_line(
+        &mut cx,
+        p.start_token(),
+        &Default::default(),
+        &constraint,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!("48px fits")
+    };
+    assert_eq!(first.block_size(), 48.0);
+    assert!(
+        first
+            .fragments()
+            .filter_map(|f| match f {
+                Fragment::GlyphRun(r) => Some(r),
+                _ => None,
+            })
+            .all(|r| r.emphasis_mark().unwrap().offset == 24.0)
+    );
+    let LineResult::Line(next) = p.next_line(
+        &mut cx,
+        first.break_token(),
+        &Default::default(),
+        &constraint,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!("normal continuation")
+    };
+    assert_eq!(next.block_size(), 36.0);
+    assert!(
+        next.fragments()
+            .filter_map(|f| match f {
+                Fragment::GlyphRun(r) => Some(r),
+                _ => None,
+            })
+            .all(|r| r.emphasis_mark().is_none())
+    );
+}
+
+#[test]
+fn ruby_and_emphasis_share_container_leading() {
+    use shodo::style::{TextEmphasis, TextEmphasisPosition, TextEmphasisShape};
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        let mut container = style(24.0);
+        container.line_height = LineHeight::Px(100.0);
+        let mut marked = container.clone();
+        marked.text_emphasis = Some(TextEmphasis {
+            shape: TextEmphasisShape::Dot,
+            filled: true,
+            position: TextEmphasisPosition::OverRight,
+        });
+        let mut b = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: container.clone(),
+                writing_mode: mode,
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        b.push_ruby(
+            NodeId(8),
+            &container,
+            marked_base_ruby(
+                RubyContent::text(
+                    TextSource::Generated { node: NodeId(10) },
+                    "日",
+                    &marked,
+                    &Limits::default(),
+                ),
+                20,
+            ),
+        );
+        let line = layout(b, &AtomicSizes::EMPTY);
+        assert_eq!(
+            line.block_size(),
+            100.0,
+            "{mode:?}: shared leading must absorb ruby and marks"
+        );
+    }
+}
+
+#[test]
+fn small_marked_base_clears_annotations_of_a_larger_base_column() {
+    use shodo::style::{TextEmphasis, TextEmphasisPosition, TextEmphasisShape};
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let mut marked = style(24.0);
+        marked.text_emphasis = Some(TextEmphasis {
+            shape: TextEmphasisShape::Dot,
+            filled: true,
+            position: TextEmphasisPosition::OverRight,
+        });
+        let root = ParagraphStyle {
+            root: style(48.0),
+            writing_mode: mode,
+            ..Default::default()
+        };
+        let mut base = ParagraphBuilder::new(&root, &Limits::default());
+        base.open_inline(NodeId(10), &marked, Default::default())
+            .push_text(TextSource::Generated { node: NodeId(11) }, "日")
+            .close_inline();
+        base.push_text(TextSource::Generated { node: NodeId(12) }, "本");
+        let mut b = ParagraphBuilder::new(&root, &Limits::default());
+        b.push_ruby(
+            NodeId(8),
+            &style(48.0),
+            marked_base_ruby(RubyContent::from_builder(base), 20),
+        );
+        let line = layout(b, &AtomicSizes::EMPTY);
+        let run = line
+            .fragments()
+            .find_map(|f| match f {
+                Fragment::GlyphRun(r) if r.emphasis_mark().is_some() => Some(r),
+                _ => None,
+            })
+            .unwrap();
+        let mark = run.emphasis_mark().unwrap();
+        let annotation = line.ruby_annotations().next().unwrap();
+        let mark_edge = if mode == WritingMode::VerticalRl {
+            run.baseline() - mark.offset
+        } else {
+            run.baseline() + mark.offset
+        };
+        let reading_edge = if mode == WritingMode::VerticalRl {
+            annotation.origin().1
+        } else {
+            annotation.origin().1 + annotation.line().block_size()
+        };
+        assert!(
+            (mark_edge - reading_edge).abs() < 0.02,
+            "{mode:?}: mark's inner edge {mark_edge} must touch reading's outer edge {reading_edge}"
+        );
+        assert_eq!(mark.offset, 36.0);
+        assert_eq!(line.block_size(), 72.0);
+    }
+}

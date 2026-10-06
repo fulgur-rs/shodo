@@ -241,6 +241,7 @@ pub(crate) fn rightmost_column(
 pub(crate) struct ColumnGeometry {
     pub(crate) contents: Vec<Bounds>,
     pub(crate) area: Bounds,
+    pub(crate) marks: [Option<Bounds>; 2],
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -291,7 +292,11 @@ pub(crate) fn columns(
         )
         .contents[0]
     });
+    let marks = geometry.marks.iter().fold([None, None], |marks, other| {
+        std::array::from_fn(|i| combine(marks[i], other[i]))
+    });
     ColumnGeometry {
+        marks,
         contents: geometry.contents,
         area,
     }

@@ -165,6 +165,12 @@ impl Line {
         let mut map = vec![None; self.fragments.len()];
         let mut records = Vec::with_capacity(self.fragments.len() + runs.len());
         let mut shifts = Vec::with_capacity(records.capacity());
+        let has_emphasis_offsets = !self.emphasis_offsets.is_empty();
+        let mut emphasis_offsets = if has_emphasis_offsets {
+            Vec::with_capacity(records.capacity())
+        } else {
+            Vec::new()
+        };
         let records_in = std::mem::take(&mut self.fragments);
         for (index, mut record) in records_in.into_iter().enumerate() {
             let own = by_record[index].clone();
@@ -204,6 +210,9 @@ impl Line {
             if keep {
                 map[index] = Some(records.len() as u32);
                 shifts.push(self.block_shifts[index]);
+                if has_emphasis_offsets {
+                    emphasis_offsets.push(self.emphasis_offsets[index]);
+                }
                 records.push(record);
             }
         }
@@ -270,6 +279,9 @@ impl Line {
                 level: self.data.base_level,
             });
             shifts.push(LayoutUnit::ZERO);
+            if has_emphasis_offsets {
+                emphasis_offsets.push((LayoutUnit::ZERO, LayoutUnit::ZERO));
+            }
             position = position.add(run_width, &mut sat);
         }
         debug_assert_eq!(overlay.len(), offset as usize + glyph_count);
@@ -279,6 +291,7 @@ impl Line {
         let last_index = records.len();
         self.fragments = records;
         self.block_shifts = shifts;
+        self.emphasis_offsets = emphasis_offsets;
         self.ellipsis = Some(first_index as u32..last_index as u32);
         self.inline_size = position.sub(self.origin, &mut sat);
         self.trailing_whitespace = LayoutUnit::ZERO;

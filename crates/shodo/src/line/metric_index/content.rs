@@ -13,6 +13,9 @@ use std::ops::Range;
 pub(super) struct ContentBounds {
     top: f64,
     bottom: f64,
+    // Only the outward outset sizes the line. Infinite identity edges mean
+    // this subtree has no marks on that side, avoiding optional box payloads.
+    marks: [f64; 2],
 }
 impl ContentBounds {
     fn join(a: Option<Self>, b: Option<Self>) -> Option<Self> {
@@ -20,6 +23,7 @@ impl ContentBounds {
             (Some(a), Some(b)) => Some(Self {
                 top: a.top.min(b.top),
                 bottom: a.bottom.max(b.bottom),
+                marks: [a.marks[0].min(b.marks[0]), a.marks[1].max(b.marks[1])],
             }),
             (a, None) | (None, a) => a,
         }
@@ -28,7 +32,19 @@ impl ContentBounds {
         Self {
             top: self.top + delta,
             bottom: self.bottom + delta,
+            marks: self.marks,
         }
+    }
+    fn fixed_marks(self, sat: &mut Saturation) -> [Option<crate::ruby::geometry::Bounds>; 2] {
+        self.marks.map(|edge| {
+            edge.is_finite().then(|| {
+                let edge = LayoutUnit::from_f32_round(edge as f32, sat);
+                crate::ruby::geometry::Bounds {
+                    top: edge,
+                    bottom: edge,
+                }
+            })
+        })
     }
     fn fixed(self, sat: &mut Saturation) -> crate::ruby::geometry::Bounds {
         crate::ruby::geometry::Bounds {
@@ -69,7 +85,28 @@ pub(super) fn content_bounds(
     ContentBounds {
         top: center - f64::from(a.to_f32()),
         bottom: center + f64::from(d.to_f32()),
+        marks: [f64::INFINITY, f64::NEG_INFINITY],
     }
+}
+
+pub(super) fn record_content_bounds(
+    data: &ParagraphData,
+    profile: RecordProfile,
+    record: &super::FragmentRecord,
+    runs: &[crate::shape::ShapedRun],
+    sat: &mut Saturation,
+) -> Option<ContentBounds> {
+    let (a, d) = crate::ruby::geometry::record_extents(data, record, runs, sat)?;
+    let mut bounds = content_bounds(data, profile, a, d);
+    for (side, mark) in crate::ruby::geometry::record_emphasis(data, record, runs, sat)
+        .into_iter()
+        .enumerate()
+    {
+        if let Some(mark) = mark {
+            bounds.marks[side] = f64::from(if side == 0 { mark.top } else { mark.bottom }.to_f32());
+        }
+    }
+    Some(bounds)
 }
 
 impl MetricIndex {
@@ -249,7 +286,14 @@ impl MetricIndex {
 
     /// The parts of `selection` that container geometry reads.
     fn digest(&self, selection: &Selection) -> SelectionDigest {
-        let bits = |b: Option<ContentBounds>| b.map(|b| (b.top.to_bits(), b.bottom.to_bits()));
+        let bits = |b: Option<ContentBounds>| {
+            b.map(|b| {
+                (
+                    (b.top.to_bits(), b.bottom.to_bits()),
+                    b.marks.map(f64::to_bits),
+                )
+            })
+        };
         let mut partial: Vec<_> = selection
             .partial
             .iter()
@@ -286,6 +330,7 @@ pub(crate) struct ContentGeometry {
     pub(crate) leaf_areas: Vec<Option<crate::ruby::geometry::Bounds>>,
     pub(crate) paints: Vec<crate::ruby::geometry::Bounds>,
     pub(crate) contents: Vec<crate::ruby::geometry::Bounds>,
+    pub(crate) marks: Vec<[Option<crate::ruby::geometry::Bounds>; 2]>,
 }
 
 /// Edge windows and selected line profile of one `selected` range, shared by
@@ -437,8 +482,9 @@ pub(crate) struct SelectionDigest {
     pub(crate) replacements: Vec<(usize, SummaryBits)>,
 }
 
-/// `ContentSummary` bounds (normal, top, bottom, raw) as `(top, bottom)` bits.
-pub(crate) type SummaryBits = [Option<(u64, u64)>; 4];
+/// `ContentSummary` bounds (normal, top, bottom, raw), including mark edges, as bits.
+type ContentBits = ((u64, u64), [u64; 2]);
+pub(crate) type SummaryBits = [Option<ContentBits>; 4];
 
 impl SelectionDigest {
     /// The profile's height or above changed: every group moves.
@@ -681,6 +727,10 @@ pub(crate) fn content_shared(
     if let Some(d) = share.detached.as_mut() {
         d.note.profile |= grouped_ancestor;
     }
+    let marks = leaf_areas
+        .iter()
+        .map(|b| b.map_or([None, None], |b| b.fixed_marks(sat)))
+        .collect();
     let leaf_areas = leaf_areas
         .into_iter()
         .map(|b| b.map(|b| b.fixed(sat)))
@@ -691,5 +741,6 @@ pub(crate) fn content_shared(
         leaf_areas,
         contents,
         paints,
+        marks,
     }
 }

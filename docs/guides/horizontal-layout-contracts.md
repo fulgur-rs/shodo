@@ -64,14 +64,24 @@ Chromium also lets the previous line's or block's unused leading absorb a line's
 overflow, and the next line's for under marks; shodo sizes each line alone, as
 it does for ruby. Chromium rounds font metrics to pixels first, so its results
 can differ by a pixel. Unmarked text on a line with marks does not add its em
-box, marks do not stack outside ruby annotations on the same side, and
-`Line::overflow_rect` does not include the marks.
+box. Marks stack outside the same-side ruby annotation extent covering their
+base text, including nested levels. Opposite-side annotations do not move them.
+The retained placement and indexed block-size probes share this extent; marks
+enter the line contribution once and never inflate ruby font-content bounds.
+`Line::overflow_rect` includes their nominal painted em boxes, with excluded
+characters omitted and one box per combined-text square.
 
 The renderer draws the marks. `GlyphRunView::emphasis_mark()` returns the mark
 character, its size, its line-relative side and the distance from the baseline
-to the primary font edge Blink paints it outside; draw one mark per typographic
+to the primary font edge plus its same-side annotation extent; draw one mark per typographic
 character whose cluster is not `emphasis_excluded`. That edge is untrimmed, so a
 painted mark can extend past the space the line reserves by up to the trim.
+Overflow uses square mark em boxes centered on typographic characters; renderers
+remain responsible for custom-mark ink outside those boxes, strokes and effects.
+The annotation offset follows Chromium’s
+[`TextPainter::SetEmphasisMark`](https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/paint/text_painter.cc)
+and its per-text `AnnotationMetrics`; the line contribution follows
+[`ComputeAnnotationOverflow`](https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/layout/inline/ruby_utils.cc).
 
 ## Text overflow
 

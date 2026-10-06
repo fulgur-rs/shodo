@@ -9,7 +9,7 @@ use super::{
 use std::ops::Range;
 
 impl ClusterFlags {
-    fn from_source(source: &str, synthetic_hyphen: bool) -> Self {
+    pub(super) fn from_source(source: &str, synthetic_hyphen: bool) -> Self {
         use icu_properties::{
             CodePointMapData,
             props::{GeneralCategory, GeneralCategoryGroup},
@@ -318,7 +318,14 @@ impl<'a> GlyphRunView<'a> {
             character,
             font_size: half,
             line_over,
-            offset: if line_over { ascent } else { descent },
+            offset: (if line_over { ascent } else { descent })
+                + if line_over
+                    != (self.line.writing_mode() == crate::geometry::WritingMode::VerticalLr)
+                {
+                    self.emphasis_offset.0.to_f32()
+                } else {
+                    self.emphasis_offset.1.to_f32()
+                },
         })
     }
 
@@ -388,7 +395,7 @@ impl<'a> GlyphRunView<'a> {
         }
     }
 
-    fn cluster_parts(
+    pub(super) fn cluster_parts(
         &self,
     ) -> impl ExactSizeIterator<Item = (Range<u32>, Range<u32>, &'a crate::shape::GlyphStore)> + '_
     {
@@ -494,7 +501,7 @@ impl<'a> GlyphRunView<'a> {
         store.pen[g as usize] - store.pen[self.glyphs.0 as usize]
     }
 
-    fn glyph(&self, g: u32) -> Glyph {
+    pub(super) fn glyph(&self, g: u32) -> Glyph {
         let store = match self.source {
             GlyphSource::Shared => &self.data().glyphs,
             GlyphSource::Overlay { .. } => self.line.overlay.as_deref().expect("overlay store"),
