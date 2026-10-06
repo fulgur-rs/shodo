@@ -5,7 +5,7 @@ use std::ops::Range;
 use unicode_bidi::{BidiInfo, Level};
 
 use crate::analysis::units::{Unit, UnitKind};
-use crate::geometry::LayoutUnit;
+use crate::geometry::{BaselineKind, LayoutUnit};
 use crate::node::{NodeId, OutOfFlowKind};
 use crate::paragraph::{AtomicSize, AtomicSizes, ParagraphData};
 
@@ -38,6 +38,7 @@ pub(crate) enum RecordKind {
         node: NodeId,
         size: AtomicSize,
         unit: u32,
+        baseline_kind: BaselineKind,
     },
     InlineBox {
         box_index: u32,
@@ -247,6 +248,9 @@ fn build_logical(
                         node: *node,
                         size,
                         unit: i as u32,
+                        baseline_kind: data
+                            .baseline_kind(*node)
+                            .unwrap_or(BaselineKind::Alphabetic),
                     },
                     inline_start: pos,
                     inline_size: w,
@@ -674,6 +678,9 @@ fn build_bidi(
                     node: *node,
                     size,
                     unit: i as u32,
+                    baseline_kind: data
+                        .baseline_kind(*node)
+                        .unwrap_or(BaselineKind::Alphabetic),
                 };
                 Piece {
                     record: Some(record(kind)),

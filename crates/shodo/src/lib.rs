@@ -147,9 +147,9 @@ pub use analysis::first_letter::first_letter_range;
 pub use builder::{ParagraphBuilder, RichText};
 pub use context::LayoutContext;
 pub use output::{
-    AnchorFragment, AtomicFragment, BreakReason, Cluster, ClusterFlags, DecorationRect,
-    EmphasisMark, ForcedBreak, Fragment, Glyph, GlyphRunView, GlyphTransform, Glyphs,
-    InlineBoxFragment, Line, LineMetrics, PaintSpan, RubyAnnotationView, RubyTransform,
+    AnchorFragment, AnnotationMetrics, AtomicFragment, BreakReason, Cluster, ClusterFlags,
+    DecorationRect, EmphasisMark, ForcedBreak, Fragment, Glyph, GlyphRunView, GlyphTransform,
+    Glyphs, InlineBoxFragment, Line, LineMetrics, PaintSpan, RubyAnnotationView, RubyTransform,
     TextCombination, Truncation,
 };
 pub use paragraph::{

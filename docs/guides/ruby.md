@@ -124,6 +124,15 @@ annotation font-content bounds or the opposite-side mark offset. Unused
 container leading absorbs the combined ruby and emphasis contribution.
 `max_block_size` applies to the resulting advance.
 
+`Line::annotation_metrics()` exposes the baseline-aligned box before ruby and
+emphasis contributions, plus per-side reserved annotation overflow and unused
+leading. Nested and hidden readings reserve their layout edges; collapsed
+readings do not. Accepted inline displacements, combined squares and trimmed
+font-content bounds determine occupied leading. These cached values let callers
+choose spacing between adjacent lines or separate blocks in the same writing
+mode and units; Shodo continues to size and advance each line independently.
+They describe layout reservations rather than glyph ink or painted mark boxes.
+
 `Line::overflow_rect()` includes visible annotation ink and nominal painted
 emphasis em boxes, including transformed child-line marks, and can extend beyond
 the advance box. It remains line-local; strokes, antialiasing and decorations

@@ -62,7 +62,18 @@ and `LineMetrics::text_over`/`text_under` ignore the marks.
 
 Chromium also lets the previous line's or block's unused leading absorb a line's
 overflow, and the next line's for under marks; shodo sizes each line alone, as
-it does for ruby. Chromium rounds font metrics to pixels first, so its results
+it does for ruby. `Line::annotation_metrics()` exposes an emphasis-free line
+box aligned to the accepted baseline, line-over/under annotation overflow, and
+unoccupied leading on each side. Values are cached layout reservations;
+hidden ruby occupies space, while painted mark ink can extend farther. Ordinary
+font overflow is excluded from annotation overflow and prevents spare space.
+The independent bare profile can round differently; spare space stays inside
+both the accepted and bare boxes. For consecutive lines in the same writing
+mode and coordinate units, a caller can borrow
+`min(previous.space_under, next.overflow_over)` in horizontal/vertical-rl
+progression; swap the sides for vertical-lr. Layout never applies this policy
+automatically, and truncation preserves the accepted annotation metrics.
+Chromium rounds font metrics to pixels first, so its results
 can differ by a pixel. Unmarked text on a line with marks does not add its em
 box. Marks stack outside the same-side ruby annotation extent covering their
 base text, including nested levels. Opposite-side annotations do not move them.

@@ -217,10 +217,14 @@ pub(crate) fn record_extents(
                 ),
             )
         }
-        RecordKind::Atomic { size, node, .. } => {
+        RecordKind::Atomic {
+            size,
+            baseline_kind,
+            ..
+        } => {
             let height = size.block_size + size.margins.block_start + size.margins.block_end;
             let baseline = size.baseline.unwrap_or(
-                if data.baseline_kind(*node) == Some(crate::geometry::BaselineKind::Central) {
+                if *baseline_kind == crate::geometry::BaselineKind::Central {
                     height / 2.0
                 } else {
                     height
@@ -330,6 +334,7 @@ pub(crate) struct BlockLayout {
     pub(crate) shift: LayoutUnit,
     pub(crate) advance: LayoutUnit,
     pub(crate) emphasis_offsets: Vec<(LayoutUnit, LayoutUnit)>,
+    pub(crate) annotation_edges: [Option<LayoutUnit>; 2],
 }
 
 /// Resolve line-relative sides once for both width allowances and placement.
@@ -387,6 +392,7 @@ pub(crate) struct Tracks {
     pub(crate) whole: Bounds,
     pub(crate) contribution: Bounds,
     pub(crate) annotation_extents: (LayoutUnit, LayoutUnit),
+    annotation_edges: [Option<LayoutUnit>; 2],
 }
 
 /// The same track stack serves indexed clearance and retained child output.
@@ -424,6 +430,7 @@ pub(crate) fn tracks(
             whole: empty,
             contribution: empty,
             annotation_extents: (LayoutUnit::ZERO, LayoutUnit::ZERO),
+            annotation_edges: [None, None],
         };
     }
     let before = level_sides(data, ruby);
@@ -514,12 +521,17 @@ pub(crate) fn tracks(
             .sub(original_base.bottom, sat)
             .max(LayoutUnit::ZERO),
     );
+    let mut annotation_edges = [
+        (annotation_extents.0 != LayoutUnit::ZERO).then_some(whole.top),
+        (annotation_extents.1 != LayoutUnit::ZERO).then_some(whole.bottom),
+    ];
     // Only the occupied side moves its marks to the outer annotation edge.
     // Independent marks are already included by the ordinary line profile.
     if annotation_extents.0 != LayoutUnit::ZERO
         && let Some(mark) = emphasis[0]
     {
         let edge = whole.top.add(mark.top, sat);
+        annotation_edges[0] = Some(edge);
         own = own.union(Bounds {
             top: edge,
             bottom: edge,
@@ -529,6 +541,7 @@ pub(crate) fn tracks(
         && let Some(mark) = emphasis[1]
     {
         let edge = whole.bottom.add(mark.bottom, sat);
+        annotation_edges[1] = Some(edge);
         own = own.union(Bounds {
             top: edge,
             bottom: edge,
@@ -540,6 +553,7 @@ pub(crate) fn tracks(
         whole,
         contribution: own,
         annotation_extents,
+        annotation_edges,
     }
 }
 
@@ -553,6 +567,7 @@ pub(crate) fn layout(
     let data = frame.data;
     let mut lanes = Vec::with_capacity(measure.fragments.len());
     let mut offsets = Vec::new();
+    let mut annotation_edges: [Option<LayoutUnit>; 2] = [None, None];
     let bounds = index::RecordBounds::new(frame, sat);
     let mut whole = index::CompletedBounds::default();
     let mut contribution = Bounds {
@@ -603,6 +618,17 @@ pub(crate) fn layout(
         if fragment.has_content {
             whole.insert(fragment.units.clone(), fragment.container, result.whole);
             contribution = contribution.union(result.contribution);
+            for (side, edge) in result.annotation_edges.into_iter().enumerate() {
+                if let Some(edge) = edge {
+                    annotation_edges[side] = Some(annotation_edges[side].map_or(edge, |old| {
+                        if side == 0 {
+                            old.min(edge)
+                        } else {
+                            old.max(edge)
+                        }
+                    }));
+                }
+            }
         }
         if emphasis.iter().any(Option::is_some) {
             offsets.push((
@@ -621,6 +647,7 @@ pub(crate) fn layout(
         shift: LayoutUnit::ZERO.sub(contribution.top, sat),
         advance: contribution.height(sat),
         emphasis_offsets: index::emphasis_offsets(frame, offsets, sat),
+        annotation_edges,
     }
 }
 

@@ -403,6 +403,7 @@ impl Line {
             _clone_probe: super::clone_probe::CloneProbe,
             ruby: Vec::new(),
             emphasis_offsets: Vec::new(),
+            annotation_geometry: super::annotations::Geometry::default(),
             ruby_caret_gaps,
             data: Arc::clone(&para.data),
             break_token: BreakToken {
@@ -468,7 +469,7 @@ impl Line {
         }
     }
 
-    pub(crate) fn measure_metrics(&mut self, sat: &mut Saturation) {
+    pub(crate) fn measure_metrics(&mut self, sat: &mut Saturation) -> (bool, Option<usize>) {
         let metrics = crate::line::metrics::measure(
             &self.data,
             self.units.start as usize..self.units.end as usize,
@@ -476,11 +477,35 @@ impl Line {
             &self.overlay_runs,
             sat,
         );
+        // Only accepted materialization needs the emphasis-free profile.
+        // Candidate metric indexes continue to solve their existing profile.
+        let marked = self.data.units[self.units.start as usize..self.units.end as usize]
+            .iter()
+            .any(|u| {
+                self.data.styles[self.data.items[u.item as usize].style as usize]
+                    .text_emphasis
+                    .is_some()
+            });
+        let (bare_baseline, bare_size) = if marked {
+            let bare = crate::line::metrics::measure_unannotated(
+                &self.data,
+                self.units.start as usize..self.units.end as usize,
+                &self.fragments,
+                &self.overlay_runs,
+                sat,
+            );
+            (bare.baseline, bare.block_size)
+        } else {
+            (metrics.baseline, metrics.block_size)
+        };
+        self.annotation_geometry.start = metrics.baseline.sub(bare_baseline, sat);
+        self.annotation_geometry.end = self.annotation_geometry.start.add(bare_size, sat);
         self.block_size = metrics.block_size;
         self.baseline = metrics.baseline;
         self.block_shifts = metrics.shifts;
         self.empty = metrics.empty;
         self.measure_combinations(&metrics.combination_shifts);
+        (metrics.root_strut, metrics.trimmed_trailing)
     }
 
     fn measure_combinations(&mut self, shifts: &crate::hashing::FastMap<usize, LayoutUnit>) {
@@ -716,14 +741,18 @@ impl Line {
                 item: *item,
                 text: (text.start, text.end),
             }),
-            RecordKind::Atomic { node, size, .. } => {
+            RecordKind::Atomic {
+                node,
+                size,
+                baseline_kind,
+                ..
+            } => {
                 let margin_block = size.margins.block_start + size.margins.block_end;
                 let height = size.block_size + margin_block;
-                let kind = self.data.baseline_kind(*node);
                 // Missing baselines are synthesized from the margin box
                 // (CSS Inline 3): bottom for alphabetic, middle for central.
-                let baseline_from_top = size.baseline.unwrap_or(match kind {
-                    Some(BaselineKind::Central) => height / 2.0,
+                let baseline_from_top = size.baseline.unwrap_or(match baseline_kind {
+                    BaselineKind::Central => height / 2.0,
                     _ => height,
                 });
                 let line_baseline = (self.baseline + self.block_shifts[index]).to_f32();

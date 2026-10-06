@@ -485,6 +485,81 @@ fn emphasis_offset_capacity_obeys_completed_budget_in_root_and_ruby_child() {
 }
 
 #[test]
+fn retained_annotation_geometry_is_reused_without_content_rescans() {
+    use crate::style::{LineHeight, TextEmphasis, TextEmphasisPosition, TextEmphasisShape};
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register(crate::test_support::fonts::LATIN.to_vec())
+        .unwrap();
+    let mut style = ParagraphStyle::default();
+    style.root.font_size = 10.;
+    style.root.line_height = LineHeight::Px(40.);
+    style.root.text_emphasis = Some(TextEmphasis {
+        shape: TextEmphasisShape::Dot,
+        filled: true,
+        position: TextEmphasisPosition::OverRight,
+    });
+    let mut builder = ParagraphBuilder::new(&style, &limits);
+    builder.push_text(TextSource::Generated { node: NodeId(1) }, "alpha");
+    let p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+    let mut cx = LayoutContext::new();
+    let options = LineOptions::default();
+    let mut c = LineConstraint::new(1000.);
+    c.max_block_size = Some(0.);
+    reject(
+        &p,
+        &mut cx,
+        p.start_token(),
+        &options,
+        &c,
+        &AtomicSizes::EMPTY,
+    );
+    let retained = cx
+        .completed
+        .as_ref()
+        .expect("small clean geometry is retained");
+    let expected = retained.line.annotation_metrics();
+    let storage = retained.line.owned_heap_bytes(usize::MAX).unwrap();
+    let fragments = retained.line.fragments.as_ptr();
+    assert!(expected.space_over > 0. && expected.space_under > 0.);
+    crate::output::annotation_probe::reset();
+    for _ in 0..2 {
+        reject(
+            &p,
+            &mut cx,
+            p.start_token(),
+            &options,
+            &c,
+            &AtomicSizes::EMPTY,
+        );
+        let saved = &cx.completed.as_ref().unwrap().line;
+        assert_eq!(saved.annotation_metrics(), expected);
+        assert_eq!(saved.owned_heap_bytes(usize::MAX), Some(storage));
+    }
+    c.max_block_size = None;
+    let LineResult::Line(line) =
+        p.next_line(&mut cx, p.start_token(), &options, &c, &AtomicSizes::EMPTY)
+    else {
+        panic!("accepted")
+    };
+    assert_eq!(line.annotation_metrics(), expected);
+    assert_eq!(
+        line.fragments.as_ptr(),
+        fragments,
+        "cached owned vectors are moved"
+    );
+    assert_eq!(crate::output::annotation_probe::count(), 0);
+    assert!(cx.completed.is_none());
+}
+
+#[test]
 fn resource_and_saturating_retries_keep_fresh_warning_order_and_budget_reset() {
     for mode in 0..4 {
         let mut limits = Limits::default();
