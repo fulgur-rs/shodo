@@ -118,6 +118,56 @@ fn q(width: f32, input: impl FnOnce(&mut ParagraphBuilder, &mut Doc)) -> Vec<f32
 const WIDE: f32 = 1000.0;
 
 #[test]
+fn list_item_root_strut_does_not_restore_empty_child_struts() {
+    for mode in [
+        shodo::geometry::WritingMode::HorizontalTb,
+        shodo::geometry::WritingMode::VerticalRl,
+        shodo::geometry::WritingMode::VerticalLr,
+    ] {
+        for force in [false, true] {
+            let mut s = root(true);
+            s.writing_mode = mode;
+            s.force_root_strut = force;
+            let mut doc = Doc::new();
+            let p = build(&s, |b| {
+                b.open_inline(NodeId(2), &span(80.0), InlineEdges::default());
+                doc.img(b, VerticalAlign::Baseline);
+                b.close_inline();
+            });
+            let line = first_line(&p, &mut LayoutContext::new(), &doc);
+            assert_eq!(
+                line.block_size(),
+                if force { 20.0 } else { 2.0 },
+                "{mode:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn list_item_root_strut_contributes_on_every_continuation_line() {
+    let mut s = root(true);
+    s.force_root_strut = true;
+    let p = build(&s, |b| {
+        b.open_inline(NodeId(2), &span(10.0), InlineEdges::default());
+        text(b, "a");
+        b.push_forced_break(NodeId(3));
+        text(b, "b");
+        b.close_inline();
+    });
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        WIDE,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(
+        lines.iter().map(|l| l.block_size()).collect::<Vec<_>>(),
+        [20.0, 20.0]
+    );
+}
+
+#[test]
 fn issue_repro_first_fragment_is_text_free() {
     // a: <span lh40><img><br>x</span> = 2 + 40
     assert_eq!(

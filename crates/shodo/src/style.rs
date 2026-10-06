@@ -608,6 +608,12 @@ pub struct ParagraphStyle {
     /// `box-decoration-break` edge repeated on a continuation line does not
     /// count, and margins never count.
     pub line_height_quirk: bool,
+    /// Keep the root inline box's strut on every nonempty line, including
+    /// continuations, when [`Self::line_height_quirk`] is enabled. Set this
+    /// for CSS list-item paragraphs to match browser quirks-mode layout.
+    /// Child inline boxes still follow the quirk's per-fragment rules.
+    /// With the quirk disabled the root strut already contributes normally.
+    pub force_root_strut: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
