@@ -122,6 +122,7 @@ fn assert_quirk_parity(p: &Paragraph, atomics: &AtomicSizes) -> usize {
             p.data.units[start].kind,
             UnitKind::Cluster { .. }
                 | UnitKind::Atomic { .. }
+                | UnitKind::ForcedBreak
                 | UnitKind::Open { .. }
                 | UnitKind::Close { .. }
         ) {
@@ -366,6 +367,117 @@ fn pending_vertical_align_index_matches_retained_ranges() {
                     assert_quirk_parity(&p, &atomics) > 5,
                     "{outer:?}/{inner:?}/{content}"
                 );
+            }
+        }
+    }
+}
+
+#[test]
+fn styled_break_only_range_has_indexed_and_retained_baseline_parity() {
+    use crate::geometry::WritingMode;
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        for force_root_strut in [false, true] {
+            let mut b = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    writing_mode: mode,
+                    line_height_quirk: true,
+                    force_root_strut,
+                    ..Default::default()
+                },
+                &Limits::default(),
+            );
+            b.push_forced_break_with_style(NodeId(3), &style(12.0));
+            let p = b.build(&mut LayoutContext::new(), &fonts()).unwrap();
+            assert_eq!(
+                assert_quirk_parity(&p, &AtomicSizes::EMPTY),
+                1,
+                "the break-only range must compare both height and baseline: {mode:?}/{force_root_strut}"
+            );
+        }
+    }
+}
+
+#[test]
+fn styled_break_root_strut_combinations_match_retained_ranges() {
+    use crate::geometry::WritingMode;
+    use crate::style::LineHeight;
+    let root = InlineStyle {
+        line_height: LineHeight::Px(20.0),
+        ..style(10.0)
+    };
+    let mut atomics = AtomicSizes::new();
+    atomics.insert(
+        NodeId(90),
+        crate::AtomicSize {
+            inline_size: 2.0,
+            block_size: 2.0,
+            ..Default::default()
+        },
+    );
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        for force_root_strut in [false, true] {
+            for nested in [false, true] {
+                for atomic in [false, true] {
+                    for first_line in [false, true] {
+                        let mut b = ParagraphBuilder::new(
+                            &ParagraphStyle {
+                                root: root.clone(),
+                                writing_mode: mode,
+                                line_height_quirk: true,
+                                force_root_strut,
+                                first_line: first_line.then(|| InlineStyle {
+                                    line_height: LineHeight::Px(30.0),
+                                    ..root.clone()
+                                }),
+                                ..Default::default()
+                            },
+                            &Limits::default(),
+                        );
+                        if nested {
+                            for (node, height) in [(100, 80.0), (101, 60.0)] {
+                                b.open_inline(
+                                    NodeId(node),
+                                    &InlineStyle {
+                                        line_height: LineHeight::Px(height),
+                                        ..root.clone()
+                                    },
+                                    Default::default(),
+                                );
+                            }
+                        }
+                        if atomic {
+                            b.push_atomic(NodeId(90), &root, Default::default());
+                        }
+                        for node in [3, 4] {
+                            b.push_forced_break_with_style(
+                                NodeId(node),
+                                &InlineStyle {
+                                    line_height: LineHeight::Px(10.0),
+                                    ..root.clone()
+                                },
+                            );
+                        }
+                        if nested {
+                            b.close_inline().close_inline();
+                        }
+                        let p = b.build(&mut LayoutContext::new(), &fonts()).unwrap();
+                        assert!(assert_quirk_parity(&p, &atomics) >= 2);
+                        if let Some(first) = &p.data.first_line {
+                            let alternate = Paragraph {
+                                data: std::sync::Arc::clone(&first.data),
+                            };
+                            assert!(assert_quirk_parity(&alternate, &atomics) >= 2);
+                        }
+                    }
+                }
             }
         }
     }

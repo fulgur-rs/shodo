@@ -226,7 +226,7 @@ impl Struts {
         if let Some((p, true)) = forced {
             s.mark(p);
         }
-        if !s.root && ruby_on_line(data, &units) {
+        if data.style.force_root_strut || (!s.root && ruby_on_line(data, &units)) {
             s.root = true;
         }
         s

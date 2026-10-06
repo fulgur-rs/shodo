@@ -537,7 +537,7 @@ impl MetricIndex {
                     }
                 }
             }
-            if q.ruby(range) {
+            if data.style.force_root_strut || q.ruby(range) {
                 side = side.join(quirk::Side::from(q.root(), Default::default()));
             }
         }
@@ -677,6 +677,82 @@ mod tests {
     use crate::limits::Limits;
     use crate::node::{InlineEdges, NodeId, Sides, TextSource};
     use crate::style::{FontFamily, InlineStyle, LineHeight, ParagraphStyle};
+
+    #[test]
+    fn forced_root_strut_matches_retained_metrics_for_selected_ranges() {
+        let fonts = FontCollection::with_options(
+            &Limits::default(),
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        for mode in [
+            WritingMode::HorizontalTb,
+            WritingMode::VerticalRl,
+            WritingMode::VerticalLr,
+        ] {
+            let root = InlineStyle {
+                font_size: 10.0,
+                line_height: LineHeight::Px(20.0),
+                ..Default::default()
+            };
+            let mut b = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    writing_mode: mode,
+                    root: root.clone(),
+                    line_height_quirk: true,
+                    force_root_strut: true,
+                    ..Default::default()
+                },
+                &Limits::default(),
+            );
+            b.open_inline(
+                NodeId(2),
+                &InlineStyle {
+                    line_height: LineHeight::Px(10.0),
+                    ..root
+                },
+                InlineEdges::default(),
+            );
+            b.push_text(TextSource::Generated { node: NodeId(3) }, "ab");
+            b.close_inline();
+            let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+            let owners: Vec<_> = p
+                .data
+                .units
+                .iter()
+                .enumerate()
+                .filter(|(_, u)| matches!(u.kind, UnitKind::Cluster { .. }))
+                .map(|(i, _)| i)
+                .collect();
+            for range in [
+                owners[0]..owners[0] + 1,
+                owners[1]..owners[1] + 1,
+                owners[0]..owners[1] + 1,
+            ] {
+                let mut cx = LayoutContext::new();
+                cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+                let metrics = measure(
+                    &p.data,
+                    range.clone(),
+                    &AtomicSizes::EMPTY,
+                    &mut cx,
+                    &mut Saturation::default(),
+                );
+                let line = p.ruby_line(
+                    &mut LayoutContext::new(),
+                    range.clone(),
+                    100.0,
+                    &AtomicSizes::EMPTY,
+                    crate::ruby::align::AnnotationAlign::Policy(crate::RubyAlign::Start),
+                );
+                assert_eq!(metrics.block_size.to_f32(), 20.0, "{mode:?} {range:?}");
+                assert_eq!(line.block_size, metrics.block_size, "{mode:?} {range:?}");
+                assert_eq!(line.baseline, metrics.baseline, "{mode:?} {range:?}");
+            }
+        }
+    }
 
     #[test]
     fn quirk_tree_is_absent_without_the_flag() {

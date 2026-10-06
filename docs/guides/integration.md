@@ -316,6 +316,11 @@ space for selection; do not subtract `Line::hang_end()` from these box widths.
 `Line::overflow_rect()` returns nominal glyph ink and painted box bounds in
 line-local coordinates. Add `block_offset` before physical conversion. Renderer
 strokes, antialiasing and decoration effects can extend those nominal bounds.
+`AnchorFragment::block_offset` already includes the accepted line's offset in
+the layout container. Place an out-of-flow child's static anchor by converting
+`(inline_position, block_offset)` with the line's writing mode and used
+direction; do not add `Line::block_offset()` again. Retained anchors carry the
+caller's final placement even when a line was retried or placed after a gap.
 `hang_start()` and `hang_end()` report excluded punctuation advances and eligible
 trailing whitespace. See the [Japanese layout contract](japanese-layout.md) for
 trimming, hanging and justification policies.

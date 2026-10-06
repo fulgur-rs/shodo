@@ -110,9 +110,51 @@ focused run and both complete feature-isolation runs. The implementation
 remained unchanged during those checks. The original workspace library
 suite had 732 passed and 8 ignored tests. Its new public API doctest passed.
 
-Temporary build outputs and raw verification logs are removed after this
-record is committed; the commands and assertions above preserve the needed
-reproduction conditions and results.
+Build caches and raw verification logs needed for integration and CI are
+retained until those checks and the merge are complete. Remove this task's
+temporary artifacts after preserving the final results in this record;
+the commands and assertions above preserve the reproduction conditions.
+
+## Main integration
+
+Merged `origin/main` at `f72ac877c39651d398827864ffadfe9ef07dd73b`, retaining
+the published feature branch's history. This includes shodo-qu8's independent
+`force_root_strut` flag and shodo-xgi's anchor block offsets. Resolved the test
+and guide insertion conflicts by keeping both features' contracts and tests.
+
+The independent review identified that the parity helper skipped ranges
+starting at `ForcedBreak`. A break-only paragraph now requires exactly one
+height and baseline comparison; it first failed because the existing helper
+compared zero ranges. Included forced-break starts in the helper so the normal
+retained/indexed comparison covers that continuation boundary too.
+
+The composed regressions cover `force_root_strut` false/true, direct-root and
+two nested text-free ancestors, a preceding atomic or no preceding content,
+normal and first-line styles, and horizontal/vertical-rl/vertical-lr modes.
+They compare indexed heights and alphabetic baselines in both datasets and
+assert the public first and continuation line heights, break identity/style,
+and zero-height pending-close terminal line. Root opt-in keeps its own 20px
+strut (30px on the first line) while the independent 10px break does not credit
+the 60px/80px ancestors.
+
+Integration checks used an exclusively assigned dependency cache, cleaned of
+all five workspace packages before compiling this checkout, with two build
+jobs. Compile logs confirm the assigned feature worktree as the source of all
+five packages. No additional production behavior changes were needed.
+
+| Fresh integration check | Result |
+| --- | --- |
+| Break-only range before helper coverage fix | Failed: 0 comparisons, expected 1 |
+| `cargo test -p shodo --lib styled_break` | 4 passed, including break-only and composed dataset parity |
+| `cargo test -p shodo --test line_height_quirk --test build` | 25 quirks and 15 builder tests passed |
+| `cargo test --workspace` | 1,610 passed, 8 existing ignored, 95 result summaries, zero failures |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Passed |
+| `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` | Passed |
+| `cargo fmt --all --check` and `git diff --check` | Passed |
+
+All three new test names appear in the fresh workspace log. These gates ran
+after the final source changes, including the earlier identical-style and
+terminal pending-close regressions.
 
 ## Release handoff
 
@@ -122,8 +164,8 @@ released version and replace the artificial `<br>` wrapper with
 `push_forced_break_with_style`. Read `Line::forced_break().node` to identify
 the element for clear handling, and retain ordinary line metadata and break
 tokens for terminal fragmentation handling. `shodo-qu8` adds independent
-root-strut opt-in behavior; rebase this branch on that integration and rerun
-the focused quirks and full workspace checks before release.
+root-strut opt-in behavior and is merged into this branch; the composed
+quirks and fresh workspace checks cover that integration before release.
 When removing the wrapper, preserve the distinction between a final break
 followed directly by `Done` and an ending break followed by pending inline
 close units. `Line::forced_break` supplies the element identity before that
