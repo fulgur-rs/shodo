@@ -104,3 +104,26 @@ The [executed verification record](../records/verification/vertical-final-gates.
 the exact commands and results for the implementation. Stable and Rust 1.89.0
 each passed 653 workspace tests, with 46 exact snapshot matches. The record also
 includes feature, allocator, wasm, font reproduction and measured benchmark checks.
+
+
+`InlineStyle::text_autospace` accepts `Normal`, `Auto`, `NoAutospace`, and
+`Custom { ideograph_alpha, ideograph_numeric, punctuation }`. `Auto` currently
+uses `Normal`'s conservative 0.125ic inter-script spacing. Custom sets select
+letters and decimal numerals independently; upright vertical letters/numerals
+and text-combine-upright compositions remain excluded from those classes.
+
+The punctuation class implements French spacing: a font-derived non-breaking
+word space before `:` and `»`, and after `«`; a font-derived narrow non-breaking
+space before `;`, `!`, and `?`. The innermost element containing the boundary
+must have a French language tag (`fr` or a subtag, case insensitive). Missing
+space glyphs fall back to the resolved word-space advance or 1/5 of the effective
+primary em. Existing Unicode separators suppress insertion; punctuation
+sequences such as `?!` take one preceding narrow space and empty `«»` receives
+none. Reservations affect glyph placement, wrapping, and intrinsic widths,
+while processed text, glyph identities, and source mappings remain unchanged.
+RTL guillemets use their displayed mirrored forms; mixed-direction boundaries
+protect the corresponding logical source cut.
+The virtual non-breaking boundary is indivisible even under emergency wrapping
+or a caller `LineBreakOverride::Allow`; forced breaks still separate the text.
+The boundary's containing element owns the reservation and its font metrics.
+`replace` behavior is not implemented; the Raikiri adapter rejects it explicitly.

@@ -5,7 +5,7 @@ mod content;
 mod quirk;
 mod scalar;
 
-use content::{ContentBounds, ContentSummary, content_bounds};
+use content::{ContentBounds, ContentSummary, content_bounds, record_content_bounds};
 // Keep the existing crate-visible type path even when callers infer it.
 #[allow(unused_imports)]
 pub(crate) use content::{
@@ -176,10 +176,10 @@ impl MetricIndex {
                 .as_ref()
                 .and_then(|r| resolver.record(data, r, &[]))
                 .or_else(|| resolver.forced_break(data, u));
-            record_content[i] = record.as_ref().zip(profile).and_then(|(r, p)| {
-                crate::ruby::geometry::record_extents(data, r, &[], &mut sat)
-                    .map(|(a, d)| content_bounds(data, p, a, d))
-            });
+            record_content[i] = record
+                .as_ref()
+                .zip(profile)
+                .and_then(|(r, p)| record_content_bounds(data, p, r, &[], &mut sat));
             let combination = resolver.combination(data, u);
             let is_box = matches!(u.kind, UnitKind::Open { .. } | UnitKind::Close { .. });
             let trims = quirk && super::quirk::trims(data, i);
@@ -448,13 +448,14 @@ impl MetricIndex {
                         let entry = replacements.entry(owner).or_default();
                         *entry = entry.join(Summary::profile(profile, true));
                     }
-                    if let Some((a, d)) = crate::ruby::geometry::record_extents(
+                    if let Some(bounds) = record_content_bounds(
                         data,
+                        profile,
                         &record,
                         std::slice::from_ref(run),
                         sat,
                     ) {
-                        let raw = Some(content_bounds(data, profile, a, d));
+                        let raw = Some(bounds);
                         let normal = if profile.group.is_none() && profile.own_group.is_none() {
                             raw
                         } else {
@@ -935,6 +936,206 @@ mod tests {
                     let metrics = measure(&p.data, range.clone(), &atomics, &mut cx, &mut sat);
                     assert_eq!(metrics.baseline, line.baseline, "{mode:?}/{range:?}");
                     assert_eq!(metrics.block_size, line.block_size, "{mode:?}/{range:?}");
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod emphasis_tests {
+    use super::*;
+    use crate::font::{FontCollection, FontOptions};
+    use crate::limits::Limits;
+    use crate::node::{NodeId, TextSource};
+    use crate::style::{
+        InlineStyle, LineHeight, ParagraphStyle, TextEmphasis, TextEmphasisPosition,
+        TextEmphasisShape,
+    };
+    use crate::{
+        ParagraphBuilder, Ruby, RubyAnnotation, RubyBase, RubyContent, RubyLevel, RubyPosition,
+        RubySpan, RubyStyle, RubyVisibility,
+    };
+
+    #[test]
+    fn emphasis_ruby_probes_match_retained_ranges_and_warm_queries_stay_bounded() {
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        for mode in [
+            WritingMode::HorizontalTb,
+            WritingMode::VerticalRl,
+            WritingMode::VerticalLr,
+        ] {
+            for position in [
+                TextEmphasisPosition::OverRight,
+                TextEmphasisPosition::UnderLeft,
+            ] {
+                let style = InlineStyle {
+                    font_size: 20.0,
+                    line_height: LineHeight::Px(20.0),
+                    text_emphasis: Some(TextEmphasis {
+                        shape: TextEmphasisShape::Dot,
+                        filled: true,
+                        position,
+                    }),
+                    ..Default::default()
+                };
+                let reading = InlineStyle {
+                    font_size: 10.0,
+                    line_height: LineHeight::Px(40.0),
+                    ..Default::default()
+                };
+                let mut builder = ParagraphBuilder::new(
+                    &ParagraphStyle {
+                        root: style.clone(),
+                        writing_mode: mode,
+                        ..Default::default()
+                    },
+                    &limits,
+                );
+                for i in 0..4 {
+                    let base_content = if i % 2 == 0 {
+                        let large = InlineStyle {
+                            font_size: 40.0,
+                            line_height: LineHeight::Px(40.0),
+                            ..Default::default()
+                        };
+                        let mut base = ParagraphBuilder::new(
+                            &ParagraphStyle {
+                                root: large,
+                                writing_mode: mode,
+                                ..Default::default()
+                            },
+                            &limits,
+                        );
+                        let mut marked = style.clone();
+                        if i == 2 {
+                            marked.vertical_align = crate::style::VerticalAlign::Top;
+                        }
+                        base.open_inline(NodeId(i + 50), &marked, Default::default())
+                            .push_text(
+                                TextSource::Generated {
+                                    node: NodeId(i + 10),
+                                },
+                                "a",
+                            )
+                            .close_inline();
+                        base.push_text(
+                            TextSource::Generated {
+                                node: NodeId(i + 60),
+                            },
+                            "b",
+                        );
+                        RubyContent::from_builder(base)
+                    } else {
+                        RubyContent::text(
+                            TextSource::Generated {
+                                node: NodeId(i + 10),
+                            },
+                            "ab",
+                            &style,
+                            &limits,
+                        )
+                    };
+                    let ruby = Ruby::new(
+                        vec![RubyBase {
+                            node: NodeId(i + 10),
+                            content: base_content,
+                            align: crate::RubyAlign::Start,
+                        }],
+                        vec![RubyLevel {
+                            annotations: vec![RubyAnnotation {
+                                node: NodeId(i + 20),
+                                content: RubyContent::text(
+                                    TextSource::Generated {
+                                        node: NodeId(i + 20),
+                                    },
+                                    "cd",
+                                    &reading,
+                                    &limits,
+                                ),
+                                span: RubySpan::All,
+                                visibility: RubyVisibility::Visible,
+                            }],
+                            style: RubyStyle {
+                                position: if i % 2 == 0 {
+                                    RubyPosition::Over
+                                } else {
+                                    RubyPosition::Under
+                                },
+                                ..Default::default()
+                            },
+                        }],
+                    )
+                    .unwrap();
+                    builder.push_ruby(NodeId(i + 30), &style, ruby);
+                }
+                let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+                let data = &paragraph.data;
+                let mut cx = LayoutContext::new();
+                cx.ruby_ranges.begin(data, &AtomicSizes::EMPTY);
+                let owners: Vec<_> = data
+                    .units
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, u)| matches!(u.kind, UnitKind::Cluster { .. }).then_some(i))
+                    .collect();
+                for (at, start) in owners.iter().enumerate() {
+                    for end in owners[at..].iter().map(|i| i + 1) {
+                        let range = *start..end;
+                        let mut sat = Saturation::default();
+                        let ruby = crate::ruby::measure::candidate(
+                            data,
+                            range.start,
+                            range.end,
+                            &AtomicSizes::EMPTY,
+                            &mut cx,
+                            &mut sat,
+                        );
+                        let probed = crate::line::range::block_size(
+                            data,
+                            range.clone(),
+                            &ruby,
+                            &AtomicSizes::EMPTY,
+                            &mut cx,
+                            &mut sat,
+                        );
+                        let retained = paragraph.ruby_line(
+                            &mut LayoutContext::new(),
+                            range.clone(),
+                            10000.0,
+                            &AtomicSizes::EMPTY,
+                            crate::ruby::align::AnnotationAlign::Policy(crate::RubyAlign::Start),
+                        );
+                        assert_eq!(
+                            probed, retained.block_size,
+                            "{mode:?}/{position:?}/{range:?}"
+                        );
+                        let before = cx.ruby_measure_visits;
+                        for _ in 0..8 {
+                            assert_eq!(
+                                crate::line::range::block_size(
+                                    data,
+                                    range.clone(),
+                                    &ruby,
+                                    &AtomicSizes::EMPTY,
+                                    &mut cx,
+                                    &mut sat
+                                ),
+                                probed
+                            );
+                        }
+                        assert!(
+                            cx.ruby_measure_visits - before <= 8,
+                            "warm block probes must reuse the exact cached geometry"
+                        );
+                    }
                 }
             }
         }

@@ -96,6 +96,8 @@ fn measured_tracks(p: &Paragraph) -> (Tracks, usize) {
         &f.right_columns,
         &vec![unit(2.0); f.lanes.len()],
         true,
+        base,
+        [None, None],
         &mut Saturation::default(),
     );
     (result, VISITS.with(|n| n.get()))

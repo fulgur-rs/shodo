@@ -156,6 +156,45 @@ All three new test names appear in the fresh workspace log. These gates ran
 after the final source changes, including the earlier identical-style and
 terminal pending-close regressions.
 
+## Autospace and emphasis/ruby integration
+
+Merged `origin/main` at `c6d36e99ef8020bca23d13a1af61ce144d75d12b`,
+preserving the published branch's history. This includes shodo-48t's autospace
+policies and shodo-jw6's same-side emphasis/ruby placement and cache accounting.
+The single production conflict was in `MetricIndex::build`: keep the explicit
+forced-break profile fallback alongside `record_content_bounds`, which includes
+the emphasis extents. The remaining production changes merged automatically;
+no new runtime behavior was added during integration.
+
+The new composed regression places marked ruby bases and marked sibling text
+before a styled break inside a text-free 200px ancestor, followed by a second
+styled break. It covers over/under annotations with emphasis on the same side,
+root-strut opt-in false/true, all three horizontal/vertical writing modes, and
+normal/first-line datasets. Every eligible retained range is compared with its
+indexed height, including ranges beginning at either forced break.
+
+Temporarily selecting only main's record profile reproduced the bad conflict
+resolution: indexed height was 53.359375px while the retained line required
+the explicit break's 100px strut. Restoring the break fallback made the composed
+test and all five styled-break tests pass. The emphasis/ruby indexed parity,
+warm-query bounds and root/recursive-child completed-cache budget tests also
+passed in the focused run.
+
+Validation reused the exclusively assigned target without copying artifacts.
+Cargo recompiled all five workspace packages from this worktree, with two
+build jobs. The new composed test appears in the fresh workspace log.
+
+| Autospace/emphasis integration check | Result |
+| --- | --- |
+| Composed range with break fallback temporarily removed | Failed: indexed 53.359375px, retained 100px |
+| `cargo test -p shodo --lib styled_break` | 5 passed |
+| `cargo test -p shodo --lib emphasis` | 4 passed, including composed parity and completed-cache bounds |
+| Public builder, quirks and emphasis suites | 15, 25 and 11 tests passed |
+| `cargo test --workspace` | 1,631 passed, 8 existing ignored, 95 result summaries, zero failures |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Passed |
+| `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` | Passed |
+| `cargo fmt --all --check` and `git diff --check` | Passed |
+
 ## Release handoff
 
 Release publication and the pin-ready version are owned by the parent

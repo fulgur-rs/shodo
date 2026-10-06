@@ -144,7 +144,7 @@ impl Line {
     pub fn hang_end(&self) -> f32 {
         self.hanging_end.to_f32()
     }
-    /// Bounds of nominal glyph ink and painted box geometry, relative to this
+    /// Bounds of nominal glyph ink, emphasis em boxes and painted box geometry, relative to this
     /// line's top. Renderer-added stroke, antialiasing and decorations can
     /// extend these bounds; block_offset is applied by the caller.
     pub fn overflow_rect(&self) -> LogicalRect {
@@ -203,6 +203,81 @@ impl Line {
                     });
                 }
                 Fragment::GlyphRun(run) => {
+                    if let Some(mark) = run.emphasis_mark() {
+                        let before = mark.line_over
+                            != (self.writing_mode() == crate::geometry::WritingMode::VerticalLr);
+                        let block_start = if before {
+                            run.baseline() - mark.offset - mark.font_size
+                        } else {
+                            run.baseline() + mark.offset
+                        };
+                        // Marks are caller-painted em boxes. Character centers
+                        // divide a shared shaping cluster's advance evenly.
+                        for (glyphs, text, _) in run.cluster_parts() {
+                            if run.orientation() == crate::GlyphOrientation::Combined {
+                                if let Some(square) = self.combination_at(text.start)
+                                    && square.text_range.start == text.start as usize
+                                {
+                                    include(LogicalRect {
+                                        inline_start: square.square.inline_start
+                                            + (square.square.inline_size - mark.font_size) / 2.0,
+                                        block_start,
+                                        inline_size: mark.font_size,
+                                        block_size: mark.font_size,
+                                    });
+                                }
+                                continue;
+                            }
+                            let source = run
+                                .data()
+                                .text
+                                .get(text.start as usize..text.end as usize)
+                                .unwrap_or_default();
+                            let mut cuts =
+                                icu_segmenter::GraphemeClusterSegmenter::new().segment_str(source);
+                            let Some(mut start) = cuts.next() else {
+                                continue;
+                            };
+                            let ranges: Vec<_> = cuts
+                                .map(|end| {
+                                    let range = start..end;
+                                    start = end;
+                                    range
+                                })
+                                .collect();
+                            let advance: f32 = glyphs.clone().map(|i| run.glyph(i).advance).sum();
+                            let reversed = run.record.level % 2 != self.data.base_level % 2;
+                            let pen = run.logical_pen(glyphs.start).to_f32();
+                            let cluster_start = run.inline_start()
+                                + if reversed {
+                                    run.inline_size() - pen - advance
+                                } else {
+                                    pen
+                                };
+                            let count = ranges.len();
+                            let step = advance / count.max(1) as f32;
+                            for (i, range) in ranges.into_iter().enumerate() {
+                                if super::ClusterFlags::from_source(
+                                    &source[range],
+                                    self.visible_hyphen == Some(text.start),
+                                )
+                                .emphasis_excluded
+                                {
+                                    continue;
+                                }
+                                include(LogicalRect {
+                                    inline_start: cluster_start
+                                        + step
+                                            * (if reversed { count - 1 - i } else { i } as f32
+                                                + 0.5)
+                                        - mark.font_size / 2.0,
+                                    block_start,
+                                    inline_size: mark.font_size,
+                                    block_size: mark.font_size,
+                                });
+                            }
+                        }
+                    }
                     let data = run.font_data();
                     let font = data
                         .as_ref()
@@ -327,6 +402,7 @@ impl Line {
             #[cfg(test)]
             _clone_probe: super::clone_probe::CloneProbe,
             ruby: Vec::new(),
+            emphasis_offsets: Vec::new(),
             ruby_caret_gaps,
             data: Arc::clone(&para.data),
             break_token: BreakToken {
@@ -625,6 +701,11 @@ impl Line {
             } => Fragment::GlyphRun(GlyphRunView {
                 source: *source,
                 block_shift: self.block_shifts[index],
+                emphasis_offset: self
+                    .emphasis_offsets
+                    .get(index)
+                    .copied()
+                    .unwrap_or_default(),
                 line: self,
                 record,
                 run: *run,

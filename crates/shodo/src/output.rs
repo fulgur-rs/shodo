@@ -60,6 +60,7 @@ pub struct Line {
     #[cfg(test)]
     pub(crate) _clone_probe: clone_probe::CloneProbe,
     pub(crate) ruby: Vec<ruby::RubyAnnotationRecord>,
+    pub(crate) emphasis_offsets: Vec<(LayoutUnit, LayoutUnit)>,
     pub(crate) ruby_caret_gaps: Vec<crate::ruby::align::CaretGap>,
     pub(crate) data: Arc<ParagraphData>,
     pub(crate) break_token: BreakToken,
@@ -188,6 +189,7 @@ pub struct AnchorFragment {
 pub struct GlyphRunView<'a> {
     source: GlyphSource,
     block_shift: LayoutUnit,
+    emphasis_offset: (LayoutUnit, LayoutUnit),
     line: &'a Line,
     record: &'a FragmentRecord,
     run: u32,
@@ -257,7 +259,8 @@ pub struct EmphasisMark {
     pub line_over: bool,
     /// The style's primary font ascent (line-over marks) or descent
     /// (line-under marks); half the em for upright text without vertical
-    /// metrics and for combined text.
+    /// metrics and for combined text, plus the same-side annotation extent
+    /// covering this run’s base text (including nested ruby).
     pub offset: f32,
 }
 

@@ -1522,3 +1522,368 @@ fn autospace_float_retries_and_tiny_windows_keep_final_geometry() {
         }
     }
 }
+
+fn classes(alpha: bool, numeric: bool, punctuation: bool) -> shodo::style::TextAutospace {
+    shodo::style::TextAutospace::Custom {
+        ideograph_alpha: alpha,
+        ideograph_numeric: numeric,
+        punctuation,
+    }
+}
+
+#[test]
+fn autospace_explicit_classes_are_independent_and_auto_aliases_normal() {
+    for (auto, count) in [
+        (classes(false, false, false), 0),
+        (classes(true, false, false), 1),
+        (classes(false, true, false), 1),
+        (classes(true, true, false), 2),
+        (classes(false, false, true), 0),
+        (shodo::style::TextAutospace::Auto, 2),
+    ] {
+        let mut style = root();
+        style.text_autospace = auto;
+        let mut disabled = style.clone();
+        disabled.text_autospace = shodo::style::TextAutospace::NoAutospace;
+        let actual = lines(&paragraph(style, "水a 水1"), 1000.0).remove(0);
+        let plain = lines(&paragraph(disabled, "水a 水1"), 1000.0).remove(0);
+        close(
+            actual.inline_size(),
+            plain.inline_size() + count as f32 * ic(20.0) / 8.0,
+        );
+    }
+}
+
+#[test]
+fn autospace_french_punctuation_inserts_font_spaces_without_changing_text() {
+    for (text, spaces) in [
+        ("a:", vec!['\u{a0}']),
+        ("a;", vec!['\u{202f}']),
+        ("a!", vec!['\u{202f}']),
+        ("a?", vec!['\u{202f}']),
+        ("«a»", vec!['\u{a0}', '\u{a0}']),
+    ] {
+        let mut style = root();
+        style.lang = Some("fr-FR".into());
+        style.text_autospace = classes(false, false, true);
+        let p = paragraph(style.clone(), text);
+        assert_eq!(p.text(), text);
+        let actual = lines(&p, 1000.0).remove(0);
+        style.text_autospace = shodo::style::TextAutospace::NoAutospace;
+        let natural = lines(&paragraph(style, text), 1000.0).remove(0);
+        let font = FontRef::from_index(FONTS[0].bytes, 0).unwrap();
+        let extra: f32 = spaces
+            .into_iter()
+            .map(|ch| {
+                font.charmap()
+                    .map(ch)
+                    .and_then(|glyph| {
+                        font.glyph_metrics(Size::new(20.0), LocationRef::default())
+                            .advance_width(glyph)
+                    })
+                    .unwrap_or(if ch == '\u{202f}' { 4.0 } else { advance(' ') })
+            })
+            .sum();
+        close(actual.inline_size(), natural.inline_size() + extra);
+        let intrinsic = p.intrinsic_sizes(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            &AtomicIntrinsics::EMPTY,
+        );
+        close(intrinsic.min_content, actual.inline_size());
+        close(intrinsic.max_content, actual.inline_size());
+    }
+}
+
+#[test]
+fn autospace_french_insert_respects_locale_separators_and_punctuation_sequences() {
+    for lang in [None, Some("en"), Some("zh"), Some("fr"), Some("FR-ca")] {
+        for text in [
+            "a:",
+            "a?!",
+            "a!",
+            "a :",
+            "a\u{a0}:",
+            "a\u{202f}!",
+            "a\u{2003}!",
+            "a\u{200b}!",
+            "a,b",
+            "«»",
+        ] {
+            let mut style = root();
+            style.lang = lang.map(Into::into);
+            style.text_autospace = classes(false, false, true);
+            let actual = lines(&paragraph(style.clone(), text), 1000.0).remove(0);
+            style.text_autospace = shodo::style::TextAutospace::NoAutospace;
+            let natural = lines(&paragraph(style, text), 1000.0).remove(0);
+            let french = lang.is_some_and(|l| l.starts_with("fr") || l.starts_with("FR"));
+            let extra = if french {
+                match text {
+                    "a:" => advance('\u{a0}'),
+                    "a?!" | "a!" => 4.0,
+                    _ => 0.0,
+                }
+            } else {
+                0.0
+            };
+            close(actual.inline_size(), natural.inline_size() + extra);
+        }
+    }
+}
+
+#[test]
+fn autospace_french_gaps_are_nonbreaking_but_forced_breaks_and_edges_remain_boundaries() {
+    for text in ["a:", "a!", "«a»", "a\u{ad}:"] {
+        for emergency in [false, true] {
+            let mut style = root();
+            style.lang = Some("fr".into());
+            style.text_autospace = classes(false, false, true);
+            if emergency {
+                style.overflow_wrap = shodo::style::OverflowWrap::Anywhere;
+            }
+            let p = paragraph(style, text);
+            let actual = lines(&p, 0.0);
+            assert_eq!(actual.len(), 1, "{text:?}, emergency {emergency}");
+            assert_eq!(actual[0].text_range(), 0..text.len());
+        }
+    }
+    let mut style = root();
+    style.lang = Some("fr".into());
+    style.text_autospace = classes(false, false, true);
+    let p = build(style.clone(), |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "a")
+            .push_forced_break(NodeId(2))
+            .push_text(TextSource::Generated { node: NodeId(3) }, ":");
+    });
+    let actual = lines(&p, 1000.0);
+    assert_eq!(actual.len(), 2);
+    close(actual[0].inline_size(), advance('a'));
+    close(actual[1].inline_size(), advance(':'));
+    for text in [":", "!", "«", "»"] {
+        let actual = lines(&paragraph(style.clone(), text), 1000.0).remove(0);
+        style.text_autospace = shodo::style::TextAutospace::NoAutospace;
+        close(
+            actual.inline_size(),
+            lines(&paragraph(style.clone(), text), 1000.0)
+                .remove(0)
+                .inline_size(),
+        );
+        style.text_autospace = classes(false, false, true);
+    }
+}
+
+#[test]
+fn autospace_french_boundary_uses_shared_parent_policy_and_excludes_child_box() {
+    for parent_french in [false, true] {
+        for padding in [0.0, 2.0] {
+            let layout = |enabled| {
+                let mut style = root();
+                style.lang = Some(if parent_french { "fr" } else { "en" }.into());
+                style.text_autospace = if enabled {
+                    classes(false, false, true)
+                } else {
+                    shodo::style::TextAutospace::NoAutospace
+                };
+                let child = InlineStyle {
+                    font_size: 32.0,
+                    lang: Some(if parent_french { "en" } else { "fr" }.into()),
+                    ..style.clone()
+                };
+                build(style, |b| {
+                    b.push_text(TextSource::Generated { node: NodeId(1) }, "a")
+                        .open_inline(
+                            NodeId(2),
+                            &child,
+                            InlineEdges {
+                                padding: shodo::node::Sides {
+                                    inline_start: padding,
+                                    ..Default::default()
+                                },
+                                ..Default::default()
+                            },
+                        )
+                        .push_text(TextSource::Generated { node: NodeId(3) }, ":")
+                        .close_inline();
+                })
+            };
+            let yes = lines(&layout(true), 1000.0).remove(0);
+            let no = lines(&layout(false), 1000.0).remove(0);
+            close(
+                yes.inline_size(),
+                no.inline_size()
+                    + if parent_french && padding == 0.0 {
+                        advance('\u{a0}')
+                    } else {
+                        0.0
+                    },
+            );
+            let box_width = |line: &Line| {
+                line.fragments()
+                    .find_map(|f| match f {
+                        Fragment::InlineBox(b) => Some(b.rect.inline_size),
+                        _ => None,
+                    })
+                    .unwrap()
+            };
+            close(box_width(&yes), box_width(&no));
+        }
+    }
+}
+
+#[test]
+fn autospace_french_gaps_compose_with_tracking_and_word_spacing() {
+    let mut style = root();
+    style.lang = Some("fr".into());
+    style.text_autospace = classes(false, false, true);
+    style.letter_spacing = 2.0;
+    style.word_spacing = 3.0;
+    let actual = lines(&paragraph(style, "a:"), 1000.0).remove(0);
+    let natural = lines(&paragraph(root(), "a:"), 1000.0).remove(0);
+    close(
+        actual.inline_size(),
+        natural.inline_size() + advance('\u{a0}') + 2.0 + 3.0,
+    );
+}
+
+#[test]
+fn autospace_custom_numeric_and_alpha_keep_upright_and_bidi_semantics() {
+    for (auto, text) in [
+        (classes(true, false, false), "水a"),
+        (classes(false, true, false), "水1"),
+    ] {
+        for mode in [
+            shodo::geometry::WritingMode::VerticalRl,
+            shodo::geometry::WritingMode::VerticalLr,
+        ] {
+            let fonts = load_fonts(&Limits::default()).unwrap();
+            let layout = |auto| {
+                let mut root = root();
+                root.text_autospace = auto;
+                root.text_orientation = shodo::style::TextOrientation::Upright;
+                let mut b = ParagraphBuilder::new(
+                    &ParagraphStyle {
+                        root,
+                        writing_mode: mode,
+                        ..Default::default()
+                    },
+                    &Limits::default(),
+                );
+                b.push_text(TextSource::Generated { node: NodeId(1) }, text);
+                let p = b
+                    .build(&mut LayoutContext::new(), &fonts.collection)
+                    .unwrap();
+                lines(&p, 1000.0).remove(0).inline_size()
+            };
+            close(
+                layout(auto),
+                layout(shodo::style::TextAutospace::NoAutospace),
+            );
+        }
+    }
+    let mut style = root();
+    style.text_autospace = classes(true, false, false);
+    let actual = lines(&paragraph(style.clone(), "水אב1"), 1000.0).remove(0);
+    style.text_autospace = shodo::style::TextAutospace::NoAutospace;
+    let natural = lines(&paragraph(style, "水אב1"), 1000.0).remove(0);
+    // Visual neighbors are ideograph/digit, so alpha-only adds no gap.
+    close(actual.inline_size(), natural.inline_size());
+}
+
+#[test]
+fn autospace_french_source_mapping_and_glyph_identity_are_unchanged() {
+    let make = |auto| {
+        let mut style = root();
+        style.lang = Some("fr".into());
+        style.text_autospace = auto;
+        build(style, |b| {
+            b.push_text(
+                TextSource::Dom {
+                    node: NodeId(7),
+                    offset: 12,
+                },
+                "é:",
+            );
+        })
+    };
+    let spaced = make(classes(false, false, true));
+    let natural = make(shodo::style::TextAutospace::NoAutospace);
+    assert_eq!(spaced.text(), "é:");
+    assert_eq!(
+        spaced.offset_mapping().unwrap().units(),
+        natural.offset_mapping().unwrap().units()
+    );
+    let spaced_line = lines(&spaced, 1000.0).remove(0);
+    let natural_line = lines(&natural, 1000.0).remove(0);
+    let glyphs = |line: &Line| {
+        line.fragments()
+            .flat_map(|f| match f {
+                Fragment::GlyphRun(r) => r.glyphs().map(|g| (g.id, g.cluster)).collect::<Vec<_>>(),
+                _ => Vec::new(),
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(glyphs(&spaced_line), glyphs(&natural_line));
+    assert_eq!(spaced_line.text_range(), natural_line.text_range());
+}
+
+#[test]
+fn autospace_french_nonbreaking_overrides_allow_and_matches_rtl_visual_gaps() {
+    for (direction, text) in [
+        (shodo::geometry::Direction::Ltr, "a:"),
+        (shodo::geometry::Direction::Rtl, ":אב"),
+        (shodo::geometry::Direction::Rtl, ":a"),
+        (shodo::geometry::Direction::Rtl, "«a»"),
+    ] {
+        let make = |auto| {
+            let fonts = load_fonts(&Limits::default()).unwrap();
+            let mut style = root();
+            style.lang = Some("fr".into());
+            style.direction = direction;
+            style.text_autospace = auto;
+            style.overflow_wrap = shodo::style::OverflowWrap::Anywhere;
+            let mut builder = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    root: style,
+                    direction,
+                    ..Default::default()
+                },
+                &Limits::default(),
+            );
+            builder.with_line_break_override(|_| shodo::LineBreakOverride::Allow);
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
+            builder
+                .build(&mut LayoutContext::new(), &fonts.collection)
+                .unwrap()
+        };
+        let p = make(classes(false, false, true));
+        let natural = make(shodo::style::TextAutospace::NoAutospace);
+        let width = lines(&p, 1000.0).remove(0).inline_size();
+        close(
+            width,
+            lines(&natural, 1000.0).remove(0).inline_size()
+                + advance('\u{a0}') * if text == "«a»" { 2.0 } else { 1.0 },
+        );
+        let wrapped = lines(&p, 0.0);
+        // In the RTL word the two letters may split at their own source cut;
+        // the colon must remain attached to its visual neighboring letter.
+        assert!(
+            wrapped
+                .iter()
+                .all(|line| &p.text()[line.text_range()] != ":"),
+            "{direction:?}, {text:?}"
+        );
+        if text != ":אב" {
+            assert_eq!(wrapped.len(), 1, "{direction:?}, {text:?}");
+        }
+        let intrinsic = p.intrinsic_sizes(
+            &mut LayoutContext::new(),
+            &Default::default(),
+            &AtomicIntrinsics::EMPTY,
+        );
+        close(intrinsic.max_content, width);
+        close(
+            intrinsic.min_content,
+            wrapped.iter().map(Line::inline_size).fold(0.0, f32::max),
+        );
+    }
+}

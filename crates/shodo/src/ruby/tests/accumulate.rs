@@ -265,7 +265,21 @@ fn selection_digest_differences_name_their_source_ranges() {
         above: 2,
         partial: vec![(0..4, 7, 8)],
         removed: vec![10..12],
-        replacements: vec![(11, [Some((1, 2)), None, None, Some((1, 2))])],
+        replacements: vec![(
+            11,
+            [
+                Some((
+                    (1, 2),
+                    [f64::INFINITY.to_bits(), f64::NEG_INFINITY.to_bits()],
+                )),
+                None,
+                None,
+                Some((
+                    (1, 2),
+                    [f64::INFINITY.to_bits(), f64::NEG_INFINITY.to_bits()],
+                )),
+            ],
+        )],
     };
     assert!(base.changed_ranges(&base).is_empty());
     assert!(!base.profile_changed(&base));

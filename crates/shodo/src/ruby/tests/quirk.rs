@@ -484,6 +484,92 @@ fn styled_break_root_strut_combinations_match_retained_ranges() {
 }
 
 #[test]
+fn styled_break_with_same_side_emphasis_ruby_matches_retained_ranges() {
+    use crate::geometry::WritingMode;
+    use crate::style::{LineHeight, TextEmphasis, TextEmphasisPosition, TextEmphasisShape};
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        for force_root_strut in [false, true] {
+            for over in [false, true] {
+                for first_line in [false, true] {
+                    let marked = InlineStyle {
+                        line_height: LineHeight::Px(20.0),
+                        text_emphasis: Some(TextEmphasis {
+                            shape: TextEmphasisShape::Dot,
+                            filled: true,
+                            position: if over {
+                                TextEmphasisPosition::OverRight
+                            } else {
+                                TextEmphasisPosition::UnderLeft
+                            },
+                        }),
+                        ..style(20.0)
+                    };
+                    let mut annotation = ruby(
+                        RubyContent::text(
+                            TextSource::Generated { node: NodeId(10) },
+                            "日",
+                            &marked,
+                            &Limits::default(),
+                        ),
+                        "に",
+                    );
+                    annotation.levels[0].style.position = if over {
+                        RubyPosition::Over
+                    } else {
+                        RubyPosition::Under
+                    };
+                    let mut b = ParagraphBuilder::new(
+                        &ParagraphStyle {
+                            root: marked.clone(),
+                            writing_mode: mode,
+                            line_height_quirk: true,
+                            force_root_strut,
+                            first_line: first_line.then(|| InlineStyle {
+                                line_height: LineHeight::Px(30.0),
+                                ..marked.clone()
+                            }),
+                            ..Default::default()
+                        },
+                        &Limits::default(),
+                    );
+                    b.push_ruby(NodeId(2), &marked, annotation);
+                    b.push_text(TextSource::Generated { node: NodeId(3) }, "語");
+                    b.open_inline(
+                        NodeId(100),
+                        &InlineStyle {
+                            line_height: LineHeight::Px(200.0),
+                            ..style(20.0)
+                        },
+                        Default::default(),
+                    );
+                    b.push_forced_break_with_style(
+                        NodeId(4),
+                        &InlineStyle {
+                            line_height: LineHeight::Px(100.0),
+                            ..style(20.0)
+                        },
+                    );
+                    b.close_inline();
+                    b.push_forced_break_with_style(NodeId(5), &style(10.0));
+                    let p = b.build(&mut LayoutContext::new(), &fonts()).unwrap();
+                    assert!(assert_quirk_parity(&p, &AtomicSizes::EMPTY) >= 5);
+                    if let Some(first) = &p.data.first_line {
+                        let alternate = Paragraph {
+                            data: std::sync::Arc::clone(&first.data),
+                        };
+                        assert!(assert_quirk_parity(&alternate, &AtomicSizes::EMPTY) >= 5);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn styled_break_index_matches_retained_ranges_and_baselines() {
     use crate::geometry::WritingMode;
     use crate::style::{LineHeight, TextOrientation, VerticalAlign};
