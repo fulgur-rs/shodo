@@ -1,5 +1,6 @@
 //! Line layout output.
 
+mod ellipsis;
 mod glyphs;
 mod line;
 mod owned_bytes;
@@ -7,6 +8,7 @@ mod owned_bytes;
 pub(crate) mod owner_probe;
 mod paint;
 pub(crate) mod ruby;
+pub use ellipsis::Truncation;
 pub use paint::{DecorationRect, PaintSpan};
 pub use ruby::{RubyAnnotationView, RubyTransform};
 
@@ -71,6 +73,10 @@ pub struct Line {
     pub(crate) overlay_clusters: Box<[OverlayCluster]>,
     pub(crate) overlay_runs: Box<[crate::shape::ShapedRun]>,
     pub(crate) pending_overlays: Vec<crate::line::reshape::EdgeOverlay>,
+    /// Content start: offset, indent and alignment shift less start hanging.
+    pub(crate) origin: LayoutUnit,
+    /// Fragment indices of the ellipsis runs after truncation.
+    pub(crate) ellipsis: Option<Range<u32>>,
 }
 
 /// Final line-box extents and root font edges, in line-local logical block coordinates.

@@ -73,6 +73,30 @@ to the primary font edge Blink paints it outside; draw one mark per typographic
 character whose cluster is not `emphasis_excluded`. That edge is untrimmed, so a
 painted mark can extend past the space the line reserves by up to the trim.
 
+## Text overflow
+
+`Line::truncate_with_ellipsis(cx, available)` applies `text-overflow: ellipsis`
+to an accepted line whose content ends past `available`, measured like fragment
+positions from the line's inline-start edge. Lay the line out as `white-space:
+nowrap` content would, then truncate it; `clip` needs no call, since the caller's
+overflow clip already hides the overflow. It follows Blink's `LineTruncator`:
+the ellipsis is U+2026 when the line style's primary font has it, otherwise three
+periods, shaped in the line's root style (the first-line root on the first
+formatted line) on the root baseline without changing the line height. Clusters,
+atomic inlines and combined text that would end past the ellipsis are removed
+from `Line::fragments()` with everything after them toward the inline end, in
+visual order, so bidi runs keep the part nearest inline-start; ruby bases and
+annotations go together. The first cluster or atomic inline stays for the
+caller to clip, as CSS Overflow 3 requires. The ellipsis follows the remaining
+content, so it can end before `available`, and inline boxes cut by it end at the
+remaining content without their end edge.
+
+The returned `Truncation` lists the ellipsis fragments; `GlyphRunView::is_ellipsis()`
+marks them, with no node, the root paint and an empty text range at the first
+hidden offset. The line's text, offsets, break token and block metrics are
+unchanged, so later lines and accessibility text are unaffected; hit testing,
+carets and selections see only the remaining fragments. A line truncates once.
+
 ## Quirks-mode line height
 
 `ParagraphStyle::line_height_quirk` implements the line height calculation

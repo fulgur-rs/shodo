@@ -73,8 +73,22 @@ impl<'a> GlyphRunView<'a> {
         &self.data().styles[self.style_index() as usize].paint
     }
 
+    /// The run's style; the root (line) style for an ellipsis run.
     pub fn style_index(&self) -> u32 {
+        if self.is_ellipsis() {
+            return 0;
+        }
         self.data().items[self.item as usize].style
+    }
+
+    /// Whether this run is the ellipsis [`crate::Line::truncate_with_ellipsis`]
+    /// inserted. It has no node or source and an empty text range.
+    pub fn is_ellipsis(&self) -> bool {
+        self.line.ellipsis.as_ref().is_some_and(|range| {
+            self.line.fragments[range.start as usize..range.end as usize]
+                .iter()
+                .any(|record| std::ptr::eq(record, self.record))
+        })
     }
 
     /// Paint owner of this run: the source item's [`NodeId`], normally supplied
@@ -85,6 +99,9 @@ impl<'a> GlyphRunView<'a> {
     /// supplies resolved solid paint; other effects remain caller-owned. Use the line's offset mapping and [`crate::hit::LineLayout`] for
     /// each source node's selection, link, decoration and caret regions.
     pub fn node(&self) -> Option<NodeId> {
+        if self.is_ellipsis() {
+            return None;
+        }
         self.data().items[self.item as usize].node
     }
 
@@ -459,6 +476,22 @@ impl<'a> GlyphRunView<'a> {
                 shaping_advance,
             }
         })
+    }
+
+    /// Logical pen offset of glyph `g` from the run's first glyph, before
+    /// half-spacing and display reversal: the cluster boundary truncation
+    /// cuts at.
+    pub(crate) fn logical_pen(&self, g: u32) -> LayoutUnit {
+        if matches!(self.source, GlyphSource::Shared)
+            && let Some((start, positions)) = &self.line.positions
+        {
+            return positions[(g - start) as usize] - positions[(self.glyphs.0 - start) as usize];
+        }
+        let store = match self.source {
+            GlyphSource::Shared => &self.data().glyphs,
+            GlyphSource::Overlay { .. } => self.line.overlay.as_deref().expect("overlay store"),
+        };
+        store.pen[g as usize] - store.pen[self.glyphs.0 as usize]
     }
 
     fn glyph(&self, g: u32) -> Glyph {
