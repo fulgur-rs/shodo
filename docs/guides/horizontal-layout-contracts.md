@@ -88,8 +88,11 @@ from `Line::fragments()` with everything after them toward the inline end, in
 visual order, so bidi runs keep the part nearest inline-start; ruby bases and
 annotations go together. The first cluster or atomic inline stays for the
 caller to clip, as CSS Overflow 3 requires. The ellipsis follows the remaining
-content, so it can end before `available`, and inline boxes cut by it end at the
-remaining content without their end edge.
+content, so it can end before `available`. Inline boxes that start before the
+hidden content keep their geometry, as in Blink, so the caller's overflow clip
+trims a box the ellipsis cuts. Within a glyph run, truncation keeps a logical
+prefix (a suffix for runs displayed reversed), so remaining glyphs never move,
+even with negative letter-spacing.
 
 The returned `Truncation` lists the ellipsis fragments; `GlyphRunView::is_ellipsis()`
 marks them, with no node, the root paint and an empty text range at the first

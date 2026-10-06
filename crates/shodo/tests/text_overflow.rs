@@ -212,7 +212,7 @@ fn reversed_runs_keep_their_logical_suffix() {
 }
 
 #[test]
-fn atomics_and_boxes_end_at_the_cut() {
+fn atomics_hide_and_boxes_keep_their_geometry() {
     let style = style();
     let mut atomics = AtomicSizes::new();
     atomics.insert(
@@ -238,6 +238,13 @@ fn atomics_and_boxes_end_at_the_cut() {
             .close_inline();
     });
     let mut l = line(&p, &atomics);
+    let original_box = l
+        .fragments()
+        .find_map(|f| match f {
+            Fragment::InlineBox(b) => Some(b),
+            _ => None,
+        })
+        .unwrap();
     let text_width = line(&text(&style, "ab"), &AtomicSizes::EMPTY).inline_size();
     let available = text_width + ellipsis_width(&style) + 10.0;
     let cut = l
@@ -248,15 +255,16 @@ fn atomics_and_boxes_end_at_the_cut() {
         match fragment {
             Fragment::Atomic(_) => panic!("the atomic inline does not fit"),
             Fragment::InlineBox(b) => {
+                // As in Blink, the caller's overflow clip trims the box.
                 boxes += 1;
-                assert!(!b.has_end_edge);
-                assert_eq!(b.rect.inline_start + b.rect.inline_size, cut.inline_start);
+                assert_eq!(b, original_box);
             }
             _ => {}
         }
     }
     assert_eq!(boxes, 1);
     assert_eq!(runs(&l).len(), 2);
+    assert!((cut.inline_start - text_width).abs() < 0.01);
 }
 
 #[test]
@@ -370,4 +378,109 @@ fn ruby_hides_with_its_annotations() {
         "{:?}",
         runs(&l)
     );
+}
+
+#[test]
+fn negative_letter_spacing_keeps_glyph_positions() {
+    for direction in [Direction::Ltr, Direction::Rtl] {
+        let mut style = style();
+        style.direction = direction;
+        style.root.direction = direction;
+        style.root.letter_spacing = -4.0;
+        let p = text(&style, "iiiiiiWWWWWWiiii");
+        let original = line(&p, &AtomicSizes::EMPTY);
+        let positions = |l: &Line| {
+            l.fragments()
+                .filter_map(|f| match f {
+                    Fragment::GlyphRun(run) if !run.is_ellipsis() => Some(
+                        run.glyphs()
+                            .map(|g| (g.cluster, g.inline_position))
+                            .collect::<Vec<_>>(),
+                    ),
+                    _ => None,
+                })
+                .flatten()
+                .collect::<Vec<_>>()
+        };
+        let all = positions(&original);
+        for step in 1..40 {
+            let mut l = original.clone();
+            if l.truncate_with_ellipsis(&mut LayoutContext::new(), step as f32 * 2.0)
+                .is_none()
+            {
+                continue;
+            }
+            let kept = positions(&l);
+            assert!(!kept.is_empty());
+            assert!(kept.iter().all(|g| all.contains(g)), "{direction:?} {step}");
+        }
+    }
+}
+
+#[test]
+fn boxes_cut_in_their_start_edges_keep_their_geometry() {
+    let style = style();
+    let edges = InlineEdges {
+        margin: Sides {
+            inline_start: 5.0,
+            ..Default::default()
+        },
+        padding: Sides {
+            inline_start: 20.0,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let p = build(&style, |b| {
+        b.push_text(TextSource::Generated { node: NodeId(1) }, "abcd");
+        b.open_inline(NodeId(2), &style.root, edges)
+            .push_text(TextSource::Generated { node: NodeId(3) }, "efghij")
+            .close_inline();
+    });
+    let mut l = line(&p, &AtomicSizes::EMPTY);
+    let abcd = line(&text(&style, "abcd"), &AtomicSizes::EMPTY).inline_size();
+    l.truncate_with_ellipsis(
+        &mut LayoutContext::new(),
+        abcd + ellipsis_width(&style) + 3.0,
+    )
+    .unwrap();
+    for fragment in l.fragments() {
+        if let Fragment::InlineBox(b) = fragment {
+            assert!(
+                b.rect.inline_size >= 0.0 && b.content_rect.inline_size >= 0.0,
+                "{b:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn tabs_end_at_the_ellipsis() {
+    let style = style();
+    let p = text(&style, "ab\tcdefghijklmnop");
+    let mut l = line(&p, &AtomicSizes::EMPTY);
+    let ab = line(&text(&style, "ab"), &AtomicSizes::EMPTY).inline_size();
+    let cut = l
+        .truncate_with_ellipsis(&mut LayoutContext::new(), ab + ellipsis_width(&style) + 4.0)
+        .unwrap();
+    let lines = [l];
+    let layout = LineLayout::new(&lines);
+    let rects = layout.selection_rects(
+        TextPosition {
+            line: 0,
+            offset: 0,
+            affinity: Affinity::Downstream,
+        },
+        TextPosition {
+            line: 0,
+            offset: 3,
+            affinity: Affinity::Upstream,
+        },
+    );
+    for rect in rects {
+        assert!(
+            rect.inline_start + rect.inline_size <= cut.inline_start + 0.01,
+            "{rect:?}"
+        );
+    }
 }

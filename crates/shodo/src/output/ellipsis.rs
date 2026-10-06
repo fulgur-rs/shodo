@@ -22,7 +22,6 @@ pub struct Truncation {
 
 /// A visible piece truncation keeps or hides as a whole.
 struct Piece {
-    record: usize,
     start: LayoutUnit,
     end: LayoutUnit,
     /// Logical cluster index within the record, for glyph runs.
@@ -55,8 +54,9 @@ impl Line {
     /// after them at the inline-end side; ruby bases and their annotations go
     /// together. The first cluster or atomic inline on the line stays even
     /// when it does not fit, for the caller's clip. The ellipsis follows the
-    /// remaining content, so it can end before `available`. Inline boxes cut by
-    /// the ellipsis end at the remaining content and lose their end edge.
+    /// remaining content, so it can end before `available`. Inline boxes that
+    /// start before the hidden content keep their geometry, as in Blink, so
+    /// the caller's overflow clip trims a box the ellipsis cuts.
     ///
     /// The line's text, offsets, break token and metrics are unchanged, so
     /// layout of later lines is unaffected. Hidden text has no geometry: hit
@@ -68,7 +68,7 @@ impl Line {
         cx: &mut LayoutContext,
         available: f32,
     ) -> Option<Truncation> {
-        if self.ellipsis.is_some() || !available.is_finite() {
+        if self.ellipsis.is_some() || self.empty || !available.is_finite() {
             return None;
         }
         let mut sat = Saturation::default();
@@ -83,23 +83,19 @@ impl Line {
             .fold(LayoutUnit::ZERO, |w, a| w.add(*a, &mut sat));
         let cut = limit.sub(width, &mut sat);
 
-        let (pieces, clusters) = self.pieces();
-        let ruby = self.ruby_extents(&pieces);
-        let effective_end = |piece: &Piece| {
-            ruby.iter()
-                .find(|(text, _, _)| text.start <= piece.text.start && piece.text.start < text.end)
-                .map_or(piece.end, |(_, _, end)| piece.end.max(*end))
+        let (pieces, by_record, clusters) = self.pieces();
+        let (containers, container_of) = self.ruby_extents(&pieces);
+        // Ruby bases and their annotations are kept or hidden together.
+        let effective_end = |i: usize| {
+            container_of[i].map_or(pieces[i].end, |c| pieces[i].end.max(containers[c].2))
         };
-        let effective_start = |piece: &Piece| {
-            ruby.iter()
-                .find(|(text, _, _)| text.start <= piece.text.start && piece.text.start < text.end)
-                .map_or(piece.start, |(_, start, _)| piece.start.min(*start))
+        let effective_start = |i: usize| {
+            container_of[i].map_or(pieces[i].start, |c| pieces[i].start.min(containers[c].1))
         };
         // Everything from the first piece that would end past the cut onward
         // is hidden, so the remaining content is one run from inline-start.
-        let mut hidden_from = pieces
-            .iter()
-            .filter(|p| effective_end(p) > cut)
+        let mut hidden_from = (0..pieces.len())
+            .filter(|&i| effective_end(i) > cut)
             .map(effective_start)
             .min()
             .unwrap_or(LayoutUnit::MAX);
@@ -115,11 +111,39 @@ impl Line {
                 .min()
                 .unwrap_or(LayoutUnit::MAX);
         }
-        let kept = |piece: &Piece| piece.start < hidden_from;
-        let mut end = pieces
-            .iter()
-            .filter(|p| kept(p))
-            .map(|p| p.end)
+        let mut kept: Vec<bool> = pieces.iter().map(|p| p.start < hidden_from).collect();
+        // Within a glyph run, keep a logical prefix (a suffix when the run
+        // displays reversed) even when negative spacing makes cluster
+        // positions overlap, so narrowing never moves a kept glyph.
+        for (record, range) in by_record.iter().enumerate() {
+            if let Some(run) = &clusters[record] {
+                let mut order: Vec<usize> = range.clone().collect();
+                if run.reversed {
+                    order.reverse();
+                }
+                let mut open = true;
+                for i in order {
+                    open &= kept[i];
+                    kept[i] = open;
+                }
+            }
+        }
+        // Negative spacing can put a run's first kept cluster after one that
+        // fails; still keep the first piece of the visually first record.
+        if !kept.iter().any(|k| *k)
+            && let Some(first) = (0..pieces.len()).min_by_key(|&i| pieces[i].start)
+            && let Some(record) = by_record.iter().position(|r| r.contains(&first))
+        {
+            let range = by_record[record].clone();
+            let walk_start = match &clusters[record] {
+                Some(run) if run.reversed => range.end - 1,
+                _ => range.start,
+            };
+            kept[walk_start] = true;
+        }
+        let mut end = (0..pieces.len())
+            .filter(|&i| kept[i])
+            .map(|i| pieces[i].end)
             .max()
             .unwrap_or(self.origin);
         for record in &self.fragments {
@@ -130,16 +154,12 @@ impl Line {
                 }
             }
         }
-        let hidden_text: Vec<Range<u32>> = pieces
-            .iter()
-            .filter(|p| !kept(p))
-            .map(|p| p.text.clone())
-            .collect();
-        let ellipsis_text = hidden_text
-            .iter()
-            .map(|t| t.start)
-            .min()
-            .unwrap_or(self.text_range.end);
+        let hidden_text = HiddenText::new(
+            (0..pieces.len())
+                .filter(|&i| !kept[i])
+                .map(|i| pieces[i].text.clone()),
+        );
+        let ellipsis_text = hidden_text.start().unwrap_or(self.text_range.end);
 
         // Rebuild the records in visual order.
         let mut map = vec![None; self.fragments.len()];
@@ -147,6 +167,8 @@ impl Line {
         let mut shifts = Vec::with_capacity(records.capacity());
         let records_in = std::mem::take(&mut self.fragments);
         for (index, mut record) in records_in.into_iter().enumerate() {
+            let own = by_record[index].clone();
+            let kept_count = own.clone().filter(|&i| kept[i]).count();
             let keep = match &mut record.kind {
                 RecordKind::Glyphs {
                     source,
@@ -154,42 +176,29 @@ impl Line {
                     text,
                     ..
                 } => {
-                    let own: Vec<&Piece> = pieces.iter().filter(|p| p.record == index).collect();
-                    let kept_count = own.iter().filter(|p| kept(p)).count();
                     if kept_count == own.len() {
                         true
                     } else if kept_count == 0 {
                         false
                     } else {
                         let run = clusters[index].as_ref().expect("cluster geometry");
+                        let kept_clusters =
+                            own.filter(|&i| kept[i]).filter_map(|i| pieces[i].cluster);
                         narrow(
                             &mut record.inline_size,
                             source,
                             glyphs,
                             text,
                             run,
-                            &own,
-                            &kept,
+                            kept_clusters,
                         );
                         true
                     }
                 }
-                RecordKind::Atomic { .. } => {
-                    pieces.iter().find(|p| p.record == index).is_none_or(&kept)
-                }
-                RecordKind::InlineBox { end_edge, .. } => {
-                    if record.inline_start >= hidden_from {
-                        false
-                    } else {
-                        let box_end = record.inline_start.add(record.inline_size, &mut sat);
-                        if box_end > cut {
-                            record.inline_size =
-                                end.sub(record.inline_start, &mut sat).max(LayoutUnit::ZERO);
-                            *end_edge = false;
-                        }
-                        true
-                    }
-                }
+                RecordKind::Atomic { .. } => kept_count == own.len(),
+                // Like Blink, a box keeps its geometry; the caller's overflow
+                // clip trims what extends under or past the ellipsis.
+                RecordKind::InlineBox { .. } => record.inline_start < hidden_from,
                 RecordKind::Anchor { .. } => true,
             };
             if keep {
@@ -203,20 +212,21 @@ impl Line {
                 *parent = parent.and_then(|p| map[p as usize]);
             }
         }
-        let intersects = |range: &Range<u32>| {
-            hidden_text
-                .iter()
-                .any(|t| t.start < range.end.max(range.start + 1) && range.start < t.end)
-        };
         self.ruby.retain(|annotation| {
-            let base = annotation.base_text.start as u32..annotation.base_text.end as u32;
-            !intersects(&base)
+            !hidden_text
+                .intersects(annotation.base_text.start as u32..annotation.base_text.end as u32)
         });
         self.combinations.retain(|square| {
-            !intersects(&(square.text_range.start as u32..square.text_range.end as u32))
+            !hidden_text.intersects(square.text_range.start as u32..square.text_range.end as u32)
         });
-        self.tabs.retain(|tab| tab.start < hidden_from);
-        if self.visible_hyphen.is_some_and(|h| intersects(&(h..h + 1))) {
+        self.tabs.retain_mut(|tab| {
+            tab.width = tab.width.min(end.sub(tab.start, &mut sat));
+            tab.start < end
+        });
+        if self
+            .visible_hyphen
+            .is_some_and(|h| hidden_text.intersects(h..h + 1))
+        {
             self.visible_hyphen = None;
         }
 
@@ -281,11 +291,15 @@ impl Line {
         })
     }
 
-    /// Pieces in record order with each glyph run's cluster geometry.
-    fn pieces(&self) -> (Vec<Piece>, Vec<Option<RunClusters>>) {
+    /// Pieces in record order, the piece range of each record, and each
+    /// glyph run's cluster geometry.
+    #[allow(clippy::type_complexity)]
+    fn pieces(&self) -> (Vec<Piece>, Vec<Range<usize>>, Vec<Option<RunClusters>>) {
         let mut pieces = Vec::new();
+        let mut by_record = Vec::with_capacity(self.fragments.len());
         let mut clusters = Vec::with_capacity(self.fragments.len());
         for (index, record) in self.fragments.iter().enumerate() {
+            let begin = pieces.len();
             let start = record.inline_start;
             let end = start + record.inline_size;
             match (&record.kind, self.view(index)) {
@@ -319,7 +333,6 @@ impl Line {
                             (from, to)
                         };
                         pieces.push(Piece {
-                            record: index,
                             start: start + a,
                             end: start + b,
                             cluster: Some(k),
@@ -330,7 +343,6 @@ impl Line {
                 }
                 (RecordKind::Glyphs { text, .. }, _) => {
                     pieces.push(Piece {
-                        record: index,
                         start,
                         end,
                         cluster: None,
@@ -341,7 +353,6 @@ impl Line {
                 (RecordKind::Atomic { unit, .. }, _) => {
                     let text = self.data.units[*unit as usize].text.clone();
                     pieces.push(Piece {
-                        record: index,
                         start,
                         end,
                         cluster: None,
@@ -351,42 +362,51 @@ impl Line {
                 }
                 _ => clusters.push(None),
             }
+            by_record.push(begin..pieces.len());
         }
-        (pieces, clusters)
+        (pieces, by_record, clusters)
     }
 
     /// Text range and visual extent of each ruby container on this line,
-    /// which truncation keeps or hides with its annotations as a whole.
-    fn ruby_extents(&self, pieces: &[Piece]) -> Vec<(Range<u32>, LayoutUnit, LayoutUnit)> {
+    /// which truncation keeps or hides with its annotations as a whole, and
+    /// the container of each piece.
+    #[allow(clippy::type_complexity)]
+    fn ruby_extents(
+        &self,
+        pieces: &[Piece],
+    ) -> (
+        Vec<(Range<u32>, LayoutUnit, LayoutUnit)>,
+        Vec<Option<usize>>,
+    ) {
         let containers = &self.data.ruby.containers;
-        if containers.is_empty() {
-            return Vec::new();
-        }
         let first = containers.partition_point(|c| c.units.end <= self.units.start as usize);
-        let mut extents = Vec::new();
-        for container in containers[first..]
+        // Containers are in text order and do not overlap.
+        let mut extents: Vec<(Range<u32>, LayoutUnit, LayoutUnit)> = containers[first..]
             .iter()
             .take_while(|c| c.units.start < self.units.end as usize)
-        {
-            let Some(text) = container
-                .columns
-                .iter()
-                .map(|c| c.text.clone())
-                .reduce(|a, b| a.start.min(b.start)..a.end.max(b.end))
-            else {
-                continue;
-            };
-            let inside = pieces
-                .iter()
-                .filter(|p| text.start <= p.text.start && p.text.start < text.end);
-            let bounds = inside.fold(None, |acc: Option<(LayoutUnit, LayoutUnit)>, p| {
-                Some(acc.map_or((p.start, p.end), |(s, e)| (s.min(p.start), e.max(p.end))))
-            });
-            if let Some((start, end)) = bounds {
-                extents.push((text, start, end));
-            }
-        }
-        extents
+            .filter_map(|container| {
+                container
+                    .columns
+                    .iter()
+                    .map(|c| c.text.clone())
+                    .reduce(|a, b| a.start.min(b.start)..a.end.max(b.end))
+                    .map(|text| (text, LayoutUnit::MAX, LayoutUnit::MIN))
+            })
+            .collect();
+        let owners = pieces
+            .iter()
+            .map(|piece| {
+                let at = extents.partition_point(|(text, ..)| text.end <= piece.text.start);
+                let owner = extents.get_mut(at)?;
+                if owner.0.start > piece.text.start {
+                    return None;
+                }
+                owner.1 = owner.1.min(piece.start);
+                owner.2 = owner.2.max(piece.end);
+                Some(at)
+            })
+            .collect();
+        (extents, owners)
     }
 }
 
@@ -398,33 +418,66 @@ fn narrow(
     shared: &mut Range<u32>,
     text: &mut Range<u32>,
     run: &RunClusters,
-    own: &[&Piece],
-    kept: &impl Fn(&Piece) -> bool,
+    kept_clusters: impl Iterator<Item = usize>,
 ) {
-    let kept_clusters: Vec<usize> = own
-        .iter()
-        .filter(|p| kept(p))
-        .filter_map(|p| p.cluster)
-        .collect();
-    let (first, last) = (
-        *kept_clusters.iter().min().expect("kept cluster"),
-        *kept_clusters.iter().max().expect("kept cluster"),
-    );
+    let (first, last) = kept_clusters.fold((usize::MAX, 0), |(lo, hi), k| (lo.min(k), hi.max(k)));
+    let count = run.texts.len();
+    debug_assert!(first <= last && last < count);
+    debug_assert!(if run.reversed {
+        last == count - 1
+    } else {
+        first == 0
+    });
     let glyphs = run.glyphs[first].start..run.glyphs[last].end;
     *text = run.texts[first].start..run.texts[last].end;
     *inline_size = run.bounds[last + 1] - run.bounds[first];
-    debug_assert!(first == 0 || run.reversed);
+    // Unit glyph ranges can extend past a record that starts or ends mid-unit.
+    let clamp = |range: Range<u32>, within: Range<u32>| {
+        let start = range.start.max(within.start);
+        start..range.end.min(within.end).max(start)
+    };
     match source {
-        GlyphSource::Shared => *shared = glyphs,
+        GlyphSource::Shared => *shared = clamp(glyphs, shared.clone()),
         GlyphSource::Overlay {
             glyphs: pair,
             clusters,
             ..
         } => {
             let base = clusters.0;
-            *pair = (glyphs.start, glyphs.end);
+            let kept = clamp(glyphs, pair.0..pair.1);
+            *pair = (kept.start, kept.end);
             *clusters = (base + first as u32, base + last as u32 + 1);
         }
+    }
+}
+
+/// Text ranges truncation hid, sorted and coalesced for binary search.
+struct HiddenText(Vec<Range<u32>>);
+
+impl HiddenText {
+    fn new(ranges: impl Iterator<Item = Range<u32>>) -> Self {
+        let mut ranges: Vec<_> = ranges.collect();
+        ranges.sort_unstable_by_key(|r| r.start);
+        let mut merged: Vec<Range<u32>> = Vec::with_capacity(ranges.len());
+        for range in ranges {
+            match merged.last_mut() {
+                Some(last) if range.start <= last.end => last.end = last.end.max(range.end),
+                _ => merged.push(range),
+            }
+        }
+        Self(merged)
+    }
+
+    fn start(&self) -> Option<u32> {
+        self.0.first().map(|r| r.start)
+    }
+
+    /// Whether `range` overlaps hidden text; an empty range counts as the
+    /// character at its start.
+    fn intersects(&self, range: Range<u32>) -> bool {
+        let end = range.end.max(range.start + 1);
+        let at = self.0.partition_point(|r| r.end <= range.start);
+        self.0.get(at).is_some_and(|r| r.start < end)
     }
 }
 
@@ -481,8 +534,10 @@ fn shape_ellipsis(
         ..Default::default()
     }
     .normalized();
-    let font = data.fonts.match_scripted(&query, script, &text[..1]);
     let first = text.chars().next().expect("ellipsis text");
+    let font = data
+        .fonts
+        .match_scripted(&query, script, &text[..first.len_utf8()]);
     let item = ShapeItem {
         segment: 0,
         scalars: text
@@ -537,5 +592,73 @@ fn shape_ellipsis(
             );
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use crate::limits::Limits;
+    use crate::line::punctuation::tests::{add_cmap_format12_mappings, cjk_font, cjk_tables};
+    use crate::node::{NodeId, TextSource};
+    use crate::style::{FontFamily, LineOptions, ParagraphStyle};
+    use crate::{
+        AtomicSizes, Fragment, LayoutContext, LineConstraint, LineResult, ParagraphBuilder,
+    };
+    use skrifa::MetadataProvider;
+
+    #[test]
+    fn fonts_with_an_ellipsis_glyph_shape_one_character() {
+        // The CJK fixture with U+2026 mapped to its ideographic comma.
+        let base = skrifa::FontRef::new(crate::test_support::fonts::CJK).unwrap();
+        let glyph = base.charmap().map('、').unwrap().to_u32() as u16;
+        let mut tables = cjk_tables();
+        add_cmap_format12_mappings(&mut tables, &[(0x2026, glyph)]);
+        let fonts = FontCollection::with_options(
+            &Limits::default(),
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register_face(
+                cjk_font(&mut tables),
+                0,
+                FontFaceDescriptor {
+                    family: "Ellipsis".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let mut style = ParagraphStyle::default();
+        style.root.font_families = vec![FontFamily::Named("Ellipsis".into())];
+        style.root.font_size = 10.0;
+        let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, "日本語日本語");
+        let mut cx = LayoutContext::new();
+        let paragraph = builder.build(&mut cx, &fonts).unwrap();
+        let LineResult::Line(mut line) = paragraph.next_line(
+            &mut cx,
+            paragraph.start_token(),
+            &LineOptions::default(),
+            &LineConstraint::new(1e6),
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("expected a line")
+        };
+        let cut = line.truncate_with_ellipsis(&mut cx, 35.0).unwrap();
+        let ellipsis: Vec<_> = line
+            .fragments()
+            .filter_map(|f| match f {
+                Fragment::GlyphRun(run) if run.is_ellipsis() => {
+                    Some(run.glyphs().map(|g| g.id).collect::<Vec<_>>())
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(ellipsis, [vec![u32::from(glyph)]]);
+        assert_eq!(cut.fragments.len(), 1);
+        assert!(cut.inline_start + cut.inline_size <= 35.0 + 0.01);
     }
 }
