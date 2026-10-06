@@ -14,7 +14,7 @@ use skrifa::{
     raw::TableProvider,
 };
 
-fn cjk_tables() -> Vec<([u8; 4], Vec<u8>)> {
+pub(crate) fn cjk_tables() -> Vec<([u8; 4], Vec<u8>)> {
     let base = crate::test_support::fonts::CJK;
     (0..u16::from_be_bytes(base[4..6].try_into().unwrap()) as usize)
         .map(|n| {
@@ -29,7 +29,7 @@ fn cjk_tables() -> Vec<([u8; 4], Vec<u8>)> {
         .collect()
 }
 
-fn cjk_font(tables: &mut [([u8; 4], Vec<u8>)]) -> Vec<u8> {
+pub(crate) fn cjk_font(tables: &mut [([u8; 4], Vec<u8>)]) -> Vec<u8> {
     tables.sort_by_key(|t| t.0);
     let mut bytes = crate::font::sfnt::build_sfnt(tables);
     bytes[..4].copy_from_slice(b"OTTO");
@@ -346,7 +346,10 @@ fn chinese_punctuation_respects_script_and_region_subtags() {
     }
 }
 
-fn add_cmap_format12_mappings(tables: &mut [([u8; 4], Vec<u8>)], mappings: &[(u32, u16)]) {
+pub(crate) fn add_cmap_format12_mappings(
+    tables: &mut [([u8; 4], Vec<u8>)],
+    mappings: &[(u32, u16)],
+) {
     let cmap = &mut tables
         .iter_mut()
         .find(|table| table.0 == *b"cmap")

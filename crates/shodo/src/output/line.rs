@@ -359,6 +359,8 @@ impl Line {
             pending_overlays: scan.overlays,
             tabs,
             combinations: Vec::new(),
+            origin,
+            ellipsis: None,
         }
     }
 
@@ -572,7 +574,7 @@ impl Line {
         self.empty
     }
 
-    fn view(&self, index: usize) -> Fragment<'_> {
+    pub(super) fn view(&self, index: usize) -> Fragment<'_> {
         if index >= self.fragments.len() {
             return Fragment::RubyAnnotation(RubyAnnotationView {
                 record: &self.ruby[index - self.fragments.len()],

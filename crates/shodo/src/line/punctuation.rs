@@ -720,4 +720,4 @@ pub(super) fn justify_boundary(data: &ParagraphData, left: u32, right: u32) -> b
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
