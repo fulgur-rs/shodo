@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.17](https://github.com/fulgur-rs/shodo/compare/v0.0.16...v0.0.17) - 2026-10-06
+
+### Fixed
+
+- match Blink pending vertical-align credit for br struts
+
+### Other
+
+- Merge pull request #236 from fulgur-rs/fix/shodo-9kt-pending-vertical-align
+
 ## [0.0.16](https://github.com/fulgur-rs/shodo/compare/v0.0.15...v0.0.16) - 2026-10-06
 
 ### Added
