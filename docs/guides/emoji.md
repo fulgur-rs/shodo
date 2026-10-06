@@ -68,11 +68,12 @@ a y flip. Bitmap PNG coordinates already use y-down and must not be flipped agai
 
 To choose a paint backend for a run, read `GlyphRunView::color_glyph_formats()`,
 or `FontCollection::color_glyph_formats(id)` once per face. `ColorGlyphFormats`
-reports COLR v0, COLR v1, CBDT/CBLC, sbix and SVG tables whose headers parse and
-list at least one glyph. shodo reads only those headers: it exposes no layers,
-paint graphs or bitmaps, so the renderer reads the glyph data from `font_data()`
-itself. A face can mix color and outline glyphs, so look up each glyph ID in the
-chosen table and fall back to the outline when it is absent. Matching ranks faces
+reports COLR v0, COLR v1, CBDT/CBLC, sbix and SVG tables that parse and hold at
+least one record. The check reads table headers and record arrays only. It does
+not check CPAL palettes or glyph data, and it exposes no layers, paint graphs or
+bitmaps: the renderer reads the glyph data from `font_data()` itself. A face can
+mix color and outline glyphs, so look up each glyph ID in the chosen table and
+fall back to the outline when the table has no data for it. Matching ranks faces
 by table presence alone, so a face chosen for emoji presentation can still report
 no usable format.
 

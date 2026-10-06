@@ -7,13 +7,14 @@ use skrifa::raw::TableProvider;
 ///
 /// shodo does not paint glyphs. Use these flags to choose a paint backend for
 /// a face, then read the glyph data from [`FontData`] yourself. A face can
-/// carry several formats and can mix color and outline glyphs: COLR, CBDT,
-/// sbix and SVG each cover only the glyph IDs they list. Check the glyph ID in
-/// the chosen table, and fall back to the outline when it is absent.
+/// carry several formats and can mix color and outline glyphs, because each
+/// table covers only some glyph IDs. Look the glyph up in the chosen table,
+/// and fall back to the outline when the table has no data for it.
 ///
-/// A flag is set only when the table header parses and lists at least one
-/// glyph. The flags do not check every record, so a renderer must still
-/// handle malformed glyph data. Font matching ranks faces by table presence
+/// A flag is set only when the table parses and holds at least one base glyph,
+/// bitmap size, strike or document record. The flags do not check the records,
+/// the CPAL palettes COLR colors refer to, or the glyph data, so a renderer must
+/// still handle malformed glyph data. Font matching ranks faces by table presence
 /// alone, so a face can win color presentation matching with every flag here
 /// unset.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -41,25 +42,34 @@ impl ColorGlyphFormats {
             .unwrap_or_default()
     }
 
-    pub(crate) fn from_font(font: &skrifa::FontRef<'_>) -> Self {
+    fn from_font(font: &skrifa::FontRef<'_>) -> Self {
         let colr = font.colr().ok();
-        let colr_v0 = colr
-            .as_ref()
-            .is_some_and(|colr| colr.num_base_glyph_records() > 0);
-        let colr_v1 = colr.as_ref().is_some_and(|colr| {
-            colr.version() >= 1
-                && colr
-                    .base_glyph_list()
-                    .and_then(Result::ok)
-                    .is_some_and(|list| list.num_base_glyph_paint_records() > 0)
+        // Each check reads the record array, not only its declared count, so
+        // a count that runs past the table sets no flag.
+        let colr_v0 = colr.as_ref().is_some_and(|colr| {
+            colr.base_glyph_records()
+                .and_then(Result::ok)
+                .is_some_and(|records| !records.is_empty())
         });
-        let cbdt = font.cbdt().is_ok() && font.cblc().is_ok_and(|cblc| cblc.num_sizes() > 0);
-        let sbix = font.sbix().is_ok_and(|sbix| sbix.num_strikes() > 0);
+        // Version 0 tables have no base glyph list offset.
+        let colr_v1 = colr.as_ref().is_some_and(|colr| {
+            colr.base_glyph_list()
+                .and_then(Result::ok)
+                .is_some_and(|list| !list.base_glyph_paint_records().is_empty())
+        });
+        let cbdt = font.cbdt().is_ok()
+            && font
+                .cblc()
+                .is_ok_and(|cblc| !cblc.bitmap_sizes().is_empty());
+        // read-fonts reads the glyph count from maxp to parse sbix.
+        let sbix = font
+            .sbix()
+            .is_ok_and(|sbix| !sbix.strike_offsets().is_empty());
         let svg = font
             .svg()
             .ok()
             .and_then(|svg| svg.svg_document_list().ok())
-            .is_some_and(|list| list.num_entries() > 0);
+            .is_some_and(|list| !list.document_records().is_empty());
         Self {
             colr_v0,
             colr_v1,
@@ -167,7 +177,27 @@ mod tests {
                 ..Default::default()
             }
         );
+        // A table can carry both versions' records.
+        let mut both = colr_v1(1);
+        both[2..4].copy_from_slice(&1u16.to_be_bytes());
+        let records = both.len() as u32;
+        both[4..8].copy_from_slice(&records.to_be_bytes());
+        both.extend([0u8; 6]);
+        assert_eq!(
+            formats(&[(*b"COLR", both)]),
+            ColorGlyphFormats {
+                colr_v0: true,
+                colr_v1: true,
+                ..Default::default()
+            }
+        );
         // Empty record lists and truncated headers list no color glyphs.
+        let mut overrun = colr_v0(1);
+        overrun.truncate(14);
+        assert!(formats(&[(*b"COLR", overrun)]).is_empty());
+        let mut overrun = colr_v1(1);
+        overrun.truncate(38);
+        assert!(formats(&[(*b"COLR", overrun)]).is_empty());
         assert!(formats(&[(*b"COLR", colr_v0(0))]).is_empty());
         assert!(formats(&[(*b"COLR", colr_v1(0))]).is_empty());
         assert!(formats(&[(*b"COLR", vec![0, 0, 0])]).is_empty());
@@ -204,6 +234,19 @@ mod tests {
         };
         assert!(formats(&[maxp(1), sbix(1)]).sbix);
         assert!(formats(&[maxp(1), sbix(0)]).is_empty());
+        // read-fonts needs maxp's glyph count to parse sbix.
+        assert!(formats(&[sbix(1)]).is_empty());
+        // Declared counts that run past the table set no flag.
+        let mut overrun = sbix(1);
+        overrun.1.truncate(8);
+        assert!(formats(&[maxp(1), overrun]).is_empty());
+        let cblc = be(&[
+            &3u16.to_be_bytes(),
+            &0u16.to_be_bytes(),
+            &1u32.to_be_bytes(),
+        ]);
+        let cbdt = (*b"CBDT", be(&[&3u16.to_be_bytes(), &0u16.to_be_bytes()]));
+        assert!(formats(&[cbdt, (*b"CBLC", cblc)]).is_empty());
     }
 
     #[test]
@@ -222,6 +265,9 @@ mod tests {
         };
         assert!(formats(&[svg(1)]).svg);
         assert!(formats(&[svg(0)]).is_empty());
+        let mut overrun = svg(1);
+        overrun.1.truncate(12);
+        assert!(formats(&[overrun]).is_empty());
     }
 
     #[test]
