@@ -4,6 +4,8 @@
 //! includes style/string/RichText input preparation. Combined measures paint
 //! plus LineLayout construction on already accepted lines; it excludes layout.
 //! `spaces` uses breakable text to exercise genuinely multiple accepted lines.
+//! `layout-cold` creates and destroys a fresh context for each layout;
+//! `layout-widths` cycles through WIDTH, WIDTH/2 and WIDTH*1.5 per iteration.
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use shodo::hit::LineLayout;
@@ -68,6 +70,21 @@ fn lines(p: &Paragraph, cx: &mut LayoutContext, width: f32) -> Run {
         intrinsics: Vec::new(),
     }
 }
+fn paint_hash(run: &Run) -> String {
+    format!(
+        "{:x}",
+        Sha256::digest(
+            format!(
+                "{:?}",
+                run.lines
+                    .iter()
+                    .map(|l| l.paint_spans())
+                    .collect::<Vec<_>>()
+            )
+            .as_bytes()
+        )
+    )
+}
 fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
     assert_eq!(args.len(), 5, "OPERATION CASE LENGTH ITERATIONS WIDTH");
@@ -88,25 +105,37 @@ fn main() {
     let run = lines(&paragraph, &mut cx, width);
     assert!(cx.take_warnings().is_empty());
     let geometry = digest(&run, &fonts).unwrap();
-    let paint_hash = format!(
-        "{:x}",
-        Sha256::digest(
-            format!(
-                "{:?}",
-                run.lines
-                    .iter()
-                    .map(|l| l.paint_spans())
-                    .collect::<Vec<_>>()
-            )
-            .as_bytes()
-        )
-    );
+    let paint_sha256 = paint_hash(&run);
+    let widths = [width, width / 2.0, width * 1.5];
+    let width_outputs: Vec<_> = if op == "layout-widths" {
+        widths
+            .iter()
+            .map(|&w| {
+                let mut fresh = LayoutContext::new();
+                let run = lines(&paragraph, &mut fresh, w);
+                assert!(fresh.take_warnings().is_empty());
+                (digest(&run, &fonts).unwrap(), paint_hash(&run))
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     let mut execute = || match op {
         "build" => {
             black_box(build(case, n, &mut cx, &fonts, &limits));
         }
         "layout" => {
             black_box(lines(&paragraph, &mut cx, width));
+        }
+        "layout-cold" => {
+            let mut fresh = LayoutContext::new();
+            black_box(lines(&paragraph, &mut fresh, width));
+            assert!(fresh.take_warnings().is_empty());
+        }
+        "layout-widths" => {
+            for w in widths {
+                black_box(lines(&paragraph, &mut cx, w));
+            }
         }
         "paint" => {
             black_box(
@@ -153,9 +182,15 @@ fn main() {
     };
     let after = lines(&paragraph, &mut cx, width);
     assert_eq!(geometry, digest(&after, &fonts).unwrap());
+    assert_eq!(paint_sha256, paint_hash(&after));
+    for (&w, (geometry, paint)) in widths.iter().zip(&width_outputs) {
+        let after = lines(&paragraph, &mut cx, w);
+        assert_eq!(*geometry, digest(&after, &fonts).unwrap());
+        assert_eq!(*paint, paint_hash(&after));
+    }
     assert!(cx.take_warnings().is_empty());
     println!(
         "{}",
-        json!({"op":op,"case":case,"length":n,"width":width,"iterations":iterations,"measure":measure,"geometry":geometry,"paint_sha256":paint_hash})
+        json!({"op":op,"case":case,"length":n,"width":width,"iterations":iterations,"measure":measure,"geometry":geometry,"paint_sha256":paint_sha256,"width_outputs":width_outputs})
     );
 }

@@ -210,9 +210,12 @@ depend on what earlier calls left in the context.
 
 Each `LayoutContext` is `Send` and deliberately not `Sync`: use one per thread.
 It reuses shaping scratch and at most 64 font-qualified shaping plans, and keeps
-the reshaped line-edge windows of the most recent paragraph (at most 256 entries
-and about 32K glyph-equivalents, roughly 0.9 MiB; a single window costing more
-than 1K glyph-equivalents is not retained); no word cache is retained.
+the reshaped line-edge windows of the most recent paragraph (at most 2048 entries
+within a 1 MiB accounted storage budget). Accounting includes vector capacities,
+retained run instances and a metadata allowance; it does not measure allocator
+overhead or process RSS. A single window costing more than 1K glyph-equivalents
+is not retained. When full, the cache keeps resident results and declines new
+ones until the paragraph changes or the cache is cleared; no word cache is retained.
 `shrink_to(bytes)` drops all plans and that window cache and caps the combined
 accounted scratch/partial-line buffers, preferring scratch when it fits. It does
 not measure separately shared paragraph/font allocations. Shaping also releases

@@ -135,7 +135,9 @@ fn partial(data: &ParagraphData, range: &Range<usize>) -> bool {
 ///
 /// Retention is bounded by an accounted cost, not just the entry count: a
 /// hostile font can expand one window into a very large glyph run, so the
-/// total is capped in glyph-equivalents and oversized results are not cached.
+/// total counts retained vector capacity and a metadata allowance. Oversized
+/// results are not cached. Once full, preserve resident results rather than
+/// repeatedly discarding the entire cache during a long candidate scan.
 #[derive(Default)]
 pub(crate) struct EdgeShapeCache {
     owner: Option<(u64, usize)>,
@@ -189,6 +191,11 @@ fn cache_owned_window(
     key: (usize, usize, Option<u64>),
     cache: &mut EdgeShapeCache,
 ) -> WindowHandle {
+    // Cloning produces len-sized vectors. Refuse admission before allocating
+    // that snapshot when it cannot fit; the owned miss remains usable.
+    if !cache.can_insert(&key, window_storage_cost(&shaped, true)) {
+        return WindowHandle::Owned(shaped);
+    }
     // A miss keeps its original output vectors. Clone exactly one len-sized
     // cache snapshot, as before, instead of shrinking every growing vector and
     // then cloning again if this newly shaped window is selected.
@@ -197,16 +204,66 @@ fn cache_owned_window(
     WindowHandle::Owned(shaped)
 }
 
-const EDGE_SHAPE_CACHE_ENTRIES: usize = 256;
-/// Total retained cost in glyph-equivalents (about 26 bytes each): roughly
-/// 0.9 MiB at most.
-const EDGE_SHAPE_CACHE_COST: usize = 1 << 15;
+const EDGE_SHAPE_CACHE_ENTRIES: usize = 2048;
+/// Accounted retained bytes, including a conservative metadata allowance.
+/// This bounds cache storage, rather than process RSS or allocator overhead.
+const EDGE_SHAPE_CACHE_COST: usize = 1 << 20;
 /// A single window costing more than this is shaped every time instead.
 const EDGE_SHAPE_ENTRY_COST_MAX: usize = 1 << 10;
 
 fn window_cost(window: &OwnedShapedWindow) -> usize {
     // A run holds an `Arc` and a few scalars; count it as a few glyphs.
     window.0.len() + window.1.len() * 4
+}
+
+fn window_storage_cost(window: &OwnedShapedWindow, snapshot: bool) -> usize {
+    use std::mem::size_of;
+    fn bytes<T>(vector: &Vec<T>, snapshot: bool) -> usize {
+        let count = if snapshot {
+            vector.len()
+        } else {
+            vector.capacity()
+        };
+        count * size_of::<T>()
+    }
+    let (store, runs) = window;
+    // The Arc owns the tuple and two counters. Allow four table slots per
+    // entry plus control bytes to cover spare HashMap capacity as it grows.
+    let metadata = size_of::<OwnedShapedWindow>()
+        + 2 * size_of::<usize>()
+        + 4 * size_of::<((usize, usize, Option<u64>), ShapedWindow)>()
+        + 2 * size_of::<usize>();
+    let mut cost = metadata
+        + bytes(&store.id, snapshot)
+        + bytes(&store.advance, snapshot)
+        + bytes(&store.pen, snapshot)
+        + bytes(&store.offset_inline, snapshot)
+        + bytes(&store.offset_block, snapshot)
+        + bytes(&store.cluster, snapshot)
+        + bytes(&store.flags, snapshot)
+        + store.spacing.as_ref().map_or(0, |v| bytes(v, snapshot))
+        + store.leading.as_ref().map_or(0, |v| bytes(v, snapshot))
+        + bytes(runs, snapshot);
+    // Edge shaping resolves fresh instances. Their Arcs keep coordinates,
+    // variations, language and features alive as well as the run scalars.
+    // Consecutive runs from one input share an instance; other sharing may be
+    // conservatively counted more than once without allocating a dedup set.
+    let mut previous = None;
+    for run in runs {
+        if previous.is_some_and(|p| Arc::ptr_eq(p, &run.instance)) {
+            continue;
+        }
+        let instance = &run.instance;
+        previous = Some(instance);
+        cost += size_of::<crate::shape::RunInstance>()
+            + 2 * size_of::<usize>()
+            + bytes(&instance.coords, false)
+            + bytes(&instance.variations, false)
+            + instance.language.as_ref().map_or(0, String::capacity)
+            + std::mem::size_of_val(instance.features.as_ref())
+            + 2 * size_of::<usize>();
+    }
+    cost
 }
 
 impl EdgeShapeCache {
@@ -233,20 +290,24 @@ impl EdgeShapeCache {
         self.entries.get(key)
     }
 
+    fn can_insert(&self, key: &(usize, usize, Option<u64>), cost: usize) -> bool {
+        let previous = self.entries.get(key);
+        let retained = self.cost - previous.map_or(0, |w| window_storage_cost(w, false));
+        (previous.is_some() || self.entries.len() < EDGE_SHAPE_CACHE_ENTRIES)
+            && cost <= EDGE_SHAPE_CACHE_COST - retained
+    }
+
     /// Returns whether the window was retained.
     fn insert(&mut self, key: (usize, usize, Option<u64>), window: &ShapedWindow) -> bool {
-        let cost = window_cost(window);
-        if cost > EDGE_SHAPE_ENTRY_COST_MAX {
+        if window_cost(window) > EDGE_SHAPE_ENTRY_COST_MAX {
             return false;
         }
-        if self.entries.len() >= EDGE_SHAPE_CACHE_ENTRIES
-            || self.cost + cost > EDGE_SHAPE_CACHE_COST
-        {
-            self.entries.clear();
-            self.cost = 0;
+        let cost = window_storage_cost(window, false);
+        if !self.can_insert(&key, cost) {
+            return false;
         }
         if let Some(previous) = self.entries.insert(key, window.clone()) {
-            self.cost -= window_cost(&previous);
+            self.cost -= window_storage_cost(&previous, false);
         }
         self.cost += cost;
         true

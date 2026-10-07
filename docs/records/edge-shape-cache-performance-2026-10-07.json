@@ -1,0 +1,2875 @@
+{
+  "date": "2026-10-07",
+  "purpose": "Avoid repeated whole-cache eviction during long candidate scans while bounding retained storage and preserving output, warning and request-budget semantics.",
+  "baseline_revision": "0fe5905508c9b5cee14157451e3b9a6694ba6287",
+  "candidate": "Implementation committed with this record; storage-budget admission preserving resident entries.",
+  "conditions": {
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+    "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)\n",
+    "cpu": "AMD Ryzen 5 5600G, x86_64 Linux",
+    "system_fonts": false,
+    "fonts": "Fixed shodo fixture Latin/CJK/Arabic, manifest checksums verified by load_fonts()",
+    "fixture_manifest_sha256": "8ff4c966f09124494ae8a6be9bed079575f88a571b9ae430d433ce35936cf0f1",
+    "fixture_cases_sha256": "8c641d37deb7328e603f604dc220295b3784f483de6d65f8ffabada57978f384",
+    "cargo_lock_sha256": "7f6eb934a9044db268e4fa51fe520717a926b49d51cf5ce360f653c2c4ba0c40",
+    "cargo_home_config_sha256": "5af4dde0536b72eff88ce4c2e77e0cb7a48d88004cec0367b0964fe61bdee189",
+    "wrapper": "kache rustc-wrapper; cargo shim bypassed by using the actual Cargo executable",
+    "runner": "/usr/bin/env",
+    "os": "Linux 7.2.5-3-omarchy x86_64 GNU/Linux\n",
+    "elapsed_measurement": "Normal allocator release binaries; CPU10; 12 fresh processes per variant/condition, alternating AB/BA. 3 warmups. Includes output drop; input/font setup, digest/paint validation and JSON excluded. No concurrent task builds/tests/profiles during timing.",
+    "allocation_measurement": "Separate allocation-counting binaries; 3 fresh processes per variant/condition. Counters captured before JSON; record includes live at scope start/end, net and peak extra requested bytes. This is requested allocator storage, not RSS.",
+    "cold_scope": "Each call creates a fresh context on an already built paragraph, lays out, destroys output and context, verifies warnings. Shared prepared paragraph/font allocations excluded. The main probe also holds an initial accepted run/context outside the scope; start_live_bytes is process-wide.",
+    "width_scope": "Each call cycles WIDTH, WIDTH/2, WIDTH*1.5 using the same paragraph/context. Three independent fresh-context reference digests/paint hashes checked before and after measured loops.",
+    "profile": "offline locked release build, default shodo-bench features (complex-scripts); normal allocator for time, separate allocation-counting builds for storage"
+  },
+  "baseline_source_sha256": {
+    "crates/shodo/src/line/windows.rs": "547ea2922d600afd36e8d1295fd4c53e8e12eed0b03f4a956272a76daa43a5cf",
+    "crates/shodo/src/shape.rs": "26e60d3e2588e7c844849ceeb133f5f8721f1c151511f2570869a8340bbf3f32",
+    "crates/shodo/src/shape/instance.rs": "a58e64eec69a012c23a0679806ce4a073d39d27fbb1b20bd34a18cbde7598d69",
+    "dev/bench/examples/line_profile.rs": "6aace238b2e2c304df9ee8c473ffae54ee01cf460fed4c847d1fdc8bfda62e0d",
+    "Cargo.toml": "bc93455c8dc1842a6bd3ca5ad6e464d8768646f18aa3b04e176c2d582381174a",
+    "Cargo.lock": "7f6eb934a9044db268e4fa51fe520717a926b49d51cf5ce360f653c2c4ba0c40"
+  },
+  "candidate_source_sha256": {
+    "crates/shodo/src/line/windows.rs": "213bfba8c4884e6c00d88e3d818eb94d3387f5ed935b48150f9f84af2d168bd3",
+    "crates/shodo/src/shape.rs": "26e60d3e2588e7c844849ceeb133f5f8721f1c151511f2570869a8340bbf3f32",
+    "crates/shodo/src/shape/instance.rs": "a58e64eec69a012c23a0679806ce4a073d39d27fbb1b20bd34a18cbde7598d69",
+    "dev/bench/examples/line_profile.rs": "a7c000f02792052408f85aac47120560240a0a4ad9501755c2d34f60427f3fe2",
+    "Cargo.toml": "bc93455c8dc1842a6bd3ca5ad6e464d8768646f18aa3b04e176c2d582381174a",
+    "Cargo.lock": "7f6eb934a9044db268e4fa51fe520717a926b49d51cf5ce360f653c2c4ba0c40"
+  },
+  "baseline_build_note": "Same modified benchmark harness used for baseline and candidate; baseline normal and counting executables were saved before production changes. Test-only RED scaffolding was excluded from release. Formatting only changed before candidate builds. The runtime engine was the baseline revision. Post-measurement independent-review fixes affect only documentation and cfg(test) Arabic resource-test preparation; the measured production files/harness are unchanged.",
+  "binary_sha256": {
+    "time": {
+      "baseline": "a4f8bbe373120c62c477378d2b2eef8e44bcb85393027c0cd446f5fb29e4f18b",
+      "candidate": "4cc7071d03810447e187e50b87886bbdec4374003866dc10d707dffaf0fd17b0"
+    },
+    "allocation": {
+      "baseline": "2036e70e9333818fdecdd92153d3531fe731255f8877775cb506da5bfb5bbc50",
+      "candidate": "70a8bbb3d249186ff7f0fefeb58bfacfa9ebd5cb9d210f73d2cc295c3e6da711"
+    }
+  },
+  "initial_evidence": {
+    "candidate": {
+      "priority": 1,
+      "name": "Edge shape cache entry cap and wholesale clearing",
+      "location": "crates/shodo/src/line/windows.rs:242",
+      "status": "New observational evidence on current main",
+      "evidence": {
+        "warm_13_lines": {
+          "hits": 140,
+          "misses": 0
+        },
+        "warm_26_lines": {
+          "hits": 24,
+          "misses": 270,
+          "entry_cap_clears": 1
+        },
+        "warm_103_lines": {
+          "hits": 101,
+          "misses": 1115,
+          "entry_cap_clears": 4
+        },
+        "max_cost_before_clear_across_matrix": 4096,
+        "total_cost_cap": 32768,
+        "entry_cap": 256,
+        "cost_cap_clears": 0
+      },
+      "proposal": "A/B entry-count versus byte/cost bounds and selective retention, preserving a bounded cache. Assess whole-layout time, cache lookup/reshape counts and retained memory. Do not assume LRU alone solves a sequential working set larger than capacity. Do not simply remove bounds.",
+      "validation": "Same paragraph at repeated/changed widths, cold/warm contexts, long and short windows, many paragraphs, first-line alternates, variable fonts, saturation and warning/budget equivalence. Cache hits must continue to charge the same reshape budget."
+    },
+    "observations": [
+      {
+        "case": "spaces",
+        "length": 128,
+        "width": 128,
+        "samples": [
+          {
+            "iterations": 1,
+            "complete_layout_calls": 6,
+            "counts": [
+              {
+                "hits": 711,
+                "misses": 129,
+                "capacity_clears": 0,
+                "hit_clones": 711,
+                "cloned_glyphs": 8885,
+                "final_entries": 129,
+                "final_cost": 2029,
+                "entry_cap_clears": 0,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 0
+              },
+              {
+                "hits": 711,
+                "misses": 129,
+                "capacity_clears": 0,
+                "hit_clones": 711,
+                "cloned_glyphs": 8885,
+                "final_entries": 129,
+                "final_cost": 2029,
+                "entry_cap_clears": 0,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 0
+              },
+              {
+                "hits": 711,
+                "misses": 129,
+                "capacity_clears": 0,
+                "hit_clones": 711,
+                "cloned_glyphs": 8885,
+                "final_entries": 129,
+                "final_cost": 2029,
+                "entry_cap_clears": 0,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 0
+              }
+            ]
+          },
+          {
+            "iterations": 2,
+            "complete_layout_calls": 7,
+            "counts": [
+              {
+                "hits": 851,
+                "misses": 129,
+                "capacity_clears": 0,
+                "hit_clones": 851,
+                "cloned_glyphs": 10618,
+                "final_entries": 129,
+                "final_cost": 2029,
+                "entry_cap_clears": 0,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 0
+              },
+              {
+                "hits": 851,
+                "misses": 129,
+                "capacity_clears": 0,
+                "hit_clones": 851,
+                "cloned_glyphs": 10618,
+                "final_entries": 129,
+                "final_cost": 2029,
+                "entry_cap_clears": 0,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 0
+              },
+              {
+                "hits": 851,
+                "misses": 129,
+                "capacity_clears": 0,
+                "hit_clones": 851,
+                "cloned_glyphs": 10618,
+                "final_entries": 129,
+                "final_cost": 2029,
+                "entry_cap_clears": 0,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 0
+              }
+            ]
+          }
+        ],
+        "output": {
+          "case": "spaces",
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 256,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 13,
+            "runs": 13,
+            "sha256": "7b7fba67cf0d2f7b6ffe2faf2383183426848aed5e1b4cec15bf2c1c85390565",
+            "synthetic_glyphs": 0
+          },
+          "length": 128,
+          "op": "layout",
+          "paint_sha256": "c51e8daa4fdff28b6a5146a387e9ce8870b017e253cca4bd3bd859b5e202aeae",
+          "width": 128.0
+        },
+        "seventh_layout_delta": {
+          "hits": 140,
+          "misses": 0,
+          "capacity_clears": 0,
+          "hit_clones": 140,
+          "cloned_glyphs": 1733,
+          "entry_cap_clears": 0,
+          "cost_cap_clears": 0
+        }
+      },
+      {
+        "case": "spaces",
+        "length": 256,
+        "width": 128,
+        "samples": [
+          {
+            "iterations": 1,
+            "complete_layout_calls": 6,
+            "counts": [
+              {
+                "hits": 143,
+                "misses": 1621,
+                "capacity_clears": 6,
+                "hit_clones": 143,
+                "cloned_glyphs": 2860,
+                "final_entries": 85,
+                "final_cost": 1340,
+                "entry_cap_clears": 6,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4067
+              },
+              {
+                "hits": 143,
+                "misses": 1621,
+                "capacity_clears": 6,
+                "hit_clones": 143,
+                "cloned_glyphs": 2860,
+                "final_entries": 85,
+                "final_cost": 1340,
+                "entry_cap_clears": 6,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4067
+              },
+              {
+                "hits": 143,
+                "misses": 1621,
+                "capacity_clears": 6,
+                "hit_clones": 143,
+                "cloned_glyphs": 2860,
+                "final_entries": 85,
+                "final_cost": 1340,
+                "entry_cap_clears": 6,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4067
+              }
+            ]
+          },
+          {
+            "iterations": 2,
+            "complete_layout_calls": 7,
+            "counts": [
+              {
+                "hits": 167,
+                "misses": 1891,
+                "capacity_clears": 7,
+                "hit_clones": 167,
+                "cloned_glyphs": 3340,
+                "final_entries": 99,
+                "final_cost": 1575,
+                "entry_cap_clears": 7,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4067
+              },
+              {
+                "hits": 167,
+                "misses": 1891,
+                "capacity_clears": 7,
+                "hit_clones": 167,
+                "cloned_glyphs": 3340,
+                "final_entries": 99,
+                "final_cost": 1575,
+                "entry_cap_clears": 7,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4067
+              },
+              {
+                "hits": 167,
+                "misses": 1891,
+                "capacity_clears": 7,
+                "hit_clones": 167,
+                "cloned_glyphs": 3340,
+                "final_entries": 99,
+                "final_cost": 1575,
+                "entry_cap_clears": 7,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4067
+              }
+            ]
+          }
+        ],
+        "output": {
+          "case": "spaces",
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 26,
+            "runs": 26,
+            "sha256": "9abc44c8212590b9de197d84f61434c185af367e5ccb93a7d48e571631605fb2",
+            "synthetic_glyphs": 0
+          },
+          "length": 256,
+          "op": "layout",
+          "paint_sha256": "62d95224179069c94333d891d29faa1ac5d06f16e05b3fa4a10d237ae8d9c4e6",
+          "width": 128.0
+        },
+        "seventh_layout_delta": {
+          "hits": 24,
+          "misses": 270,
+          "capacity_clears": 1,
+          "hit_clones": 24,
+          "cloned_glyphs": 480,
+          "entry_cap_clears": 1,
+          "cost_cap_clears": 0
+        }
+      },
+      {
+        "case": "spaces",
+        "length": 1024,
+        "width": 128,
+        "samples": [
+          {
+            "iterations": 1,
+            "complete_layout_calls": 6,
+            "counts": [
+              {
+                "hits": 606,
+                "misses": 6690,
+                "capacity_clears": 26,
+                "hit_clones": 606,
+                "cloned_glyphs": 12120,
+                "final_entries": 34,
+                "final_cost": 537,
+                "entry_cap_clears": 26,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4096
+              },
+              {
+                "hits": 606,
+                "misses": 6690,
+                "capacity_clears": 26,
+                "hit_clones": 606,
+                "cloned_glyphs": 12120,
+                "final_entries": 34,
+                "final_cost": 537,
+                "entry_cap_clears": 26,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4096
+              },
+              {
+                "hits": 606,
+                "misses": 6690,
+                "capacity_clears": 26,
+                "hit_clones": 606,
+                "cloned_glyphs": 12120,
+                "final_entries": 34,
+                "final_cost": 537,
+                "entry_cap_clears": 26,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4096
+              }
+            ]
+          },
+          {
+            "iterations": 2,
+            "complete_layout_calls": 7,
+            "counts": [
+              {
+                "hits": 707,
+                "misses": 7805,
+                "capacity_clears": 30,
+                "hit_clones": 707,
+                "cloned_glyphs": 14140,
+                "final_entries": 125,
+                "final_cost": 1961,
+                "entry_cap_clears": 30,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4096
+              },
+              {
+                "hits": 707,
+                "misses": 7805,
+                "capacity_clears": 30,
+                "hit_clones": 707,
+                "cloned_glyphs": 14140,
+                "final_entries": 125,
+                "final_cost": 1961,
+                "entry_cap_clears": 30,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4096
+              },
+              {
+                "hits": 707,
+                "misses": 7805,
+                "capacity_clears": 30,
+                "hit_clones": 707,
+                "cloned_glyphs": 14140,
+                "final_entries": 125,
+                "final_cost": 1961,
+                "entry_cap_clears": 30,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4096
+              }
+            ]
+          }
+        ],
+        "output": {
+          "case": "spaces",
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 2048,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 103,
+            "runs": 103,
+            "sha256": "5c4375409b84c2a4350e6a5f845aea6f491af70d21a45bb33bc4ba1bd73c8b35",
+            "synthetic_glyphs": 0
+          },
+          "length": 1024,
+          "op": "layout",
+          "paint_sha256": "d88af69fcf0503437d2a39551eeaeb68a0821e077a68805fb310a59cba6b2175",
+          "width": 128.0
+        },
+        "seventh_layout_delta": {
+          "hits": 101,
+          "misses": 1115,
+          "capacity_clears": 4,
+          "hit_clones": 101,
+          "cloned_glyphs": 2020,
+          "entry_cap_clears": 4,
+          "cost_cap_clears": 0
+        }
+      },
+      {
+        "case": "spaces",
+        "length": 4096,
+        "width": 128,
+        "samples": [
+          {
+            "iterations": 1,
+            "complete_layout_calls": 6,
+            "counts": [
+              {
+                "hits": 2425,
+                "misses": 26987,
+                "capacity_clears": 105,
+                "hit_clones": 2425,
+                "cloned_glyphs": 48500,
+                "final_entries": 107,
+                "final_cost": 1690,
+                "entry_cap_clears": 105,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4091
+              },
+              {
+                "hits": 2425,
+                "misses": 26987,
+                "capacity_clears": 105,
+                "hit_clones": 2425,
+                "cloned_glyphs": 48500,
+                "final_entries": 107,
+                "final_cost": 1690,
+                "entry_cap_clears": 105,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4091
+              },
+              {
+                "hits": 2425,
+                "misses": 26987,
+                "capacity_clears": 105,
+                "hit_clones": 2425,
+                "cloned_glyphs": 48500,
+                "final_entries": 107,
+                "final_cost": 1690,
+                "entry_cap_clears": 105,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4091
+              }
+            ]
+          },
+          {
+            "iterations": 2,
+            "complete_layout_calls": 7,
+            "counts": [
+              {
+                "hits": 2830,
+                "misses": 31484,
+                "capacity_clears": 122,
+                "hit_clones": 2830,
+                "cloned_glyphs": 56600,
+                "final_entries": 252,
+                "final_cost": 4007,
+                "entry_cap_clears": 122,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4091
+              },
+              {
+                "hits": 2830,
+                "misses": 31484,
+                "capacity_clears": 122,
+                "hit_clones": 2830,
+                "cloned_glyphs": 56600,
+                "final_entries": 252,
+                "final_cost": 4007,
+                "entry_cap_clears": 122,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4091
+              },
+              {
+                "hits": 2830,
+                "misses": 31484,
+                "capacity_clears": 122,
+                "hit_clones": 2830,
+                "cloned_glyphs": 56600,
+                "final_entries": 252,
+                "final_cost": 4007,
+                "entry_cap_clears": 122,
+                "cost_cap_clears": 0,
+                "max_cost_before_clear": 4091
+              }
+            ]
+          }
+        ],
+        "output": {
+          "case": "spaces",
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 8192,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 410,
+            "runs": 410,
+            "sha256": "d4530fcfa85f66ded784d90ab341359f80ce3983f5cfffe4e1d2c0148f0987d1",
+            "synthetic_glyphs": 0
+          },
+          "length": 4096,
+          "op": "layout",
+          "paint_sha256": "b3b41f6a72c5a61502a43e8a19313f5ec9dc47483ed95c5993026a6624bcfa10",
+          "width": 128.0
+        },
+        "seventh_layout_delta": {
+          "hits": 405,
+          "misses": 4497,
+          "capacity_clears": 17,
+          "hit_clones": 405,
+          "cloned_glyphs": 8100,
+          "entry_cap_clears": 17,
+          "cost_cap_clears": 0
+        }
+      }
+    ],
+    "observer_patch": "--- a/crates/shodo/src/line/windows.rs\n+++ b/crates/shodo/src/line/windows.rs\n@@ -152,6 +152,27 @@\n     }\n }\n \n+\n+// Disposable diagnostic counters, excluded from performance claims.\n+static PERF_HITS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);\n+static PERF_MISSES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);\n+static PERF_ENTRY_CLEARS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);\n+static PERF_COST_CLEARS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);\n+static PERF_MAX_CLEAR_COST: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);\n+static PERF_EVICTIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);\n+static PERF_CLONES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);\n+static PERF_CLONED_GLYPHS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);\n+impl Drop for EdgeShapeCache {\n+    fn drop(&mut self) {\n+        use std::sync::atomic::Ordering::Relaxed;\n+        if std::env::var_os(\"SHODO_EDGE_COUNTS\").is_some() {\n+            eprintln!(\"EDGE_COUNTS hits={} misses={} capacity_clears={} hit_clones={} cloned_glyphs={} final_entries={} final_cost={} entry_cap_clears={} cost_cap_clears={} max_cost_before_clear={}\",\n+                PERF_HITS.load(Relaxed), PERF_MISSES.load(Relaxed), PERF_EVICTIONS.load(Relaxed),\n+                PERF_CLONES.load(Relaxed), PERF_CLONED_GLYPHS.load(Relaxed), self.entries.len(), self.cost, PERF_ENTRY_CLEARS.load(Relaxed), PERF_COST_CLEARS.load(Relaxed), PERF_MAX_CLEAR_COST.load(Relaxed));\n+        }\n+    }\n+}\n+\n type OwnedShapedWindow = (crate::shape::GlyphStore, Vec<crate::shape::ShapedRun>);\n type ShapedWindow = std::sync::Arc<OwnedShapedWindow>;\n \n@@ -178,7 +199,11 @@\n         match self {\n             Self::Owned(window) => window,\n             Self::Shared(window) => {\n-                std::sync::Arc::try_unwrap(window).unwrap_or_else(|shared| (*shared).clone())\n+                std::sync::Arc::try_unwrap(window).unwrap_or_else(|shared| {\n+                    PERF_CLONES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);\n+                    PERF_CLONED_GLYPHS.fetch_add(shared.0.len() as u64, std::sync::atomic::Ordering::Relaxed);\n+                    (*shared).clone()\n+                })\n             }\n         }\n     }\n@@ -242,6 +267,10 @@\n         if self.entries.len() >= EDGE_SHAPE_CACHE_ENTRIES\n             || self.cost + cost > EDGE_SHAPE_CACHE_COST\n         {\n+            PERF_EVICTIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);\n+            if self.entries.len() >= EDGE_SHAPE_CACHE_ENTRIES { PERF_ENTRY_CLEARS.fetch_add(1, std::sync::atomic::Ordering::Relaxed); }\n+            if self.cost + cost > EDGE_SHAPE_CACHE_COST { PERF_COST_CLEARS.fetch_add(1, std::sync::atomic::Ordering::Relaxed); }\n+            PERF_MAX_CLEAR_COST.fetch_max(self.cost as u64, std::sync::atomic::Ordering::Relaxed);\n             self.entries.clear();\n             self.cost = 0;\n         }\n@@ -305,9 +334,11 @@\n     if replacement.is_none() {\n         cx.edge_shapes.begin(data);\n         if let Some(hit) = cx.edge_shapes.get(&key) {\n+            PERF_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);\n             return Some(WindowHandle::Shared(std::sync::Arc::clone(hit)));\n         }\n     }\n+    PERF_MISSES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);\n     let mut unit = data.units[range.start].clone();\n     unit.text = unit.text.start..data.units[range.end - 1].text.end;\n     #[cfg(test)]\n",
+    "observer_driver": "from pathlib import Path\nimport subprocess,os,json,re\np=Path(__file__).parent\nb=p/\"target/release/examples/line_profile\"\nreference=json.load(open(p/\"reference.json\"))\nexpected={(m[\"case\"],m[\"length\"],int(m[\"width\"])):m[\"output\"] for m in reference[\"measurements\"]}\nresult=[]\nfor case,n,width in [(\"plain\",4096,1000000),(\"emphasis\",4096,1000000)]+[(\"spaces\",n,128) for n in (32,64,128,256,512,1024,4096)]:\n    item={\"case\":case,\"length\":n,\"width\":width,\"samples\":[]}\n    for iterations in (1,2):\n        samples=[]\n        for repeat in range(3):\n            q=subprocess.run([str(b),\"layout\",case,str(n),str(iterations),str(width)],capture_output=True,text=True,check=True,env=dict(os.environ,SHODO_EDGE_COUNTS=\"1\",TMPDIR=str(Path.home()/\"tmp\")))\n            data=json.loads(q.stdout)\n            signature={k:v for k,v in data.items() if k not in (\"measure\",\"iterations\")}\n            if \"output\" not in item: item[\"output\"]=signature\n            assert signature==item[\"output\"]\n            if (case,n,width) in expected: assert signature=={k:v for k,v in expected[case,n,width].items() if k!=\"iterations\"}\n            line=re.findall(r\"EDGE_COUNTS (.*)\",q.stderr)[-1]\n            counts={k:int(v) for k,v in re.findall(r\"(\\w+)=(\\d+)\",line)}\n            samples.append(counts)\n        assert samples[0]==samples[1]==samples[2]\n        item[\"samples\"].append({\"iterations\":iterations,\"complete_layout_calls\":iterations+5,\"counts\":samples})\n    first,second=(s[\"counts\"][0] for s in item[\"samples\"])\n    item[\"seventh_layout_delta\"]={k:second[k]-first[k] for k in (\"hits\",\"misses\",\"capacity_clears\",\"hit_clones\",\"cloned_glyphs\",\"entry_cap_clears\",\"cost_cap_clears\")}\n    result.append(item)\n    print(case,n,\"lines\",item[\"output\"][\"geometry\"][\"lines\"],\"delta\",item[\"seventh_layout_delta\"],\"max_cost\",second[\"max_cost_before_clear\"],flush=True)\n(p/\"final-observations.json\").write_text(json.dumps(result,indent=2)+\"\\n\")\n",
+    "source_sha256": {
+      "crates/shodo/src/line/windows.rs": "547ea2922d600afd36e8d1295fd4c53e8e12eed0b03f4a956272a76daa43a5cf",
+      "crates/shodo/src/shape.rs": "26e60d3e2588e7c844849ceeb133f5f8721f1c151511f2570869a8340bbf3f32",
+      "crates/shodo/src/shape/instance.rs": "a58e64eec69a012c23a0679806ce4a073d39d27fbb1b20bd34a18cbde7598d69",
+      "crates/shodo/src/line/punctuation.rs": "c0cc157934d552075bf9ddfb0fa331a97081c2e6c5f4da40eead324ec3c3d9e7",
+      "crates/shodo/src/line/metrics.rs": "41069792e965599ae73d89dbe4196afa8f8a886a5ad24ee57ac9075a89fb5be1",
+      "crates/shodo/src/output/line.rs": "8dad63489987fa2368a4a3c46fa449d6ceeabddd262d821b912cc8b82cec65af",
+      "dev/bench/examples/line_profile.rs": "6aace238b2e2c304df9ee8c473ffae54ee01cf460fed4c847d1fdc8bfda62e0d",
+      "Cargo.lock": "7f6eb934a9044db268e4fa51fe520717a926b49d51cf5ce360f653c2c4ba0c40"
+    },
+    "diagnostic_binary_sha256": "b208bd26d6be3984028663331e8bc135b728e9d5abc495643e0a245dfba10f34",
+    "note": "Temporary diagnostic-only instrumentation; counters from seventh minus sixth complete layout; 3 identical processes for each count. Instrumented elapsed timings are not evidence.",
+    "diagnostic_conditions": {
+      "profile": "offline locked release build, default shodo-bench features (complex-scripts); diagnostic counters only",
+      "measurement": "9 conditions ×2 iteration counts ×3 independent processes. Output prep+3 warmups+measured iterations+verification means6/7 complete layouts. Counter deltas isolate the seventh complete layout. Diagnostic elapsed times intentionally discarded; no optimized A/B, CPU fraction or speedup claims."
+    }
+  },
+  "implementation_constraints": [
+    "Retain only the most recent paragraph identity (id,pointer), clear/reset/shrink releases the map and windows.",
+    "Range and glyph budget stay in the key; operation reshape requests charged before lookup, including hits.",
+    "Only clean, unedited, unsaturated results eligible; original 1024 glyph-equivalent per-window maximum unchanged.",
+    "At most 2048 entries and 1048576 accounted bytes. Account glyph/run Vec capacities, Arc tuple and instance owned coordinates/variations/language/features, with table metadata allowance. Shared instance/features may be overcounted conservatively. Exact allocator overhead/RSS is not bounded by this value.",
+    "Full cache refuses admission instead of clearing resident results. Preflight avoids snapshot clone on refusal. Failed replacement preserves previous entry.",
+    "Cache hits still deep-copy for independently owned selected output; this optimization does not eliminate that necessary copy."
+  ],
+  "measurements": [
+    {
+      "op": "layout",
+      "case": "spaces",
+      "length": 128,
+      "width": 128,
+      "iterations": 40,
+      "median_ns_per_iteration": {
+        "baseline": 157387.175,
+        "candidate": 154808.15000000002
+      },
+      "median_paired_ratio": 0.9817113770754684,
+      "time_reduction_percent": 1.6386500361290302,
+      "time_samples_ns": {
+        "baseline": [
+          6278061,
+          6401895,
+          6268492,
+          6240973,
+          6334844,
+          6312913,
+          6797426,
+          6641463,
+          6553528,
+          6268142,
+          6204584,
+          6232033
+        ],
+        "candidate": [
+          6172596,
+          6328349,
+          6432068,
+          6097024,
+          6105055,
+          6273102,
+          6126219,
+          6211847,
+          6184399,
+          6144169,
+          6200253,
+          6203886
+        ]
+      },
+      "allocation_samples": {
+        "baseline": [
+          {
+            "allocated_bytes": 14907720,
+            "calls": 94040,
+            "deallocated_bytes": 14907720,
+            "live_bytes": 647182,
+            "net_bytes": 0,
+            "peak_extra_bytes": 25432,
+            "start_live_bytes": 647182
+          },
+          {
+            "allocated_bytes": 14907720,
+            "calls": 94040,
+            "deallocated_bytes": 14907720,
+            "live_bytes": 647182,
+            "net_bytes": 0,
+            "peak_extra_bytes": 25432,
+            "start_live_bytes": 647182
+          },
+          {
+            "allocated_bytes": 14907720,
+            "calls": 94040,
+            "deallocated_bytes": 14907720,
+            "live_bytes": 647182,
+            "net_bytes": 0,
+            "peak_extra_bytes": 25432,
+            "start_live_bytes": 647182
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 14907720,
+            "calls": 94040,
+            "deallocated_bytes": 14907720,
+            "live_bytes": 647182,
+            "net_bytes": 0,
+            "peak_extra_bytes": 25432,
+            "start_live_bytes": 647182
+          },
+          {
+            "allocated_bytes": 14907720,
+            "calls": 94040,
+            "deallocated_bytes": 14907720,
+            "live_bytes": 647182,
+            "net_bytes": 0,
+            "peak_extra_bytes": 25432,
+            "start_live_bytes": 647182
+          },
+          {
+            "allocated_bytes": 14907720,
+            "calls": 94040,
+            "deallocated_bytes": 14907720,
+            "live_bytes": 647182,
+            "net_bytes": 0,
+            "peak_extra_bytes": 25432,
+            "start_live_bytes": 647182
+          }
+        ]
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 13,
+          "runs": 13,
+          "sha256": "7b7fba67cf0d2f7b6ffe2faf2383183426848aed5e1b4cec15bf2c1c85390565",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "c51e8daa4fdff28b6a5146a387e9ce8870b017e253cca4bd3bd859b5e202aeae",
+        "width_outputs": []
+      }
+    },
+    {
+      "op": "layout",
+      "case": "spaces",
+      "length": 256,
+      "width": 128,
+      "iterations": 30,
+      "median_ns_per_iteration": {
+        "baseline": 1275583.0333333332,
+        "candidate": 318120.48333333334
+      },
+      "median_paired_ratio": 0.2490692696104056,
+      "time_reduction_percent": 75.06077808968453,
+      "time_samples_ns": {
+        "baseline": [
+          38450065,
+          38246817,
+          38376240,
+          37966042,
+          37893892,
+          37856105,
+          38750956,
+          38258621,
+          38145263,
+          38276361,
+          38449996,
+          39602713
+        ],
+        "candidate": [
+          9516899,
+          9407243,
+          9743545,
+          9569771,
+          9727760,
+          9540786,
+          9537364,
+          9546443,
+          9646321,
+          9516061,
+          9524861,
+          9572705
+        ]
+      },
+      "allocation_samples": {
+        "baseline": [
+          {
+            "allocated_bytes": 35309612,
+            "calls": 327034,
+            "deallocated_bytes": 35177903,
+            "live_bytes": 842477,
+            "net_bytes": 131709,
+            "peak_extra_bytes": 206426,
+            "start_live_bytes": 710768
+          },
+          {
+            "allocated_bytes": 35309612,
+            "calls": 327034,
+            "deallocated_bytes": 35177903,
+            "live_bytes": 842477,
+            "net_bytes": 131709,
+            "peak_extra_bytes": 206426,
+            "start_live_bytes": 710768
+          },
+          {
+            "allocated_bytes": 35309612,
+            "calls": 327034,
+            "deallocated_bytes": 35177903,
+            "live_bytes": 842477,
+            "net_bytes": 131709,
+            "peak_extra_bytes": 206426,
+            "start_live_bytes": 710768
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 23539020,
+            "calls": 147390,
+            "deallocated_bytes": 23539020,
+            "live_bytes": 873575,
+            "net_bytes": 0,
+            "peak_extra_bytes": 50424,
+            "start_live_bytes": 873575
+          },
+          {
+            "allocated_bytes": 23539020,
+            "calls": 147390,
+            "deallocated_bytes": 23539020,
+            "live_bytes": 873575,
+            "net_bytes": 0,
+            "peak_extra_bytes": 50424,
+            "start_live_bytes": 873575
+          },
+          {
+            "allocated_bytes": 23539020,
+            "calls": 147390,
+            "deallocated_bytes": 23539020,
+            "live_bytes": 873575,
+            "net_bytes": 0,
+            "peak_extra_bytes": 50424,
+            "start_live_bytes": 873575
+          }
+        ]
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 512,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 26,
+          "runs": 26,
+          "sha256": "9abc44c8212590b9de197d84f61434c185af367e5ccb93a7d48e571631605fb2",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "62d95224179069c94333d891d29faa1ac5d06f16e05b3fa4a10d237ae8d9c4e6",
+        "width_outputs": []
+      }
+    },
+    {
+      "op": "layout",
+      "case": "spaces",
+      "length": 1024,
+      "width": 128,
+      "iterations": 10,
+      "median_ns_per_iteration": {
+        "baseline": 5228238.85,
+        "candidate": 1471006.15
+      },
+      "median_paired_ratio": 0.2824692831997288,
+      "time_reduction_percent": 71.86421293663734,
+      "time_samples_ns": {
+        "baseline": [
+          52085287,
+          52663042,
+          51984082,
+          51999168,
+          52463286,
+          52171964,
+          53030635,
+          52753002,
+          52440517,
+          52244812,
+          52005385,
+          52319965
+        ],
+        "candidate": [
+          14744565,
+          14656980,
+          15173831,
+          14679680,
+          14628832,
+          14679400,
+          15488341,
+          14683381,
+          14821395,
+          14621988,
+          14736742,
+          14828589
+        ]
+      },
+      "allocation_samples": {
+        "baseline": [
+          {
+            "allocated_bytes": 48734918,
+            "calls": 450141,
+            "deallocated_bytes": 48622559,
+            "live_bytes": 1509605,
+            "net_bytes": 112359,
+            "peak_extra_bytes": 326431,
+            "start_live_bytes": 1397246
+          },
+          {
+            "allocated_bytes": 48734918,
+            "calls": 450141,
+            "deallocated_bytes": 48622559,
+            "live_bytes": 1509605,
+            "net_bytes": 112359,
+            "peak_extra_bytes": 326431,
+            "start_live_bytes": 1397246
+          },
+          {
+            "allocated_bytes": 48734918,
+            "calls": 450141,
+            "deallocated_bytes": 48622559,
+            "live_bytes": 1509605,
+            "net_bytes": 112359,
+            "peak_extra_bytes": 326431,
+            "start_live_bytes": 1397246
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 32885770,
+            "calls": 208520,
+            "deallocated_bytes": 32885770,
+            "live_bytes": 2199819,
+            "net_bytes": 0,
+            "peak_extra_bytes": 200640,
+            "start_live_bytes": 2199819
+          },
+          {
+            "allocated_bytes": 32885770,
+            "calls": 208520,
+            "deallocated_bytes": 32885770,
+            "live_bytes": 2199819,
+            "net_bytes": 0,
+            "peak_extra_bytes": 200640,
+            "start_live_bytes": 2199819
+          },
+          {
+            "allocated_bytes": 32885770,
+            "calls": 208520,
+            "deallocated_bytes": 32885770,
+            "live_bytes": 2199819,
+            "net_bytes": 0,
+            "peak_extra_bytes": 200640,
+            "start_live_bytes": 2199819
+          }
+        ]
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 2048,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 103,
+          "runs": 103,
+          "sha256": "5c4375409b84c2a4350e6a5f845aea6f491af70d21a45bb33bc4ba1bd73c8b35",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "d88af69fcf0503437d2a39551eeaeb68a0821e077a68805fb310a59cba6b2175",
+        "width_outputs": []
+      }
+    },
+    {
+      "op": "layout",
+      "case": "spaces",
+      "length": 4096,
+      "width": 128,
+      "iterations": 3,
+      "median_ns_per_iteration": {
+        "baseline": 20881795.333333336,
+        "candidate": 16651767.5
+      },
+      "median_paired_ratio": 0.7952353959492379,
+      "time_reduction_percent": 20.257012224332062,
+      "time_samples_ns": {
+        "baseline": [
+          62096616,
+          62879296,
+          62449052,
+          63594924,
+          63490995,
+          62501715,
+          62184481,
+          62165972,
+          63387485,
+          63559024,
+          62693160,
+          62597612
+        ],
+        "candidate": [
+          50020468,
+          49585824,
+          49816102,
+          50172031,
+          49890137,
+          49592530,
+          50213588,
+          49518284,
+          50448057,
+          50382612,
+          50431224,
+          49740251
+        ]
+      },
+      "allocation_samples": {
+        "baseline": [
+          {
+            "allocated_bytes": 58974478,
+            "calls": 544532,
+            "deallocated_bytes": 58831825,
+            "live_bytes": 4091852,
+            "net_bytes": 142653,
+            "peak_extra_bytes": 1009121,
+            "start_live_bytes": 3949199
+          },
+          {
+            "allocated_bytes": 58974478,
+            "calls": 544532,
+            "deallocated_bytes": 58831825,
+            "live_bytes": 4091852,
+            "net_bytes": 142653,
+            "peak_extra_bytes": 1009121,
+            "start_live_bytes": 3949199
+          },
+          {
+            "allocated_bytes": 58974478,
+            "calls": 544532,
+            "deallocated_bytes": 58831825,
+            "live_bytes": 4091852,
+            "net_bytes": 142653,
+            "peak_extra_bytes": 1009121,
+            "start_live_bytes": 3949199
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 49462443,
+            "calls": 400743,
+            "deallocated_bytes": 49462443,
+            "live_bytes": 4781378,
+            "net_bytes": 0,
+            "peak_extra_bytes": 853036,
+            "start_live_bytes": 4781378
+          },
+          {
+            "allocated_bytes": 49462443,
+            "calls": 400743,
+            "deallocated_bytes": 49462443,
+            "live_bytes": 4781378,
+            "net_bytes": 0,
+            "peak_extra_bytes": 853036,
+            "start_live_bytes": 4781378
+          },
+          {
+            "allocated_bytes": 49462443,
+            "calls": 400743,
+            "deallocated_bytes": 49462443,
+            "live_bytes": 4781378,
+            "net_bytes": 0,
+            "peak_extra_bytes": 853036,
+            "start_live_bytes": 4781378
+          }
+        ]
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 8192,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 410,
+          "runs": 410,
+          "sha256": "d4530fcfa85f66ded784d90ab341359f80ce3983f5cfffe4e1d2c0148f0987d1",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "b3b41f6a72c5a61502a43e8a19313f5ec9dc47483ed95c5993026a6624bcfa10",
+        "width_outputs": []
+      }
+    },
+    {
+      "op": "layout-cold",
+      "case": "spaces",
+      "length": 256,
+      "width": 128,
+      "iterations": 20,
+      "median_ns_per_iteration": {
+        "baseline": 1289500.75,
+        "candidate": 1289816.7999999998
+      },
+      "median_paired_ratio": 1.002650693842115,
+      "time_reduction_percent": -0.02450948555088317,
+      "time_samples_ns": {
+        "baseline": [
+          26006463,
+          25645436,
+          25596545,
+          26087204,
+          25846869,
+          25739587,
+          26017359,
+          25648579,
+          25685318,
+          25636496,
+          25840443,
+          26403181
+        ],
+        "candidate": [
+          25518808,
+          25742311,
+          25708576,
+          25800911,
+          25902395,
+          25820747,
+          25563718,
+          25782332,
+          25883397,
+          25792948,
+          25799724,
+          25875225
+        ]
+      },
+      "allocation_samples": {
+        "baseline": [
+          {
+            "allocated_bytes": 24518840,
+            "calls": 218620,
+            "deallocated_bytes": 24518840,
+            "live_bytes": 677259,
+            "net_bytes": 0,
+            "peak_extra_bytes": 272693,
+            "start_live_bytes": 677259
+          },
+          {
+            "allocated_bytes": 24518840,
+            "calls": 218620,
+            "deallocated_bytes": 24518840,
+            "live_bytes": 677259,
+            "net_bytes": 0,
+            "peak_extra_bytes": 272693,
+            "start_live_bytes": 677259
+          },
+          {
+            "allocated_bytes": 24518840,
+            "calls": 218620,
+            "deallocated_bytes": 24518840,
+            "live_bytes": 677259,
+            "net_bytes": 0,
+            "peak_extra_bytes": 272693,
+            "start_live_bytes": 677259
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 24518840,
+            "calls": 218620,
+            "deallocated_bytes": 24518840,
+            "live_bytes": 873580,
+            "net_bytes": 0,
+            "peak_extra_bytes": 286046,
+            "start_live_bytes": 873580
+          },
+          {
+            "allocated_bytes": 24518840,
+            "calls": 218620,
+            "deallocated_bytes": 24518840,
+            "live_bytes": 873580,
+            "net_bytes": 0,
+            "peak_extra_bytes": 286046,
+            "start_live_bytes": 873580
+          },
+          {
+            "allocated_bytes": 24518840,
+            "calls": 218620,
+            "deallocated_bytes": 24518840,
+            "live_bytes": 873580,
+            "net_bytes": 0,
+            "peak_extra_bytes": 286046,
+            "start_live_bytes": 873580
+          }
+        ]
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 512,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 26,
+          "runs": 26,
+          "sha256": "9abc44c8212590b9de197d84f61434c185af367e5ccb93a7d48e571631605fb2",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "62d95224179069c94333d891d29faa1ac5d06f16e05b3fa4a10d237ae8d9c4e6",
+        "width_outputs": []
+      }
+    },
+    {
+      "op": "layout-cold",
+      "case": "spaces",
+      "length": 1024,
+      "width": 128,
+      "iterations": 8,
+      "median_ns_per_iteration": {
+        "baseline": 5249767.5,
+        "candidate": 5233306.0
+      },
+      "median_paired_ratio": 0.9948644182101547,
+      "time_reduction_percent": 0.31356626745850935,
+      "time_samples_ns": {
+        "baseline": [
+          41836415,
+          41749179,
+          43117437,
+          41937760,
+          42312337,
+          41754487,
+          41670952,
+          41990841,
+          42005439,
+          42551694,
+          42318692,
+          42774988
+        ],
+        "candidate": [
+          41983018,
+          41780399,
+          42108041,
+          41920228,
+          41812668,
+          41476156,
+          41520717,
+          41516736,
+          42030792,
+          42020665,
+          41497249,
+          44108254
+        ]
+      },
+      "allocation_samples": {
+        "baseline": [
+          {
+            "allocated_bytes": 39380184,
+            "calls": 360360,
+            "deallocated_bytes": 39380184,
+            "live_bytes": 1381748,
+            "net_bytes": 0,
+            "peak_extra_bytes": 425596,
+            "start_live_bytes": 1381748
+          },
+          {
+            "allocated_bytes": 39380184,
+            "calls": 360360,
+            "deallocated_bytes": 39380184,
+            "live_bytes": 1381748,
+            "net_bytes": 0,
+            "peak_extra_bytes": 425596,
+            "start_live_bytes": 1381748
+          },
+          {
+            "allocated_bytes": 39380184,
+            "calls": 360360,
+            "deallocated_bytes": 39380184,
+            "live_bytes": 1381748,
+            "net_bytes": 0,
+            "peak_extra_bytes": 425596,
+            "start_live_bytes": 1381748
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 40233000,
+            "calls": 358056,
+            "deallocated_bytes": 40233000,
+            "live_bytes": 2199823,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1129933,
+            "start_live_bytes": 2199823
+          },
+          {
+            "allocated_bytes": 40233000,
+            "calls": 358056,
+            "deallocated_bytes": 40233000,
+            "live_bytes": 2199823,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1129933,
+            "start_live_bytes": 2199823
+          },
+          {
+            "allocated_bytes": 40233000,
+            "calls": 358056,
+            "deallocated_bytes": 40233000,
+            "live_bytes": 2199823,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1129933,
+            "start_live_bytes": 2199823
+          }
+        ]
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 2048,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 103,
+          "runs": 103,
+          "sha256": "5c4375409b84c2a4350e6a5f845aea6f491af70d21a45bb33bc4ba1bd73c8b35",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "d88af69fcf0503437d2a39551eeaeb68a0821e077a68805fb310a59cba6b2175",
+        "width_outputs": []
+      }
+    },
+    {
+      "op": "layout-cold",
+      "case": "spaces",
+      "length": 4096,
+      "width": 128,
+      "iterations": 3,
+      "median_ns_per_iteration": {
+        "baseline": 21166994.166666664,
+        "candidate": 20406676.333333332
+      },
+      "median_paired_ratio": 0.9651682870005975,
+      "time_reduction_percent": 3.5919971789412863,
+      "time_samples_ns": {
+        "baseline": [
+          63880029,
+          63176134,
+          63883662,
+          63606937,
+          63253942,
+          63382177,
+          64812107,
+          63274546,
+          64625482,
+          63278108,
+          63395028,
+          63616644
+        ],
+        "candidate": [
+          61207213,
+          61739080,
+          60644684,
+          60847583,
+          61094623,
+          61130454,
+          60993209,
+          62189718,
+          61378612,
+          61232845,
+          61784967,
+          61949941
+        ]
+      },
+      "allocation_samples": {
+        "baseline": [
+          {
+            "allocated_bytes": 59117682,
+            "calls": 544572,
+            "deallocated_bytes": 59117682,
+            "live_bytes": 4005215,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1069691,
+            "start_live_bytes": 4005215
+          },
+          {
+            "allocated_bytes": 59117682,
+            "calls": 544572,
+            "deallocated_bytes": 59117682,
+            "live_bytes": 4005215,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1069691,
+            "start_live_bytes": 4005215
+          },
+          {
+            "allocated_bytes": 59117682,
+            "calls": 544572,
+            "deallocated_bytes": 59117682,
+            "live_bytes": 4005215,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1069691,
+            "start_live_bytes": 4005215
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 54684087,
+            "calls": 472458,
+            "deallocated_bytes": 54684087,
+            "live_bytes": 4781383,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1782329,
+            "start_live_bytes": 4781383
+          },
+          {
+            "allocated_bytes": 54684087,
+            "calls": 472458,
+            "deallocated_bytes": 54684087,
+            "live_bytes": 4781383,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1782329,
+            "start_live_bytes": 4781383
+          },
+          {
+            "allocated_bytes": 54684087,
+            "calls": 472458,
+            "deallocated_bytes": 54684087,
+            "live_bytes": 4781383,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1782329,
+            "start_live_bytes": 4781383
+          }
+        ]
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 8192,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 410,
+          "runs": 410,
+          "sha256": "d4530fcfa85f66ded784d90ab341359f80ce3983f5cfffe4e1d2c0148f0987d1",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "b3b41f6a72c5a61502a43e8a19313f5ec9dc47483ed95c5993026a6624bcfa10",
+        "width_outputs": []
+      }
+    },
+    {
+      "op": "layout-widths",
+      "case": "spaces",
+      "length": 256,
+      "width": 128,
+      "iterations": 10,
+      "median_ns_per_iteration": {
+        "baseline": 3846829.35,
+        "candidate": 1018974.75
+      },
+      "median_paired_ratio": 0.26541947283963996,
+      "time_reduction_percent": 73.51130873533552,
+      "time_samples_ns": {
+        "baseline": [
+          38057956,
+          38343341,
+          38440006,
+          38310654,
+          38432883,
+          38520049,
+          38496581,
+          38681809,
+          38701644,
+          38698222,
+          38596389,
+          38245000
+        ],
+        "candidate": [
+          10103385,
+          10192297,
+          10201656,
+          10300067,
+          10163940,
+          10187198,
+          10112325,
+          10067764,
+          10061338,
+          10272339,
+          10293432,
+          10212761
+        ]
+      },
+      "allocation_samples": {
+        "baseline": [
+          {
+            "allocated_bytes": 35914634,
+            "calls": 333609,
+            "deallocated_bytes": 36042394,
+            "live_bytes": 717396,
+            "net_bytes": -127760,
+            "peak_extra_bytes": 94207,
+            "start_live_bytes": 845156
+          },
+          {
+            "allocated_bytes": 35914634,
+            "calls": 333609,
+            "deallocated_bytes": 36042394,
+            "live_bytes": 717396,
+            "net_bytes": -127760,
+            "peak_extra_bytes": 94207,
+            "start_live_bytes": 845156
+          },
+          {
+            "allocated_bytes": 35914634,
+            "calls": 333609,
+            "deallocated_bytes": 36042394,
+            "live_bytes": 717396,
+            "net_bytes": -127760,
+            "peak_extra_bytes": 94207,
+            "start_live_bytes": 845156
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 24464490,
+            "calls": 158290,
+            "deallocated_bytes": 24464490,
+            "live_bytes": 1219285,
+            "net_bytes": 0,
+            "peak_extra_bytes": 79802,
+            "start_live_bytes": 1219285
+          },
+          {
+            "allocated_bytes": 24464490,
+            "calls": 158290,
+            "deallocated_bytes": 24464490,
+            "live_bytes": 1219285,
+            "net_bytes": 0,
+            "peak_extra_bytes": 79802,
+            "start_live_bytes": 1219285
+          },
+          {
+            "allocated_bytes": 24464490,
+            "calls": 158290,
+            "deallocated_bytes": 24464490,
+            "live_bytes": 1219285,
+            "net_bytes": 0,
+            "peak_extra_bytes": 79802,
+            "start_live_bytes": 1219285
+          }
+        ]
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 512,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 26,
+          "runs": 26,
+          "sha256": "9abc44c8212590b9de197d84f61434c185af367e5ccb93a7d48e571631605fb2",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "62d95224179069c94333d891d29faa1ac5d06f16e05b3fa4a10d237ae8d9c4e6",
+        "width_outputs": [
+          [
+            {
+              "float_reports": 0,
+              "glyphs": 512,
+              "height_retries": 0,
+              "intrinsic_measurements": 0,
+              "lines": 26,
+              "runs": 26,
+              "sha256": "9abc44c8212590b9de197d84f61434c185af367e5ccb93a7d48e571631605fb2",
+              "synthetic_glyphs": 0
+            },
+            "62d95224179069c94333d891d29faa1ac5d06f16e05b3fa4a10d237ae8d9c4e6"
+          ],
+          [
+            {
+              "float_reports": 0,
+              "glyphs": 512,
+              "height_retries": 0,
+              "intrinsic_measurements": 0,
+              "lines": 52,
+              "runs": 52,
+              "sha256": "3435013c7400b36c730d8924a2d49f5a4aeef25f97e101ffab63d337f462e0b6",
+              "synthetic_glyphs": 0
+            },
+            "e5d8101c096a5cdba6b5f30b516dfaa87598de03b90350aa92e852741d3ba92f"
+          ],
+          [
+            {
+              "float_reports": 0,
+              "glyphs": 512,
+              "height_retries": 0,
+              "intrinsic_measurements": 0,
+              "lines": 19,
+              "runs": 19,
+              "sha256": "cd05b344094b3ee63a4acd43e5bbeaabc03e5910d3523d4b45fc011988656d6d",
+              "synthetic_glyphs": 0
+            },
+            "1cfd3fe4932476fb65cb0f0a2c34cff1ad0e982b3c47af12c09212dda501bfb5"
+          ]
+        ]
+      }
+    },
+    {
+      "op": "layout-widths",
+      "case": "spaces",
+      "length": 1024,
+      "width": 128,
+      "iterations": 3,
+      "median_ns_per_iteration": {
+        "baseline": 15764611.5,
+        "candidate": 10178118.333333332
+      },
+      "median_paired_ratio": 0.6452803142000356,
+      "time_reduction_percent": 35.43692254431178,
+      "time_samples_ns": {
+        "baseline": [
+          47267748,
+          47394516,
+          47727954,
+          47184073,
+          50536339,
+          47252172,
+          46771361,
+          48982434,
+          48044490,
+          47319921,
+          46911051,
+          46984038
+        ],
+        "candidate": [
+          30557963,
+          30343050,
+          30475616,
+          31875443,
+          30366448,
+          30825747,
+          30942737,
+          30256303,
+          30578497,
+          30510747,
+          30294438,
+          30775110
+        ]
+      },
+      "allocation_samples": {
+        "baseline": [
+          {
+            "allocated_bytes": 44473064,
+            "calls": 412013,
+            "deallocated_bytes": 44455329,
+            "live_bytes": 1430603,
+            "net_bytes": 17735,
+            "peak_extra_bytes": 401565,
+            "start_live_bytes": 1412868
+          },
+          {
+            "allocated_bytes": 44473064,
+            "calls": 412013,
+            "deallocated_bytes": 44455329,
+            "live_bytes": 1430603,
+            "net_bytes": 17735,
+            "peak_extra_bytes": 401565,
+            "start_live_bytes": 1412868
+          },
+          {
+            "allocated_bytes": 44473064,
+            "calls": 412013,
+            "deallocated_bytes": 44455329,
+            "live_bytes": 1430603,
+            "net_bytes": 17735,
+            "peak_extra_bytes": 401565,
+            "start_live_bytes": 1412868
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 35161341,
+            "calls": 271443,
+            "deallocated_bytes": 35161341,
+            "live_bytes": 2200489,
+            "net_bytes": 0,
+            "peak_extra_bytes": 334130,
+            "start_live_bytes": 2200489
+          },
+          {
+            "allocated_bytes": 35161341,
+            "calls": 271443,
+            "deallocated_bytes": 35161341,
+            "live_bytes": 2200489,
+            "net_bytes": 0,
+            "peak_extra_bytes": 334130,
+            "start_live_bytes": 2200489
+          },
+          {
+            "allocated_bytes": 35161341,
+            "calls": 271443,
+            "deallocated_bytes": 35161341,
+            "live_bytes": 2200489,
+            "net_bytes": 0,
+            "peak_extra_bytes": 334130,
+            "start_live_bytes": 2200489
+          }
+        ]
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 2048,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 103,
+          "runs": 103,
+          "sha256": "5c4375409b84c2a4350e6a5f845aea6f491af70d21a45bb33bc4ba1bd73c8b35",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "d88af69fcf0503437d2a39551eeaeb68a0821e077a68805fb310a59cba6b2175",
+        "width_outputs": [
+          [
+            {
+              "float_reports": 0,
+              "glyphs": 2048,
+              "height_retries": 0,
+              "intrinsic_measurements": 0,
+              "lines": 103,
+              "runs": 103,
+              "sha256": "5c4375409b84c2a4350e6a5f845aea6f491af70d21a45bb33bc4ba1bd73c8b35",
+              "synthetic_glyphs": 0
+            },
+            "d88af69fcf0503437d2a39551eeaeb68a0821e077a68805fb310a59cba6b2175"
+          ],
+          [
+            {
+              "float_reports": 0,
+              "glyphs": 2048,
+              "height_retries": 0,
+              "intrinsic_measurements": 0,
+              "lines": 205,
+              "runs": 205,
+              "sha256": "835cc63a6f391c409359828d4d5c770d05bc5d238cbf2b6f895bbce1ee5a3a2c",
+              "synthetic_glyphs": 0
+            },
+            "7a5e970d4365b516330e38ee586e90a580d10f3af2493ec60f19f22267777689"
+          ],
+          [
+            {
+              "float_reports": 0,
+              "glyphs": 2048,
+              "height_retries": 0,
+              "intrinsic_measurements": 0,
+              "lines": 74,
+              "runs": 74,
+              "sha256": "13ebf51e0258e9f0a46fc85258ac7e20f69a5d44497c9941a99b19c61c4eced2",
+              "synthetic_glyphs": 0
+            },
+            "8b4c7ba255c5d72e99bb8ffdd6ed239fe11100d7fb07f21f583870390e34d1c7"
+          ]
+        ]
+      }
+    },
+    {
+      "op": "layout-widths",
+      "case": "spaces",
+      "length": 4096,
+      "width": 128,
+      "iterations": 1,
+      "median_ns_per_iteration": {
+        "baseline": 63518302.0,
+        "candidate": 56937745.0
+      },
+      "median_paired_ratio": 0.8977821773360115,
+      "time_reduction_percent": 10.36009589802952,
+      "time_samples_ns": {
+        "baseline": [
+          63609660,
+          63091692,
+          63417097,
+          63707511,
+          63467525,
+          64250903,
+          63569079,
+          63257502,
+          63779172,
+          63285509,
+          63252892,
+          63591848
+        ],
+        "candidate": [
+          56576578,
+          56925942,
+          56683300,
+          56841499,
+          57870870,
+          57512217,
+          57069751,
+          56792886,
+          56869715,
+          56949548,
+          57198684,
+          57712461
+        ]
+      },
+      "allocation_samples": {
+        "baseline": [
+          {
+            "allocated_bytes": 59783715,
+            "calls": 553721,
+            "deallocated_bytes": 59810305,
+            "live_bytes": 3916068,
+            "net_bytes": -26590,
+            "peak_extra_bytes": 1511439,
+            "start_live_bytes": 3942658
+          },
+          {
+            "allocated_bytes": 59783715,
+            "calls": 553721,
+            "deallocated_bytes": 59810305,
+            "live_bytes": 3916068,
+            "net_bytes": -26590,
+            "peak_extra_bytes": 1511439,
+            "start_live_bytes": 3942658
+          },
+          {
+            "allocated_bytes": 59783715,
+            "calls": 553721,
+            "deallocated_bytes": 59810305,
+            "live_bytes": 3916068,
+            "net_bytes": -26590,
+            "peak_extra_bytes": 1511439,
+            "start_live_bytes": 3942658
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 51821065,
+            "calls": 433919,
+            "deallocated_bytes": 51821065,
+            "live_bytes": 4782145,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1387640,
+            "start_live_bytes": 4782145
+          },
+          {
+            "allocated_bytes": 51821065,
+            "calls": 433919,
+            "deallocated_bytes": 51821065,
+            "live_bytes": 4782145,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1387640,
+            "start_live_bytes": 4782145
+          },
+          {
+            "allocated_bytes": 51821065,
+            "calls": 433919,
+            "deallocated_bytes": 51821065,
+            "live_bytes": 4782145,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1387640,
+            "start_live_bytes": 4782145
+          }
+        ]
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 8192,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 410,
+          "runs": 410,
+          "sha256": "d4530fcfa85f66ded784d90ab341359f80ce3983f5cfffe4e1d2c0148f0987d1",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "b3b41f6a72c5a61502a43e8a19313f5ec9dc47483ed95c5993026a6624bcfa10",
+        "width_outputs": [
+          [
+            {
+              "float_reports": 0,
+              "glyphs": 8192,
+              "height_retries": 0,
+              "intrinsic_measurements": 0,
+              "lines": 410,
+              "runs": 410,
+              "sha256": "d4530fcfa85f66ded784d90ab341359f80ce3983f5cfffe4e1d2c0148f0987d1",
+              "synthetic_glyphs": 0
+            },
+            "b3b41f6a72c5a61502a43e8a19313f5ec9dc47483ed95c5993026a6624bcfa10"
+          ],
+          [
+            {
+              "float_reports": 0,
+              "glyphs": 8192,
+              "height_retries": 0,
+              "intrinsic_measurements": 0,
+              "lines": 820,
+              "runs": 820,
+              "sha256": "d831872cd4b6d9bad089a81d9df537fb855730d6e18681e81b43b0e3bb8f12ea",
+              "synthetic_glyphs": 0
+            },
+            "5b83d7f3c2636f1cd3c60c3c4c7f07a1552bf1bd7368c5198368bdfd87dc61bc"
+          ],
+          [
+            {
+              "float_reports": 0,
+              "glyphs": 8192,
+              "height_retries": 0,
+              "intrinsic_measurements": 0,
+              "lines": 293,
+              "runs": 293,
+              "sha256": "ebe680750dff27409ea8b592d08fc0e712696217241be8073a82a483085ffc2b",
+              "synthetic_glyphs": 0
+            },
+            "bfc3cbbfed0327062798ee94fd032450ec5dd954118705b7d510ac6281854772"
+          ]
+        ]
+      }
+    },
+    {
+      "op": "layout",
+      "case": "plain",
+      "length": 4096,
+      "width": 1000000,
+      "iterations": 500,
+      "median_ns_per_iteration": {
+        "baseline": 43795.068,
+        "candidate": 46063.623999999996
+      },
+      "median_paired_ratio": 1.0563317654060733,
+      "time_reduction_percent": -5.179934873031811,
+      "time_samples_ns": {
+        "baseline": [
+          21703541,
+          21852868,
+          21963433,
+          21430238,
+          21990113,
+          21612532,
+          22098303,
+          22168426,
+          21942200,
+          21808797,
+          22067781,
+          21709687
+        ],
+        "candidate": [
+          23210160,
+          22811556,
+          22672915,
+          23540875,
+          23080948,
+          22982676,
+          23491774,
+          22569964,
+          22885801,
+          23808450,
+          23953447,
+          22650564
+        ]
+      },
+      "allocation_samples": {
+        "baseline": [
+          {
+            "allocated_bytes": 9390000,
+            "calls": 6000,
+            "deallocated_bytes": 9390000,
+            "live_bytes": 1752526,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752526
+          },
+          {
+            "allocated_bytes": 9390000,
+            "calls": 6000,
+            "deallocated_bytes": 9390000,
+            "live_bytes": 1752526,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752526
+          },
+          {
+            "allocated_bytes": 9390000,
+            "calls": 6000,
+            "deallocated_bytes": 9390000,
+            "live_bytes": 1752526,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752526
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 9390000,
+            "calls": 6000,
+            "deallocated_bytes": 9390000,
+            "live_bytes": 1752526,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752526
+          },
+          {
+            "allocated_bytes": 9390000,
+            "calls": 6000,
+            "deallocated_bytes": 9390000,
+            "live_bytes": 1752526,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752526
+          },
+          {
+            "allocated_bytes": 9390000,
+            "calls": 6000,
+            "deallocated_bytes": 9390000,
+            "live_bytes": 1752526,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752526
+          }
+        ]
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 4096,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 1,
+          "sha256": "7debff63c2c99a3dcb0046ef17ea3917519f34a3e831c080d2ffccf86da9955d",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "46e0de03ee209204aab77f6a375854d125f04e6857d6b7dc8c6db42efef51378",
+        "width_outputs": []
+      }
+    },
+    {
+      "op": "layout",
+      "case": "emphasis",
+      "length": 4096,
+      "width": 1000000,
+      "iterations": 250,
+      "median_ns_per_iteration": {
+        "baseline": 54504.562,
+        "candidate": 57541.97
+      },
+      "median_paired_ratio": 1.0591954357845514,
+      "time_reduction_percent": -5.5727592123389735,
+      "time_samples_ns": {
+        "baseline": [
+          13643392,
+          13447688,
+          13726718,
+          13892249,
+          13648282,
+          13572012,
+          13608889,
+          13692075,
+          13601975,
+          13731048,
+          13586958,
+          13559788
+        ],
+        "candidate": [
+          14468328,
+          14258864,
+          15200440,
+          14410846,
+          15874581,
+          14360139,
+          14205573,
+          14615421,
+          14438575,
+          14145506,
+          14220939,
+          14209764
+        ]
+      },
+      "allocation_samples": {
+        "baseline": [
+          {
+            "allocated_bytes": 4745000,
+            "calls": 4250,
+            "deallocated_bytes": 4745000,
+            "live_bytes": 1752529,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752529
+          },
+          {
+            "allocated_bytes": 4745000,
+            "calls": 4250,
+            "deallocated_bytes": 4745000,
+            "live_bytes": 1752529,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752529
+          },
+          {
+            "allocated_bytes": 4745000,
+            "calls": 4250,
+            "deallocated_bytes": 4745000,
+            "live_bytes": 1752529,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752529
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 4745000,
+            "calls": 4250,
+            "deallocated_bytes": 4745000,
+            "live_bytes": 1752529,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752529
+          },
+          {
+            "allocated_bytes": 4745000,
+            "calls": 4250,
+            "deallocated_bytes": 4745000,
+            "live_bytes": 1752529,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752529
+          },
+          {
+            "allocated_bytes": 4745000,
+            "calls": 4250,
+            "deallocated_bytes": 4745000,
+            "live_bytes": 1752529,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752529
+          }
+        ]
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 4096,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 1,
+          "sha256": "33ae8e97f0a7760f2b67b5013c08b4b0671ab71bd036a138e072ac09c12e5a88",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "5065d2a9b0f0c1e27df88c5d2253ff4555d1c29c12977b1e8610bcbc38c23dc2",
+        "width_outputs": []
+      }
+    }
+  ],
+  "wide_control_followup": {
+    "kind": "time",
+    "cpu": 10,
+    "clock": "Instant measured in probe excluding process startup/input/digest/JSON",
+    "warmups": 3,
+    "sha256": {
+      "baseline": "a4f8bbe373120c62c477378d2b2eef8e44bcb85393027c0cd446f5fb29e4f18b",
+      "candidate": "4cc7071d03810447e187e50b87886bbdec4374003866dc10d707dffaf0fd17b0"
+    },
+    "note": "20 longer independent AB/BA process pairs; same final binary as primary matrix. Persistent small wide-line regression is reported, not dismissed as noise.",
+    "samples": [
+      {
+        "op": "layout",
+        "case": "plain",
+        "length": 4096,
+        "width": 1000000,
+        "iterations": 5000,
+        "pairs": 20,
+        "median_ns_per_iteration": {
+          "baseline": 43747.1308,
+          "candidate": 45872.6238
+        },
+        "median_paired_ratio": 1.0530199502350608,
+        "time_reduction_percent": -4.858588348838655,
+        "time_samples_ns": {
+          "baseline": [
+            215973753,
+            217174384,
+            216377036,
+            215832247,
+            219838818,
+            222256142,
+            215463188,
+            218736179,
+            218031935,
+            218159122,
+            219890781,
+            214654385,
+            216276039,
+            224668926,
+            220594606,
+            219263854,
+            219388388,
+            218735129,
+            222599567,
+            224114079
+          ],
+          "candidate": [
+            229411871,
+            226136644,
+            227990602,
+            228871343,
+            234218513,
+            237267094,
+            252235579,
+            229314367,
+            228015535,
+            229583478,
+            240636261,
+            227797200,
+            238134284,
+            227305423,
+            230716847,
+            225906294,
+            228348413,
+            231860833,
+            231838622,
+            224952424
+          ]
+        },
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "7debff63c2c99a3dcb0046ef17ea3917519f34a3e831c080d2ffccf86da9955d",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "46e0de03ee209204aab77f6a375854d125f04e6857d6b7dc8c6db42efef51378",
+          "width_outputs": []
+        }
+      },
+      {
+        "op": "layout",
+        "case": "emphasis",
+        "length": 4096,
+        "width": 1000000,
+        "iterations": 2500,
+        "pairs": 20,
+        "median_ns_per_iteration": {
+          "baseline": 54533.7416,
+          "candidate": 57600.3284
+        },
+        "median_paired_ratio": 1.0541243502315123,
+        "time_reduction_percent": -5.623283328866613,
+        "time_samples_ns": {
+          "baseline": [
+            138554753,
+            137616529,
+            139331495,
+            135889828,
+            135914413,
+            136188275,
+            136304845,
+            152831565,
+            135837025,
+            136131770,
+            135956809,
+            137418029,
+            135448967,
+            137110503,
+            138697235,
+            136785515,
+            135960161,
+            135192917,
+            136939732,
+            136363863
+          ],
+          "candidate": [
+            145418460,
+            145309991,
+            143480898,
+            143348752,
+            143356505,
+            141911907,
+            144947147,
+            142422332,
+            159094119,
+            145433196,
+            144703180,
+            143861062,
+            143371101,
+            144140580,
+            144635290,
+            142566490,
+            144510827,
+            142208816,
+            144808365,
+            143658372
+          ]
+        },
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 4096,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "33ae8e97f0a7760f2b67b5013c08b4b0671ab71bd036a138e072ac09c12e5a88",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "5065d2a9b0f0c1e27df88c5d2253ff4555d1c29c12977b1e8610bcbc38c23dc2",
+          "width_outputs": []
+        }
+      }
+    ]
+  },
+  "development_evaluation": {
+    "initial_vector_only_accounting": "Rejected even though warm26/103 improved about75%: omitted fresh RunInstance retention from accounted budget.",
+    "instance_accounting_before_outlining": {
+      "wide_control_summary": [
+        {
+          "case": "plain",
+          "median_ns_per_iteration": {
+            "baseline": 43747.1308,
+            "candidate": 45872.6238
+          },
+          "median_paired_ratio": 1.0530199502350608,
+          "time_reduction_percent": -4.858588348838655
+        },
+        {
+          "case": "emphasis",
+          "median_ns_per_iteration": {
+            "baseline": 54533.7416,
+            "candidate": 57600.3284
+          },
+          "median_paired_ratio": 1.0541243502315123,
+          "time_reduction_percent": -5.623283328866613
+        }
+      ],
+      "decision": "Adopt with explicit wide-line elapsed tradeoff. The routine is NOT outlined: the no-inline experiment below worsened cold performance. Exact cause of the wide regression is unproven."
+    },
+    "rejected_outline": {
+      "change": "Added #[inline(never)] to cache_owned_window, otherwise identical source.",
+      "measurements": [
+        {
+          "op": "layout",
+          "case": "spaces",
+          "length": 128,
+          "width": 128,
+          "iterations": 40,
+          "median_ns_per_iteration": {
+            "baseline": 208376.35,
+            "candidate": 205805.1875
+          },
+          "median_paired_ratio": 1.0092423221477393,
+          "time_reduction_percent": 1.2339032236623804,
+          "time_samples_ns": {
+            "baseline": [
+              7823022,
+              8274079,
+              7925764,
+              7033219,
+              6633917,
+              8782688,
+              8396029,
+              8077258,
+              8523355,
+              8483683,
+              9220125,
+              9020650
+            ],
+            "candidate": [
+              8254662,
+              7834268,
+              8209753,
+              7557543,
+              7346263,
+              8014607,
+              8755588,
+              8507571,
+              7959849,
+              8336521,
+              8527825,
+              8629519
+            ]
+          }
+        },
+        {
+          "op": "layout",
+          "case": "spaces",
+          "length": 256,
+          "width": 128,
+          "iterations": 30,
+          "median_ns_per_iteration": {
+            "baseline": 1894642.7666666666,
+            "candidate": 473067.2833333333
+          },
+          "median_paired_ratio": 0.26328845460970807,
+          "time_reduction_percent": 75.03132032823144,
+          "time_samples_ns": {
+            "baseline": [
+              59236317,
+              54442249,
+              47953468,
+              53034529,
+              50093440,
+              53999852,
+              52572577,
+              79673149,
+              64706343,
+              175083909,
+              79282298,
+              69867376
+            ],
+            "candidate": [
+              13478346,
+              12664447,
+              14106529,
+              14277508,
+              13932546,
+              13110265,
+              14759507,
+              13040769,
+              42466541,
+              51720332,
+              17720712,
+              17981442
+            ]
+          }
+        },
+        {
+          "op": "layout",
+          "case": "spaces",
+          "length": 1024,
+          "width": 128,
+          "iterations": 10,
+          "median_ns_per_iteration": {
+            "baseline": 7395196.15,
+            "candidate": 2712756.7
+          },
+          "median_paired_ratio": 0.28194398081961547,
+          "time_reduction_percent": 63.3173124150331,
+          "time_samples_ns": {
+            "baseline": [
+              132124335,
+              93426962,
+              103785765,
+              361232122,
+              123428952,
+              68043102,
+              66610169,
+              71290809,
+              75912222,
+              57725576,
+              71991701,
+              65970810
+            ],
+            "candidate": [
+              35248094,
+              35209679,
+              28055558,
+              21471510,
+              38234443,
+              26199576,
+              28594760,
+              28607611,
+              17404804,
+              16946274,
+              19275803,
+              16151372
+            ]
+          }
+        },
+        {
+          "op": "layout",
+          "case": "spaces",
+          "length": 4096,
+          "width": 128,
+          "iterations": 3,
+          "median_ns_per_iteration": {
+            "baseline": 24482072.0,
+            "candidate": 19527186.166666664
+          },
+          "median_paired_ratio": 0.8258289805511552,
+          "time_reduction_percent": 20.238833679328028,
+          "time_samples_ns": {
+            "baseline": [
+              72472791,
+              67290106,
+              71958036,
+              77587587,
+              64210864,
+              79033790,
+              74419641,
+              79705486,
+              79298781,
+              63523731,
+              79850484,
+              69906837
+            ],
+            "candidate": [
+              54845392,
+              54603938,
+              55454857,
+              76537821,
+              54417453,
+              79648842,
+              55331162,
+              61708260,
+              53321451,
+              82752460,
+              67089373,
+              66671212
+            ]
+          }
+        },
+        {
+          "op": "layout-cold",
+          "case": "spaces",
+          "length": 256,
+          "width": 128,
+          "iterations": 20,
+          "median_ns_per_iteration": {
+            "baseline": 1318396.8,
+            "candidate": 1329109.25
+          },
+          "median_paired_ratio": 0.998589662503381,
+          "time_reduction_percent": -0.8125361044565516,
+          "time_samples_ns": {
+            "baseline": [
+              111193351,
+              30688842,
+              27947020,
+              26405477,
+              28602022,
+              25654787,
+              27038131,
+              25879827,
+              26330395,
+              26181695,
+              26251121,
+              25902457
+            ],
+            "candidate": [
+              38761350,
+              34037266,
+              28232335,
+              30730260,
+              27926415,
+              27060621,
+              26051923,
+              25952116,
+              25997655,
+              25569018,
+              26103749,
+              26039771
+            ]
+          }
+        },
+        {
+          "op": "layout-cold",
+          "case": "spaces",
+          "length": 1024,
+          "width": 128,
+          "iterations": 8,
+          "median_ns_per_iteration": {
+            "baseline": 8120862.125,
+            "candidate": 10305284.875
+          },
+          "median_paired_ratio": 1.2046079901784852,
+          "time_reduction_percent": -26.898902067001917,
+          "time_samples_ns": {
+            "baseline": [
+              55347924,
+              145805159,
+              68686650,
+              106769528,
+              78060992,
+              161031298,
+              80825724,
+              53335838,
+              58974888,
+              61247144,
+              57701339,
+              45789959
+            ],
+            "candidate": [
+              83446087,
+              93574263,
+              95341543,
+              79237735,
+              80991885,
+              129962011,
+              89407120,
+              79844127,
+              81438471,
+              85094281,
+              58619657,
+              59666349
+            ]
+          }
+        },
+        {
+          "op": "layout-cold",
+          "case": "spaces",
+          "length": 4096,
+          "width": 128,
+          "iterations": 3,
+          "median_ns_per_iteration": {
+            "baseline": 22921776.333333336,
+            "candidate": 21803807.666666664
+          },
+          "median_paired_ratio": 0.9966971238840325,
+          "time_reduction_percent": 4.877321244256705,
+          "time_samples_ns": {
+            "baseline": [
+              75199177,
+              94404995,
+              110508872,
+              64160994,
+              68496881,
+              69389706,
+              65888252,
+              66130753,
+              65369236,
+              70746788,
+              66333652,
+              69033777
+            ],
+            "candidate": [
+              185070995,
+              128184743,
+              64552124,
+              65736201,
+              63121286,
+              75586675,
+              65529112,
+              65088671,
+              65293734,
+              63150272,
+              69754365,
+              64704455
+            ]
+          }
+        },
+        {
+          "op": "layout-widths",
+          "case": "spaces",
+          "length": 256,
+          "width": 128,
+          "iterations": 10,
+          "median_ns_per_iteration": {
+            "baseline": 4011930.4000000004,
+            "candidate": 1029741.0
+          },
+          "median_paired_ratio": 0.2582913687131142,
+          "time_reduction_percent": 74.33302930678958,
+          "time_samples_ns": {
+            "baseline": [
+              39060913,
+              40421208,
+              40659727,
+              41270100,
+              39824176,
+              41756918,
+              38867653,
+              40156706,
+              40363935,
+              39325974,
+              40081902,
+              38697232
+            ],
+            "candidate": [
+              10258786,
+              10324999,
+              12087110,
+              10632385,
+              10267726,
+              10715640,
+              10269821,
+              10367045,
+              10156533,
+              10162540,
+              11988210,
+              10101425
+            ]
+          }
+        },
+        {
+          "op": "layout-widths",
+          "case": "spaces",
+          "length": 1024,
+          "width": 128,
+          "iterations": 3,
+          "median_ns_per_iteration": {
+            "baseline": 16280176.5,
+            "candidate": 11210931.666666668
+          },
+          "median_paired_ratio": 0.687721890465061,
+          "time_reduction_percent": 31.137529948359788,
+          "time_samples_ns": {
+            "baseline": [
+              49947114,
+              69085043,
+              48443986,
+              48604978,
+              50161607,
+              49203127,
+              49076081,
+              47931466,
+              47637001,
+              48061726,
+              49583013,
+              47370404
+            ],
+            "candidate": [
+              39020962,
+              50744390,
+              31816553,
+              33360471,
+              33242992,
+              33905119,
+              36910815,
+              32647985,
+              30556207,
+              30453465,
+              35318286,
+              42901462
+            ]
+          }
+        },
+        {
+          "op": "layout-widths",
+          "case": "spaces",
+          "length": 4096,
+          "width": 128,
+          "iterations": 1,
+          "median_ns_per_iteration": {
+            "baseline": 73993271.5,
+            "candidate": 63328758.5
+          },
+          "median_paired_ratio": 0.8088095883946902,
+          "time_reduction_percent": 14.41281454895531,
+          "time_samples_ns": {
+            "baseline": [
+              72934741,
+              64379048,
+              134287139,
+              67171787,
+              66845612,
+              79304365,
+              77861305,
+              80202707,
+              65763787,
+              75051802,
+              79741522,
+              65290380
+            ],
+            "candidate": [
+              58292573,
+              67124363,
+              62883813,
+              59036140,
+              67739484,
+              64117759,
+              58549113,
+              63773704,
+              87695643,
+              60725682,
+              57346946,
+              65401154
+            ]
+          }
+        },
+        {
+          "op": "layout",
+          "case": "plain",
+          "length": 4096,
+          "width": 1000000,
+          "iterations": 500,
+          "median_ns_per_iteration": {
+            "baseline": 48253.169,
+            "candidate": 55108.073000000004
+          },
+          "median_paired_ratio": 1.031406812321119,
+          "time_reduction_percent": -14.206121881860234,
+          "time_samples_ns": {
+            "baseline": [
+              35471803,
+              36856754,
+              29280772,
+              28002405,
+              44248905,
+              25823740,
+              22070707,
+              22306014,
+              22429429,
+              22101228,
+              21986404,
+              21718271
+            ],
+            "candidate": [
+              36061223,
+              51754063,
+              28218923,
+              36538751,
+              42960969,
+              34794799,
+              22534475,
+              22488308,
+              22529377,
+              24580016,
+              26889150,
+              22626112
+            ]
+          }
+        },
+        {
+          "op": "layout",
+          "case": "emphasis",
+          "length": 4096,
+          "width": 1000000,
+          "iterations": 250,
+          "median_ns_per_iteration": {
+            "baseline": 56188.084,
+            "candidate": 62383.164000000004
+          },
+          "median_paired_ratio": 1.058243593310062,
+          "time_reduction_percent": -11.0256117649429,
+          "time_samples_ns": {
+            "baseline": [
+              13614752,
+              13760098,
+              14406511,
+              13649954,
+              13810317,
+              14024810,
+              14069232,
+              15413950,
+              13630816,
+              15754094,
+              15597363,
+              15365059
+            ],
+            "candidate": [
+              14366491,
+              14144733,
+              17597156,
+              16584966,
+              14169388,
+              15798375,
+              14757480,
+              15393207,
+              14267031,
+              18756577,
+              16553047,
+              20596495
+            ]
+          }
+        }
+      ],
+      "decision": "Rejected: 103-line cold layout27% slower; wide controls still regress, with different run durations. Restored pre-outline source, rebuilt, and checked exact executable SHA256 equality with all adopted raw timing and allocation samples."
+    }
+  },
+  "validation": {
+    "red": "Original implementation: 12 existing tests passed, 3 new tests failed for loss of first512 hot windows, no refusal on full cache and unnecessary snapshot clone at entry bound.",
+    "green": "Final line tests and full repository checks documented in PR; memory tests cover optional Vec capacity and retained instance settings.",
+    "output": "Every timing and allocation sample agrees on complete geometry/source/glyph digest and paint hash; all checked context/paragraph warnings empty, synthetic glyphs0. Multiwidth references use independent fresh contexts.",
+    "allocation_repeatability": "All three scope-count samples identical per variant/condition.",
+    "limits": "Cold and warm request budgets and warnings retain existing checks before cache lookup; broad existing suite covers first-line/float/Ruby/forced/atomic/font invalidation and resource paths.",
+    "warm_resource_test": "Independent review found the previous warm resource test rebuilt the paragraph each call. It now reuses one Paragraph, asserts cached windows are present, and compares full geometry summary and warning sequence against fresh contexts.",
+    "independent_review": "No Critical/Important findings; source/measurement hashes, 12 condition statistics and allocation repeatability independently checked; two minor documentation/test-evidence findings addressed.",
+    "local_checks": {
+      "result": "PASS",
+      "test_result_groups": 280,
+      "summed_tests_across_configurations": 5722,
+      "dev_profile": {
+        "opt_level": 1,
+        "debug": "line-tables-only"
+      },
+      "commands": [
+        "cargo fmt --all --check",
+        "cargo clippy --workspace --all-targets --locked -- -D warnings",
+        "cargo clippy --workspace --all-targets --locked --features shodo-harness/accesskit -- -D warnings",
+        "cargo test --workspace --locked",
+        "cargo test --workspace --locked --features shodo-harness/accesskit",
+        "cargo test -p shodo-bench --locked --features allocation-counting --test allocator --test probe --test ruby_hit_path_allocations --test ruby_base_caret_range --test ruby_base_decoration --test style_memory --test suppressed_warning_format --test selection_allocations --test paint_geometry_allocations",
+        "cargo test -p shodo --locked --no-default-features",
+        "cargo test -p shodo --locked --no-default-features --features complex-scripts"
+      ],
+      "notes": "TMPDIR set to ~/tmp, explicit task-owned Cargo target, /usr/bin/env runner override. Feature test totals include repeated tests, not5722 unique tests. Post-review cfg(test) preparation changes rechecked with final fmt/clippy and line tests."
+    },
+    "final_followup": {
+      "result": "PASS",
+      "commands": [
+        "cargo fmt --all --check",
+        "cargo clippy --workspace --all-targets --locked -- -D warnings",
+        "cargo clippy --workspace --all-targets --locked --features shodo-harness/accesskit -- -D warnings",
+        "cargo test -p shodo --lib line:: --locked"
+      ],
+      "line_tests_passed": 161,
+      "independent_followup_review": "Both Minor findings resolved; no new findings. Measured source/harness hashes unchanged."
+    }
+  },
+  "measurement_driver": "import argparse, hashlib, json, os, statistics, subprocess, time\nfrom pathlib import Path\nROOT = Path(__file__).parent\nCASES = [('layout','spaces',128,128,40),('layout','spaces',256,128,30),('layout','spaces',1024,128,10),('layout','spaces',4096,128,3),('layout-cold','spaces',256,128,20),('layout-cold','spaces',1024,128,8),('layout-cold','spaces',4096,128,3),('layout-widths','spaces',256,128,10),('layout-widths','spaces',1024,128,3),('layout-widths','spaces',4096,128,1),('layout','plain',4096,1000000,500),('layout','emphasis',4096,1000000,250)]\np = argparse.ArgumentParser(); p.add_argument('kind', choices=['time','alloc']); p.add_argument('--pairs',type=int,default=12); args=p.parse_args()\nbinaries = {v: ROOT / (v+'-'+args.kind) for v in ['baseline','candidate']}\nresult = {'kind':args.kind,'cpu':10,'clock':'Instant measured in probe excluding process startup/input/digest/JSON','warmups':3,'samples':[], 'sha256':{v:hashlib.sha256(b.read_bytes()).hexdigest() for v,b in binaries.items()}}\nfor op,case,n,w,iters in CASES:\n    observations={v:[] for v in binaries}; accepted=None\n    for i in range(args.pairs):\n        order=['baseline','candidate'] if i%2==0 else ['candidate','baseline']\n        for v in order:\n            command=['taskset','-c','10',str(binaries[v]),op,case,str(n),str(iters),str(w)]\n            obs=json.loads(subprocess.check_output(command, text=True, cwd=os.environ['SHODO_WORKTREE']))\n            equality={k:obs[k] for k in ['geometry','paint_sha256','width_outputs']}\n            if accepted is None: accepted=equality\n            assert equality==accepted, (op,case,n,w,v,'output mismatch')\n            observations[v].append(obs)\n    row={'op':op,'case':case,'length':n,'width':w,'iterations':iters,'pairs':args.pairs,'observations':observations}\n    if args.kind=='time':\n        meds={v:statistics.median(o['measure']['ns']/iters for o in xs) for v,xs in observations.items()}\n        ratios=[observations['candidate'][i]['measure']['ns']/observations['baseline'][i]['measure']['ns'] for i in range(args.pairs)]\n        row.update(median_ns_per_iteration=meds,median_paired_ratio=statistics.median(ratios),time_reduction_percent=100*(1-meds['candidate']/meds['baseline']))\n        print(op,case,n,w,round(row['time_reduction_percent'],2),flush=True)\n    else:\n        print(op,case,n,w,observations['baseline'][0]['measure'],observations['candidate'][0]['measure'],flush=True)\n    result['samples'].append(row)\n    (ROOT/(args.kind+'-samples.json')).write_text(json.dumps(result,indent=2)+'\\n')\n",
+  "control_driver": "import argparse, hashlib, json, os, statistics, subprocess, time\nfrom pathlib import Path\nROOT = Path(__file__).parent\nCASES = [('layout','plain',4096,1000000,5000),('layout','emphasis',4096,1000000,2500)]\np = argparse.ArgumentParser(); p.add_argument('kind', choices=['time','alloc']); p.add_argument('--pairs',type=int,default=12); args=p.parse_args()\nbinaries = {v: ROOT / (v+'-'+args.kind) for v in ['baseline','candidate']}\nresult = {'kind':args.kind,'cpu':10,'clock':'Instant measured in probe excluding process startup/input/digest/JSON','warmups':3,'samples':[], 'sha256':{v:hashlib.sha256(b.read_bytes()).hexdigest() for v,b in binaries.items()}}\nfor op,case,n,w,iters in CASES:\n    observations={v:[] for v in binaries}; accepted=None\n    for i in range(args.pairs):\n        order=['baseline','candidate'] if i%2==0 else ['candidate','baseline']\n        for v in order:\n            command=['taskset','-c','10',str(binaries[v]),op,case,str(n),str(iters),str(w)]\n            obs=json.loads(subprocess.check_output(command, text=True, cwd=os.environ['SHODO_WORKTREE']))\n            equality={k:obs[k] for k in ['geometry','paint_sha256','width_outputs']}\n            if accepted is None: accepted=equality\n            assert equality==accepted, (op,case,n,w,v,'output mismatch')\n            observations[v].append(obs)\n    row={'op':op,'case':case,'length':n,'width':w,'iterations':iters,'pairs':args.pairs,'observations':observations}\n    if args.kind=='time':\n        meds={v:statistics.median(o['measure']['ns']/iters for o in xs) for v,xs in observations.items()}\n        ratios=[observations['candidate'][i]['measure']['ns']/observations['baseline'][i]['measure']['ns'] for i in range(args.pairs)]\n        row.update(median_ns_per_iteration=meds,median_paired_ratio=statistics.median(ratios),time_reduction_percent=100*(1-meds['candidate']/meds['baseline']))\n        print(op,case,n,w,round(row['time_reduction_percent'],2),flush=True)\n    else:\n        print(op,case,n,w,observations['baseline'][0]['measure'],observations['candidate'][0]['measure'],flush=True)\n    result['samples'].append(row)\n    (ROOT/('controls-'+args.kind+'-samples.json')).write_text(json.dumps(result,indent=2)+'\\n')\n",
+  "reproduction": [
+    "Create disposable baseline checkout at baseline_revision; copy the tracked final dev/bench/examples/line_profile.rs into it so both engines use exactly the same harness. Use TMPDIR=\"$HOME/tmp\" and explicit CARGO_TARGET_DIR=\"$HOME/tmp/shodo-edge-cache-baseline-target\"; bypass local Cargo runner wrappers as necessary.",
+    "Build cargo build --locked --release -p shodo-bench --example line_profile; save baseline-time. Rebuild with --features allocation-counting; save baseline-alloc. Compile final engine with the same toolchain/config/profile/lock and harness and save candidate-time/candidate-alloc before measuring.",
+    "Save embedded measurement_driver as measure.py alongside the4 executables, set SHODO_WORKTREE to a checkout containing the fixed fixtures, run python measure.py alloc --pairs 3 then python measure.py time --pairs 12 with no concurrent builds/tests/profiles. Spaces LENGTH means \"a \".repeat(LENGTH); Latin16px; width128.",
+    "Save embedded control_driver alongside those executables and run python measure-controls.py time --pairs 20 for the longer wide controls. taskset CPU10 must be available or adapt to an idle permitted core and record that change.",
+    "After storing conditions/results/repro here and validation in the PR, remove only task-owned raw logs/samples/binaries/build targets and remove the clean disposable worktree with git worktree remove."
+  ],
+  "limitations": [
+    "Single machine/toolchain/fixed Latin fixture, rather than a whole application speedup or universal benefit.",
+    "Resident retention deliberately increases when more short windows fit. Scope start_live_bytes includes unrelated font/paragraph/accepted-output state and can include other context buffers; report the complete process-wide delta rather than attributing every byte to the cache alone.",
+    "Initial context/cold preparation and output/drop scopes specified above; no process-startup or font-discovery timing claim.",
+    "Wide one-line controls show a small elapsed regression despite identical allocation counts and no edge-window activity; retain that tradeoff explicitly.",
+    "At capacity, new windows are reshaped instead of replacing the resident set. A later width hot set may receive fewer hits, while owner change/reset/shrink clears all. Measured width cycling covers three widths, not every transition."
+  ],
+  "measured_harness_sha256": "a7c000f02792052408f85aac47120560240a0a4ad9501755c2d34f60427f3fe2",
+  "measurement_raw_sha256": {
+    "time-samples.json": "50d2c873fcf3610eb3504a66a86a0625a4464d3c16f630218507d4e6c8e7b99a",
+    "alloc-samples.json": "1ffe221a3683a46b9cca57af329e47df8f725fb63b14687cab5d7173d4f0998f",
+    "controls-time-samples.json": "2017f86f3c868c361b1abd22535167ce0b4222b5b45f47111df28b473568b49c"
+  }
+}
