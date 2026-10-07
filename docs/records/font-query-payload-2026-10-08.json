@@ -1,0 +1,5084 @@
+{
+  "date": "2026-10-08",
+  "issue": "shodo-j2r.9",
+  "related_pr": "https://github.com/fulgur-rs/shodo/pull/263",
+  "scope": "Implemented borrowed font-query identities, lazy owned payload creation and in-place ASCII language normalization; no public API change.",
+  "baseline_revision": "88f0dc0c125f4c6e7ece6bc48a2751adc2fc0dd3",
+  "conclusion": {
+    "allocation": "Deterministic reduction of transient allocation calls and requested bytes across all measured build workloads. Paint-only 64-style build: 734 -> 411 calls, 306328 -> 298637 requested bytes. Retained and peak memory unchanged.",
+    "timing": "Inconclusive. Unpinned ordinary no-language builds suggest roughly 2-5% lower median, but other groups and CPU-2-pinned results have large inconsistent changes. Unchanged builder-record controls also moved by up to 61% in pinned runs. These runs do not establish an elapsed-time speedup or a regression.",
+    "long_tags": "Rejected initial one-byte-at-a-time hash variant regressed approximately 23-26% on 1156-byte tags. Final code hashes lowercase stack-buffer blocks; unpinned final long-tag medians are lower, while noisy pinned results remain inconclusive.",
+    "parley": "No page/PNG or Parley comparison was rerun for this patch. Do not subtract these allocation or microbenchmark results from the previous page comparison.",
+    "output": "All before/after geometry, font-instance, glyph, paint and warning digests matched per workload across final timing/allocation runs.",
+    "instructions": "Callgrind confirms lower total build guest instructions in all 22 workloads (ordinary multi-size 64 styles approximately 1.3-3.2%, paint-only Latin approximately 4.6-5.4%); this is not an elapsed-time speedup. See callgrind_record for attribution and long-tag tradeoff."
+  },
+  "changes": [
+    "QueryKey borrows family and language data from retained InlineStyle values; normalized numeric attributes preserve previous identity.",
+    "Create owned normalized FontQuery only in the HashMap vacant-entry closure; duplicate query identities do not clone payloads.",
+    "Explicit Latn/Auto fields avoid allocating and discarding the default SansSerif family Vec.",
+    "FontQuery::normalized lowercases the owned language String in place; borrowed ASCII-insensitive identity hashes 64-byte stack blocks.",
+    "Tests cover float fallbacks/clamps, signed zero, ASCII and Unicode language distinctions, multi-block hashing, family ordering/kinds, synthesis and forced hash collisions.",
+    "New allocation regression test is included in the existing CI allocation-counting command."
+  ],
+  "conditions": {
+    "toolchain": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6\n",
+    "machine": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+    "cpu": "AMD Ryzen 5 5600G",
+    "profile": "release default",
+    "features": "shodo-bench default complex-scripts; separate allocation-counting binaries",
+    "fonts": "Pinned fixture faces, system_fonts false; Latin, CJK fallback, variable emoji and size-adjust cases",
+    "archives": "Both versions derived from the clean baseline revision. All 151 production Rust files verified; candidate changes only the two production files listed below. Existing workspace modifications excluded from benchmarks.",
+    "language_probe": "64 styles varying paint and font size; builders, fixtures and fresh LayoutContext created outside the timed build; output snapshot outside timing. Modes: none, same EN-us, alternating ASCII case, distinct en/fr, long 1156-byte tag.",
+    "style_probe": "Existing style_interning example; separate record/build samples with iterations normalized per operation. Allocation build uses warmed context; language build uses fresh context.",
+    "sampling": "Language: 3 warmups then 21 timing or 9 allocation samples per case per process. Style: 9 samples per operation/case, built-in batched iterations. Unpinned: 6 rounds shuffled with seeds 20261009+round. Pinned: 8 rounds on CPU 2, workload shuffle seeds 20261010+round, adjacent versions alternating order. Allocation: 3 rounds shuffled with seeds 20261011+round.",
+    "concurrency": "No task builds/tests/profilers concurrent with final elapsed-time runs; shared machine contention still present."
+  },
+  "production_sources_sha256": {
+    ".github/workflows/ci.yml": "78902504b7825b1a57ae314535a82ad78f39425e0a0a24c784248378406ac738",
+    "crates/shodo/src/analysis/itemize.rs": "83c8eaebfde5f746c26a79f2fa03729ee1402a89aa795e7a6de826efc85b7168",
+    "crates/shodo/src/font/matching.rs": "236a8dea09bafacdb7f4cb874087bec6dda4c01bf21068199128919b51979ab2",
+    "dev/bench/tests/font_query_allocations.rs": "935a8c8f91409985b8d0847bf0e294ead44cb695a7f016cffa2c37a4b4c82ac3"
+  },
+  "baseline_dependency_lock_sha256": "167069c7f556ed17dac5eeca288aad6503fa3c7b6f9e0a1b9d8c6e81ab41e2d4",
+  "timing_binary_sha256": {
+    "before-style": "d6f0260101bc66bf11c1544829ef776614808b40addc206a4f268f190139a872",
+    "before-language": "f553d2720db5e052df646b2d8eb8216ce0179ecddf4527079e7a25540b9dd36a",
+    "after-style": "d8065c27c4f759f6cf148f1de5b6b02d38917df67b3b344667c8d2205a4894b5",
+    "after-language": "7d604fdfd2696dbd5140f15984ad0053672298c28383ff1d10c86612cf9a8b2d"
+  },
+  "allocation_binary_sha256": {
+    "before-style": "143e3bec3f0d567e8f27dc6f231a692223dc997e2990b17268de73efa316eeea",
+    "before-language": "380a6f5211bbd1cd4fb62bb7dced1ae45eb0c4b4f73dedce97ab99ab33101652",
+    "after-style": "d84134460f7feb757b2580edf63628a36a2e96c89d3cfea56f0bab3b15cba7ed",
+    "after-language": "ccd7c5579a2a6d5b2406c440f7d3cc3c9ace10d7e987c785815643666e8f3caa"
+  },
+  "unpinned_timing": {
+    "raw_rows": 6120,
+    "raw_sha256": "d7e9e493352c44c090a0f823d52216378ca9998b0c498f0664479afc3996d80d",
+    "summaries": [
+      {
+        "probe": "language",
+        "language_case": "case",
+        "fixture": "cjk-fallback-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5e809c4179fd360ed3e749de46415cc0118059a210beb55ef439b71e2aeee171",
+          "instance_sha256": "1865436a7260862a6711020a032f8e87d11c98823670469c970092a8f2798464",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 306.9325,
+          "p10_us": 296.3855,
+          "p90_us": 415.0865,
+          "round_median_us": {
+            "0": 316.326,
+            "1": 314.231,
+            "2": 307.457,
+            "3": 300.542,
+            "4": 303.824,
+            "5": 300.821
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 307.561,
+          "p10_us": 289.541,
+          "p90_us": 537.28,
+          "round_median_us": {
+            "0": 513.638,
+            "1": 308.713,
+            "2": 306.338,
+            "3": 291.742,
+            "4": 295.512,
+            "5": 308.365
+          }
+        },
+        "median_change_percent": 0.2047681493487996
+      },
+      {
+        "probe": "language",
+        "language_case": "case",
+        "fixture": "latin-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5038384b161b8f7f7dca74ee004d3cd7714f7e535c60e762e95d3be7847ab392",
+          "instance_sha256": "42f9d000853dad510ed42f549f739b7e1155992a738e951f1533110310ab3afb",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 293.80100000000004,
+          "p10_us": 285.1055,
+          "p90_us": 330.644,
+          "round_median_us": {
+            "0": 291.81,
+            "1": 301.799,
+            "2": 289.157,
+            "3": 290.553,
+            "4": 298.656,
+            "5": 289.296
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 350.3755,
+          "p10_us": 276.236,
+          "p90_us": 514.091,
+          "round_median_us": {
+            "0": 487.027,
+            "1": 297.189,
+            "2": 435.342,
+            "3": 281.962,
+            "4": 412.363,
+            "5": 294.395
+          }
+        },
+        "median_change_percent": 19.256061075353713
+      },
+      {
+        "probe": "language",
+        "language_case": "case",
+        "fixture": "size-adjust-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "ac4bbc0cca3ffe834fd4a024409dba9ac0c9ec747bc58820ad4b1e76e5687286",
+          "instance_sha256": "6e63c25cf0072195ada1c96bd256a3a8a6ba18ef382f37666834886265f42cda",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 322.9615,
+          "p10_us": 309.1325,
+          "p90_us": 477.3535,
+          "round_median_us": {
+            "0": 326.105,
+            "1": 336.791,
+            "2": 330.784,
+            "3": 315.558,
+            "4": 320.377,
+            "5": 327.572
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 314.58000000000004,
+          "p10_us": 298.341,
+          "p90_us": 559.8045,
+          "round_median_us": {
+            "0": 556.731,
+            "1": 309.622,
+            "2": 348.315,
+            "3": 311.018,
+            "4": 299.633,
+            "5": 311.646
+          }
+        },
+        "median_change_percent": -2.5952009759677153
+      },
+      {
+        "probe": "language",
+        "language_case": "case",
+        "fixture": "variable-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5aee21cca23e8cce16e8d9dfba013eb26914007789eaaf049b990a3ffb28e7f7",
+          "instance_sha256": "d1a6f6f8a77456dbffadd404e6700bf18ca23d6deffcb979972fea5b93995fe8",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 370.5605,
+          "p10_us": 353.3435,
+          "p90_us": 638.8335,
+          "round_median_us": {
+            "0": 356.557,
+            "1": 396.578,
+            "2": 370.805,
+            "3": 358.373,
+            "4": 563.856,
+            "5": 367.244
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 438.24,
+          "p10_us": 342.34299999999996,
+          "p90_us": 645.9580000000001,
+          "round_median_us": {
+            "0": 636.633,
+            "1": 531.378,
+            "2": 501.344,
+            "3": 369.338,
+            "4": 346.29,
+            "5": 374.577
+          }
+        },
+        "median_change_percent": 18.264089129845207
+      },
+      {
+        "probe": "language",
+        "language_case": "distinct",
+        "fixture": "cjk-fallback-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5e809c4179fd360ed3e749de46415cc0118059a210beb55ef439b71e2aeee171",
+          "instance_sha256": "1865436a7260862a6711020a032f8e87d11c98823670469c970092a8f2798464",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 311.193,
+          "p10_us": 301.1355,
+          "p90_us": 534.6955,
+          "round_median_us": {
+            "0": 307.038,
+            "1": 304.452,
+            "2": 309.97,
+            "3": 320.098,
+            "4": 308.364,
+            "5": 375.345
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 305.0115,
+          "p10_us": 290.868,
+          "p90_us": 538.0485,
+          "round_median_us": {
+            "0": 294.255,
+            "1": 392.247,
+            "2": 291.88,
+            "3": 309.342,
+            "4": 522.298,
+            "5": 307.666
+          }
+        },
+        "median_change_percent": -1.9863878686217196
+      },
+      {
+        "probe": "language",
+        "language_case": "distinct",
+        "fixture": "latin-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5038384b161b8f7f7dca74ee004d3cd7714f7e535c60e762e95d3be7847ab392",
+          "instance_sha256": "42f9d000853dad510ed42f549f739b7e1155992a738e951f1533110310ab3afb",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 295.26800000000003,
+          "p10_us": 287.341,
+          "p90_us": 339.166,
+          "round_median_us": {
+            "0": 290.553,
+            "1": 290.833,
+            "2": 303.824,
+            "3": 293.627,
+            "4": 289.576,
+            "5": 315.768
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 299.49350000000004,
+          "p10_us": 276.62,
+          "p90_us": 513.7415,
+          "round_median_us": {
+            "0": 283.29,
+            "1": 492.684,
+            "2": 278.471,
+            "3": 300.192,
+            "4": 297.748,
+            "5": 481.159
+          }
+        },
+        "median_change_percent": 1.431072788111143
+      },
+      {
+        "probe": "language",
+        "language_case": "distinct",
+        "fixture": "size-adjust-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "ac4bbc0cca3ffe834fd4a024409dba9ac0c9ec747bc58820ad4b1e76e5687286",
+          "instance_sha256": "6e63c25cf0072195ada1c96bd256a3a8a6ba18ef382f37666834886265f42cda",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 321.7395,
+          "p10_us": 310.28499999999997,
+          "p90_us": 557.2205,
+          "round_median_us": {
+            "0": 313.463,
+            "1": 312.974,
+            "2": 323.381,
+            "3": 315.138,
+            "4": 502.602,
+            "5": 331.203
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 311.647,
+          "p10_us": 301.485,
+          "p90_us": 522.403,
+          "round_median_us": {
+            "0": 305.92,
+            "1": 302.497,
+            "2": 303.824,
+            "3": 308.713,
+            "4": 312.904,
+            "5": 339.166
+          }
+        },
+        "median_change_percent": -3.136854504964426
+      },
+      {
+        "probe": "language",
+        "language_case": "distinct",
+        "fixture": "variable-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5aee21cca23e8cce16e8d9dfba013eb26914007789eaaf049b990a3ffb28e7f7",
+          "instance_sha256": "d1a6f6f8a77456dbffadd404e6700bf18ca23d6deffcb979972fea5b93995fe8",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 359.80449999999996,
+          "p10_us": 350.3055,
+          "p90_us": 440.8245,
+          "round_median_us": {
+            "0": 351.738,
+            "1": 355.858,
+            "2": 360.748,
+            "3": 355.369,
+            "4": 358.373,
+            "5": 375.276
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 349.88699999999994,
+          "p10_us": 340.3185,
+          "p90_us": 643.444,
+          "round_median_us": {
+            "0": 345.381,
+            "1": 344.474,
+            "2": 342.588,
+            "3": 601.781,
+            "4": 357.675,
+            "5": 351.389
+          }
+        },
+        "median_change_percent": -2.756357966617984
+      },
+      {
+        "probe": "language",
+        "language_case": "long",
+        "fixture": "cjk-fallback-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5e809c4179fd360ed3e749de46415cc0118059a210beb55ef439b71e2aeee171",
+          "instance_sha256": "1865436a7260862a6711020a032f8e87d11c98823670469c970092a8f2798464",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 591.8985,
+          "p10_us": 565.1475,
+          "p90_us": 1066.0385,
+          "round_median_us": {
+            "0": 985.648,
+            "1": 575.101,
+            "2": 759.91,
+            "3": 790.431,
+            "4": 568.047,
+            "5": 589.28
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 558.094,
+          "p10_us": 543.4259999999999,
+          "p90_us": 670.7529999999999,
+          "round_median_us": {
+            "0": 559.037,
+            "1": 561.97,
+            "2": 555.405,
+            "3": 559.735,
+            "4": 622.106,
+            "5": 554.007
+          }
+        },
+        "median_change_percent": -5.711198795063677
+      },
+      {
+        "probe": "language",
+        "language_case": "long",
+        "fixture": "latin-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5038384b161b8f7f7dca74ee004d3cd7714f7e535c60e762e95d3be7847ab392",
+          "instance_sha256": "42f9d000853dad510ed42f549f739b7e1155992a738e951f1533110310ab3afb",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 615.8545,
+          "p10_us": 556.8015,
+          "p90_us": 1034.2939999999999,
+          "round_median_us": {
+            "0": 584.809,
+            "1": 572.935,
+            "2": 1032.234,
+            "3": 660.87,
+            "4": 899.32,
+            "5": 579.641
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 542.4135,
+          "p10_us": 525.197,
+          "p90_us": 963.8555,
+          "round_median_us": {
+            "0": 535.498,
+            "1": 673.372,
+            "2": 530.68,
+            "3": 540.457,
+            "4": 741.89,
+            "5": 549.188
+          }
+        },
+        "median_change_percent": -11.925056973684534
+      },
+      {
+        "probe": "language",
+        "language_case": "long",
+        "fixture": "size-adjust-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "ac4bbc0cca3ffe834fd4a024409dba9ac0c9ec747bc58820ad4b1e76e5687286",
+          "instance_sha256": "6e63c25cf0072195ada1c96bd256a3a8a6ba18ef382f37666834886265f42cda",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 625.0745,
+          "p10_us": 578.348,
+          "p90_us": 1066.9814999999999,
+          "round_median_us": {
+            "0": 581.386,
+            "1": 708.923,
+            "2": 640.894,
+            "3": 841.139,
+            "4": 589.978,
+            "5": 668.203
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 570.7355,
+          "p10_us": 555.649,
+          "p90_us": 1006.7755,
+          "round_median_us": {
+            "0": 572.446,
+            "1": 557.71,
+            "2": 564.903,
+            "3": 567.558,
+            "4": 824.096,
+            "5": 604.925
+          }
+        },
+        "median_change_percent": -8.69320377011059
+      },
+      {
+        "probe": "language",
+        "language_case": "long",
+        "fixture": "variable-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5aee21cca23e8cce16e8d9dfba013eb26914007789eaaf049b990a3ffb28e7f7",
+          "instance_sha256": "d1a6f6f8a77456dbffadd404e6700bf18ca23d6deffcb979972fea5b93995fe8",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 659.6125,
+          "p10_us": 632.8975,
+          "p90_us": 1170.317,
+          "round_median_us": {
+            "0": 649.485,
+            "1": 644.666,
+            "2": 729.388,
+            "3": 840.44,
+            "4": 664.502,
+            "5": 1046.552
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 626.262,
+          "p10_us": 606.74,
+          "p90_us": 849.3455,
+          "round_median_us": {
+            "0": 627.414,
+            "1": 625.948,
+            "2": 620.36,
+            "3": 619.941,
+            "4": 627.694,
+            "5": 645.154
+          }
+        },
+        "median_change_percent": -5.056074589247473
+      },
+      {
+        "probe": "language",
+        "language_case": "none",
+        "fixture": "cjk-fallback-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5e809c4179fd360ed3e749de46415cc0118059a210beb55ef439b71e2aeee171",
+          "instance_sha256": "1865436a7260862a6711020a032f8e87d11c98823670469c970092a8f2798464",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 278.9945,
+          "p10_us": 272.1845,
+          "p90_us": 489.087,
+          "round_median_us": {
+            "0": 277.074,
+            "1": 278.959,
+            "2": 491.008,
+            "3": 275.048,
+            "4": 275.048,
+            "5": 282.382
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 272.534,
+          "p10_us": 263.734,
+          "p90_us": 481.75350000000003,
+          "round_median_us": {
+            "0": 270.019,
+            "1": 267.855,
+            "2": 268.552,
+            "3": 266.387,
+            "4": 276.725,
+            "5": 460.974
+          }
+        },
+        "median_change_percent": -2.315637046608454
+      },
+      {
+        "probe": "language",
+        "language_case": "none",
+        "fixture": "latin-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5038384b161b8f7f7dca74ee004d3cd7714f7e535c60e762e95d3be7847ab392",
+          "instance_sha256": "42f9d000853dad510ed42f549f739b7e1155992a738e951f1533110310ab3afb",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 270.05449999999996,
+          "p10_us": 258.914,
+          "p90_us": 472.0795,
+          "round_median_us": {
+            "0": 267.575,
+            "1": 269.67,
+            "2": 462.581,
+            "3": 261.499,
+            "4": 268.972,
+            "5": 277.213
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 262.895,
+          "p10_us": 252.977,
+          "p90_us": 466.2825,
+          "round_median_us": {
+            "0": 258.076,
+            "1": 462.232,
+            "2": 254.933,
+            "3": 255.003,
+            "4": 384.355,
+            "5": 258.984
+          }
+        },
+        "median_change_percent": -2.6511315308576533
+      },
+      {
+        "probe": "language",
+        "language_case": "none",
+        "fixture": "size-adjust-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "ac4bbc0cca3ffe834fd4a024409dba9ac0c9ec747bc58820ad4b1e76e5687286",
+          "instance_sha256": "6e63c25cf0072195ada1c96bd256a3a8a6ba18ef382f37666834886265f42cda",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 294.29,
+          "p10_us": 280.322,
+          "p90_us": 514.9995,
+          "round_median_us": {
+            "0": 287.69,
+            "1": 307.107,
+            "2": 384.914,
+            "3": 283.779,
+            "4": 281.474,
+            "5": 289.995
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 282.2425,
+          "p10_us": 273.232,
+          "p90_us": 335.63800000000003,
+          "round_median_us": {
+            "0": 279.728,
+            "1": 285.315,
+            "2": 274.768,
+            "3": 276.584,
+            "4": 287.69,
+            "5": 295.234
+          }
+        },
+        "median_change_percent": -4.093751061877748
+      },
+      {
+        "probe": "language",
+        "language_case": "none",
+        "fixture": "variable-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5aee21cca23e8cce16e8d9dfba013eb26914007789eaaf049b990a3ffb28e7f7",
+          "instance_sha256": "d1a6f6f8a77456dbffadd404e6700bf18ca23d6deffcb979972fea5b93995fe8",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 348.45500000000004,
+          "p10_us": 327.711,
+          "p90_us": 607.02,
+          "round_median_us": {
+            "0": 334.765,
+            "1": 442.606,
+            "2": 345.87,
+            "3": 327.711,
+            "4": 582.155,
+            "5": 401.467
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 329.7365,
+          "p10_us": 316.257,
+          "p90_us": 597.4855,
+          "round_median_us": {
+            "0": 322.053,
+            "1": 592.911,
+            "2": 317.793,
+            "3": 318.562,
+            "4": 330.645,
+            "5": 337.14
+          }
+        },
+        "median_change_percent": -5.371855763298006
+      },
+      {
+        "probe": "language",
+        "language_case": "same",
+        "fixture": "cjk-fallback-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5e809c4179fd360ed3e749de46415cc0118059a210beb55ef439b71e2aeee171",
+          "instance_sha256": "1865436a7260862a6711020a032f8e87d11c98823670469c970092a8f2798464",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 308.818,
+          "p10_us": 297.049,
+          "p90_us": 529.7365,
+          "round_median_us": {
+            "0": 300.472,
+            "1": 299.703,
+            "2": 332.88,
+            "3": 300.542,
+            "4": 312.974,
+            "5": 325.336
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 305.4655,
+          "p10_us": 287.69,
+          "p90_us": 525.2665,
+          "round_median_us": {
+            "0": 295.443,
+            "1": 303.405,
+            "2": 346.01,
+            "3": 291.391,
+            "4": 518.875,
+            "5": 309.97
+          }
+        },
+        "median_change_percent": -1.0855908658173985
+      },
+      {
+        "probe": "language",
+        "language_case": "same",
+        "fixture": "latin-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5038384b161b8f7f7dca74ee004d3cd7714f7e535c60e762e95d3be7847ab392",
+          "instance_sha256": "42f9d000853dad510ed42f549f739b7e1155992a738e951f1533110310ab3afb",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 298.9,
+          "p10_us": 284.477,
+          "p90_us": 538.6769999999999,
+          "round_median_us": {
+            "0": 292.09,
+            "1": 287.481,
+            "2": 364.379,
+            "3": 290.134,
+            "4": 294.954,
+            "5": 561.132
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 295.932,
+          "p10_us": 271.87,
+          "p90_us": 518.073,
+          "round_median_us": {
+            "0": 515.034,
+            "1": 299.285,
+            "2": 300.402,
+            "3": 271.416,
+            "4": 278.47,
+            "5": 347.337
+          }
+        },
+        "median_change_percent": -0.9929742388758656
+      },
+      {
+        "probe": "language",
+        "language_case": "same",
+        "fixture": "size-adjust-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "ac4bbc0cca3ffe834fd4a024409dba9ac0c9ec747bc58820ad4b1e76e5687286",
+          "instance_sha256": "6e63c25cf0072195ada1c96bd256a3a8a6ba18ef382f37666834886265f42cda",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 320.098,
+          "p10_us": 307.875,
+          "p90_us": 557.5345,
+          "round_median_us": {
+            "0": 310.041,
+            "1": 311.297,
+            "2": 324.707,
+            "3": 309.97,
+            "4": 322.472,
+            "5": 547.302
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 308.853,
+          "p10_us": 296.0715,
+          "p90_us": 541.4005,
+          "round_median_us": {
+            "0": 297.329,
+            "1": 303.894,
+            "2": 393.295,
+            "3": 299.144,
+            "4": 304.942,
+            "5": 328.828
+          }
+        },
+        "median_change_percent": -3.5129866478391003
+      },
+      {
+        "probe": "language",
+        "language_case": "same",
+        "fixture": "variable-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5aee21cca23e8cce16e8d9dfba013eb26914007789eaaf049b990a3ffb28e7f7",
+          "instance_sha256": "d1a6f6f8a77456dbffadd404e6700bf18ca23d6deffcb979972fea5b93995fe8",
+          "warnings": []
+        },
+        "before": {
+          "samples": 126,
+          "median_us": 362.8075,
+          "p10_us": 350.4105,
+          "p90_us": 638.8344999999999,
+          "round_median_us": {
+            "0": 355.579,
+            "1": 354.532,
+            "2": 405.657,
+            "3": 352.087,
+            "4": 395.041,
+            "5": 372.482
+          }
+        },
+        "after": {
+          "samples": 126,
+          "median_us": 352.40099999999995,
+          "p10_us": 338.1175,
+          "p90_us": 614.982,
+          "round_median_us": {
+            "0": 351.598,
+            "1": 367.523,
+            "2": 369.827,
+            "3": 341.82,
+            "4": 340.143,
+            "5": 370.107
+          }
+        },
+        "median_change_percent": -2.868325489412449
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "consecutive-1x512",
+        "operation": "build",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "bcfd1aa097b6cfb5d4b57e8ea53fcaad27a0b28dc3526da19a82995bcc0ff09e",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "cb8588d518f25a4d1aee00d873698e8ee144059e63db03b3a21ad32e91e7a2a7"
+        },
+        "before": {
+          "samples": 54,
+          "median_us": 473.23582,
+          "p10_us": 455.29594,
+          "p90_us": 589.967018,
+          "round_median_us": {
+            "0": 455.54626,
+            "1": 527.23062,
+            "2": 462.4092,
+            "3": 479.68876,
+            "4": 497.54384000000005,
+            "5": 552.03664
+          }
+        },
+        "after": {
+          "samples": 54,
+          "median_us": 477.22674000000006,
+          "p10_us": 441.529854,
+          "p90_us": 601.258112,
+          "round_median_us": {
+            "0": 462.89254,
+            "1": 533.36576,
+            "2": 445.49982,
+            "3": 441.4209,
+            "4": 586.15014,
+            "5": 527.27252
+          }
+        },
+        "median_change_percent": 0.8433258496789442
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "consecutive-1x512",
+        "operation": "record",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "bcfd1aa097b6cfb5d4b57e8ea53fcaad27a0b28dc3526da19a82995bcc0ff09e",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "cb8588d518f25a4d1aee00d873698e8ee144059e63db03b3a21ad32e91e7a2a7"
+        },
+        "before": {
+          "samples": 54,
+          "median_us": 25.20762,
+          "p10_us": 23.77414,
+          "p90_us": 49.16615,
+          "round_median_us": {
+            "0": 38.294419999999995,
+            "1": 24.34364,
+            "2": 23.98464,
+            "3": 23.83238,
+            "4": 49.074239999999996,
+            "5": 27.98254
+          }
+        },
+        "after": {
+          "samples": 54,
+          "median_us": 26.82733,
+          "p10_us": 24.571194000000002,
+          "p90_us": 48.80060000000002,
+          "round_median_us": {
+            "0": 31.57676,
+            "1": 27.675240000000002,
+            "2": 28.46868,
+            "3": 24.56574,
+            "4": 25.25442,
+            "5": 26.17916
+          }
+        },
+        "median_change_percent": 6.425477692856374
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "first-line-16x512",
+        "operation": "build",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "57d14266caa98853282e3d8f5349d0c60273045b6e4388d5baa840dad99b56f3",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "4589dc01fc1017b57c1444530fd3119bf1e0e620d745372489ebedb2ae97ae41"
+        },
+        "before": {
+          "samples": 54,
+          "median_us": 1497.5353100000002,
+          "p10_us": 1318.081278,
+          "p90_us": 1912.839492,
+          "round_median_us": {
+            "0": 1357.4891599999999,
+            "1": 1327.2254599999999,
+            "2": 1324.22076,
+            "3": 2052.19184,
+            "4": 1683.90806,
+            "5": 1619.53086
+          }
+        },
+        "after": {
+          "samples": 54,
+          "median_us": 1598.5998100000002,
+          "p10_us": 1318.051384,
+          "p90_us": 1732.892194,
+          "round_median_us": {
+            "0": 1370.8001399999998,
+            "1": 1661.01856,
+            "2": 1697.0039199999999,
+            "3": 1312.2396,
+            "4": 1619.00704,
+            "5": 1633.76102
+          }
+        },
+        "median_change_percent": 6.748722338974433
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "first-line-16x512",
+        "operation": "record",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "57d14266caa98853282e3d8f5349d0c60273045b6e4388d5baa840dad99b56f3",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "4589dc01fc1017b57c1444530fd3119bf1e0e620d745372489ebedb2ae97ae41"
+        },
+        "before": {
+          "samples": 54,
+          "median_us": 423.22775,
+          "p10_us": 393.120814,
+          "p90_us": 539.7452420000001,
+          "round_median_us": {
+            "0": 397.33774,
+            "1": 440.30616,
+            "2": 392.74753999999996,
+            "3": 409.988,
+            "4": 512.5618400000001,
+            "5": 481.48238
+          }
+        },
+        "after": {
+          "samples": 54,
+          "median_us": 425.53333,
+          "p10_us": 404.75538800000004,
+          "p90_us": 584.9016080000001,
+          "round_median_us": {
+            "0": 419.42121999999995,
+            "1": 471.85778000000005,
+            "2": 412.83628000000004,
+            "3": 404.70634,
+            "4": 425.7282,
+            "5": 547.22712
+          }
+        },
+        "median_change_percent": 0.5447610654074397
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "reuse-16x512",
+        "operation": "build",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "bcfd1aa097b6cfb5d4b57e8ea53fcaad27a0b28dc3526da19a82995bcc0ff09e",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "0180fe11d18a0eba95cb5e4e430989fd0aed1055158826e93aef2ff5ca1ae7f8"
+        },
+        "before": {
+          "samples": 54,
+          "median_us": 710.12018,
+          "p10_us": 658.2187680000001,
+          "p90_us": 871.0662360000002,
+          "round_median_us": {
+            "0": 668.13378,
+            "1": 750.14676,
+            "2": 659.487,
+            "3": 914.3500799999999,
+            "4": 796.22464,
+            "5": 784.3664200000001
+          }
+        },
+        "after": {
+          "samples": 54,
+          "median_us": 702.02938,
+          "p10_us": 642.454418,
+          "p90_us": 829.89716,
+          "round_median_us": {
+            "0": 677.82262,
+            "1": 791.0729,
+            "2": 650.71732,
+            "3": 641.23522,
+            "4": 782.2305799999999,
+            "5": 836.9859799999999
+          }
+        },
+        "median_change_percent": -1.1393564396381506
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "reuse-16x512",
+        "operation": "record",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "bcfd1aa097b6cfb5d4b57e8ea53fcaad27a0b28dc3526da19a82995bcc0ff09e",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "0180fe11d18a0eba95cb5e4e430989fd0aed1055158826e93aef2ff5ca1ae7f8"
+        },
+        "before": {
+          "samples": 54,
+          "median_us": 225.78955,
+          "p10_us": 213.661724,
+          "p90_us": 293.47137000000004,
+          "round_median_us": {
+            "0": 219.382,
+            "1": 272.50862,
+            "2": 225.5898,
+            "3": 217.46823999999998,
+            "4": 252.27882,
+            "5": 250.27848
+          }
+        },
+        "after": {
+          "samples": 54,
+          "median_us": 218.56691,
+          "p10_us": 212.502862,
+          "p90_us": 303.871934,
+          "round_median_us": {
+            "0": 219.85834,
+            "1": 298.92246,
+            "2": 214.5725,
+            "3": 211.94634,
+            "4": 268.17126,
+            "5": 221.69944
+          }
+        },
+        "median_change_percent": -3.1988371472461807
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "root",
+        "operation": "build",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 1,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "e06a8afbcfd68d8e2296b4bb0d25afeec47bc638fa81751148ff844c38c194a4",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "dbceba7d7ae736000ea23ed5d92d6d2cf476c0207cc02201430ba13244d5dcd1"
+        },
+        "before": {
+          "samples": 54,
+          "median_us": 10.911813500000001,
+          "p10_us": 9.345791799999999,
+          "p90_us": 12.543166180000002,
+          "round_median_us": {
+            "0": 10.203155800000001,
+            "1": 11.1541882,
+            "2": 10.8068788,
+            "3": 9.2448594,
+            "4": 11.299884200000001,
+            "5": 11.064954599999998
+          }
+        },
+        "after": {
+          "samples": 54,
+          "median_us": 10.183801800000001,
+          "p10_us": 8.91302064,
+          "p90_us": 11.97296862,
+          "round_median_us": {
+            "0": 9.3840038,
+            "1": 10.2417798,
+            "2": 10.1955566,
+            "3": 8.9804414,
+            "4": 11.8516988,
+            "5": 10.2837146
+          }
+        },
+        "median_change_percent": -6.671775502761291
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "root",
+        "operation": "record",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 1,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "e06a8afbcfd68d8e2296b4bb0d25afeec47bc638fa81751148ff844c38c194a4",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "dbceba7d7ae736000ea23ed5d92d6d2cf476c0207cc02201430ba13244d5dcd1"
+        },
+        "before": {
+          "samples": 54,
+          "median_us": 0.6704386,
+          "p10_us": 0.62453678,
+          "p90_us": 1.1994866200000003,
+          "round_median_us": {
+            "0": 0.6240758,
+            "1": 0.6776746,
+            "2": 0.6652002,
+            "3": 0.6553662,
+            "4": 0.6744338,
+            "5": 1.2762152
+          }
+        },
+        "after": {
+          "samples": 54,
+          "median_us": 0.6476622999999999,
+          "p10_us": 0.62480916,
+          "p90_us": 1.2538872200000002,
+          "round_median_us": {
+            "0": 0.63479,
+            "1": 0.6308926,
+            "2": 0.6528936,
+            "3": 0.6250536,
+            "4": 0.6677288,
+            "5": 0.858726
+          }
+        },
+        "median_change_percent": -3.3972238471949634
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "unique-64",
+        "operation": "build",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 64,
+            "sha256": "b1248af340559f6f3f50da63583455aeca32f708389fb84d53510ce05aad7c96",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "6bfd338e298a6d16a64246bcb6808951e2ef6279de931694721e107b5eab269d"
+        },
+        "before": {
+          "samples": 54,
+          "median_us": 124.78371999999999,
+          "p10_us": 120.27833,
+          "p90_us": 183.10972,
+          "round_median_us": {
+            "0": 122.81342,
+            "1": 135.62292000000002,
+            "2": 123.14308,
+            "3": 120.88708,
+            "4": 157.63235999999998,
+            "5": 172.28994
+          }
+        },
+        "after": {
+          "samples": 54,
+          "median_us": 120.94157,
+          "p10_us": 116.369812,
+          "p90_us": 169.27741000000003,
+          "round_median_us": {
+            "0": 126.16036,
+            "1": 120.85914,
+            "2": 120.42892,
+            "3": 116.0706,
+            "4": 134.81272,
+            "5": 158.35316
+          }
+        },
+        "median_change_percent": -3.0790474911310484
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "unique-64",
+        "operation": "record",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 64,
+            "sha256": "b1248af340559f6f3f50da63583455aeca32f708389fb84d53510ce05aad7c96",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "6bfd338e298a6d16a64246bcb6808951e2ef6279de931694721e107b5eab269d"
+        },
+        "before": {
+          "samples": 54,
+          "median_us": 36.12993,
+          "p10_us": 35.611402,
+          "p90_us": 47.962174,
+          "round_median_us": {
+            "0": 35.907120000000006,
+            "1": 35.915519999999994,
+            "2": 36.35272,
+            "3": 35.949040000000004,
+            "4": 35.971379999999996,
+            "5": 36.55668
+          }
+        },
+        "after": {
+          "samples": 54,
+          "median_us": 38.1198,
+          "p10_us": 36.988042,
+          "p90_us": 64.03607600000001,
+          "round_median_us": {
+            "0": 37.18668,
+            "1": 38.81546,
+            "2": 38.1226,
+            "3": 36.97714,
+            "4": 37.337540000000004,
+            "5": 49.176199999999994
+          }
+        },
+        "median_change_percent": 5.507539040346865
+      }
+    ]
+  },
+  "cpu_2_pinned_timing": {
+    "raw_rows": 8160,
+    "raw_sha256": "052b01bca96858bda1c09dab031ba1ae011e49bd8813cbe139c4716674bce82e",
+    "summaries": [
+      {
+        "probe": "language",
+        "language_case": "case",
+        "fixture": "cjk-fallback-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5e809c4179fd360ed3e749de46415cc0118059a210beb55ef439b71e2aeee171",
+          "instance_sha256": "1865436a7260862a6711020a032f8e87d11c98823670469c970092a8f2798464",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 505.5005,
+          "p10_us": 300.262,
+          "p90_us": 611.5877,
+          "round_median_us": {
+            "0": 553.24,
+            "1": 548.63,
+            "2": 517.479,
+            "3": 314.441,
+            "4": 554.497,
+            "5": 520.342,
+            "6": 312.904,
+            "7": 300.262
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 364.973,
+          "p10_us": 289.9383,
+          "p90_us": 562.312,
+          "round_median_us": {
+            "0": 459.229,
+            "1": 562.249,
+            "2": 532.985,
+            "3": 299.424,
+            "4": 382.609,
+            "5": 289.645,
+            "6": 428.916,
+            "7": 291.043
+          }
+        },
+        "median_change_percent": -27.799675766888456
+      },
+      {
+        "probe": "language",
+        "language_case": "case",
+        "fixture": "latin-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5038384b161b8f7f7dca74ee004d3cd7714f7e535c60e762e95d3be7847ab392",
+          "instance_sha256": "42f9d000853dad510ed42f549f739b7e1155992a738e951f1533110310ab3afb",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 480.11199999999997,
+          "p10_us": 285.2033,
+          "p90_us": 593.2531,
+          "round_median_us": {
+            "0": 537.315,
+            "1": 543.671,
+            "2": 543.88,
+            "3": 290.973,
+            "4": 420.116,
+            "5": 492.823,
+            "6": 285.805,
+            "7": 285.805
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 501.83299999999997,
+          "p10_us": 276.3753,
+          "p90_us": 609.7086,
+          "round_median_us": {
+            "0": 567.418,
+            "1": 552.541,
+            "2": 535.639,
+            "3": 282.871,
+            "4": 525.651,
+            "5": 291.671,
+            "6": 500.995,
+            "7": 275.816
+          }
+        },
+        "median_change_percent": 4.524152697703876
+      },
+      {
+        "probe": "language",
+        "language_case": "case",
+        "fixture": "size-adjust-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "ac4bbc0cca3ffe834fd4a024409dba9ac0c9ec747bc58820ad4b1e76e5687286",
+          "instance_sha256": "6e63c25cf0072195ada1c96bd256a3a8a6ba18ef382f37666834886265f42cda",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 443.89750000000004,
+          "p10_us": 308.5173,
+          "p90_us": 590.788,
+          "round_median_us": {
+            "0": 508.818,
+            "1": 578.523,
+            "2": 542.274,
+            "3": 319.469,
+            "4": 579.64,
+            "5": 319.19,
+            "6": 311.577,
+            "7": 310.529
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 461.4635,
+          "p10_us": 299.215,
+          "p90_us": 599.7284,
+          "round_median_us": {
+            "0": 497.503,
+            "1": 574.822,
+            "2": 637.332,
+            "3": 303.196,
+            "4": 551.284,
+            "5": 305.221,
+            "6": 334.835,
+            "7": 303.196
+          }
+        },
+        "median_change_percent": 3.9572198536824255
+      },
+      {
+        "probe": "language",
+        "language_case": "case",
+        "fixture": "variable-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5aee21cca23e8cce16e8d9dfba013eb26914007789eaaf049b990a3ffb28e7f7",
+          "instance_sha256": "d1a6f6f8a77456dbffadd404e6700bf18ca23d6deffcb979972fea5b93995fe8",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 588.1615,
+          "p10_us": 351.15799999999996,
+          "p90_us": 683.8138,
+          "round_median_us": {
+            "0": 622.875,
+            "1": 676.375,
+            "2": 617.147,
+            "3": 355.02,
+            "4": 667.645,
+            "5": 612.467,
+            "6": 362.354,
+            "7": 351.179
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 473.267,
+          "p10_us": 340.36,
+          "p90_us": 675.7682,
+          "round_median_us": {
+            "0": 547.303,
+            "1": 683.918,
+            "2": 649.555,
+            "3": 350.41,
+            "4": 647.739,
+            "5": 338.537,
+            "6": 355.928,
+            "7": 343.705
+          }
+        },
+        "median_change_percent": -19.53451560498265
+      },
+      {
+        "probe": "language",
+        "language_case": "distinct",
+        "fixture": "cjk-fallback-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5e809c4179fd360ed3e749de46415cc0118059a210beb55ef439b71e2aeee171",
+          "instance_sha256": "1865436a7260862a6711020a032f8e87d11c98823670469c970092a8f2798464",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 360.538,
+          "p10_us": 302.0363,
+          "p90_us": 576.1552,
+          "round_median_us": {
+            "0": 438.136,
+            "1": 552.89,
+            "2": 567.697,
+            "3": 307.666,
+            "4": 320.377,
+            "5": 528.864,
+            "6": 327.642,
+            "7": 301.519
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 490.34450000000004,
+          "p10_us": 292.32099999999997,
+          "p90_us": 591.3889,
+          "round_median_us": {
+            "0": 512.1,
+            "1": 587.673,
+            "2": 549.677,
+            "3": 307.317,
+            "4": 302.637,
+            "5": 411.664,
+            "6": 534.032,
+            "7": 291.811
+          }
+        },
+        "median_change_percent": 36.00355579716978
+      },
+      {
+        "probe": "language",
+        "language_case": "distinct",
+        "fixture": "latin-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5038384b161b8f7f7dca74ee004d3cd7714f7e535c60e762e95d3be7847ab392",
+          "instance_sha256": "42f9d000853dad510ed42f549f739b7e1155992a738e951f1533110310ab3afb",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 319.644,
+          "p10_us": 289.1567,
+          "p90_us": 536.8956000000002,
+          "round_median_us": {
+            "0": 468.657,
+            "1": 526.14,
+            "2": 507.142,
+            "3": 305.012,
+            "4": 308.295,
+            "5": 292.37,
+            "6": 320.098,
+            "7": 289.157
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 347.5125,
+          "p10_us": 278.7353,
+          "p90_us": 563.9325,
+          "round_median_us": {
+            "0": 374.996,
+            "1": 568.745,
+            "2": 506.234,
+            "3": 285.316,
+            "4": 289.087,
+            "5": 305.082,
+            "6": 437.646,
+            "7": 279.518
+          }
+        },
+        "median_change_percent": 8.718605698839955
+      },
+      {
+        "probe": "language",
+        "language_case": "distinct",
+        "fixture": "size-adjust-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "ac4bbc0cca3ffe834fd4a024409dba9ac0c9ec747bc58820ad4b1e76e5687286",
+          "instance_sha256": "6e63c25cf0072195ada1c96bd256a3a8a6ba18ef382f37666834886265f42cda",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 414.423,
+          "p10_us": 312.883,
+          "p90_us": 612.9563,
+          "round_median_us": {
+            "0": 378.838,
+            "1": 604.296,
+            "2": 580.199,
+            "3": 509.796,
+            "4": 324.638,
+            "5": 534.66,
+            "6": 337.908,
+            "7": 311.367
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 497.18899999999996,
+          "p10_us": 302.15500000000003,
+          "p90_us": 609.3174,
+          "round_median_us": {
+            "0": 540.737,
+            "1": 575.869,
+            "2": 577.685,
+            "3": 312.205,
+            "4": 320.937,
+            "5": 582.435,
+            "6": 307.107,
+            "7": 301.938
+          }
+        },
+        "median_change_percent": 19.97138189724026
+      },
+      {
+        "probe": "language",
+        "language_case": "distinct",
+        "fixture": "variable-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5aee21cca23e8cce16e8d9dfba013eb26914007789eaaf049b990a3ffb28e7f7",
+          "instance_sha256": "d1a6f6f8a77456dbffadd404e6700bf18ca23d6deffcb979972fea5b93995fe8",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 587.2535,
+          "p10_us": 350.976,
+          "p90_us": 792.3799000000004,
+          "round_median_us": {
+            "0": 589.768,
+            "1": 708.713,
+            "2": 774.577,
+            "3": 501.764,
+            "4": 367.872,
+            "5": 610.023,
+            "6": 362.983,
+            "7": 351.318
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 419.94100000000003,
+          "p10_us": 343.8243,
+          "p90_us": 688.7241000000001,
+          "round_median_us": {
+            "0": 607.788,
+            "1": 661.708,
+            "2": 659.473,
+            "3": 362.773,
+            "4": 352.436,
+            "5": 648.228,
+            "6": 351.389,
+            "7": 344.962
+          }
+        },
+        "median_change_percent": -28.49067736505615
+      },
+      {
+        "probe": "language",
+        "language_case": "long",
+        "fixture": "cjk-fallback-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5e809c4179fd360ed3e749de46415cc0118059a210beb55ef439b71e2aeee171",
+          "instance_sha256": "1865436a7260862a6711020a032f8e87d11c98823670469c970092a8f2798464",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 1027.4845,
+          "p10_us": 568.703,
+          "p90_us": 1375.3105000000012,
+          "round_median_us": {
+            "0": 1025.529,
+            "1": 1090.833,
+            "2": 1104.732,
+            "3": 1001.433,
+            "4": 1959.142,
+            "5": 570.072,
+            "6": 1025.458,
+            "7": 571.329
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 963.262,
+          "p10_us": 552.9456,
+          "p90_us": 1240.0992000000003,
+          "round_median_us": {
+            "0": 1016.798,
+            "1": 1099.494,
+            "2": 966.23,
+            "3": 1046.482,
+            "4": 1122.403,
+            "5": 849.101,
+            "6": 557.709,
+            "7": 552.401
+          }
+        },
+        "median_change_percent": -6.250459252670004
+      },
+      {
+        "probe": "language",
+        "language_case": "long",
+        "fixture": "latin-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5038384b161b8f7f7dca74ee004d3cd7714f7e535c60e762e95d3be7847ab392",
+          "instance_sha256": "42f9d000853dad510ed42f549f739b7e1155992a738e951f1533110310ab3afb",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 954.3215,
+          "p10_us": 552.129,
+          "p90_us": 1109.0566999999999,
+          "round_median_us": {
+            "0": 1003.109,
+            "1": 1065.76,
+            "2": 1018.056,
+            "3": 997.103,
+            "4": 964.904,
+            "5": 580.548,
+            "6": 554.776,
+            "7": 554.287
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 880.1125,
+          "p10_us": 532.5020000000001,
+          "p90_us": 1119.4975000000004,
+          "round_median_us": {
+            "0": 963.087,
+            "1": 1012.678,
+            "2": 922.508,
+            "3": 552.052,
+            "4": 1108.015,
+            "5": 702.986,
+            "6": 535.08,
+            "7": 541.506
+          }
+        },
+        "median_change_percent": -7.776100611795922
+      },
+      {
+        "probe": "language",
+        "language_case": "long",
+        "fixture": "size-adjust-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "ac4bbc0cca3ffe834fd4a024409dba9ac0c9ec747bc58820ad4b1e76e5687286",
+          "instance_sha256": "6e63c25cf0072195ada1c96bd256a3a8a6ba18ef382f37666834886265f42cda",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 934.696,
+          "p10_us": 580.8143,
+          "p90_us": 1342.6448,
+          "round_median_us": {
+            "0": 1352.96,
+            "1": 1039.986,
+            "2": 1072.325,
+            "3": 860.486,
+            "4": 1181.492,
+            "5": 593.819,
+            "6": 579.71,
+            "7": 587.603
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 650.498,
+          "p10_us": 560.2446,
+          "p90_us": 1140.8846000000003,
+          "round_median_us": {
+            "0": 584.111,
+            "1": 1009.814,
+            "2": 1074.629,
+            "3": 913.358,
+            "4": 914.546,
+            "5": 659.194,
+            "6": 559.805,
+            "7": 566.509
+          }
+        },
+        "median_change_percent": -30.405393839280357
+      },
+      {
+        "probe": "language",
+        "language_case": "long",
+        "fixture": "variable-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5aee21cca23e8cce16e8d9dfba013eb26914007789eaaf049b990a3ffb28e7f7",
+          "instance_sha256": "d1a6f6f8a77456dbffadd404e6700bf18ca23d6deffcb979972fea5b93995fe8",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 1057.518,
+          "p10_us": 632.8756,
+          "p90_us": 1630.9768000000006,
+          "round_median_us": {
+            "0": 1614.109,
+            "1": 1184.635,
+            "2": 1097.679,
+            "3": 1112.765,
+            "4": 1252.244,
+            "5": 644.387,
+            "6": 636.284,
+            "7": 638.73
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 1107.212,
+          "p10_us": 616.5666,
+          "p90_us": 1412.1047,
+          "round_median_us": {
+            "0": 1071.626,
+            "1": 1192.736,
+            "2": 1147.547,
+            "3": 1210.547,
+            "4": 1230.104,
+            "5": 694.954,
+            "6": 622.315,
+            "7": 650.533
+          }
+        },
+        "median_change_percent": 4.699116232536937
+      },
+      {
+        "probe": "language",
+        "language_case": "none",
+        "fixture": "cjk-fallback-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5e809c4179fd360ed3e749de46415cc0118059a210beb55ef439b71e2aeee171",
+          "instance_sha256": "1865436a7260862a6711020a032f8e87d11c98823670469c970092a8f2798464",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 458.949,
+          "p10_us": 274.3073,
+          "p90_us": 524.7565,
+          "round_median_us": {
+            "0": 475.293,
+            "1": 515.034,
+            "2": 488.214,
+            "3": 489.89,
+            "4": 304.383,
+            "5": 286.014,
+            "6": 275.746,
+            "7": 279.518
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 354.741,
+          "p10_us": 265.38829999999996,
+          "p90_us": 513.9589,
+          "round_median_us": {
+            "0": 490.17,
+            "1": 496.107,
+            "2": 500.367,
+            "3": 468.728,
+            "4": 273.651,
+            "5": 267.714,
+            "6": 271.207,
+            "7": 273.441
+          }
+        },
+        "median_change_percent": -22.705790839505045
+      },
+      {
+        "probe": "language",
+        "language_case": "none",
+        "fixture": "latin-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5038384b161b8f7f7dca74ee004d3cd7714f7e535c60e762e95d3be7847ab392",
+          "instance_sha256": "42f9d000853dad510ed42f549f739b7e1155992a738e951f1533110310ab3afb",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 452.45349999999996,
+          "p10_us": 261.9457,
+          "p90_us": 507.70050000000003,
+          "round_median_us": {
+            "0": 463.838,
+            "1": 499.808,
+            "2": 454.479,
+            "3": 477.388,
+            "4": 426.89,
+            "5": 466.842,
+            "6": 261.429,
+            "7": 266.737
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 313.46299999999997,
+          "p10_us": 254.402,
+          "p90_us": 534.7658,
+          "round_median_us": {
+            "0": 396.788,
+            "1": 521.74,
+            "2": 445.329,
+            "3": 464.676,
+            "4": 279.03,
+            "5": 254.723,
+            "6": 262.057,
+            "7": 257.587
+          }
+        },
+        "median_change_percent": -30.71928938553907
+      },
+      {
+        "probe": "language",
+        "language_case": "none",
+        "fixture": "size-adjust-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "ac4bbc0cca3ffe834fd4a024409dba9ac0c9ec747bc58820ad4b1e76e5687286",
+          "instance_sha256": "6e63c25cf0072195ada1c96bd256a3a8a6ba18ef382f37666834886265f42cda",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 305.2905,
+          "p10_us": 283.479,
+          "p90_us": 545.2977,
+          "round_median_us": {
+            "0": 539.13,
+            "1": 522.368,
+            "2": 496.735,
+            "3": 291.462,
+            "4": 366.265,
+            "5": 286.433,
+            "6": 287.69,
+            "7": 284.827
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 474.769,
+          "p10_us": 277.2623,
+          "p90_us": 557.9192,
+          "round_median_us": {
+            "0": 537.245,
+            "1": 547.233,
+            "2": 529.772,
+            "3": 310.599,
+            "4": 295.652,
+            "5": 503.789,
+            "6": 277.423,
+            "7": 278.959
+          }
+        },
+        "median_change_percent": 55.513846647701115
+      },
+      {
+        "probe": "language",
+        "language_case": "none",
+        "fixture": "variable-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5aee21cca23e8cce16e8d9dfba013eb26914007789eaaf049b990a3ffb28e7f7",
+          "instance_sha256": "d1a6f6f8a77456dbffadd404e6700bf18ca23d6deffcb979972fea5b93995fe8",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 373.948,
+          "p10_us": 325.1623,
+          "p90_us": 621.5681000000001,
+          "round_median_us": {
+            "0": 565.043,
+            "1": 622.595,
+            "2": 604.156,
+            "3": 346.359,
+            "4": 385.822,
+            "5": 326.943,
+            "6": 327.711,
+            "7": 327.083
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 409.639,
+          "p10_us": 319.337,
+          "p90_us": 650.5334,
+          "round_median_us": {
+            "0": 637.542,
+            "1": 628.462,
+            "2": 605.343,
+            "3": 583.551,
+            "4": 328.619,
+            "5": 325.336,
+            "6": 320.587,
+            "7": 321.775
+          }
+        },
+        "median_change_percent": 9.544375153764694
+      },
+      {
+        "probe": "language",
+        "language_case": "same",
+        "fixture": "cjk-fallback-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5e809c4179fd360ed3e749de46415cc0118059a210beb55ef439b71e2aeee171",
+          "instance_sha256": "1865436a7260862a6711020a032f8e87d11c98823670469c970092a8f2798464",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 554.217,
+          "p10_us": 300.779,
+          "p90_us": 621.5754000000001,
+          "round_median_us": {
+            "0": 589.0,
+            "1": 569.373,
+            "2": 575.799,
+            "3": 550.166,
+            "4": 526.21,
+            "5": 601.502,
+            "6": 298.237,
+            "7": 313.952
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 536.6514999999999,
+          "p10_us": 304.0058,
+          "p90_us": 601.3064,
+          "round_median_us": {
+            "0": 560.364,
+            "1": 552.89,
+            "2": 562.738,
+            "3": 515.803,
+            "4": 489.891,
+            "5": 541.506,
+            "6": 291.462,
+            "7": 559.385
+          }
+        },
+        "median_change_percent": -3.1694264160067376
+      },
+      {
+        "probe": "language",
+        "language_case": "same",
+        "fixture": "latin-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5038384b161b8f7f7dca74ee004d3cd7714f7e535c60e762e95d3be7847ab392",
+          "instance_sha256": "42f9d000853dad510ed42f549f739b7e1155992a738e951f1533110310ab3afb",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 525.9649999999999,
+          "p10_us": 299.95459999999997,
+          "p90_us": 711.6263000000006,
+          "round_median_us": {
+            "0": 572.586,
+            "1": 491.287,
+            "2": 516.501,
+            "3": 498.272,
+            "4": 1221.932,
+            "5": 543.88,
+            "6": 286.712,
+            "7": 556.173
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 510.2845,
+          "p10_us": 291.259,
+          "p90_us": 636.8855000000002,
+          "round_median_us": {
+            "0": 560.294,
+            "1": 515.384,
+            "2": 520.761,
+            "3": 496.037,
+            "4": 464.956,
+            "5": 555.614,
+            "6": 276.864,
+            "7": 521.6
+          }
+        },
+        "median_change_percent": -2.9812820244693006
+      },
+      {
+        "probe": "language",
+        "language_case": "same",
+        "fixture": "size-adjust-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "ac4bbc0cca3ffe834fd4a024409dba9ac0c9ec747bc58820ad4b1e76e5687286",
+          "instance_sha256": "6e63c25cf0072195ada1c96bd256a3a8a6ba18ef382f37666834886265f42cda",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 564.1,
+          "p10_us": 313.959,
+          "p90_us": 689.9949000000003,
+          "round_median_us": {
+            "0": 576.987,
+            "1": 604.925,
+            "2": 573.215,
+            "3": 547.233,
+            "4": 563.018,
+            "5": 661.428,
+            "6": 309.063,
+            "7": 323.031
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 549.119,
+          "p10_us": 301.9106,
+          "p90_us": 634.3077000000002,
+          "round_median_us": {
+            "0": 315.348,
+            "1": 591.933,
+            "2": 565.183,
+            "3": 459.648,
+            "4": 586.486,
+            "5": 573.704,
+            "6": 301.031,
+            "7": 577.755
+          }
+        },
+        "median_change_percent": -2.65573479879454
+      },
+      {
+        "probe": "language",
+        "language_case": "same",
+        "fixture": "variable-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5aee21cca23e8cce16e8d9dfba013eb26914007789eaaf049b990a3ffb28e7f7",
+          "instance_sha256": "d1a6f6f8a77456dbffadd404e6700bf18ca23d6deffcb979972fea5b93995fe8",
+          "warnings": []
+        },
+        "before": {
+          "samples": 168,
+          "median_us": 672.4635000000001,
+          "p10_us": 350.746,
+          "p90_us": 1048.4794000000002,
+          "round_median_us": {
+            "0": 690.204,
+            "1": 679.239,
+            "2": 675.816,
+            "3": 630.557,
+            "4": 700.193,
+            "5": 889.052,
+            "6": 352.506,
+            "7": 349.154
+          }
+        },
+        "after": {
+          "samples": 168,
+          "median_us": 621.722,
+          "p10_us": 354.67879999999997,
+          "p90_us": 872.5624000000003,
+          "round_median_us": {
+            "0": 586.067,
+            "1": 661.428,
+            "2": 627.834,
+            "3": 456.504,
+            "4": 752.506,
+            "5": 635.027,
+            "6": 341.819,
+            "7": 664.432
+          }
+        },
+        "median_change_percent": -7.545613999867662
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "consecutive-1x512",
+        "operation": "build",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "bcfd1aa097b6cfb5d4b57e8ea53fcaad27a0b28dc3526da19a82995bcc0ff09e",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "cb8588d518f25a4d1aee00d873698e8ee144059e63db03b3a21ad32e91e7a2a7"
+        },
+        "before": {
+          "samples": 72,
+          "median_us": 614.6432599999999,
+          "p10_us": 449.964698,
+          "p90_us": 952.3377599999999,
+          "round_median_us": {
+            "0": 959.49766,
+            "1": 840.96992,
+            "2": 781.80872,
+            "3": 449.94334000000003,
+            "4": 556.367,
+            "5": 510.68582000000004,
+            "6": 457.69748,
+            "7": 501.3392
+          }
+        },
+        "after": {
+          "samples": 72,
+          "median_us": 779.68265,
+          "p10_us": 445.924476,
+          "p90_us": 1423.494982,
+          "round_median_us": {
+            "0": 798.496,
+            "1": 1047.88466,
+            "2": 753.3260600000001,
+            "3": 1110.45286,
+            "4": 443.02452,
+            "5": 1335.2198799999999,
+            "6": 455.68456,
+            "7": 719.56178
+          }
+        },
+        "median_change_percent": 26.85124864136639
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "consecutive-1x512",
+        "operation": "record",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "bcfd1aa097b6cfb5d4b57e8ea53fcaad27a0b28dc3526da19a82995bcc0ff09e",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "cb8588d518f25a4d1aee00d873698e8ee144059e63db03b3a21ad32e91e7a2a7"
+        },
+        "before": {
+          "samples": 72,
+          "median_us": 31.53416,
+          "p10_us": 23.573118,
+          "p90_us": 54.81309999999999,
+          "round_median_us": {
+            "0": 76.77462,
+            "1": 42.51722,
+            "2": 29.677,
+            "3": 23.63542,
+            "4": 47.139540000000004,
+            "5": 29.74544,
+            "6": 23.578139999999998,
+            "7": 25.9417
+          }
+        },
+        "after": {
+          "samples": 72,
+          "median_us": 50.77077,
+          "p10_us": 30.918692,
+          "p90_us": 73.80594199999999,
+          "round_median_us": {
+            "0": 50.212720000000004,
+            "1": 51.43498,
+            "2": 44.6,
+            "3": 60.17534,
+            "4": 28.08452,
+            "5": 80.39538,
+            "6": 49.75032,
+            "7": 51.07738
+          }
+        },
+        "median_change_percent": 61.002449407245976
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "first-line-16x512",
+        "operation": "build",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "57d14266caa98853282e3d8f5349d0c60273045b6e4388d5baa840dad99b56f3",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "4589dc01fc1017b57c1444530fd3119bf1e0e620d745372489ebedb2ae97ae41"
+        },
+        "before": {
+          "samples": 72,
+          "median_us": 1674.62013,
+          "p10_us": 1325.128458,
+          "p90_us": 2834.411378,
+          "round_median_us": {
+            "0": 2294.90752,
+            "1": 2587.0997599999996,
+            "2": 1304.0161,
+            "3": 1644.84954,
+            "4": 1422.03118,
+            "5": 1808.65896,
+            "6": 1599.57624,
+            "7": 1516.7125800000001
+          }
+        },
+        "after": {
+          "samples": 72,
+          "median_us": 2243.1372899999997,
+          "p10_us": 1323.0867600000001,
+          "p90_us": 3158.392136,
+          "round_median_us": {
+            "0": 2840.21812,
+            "1": 2600.64264,
+            "2": 2595.10816,
+            "3": 1322.75402,
+            "4": 1614.98118,
+            "5": 2322.23634,
+            "6": 1529.3824,
+            "7": 2371.46982
+          }
+        },
+        "median_change_percent": 33.94902221795218
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "first-line-16x512",
+        "operation": "record",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "57d14266caa98853282e3d8f5349d0c60273045b6e4388d5baa840dad99b56f3",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "4589dc01fc1017b57c1444530fd3119bf1e0e620d745372489ebedb2ae97ae41"
+        },
+        "before": {
+          "samples": 72,
+          "median_us": 618.05099,
+          "p10_us": 395.39356000000004,
+          "p90_us": 1199.4496120000001,
+          "round_median_us": {
+            "0": 748.7289000000001,
+            "1": 772.59902,
+            "2": 1367.9448799999998,
+            "3": 395.57905999999997,
+            "4": 644.60872,
+            "5": 566.8939799999999,
+            "6": 399.2878,
+            "7": 409.34821999999997
+          }
+        },
+        "after": {
+          "samples": 72,
+          "median_us": 660.33772,
+          "p10_us": 416.80038,
+          "p90_us": 1270.271496,
+          "round_median_us": {
+            "0": 1220.06424,
+            "1": 677.7136800000001,
+            "2": 690.2899,
+            "3": 444.5597,
+            "4": 428.86841999999996,
+            "5": 639.707,
+            "6": 471.15373999999997,
+            "7": 952.57466
+          }
+        },
+        "median_change_percent": 6.8419484288828825
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "reuse-16x512",
+        "operation": "build",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "bcfd1aa097b6cfb5d4b57e8ea53fcaad27a0b28dc3526da19a82995bcc0ff09e",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "0180fe11d18a0eba95cb5e4e430989fd0aed1055158826e93aef2ff5ca1ae7f8"
+        },
+        "before": {
+          "samples": 72,
+          "median_us": 923.4466600000001,
+          "p10_us": 651.80941,
+          "p90_us": 1183.657308,
+          "round_median_us": {
+            "0": 1157.2613600000002,
+            "1": 1516.59804,
+            "2": 964.6940999999999,
+            "3": 818.73836,
+            "4": 714.58326,
+            "5": 650.87656,
+            "6": 656.1651999999999,
+            "7": 1055.5689399999999
+          }
+        },
+        "after": {
+          "samples": 72,
+          "median_us": 897.08799,
+          "p10_us": 644.99997,
+          "p90_us": 2385.5215740000003,
+          "round_median_us": {
+            "0": 2487.25406,
+            "1": 1251.4636,
+            "2": 1297.0372399999999,
+            "3": 703.3480400000001,
+            "4": 648.1219,
+            "5": 881.396,
+            "6": 649.95042,
+            "7": 896.89172
+          }
+        },
+        "median_change_percent": -2.8543792664754486
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "reuse-16x512",
+        "operation": "record",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "bcfd1aa097b6cfb5d4b57e8ea53fcaad27a0b28dc3526da19a82995bcc0ff09e",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "0180fe11d18a0eba95cb5e4e430989fd0aed1055158826e93aef2ff5ca1ae7f8"
+        },
+        "before": {
+          "samples": 72,
+          "median_us": 279.82415000000003,
+          "p10_us": 215.072572,
+          "p90_us": 421.451338,
+          "round_median_us": {
+            "0": 772.68422,
+            "1": 360.97524,
+            "2": 293.77909999999997,
+            "3": 238.01234,
+            "4": 243.24092000000002,
+            "5": 220.69508,
+            "6": 215.05022,
+            "7": 276.85015999999996
+          }
+        },
+        "after": {
+          "samples": 72,
+          "median_us": 365.31329000000005,
+          "p10_us": 212.816042,
+          "p90_us": 1121.8814159999993,
+          "round_median_us": {
+            "0": 532.6268,
+            "1": 355.88635999999997,
+            "2": 370.45453999999995,
+            "3": 370.92252,
+            "4": 216.43735999999998,
+            "5": 1238.8818,
+            "6": 212.67272,
+            "7": 301.38938
+          }
+        },
+        "median_change_percent": 30.551022847742047
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "root",
+        "operation": "build",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 1,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "e06a8afbcfd68d8e2296b4bb0d25afeec47bc638fa81751148ff844c38c194a4",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "dbceba7d7ae736000ea23ed5d92d6d2cf476c0207cc02201430ba13244d5dcd1"
+        },
+        "before": {
+          "samples": 72,
+          "median_us": 13.6849737,
+          "p10_us": 9.31958196,
+          "p90_us": 22.640767099999998,
+          "round_median_us": {
+            "0": 16.4727874,
+            "1": 19.586321599999998,
+            "2": 15.4683376,
+            "3": 9.0556502,
+            "4": 15.8248806,
+            "5": 14.8104292,
+            "6": 10.9553964,
+            "7": 11.276095
+          }
+        },
+        "after": {
+          "samples": 72,
+          "median_us": 16.2017414,
+          "p10_us": 8.912323520000001,
+          "p90_us": 37.13033838,
+          "round_median_us": {
+            "0": 20.155611,
+            "1": 17.027172,
+            "2": 15.3869828,
+            "3": 42.279542,
+            "4": 9.9387938,
+            "5": 18.986831,
+            "6": 13.4151428,
+            "7": 8.711525799999999
+          }
+        },
+        "median_change_percent": 18.390738302989938
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "root",
+        "operation": "record",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 1,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "e06a8afbcfd68d8e2296b4bb0d25afeec47bc638fa81751148ff844c38c194a4",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "dbceba7d7ae736000ea23ed5d92d6d2cf476c0207cc02201430ba13244d5dcd1"
+        },
+        "before": {
+          "samples": 72,
+          "median_us": 0.7136445,
+          "p10_us": 0.6120625999999999,
+          "p90_us": 1.37000668,
+          "round_median_us": {
+            "0": 0.632946,
+            "1": 1.1062552,
+            "2": 1.1853612,
+            "3": 0.6409922,
+            "4": 1.2063006,
+            "5": 1.4332958,
+            "6": 0.6095900000000001,
+            "7": 0.6184462
+          }
+        },
+        "after": {
+          "samples": 72,
+          "median_us": 1.0645788999999999,
+          "p10_us": 0.63990822,
+          "p90_us": 2.2363205199999996,
+          "round_median_us": {
+            "0": 1.2152965999999998,
+            "1": 1.0764036000000001,
+            "2": 1.1473938000000001,
+            "3": 1.4031088,
+            "4": 0.779494,
+            "5": 1.2136484,
+            "6": 0.6889476,
+            "7": 0.638408
+          }
+        },
+        "median_change_percent": 49.17496036191687
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "unique-64",
+        "operation": "build",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 64,
+            "sha256": "b1248af340559f6f3f50da63583455aeca32f708389fb84d53510ce05aad7c96",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "6bfd338e298a6d16a64246bcb6808951e2ef6279de931694721e107b5eab269d"
+        },
+        "before": {
+          "samples": 72,
+          "median_us": 187.03764999999999,
+          "p10_us": 121.001778,
+          "p90_us": 342.50244599999985,
+          "round_median_us": {
+            "0": 185.74622,
+            "1": 232.13284,
+            "2": 350.472,
+            "3": 126.89794,
+            "4": 176.1831,
+            "5": 123.00617999999999,
+            "6": 121.49474000000001,
+            "7": 201.1721
+          }
+        },
+        "after": {
+          "samples": 72,
+          "median_us": 189.12181,
+          "p10_us": 131.005198,
+          "p90_us": 217.862182,
+          "round_median_us": {
+            "0": 213.21751999999998,
+            "1": 169.63585999999998,
+            "2": 208.6301,
+            "3": 135.38546,
+            "4": 156.73976000000002,
+            "5": 202.00606,
+            "6": 121.12736,
+            "7": 200.04342000000003
+          }
+        },
+        "median_change_percent": 1.1142997145227262
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "unique-64",
+        "operation": "record",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 64,
+            "sha256": "b1248af340559f6f3f50da63583455aeca32f708389fb84d53510ce05aad7c96",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "6bfd338e298a6d16a64246bcb6808951e2ef6279de931694721e107b5eab269d"
+        },
+        "before": {
+          "samples": 72,
+          "median_us": 58.44179,
+          "p10_us": 35.41571,
+          "p90_us": 81.14941799999998,
+          "round_median_us": {
+            "0": 70.24974,
+            "1": 62.60874,
+            "2": 67.83032,
+            "3": 36.63352,
+            "4": 51.36374,
+            "5": 36.24238,
+            "6": 35.455940000000005,
+            "7": 60.08596
+          }
+        },
+        "after": {
+          "samples": 72,
+          "median_us": 63.6103,
+          "p10_us": 37.668471999999994,
+          "p90_us": 80.70016399999999,
+          "round_median_us": {
+            "0": 71.45244,
+            "1": 62.8015,
+            "2": 76.5539,
+            "3": 39.7416,
+            "4": 67.97417999999999,
+            "5": 62.350300000000004,
+            "6": 38.94956,
+            "7": 61.38926
+          }
+        },
+        "median_change_percent": 8.843859847550872
+      }
+    ]
+  },
+  "allocations": {
+    "raw_rows": 1620,
+    "raw_sha256": "3066973b4ddd35604cbe1053d7b0f23f61cf059ee60dd55d5a54e363bce19964",
+    "summaries": [
+      {
+        "probe": "language",
+        "language_case": "case",
+        "fixture": "cjk-fallback-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5e809c4179fd360ed3e749de46415cc0118059a210beb55ef439b71e2aeee171",
+          "instance_sha256": "1865436a7260862a6711020a032f8e87d11c98823670469c970092a8f2798464",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 3240,
+              "minimum": 3240,
+              "maximum": 3240
+            },
+            "allocated_bytes": {
+              "median": 273893,
+              "minimum": 273893,
+              "maximum": 273893
+            },
+            "deallocated_bytes": {
+              "median": 194860,
+              "minimum": 194860,
+              "maximum": 194860
+            },
+            "net_bytes": {
+              "median": 79033,
+              "minimum": 79033,
+              "maximum": 79033
+            },
+            "peak_extra_bytes": {
+              "median": 96489,
+              "minimum": 96489,
+              "maximum": 96489
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 2334,
+              "minimum": 2334,
+              "maximum": 2334
+            },
+            "allocated_bytes": {
+              "median": 258123,
+              "minimum": 258123,
+              "maximum": 258123
+            },
+            "deallocated_bytes": {
+              "median": 179090,
+              "minimum": 179090,
+              "maximum": 179090
+            },
+            "net_bytes": {
+              "median": 79033,
+              "minimum": 79033,
+              "maximum": 79033
+            },
+            "peak_extra_bytes": {
+              "median": 96489,
+              "minimum": 96489,
+              "maximum": 96489
+            }
+          }
+        },
+        "saved_calls": 906,
+        "saved_requested_bytes": 15770
+      },
+      {
+        "probe": "language",
+        "language_case": "case",
+        "fixture": "latin-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5038384b161b8f7f7dca74ee004d3cd7714f7e535c60e762e95d3be7847ab392",
+          "instance_sha256": "42f9d000853dad510ed42f549f739b7e1155992a738e951f1533110310ab3afb",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 2663,
+              "minimum": 2663,
+              "maximum": 2663
+            },
+            "allocated_bytes": {
+              "median": 252844,
+              "minimum": 252844,
+              "maximum": 252844
+            },
+            "deallocated_bytes": {
+              "median": 173955,
+              "minimum": 173955,
+              "maximum": 173955
+            },
+            "net_bytes": {
+              "median": 78889,
+              "minimum": 78889,
+              "maximum": 78889
+            },
+            "peak_extra_bytes": {
+              "median": 96345,
+              "minimum": 96345,
+              "maximum": 96345
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 1886,
+              "minimum": 1886,
+              "maximum": 1886
+            },
+            "allocated_bytes": {
+              "median": 242883,
+              "minimum": 242883,
+              "maximum": 242883
+            },
+            "deallocated_bytes": {
+              "median": 163994,
+              "minimum": 163994,
+              "maximum": 163994
+            },
+            "net_bytes": {
+              "median": 78889,
+              "minimum": 78889,
+              "maximum": 78889
+            },
+            "peak_extra_bytes": {
+              "median": 96345,
+              "minimum": 96345,
+              "maximum": 96345
+            }
+          }
+        },
+        "saved_calls": 777,
+        "saved_requested_bytes": 9961
+      },
+      {
+        "probe": "language",
+        "language_case": "case",
+        "fixture": "size-adjust-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "ac4bbc0cca3ffe834fd4a024409dba9ac0c9ec747bc58820ad4b1e76e5687286",
+          "instance_sha256": "6e63c25cf0072195ada1c96bd256a3a8a6ba18ef382f37666834886265f42cda",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 2663,
+              "minimum": 2663,
+              "maximum": 2663
+            },
+            "allocated_bytes": {
+              "median": 252844,
+              "minimum": 252844,
+              "maximum": 252844
+            },
+            "deallocated_bytes": {
+              "median": 173955,
+              "minimum": 173955,
+              "maximum": 173955
+            },
+            "net_bytes": {
+              "median": 78889,
+              "minimum": 78889,
+              "maximum": 78889
+            },
+            "peak_extra_bytes": {
+              "median": 96345,
+              "minimum": 96345,
+              "maximum": 96345
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 1886,
+              "minimum": 1886,
+              "maximum": 1886
+            },
+            "allocated_bytes": {
+              "median": 242883,
+              "minimum": 242883,
+              "maximum": 242883
+            },
+            "deallocated_bytes": {
+              "median": 163994,
+              "minimum": 163994,
+              "maximum": 163994
+            },
+            "net_bytes": {
+              "median": 78889,
+              "minimum": 78889,
+              "maximum": 78889
+            },
+            "peak_extra_bytes": {
+              "median": 96345,
+              "minimum": 96345,
+              "maximum": 96345
+            }
+          }
+        },
+        "saved_calls": 777,
+        "saved_requested_bytes": 9961
+      },
+      {
+        "probe": "language",
+        "language_case": "case",
+        "fixture": "variable-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5aee21cca23e8cce16e8d9dfba013eb26914007789eaaf049b990a3ffb28e7f7",
+          "instance_sha256": "d1a6f6f8a77456dbffadd404e6700bf18ca23d6deffcb979972fea5b93995fe8",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 3808,
+              "minimum": 3808,
+              "maximum": 3808
+            },
+            "allocated_bytes": {
+              "median": 298439,
+              "minimum": 298439,
+              "maximum": 298439
+            },
+            "deallocated_bytes": {
+              "median": 216862,
+              "minimum": 216862,
+              "maximum": 216862
+            },
+            "net_bytes": {
+              "median": 81577,
+              "minimum": 81577,
+              "maximum": 81577
+            },
+            "peak_extra_bytes": {
+              "median": 99033,
+              "minimum": 99033,
+              "maximum": 99033
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 3031,
+              "minimum": 3031,
+              "maximum": 3031
+            },
+            "allocated_bytes": {
+              "median": 288478,
+              "minimum": 288478,
+              "maximum": 288478
+            },
+            "deallocated_bytes": {
+              "median": 206901,
+              "minimum": 206901,
+              "maximum": 206901
+            },
+            "net_bytes": {
+              "median": 81577,
+              "minimum": 81577,
+              "maximum": 81577
+            },
+            "peak_extra_bytes": {
+              "median": 99033,
+              "minimum": 99033,
+              "maximum": 99033
+            }
+          }
+        },
+        "saved_calls": 777,
+        "saved_requested_bytes": 9961
+      },
+      {
+        "probe": "language",
+        "language_case": "distinct",
+        "fixture": "cjk-fallback-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5e809c4179fd360ed3e749de46415cc0118059a210beb55ef439b71e2aeee171",
+          "instance_sha256": "1865436a7260862a6711020a032f8e87d11c98823670469c970092a8f2798464",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 3252,
+              "minimum": 3252,
+              "maximum": 3252
+            },
+            "allocated_bytes": {
+              "median": 274277,
+              "minimum": 274277,
+              "maximum": 274277
+            },
+            "deallocated_bytes": {
+              "median": 194652,
+              "minimum": 194652,
+              "maximum": 194652
+            },
+            "net_bytes": {
+              "median": 79625,
+              "minimum": 79625,
+              "maximum": 79625
+            },
+            "peak_extra_bytes": {
+              "median": 97081,
+              "minimum": 97081,
+              "maximum": 97081
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 2350,
+              "minimum": 2350,
+              "maximum": 2350
+            },
+            "allocated_bytes": {
+              "median": 259955,
+              "minimum": 259955,
+              "maximum": 259955
+            },
+            "deallocated_bytes": {
+              "median": 180330,
+              "minimum": 180330,
+              "maximum": 180330
+            },
+            "net_bytes": {
+              "median": 79625,
+              "minimum": 79625,
+              "maximum": 79625
+            },
+            "peak_extra_bytes": {
+              "median": 97081,
+              "minimum": 97081,
+              "maximum": 97081
+            }
+          }
+        },
+        "saved_calls": 902,
+        "saved_requested_bytes": 14322
+      },
+      {
+        "probe": "language",
+        "language_case": "distinct",
+        "fixture": "latin-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5038384b161b8f7f7dca74ee004d3cd7714f7e535c60e762e95d3be7847ab392",
+          "instance_sha256": "42f9d000853dad510ed42f549f739b7e1155992a738e951f1533110310ab3afb",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 2680,
+              "minimum": 2680,
+              "maximum": 2680
+            },
+            "allocated_bytes": {
+              "median": 254764,
+              "minimum": 254764,
+              "maximum": 254764
+            },
+            "deallocated_bytes": {
+              "median": 174515,
+              "minimum": 174515,
+              "maximum": 174515
+            },
+            "net_bytes": {
+              "median": 80249,
+              "minimum": 80249,
+              "maximum": 80249
+            },
+            "peak_extra_bytes": {
+              "median": 97705,
+              "minimum": 97705,
+              "maximum": 97705
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 1906,
+              "minimum": 1906,
+              "maximum": 1906
+            },
+            "allocated_bytes": {
+              "median": 246210,
+              "minimum": 246210,
+              "maximum": 246210
+            },
+            "deallocated_bytes": {
+              "median": 165961,
+              "minimum": 165961,
+              "maximum": 165961
+            },
+            "net_bytes": {
+              "median": 80249,
+              "minimum": 80249,
+              "maximum": 80249
+            },
+            "peak_extra_bytes": {
+              "median": 97705,
+              "minimum": 97705,
+              "maximum": 97705
+            }
+          }
+        },
+        "saved_calls": 774,
+        "saved_requested_bytes": 8554
+      },
+      {
+        "probe": "language",
+        "language_case": "distinct",
+        "fixture": "size-adjust-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "ac4bbc0cca3ffe834fd4a024409dba9ac0c9ec747bc58820ad4b1e76e5687286",
+          "instance_sha256": "6e63c25cf0072195ada1c96bd256a3a8a6ba18ef382f37666834886265f42cda",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 2680,
+              "minimum": 2680,
+              "maximum": 2680
+            },
+            "allocated_bytes": {
+              "median": 254764,
+              "minimum": 254764,
+              "maximum": 254764
+            },
+            "deallocated_bytes": {
+              "median": 174515,
+              "minimum": 174515,
+              "maximum": 174515
+            },
+            "net_bytes": {
+              "median": 80249,
+              "minimum": 80249,
+              "maximum": 80249
+            },
+            "peak_extra_bytes": {
+              "median": 97705,
+              "minimum": 97705,
+              "maximum": 97705
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 1906,
+              "minimum": 1906,
+              "maximum": 1906
+            },
+            "allocated_bytes": {
+              "median": 246210,
+              "minimum": 246210,
+              "maximum": 246210
+            },
+            "deallocated_bytes": {
+              "median": 165961,
+              "minimum": 165961,
+              "maximum": 165961
+            },
+            "net_bytes": {
+              "median": 80249,
+              "minimum": 80249,
+              "maximum": 80249
+            },
+            "peak_extra_bytes": {
+              "median": 97705,
+              "minimum": 97705,
+              "maximum": 97705
+            }
+          }
+        },
+        "saved_calls": 774,
+        "saved_requested_bytes": 8554
+      },
+      {
+        "probe": "language",
+        "language_case": "distinct",
+        "fixture": "variable-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5aee21cca23e8cce16e8d9dfba013eb26914007789eaaf049b990a3ffb28e7f7",
+          "instance_sha256": "d1a6f6f8a77456dbffadd404e6700bf18ca23d6deffcb979972fea5b93995fe8",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 3819,
+              "minimum": 3819,
+              "maximum": 3819
+            },
+            "allocated_bytes": {
+              "median": 298580,
+              "minimum": 298580,
+              "maximum": 298580
+            },
+            "deallocated_bytes": {
+              "median": 216459,
+              "minimum": 216459,
+              "maximum": 216459
+            },
+            "net_bytes": {
+              "median": 82121,
+              "minimum": 82121,
+              "maximum": 82121
+            },
+            "peak_extra_bytes": {
+              "median": 99577,
+              "minimum": 99577,
+              "maximum": 99577
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 3045,
+              "minimum": 3045,
+              "maximum": 3045
+            },
+            "allocated_bytes": {
+              "median": 290026,
+              "minimum": 290026,
+              "maximum": 290026
+            },
+            "deallocated_bytes": {
+              "median": 207905,
+              "minimum": 207905,
+              "maximum": 207905
+            },
+            "net_bytes": {
+              "median": 82121,
+              "minimum": 82121,
+              "maximum": 82121
+            },
+            "peak_extra_bytes": {
+              "median": 99577,
+              "minimum": 99577,
+              "maximum": 99577
+            }
+          }
+        },
+        "saved_calls": 774,
+        "saved_requested_bytes": 8554
+      },
+      {
+        "probe": "language",
+        "language_case": "long",
+        "fixture": "cjk-fallback-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5e809c4179fd360ed3e749de46415cc0118059a210beb55ef439b71e2aeee171",
+          "instance_sha256": "1865436a7260862a6711020a032f8e87d11c98823670469c970092a8f2798464",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 3953,
+              "minimum": 3953,
+              "maximum": 3953
+            },
+            "allocated_bytes": {
+              "median": 2000125,
+              "minimum": 2000125,
+              "maximum": 2000125
+            },
+            "deallocated_bytes": {
+              "median": 1845380,
+              "minimum": 1845380,
+              "maximum": 1845380
+            },
+            "net_bytes": {
+              "median": 154745,
+              "minimum": 154745,
+              "maximum": 154745
+            },
+            "peak_extra_bytes": {
+              "median": 172201,
+              "minimum": 172201,
+              "maximum": 172201
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 3047,
+              "minimum": 3047,
+              "maximum": 3047
+            },
+            "allocated_bytes": {
+              "median": 1461801,
+              "minimum": 1461801,
+              "maximum": 1461801
+            },
+            "deallocated_bytes": {
+              "median": 1307056,
+              "minimum": 1307056,
+              "maximum": 1307056
+            },
+            "net_bytes": {
+              "median": 154745,
+              "minimum": 154745,
+              "maximum": 154745
+            },
+            "peak_extra_bytes": {
+              "median": 172201,
+              "minimum": 172201,
+              "maximum": 172201
+            }
+          }
+        },
+        "saved_calls": 906,
+        "saved_requested_bytes": 538324
+      },
+      {
+        "probe": "language",
+        "language_case": "long",
+        "fixture": "latin-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5038384b161b8f7f7dca74ee004d3cd7714f7e535c60e762e95d3be7847ab392",
+          "instance_sha256": "42f9d000853dad510ed42f549f739b7e1155992a738e951f1533110310ab3afb",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 3376,
+              "minimum": 3376,
+              "maximum": 3376
+            },
+            "allocated_bytes": {
+              "median": 1979076,
+              "minimum": 1979076,
+              "maximum": 1979076
+            },
+            "deallocated_bytes": {
+              "median": 1824475,
+              "minimum": 1824475,
+              "maximum": 1824475
+            },
+            "net_bytes": {
+              "median": 154601,
+              "minimum": 154601,
+              "maximum": 154601
+            },
+            "peak_extra_bytes": {
+              "median": 172057,
+              "minimum": 172057,
+              "maximum": 172057
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 2599,
+              "minimum": 2599,
+              "maximum": 2599
+            },
+            "allocated_bytes": {
+              "median": 1446561,
+              "minimum": 1446561,
+              "maximum": 1446561
+            },
+            "deallocated_bytes": {
+              "median": 1291960,
+              "minimum": 1291960,
+              "maximum": 1291960
+            },
+            "net_bytes": {
+              "median": 154601,
+              "minimum": 154601,
+              "maximum": 154601
+            },
+            "peak_extra_bytes": {
+              "median": 172057,
+              "minimum": 172057,
+              "maximum": 172057
+            }
+          }
+        },
+        "saved_calls": 777,
+        "saved_requested_bytes": 532515
+      },
+      {
+        "probe": "language",
+        "language_case": "long",
+        "fixture": "size-adjust-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "ac4bbc0cca3ffe834fd4a024409dba9ac0c9ec747bc58820ad4b1e76e5687286",
+          "instance_sha256": "6e63c25cf0072195ada1c96bd256a3a8a6ba18ef382f37666834886265f42cda",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 3376,
+              "minimum": 3376,
+              "maximum": 3376
+            },
+            "allocated_bytes": {
+              "median": 1979076,
+              "minimum": 1979076,
+              "maximum": 1979076
+            },
+            "deallocated_bytes": {
+              "median": 1824475,
+              "minimum": 1824475,
+              "maximum": 1824475
+            },
+            "net_bytes": {
+              "median": 154601,
+              "minimum": 154601,
+              "maximum": 154601
+            },
+            "peak_extra_bytes": {
+              "median": 172057,
+              "minimum": 172057,
+              "maximum": 172057
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 2599,
+              "minimum": 2599,
+              "maximum": 2599
+            },
+            "allocated_bytes": {
+              "median": 1446561,
+              "minimum": 1446561,
+              "maximum": 1446561
+            },
+            "deallocated_bytes": {
+              "median": 1291960,
+              "minimum": 1291960,
+              "maximum": 1291960
+            },
+            "net_bytes": {
+              "median": 154601,
+              "minimum": 154601,
+              "maximum": 154601
+            },
+            "peak_extra_bytes": {
+              "median": 172057,
+              "minimum": 172057,
+              "maximum": 172057
+            }
+          }
+        },
+        "saved_calls": 777,
+        "saved_requested_bytes": 532515
+      },
+      {
+        "probe": "language",
+        "language_case": "long",
+        "fixture": "variable-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5aee21cca23e8cce16e8d9dfba013eb26914007789eaaf049b990a3ffb28e7f7",
+          "instance_sha256": "d1a6f6f8a77456dbffadd404e6700bf18ca23d6deffcb979972fea5b93995fe8",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 4521,
+              "minimum": 4521,
+              "maximum": 4521
+            },
+            "allocated_bytes": {
+              "median": 2099486,
+              "minimum": 2099486,
+              "maximum": 2099486
+            },
+            "deallocated_bytes": {
+              "median": 1942197,
+              "minimum": 1942197,
+              "maximum": 1942197
+            },
+            "net_bytes": {
+              "median": 157289,
+              "minimum": 157289,
+              "maximum": 157289
+            },
+            "peak_extra_bytes": {
+              "median": 174745,
+              "minimum": 174745,
+              "maximum": 174745
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 3744,
+              "minimum": 3744,
+              "maximum": 3744
+            },
+            "allocated_bytes": {
+              "median": 1566971,
+              "minimum": 1566971,
+              "maximum": 1566971
+            },
+            "deallocated_bytes": {
+              "median": 1409682,
+              "minimum": 1409682,
+              "maximum": 1409682
+            },
+            "net_bytes": {
+              "median": 157289,
+              "minimum": 157289,
+              "maximum": 157289
+            },
+            "peak_extra_bytes": {
+              "median": 174745,
+              "minimum": 174745,
+              "maximum": 174745
+            }
+          }
+        },
+        "saved_calls": 777,
+        "saved_requested_bytes": 532515
+      },
+      {
+        "probe": "language",
+        "language_case": "none",
+        "fixture": "cjk-fallback-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5e809c4179fd360ed3e749de46415cc0118059a210beb55ef439b71e2aeee171",
+          "instance_sha256": "1865436a7260862a6711020a032f8e87d11c98823670469c970092a8f2798464",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 2264,
+              "minimum": 2264,
+              "maximum": 2264
+            },
+            "allocated_bytes": {
+              "median": 269013,
+              "minimum": 269013,
+              "maximum": 269013
+            },
+            "deallocated_bytes": {
+              "median": 190300,
+              "minimum": 190300,
+              "maximum": 190300
+            },
+            "net_bytes": {
+              "median": 78713,
+              "minimum": 78713,
+              "maximum": 78713
+            },
+            "peak_extra_bytes": {
+              "median": 96169,
+              "minimum": 96169,
+              "maximum": 96169
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 1812,
+              "minimum": 1812,
+              "maximum": 1812
+            },
+            "allocated_bytes": {
+              "median": 255513,
+              "minimum": 255513,
+              "maximum": 255513
+            },
+            "deallocated_bytes": {
+              "median": 176800,
+              "minimum": 176800,
+              "maximum": 176800
+            },
+            "net_bytes": {
+              "median": 78713,
+              "minimum": 78713,
+              "maximum": 78713
+            },
+            "peak_extra_bytes": {
+              "median": 96169,
+              "minimum": 96169,
+              "maximum": 96169
+            }
+          }
+        },
+        "saved_calls": 452,
+        "saved_requested_bytes": 13500
+      },
+      {
+        "probe": "language",
+        "language_case": "none",
+        "fixture": "latin-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5038384b161b8f7f7dca74ee004d3cd7714f7e535c60e762e95d3be7847ab392",
+          "instance_sha256": "42f9d000853dad510ed42f549f739b7e1155992a738e951f1533110310ab3afb",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 1687,
+              "minimum": 1687,
+              "maximum": 1687
+            },
+            "allocated_bytes": {
+              "median": 247964,
+              "minimum": 247964,
+              "maximum": 247964
+            },
+            "deallocated_bytes": {
+              "median": 169395,
+              "minimum": 169395,
+              "maximum": 169395
+            },
+            "net_bytes": {
+              "median": 78569,
+              "minimum": 78569,
+              "maximum": 78569
+            },
+            "peak_extra_bytes": {
+              "median": 96025,
+              "minimum": 96025,
+              "maximum": 96025
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 1364,
+              "minimum": 1364,
+              "maximum": 1364
+            },
+            "allocated_bytes": {
+              "median": 240273,
+              "minimum": 240273,
+              "maximum": 240273
+            },
+            "deallocated_bytes": {
+              "median": 161704,
+              "minimum": 161704,
+              "maximum": 161704
+            },
+            "net_bytes": {
+              "median": 78569,
+              "minimum": 78569,
+              "maximum": 78569
+            },
+            "peak_extra_bytes": {
+              "median": 96025,
+              "minimum": 96025,
+              "maximum": 96025
+            }
+          }
+        },
+        "saved_calls": 323,
+        "saved_requested_bytes": 7691
+      },
+      {
+        "probe": "language",
+        "language_case": "none",
+        "fixture": "size-adjust-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "ac4bbc0cca3ffe834fd4a024409dba9ac0c9ec747bc58820ad4b1e76e5687286",
+          "instance_sha256": "6e63c25cf0072195ada1c96bd256a3a8a6ba18ef382f37666834886265f42cda",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 1687,
+              "minimum": 1687,
+              "maximum": 1687
+            },
+            "allocated_bytes": {
+              "median": 247964,
+              "minimum": 247964,
+              "maximum": 247964
+            },
+            "deallocated_bytes": {
+              "median": 169395,
+              "minimum": 169395,
+              "maximum": 169395
+            },
+            "net_bytes": {
+              "median": 78569,
+              "minimum": 78569,
+              "maximum": 78569
+            },
+            "peak_extra_bytes": {
+              "median": 96025,
+              "minimum": 96025,
+              "maximum": 96025
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 1364,
+              "minimum": 1364,
+              "maximum": 1364
+            },
+            "allocated_bytes": {
+              "median": 240273,
+              "minimum": 240273,
+              "maximum": 240273
+            },
+            "deallocated_bytes": {
+              "median": 161704,
+              "minimum": 161704,
+              "maximum": 161704
+            },
+            "net_bytes": {
+              "median": 78569,
+              "minimum": 78569,
+              "maximum": 78569
+            },
+            "peak_extra_bytes": {
+              "median": 96025,
+              "minimum": 96025,
+              "maximum": 96025
+            }
+          }
+        },
+        "saved_calls": 323,
+        "saved_requested_bytes": 7691
+      },
+      {
+        "probe": "language",
+        "language_case": "none",
+        "fixture": "variable-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5aee21cca23e8cce16e8d9dfba013eb26914007789eaaf049b990a3ffb28e7f7",
+          "instance_sha256": "d1a6f6f8a77456dbffadd404e6700bf18ca23d6deffcb979972fea5b93995fe8",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 2767,
+              "minimum": 2767,
+              "maximum": 2767
+            },
+            "allocated_bytes": {
+              "median": 293234,
+              "minimum": 293234,
+              "maximum": 293234
+            },
+            "deallocated_bytes": {
+              "median": 211977,
+              "minimum": 211977,
+              "maximum": 211977
+            },
+            "net_bytes": {
+              "median": 81257,
+              "minimum": 81257,
+              "maximum": 81257
+            },
+            "peak_extra_bytes": {
+              "median": 98713,
+              "minimum": 98713,
+              "maximum": 98713
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 2444,
+              "minimum": 2444,
+              "maximum": 2444
+            },
+            "allocated_bytes": {
+              "median": 285543,
+              "minimum": 285543,
+              "maximum": 285543
+            },
+            "deallocated_bytes": {
+              "median": 204286,
+              "minimum": 204286,
+              "maximum": 204286
+            },
+            "net_bytes": {
+              "median": 81257,
+              "minimum": 81257,
+              "maximum": 81257
+            },
+            "peak_extra_bytes": {
+              "median": 98713,
+              "minimum": 98713,
+              "maximum": 98713
+            }
+          }
+        },
+        "saved_calls": 323,
+        "saved_requested_bytes": 7691
+      },
+      {
+        "probe": "language",
+        "language_case": "same",
+        "fixture": "cjk-fallback-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5e809c4179fd360ed3e749de46415cc0118059a210beb55ef439b71e2aeee171",
+          "instance_sha256": "1865436a7260862a6711020a032f8e87d11c98823670469c970092a8f2798464",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 3240,
+              "minimum": 3240,
+              "maximum": 3240
+            },
+            "allocated_bytes": {
+              "median": 273893,
+              "minimum": 273893,
+              "maximum": 273893
+            },
+            "deallocated_bytes": {
+              "median": 194860,
+              "minimum": 194860,
+              "maximum": 194860
+            },
+            "net_bytes": {
+              "median": 79033,
+              "minimum": 79033,
+              "maximum": 79033
+            },
+            "peak_extra_bytes": {
+              "median": 96489,
+              "minimum": 96489,
+              "maximum": 96489
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 2334,
+              "minimum": 2334,
+              "maximum": 2334
+            },
+            "allocated_bytes": {
+              "median": 258123,
+              "minimum": 258123,
+              "maximum": 258123
+            },
+            "deallocated_bytes": {
+              "median": 179090,
+              "minimum": 179090,
+              "maximum": 179090
+            },
+            "net_bytes": {
+              "median": 79033,
+              "minimum": 79033,
+              "maximum": 79033
+            },
+            "peak_extra_bytes": {
+              "median": 96489,
+              "minimum": 96489,
+              "maximum": 96489
+            }
+          }
+        },
+        "saved_calls": 906,
+        "saved_requested_bytes": 15770
+      },
+      {
+        "probe": "language",
+        "language_case": "same",
+        "fixture": "latin-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5038384b161b8f7f7dca74ee004d3cd7714f7e535c60e762e95d3be7847ab392",
+          "instance_sha256": "42f9d000853dad510ed42f549f739b7e1155992a738e951f1533110310ab3afb",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 2663,
+              "minimum": 2663,
+              "maximum": 2663
+            },
+            "allocated_bytes": {
+              "median": 252844,
+              "minimum": 252844,
+              "maximum": 252844
+            },
+            "deallocated_bytes": {
+              "median": 173955,
+              "minimum": 173955,
+              "maximum": 173955
+            },
+            "net_bytes": {
+              "median": 78889,
+              "minimum": 78889,
+              "maximum": 78889
+            },
+            "peak_extra_bytes": {
+              "median": 96345,
+              "minimum": 96345,
+              "maximum": 96345
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 1886,
+              "minimum": 1886,
+              "maximum": 1886
+            },
+            "allocated_bytes": {
+              "median": 242883,
+              "minimum": 242883,
+              "maximum": 242883
+            },
+            "deallocated_bytes": {
+              "median": 163994,
+              "minimum": 163994,
+              "maximum": 163994
+            },
+            "net_bytes": {
+              "median": 78889,
+              "minimum": 78889,
+              "maximum": 78889
+            },
+            "peak_extra_bytes": {
+              "median": 96345,
+              "minimum": 96345,
+              "maximum": 96345
+            }
+          }
+        },
+        "saved_calls": 777,
+        "saved_requested_bytes": 9961
+      },
+      {
+        "probe": "language",
+        "language_case": "same",
+        "fixture": "size-adjust-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "ac4bbc0cca3ffe834fd4a024409dba9ac0c9ec747bc58820ad4b1e76e5687286",
+          "instance_sha256": "6e63c25cf0072195ada1c96bd256a3a8a6ba18ef382f37666834886265f42cda",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 2663,
+              "minimum": 2663,
+              "maximum": 2663
+            },
+            "allocated_bytes": {
+              "median": 252844,
+              "minimum": 252844,
+              "maximum": 252844
+            },
+            "deallocated_bytes": {
+              "median": 173955,
+              "minimum": 173955,
+              "maximum": 173955
+            },
+            "net_bytes": {
+              "median": 78889,
+              "minimum": 78889,
+              "maximum": 78889
+            },
+            "peak_extra_bytes": {
+              "median": 96345,
+              "minimum": 96345,
+              "maximum": 96345
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 1886,
+              "minimum": 1886,
+              "maximum": 1886
+            },
+            "allocated_bytes": {
+              "median": 242883,
+              "minimum": 242883,
+              "maximum": 242883
+            },
+            "deallocated_bytes": {
+              "median": 163994,
+              "minimum": 163994,
+              "maximum": 163994
+            },
+            "net_bytes": {
+              "median": 78889,
+              "minimum": 78889,
+              "maximum": 78889
+            },
+            "peak_extra_bytes": {
+              "median": 96345,
+              "minimum": 96345,
+              "maximum": 96345
+            }
+          }
+        },
+        "saved_calls": 777,
+        "saved_requested_bytes": 9961
+      },
+      {
+        "probe": "language",
+        "language_case": "same",
+        "fixture": "variable-multi-style",
+        "operation": "build",
+        "output": {
+          "geometry_sha256": "5aee21cca23e8cce16e8d9dfba013eb26914007789eaaf049b990a3ffb28e7f7",
+          "instance_sha256": "d1a6f6f8a77456dbffadd404e6700bf18ca23d6deffcb979972fea5b93995fe8",
+          "warnings": []
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 3808,
+              "minimum": 3808,
+              "maximum": 3808
+            },
+            "allocated_bytes": {
+              "median": 298439,
+              "minimum": 298439,
+              "maximum": 298439
+            },
+            "deallocated_bytes": {
+              "median": 216862,
+              "minimum": 216862,
+              "maximum": 216862
+            },
+            "net_bytes": {
+              "median": 81577,
+              "minimum": 81577,
+              "maximum": 81577
+            },
+            "peak_extra_bytes": {
+              "median": 99033,
+              "minimum": 99033,
+              "maximum": 99033
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 3031,
+              "minimum": 3031,
+              "maximum": 3031
+            },
+            "allocated_bytes": {
+              "median": 288478,
+              "minimum": 288478,
+              "maximum": 288478
+            },
+            "deallocated_bytes": {
+              "median": 206901,
+              "minimum": 206901,
+              "maximum": 206901
+            },
+            "net_bytes": {
+              "median": 81577,
+              "minimum": 81577,
+              "maximum": 81577
+            },
+            "peak_extra_bytes": {
+              "median": 99033,
+              "minimum": 99033,
+              "maximum": 99033
+            }
+          }
+        },
+        "saved_calls": 777,
+        "saved_requested_bytes": 9961
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "consecutive-1x512",
+        "operation": "build",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "bcfd1aa097b6cfb5d4b57e8ea53fcaad27a0b28dc3526da19a82995bcc0ff09e",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "cb8588d518f25a4d1aee00d873698e8ee144059e63db03b3a21ad32e91e7a2a7"
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 286,
+              "minimum": 286,
+              "maximum": 286
+            },
+            "allocated_bytes": {
+              "median": 1409977,
+              "minimum": 1409977,
+              "maximum": 1409977
+            },
+            "deallocated_bytes": {
+              "median": 1409967,
+              "minimum": 1409967,
+              "maximum": 1409967
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 698594,
+              "minimum": 698594,
+              "maximum": 698594
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 278,
+              "minimum": 278,
+              "maximum": 278
+            },
+            "allocated_bytes": {
+              "median": 1409720,
+              "minimum": 1409720,
+              "maximum": 1409720
+            },
+            "deallocated_bytes": {
+              "median": 1409710,
+              "minimum": 1409710,
+              "maximum": 1409710
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 698594,
+              "minimum": 698594,
+              "maximum": 698594
+            }
+          }
+        },
+        "saved_calls": 8,
+        "saved_requested_bytes": 257
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "consecutive-1x512",
+        "operation": "record",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "bcfd1aa097b6cfb5d4b57e8ea53fcaad27a0b28dc3526da19a82995bcc0ff09e",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "cb8588d518f25a4d1aee00d873698e8ee144059e63db03b3a21ad32e91e7a2a7"
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 30,
+              "minimum": 30,
+              "maximum": 30
+            },
+            "allocated_bytes": {
+              "median": 297523,
+              "minimum": 297523,
+              "maximum": 297523
+            },
+            "deallocated_bytes": {
+              "median": 297513,
+              "minimum": 297513,
+              "maximum": 297513
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 149817,
+              "minimum": 149817,
+              "maximum": 149817
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 30,
+              "minimum": 30,
+              "maximum": 30
+            },
+            "allocated_bytes": {
+              "median": 297523,
+              "minimum": 297523,
+              "maximum": 297523
+            },
+            "deallocated_bytes": {
+              "median": 297513,
+              "minimum": 297513,
+              "maximum": 297513
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 149817,
+              "minimum": 149817,
+              "maximum": 149817
+            }
+          }
+        },
+        "saved_calls": 0,
+        "saved_requested_bytes": 0
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "first-line-16x512",
+        "operation": "build",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "57d14266caa98853282e3d8f5349d0c60273045b6e4388d5baa840dad99b56f3",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "4589dc01fc1017b57c1444530fd3119bf1e0e620d745372489ebedb2ae97ae41"
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 895,
+              "minimum": 895,
+              "maximum": 895
+            },
+            "allocated_bytes": {
+              "median": 2682641,
+              "minimum": 2682641,
+              "maximum": 2682641
+            },
+            "deallocated_bytes": {
+              "median": 2682631,
+              "minimum": 2682631,
+              "maximum": 2682631
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 1267430,
+              "minimum": 1267430,
+              "maximum": 1267430
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 729,
+              "minimum": 729,
+              "maximum": 729
+            },
+            "allocated_bytes": {
+              "median": 2678587,
+              "minimum": 2678587,
+              "maximum": 2678587
+            },
+            "deallocated_bytes": {
+              "median": 2678577,
+              "minimum": 2678577,
+              "maximum": 2678577
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 1267430,
+              "minimum": 1267430,
+              "maximum": 1267430
+            }
+          }
+        },
+        "saved_calls": 166,
+        "saved_requested_bytes": 4054
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "first-line-16x512",
+        "operation": "record",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "57d14266caa98853282e3d8f5349d0c60273045b6e4388d5baa840dad99b56f3",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "4589dc01fc1017b57c1444530fd3119bf1e0e620d745372489ebedb2ae97ae41"
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 117,
+              "minimum": 117,
+              "maximum": 117
+            },
+            "allocated_bytes": {
+              "median": 346140,
+              "minimum": 346140,
+              "maximum": 346140
+            },
+            "deallocated_bytes": {
+              "median": 346130,
+              "minimum": 346130,
+              "maximum": 346130
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 175658,
+              "minimum": 175658,
+              "maximum": 175658
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 117,
+              "minimum": 117,
+              "maximum": 117
+            },
+            "allocated_bytes": {
+              "median": 346140,
+              "minimum": 346140,
+              "maximum": 346140
+            },
+            "deallocated_bytes": {
+              "median": 346130,
+              "minimum": 346130,
+              "maximum": 346130
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 175658,
+              "minimum": 175658,
+              "maximum": 175658
+            }
+          }
+        },
+        "saved_calls": 0,
+        "saved_requested_bytes": 0
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "reuse-16x512",
+        "operation": "build",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "bcfd1aa097b6cfb5d4b57e8ea53fcaad27a0b28dc3526da19a82995bcc0ff09e",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "0180fe11d18a0eba95cb5e4e430989fd0aed1055158826e93aef2ff5ca1ae7f8"
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 416,
+              "minimum": 416,
+              "maximum": 416
+            },
+            "allocated_bytes": {
+              "median": 1438376,
+              "minimum": 1438376,
+              "maximum": 1438376
+            },
+            "deallocated_bytes": {
+              "median": 1438366,
+              "minimum": 1438366,
+              "maximum": 1438366
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 711311,
+              "minimum": 711311,
+              "maximum": 711311
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 333,
+              "minimum": 333,
+              "maximum": 333
+            },
+            "allocated_bytes": {
+              "median": 1436349,
+              "minimum": 1436349,
+              "maximum": 1436349
+            },
+            "deallocated_bytes": {
+              "median": 1436339,
+              "minimum": 1436339,
+              "maximum": 1436339
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 711311,
+              "minimum": 711311,
+              "maximum": 711311
+            }
+          }
+        },
+        "saved_calls": 83,
+        "saved_requested_bytes": 2027
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "reuse-16x512",
+        "operation": "record",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 512,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 512,
+            "sha256": "bcfd1aa097b6cfb5d4b57e8ea53fcaad27a0b28dc3526da19a82995bcc0ff09e",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "0180fe11d18a0eba95cb5e4e430989fd0aed1055158826e93aef2ff5ca1ae7f8"
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 81,
+              "minimum": 81,
+              "maximum": 81
+            },
+            "allocated_bytes": {
+              "median": 321808,
+              "minimum": 321808,
+              "maximum": 321808
+            },
+            "deallocated_bytes": {
+              "median": 321798,
+              "minimum": 321798,
+              "maximum": 321798
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 162378,
+              "minimum": 162378,
+              "maximum": 162378
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 81,
+              "minimum": 81,
+              "maximum": 81
+            },
+            "allocated_bytes": {
+              "median": 321808,
+              "minimum": 321808,
+              "maximum": 321808
+            },
+            "deallocated_bytes": {
+              "median": 321798,
+              "minimum": 321798,
+              "maximum": 321798
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 162378,
+              "minimum": 162378,
+              "maximum": 162378
+            }
+          }
+        },
+        "saved_calls": 0,
+        "saved_requested_bytes": 0
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "root",
+        "operation": "build",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 1,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "e06a8afbcfd68d8e2296b4bb0d25afeec47bc638fa81751148ff844c38c194a4",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "dbceba7d7ae736000ea23ed5d92d6d2cf476c0207cc02201430ba13244d5dcd1"
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 97,
+              "minimum": 97,
+              "maximum": 97
+            },
+            "allocated_bytes": {
+              "median": 9246,
+              "minimum": 9246,
+              "maximum": 9246
+            },
+            "deallocated_bytes": {
+              "median": 9236,
+              "minimum": 9236,
+              "maximum": 9236
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 6228,
+              "minimum": 6228,
+              "maximum": 6228
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 94,
+              "minimum": 94,
+              "maximum": 94
+            },
+            "allocated_bytes": {
+              "median": 9107,
+              "minimum": 9107,
+              "maximum": 9107
+            },
+            "deallocated_bytes": {
+              "median": 9097,
+              "minimum": 9097,
+              "maximum": 9097
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 6228,
+              "minimum": 6228,
+              "maximum": 6228
+            }
+          }
+        },
+        "saved_calls": 3,
+        "saved_requested_bytes": 139
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "root",
+        "operation": "record",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 1,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 1,
+            "sha256": "e06a8afbcfd68d8e2296b4bb0d25afeec47bc638fa81751148ff844c38c194a4",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "dbceba7d7ae736000ea23ed5d92d6d2cf476c0207cc02201430ba13244d5dcd1"
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 11,
+              "minimum": 11,
+              "maximum": 11
+            },
+            "allocated_bytes": {
+              "median": 2104,
+              "minimum": 2104,
+              "maximum": 2104
+            },
+            "deallocated_bytes": {
+              "median": 2094,
+              "minimum": 2094,
+              "maximum": 2094
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 2070,
+              "minimum": 2070,
+              "maximum": 2070
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 11,
+              "minimum": 11,
+              "maximum": 11
+            },
+            "allocated_bytes": {
+              "median": 2104,
+              "minimum": 2104,
+              "maximum": 2104
+            },
+            "deallocated_bytes": {
+              "median": 2094,
+              "minimum": 2094,
+              "maximum": 2094
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 2070,
+              "minimum": 2070,
+              "maximum": 2070
+            }
+          }
+        },
+        "saved_calls": 0,
+        "saved_requested_bytes": 0
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "unique-64",
+        "operation": "build",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 64,
+            "sha256": "b1248af340559f6f3f50da63583455aeca32f708389fb84d53510ce05aad7c96",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "6bfd338e298a6d16a64246bcb6808951e2ef6279de931694721e107b5eab269d"
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 734,
+              "minimum": 734,
+              "maximum": 734
+            },
+            "allocated_bytes": {
+              "median": 306328,
+              "minimum": 306328,
+              "maximum": 306328
+            },
+            "deallocated_bytes": {
+              "median": 306318,
+              "minimum": 306318,
+              "maximum": 306318
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 145631,
+              "minimum": 145631,
+              "maximum": 145631
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 411,
+              "minimum": 411,
+              "maximum": 411
+            },
+            "allocated_bytes": {
+              "median": 298637,
+              "minimum": 298637,
+              "maximum": 298637
+            },
+            "deallocated_bytes": {
+              "median": 298627,
+              "minimum": 298627,
+              "maximum": 298627
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 145631,
+              "minimum": 145631,
+              "maximum": 145631
+            }
+          }
+        },
+        "saved_calls": 323,
+        "saved_requested_bytes": 7691
+      },
+      {
+        "probe": "style",
+        "language_case": "none",
+        "fixture": "unique-64",
+        "operation": "record",
+        "output": {
+          "geometry": {
+            "float_reports": 0,
+            "glyphs": 64,
+            "height_retries": 0,
+            "intrinsic_measurements": 0,
+            "lines": 1,
+            "runs": 64,
+            "sha256": "b1248af340559f6f3f50da63583455aeca32f708389fb84d53510ce05aad7c96",
+            "synthetic_glyphs": 0
+          },
+          "paint_sha256": "6bfd338e298a6d16a64246bcb6808951e2ef6279de931694721e107b5eab269d"
+        },
+        "before": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 223,
+              "minimum": 223,
+              "maximum": 223
+            },
+            "allocated_bytes": {
+              "median": 145792,
+              "minimum": 145792,
+              "maximum": 145792
+            },
+            "deallocated_bytes": {
+              "median": 145782,
+              "minimum": 145782,
+              "maximum": 145782
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 75770,
+              "minimum": 75770,
+              "maximum": 75770
+            }
+          }
+        },
+        "after": {
+          "samples": 27,
+          "counts": {
+            "calls": {
+              "median": 223,
+              "minimum": 223,
+              "maximum": 223
+            },
+            "allocated_bytes": {
+              "median": 145792,
+              "minimum": 145792,
+              "maximum": 145792
+            },
+            "deallocated_bytes": {
+              "median": 145782,
+              "minimum": 145782,
+              "maximum": 145782
+            },
+            "net_bytes": {
+              "median": 10,
+              "minimum": 10,
+              "maximum": 10
+            },
+            "peak_extra_bytes": {
+              "median": 75770,
+              "minimum": 75770,
+              "maximum": 75770
+            }
+          }
+        },
+        "saved_calls": 0,
+        "saved_requested_bytes": 0
+      }
+    ]
+  },
+  "regression_test": {
+    "input": "32 paint-only one-character styles sharing a 3072-byte named family alias and EN-us; prepared analysis and warmed context outside measured shaping scope. Alias remains below match-cache payload cap.",
+    "ceiling_requested_bytes": 147456,
+    "before": {
+      "exit_code": 101,
+      "calls": 404,
+      "requested_bytes": 289344,
+      "net_bytes": 30494,
+      "peak_extra_bytes": 37838
+    },
+    "after": {
+      "exit_code": 0,
+      "calls": 139,
+      "requested_bytes": 86474,
+      "net_bytes": 30494,
+      "peak_extra_bytes": 37838
+    },
+    "output_checks": "32-character text, no warnings, one line, 32 paint spans with expected colors, glyph runs use the registered fixture face.",
+    "measurement_note": "Archive copies of test include an eprintln of the finished allocation counts; production test does not print counts."
+  },
+  "verification": {
+    "core_release_tests": {
+      "passed": 1191,
+      "failed": 0,
+      "ignored": 9,
+      "groups": 35,
+      "command": "cargo +stable test --offline --locked --release -p shodo"
+    },
+    "new_allocation_test": "Passed in debug (CI profile) and release; same new test fails against clean baseline.",
+    "clippy": "Passed: cargo +stable clippy --offline --locked --release -p shodo --all-targets -- -D warnings; and shodo-bench --test font_query_allocations --features allocation-counting.",
+    "broad_clippy_limit": "Combined shodo/shodo-bench all-targets check stops at pre-existing clippy::needless_question_mark in dev/bench/src/bin/font_match_probe.rs:224. File unchanged from baseline; not modified in this task.",
+    "format": "rustfmt --check --edition 2024 on touched Rust files and git diff --check passed.",
+    "independent_review": "Ready with no required changes. Follow-up review of 64-byte hash and multi-block regression coverage also Ready.",
+    "user_changes": "SHA256 of all five previously modified source files unchanged."
+  },
+  "reproduction": [
+    "Create two temporary archives of baseline_revision under ~/tmp; apply production_patch to the candidate archive. Preserve each version in a separate cargo target directory.",
+    "Write language_probe_source to dev/bench/examples/query_language_probe.rs in both archives.",
+    "Use TMPDIR=\"$HOME/tmp\", RUSTC_WRAPPER= and a direct cargo +stable invocation. Set CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=env for tests when the inherited runner cannot run in the sandbox.",
+    "Build --offline --locked --release -p shodo-bench --example style_interning --example query_language_probe with an explicit absolute --target-dir per archive. Save and SHA256 both example binaries before feature rebuilds.",
+    "Run saved binaries with time; set SHODO_QUERY_LANG to none, same, case, distinct or long for query_language_probe. Execute sequentially using conditions.sampling round counts/seeds; normalize style ns by iterations. For pinned runs set subprocess affinity to CPU 2.",
+    "Rebuild the same examples with --features allocation-counting, save separately, run with alloc in 3 shuffled sequential rounds. Aggregate measurement.allocation fields and verify output equality per workload.",
+    "Run the allocation regression test with --features allocation-counting in debug and release. Copy the new test to baseline to verify its failure.",
+    "Store summaries, source, conditions and judgments here, then remove only the task-owned temporary archives, targets, raw JSONL and logs."
+  ],
+  "language_probe_source_sha256": "3bc0ebc7abbd4024e7f52a39afe33a137415baf875379d4c31c5f1bb07b8b06b",
+  "language_probe_source": "//! Paired build timing and allocation probe for StyleMetrics font instances.\n//! Run without features for timing, then with `allocation-counting` for allocs.\nuse serde_json::{Value, json};\nuse sha2::{Digest, Sha256};\nuse shodo::geometry::LogicalRect;\nuse shodo::limits::Limits;\nuse shodo::node::{InlineEdges, NodeId, TextSource};\nuse shodo::style::{\n    FontFamily, FontMetricKind, FontSizeAdjust, FontVariation, InlineStyle, LineOptions,\n    ParagraphStyle,\n};\nuse shodo::{AtomicSizes, Fragment, LayoutContext, Paragraph, ParagraphBuilder};\nuse std::hint::black_box;\nuse std::time::Instant;\n\n#[cfg(feature = \"allocation-counting\")]\n#[global_allocator]\nstatic ALLOC: shodo_bench::allocator::CountingAllocator<std::alloc::System> =\n    shodo_bench::allocator::CountingAllocator::new(std::alloc::System);\n\nconst WARMUP: usize = 3;\nconst STYLE_COUNT: usize = 64;\n\n#[derive(Clone, Copy)]\nenum FontCase {\n    Latin,\n    CjkFallback,\n    Variable,\n    SizeAdjust,\n}\n\n#[derive(Clone, Copy)]\nstruct Case {\n    name: &'static str,\n    font: FontCase,\n    text: &'static str,\n}\n\nconst CASES: [Case; 4] = [\n    Case {\n        name: \"latin-multi-style\",\n        font: FontCase::Latin,\n        text: \"a\",\n    },\n    Case {\n        name: \"cjk-fallback-multi-style\",\n        font: FontCase::CjkFallback,\n        text: \"水\",\n    },\n    Case {\n        name: \"variable-multi-style\",\n        font: FontCase::Variable,\n        text: \"😀\",\n    },\n    Case {\n        name: \"size-adjust-multi-style\",\n        font: FontCase::SizeAdjust,\n        text: \"a\",\n    },\n];\n\nfn family(case: FontCase) -> Vec<FontFamily> {\n    match case {\n        FontCase::Latin | FontCase::SizeAdjust => {\n            vec![FontFamily::Named(\"Shodo Fixture Latin\".into())]\n        }\n        FontCase::CjkFallback => vec![\n            FontFamily::Named(\"Shodo Fixture Latin\".into()),\n            FontFamily::Named(\"Shodo Fixture CJK\".into()),\n        ],\n        FontCase::Variable => vec![FontFamily::Named(\"Shodo Fixture Emoji\".into())],\n    }\n}\n\nfn style(case: FontCase, index: Option<usize>) -> InlineStyle {\n    let mut style = InlineStyle {\n        font_families: family(case),\n        font_size: index.map_or(16.0, |index| 16.125 + index as f32 * 0.015),\n        ..Default::default()\n    };\n    match case {\n        FontCase::Variable => {\n            style.font_weight = 700.0;\n            style.font_variations = vec![FontVariation {\n                tag: *b\"wght\",\n                value: 700.0,\n            }];\n        }\n        FontCase::SizeAdjust => {\n            style.font_size_adjust = Some(FontSizeAdjust {\n                metric: FontMetricKind::ExHeight,\n                value: 0.5,\n            });\n        }\n        FontCase::Latin | FontCase::CjkFallback => {}\n    }\n    style.lang = match std::env::var(\"SHODO_QUERY_LANG\").as_deref() {\n        Ok(\"long\") => Some(format!(\"en-x{}\", \"-a1234567\".repeat(128))),\n        Ok(\"same\") => Some(\"EN-us\".into()),\n        Ok(\"case\") => Some(if index.is_some_and(|i| i % 2 == 0) { \"en-US\" } else { \"EN-us\" }.into()),\n        Ok(\"distinct\") => Some(if index.is_some_and(|i| i % 2 == 0) { \"en\" } else { \"fr\" }.into()),\n        _ => None,\n    };\n    style\n}\n\nfn builder(case: Case, limits: &Limits) -> ParagraphBuilder {\n    let mut root = style(case.font, None);\n    root.paint.color = [255, 255, 255, 255];\n    let paragraph_style = ParagraphStyle {\n        root: root.clone(),\n        ..Default::default()\n    };\n    let mut builder = ParagraphBuilder::new(&paragraph_style, limits);\n    for index in 0..STYLE_COUNT {\n        let mut style = style(case.font, Some(index));\n        style.paint.color = [index as u8, (index >> 8) as u8, 17, 255];\n        let node = NodeId(index as u64 + 1);\n        builder\n            .open_inline(node, &style, InlineEdges::default())\n            .push_text(TextSource::Generated { node }, case.text)\n            .close_inline();\n    }\n    builder\n}\n\nfn add_usize(hash: &mut Sha256, value: usize) {\n    hash.update((value as u64).to_le_bytes());\n}\n\nfn add_f32(hash: &mut Sha256, value: f32) {\n    hash.update(value.to_bits().to_le_bytes());\n}\n\nfn add_rect(hash: &mut Sha256, rect: LogicalRect) {\n    for value in [\n        rect.inline_start,\n        rect.block_start,\n        rect.inline_size,\n        rect.block_size,\n    ] {\n        add_f32(hash, value);\n    }\n}\n\nfn add_debug(hash: &mut Sha256, value: impl std::fmt::Debug) {\n    let value = format!(\"{value:?}\");\n    add_usize(hash, value.len());\n    hash.update(value.as_bytes());\n}\n\nstruct Snapshot {\n    geometry_sha256: String,\n    instance_sha256: String,\n    warnings: Vec<String>,\n}\n\nfn snapshot(\n    paragraph: &Paragraph,\n    context: &mut LayoutContext,\n    case: Case,\n    fonts: &shodo_fixtures::EmojiFixtureFonts,\n) -> Snapshot {\n    let lines = paragraph.break_all(\n        context,\n        &LineOptions::default(),\n        1_000_000.0,\n        &AtomicSizes::EMPTY,\n    );\n    assert_eq!(lines.len(), 1, \"fixture should remain a single line\");\n    let spans: Vec<_> = lines.iter().flat_map(|line| line.paint_spans()).collect();\n    assert_eq!(\n        spans.len(),\n        STYLE_COUNT,\n        \"paint span count for {}\",\n        case.name\n    );\n    let colors: std::collections::BTreeSet<_> = spans.iter().map(|span| span.style.color).collect();\n    assert_eq!(colors.len(), STYLE_COUNT, \"paint colors for {}\", case.name);\n\n    let mut geometry = Sha256::new();\n    let mut instances = Sha256::new();\n    add_usize(&mut geometry, lines.len());\n    for line in &lines {\n        add_usize(&mut geometry, line.text_range().start);\n        add_usize(&mut geometry, line.text_range().end);\n        for value in [\n            line.inline_size(),\n            line.block_size(),\n            line.block_offset(),\n            line.hang_start(),\n            line.hang_end(),\n        ] {\n            add_f32(&mut geometry, value);\n        }\n        for span in line.paint_spans() {\n            add_usize(&mut geometry, span.text_range.start);\n            add_usize(&mut geometry, span.text_range.end);\n            geometry.update(span.style.color);\n            add_rect(&mut geometry, span.rect);\n        }\n        for fragment in line.fragments() {\n            match fragment {\n                Fragment::GlyphRun(run) => {\n                    add_usize(&mut instances, run.font().layer() as usize);\n                    add_usize(&mut instances, run.font().index() as usize);\n                    add_usize(&mut instances, run.style_index() as usize);\n                    add_usize(&mut instances, run.text_range().start);\n                    add_usize(&mut instances, run.text_range().end);\n                    add_f32(&mut instances, run.font_size());\n                    add_debug(&mut instances, run.metrics());\n                    add_debug(&mut instances, run.vertical_metrics());\n                    add_debug(&mut instances, run.variations());\n                    add_debug(&mut instances, run.normalized_coords());\n                    add_debug(&mut instances, run.script());\n                    add_debug(&mut instances, run.source());\n                    for (index, glyph) in run.glyphs().enumerate() {\n                        add_usize(&mut instances, glyph.id as usize);\n                        add_usize(&mut instances, glyph.cluster as usize);\n                        add_f32(&mut instances, glyph.inline_position);\n                        add_f32(&mut instances, glyph.block_offset);\n                        add_f32(&mut instances, glyph.advance);\n                        if let Some((x, y)) = run.glyph_origin(index) {\n                            add_f32(&mut instances, x);\n                            add_f32(&mut instances, y);\n                        }\n                    }\n                }\n                other => add_debug(&mut instances, other),\n            }\n        }\n    }\n\n    if matches!(case.font, FontCase::Variable) {\n        assert!(\n            lines\n                .iter()\n                .flat_map(|line| line.fragments())\n                .any(|fragment| {\n                    matches!(fragment, Fragment::GlyphRun(run) if run.font() == fonts.emoji_ids[1])\n                }),\n            \"variable emoji face should be selected\"\n        );\n    }\n    if matches!(case.font, FontCase::CjkFallback) {\n        assert!(\n            lines\n                .iter()\n                .flat_map(|line| line.fragments())\n                .any(|fragment| {\n                    matches!(fragment, Fragment::GlyphRun(run) if run.font() == fonts.base.ids[1])\n                }),\n            \"CJK fallback face should shape the CJK input\"\n        );\n    }\n\n    let mut warnings: Vec<_> = paragraph\n        .warnings()\n        .iter()\n        .map(|warning| format!(\"{:?}:{}\", warning.kind, warning.message))\n        .collect();\n    warnings.extend(\n        context\n            .take_warnings()\n            .into_iter()\n            .map(|warning| format!(\"{:?}:{}\", warning.kind, warning.message)),\n    );\n\n    Snapshot {\n        geometry_sha256: format!(\"{:x}\", geometry.finalize()),\n        instance_sha256: format!(\"{:x}\", instances.finalize()),\n        warnings,\n    }\n}\n\nfn sample(\n    case: Case,\n    mode: &str,\n    fonts: &shodo_fixtures::EmojiFixtureFonts,\n    index: usize,\n) -> Value {\n    let limits = Limits::default();\n    let builder = builder(case, &limits);\n    let mut context = LayoutContext::new();\n    let (paragraph, measurement) = match mode {\n        \"time\" => {\n            let start = Instant::now();\n            let paragraph = black_box(builder)\n                .build(&mut context, &fonts.base.collection)\n                .unwrap();\n            let elapsed = start.elapsed().as_nanos() as u64;\n            black_box(&paragraph);\n            (paragraph, json!({\"ns\": elapsed}))\n        }\n        \"alloc\" => {\n            #[cfg(feature = \"allocation-counting\")]\n            {\n                let scope = ALLOC.begin().unwrap();\n                let paragraph = black_box(builder)\n                    .build(&mut context, &fonts.base.collection)\n                    .unwrap();\n                let allocation = scope.finish();\n                black_box(&paragraph);\n                (paragraph, json!({\"allocation\": allocation}))\n            }\n            #[cfg(not(feature = \"allocation-counting\"))]\n            panic!(\"alloc mode requires --features allocation-counting\");\n        }\n        _ => panic!(\"mode must be time or alloc\"),\n    };\n    let output = snapshot(&paragraph, &mut context, case, fonts);\n    assert!(\n        output.warnings.is_empty(),\n        \"unexpected warnings: {:?}\",\n        output.warnings\n    );\n    json!({\n        \"schema\": 1,\n        \"mode\": mode,\n        \"fixture\": case.name,\n        \"style_count\": STYLE_COUNT,\n        \"sample\": index,\n        \"measurement\": measurement,\n        \"output\": {\n            \"geometry_sha256\": output.geometry_sha256,\n            \"instance_sha256\": output.instance_sha256,\n            \"warnings\": output.warnings,\n        }\n    })\n}\n\nfn main() {\n    let mode = std::env::args().nth(1).unwrap_or_else(|| \"time\".into());\n    let expected_mode = if cfg!(feature = \"allocation-counting\") {\n        \"alloc\"\n    } else {\n        \"time\"\n    };\n    assert_eq!(\n        mode, expected_mode,\n        \"use separate time and allocation builds\"\n    );\n    let samples = if mode == \"time\" { 21 } else { 9 };\n    let limits = Limits::default();\n    let fonts = shodo_fixtures::load_emoji_fonts(&limits).unwrap();\n    for case in CASES {\n        for _ in 0..WARMUP {\n            black_box(sample(case, &mode, &fonts, usize::MAX));\n        }\n        for index in 0..samples {\n            println!(\n                \"{}\",\n                serde_json::to_string(&sample(case, &mode, &fonts, index)).unwrap()\n            );\n        }\n    }\n}\n",
+  "production_patch": "diff --git i/.github/workflows/ci.yml w/.github/workflows/ci.yml\nindex b8e306f..ae86fa1 100644\n--- i/.github/workflows/ci.yml\n+++ w/.github/workflows/ci.yml\n@@ -64,7 +64,7 @@ jobs:\n             target/snapshot-report\n             target/snapshot-checks\n           if-no-files-found: warn\n-      - run: cargo test -p shodo-bench --features allocation-counting --test allocator --test probe --test ruby_hit_path_allocations --test ruby_base_caret_range --test ruby_base_decoration --test style_memory --test suppressed_warning_format --test selection_allocations --test paint_geometry_allocations\n+      - run: cargo test -p shodo-bench --features allocation-counting --test allocator --test probe --test ruby_hit_path_allocations --test ruby_base_caret_range --test ruby_base_decoration --test style_memory --test suppressed_warning_format --test selection_allocations --test paint_geometry_allocations --test font_query_allocations\n       - run: cargo test -p shodo-bench --bench layout\n         env:\n           SHODO_BENCH_CASE: latin-short\ndiff --git i/crates/shodo/src/analysis/itemize.rs w/crates/shodo/src/analysis/itemize.rs\nindex 34fd611..ce1837b 100644\n--- i/crates/shodo/src/analysis/itemize.rs\n+++ w/crates/shodo/src/analysis/itemize.rs\n@@ -4,6 +4,7 @@ use super::{ItemKind, whitespace::Processed};\n use crate::font::{FontCluster, FontCollection, FontMatch, FontQuery};\n use crate::style::{FontFamily, FontStyle, InlineStyle};\n use std::collections::HashMap;\n+use std::hash::{Hash, Hasher};\n \n mod graphemes;\n \n@@ -81,36 +82,55 @@ pub(crate) fn inline_boundary_breaks_shaping(\n }\n \n #[derive(Hash, PartialEq, Eq)]\n-struct QueryKey {\n-    families: Vec<(u8, String)>,\n+struct QueryKey<'a> {\n+    families: &'a [FontFamily],\n     weight: u32,\n     width: u32,\n     style: (u8, u32),\n-    language: Option<String>,\n+    language: Option<QueryLanguage<'a>>,\n     synthesis: u8,\n }\n-impl QueryKey {\n-    fn new(s: &FontQuery) -> Self {\n+impl<'a> QueryKey<'a> {\n+    fn new(s: &'a InlineStyle) -> Self {\n+        let (weight, width, style) =\n+            FontQuery::normalized_attributes(s.font_weight, s.font_width, s.font_style);\n         Self {\n-            families: s\n-                .families\n-                .iter()\n-                .map(|f| match f {\n-                    FontFamily::Named(name) => (0, name.clone()),\n-                    FontFamily::Generic(generic) => (*generic as u8 + 1, String::new()),\n-                })\n-                .collect(),\n-            weight: s.weight.to_bits(),\n-            width: s.width.to_bits(),\n-            style: match s.style {\n+            families: &s.font_families,\n+            weight: weight.to_bits(),\n+            width: width.to_bits(),\n+            style: match style {\n                 FontStyle::Normal => (0, 0),\n                 FontStyle::Italic => (1, 0),\n                 FontStyle::Oblique(angle) => (2, if angle == 0.0 { 0 } else { angle.to_bits() }),\n             },\n-            language: s.language.clone(),\n-            synthesis: u8::from(s.synthesis.weight)\n-                | u8::from(s.synthesis.style) << 1\n-                | u8::from(s.synthesis.small_caps) << 2,\n+            language: s.lang.as_deref().map(QueryLanguage),\n+            synthesis: u8::from(s.font_synthesis.weight)\n+                | u8::from(s.font_synthesis.style) << 1\n+                | u8::from(s.font_synthesis.small_caps) << 2,\n+        }\n+    }\n+}\n+\n+/// Match FontQuery's ASCII-only normalization without an owned lowercase copy.\n+#[derive(Eq)]\n+struct QueryLanguage<'a>(&'a str);\n+\n+impl PartialEq for QueryLanguage<'_> {\n+    fn eq(&self, other: &Self) -> bool {\n+        self.0.eq_ignore_ascii_case(other.0)\n+    }\n+}\n+\n+impl Hash for QueryLanguage<'_> {\n+    fn hash<H: Hasher>(&self, state: &mut H) {\n+        self.0.len().hash(state);\n+        // Feed blocks, not one hasher call per byte of an author-supplied tag.\n+        let mut folded = [0; 64];\n+        for chunk in self.0.as_bytes().chunks(folded.len()) {\n+            for (out, byte) in folded.iter_mut().zip(chunk) {\n+                *out = byte.to_ascii_lowercase();\n+            }\n+            state.write(&folded[..chunk.len()]);\n         }\n     }\n }\n@@ -184,25 +204,26 @@ pub(crate) fn itemize(\n             .levels\n         })\n         .collect();\n-    // Canonical query identities are built once per style, without searching a\n-    // growing list of styles or cloning family/language strings per scalar.\n+    // Borrow canonical keys from the retained styles. Only a new query identity\n+    // needs owned family/language payloads; paint-only styles reuse that query.\n     let mut query_ids = HashMap::new();\n     let mut queries = Vec::new();\n     let style_queries: Vec<_> = styles\n         .iter()\n         .map(|s| {\n-            let query = FontQuery {\n-                families: s.font_families.clone(),\n-                weight: s.font_weight,\n-                width: s.font_width,\n-                style: s.font_style,\n-                language: s.lang.clone(),\n-                synthesis: s.font_synthesis,\n-                ..Default::default()\n-            }\n-            .normalized();\n             let next = queries.len();\n-            *query_ids.entry(QueryKey::new(&query)).or_insert_with(|| {\n+            *query_ids.entry(QueryKey::new(s)).or_insert_with(|| {\n+                let query = FontQuery {\n+                    families: s.font_families.clone(),\n+                    weight: s.font_weight,\n+                    width: s.font_width,\n+                    style: s.font_style,\n+                    language: s.lang.clone(),\n+                    synthesis: s.font_synthesis,\n+                    script: *b\"Latn\",\n+                    presentation: crate::font::FontPresentation::Auto,\n+                }\n+                .normalized();\n                 queries.push(query);\n                 next\n             })\n@@ -481,6 +502,7 @@ pub(crate) fn itemize(\n \n #[cfg(test)]\n mod tests {\n+    use super::QueryKey;\n     use crate::font::{FontCollection, FontOptions};\n     use crate::geometry::WritingMode;\n     use crate::limits::Limits;\n@@ -489,6 +511,142 @@ mod tests {\n     use crate::style::{ParagraphStyle, TextOrientation};\n     use crate::{LayoutContext, Paragraph, ParagraphBuilder};\n \n+    #[test]\n+    fn borrowed_query_keys_preserve_normalization_and_collision_identity() {\n+        use crate::style::{FontFamily, FontStyle, GenericFamily, InlineStyle};\n+        use std::collections::HashMap;\n+        use std::hash::{BuildHasher, BuildHasherDefault, Hasher};\n+\n+        #[derive(Default)]\n+        struct ConstantHasher;\n+        impl Hasher for ConstantHasher {\n+            fn finish(&self) -> u64 {\n+                0\n+            }\n+            fn write(&mut self, _: &[u8]) {}\n+        }\n+\n+        let normal = InlineStyle {\n+            lang: Some(\"EN-us\".into()),\n+            ..Default::default()\n+        };\n+        let same = InlineStyle {\n+            font_weight: f32::NAN,\n+            font_width: f32::INFINITY,\n+            lang: Some(\"en-US\".into()),\n+            ..normal.clone()\n+        };\n+        let clamped = InlineStyle {\n+            font_weight: 2000.0,\n+            font_width: 0.0,\n+            font_style: FontStyle::Oblique(100.0),\n+            ..normal.clone()\n+        };\n+        let clamped_same = InlineStyle {\n+            font_weight: 1000.0,\n+            font_width: 0.01,\n+            font_style: FontStyle::Oblique(90.0),\n+            ..normal.clone()\n+        };\n+        let zero = InlineStyle {\n+            font_style: FontStyle::Oblique(-0.0),\n+            ..normal.clone()\n+        };\n+        let zero_same = InlineStyle {\n+            font_style: FontStyle::Oblique(0.0),\n+            ..normal.clone()\n+        };\n+        let invalid_angle = InlineStyle {\n+            font_style: FontStyle::Oblique(f32::NAN),\n+            ..normal.clone()\n+        };\n+        let invalid_angle_same = InlineStyle {\n+            font_style: FontStyle::Oblique(14.0),\n+            ..normal.clone()\n+        };\n+        let long_language = InlineStyle {\n+            lang: Some(format!(\"EN-x-{}\", \"ABCD123-\".repeat(16))),\n+            ..normal.clone()\n+        };\n+        let long_language_same = InlineStyle {\n+            lang: Some(format!(\"en-X-{}\", \"abcd123-\".repeat(16))),\n+            ..normal.clone()\n+        };\n+        let state = std::collections::hash_map::RandomState::new();\n+        for (a, b) in [\n+            (&normal, &same),\n+            (&clamped, &clamped_same),\n+            (&zero, &zero_same),\n+            (&invalid_angle, &invalid_angle_same),\n+            (&long_language, &long_language_same),\n+        ] {\n+            assert!(QueryKey::new(a) == QueryKey::new(b));\n+            assert_eq!(\n+                state.hash_one(QueryKey::new(a)),\n+                state.hash_one(QueryKey::new(b))\n+            );\n+        }\n+\n+        let unicode_upper = InlineStyle {\n+            lang: Some(\"en-É\".into()),\n+            ..normal.clone()\n+        };\n+        let unicode_lower = InlineStyle {\n+            lang: Some(\"en-é\".into()),\n+            ..normal.clone()\n+        };\n+        let absent = InlineStyle {\n+            lang: None,\n+            ..normal.clone()\n+        };\n+        let empty = InlineStyle {\n+            lang: Some(String::new()),\n+            ..normal.clone()\n+        };\n+        let named = InlineStyle {\n+            font_families: vec![FontFamily::Named(\"SansSerif\".into())],\n+            ..normal.clone()\n+        };\n+        let ordered = InlineStyle {\n+            font_families: vec![\n+                FontFamily::Generic(GenericFamily::Serif),\n+                FontFamily::Named(\"A\".into()),\n+            ],\n+            ..normal.clone()\n+        };\n+        let reversed = InlineStyle {\n+            font_families: vec![\n+                FontFamily::Named(\"A\".into()),\n+                FontFamily::Generic(GenericFamily::Serif),\n+            ],\n+            ..normal.clone()\n+        };\n+        let mut synthesis = normal.clone();\n+        synthesis.font_synthesis.weight = false;\n+        let styles = [\n+            &normal,\n+            &same,\n+            &clamped,\n+            &unicode_upper,\n+            &unicode_lower,\n+            &absent,\n+            &empty,\n+            &named,\n+            &ordered,\n+            &reversed,\n+            &synthesis,\n+        ];\n+        let mut ids = HashMap::with_hasher(BuildHasherDefault::<ConstantHasher>::default());\n+        let actual: Vec<_> = styles\n+            .into_iter()\n+            .map(|s| {\n+                let next = ids.len();\n+                *ids.entry(QueryKey::new(s)).or_insert(next)\n+            })\n+            .collect();\n+        assert_eq!(actual, [0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);\n+    }\n+\n     std::thread_local! {\n         pub(super) static AFTER_CONTEXT_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };\n         static CLUSTERS: std::cell::RefCell<Option<Vec<String>>> = const {\ndiff --git i/crates/shodo/src/font/matching.rs w/crates/shodo/src/font/matching.rs\nindex 295d46e..1f68aa5 100644\n--- i/crates/shodo/src/font/matching.rs\n+++ w/crates/shodo/src/font/matching.rs\n@@ -51,13 +51,28 @@ impl Default for FontQuery {\n \n impl FontQuery {\n     pub(crate) fn normalized(mut self) -> Self {\n-        self.weight = finite(self.weight, 400.).clamp(1., 1000.);\n-        self.width = finite(self.width, 100.).max(0.01);\n-        if let FontStyle::Oblique(angle) = &mut self.style {\n+        (self.weight, self.width, self.style) =\n+            Self::normalized_attributes(self.weight, self.width, self.style);\n+        if let Some(language) = &mut self.language {\n+            language.make_ascii_lowercase();\n+        }\n+        self\n+    }\n+\n+    /// Shared by owned queries and borrowed style keys.\n+    pub(crate) fn normalized_attributes(\n+        weight: f32,\n+        width: f32,\n+        mut style: FontStyle,\n+    ) -> (f32, f32, FontStyle) {\n+        if let FontStyle::Oblique(angle) = &mut style {\n             *angle = finite(*angle, 14.).clamp(-90., 90.);\n         }\n-        self.language = self.language.map(|s| s.to_ascii_lowercase());\n-        self\n+        (\n+            finite(weight, 400.).clamp(1., 1000.),\n+            finite(width, 100.).max(0.01),\n+            style,\n+        )\n     }\n }\n \ndiff --git 1/dev/bench/tests/font_query_allocations.rs 2/dev/bench/tests/font_query_allocations.rs\nnew file mode 100644\nindex 0000000..3a3443f\n--- /dev/null\n+++ 2/dev/bench/tests/font_query_allocations.rs\n@@ -0,0 +1,90 @@\n+#![cfg(feature = \"allocation-counting\")]\n+\n+use shodo::font::{FontCollection, FontFaceDescriptor, FontOptions};\n+use shodo::limits::Limits;\n+use shodo::node::{InlineEdges, NodeId, TextSource};\n+use shodo::style::{FontFamily, InlineStyle, LineOptions, ParagraphStyle};\n+use shodo::{AtomicSizes, LayoutContext, ParagraphBuilder};\n+use shodo_bench::allocator::CountingAllocator;\n+\n+#[global_allocator]\n+static ALLOC: CountingAllocator<std::alloc::System> = CountingAllocator::new(std::alloc::System);\n+\n+#[test]\n+fn paint_only_styles_do_not_copy_a_large_font_query_payload_per_style() {\n+    let limits = Limits::unlimited();\n+    let fonts = FontCollection::with_options(\n+        &limits,\n+        FontOptions {\n+            system_fonts: false,\n+            ..Default::default()\n+        },\n+    );\n+    // Keep the query below the match cache's payload cap so this test isolates\n+    // style/query preparation rather than intentional cache bypass.\n+    let payload_bytes = 3 * 1024;\n+    let family = \"x\".repeat(payload_bytes);\n+    let id = fonts\n+        .register_face(\n+            shodo_fixtures::font(\"latin\").unwrap().bytes.to_vec(),\n+            0,\n+            FontFaceDescriptor {\n+                family: family.clone(),\n+                ..Default::default()\n+            },\n+        )\n+        .unwrap();\n+    let style = ParagraphStyle {\n+        root: InlineStyle {\n+            font_families: vec![FontFamily::Named(family)],\n+            lang: Some(\"EN-us\".into()),\n+            ..Default::default()\n+        },\n+        ..Default::default()\n+    };\n+    let mut cx = LayoutContext::new();\n+    let mut warm = ParagraphBuilder::new(&style, &limits);\n+    warm.push_text(TextSource::Generated { node: NodeId(100) }, \"a\");\n+    drop(warm.build(&mut cx, &fonts).unwrap());\n+    let mut builder = ParagraphBuilder::new(&style, &limits);\n+    for i in 0..32 {\n+        let mut inline = style.root.clone();\n+        inline.paint.color = [i as u8, 17, 23, 255];\n+        let node = NodeId(i);\n+        builder\n+            .open_inline(node, &inline, InlineEdges::default())\n+            .push_text(TextSource::Generated { node }, \"a\")\n+            .close_inline();\n+    }\n+    let analysis = builder.analyze().unwrap();\n+    let scope = ALLOC.begin().unwrap();\n+    let paragraph = analysis.shape(&mut cx, &fonts).unwrap();\n+    let counts = scope.finish();\n+    assert_eq!(paragraph.text(), \"a\".repeat(32));\n+    assert!(paragraph.warnings().is_empty());\n+    let lines = paragraph.break_all(\n+        &mut cx,\n+        &LineOptions::default(),\n+        100_000.0,\n+        &AtomicSizes::EMPTY,\n+    );\n+    assert_eq!(lines.len(), 1);\n+    assert!(cx.take_warnings().is_empty());\n+    let spans = lines[0].paint_spans();\n+    assert_eq!(spans.len(), 32);\n+    for (i, span) in spans.iter().enumerate() {\n+        assert_eq!(span.style.color, [i as u8, 17, 23, 255]);\n+    }\n+    assert!(lines[0].fragments().all(|fragment| match fragment {\n+        shodo::Fragment::GlyphRun(run) => run.font() == id,\n+        _ => true,\n+    }));\n+    // Include all shaping work, but leave room for shared queries and metrics.\n+    // Two transient payload copies per style alone would exceed this ceiling.\n+    assert!(\n+        counts.allocated_bytes < (48 * payload_bytes) as u64,\n+        \"shared font queries allocated {} bytes for a {} byte payload\",\n+        counts.allocated_bytes,\n+        payload_bytes,\n+    );\n+}\n",
+  "rejected_initial_bytewise_hash": {
+    "raw_sha256": "a1d76498c8df41c4d7db28295f303fdfb07d67303f95db9ad2e3066b9c10f25f",
+    "raw_rows": 6120,
+    "long_tag_median_change_percent": {
+      "latin": 25.3,
+      "cjk_fallback": 25.9,
+      "size_adjust": 24.2,
+      "variable": 22.7
+    },
+    "disposition": "Replaced before completion with 64-byte stack-block hashing."
+  },
+  "temporary_artifact_retention": "Task-owned raw profiles, annotations, binaries, logs, archived sources and temporary targets were removed after these durable records and issue notes were verified. No temporary artifacts retained.",
+  "callgrind_record": "docs/records/font-query-callgrind-2026-10-08.json"
+}

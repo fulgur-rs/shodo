@@ -51,13 +51,28 @@ impl Default for FontQuery {
 
 impl FontQuery {
     pub(crate) fn normalized(mut self) -> Self {
-        self.weight = finite(self.weight, 400.).clamp(1., 1000.);
-        self.width = finite(self.width, 100.).max(0.01);
-        if let FontStyle::Oblique(angle) = &mut self.style {
+        (self.weight, self.width, self.style) =
+            Self::normalized_attributes(self.weight, self.width, self.style);
+        if let Some(language) = &mut self.language {
+            language.make_ascii_lowercase();
+        }
+        self
+    }
+
+    /// Shared by owned queries and borrowed style keys.
+    pub(crate) fn normalized_attributes(
+        weight: f32,
+        width: f32,
+        mut style: FontStyle,
+    ) -> (f32, f32, FontStyle) {
+        if let FontStyle::Oblique(angle) = &mut style {
             *angle = finite(*angle, 14.).clamp(-90., 90.);
         }
-        self.language = self.language.map(|s| s.to_ascii_lowercase());
-        self
+        (
+            finite(weight, 400.).clamp(1., 1000.),
+            finite(width, 100.).max(0.01),
+            style,
+        )
     }
 }
 
