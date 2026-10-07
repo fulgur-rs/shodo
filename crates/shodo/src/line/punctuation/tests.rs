@@ -14,6 +14,143 @@ use skrifa::{
     raw::TableProvider,
 };
 
+std::thread_local! {
+    pub(super) static METRIC_PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(super) static BOUNDS_REQUESTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[test]
+fn repeated_punctuation_reuses_metrics_across_language_runs_and_keeps_sizes_distinct() {
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            crate::test_support::fonts::CJK.to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let style = ParagraphStyle {
+        root: InlineStyle {
+            font_families: vec![FontFamily::Named("CJK".into())],
+            font_size: 16.0,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    for repeats in [16, 128] {
+        let mut builder = crate::RichText::with_limits(&style, &limits);
+        for i in 0..repeats {
+            let inline = InlineStyle {
+                font_size: if i % 2 == 0 { 16.0 } else { 32.0 },
+                lang: Some(if i % 4 < 2 { "ja" } else { "en" }.into()),
+                ..style.root.clone()
+            };
+            builder = builder.push("「", &inline);
+        }
+        METRIC_PROBES.with(|count| count.set(0));
+        BOUNDS_REQUESTS.with(|count| count.set(0));
+        let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        assert!(paragraph.warnings().is_empty());
+        assert_eq!(paragraph.data.runs.len(), repeats);
+        for (i, p) in paragraph.data.punctuation.iter().take(repeats).enumerate() {
+            assert_eq!(p.class, P::Opening);
+            assert_eq!(p.left.to_f32(), if i % 2 == 0 { 8.0 } else { 16.0 });
+            assert_eq!(p.right.to_f32(), 0.0);
+        }
+        assert!(
+            METRIC_PROBES.with(|count| count.get()) <= 2,
+            "fullwidth probes should depend on font instances, not run count"
+        );
+        assert!(
+            BOUNDS_REQUESTS.with(|count| count.get()) <= 2,
+            "outline requests should depend on distinct instance/glyph pairs"
+        );
+    }
+    // Exceed the instance cache's working set and revisit evicted sizes.
+    let mut builder = crate::RichText::with_limits(&style, &limits);
+    for i in 0..48 {
+        builder = builder.push(
+            "「",
+            &InlineStyle {
+                font_size: 16.0 + 2.0 * (i % 12) as f32,
+                ..style.root.clone()
+            },
+        );
+    }
+    let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+    assert!(paragraph.warnings().is_empty());
+    assert_eq!(paragraph.data.runs.len(), 48);
+    for (i, p) in paragraph.data.punctuation.iter().take(48).enumerate() {
+        assert_eq!(p.left.to_f32(), 8.0 + (i % 12) as f32);
+    }
+}
+
+#[test]
+fn equal_glyph_ids_from_distinct_faces_do_not_share_outline_bounds() {
+    let mut tables = cjk_tables();
+    tables.retain(|(tag, _)| tag != b"CFF ");
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    for (family, bytes) in [
+        ("Outlined", crate::test_support::fonts::CJK.to_vec()),
+        ("No Outline", cjk_font(&mut tables)),
+    ] {
+        fonts
+            .register_face(
+                bytes,
+                0,
+                FontFaceDescriptor {
+                    family: family.into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+    let style = ParagraphStyle::default();
+    let mut builder = crate::RichText::with_limits(&style, &limits);
+    for family in ["Outlined", "No Outline", "Outlined", "No Outline"] {
+        builder = builder.push(
+            "「",
+            &InlineStyle {
+                font_families: vec![FontFamily::Named(family.into())],
+                font_size: 16.0,
+                ..Default::default()
+            },
+        );
+    }
+    let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+    assert!(paragraph.warnings().is_empty());
+    assert_eq!(paragraph.data.runs.len(), 4);
+    assert!(
+        paragraph
+            .data
+            .glyphs
+            .id
+            .iter()
+            .all(|id| *id == paragraph.data.glyphs.id[0])
+    );
+    for (p, blank) in paragraph.data.punctuation.iter().zip([8.0, 0.0, 8.0, 0.0]) {
+        assert_eq!(p.class, P::Opening);
+        assert_eq!(p.left.to_f32(), blank);
+    }
+}
+
 pub(crate) fn cjk_tables() -> Vec<([u8; 4], Vec<u8>)> {
     let base = crate::test_support::fonts::CJK;
     (0..u16::from_be_bytes(base[4..6].try_into().unwrap()) as usize)
@@ -251,6 +388,82 @@ fn fallback_variation_and_size_adjust_use_the_actual_blank() {
         assert_eq!(line.inline_size(), expected, "weight {weight}");
         assert_eq!(line.text_range(), 0..9);
     }
+
+    // Equal-size runs still need distinct normalized coordinates. The HVAR
+    // location widens the advance without widening this bracket's outline.
+    let style = ParagraphStyle {
+        root: InlineStyle {
+            font_families: vec![FontFamily::Named("Variable".into())],
+            font_size: 16.0,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut builder = crate::RichText::with_limits(&style, &limits);
+    for weight in [400.0, 900.0, 400.0, 900.0] {
+        builder = builder.push(
+            "「",
+            &InlineStyle {
+                font_variations: vec![FontVariation {
+                    tag: *b"wght",
+                    value: weight,
+                }],
+                ..style.root.clone()
+            },
+        );
+    }
+    let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+    assert!(paragraph.warnings().is_empty());
+    assert_eq!(paragraph.data.runs.len(), 4);
+    assert!(paragraph.data.runs.iter().all(|run| run.font_size == 16.0));
+    for (punctuation, blank) in paragraph.data.punctuation.iter().zip([8.0, 0.0, 8.0, 0.0]) {
+        assert_eq!(punctuation.left.to_f32(), blank);
+    }
+}
+
+#[test]
+fn raw_bounds_cache_keeps_missing_outlines_and_stays_bounded() {
+    let font = FontRef::new(crate::test_support::fonts::CJK).unwrap();
+    let metrics = font.glyph_metrics(Size::new(16.0), LocationRef::default());
+    let fonts = FontCollection::with_options(
+        &Limits::default(),
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    let id = fonts
+        .register(crate::test_support::fonts::CJK.to_vec())
+        .unwrap();
+    let mut geometry = FontGeometry {
+        font: id,
+        size: 16.0f32.to_bits(),
+        coords: &[],
+        nominal: None,
+        proportional: false,
+        bounds: HashMap::new(),
+    };
+    BOUNDS_REQUESTS.with(|count| count.set(0));
+    for _ in 0..128 {
+        assert!(geometry.bounds(&metrics, u32::MAX).is_none());
+    }
+    assert_eq!(BOUNDS_REQUESTS.with(|count| count.get()), 1);
+    for glyph in 0..256 {
+        assert_eq!(
+            geometry.bounds(&metrics, glyph),
+            metrics.bounds(GlyphId::new(glyph))
+        );
+    }
+    assert!(geometry.bounds.len() <= 64);
+    // A cached None survives overflow, and the uncached glyph path still
+    // computes the same raw bounds when the working storage is full.
+    BOUNDS_REQUESTS.with(|count| count.set(0));
+    assert!(geometry.bounds(&metrics, u32::MAX).is_none());
+    assert_eq!(BOUNDS_REQUESTS.with(|count| count.get()), 0);
+    assert_eq!(
+        geometry.bounds(&metrics, 255),
+        metrics.bounds(GlyphId::new(255))
+    );
 }
 
 #[test]
