@@ -179,8 +179,9 @@ pub(crate) fn candidate_adjustment(
         // Past the operation's work allowance: fit without the adjustment.
         return LayoutUnit::ZERO;
     }
-    // Fit probes grow `end` for a fixed `start`: resume the previous walk.
-    let mut walk = cx.ruby_memo.take_walk();
+    // Fit probes grow `end` for a fixed `start`. Intrinsic sizes alternate
+    // word and row starts, so resume the walk belonging to this start.
+    let mut walk = cx.ruby_memo.take_walk(data, start);
     let through = super::memo::advance(&mut walk, data, start, end);
     if let Some(w) = walk.as_ref() {
         // A restarted walk (a new start) visits its containers again.
