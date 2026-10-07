@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.23](https://github.com/fulgur-rs/shodo/compare/v0.0.22...v0.0.23) - 2026-10-07
+
+### Other
+
+- *(builder)* hash structural style keys
+- reuse punctuation geometry across shaped runs
+- *(ruby)* retain intrinsic word and segment walks
+
 ## [0.0.22](https://github.com/fulgur-rs/shodo/compare/v0.0.21...v0.0.22) - 2026-10-07
 
 ### Other
