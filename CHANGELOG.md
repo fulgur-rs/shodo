@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.21](https://github.com/fulgur-rs/shodo/compare/v0.0.20...v0.0.21) - 2026-10-07
+
+### Fixed
+
+- evaluate each styled break independently in count mode
+- keep styled break group geometry consistent with metrics
+- gate styled break struts on quirks parent metrics
+
 ## [0.0.20](https://github.com/fulgur-rs/shodo/compare/v0.0.19...v0.0.20) - 2026-10-07
 
 ### Other
