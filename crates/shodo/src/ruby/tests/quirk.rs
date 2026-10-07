@@ -513,6 +513,226 @@ fn styled_break_multiple_parent_eligibility_matches_count_mode() {
     }
 }
 
+fn many_break_ruby(count: usize, styled: bool) -> Paragraph {
+    use crate::style::LineHeight;
+    let ps = ParagraphStyle {
+        root: style(10.0),
+        line_height_quirk: true,
+        ..Default::default()
+    };
+    let mut content = ParagraphBuilder::new(&ps, &Limits::default());
+    for i in 0..count as u64 {
+        content.open_inline(
+            NodeId(1000 + 3 * i),
+            &InlineStyle {
+                line_height: LineHeight::Px(10.0),
+                ..style(10.0)
+            },
+            Default::default(),
+        );
+        if i % 2 == 0 {
+            content.push_text(
+                TextSource::Generated {
+                    node: NodeId(1001 + 3 * i),
+                },
+                "日",
+            );
+        }
+        if styled || i == 0 {
+            content.push_forced_break_with_style(
+                NodeId(1002 + 3 * i),
+                &InlineStyle {
+                    line_height: LineHeight::Px(40.0),
+                    ..style(10.0)
+                },
+            );
+        } else {
+            content.push_forced_break(NodeId(1002 + 3 * i));
+        }
+        content.close_inline();
+    }
+    quirk_paragraph(true, |b| {
+        b.push_ruby(
+            NodeId(1),
+            &style(10.0),
+            ruby(
+                RubyContent::from_builder(content),
+                &"日".repeat(count / 2 + 1),
+            ),
+        );
+    })
+}
+
+#[test]
+fn styled_break_cached_windows_match_retained_count_lines() {
+    use crate::geometry::WritingMode;
+    use crate::node::{InlineEdges, Sides};
+    use crate::style::{LineHeight, VerticalAlign, WhiteSpaceCollapse};
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        for collapse in [WhiteSpaceCollapse::Collapse, WhiteSpaceCollapse::Preserve] {
+            for align in [
+                VerticalAlign::Baseline,
+                VerticalAlign::Top,
+                VerticalAlign::Bottom,
+            ] {
+                for edge in [0.0, 1.0] {
+                    let p = quirk_paragraph_in(mode, true, |b| {
+                        b.open_inline(
+                            NodeId(100),
+                            &InlineStyle {
+                                line_height: LineHeight::Px(10.0),
+                                white_space_collapse: collapse,
+                                vertical_align: align,
+                                ..style(10.0)
+                            },
+                            InlineEdges {
+                                padding: Sides {
+                                    inline_start: edge,
+                                    inline_end: edge,
+                                    ..Default::default()
+                                },
+                                ..Default::default()
+                            },
+                        );
+                        b.push_text(TextSource::Generated { node: NodeId(1) }, "a ");
+                        for i in 0..3 {
+                            b.push_forced_break_with_style(
+                                NodeId(200 + i),
+                                &InlineStyle {
+                                    line_height: LineHeight::Px(40.0 + 10.0 * i as f32),
+                                    ..style(10.0)
+                                },
+                            );
+                        }
+                        b.open_inline(
+                            NodeId(101),
+                            &InlineStyle {
+                                vertical_align: VerticalAlign::TextTop,
+                                ..style(12.0)
+                            },
+                            Default::default(),
+                        );
+                        b.push_text(TextSource::Generated { node: NodeId(2) }, " ");
+                        b.push_forced_break_with_style(NodeId(203), &style(10.0));
+                        b.close_inline();
+                        b.push_forced_break_with_style(NodeId(204), &style(20.0));
+                        b.close_inline();
+                        b.push_text(TextSource::Generated { node: NodeId(3) }, "z");
+                    });
+                    let mut cx = LayoutContext::new();
+                    // Growing, shrinking, changed starts, then the initial
+                    // start again: stale prepared leaves must stay excluded.
+                    for limit in [1, usize::MAX, 3, 2, usize::MAX] {
+                        let mut retained = LayoutContext::new();
+                        let mut constraint = crate::LineConstraint::new(1000.0);
+                        constraint.max_graphemes = Some(limit);
+                        let mut token = p.start_token();
+                        while let crate::LineResult::Line(line) = p.next_line(
+                            &mut retained,
+                            token,
+                            &Default::default(),
+                            &constraint,
+                            &AtomicSizes::EMPTY,
+                        ) {
+                            token = line.break_token();
+                            let range = line.units.start as usize..line.units.end as usize;
+                            let mut sat = Saturation::default();
+                            let metrics = crate::line::metric_index::measure(
+                                &p.data,
+                                range.clone(),
+                                &AtomicSizes::EMPTY,
+                                &mut cx,
+                                &mut sat,
+                            );
+                            assert_eq!(
+                                (metrics.block_size.to_f32(), metrics.baseline.to_f32()),
+                                (
+                                    line.block_size(),
+                                    line.baseline(crate::geometry::BaselineKind::Alphabetic)
+                                ),
+                                "{mode:?}/{collapse:?}/{align:?}/{edge}/{limit}/{range:?}"
+                            );
+                            let frame = crate::ruby::geometry::Frame::new(
+                                &p.data,
+                                range.clone(),
+                                &line.fragments,
+                                &line.overlay_runs,
+                                crate::geometry::LayoutUnit::ZERO,
+                                &line.block_shifts,
+                                line.block_size,
+                            );
+                            let root_content = frame.box_content(None, &mut sat);
+                            let expected = line
+                                .fragments
+                                .iter()
+                                .enumerate()
+                                .filter_map(|(i, _)| frame.record_bounds(i, &mut sat))
+                                .fold(root_content, |a, b| a.union(b));
+                            let content = crate::line::metric_index::content(
+                                &p.data,
+                                range.clone(),
+                                std::slice::from_ref(&range),
+                                &[None],
+                                &AtomicSizes::EMPTY,
+                                &mut cx,
+                                &mut sat,
+                            );
+                            let actual = content.areas[0]
+                                .map_or(content.contents[0], |a| a.union(content.contents[0]));
+                            assert_eq!(
+                                (actual.top, actual.bottom),
+                                (expected.top, expected.bottom),
+                                "content {mode:?}/{collapse:?}/{align:?}/{edge}/{limit}/{range:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn styled_break_public_count_mode_does_not_repeat_prefix_credit_queries() {
+    for styled in [false, true] {
+        let mut decisions = Vec::new();
+        for count in [64, 128, 256] {
+            let p = many_break_ruby(count, styled);
+            let mut constraint = crate::LineConstraint::new(96.0);
+            constraint.max_graphemes = Some(usize::MAX);
+            let mut cx = LayoutContext::new();
+            let crate::LineResult::Line(line) = p.next_line(
+                &mut cx,
+                p.start_token(),
+                &crate::style::LineOptions::default(),
+                &constraint,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!("expected count-mode line")
+            };
+            assert!(line.is_last());
+            assert!(cx.take_warnings().is_empty());
+            assert!(
+                cx.ruby_scalar_calls > 0,
+                "public ruby path must reach scalar index"
+            );
+            println!(
+                "shodo-13f count={count} styled={styled} decisions={} visits={} scalar={}",
+                cx.ruby_break_credit_queries, cx.ruby_measure_visits, cx.ruby_scalar_calls
+            );
+            decisions.push(cx.ruby_break_credit_queries);
+        }
+        assert!(
+            decisions.windows(2).all(|w| w[1] < 3 * w[0]),
+            "public prefixes repeat styled-break eligibility: {styled}/{decisions:?}"
+        );
+    }
+}
+
 #[test]
 fn styled_break_root_strut_combinations_match_retained_ranges() {
     use crate::geometry::WritingMode;

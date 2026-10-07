@@ -64,8 +64,6 @@ impl MetricIndex {
         replacements: &BTreeMap<usize, Summary>,
         excluded: &BTreeSet<usize>,
         removed: &[Range<usize>],
-        include_breaks: bool,
-        break_toggles: &BTreeSet<usize>,
         cx: &mut LayoutContext,
     ) -> Summary {
         self.query_node(
@@ -75,18 +73,8 @@ impl MetricIndex {
             replacements,
             excluded,
             removed,
-            include_breaks,
-            break_toggles,
             cx,
         )
-    }
-
-    fn with_breaks(&self, summary: Summary, node: usize, include_breaks: bool) -> Summary {
-        if include_breaks && !self.breaks.is_empty() {
-            summary.join(self.breaks[node])
-        } else {
-            summary
-        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -98,8 +86,6 @@ impl MetricIndex {
         replacements: &BTreeMap<usize, Summary>,
         excluded: &BTreeSet<usize>,
         removed: &[Range<usize>],
-        include_breaks: bool,
-        break_toggles: &BTreeSet<usize>,
         _cx: &mut LayoutContext,
     ) -> Summary {
         #[cfg(test)]
@@ -113,19 +99,18 @@ impl MetricIndex {
             && source.end <= range.end
             && replacements.range(source.clone()).next().is_none()
             && excluded.range(source.clone()).next().is_none()
-            && break_toggles.range(source.clone()).next().is_none()
         {
             if removed
                 .iter()
                 .any(|r| r.start <= source.start && source.end <= r.end)
             {
-                return self.with_breaks(self.nonglyph[node], node, include_breaks);
+                return self.nonglyph[node];
             }
             if !removed
                 .iter()
                 .any(|r| r.start < source.end && source.start < r.end)
             {
-                return self.with_breaks(self.tree[node], node, include_breaks);
+                return self.tree[node];
             }
         }
         if source.end - source.start == 1 {
@@ -135,11 +120,6 @@ impl MetricIndex {
                 } else {
                     self.tree[node]
                 },
-            );
-            result = self.with_breaks(
-                result,
-                node,
-                include_breaks ^ break_toggles.contains(&source.start),
             );
             if excluded.contains(&source.start) {
                 result.height = 0.0;
@@ -155,8 +135,6 @@ impl MetricIndex {
             replacements,
             excluded,
             removed,
-            include_breaks,
-            break_toggles,
             _cx,
         )
         .join(self.query_node(
@@ -166,8 +144,6 @@ impl MetricIndex {
             replacements,
             excluded,
             removed,
-            include_breaks,
-            break_toggles,
             _cx,
         ))
     }
