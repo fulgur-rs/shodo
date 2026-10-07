@@ -870,3 +870,240 @@ fn emphasis_index_matches_retained_ranges() {
         }
     }
 }
+
+// A full aligned group can mix content in one parent with an eligible
+// styled break in another; its combined extents include their displacement.
+fn displaced_styled_break_group(
+    mode: crate::geometry::WritingMode,
+    align: crate::style::VerticalAlign,
+    offset: f32,
+    suppressed: bool,
+) -> Paragraph {
+    use crate::style::{LineHeight, VerticalAlign};
+    quirk_paragraph_in(mode, true, |b| {
+        b.open_inline(
+            NodeId(100),
+            &InlineStyle {
+                line_height: LineHeight::Px(20.0),
+                vertical_align: align,
+                ..style(20.0)
+            },
+            Default::default(),
+        );
+        if suppressed {
+            b.open_inline(
+                NodeId(101),
+                &InlineStyle {
+                    vertical_align: VerticalAlign::TextTop,
+                    ..style(20.0)
+                },
+                Default::default(),
+            );
+            b.close_inline();
+        } else {
+            b.push_text(TextSource::Generated { node: NodeId(1) }, "x");
+            b.open_inline(NodeId(101), &style(20.0), Default::default());
+        }
+        b.push_forced_break_with_style(
+            NodeId(3),
+            &InlineStyle {
+                line_height: LineHeight::Px(40.0),
+                vertical_align: VerticalAlign::Length(offset),
+                ..style(20.0)
+            },
+        );
+        if !suppressed {
+            b.close_inline();
+        }
+        b.close_inline();
+        if !suppressed {
+            b.open_inline(NodeId(102), &style(20.0), Default::default());
+            b.push_forced_break_with_style(NodeId(4), &style(10.0));
+            b.close_inline();
+        }
+    })
+}
+
+#[test]
+fn styled_break_full_groups_union_displaced_content_and_break_bounds() {
+    use crate::geometry::WritingMode;
+    use crate::style::VerticalAlign;
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        for align in [VerticalAlign::Top, VerticalAlign::Bottom] {
+            for offset in [-100.0, 100.0] {
+                let p = displaced_styled_break_group(mode, align, offset, false);
+                assert!(
+                    assert_quirk_parity(&p, &AtomicSizes::EMPTY) > 5,
+                    "{mode:?}/{align:?}/{offset}"
+                );
+            }
+        }
+    }
+}
+
+fn assert_styled_break_group_content(suppressed: bool) {
+    use crate::geometry::{LayoutUnit, WritingMode};
+    use crate::style::VerticalAlign;
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        for align in [VerticalAlign::Top, VerticalAlign::Bottom] {
+            for offset in [-100.0, 100.0] {
+                {
+                    let p = displaced_styled_break_group(mode, align, offset, suppressed);
+                    let mut cx = LayoutContext::new();
+                    cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+                    for end in 1..=p.data.units.len() {
+                        let range = 0..end;
+                        let line = p.ruby_line(
+                            &mut LayoutContext::new(),
+                            range.clone(),
+                            10000.0,
+                            &AtomicSizes::EMPTY,
+                            crate::ruby::align::AnnotationAlign::Policy(RubyAlign::Start),
+                        );
+                        if line.units != (0..end as u32) {
+                            continue;
+                        }
+                        let mut sat = Saturation::default();
+                        let frame = crate::ruby::geometry::Frame::new(
+                            &p.data,
+                            range.clone(),
+                            &line.fragments,
+                            &line.overlay_runs,
+                            LayoutUnit::ZERO,
+                            &line.block_shifts,
+                            line.block_size,
+                        );
+                        let root = frame.box_content(None, &mut sat);
+                        let expected = line
+                            .fragments
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(i, _)| frame.record_bounds(i, &mut sat))
+                            .fold(root, |a, b| a.union(b));
+                        let result = crate::line::metric_index::content(
+                            &p.data,
+                            range.clone(),
+                            std::slice::from_ref(&range),
+                            &[None],
+                            &AtomicSizes::EMPTY,
+                            &mut cx,
+                            &mut sat,
+                        );
+                        let actual = result.areas[0]
+                            .map_or(result.contents[0], |b| b.union(result.contents[0]));
+                        assert_eq!(
+                            (actual.top, actual.bottom),
+                            (expected.top, expected.bottom),
+                            "{mode:?}/{align:?}/{offset}/suppressed={suppressed} {range:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn styled_break_group_content_uses_the_selected_profile() {
+    assert_styled_break_group_content(false);
+}
+
+#[test]
+fn styled_break_suppressed_profile_does_not_move_ghost_content() {
+    assert_styled_break_group_content(true);
+}
+
+#[test]
+fn styled_break_conditional_groups_and_ghosts_do_not_rescan_prefixes() {
+    use crate::style::{LineHeight, VerticalAlign};
+    for suppressed in [false, true] {
+        let mut visits = Vec::new();
+        for count in [64, 128] {
+            let p = quirk_paragraph(true, |b| {
+                b.open_inline(
+                    NodeId(100),
+                    &InlineStyle {
+                        line_height: LineHeight::Px(20.0),
+                        vertical_align: VerticalAlign::Top,
+                        ..style(20.0)
+                    },
+                    Default::default(),
+                );
+                if suppressed {
+                    // Keep many real units: collapsible space runs coalesce.
+                    for i in 0..count {
+                        b.open_inline(
+                            NodeId(1000 + i as u64),
+                            &InlineStyle {
+                                vertical_align: VerticalAlign::TextTop,
+                                ..style(20.0)
+                            },
+                            Default::default(),
+                        );
+                        b.close_inline();
+                    }
+                } else {
+                    b.push_text(
+                        TextSource::Generated { node: NodeId(1) },
+                        &"x ".repeat(count),
+                    );
+                }
+                b.open_inline(
+                    NodeId(101),
+                    &InlineStyle {
+                        vertical_align: if suppressed {
+                            VerticalAlign::TextTop
+                        } else {
+                            VerticalAlign::Baseline
+                        },
+                        ..style(20.0)
+                    },
+                    Default::default(),
+                );
+                if suppressed {
+                    b.close_inline();
+                }
+                b.push_forced_break_with_style(
+                    NodeId(3),
+                    &InlineStyle {
+                        line_height: LineHeight::Px(40.0),
+                        vertical_align: VerticalAlign::Length(100.0),
+                        ..style(20.0)
+                    },
+                );
+                if !suppressed {
+                    b.close_inline();
+                }
+                b.close_inline();
+            });
+            let mut cx = LayoutContext::new();
+            for start in 1..count {
+                let metric = crate::line::metric_index::measure(
+                    &p.data,
+                    start..p.data.units.len(),
+                    &AtomicSizes::EMPTY,
+                    &mut cx,
+                    &mut Saturation::default(),
+                );
+                if suppressed {
+                    assert_eq!(metric.block_size.to_f32(), 0.0);
+                } else {
+                    assert_eq!(metric.block_size.to_f32(), 130.0);
+                }
+            }
+            visits.push(cx.ruby_measure_visits);
+        }
+        assert!(
+            visits[1] < 3 * visits[0],
+            "conditional styled break prefixes rescanned: {suppressed}/{visits:?}"
+        );
+    }
+}

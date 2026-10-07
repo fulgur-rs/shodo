@@ -18,8 +18,9 @@ eligibility. Retained measurement gates break profiles on that decision.
 Indexed measurement keeps explicit break profiles and their top/bottom group
 extents in conditional summaries, selected with the same decision. They exist
 only for a quirks dataset with explicit break styles; other datasets allocate
-no extra summary tree. Queries reuse the existing traversal without unit
-rescans. Synthetic retained ruby ranges can contain several breaks; every
+no extra summary tree. Position-only profiles use a compact conditional
+index too, so clipped unsized groups query only their selected profiles,
+including reshaped glyph replacements. Queries avoid unit rescans. Synthetic retained ruby ranges can contain several breaks; every
 eligible profile is included, rather than only the final one.
 
 Break nodes, explicit-style identity, effective first-line styles and output
@@ -87,6 +88,34 @@ The earlier shodo-47n record is corrected: text in a10px parent followed by
 an explicit40px break stays10px, and a root2px atomic followed by an explicit
 10px break stays2px under the quirk.
 
+## Independent review corrections
+
+The fresh-context read-only review found two Important issues, no Critical
+or Minor issues, and no declined judgments. Both are corrected with regressions:
+
+- A wholly selected top/bottom group needs the union of normal and break
+  bounds before converting to a height. Separate maximum heights lost the
+  displacement: indexed40px versus retained130px in a reproduced range.
+- Content normalization and ghost placement need the same break eligibility.
+  The reproduced content bottom was24.484375px versus134.484375px when the
+  break contributed; a suppressed break wrongly moved it to134.484375px
+  instead of28.96875px. Styled breaks are excluded from position-only profiles.
+  Selected ghosts include only the clipped range and its continued ancestors.
+  A changed conditional group uses its selected raw content and bounds, and
+  those positions enter the existing selection digest used for cache replay.
+
+Tests cover all three writing modes, top/bottom, positive/negative shifts,
+partial/full ranges, accepted/suppressed profiles and pre-break empty prefixes.
+Both height/content tests and a separate suppressed-ghost test failed before
+these corrections. Bounded prefix visits cover the accepted-group and unsized-
+ghost branches as well as the original mixed-parent suppression branch.
+
+Conditional groups are indexed in source order. A physical forced-break line
+has at most one break profile/group; synthetic ranges containing several
+breaks revisit only groups whose placement changes, never scan their units.
+This avoids allocating a second dense content-geometry tree. The compact
+position-only index is allocated only in quirks datasets with styled breaks.
+
 ## Reproduction and validation
 
 Local Rust/Cargo1.96.0; MSRV remains1.89.0. Run in the dedicated checkout:
@@ -97,7 +126,7 @@ export CARGO_TARGET_DIR="$HOME/tmp/shodo-r8t-target"
 export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=/usr/bin/env
 export CARGO_PROFILE_DEV_OPT_LEVEL=1
 export CARGO_PROFILE_DEV_DEBUG=line-tables-only
-cargo test -p shodo --test line_height_quirk --test build
+cargo test -p shodo --test line_height_quirk --test build --test annotation_metrics
 cargo test -p shodo --lib styled_break
 cargo fmt --all --check
 cargo test --workspace
@@ -108,7 +137,25 @@ RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 git diff --check
 ```
 
-Final verification and independent review results are recorded before merge.
+Final checks ran after the review corrections, including the conditional
+group/ghost scaling regression and allocation/query gates for ordinary datasets.
+
+| Check | Final result |
+| --- | --- |
+| Public quirks / builder / annotation metrics | 30 /15 /15 passed |
+| Indexed styled-break height, baseline, content and scaling | 10 passed |
+| Workspace tests and doctests | 1,699 passed,9 existing ignored,100 summaries |
+| No default features, including doctests | 1,164 passed,9 existing ignored |
+| No default features plus complex-scripts, including doctests | 1,167 passed,9 existing ignored |
+| Clippy, workspace/all targets, `-D warnings` | Passed |
+| Workspace rustdoc, `RUSTDOCFLAGS=-D warnings` | Passed |
+| Formatting and diff whitespace | Passed |
+
+Compile logs identify this task's checkout as the source of all five workspace
+packages. The target is exclusively assigned to this work; no copied target
+artifacts were used. The independent review's two Important findings were
+fixed in one pass, each with RED/GREEN evidence and final whole-suite success.
+No Critical/Minor finding or declined judgment remains.
 Publication, pin and archive verification evidence are recorded in shodo-r8t
 and the GitHub release after shipping. Raw logs, headless browser profile,
 build target and dedicated worktree are removed after preserving evidence.

@@ -30,7 +30,7 @@
 ### Task 1: Conditional styled-break metrics and shipping evidence
 
 **Files:**
-- Modify: crates/shodo/src/line/quirk.rs, line/metrics.rs, line/metric_index.rs, line/metric_index/quirk.rs, line/metric_index/scalar.rs, builder.rs.
+- Modify: crates/shodo/src/line/quirk.rs, line/metrics.rs, line/metric_index.rs, line/metric_index/quirk.rs, line/metric_index/scalar.rs, line/metric_index/ghost.rs, builder.rs.
 - Test: crates/shodo/tests/line_height_quirk.rs and annotation_metrics.rs; existing crates/shodo/src/ruby/tests/quirk.rs parity/scaling tests.
 - Correct: docs/records/shodo-47n-styled-break.md.
 - Create: docs/records/shodo-r8t-styled-break.md.
@@ -41,7 +41,7 @@
 
 - [ ] Step 1: Add a literal nine-row public API height matrix and mode controls. Update prior contradictory mixed-content expectations. Add whitespace/edge/pending/font and metadata regressions.
 - [ ] Step 2: Run `cargo test -p shodo --test line_height_quirk`. Expected: mixed-content styled-break assertions fail against main.
-- [ ] Step 3: Expose the retained line's styled-break parent-credit condition, gate retained break profiles, omit unconditional indexed break profiles under the quirk, and conditionally select break summaries in scalar/group metrics, including synthetic ranges spanning several breaks.
+- [ ] Step 3: Expose the retained line's styled-break parent-credit condition, gate retained break profiles, omit unconditional indexed break profiles under the quirk, and conditionally select break summaries in scalar/group metrics, including synthetic ranges spanning several breaks. Keep height union, selected content placement and position-only profiles consistent with that eligibility.
 - [ ] Step 4: Run focused public tests and `cargo test -p shodo --lib styled_break`. Expected: all pass; bounded query test and baseline parity remain passing.
 - [ ] Step 5: Correct API docs/old record, write red/green and Chromium results. Run fmt, workspace tests, Clippy -D warnings, no-default/complex-script tests, rustdoc -D warnings and diff check. Expected: all pass.
 - [ ] Step 6: Commit and obtain one independent read-only whole-branch review, resolve blocking findings with regressions, push PR and wait for all CI. Merge the reviewed head.

@@ -2,6 +2,7 @@
 //! Top/bottom groups are disjoint; only clipped or replaced groups need a
 //! fresh range query. Every other group reuses its cached complete height.
 mod content;
+mod ghost;
 mod quirk;
 mod scalar;
 
@@ -11,6 +12,7 @@ use content::{ContentBounds, ContentSummary, content_bounds, record_content_boun
 pub(crate) use content::{
     ContainerNote, ContentGeometry, ProfileShare, SelectionDigest, content, content_shared,
 };
+use ghost::Ghost;
 use scalar::{Bounds, Summary, union};
 pub(crate) use scalar::{ScalarMetrics, measure};
 
@@ -42,14 +44,17 @@ struct Group {
     /// Explicit break profiles, selected only for a break-only range.
     break_bounds: Option<Bounds>,
     /// Every member's profile: positions a group that sizes nothing.
-    ghost: Bounds,
+    ghost: Option<Bounds>,
     bottom: bool,
 }
 
 impl Group {
     /// Bounds that place the group's content.
     fn placed(&self) -> Bounds {
-        self.bounds.unwrap_or(self.ghost)
+        self.bounds.or(self.ghost).unwrap_or(Bounds {
+            top: 0.0,
+            bottom: 0.0,
+        })
     }
 }
 
@@ -59,6 +64,10 @@ pub(super) struct MetricIndex {
     nonglyph: Vec<Summary>,
     /// Conditional break summaries; empty unless the quirk has styled breaks.
     breaks: Vec<Summary>,
+    /// Position-only profiles without styled breaks; same allocation gate.
+    ghosts: Vec<Ghost>,
+    /// Groups with conditional break profiles, in source order.
+    break_groups: Vec<usize>,
     contents: Vec<ContentSummary>,
     nonglyph_contents: Vec<ContentSummary>,
     box_contents: Vec<ContentBounds>,
@@ -156,6 +165,11 @@ impl MetricIndex {
         } else {
             Vec::new()
         };
+        let mut ghosts = if breaks.is_empty() {
+            Vec::new()
+        } else {
+            vec![Ghost::default(); size * 2]
+        };
         // Glyph profiles of trimmable units, which size a line only when it
         // does not end with them: they live in the quirk tree instead.
         let mut trimmed = if quirk {
@@ -204,6 +218,20 @@ impl MetricIndex {
                 // it (`quirk::QuirkIndex`), as does a trimmable unit's glyph.
                 let conditional_break = quirk && record && matches!(u.kind, UnitKind::ForcedBreak);
                 let sizes = !(quirk && record && (is_box || trims)) && !conditional_break;
+                if !ghosts.is_empty() && !conditional_break {
+                    let bounds = Some(Bounds {
+                        top: p.top,
+                        bottom: p.bottom,
+                    });
+                    ghosts[size + i] = ghosts[size + i].join(Ghost {
+                        all: bounds,
+                        bare: if !record || !matches!(u.kind, UnitKind::Cluster { .. }) {
+                            bounds
+                        } else {
+                            None
+                        },
+                    });
+                }
                 if sizes {
                     tree[size + i] = tree[size + i].join(Summary::profile(p, active));
                 } else if trims {
@@ -232,11 +260,13 @@ impl MetricIndex {
                         units: i..i + 1,
                         bounds: None,
                         break_bounds: None,
-                        ghost: bounds,
+                        ghost: None,
                         bottom,
                     });
                     group.units.end = i + 1;
-                    group.ghost = union(Some(group.ghost), Some(bounds)).unwrap();
+                    if !conditional_break {
+                        group.ghost = union(group.ghost, Some(bounds));
+                    }
                     if sizes {
                         group.bounds = union(group.bounds, Some(bounds));
                     } else if conditional_break {
@@ -283,8 +313,15 @@ impl MetricIndex {
             }
             Box::new(index)
         });
+        let break_groups = groups
+            .iter()
+            .enumerate()
+            .filter_map(|(i, group)| group.break_bounds.map(|_| i))
+            .collect();
         for group in &groups {
-            if let Some(bounds) = group.break_bounds {
+            if group.break_bounds.is_some()
+                && let Some(bounds) = union(group.bounds, group.break_bounds)
+            {
                 let leaf = &mut breaks[size + group.units.end - 1];
                 let height = bounds.bottom - bounds.top;
                 leaf.height = leaf.height.max(height);
@@ -313,6 +350,7 @@ impl MetricIndex {
             nonglyph[i] = nonglyph[i * 2].join(nonglyph[i * 2 + 1]);
             if !breaks.is_empty() {
                 breaks[i] = breaks[i * 2].join(breaks[i * 2 + 1]);
+                ghosts[i] = ghosts[i * 2].join(ghosts[i * 2 + 1]);
             }
         }
         let mut contents = vec![ContentSummary::default(); size * 2];
@@ -389,6 +427,8 @@ impl MetricIndex {
             tree,
             nonglyph,
             breaks,
+            ghosts,
+            break_groups,
             contents,
             nonglyph_contents,
             box_contents,
@@ -424,6 +464,7 @@ impl MetricIndex {
             .map(|q| q.trailing_start(range.start, range.end));
         let mut replacements = BTreeMap::<usize, Summary>::new();
         let mut content_replacements = BTreeMap::<usize, ContentSummary>::new();
+        let mut ghost_replacements = BTreeMap::<usize, Bounds>::new();
         let mut removed = Vec::new();
         // Only edge-window owners are replaced. Box/atomic leaves keep their
         // real profiles, and unaffected glyphs reuse the indexed summaries.
@@ -472,6 +513,14 @@ impl MetricIndex {
                     self.resolver
                         .record(data, &record, std::slice::from_ref(run))
                 {
+                    if !self.ghosts.is_empty() {
+                        let bounds = Bounds {
+                            top: profile.top,
+                            bottom: profile.bottom,
+                        };
+                        let entry = ghost_replacements.entry(owner).or_insert(bounds);
+                        *entry = union(Some(*entry), Some(bounds)).unwrap();
+                    }
                     // The overlay glyph of a trimmed trailing space sizes
                     // nothing, as its original glyph would not.
                     if !trailing.is_some_and(|t| owner >= t && super::quirk::trims(data, owner)) {
@@ -548,7 +597,9 @@ impl MetricIndex {
             }
             // Include all break profiles in synthetic retained ranges too,
             // without scanning their units or baking them into normal groups.
-            if let Some((k, lo)) = q.ending_break(data, range) {
+            if !self.breaks.is_empty()
+                && let Some((k, lo)) = q.ending_break(data, range)
+            {
                 let content = q
                     .query(&(lo..k.min(t)), |l| l.all, cx)
                     .join(q.query(&(lo.max(t)..k), |l| l.kept, cx))
@@ -583,6 +634,35 @@ impl MetricIndex {
                 side = side.join(quirk::Side::from(q.root(), Default::default()));
             }
         }
+        if include_breaks {
+            // A physical forced-break line has at most one conditional group.
+            // Synthetic ranges may contain several; only changed placements
+            // need content queries, rather than a second dense content tree.
+            let first = self
+                .break_groups
+                .partition_point(|i| self.groups[*i].units.end <= range.start);
+            for i in self.break_groups[first..]
+                .iter()
+                .copied()
+                .take_while(|i| self.groups[*i].units.start < range.end)
+            {
+                #[cfg(test)]
+                {
+                    cx.ruby_measure_visits += 1;
+                }
+                let g = &self.groups[i];
+                let base = g.placed();
+                let selected = union(g.bounds, g.break_bounds).expect("conditional group bounds");
+                if if g.bottom {
+                    base.bottom != selected.bottom
+                } else {
+                    base.top != selected.top
+                } {
+                    affected.insert(i);
+                }
+            }
+        }
+        let mut ghost_extra = crate::hashing::FastMap::default();
         let mut ancestors = crate::hashing::FastSet::default();
         for unit in [range.start, range.end - 1] {
             let mut cursor = data.units[unit].parent_box;
@@ -601,6 +681,17 @@ impl MetricIndex {
                 if self.quirk.is_some() {
                     // Ancestors size the line only through `side` credits.
                     extra.active |= active;
+                    if !self.ghosts.is_empty()
+                        && let Some(group) = p.group
+                    {
+                        let i = self.group_keys[&u64::from(group)];
+                        let bounds = Some(Bounds {
+                            top: p.top,
+                            bottom: p.bottom,
+                        });
+                        let entry = ghost_extra.entry(i).or_insert(None);
+                        *entry = union(*entry, bounds);
+                    }
                     cursor = data.boxes[b as usize].parent;
                     continue;
                 }
@@ -662,7 +753,21 @@ impl MetricIndex {
                 raw = union(raw, q.side(&selected, t, &removed, cx).raw);
                 if raw.is_none() {
                     // No member sizes the line: place the content only.
-                    partial.insert(i, group.ghost);
+                    let ghost = if self.ghosts.is_empty() {
+                        group.ghost
+                    } else {
+                        union(
+                            self.ghost_query(&selected, &ghost_replacements, &removed, cx),
+                            ghost_extra.get(&i).copied().flatten(),
+                        )
+                    };
+                    partial.insert(
+                        i,
+                        ghost.unwrap_or(Bounds {
+                            top: 0.0,
+                            bottom: 0.0,
+                        }),
+                    );
                 }
             }
             if let Some(bounds) = raw {
