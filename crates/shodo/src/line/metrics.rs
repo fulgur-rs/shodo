@@ -599,7 +599,11 @@ fn measure_profile(
         crate::hashing::FastMap::default();
     for (offset, u) in data.units[units.clone()].iter().enumerate() {
         empty &= !matches!(u.kind, UnitKind::Tab | UnitKind::ForcedBreak);
-        if let Some(p) = resolver.forced_break(data, u) {
+        if quirk
+            .as_ref()
+            .is_none_or(|q| q.styled_break_contributes(units.start + offset))
+            && let Some(p) = resolver.forced_break(data, u)
+        {
             if let Some(group) = p.group {
                 let bounds = groups.entry(group).or_insert((p.top, p.bottom));
                 bounds.0 = bounds.0.min(p.top);

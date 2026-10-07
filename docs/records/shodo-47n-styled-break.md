@@ -13,6 +13,13 @@ text transforms and normal/first-line datasets, even when the style interns
 to the same slot as the current inline style. `push_forced_break(node)` and
 preserved text newlines retain their existing container-strut behavior.
 
+Correction in shodo-r8t: under `line_height_quirk`, the explicit break's own
+strut contributes only when its parent has no other metrics on the line.
+Non-trimmed text and baseline atomics in that parent suppress it; pending
+aligned descendants and content outside the parent need separate handling. The original mixed-content expectations
+below were wrong; see `shodo-r8t-styled-break.md` for the Chromium matrix and
+corrected regression evidence. Quirk-disabled behavior is unchanged.
+
 The explicit break supplies an independent strut through the shared
 `ProfileResolver::forced_break` calculation. Retained lines and the scalar
 metric index both use this profile, including ancestor displacement,
@@ -45,13 +52,14 @@ the line.
 
 The focused integration tests first failed to compile because the builder
 API was absent. After adding only input style recording, three metric tests
-failed with the intended observable differences:
+failed with the then-intended observable differences (the final two
+expectations have since been corrected against Chromium):
 
 | Input | Existing result | Expected result |
 | --- | --- | --- |
 | Text-free 40px and 60px ancestors, explicit 10px break | 60px | 10px |
-| Text in a 10px parent followed by an explicit 40px break | 10px | 40px |
-| Root atomic followed by an explicit 10px break | 2px | 10px |
+| Text in a 10px parent followed by an explicit 40px break | 10px | 10px (corrected in shodo-r8t) |
+| Root atomic followed by an explicit 10px break | 2px | 2px (corrected in shodo-r8t) |
 
 The new metadata tests first failed to compile because `Line::forced_break`
 was absent. After implementation, the public builder/output regressions

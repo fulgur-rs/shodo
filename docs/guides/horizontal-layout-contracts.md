@@ -161,9 +161,11 @@ genuinely empty lines remain empty.
 
 Use `ParagraphBuilder::push_forced_break_with_style(node, &style)` for a
 `<br>` with its own computed font or line-height. Its independent strut
-contributes even after other content. Under `line_height_quirk`, the break
-does not credit a text-free ancestor inline box; existing text and edge
-credits still apply. The root's forced-break rule remains applicable when
+contributes under `line_height_quirk` only when the break's parent has no
+other metrics on the line. Non-trimmed text, baseline atomics and inline
+edges credit that parent; pending aligned descendants may not. Content
+outside the parent and trimmed trailing spaces do not credit it. The break does not credit a text-free ancestor
+inline box; existing text and edge credits still apply. The root's forced-break rule remains applicable when
 the root directly contains the break. With the quirk disabled, the break's
 strut joins the normal root and ancestor struts. Following text keeps its
 enclosing inline style. The supplied style uses the same interning, resource

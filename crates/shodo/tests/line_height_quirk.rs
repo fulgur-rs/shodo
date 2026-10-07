@@ -118,6 +118,337 @@ fn q(width: f32, input: impl FnOnce(&mut ParagraphBuilder, &mut Doc)) -> Vec<f32
 const WIDE: f32 = 1000.0;
 
 #[test]
+fn styled_break_eligibility_is_independent_in_grapheme_count_lines() {
+    for eligible_first in [false, true] {
+        let p = build(&root(true), |b| {
+            for eligible in [eligible_first, !eligible_first] {
+                b.open_inline(NodeId(2), &span(10.0), Default::default());
+                if !eligible {
+                    text(b, "a");
+                }
+                b.push_forced_break_with_style(
+                    NodeId(3),
+                    &span(if eligible == eligible_first {
+                        100.0
+                    } else {
+                        10.0
+                    }),
+                );
+                b.close_inline();
+            }
+        });
+        let mut constraint = LineConstraint::new(WIDE);
+        constraint.max_graphemes = Some(100);
+        let LineResult::Line(line) = p.next_line(
+            &mut LayoutContext::new(),
+            p.start_token(),
+            &LineOptions::default(),
+            &constraint,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("expected count-mode line")
+        };
+        assert_eq!(line.block_size(), if eligible_first { 100.0 } else { 10.0 });
+    }
+}
+
+#[test]
+fn styled_break_on_cloned_continuation_matches_chromium() {
+    for decoration in [BoxDecorationBreak::Slice, BoxDecorationBreak::Clone] {
+        assert_eq!(
+            q(WIDE, |b, _| {
+                b.open_inline(
+                    NodeId(2),
+                    &InlineStyle {
+                        box_decoration_break: decoration,
+                        ..span(10.0)
+                    },
+                    edges(1.0, 0.0),
+                );
+                text(b, "a");
+                b.push_forced_break(NodeId(3));
+                b.push_forced_break_with_style(NodeId(4), &span(100.0));
+                b.close_inline();
+            }),
+            [10.0, 100.0],
+            "{decoration:?}"
+        );
+    }
+}
+
+#[test]
+fn styled_break_matches_chromium_quirks_height_matrix() {
+    // Chromium quirks mode: body font-size/line-height20px, img2x2.
+    // Each tuple is (HTML, ancestor line-height, content, break line-height,
+    // following text, quirks height, standard height).
+    let cases = [
+        ("<img><br>x", None, "img", 20.0, "x", 22.0, 40.0),
+        ("<img><br style=40>x", None, "img", 40.0, "x", 22.0, 60.0),
+        ("a<br style=40>x", None, "a", 40.0, "x", 40.0, 60.0),
+        (
+            "<span style=40><img><br>x</span>",
+            Some(40.0),
+            "img",
+            40.0,
+            "x",
+            42.0,
+            80.0,
+        ),
+        (
+            "<span style=40><br></span>y",
+            Some(40.0),
+            "",
+            40.0,
+            "y",
+            60.0,
+            80.0,
+        ),
+        ("<br>y", None, "", 20.0, "y", 40.0, 40.0),
+        ("<br style=40>y", None, "", 40.0, "y", 60.0, 60.0),
+        (
+            "<span style=40><br style=10></span>y",
+            Some(40.0),
+            "",
+            10.0,
+            "y",
+            30.0,
+            80.0,
+        ),
+        (
+            "<span><br style=40></span>y",
+            Some(20.0),
+            "",
+            40.0,
+            "y",
+            60.0,
+            60.0,
+        ),
+    ];
+    for quirk in [true, false] {
+        for (html, ancestor, content, break_height, following, quirks, standard) in cases {
+            let inline = |height| InlineStyle {
+                font_size: 20.0,
+                line_height: LineHeight::Px(height),
+                ..Default::default()
+            };
+            let mut style = root(quirk);
+            style.root.font_size = 20.0;
+            let mut atomics = AtomicSizes::new();
+            atomics.insert(
+                NodeId(90),
+                AtomicSize {
+                    inline_size: 2.0,
+                    block_size: 2.0,
+                    ..Default::default()
+                },
+            );
+            let p = build(&style, |b| {
+                if let Some(height) = ancestor {
+                    b.open_inline(NodeId(2), &inline(height), InlineEdges::default());
+                }
+                if content == "img" {
+                    b.push_atomic(
+                        NodeId(90),
+                        &inline(ancestor.unwrap_or(20.0)),
+                        InlineEdges::default(),
+                    );
+                } else {
+                    text(b, content);
+                }
+                b.push_forced_break_with_style(NodeId(3), &inline(break_height));
+                if ancestor.is_some() && content.is_empty() {
+                    b.close_inline();
+                }
+                text(b, following);
+                if ancestor.is_some() && !content.is_empty() {
+                    b.close_inline();
+                }
+            });
+            let lines = p.break_all(
+                &mut LayoutContext::new(),
+                &LineOptions::default(),
+                WIDE,
+                &atomics,
+            );
+            assert_eq!(
+                lines.iter().map(|l| l.block_size()).sum::<f32>(),
+                if quirk { quirks } else { standard },
+                "{html}, quirk={quirk}"
+            );
+            let br = lines[0].forced_break().unwrap();
+            assert_eq!(br.node, NodeId(3));
+            assert!(br.has_own_style);
+            assert_eq!(br.style.line_height, LineHeight::Px(break_height));
+        }
+    }
+}
+
+#[test]
+fn styled_break_strut_depends_on_untrimmed_content_and_ancestor_credit() {
+    for collapse in [WhiteSpaceCollapse::Collapse, WhiteSpaceCollapse::Preserve] {
+        assert_eq!(
+            q(WIDE, |b, _| {
+                b.open_inline(
+                    NodeId(2),
+                    &InlineStyle {
+                        white_space_collapse: collapse,
+                        ..span(10.0)
+                    },
+                    InlineEdges::default(),
+                );
+                text(b, " ");
+                b.push_forced_break_with_style(NodeId(3), &span(40.0));
+                b.close_inline();
+            }),
+            if collapse == WhiteSpaceCollapse::Collapse {
+                vec![40.0]
+            } else {
+                vec![10.0]
+            }
+        );
+    }
+    assert_eq!(
+        q(WIDE, |b, _| {
+            b.open_inline(
+                NodeId(2),
+                &span(10.0),
+                InlineEdges {
+                    padding: Sides {
+                        inline_start: 1.0,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            );
+            b.push_forced_break_with_style(NodeId(3), &span(40.0));
+            b.close_inline();
+        }),
+        [10.0]
+    );
+    assert_eq!(
+        q(WIDE, |b, _| {
+            b.open_inline(NodeId(2), &span(10.0), InlineEdges::default());
+            b.open_inline(
+                NodeId(4),
+                &InlineStyle {
+                    vertical_align: VerticalAlign::Top,
+                    ..span(60.0)
+                },
+                InlineEdges::default(),
+            );
+            b.close_inline();
+            b.push_forced_break_with_style(NodeId(3), &span(40.0));
+            b.close_inline();
+        }),
+        [40.0]
+    );
+}
+
+#[test]
+fn styled_break_does_not_supply_a_strut_to_a_credited_pending_parent() {
+    // Chromium152 quirks: a text-top child credits its baseline parent;
+    // a top child directly in the root credits the root. Both stay0px.
+    assert_eq!(
+        q(WIDE, |b, _| {
+            b.open_inline(NodeId(2), &span(10.0), InlineEdges::default());
+            b.open_inline(
+                NodeId(4),
+                &InlineStyle {
+                    vertical_align: VerticalAlign::TextTop,
+                    ..span(60.0)
+                },
+                InlineEdges::default(),
+            );
+            b.close_inline();
+            b.push_forced_break_with_style(NodeId(3), &span(40.0));
+            b.close_inline();
+        }),
+        [0.0]
+    );
+    assert_eq!(
+        q(WIDE, |b, _| {
+            b.open_inline(
+                NodeId(4),
+                &InlineStyle {
+                    vertical_align: VerticalAlign::Top,
+                    ..span(60.0)
+                },
+                InlineEdges::default(),
+            );
+            b.close_inline();
+            b.push_forced_break_with_style(NodeId(3), &span(40.0));
+        }),
+        [0.0]
+    );
+}
+
+#[test]
+fn styled_break_uses_parent_credit_instead_of_other_content_anywhere_on_the_line() {
+    // Chromium152: pending top atomics and text outside an empty break
+    // parent do not give that parent metrics. The explicit100px strut stays.
+    assert_eq!(
+        q(WIDE, |b, d| {
+            b.open_inline(NodeId(2), &span(10.0), InlineEdges::default());
+            d.img(b, VerticalAlign::Top);
+            b.push_forced_break_with_style(NodeId(3), &span(100.0));
+            b.close_inline();
+        }),
+        [100.0]
+    );
+    assert_eq!(
+        q(WIDE, |b, _| {
+            text(b, "a");
+            b.open_inline(NodeId(2), &span(20.0), InlineEdges::default());
+            b.push_forced_break_with_style(NodeId(3), &span(100.0));
+            b.close_inline();
+        }),
+        [100.0]
+    );
+    assert_eq!(
+        q(WIDE, |b, _| {
+            b.open_inline(
+                NodeId(2),
+                &span(10.0),
+                InlineEdges {
+                    padding: Sides {
+                        inline_start: 1.0,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            );
+            b.open_inline(NodeId(4), &span(10.0), InlineEdges::default());
+            b.push_forced_break_with_style(NodeId(3), &span(100.0));
+            b.close_inline().close_inline();
+        }),
+        [100.0]
+    );
+}
+
+#[test]
+fn styled_break_font_does_not_expand_a_mixed_content_line() {
+    let p = build(&root(true), |b| {
+        text(b, "a");
+        b.push_forced_break_with_style(
+            NodeId(3),
+            &InlineStyle {
+                font_size: 100.0,
+                line_height: LineHeight::Normal,
+                ..Default::default()
+            },
+        );
+    });
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        WIDE,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(lines[0].block_size(), 20.0);
+    assert_eq!(lines[0].forced_break().unwrap().style.font_size, 100.0);
+}
+
+#[test]
 fn styled_break_and_forced_root_strut_keep_independent_line_heights() {
     use shodo::geometry::WritingMode;
     for mode in [
@@ -158,6 +489,8 @@ fn styled_break_and_forced_root_strut_keep_independent_line_heights() {
                         let expected = [
                             if force || (!nested && !atomic) {
                                 root_height
+                            } else if atomic {
+                                2.0
                             } else {
                                 10.0
                             },
@@ -214,12 +547,12 @@ fn styled_break_directly_in_root_keeps_the_root_break_rule() {
             d.img(b, VerticalAlign::Baseline);
             b.push_forced_break_with_style(NodeId(3), &span(10.0));
         }),
-        [10.0]
+        [2.0]
     );
 }
 
 #[test]
-fn styled_break_owns_a_strut_even_after_text_or_an_atomic() {
+fn styled_break_does_not_size_a_line_with_text_or_an_atomic() {
     for atomic in [false, true] {
         assert_eq!(
             q(WIDE, |b, d| {
@@ -232,13 +565,13 @@ fn styled_break_owns_a_strut_even_after_text_or_an_atomic() {
                 b.push_forced_break_with_style(NodeId(3), &span(40.0));
                 b.close_inline();
             }),
-            [40.0]
+            if atomic { vec![2.0] } else { vec![10.0] }
         );
     }
 }
 
 #[test]
-fn styled_break_keeps_its_own_strut_when_it_interns_to_the_parent_style() {
+fn styled_break_does_not_size_an_atomic_line_when_it_interns_to_the_parent_style() {
     assert_eq!(
         q(WIDE, |b, d| {
             b.open_inline(NodeId(2), &span(40.0), InlineEdges::default());
@@ -246,7 +579,7 @@ fn styled_break_keeps_its_own_strut_when_it_interns_to_the_parent_style() {
             b.push_forced_break_with_style(NodeId(3), &span(40.0));
             b.close_inline();
         }),
-        [40.0]
+        [2.0]
     );
 }
 

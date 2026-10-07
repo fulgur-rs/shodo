@@ -426,8 +426,12 @@ impl ParagraphBuilder {
 
     /// Append a forced line break with its own resolved inline style.
     ///
-    /// Its font and line-height supply an independent strut, including under
-    /// [`ParagraphStyle::line_height_quirk`]. Text-free ancestor inline boxes
+    /// Its font and line-height supply an independent strut. Under
+    /// [`ParagraphStyle::line_height_quirk`], this strut contributes only when
+    /// the break's parent has no other metrics on the line. Non-trimmed text,
+    /// baseline atomics and inline edges credit the parent; top/bottom-aligned
+    /// descendants may not. Content outside that parent does not credit it.
+    /// Trimmed trailing spaces do not count as text. Text-free ancestor inline boxes
     /// do not gain a strut from this break. A break directly inside the root
     /// retains the root's ordinary forced-break strut rule. Without the quirk,
     /// root and ancestor struts continue to contribute normally.
