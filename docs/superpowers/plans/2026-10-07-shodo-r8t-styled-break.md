@@ -4,7 +4,7 @@
 
 **Goal:** Match the nine Chromium cases in shodo-r8t and publish a version Raikiri can pin.
 
-**Architecture:** Reuse line::quirk's ContentCredit and strut credits to recognize an ending break parent with no metrics. Per the user's explicit clarification, Chromium's local parent credit rule governs pending aligned descendants and content outside the parent. Retained metrics conditionally apply explicit break profiles. The scalar index omits unconditional break profiles under the quirk and selects conditional break summaries only when the ending break parent lacks metrics. Synthetic retained ranges may span several breaks, so conditional summaries include every break and group extent without rescanning units.
+**Architecture:** Reuse line::quirk's ContentCredit and strut credits to recognize an ending break parent with no metrics. Per the user's explicit clarification, Chromium's local parent credit rule governs pending aligned descendants and content outside the parent. Retained metrics conditionally apply explicit break profiles. The scalar index omits unconditional break profiles under the quirk and selects conditional break summaries only when the ending break parent lacks metrics. Synthetic retained ranges may span several breaks, so conditional summaries select each break independently with sparse overrides, preserving group extents without rescanning units. Public grapheme-count lines can also span several breaks.
 
 **Tech Stack:** Rust 2024, existing public builder tests and indexed/retained parity tests.
 

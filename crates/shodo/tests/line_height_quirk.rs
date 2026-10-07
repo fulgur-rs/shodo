@@ -118,6 +118,65 @@ fn q(width: f32, input: impl FnOnce(&mut ParagraphBuilder, &mut Doc)) -> Vec<f32
 const WIDE: f32 = 1000.0;
 
 #[test]
+fn styled_break_eligibility_is_independent_in_grapheme_count_lines() {
+    for eligible_first in [false, true] {
+        let p = build(&root(true), |b| {
+            for eligible in [eligible_first, !eligible_first] {
+                b.open_inline(NodeId(2), &span(10.0), Default::default());
+                if !eligible {
+                    text(b, "a");
+                }
+                b.push_forced_break_with_style(
+                    NodeId(3),
+                    &span(if eligible == eligible_first {
+                        100.0
+                    } else {
+                        10.0
+                    }),
+                );
+                b.close_inline();
+            }
+        });
+        let mut constraint = LineConstraint::new(WIDE);
+        constraint.max_graphemes = Some(100);
+        let LineResult::Line(line) = p.next_line(
+            &mut LayoutContext::new(),
+            p.start_token(),
+            &LineOptions::default(),
+            &constraint,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("expected count-mode line")
+        };
+        assert_eq!(line.block_size(), if eligible_first { 100.0 } else { 10.0 });
+    }
+}
+
+#[test]
+fn styled_break_on_cloned_continuation_matches_chromium() {
+    for decoration in [BoxDecorationBreak::Slice, BoxDecorationBreak::Clone] {
+        assert_eq!(
+            q(WIDE, |b, _| {
+                b.open_inline(
+                    NodeId(2),
+                    &InlineStyle {
+                        box_decoration_break: decoration,
+                        ..span(10.0)
+                    },
+                    edges(1.0, 0.0),
+                );
+                text(b, "a");
+                b.push_forced_break(NodeId(3));
+                b.push_forced_break_with_style(NodeId(4), &span(100.0));
+                b.close_inline();
+            }),
+            [10.0, 100.0],
+            "{decoration:?}"
+        );
+    }
+}
+
+#[test]
 fn styled_break_matches_chromium_quirks_height_matrix() {
     // Chromium quirks mode: body font-size/line-height20px, img2x2.
     // Each tuple is (HTML, ancestor line-height, content, break line-height,

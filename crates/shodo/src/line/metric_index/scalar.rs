@@ -65,6 +65,7 @@ impl MetricIndex {
         excluded: &BTreeSet<usize>,
         removed: &[Range<usize>],
         include_breaks: bool,
+        break_toggles: &BTreeSet<usize>,
         cx: &mut LayoutContext,
     ) -> Summary {
         self.query_node(
@@ -75,6 +76,7 @@ impl MetricIndex {
             excluded,
             removed,
             include_breaks,
+            break_toggles,
             cx,
         )
     }
@@ -97,6 +99,7 @@ impl MetricIndex {
         excluded: &BTreeSet<usize>,
         removed: &[Range<usize>],
         include_breaks: bool,
+        break_toggles: &BTreeSet<usize>,
         _cx: &mut LayoutContext,
     ) -> Summary {
         #[cfg(test)]
@@ -110,6 +113,7 @@ impl MetricIndex {
             && source.end <= range.end
             && replacements.range(source.clone()).next().is_none()
             && excluded.range(source.clone()).next().is_none()
+            && break_toggles.range(source.clone()).next().is_none()
         {
             if removed
                 .iter()
@@ -132,7 +136,11 @@ impl MetricIndex {
                     self.tree[node]
                 },
             );
-            result = self.with_breaks(result, node, include_breaks);
+            result = self.with_breaks(
+                result,
+                node,
+                include_breaks ^ break_toggles.contains(&source.start),
+            );
             if excluded.contains(&source.start) {
                 result.height = 0.0;
                 result.bottom_height = 0.0;
@@ -148,6 +156,7 @@ impl MetricIndex {
             excluded,
             removed,
             include_breaks,
+            break_toggles,
             _cx,
         )
         .join(self.query_node(
@@ -158,6 +167,7 @@ impl MetricIndex {
             excluded,
             removed,
             include_breaks,
+            break_toggles,
             _cx,
         ))
     }

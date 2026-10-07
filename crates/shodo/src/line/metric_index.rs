@@ -582,6 +582,9 @@ impl MetricIndex {
         let mut group_extra = crate::hashing::FastMap::default();
         let mut side = quirk::Side::default();
         let mut include_breaks = false;
+        // Per-break deviations from the ending break; no allocation for the
+        // ordinary one-break line. Count-mode ranges may contain several.
+        let mut break_toggles = BTreeSet::new();
         if let (Some(q), Some(t)) = (&self.quirk, trailing) {
             side = q.side(range, t, &removed, cx);
             // Groups that the trailing run clips. The run holds no Open unit,
@@ -595,8 +598,8 @@ impl MetricIndex {
                 debug_assert!(i - first < 2, "trailing run starts groups");
                 affected.insert(i);
             }
-            // Include all break profiles in synthetic retained ranges too,
-            // without scanning their units or baking them into normal groups.
+            // Reuse the ending break decision for cached summaries, with
+            // sparse deviations for earlier breaks in count-mode ranges.
             if !self.breaks.is_empty()
                 && let Some((k, lo)) = q.ending_break(data, range)
             {
@@ -606,6 +609,27 @@ impl MetricIndex {
                     .content;
                 include_breaks = !q.credited(data.units[k].parent_box, content)
                     && !q.break_parent_edge(data, range, k);
+                let mut end = k;
+                while end > range.start {
+                    let Some((previous, lo)) = q.ending_break(data, &(range.start..end)) else {
+                        break;
+                    };
+                    if data.items[data.units[previous].item as usize].own_break_style {
+                        let content = q
+                            .query(&(lo..previous.min(t)), |l| l.all, cx)
+                            .join(q.query(&(lo.max(t)..previous), |l| l.kept, cx))
+                            .content;
+                        let eligible = !q.credited(data.units[previous].parent_box, content)
+                            && !q.break_parent_edge(data, range, previous);
+                        if eligible != include_breaks {
+                            break_toggles.insert(previous);
+                            if let Some(key) = self.group_at[previous] {
+                                affected.insert(self.group_keys[&key]);
+                            }
+                        }
+                    }
+                    end = previous;
+                }
             }
             if let Some((k, lo)) = q.forced(data, range) {
                 let content = q
@@ -730,6 +754,7 @@ impl MetricIndex {
                 &excluded,
                 &removed,
                 include_breaks,
+                &break_toggles,
                 cx,
             )
             .join(extra);
@@ -744,6 +769,7 @@ impl MetricIndex {
                     &BTreeSet::new(),
                     &removed,
                     include_breaks,
+                    &break_toggles,
                     cx,
                 )
                 .raw,

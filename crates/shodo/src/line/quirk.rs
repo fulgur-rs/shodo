@@ -130,12 +130,22 @@ pub(crate) struct Struts {
     pub(crate) root: bool,
     /// The ending styled break's parent has no metrics on this line.
     pub(crate) styled_break_strut: bool,
+    ending_break: Option<usize>,
+    /// Earlier eligible breaks in count-mode lines; empty on ordinary lines.
+    earlier_styled_breaks: crate::hashing::FastSet<usize>,
     pub(crate) boxes: crate::hashing::FastSet<u32>,
     /// First unit of the line's trailing run (`whitespace::trailing_start`).
     pub(crate) trailing: usize,
 }
 
 impl Struts {
+    pub(crate) fn styled_break_contributes(&self, i: usize) -> bool {
+        if self.ending_break == Some(i) {
+            self.styled_break_strut
+        } else {
+            self.earlier_styled_breaks.contains(&i)
+        }
+    }
     pub(crate) fn contributes(&self, b: Option<u32>) -> bool {
         b.map_or(self.root, |b| self.boxes.contains(&b))
     }
@@ -203,6 +213,13 @@ impl Struts {
                     parent.1 = parent.1.join(content).join(content_credit(data, i, owner));
                 }
                 UnitKind::ForcedBreak => {
+                    if let Some(previous) = s.ending_break
+                        && s.styled_break_strut
+                        && data.items[data.units[previous].item as usize].own_break_style
+                    {
+                        s.earlier_styled_breaks.insert(previous);
+                    }
+                    s.ending_break = Some(i);
                     let (owner, content) = *stack.last().expect("root credit frame");
                     // Explicit break profiles size themselves, not empty
                     // ancestor boxes. Direct root breaks keep its usual rule.

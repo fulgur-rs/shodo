@@ -21,7 +21,7 @@ only for a quirks dataset with explicit break styles; other datasets allocate
 no extra summary tree. Position-only profiles use a compact conditional
 index too, so clipped unsized groups query only their selected profiles,
 including reshaped glyph replacements. Queries avoid unit rescans. Synthetic retained ruby ranges can contain several breaks; every
-eligible profile is included, rather than only the final one.
+eligible profile is included independently, rather than applying the final break's eligibility to all of them. Ordinary single-break lines allocate no per-break override set; multi-break queries reuse cached summaries with sparse overrides and revisit affected groups.
 
 Break nodes, explicit-style identity, effective first-line styles and output
 metadata remain available even when a break's metric profile is suppressed.
@@ -116,6 +116,32 @@ breaks revisit only groups whose placement changes, never scan their units.
 This avoids allocating a second dense content-geometry tree. The compact
 position-only index is allocated only in quirks datasets with styled breaks.
 
+## Additional automated review before shipping
+
+The GitHub review of c723e02 raised two P2 comments. The multiple-break
+comment exposed a public case: `LineConstraint.max_graphemes` intentionally
+ignores forced line boundaries. A credited10px parent containing text and a
+100px styled break, followed by an empty parent with an eligible10px break,
+incorrectly produced100px. The literal10px regression failed before the fix.
+The reverse eligibility must preserve the eligible100px break. Retained
+measurement now remembers earlier eligible breaks; indexed measurement queries
+each earlier break parent and applies sparse deviations from the ending
+break's decision. Changed groups recompute their selected bounds. Tests cover
+literal heights, baseline and emitted content geometry in all three writing
+modes with baseline/top/bottom groups. Existing prefix query bounds remain
+part of the final suite. This supersedes the initial assumption that synthetic
+multi-break ranges can share the ending break's eligibility.
+
+The cloned continuation-edge comment is declined based on direct Chromium
+measurement and existing edge tests. With body20px, parent10px,
+`padding-left:1px`, `box-decoration-break:clone` (including the prefixed form)
+and `a<br><br style="line-height:100px">`, BackCompat Chromium reports110px;
+Slice also reports110px. Shodo's literal line heights are10px/100px in both
+cases. Synthesized continuation edges do not keep the parent's strut under
+this quirk. Applying the proposed credit would contradict the user's chosen
+Chromium rule. The added continuation regression passed before any runtime
+change and remains a measured behavior control.
+
 ## Reproduction and validation
 
 Local Rust/Cargo1.96.0; MSRV remains1.89.0. Run in the dedicated checkout:
@@ -142,11 +168,11 @@ group/ghost scaling regression and allocation/query gates for ordinary datasets.
 
 | Check | Final result |
 | --- | --- |
-| Public quirks / builder / annotation metrics | 30 /15 /15 passed |
-| Indexed styled-break height, baseline, content and scaling | 10 passed |
-| Workspace tests and doctests | 1,699 passed,9 existing ignored,100 summaries |
-| No default features, including doctests | 1,164 passed,9 existing ignored |
-| No default features plus complex-scripts, including doctests | 1,167 passed,9 existing ignored |
+| Public quirks / builder / annotation metrics | 32 /15 /15 passed |
+| Indexed styled-break height, baseline, content and scaling | 11 passed |
+| Workspace tests and doctests | 1,702 passed,9 existing ignored,100 summaries |
+| No default features, including doctests | 1,167 passed,9 existing ignored |
+| No default features plus complex-scripts, including doctests | 1,170 passed,9 existing ignored |
 | Clippy, workspace/all targets, `-D warnings` | Passed |
 | Workspace rustdoc, `RUSTDOCFLAGS=-D warnings` | Passed |
 | Formatting and diff whitespace | Passed |

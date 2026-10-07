@@ -402,6 +402,118 @@ fn styled_break_only_range_has_indexed_and_retained_baseline_parity() {
 }
 
 #[test]
+fn styled_break_multiple_parent_eligibility_matches_count_mode() {
+    use crate::geometry::WritingMode;
+    use crate::style::{LineHeight, VerticalAlign};
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        for align in [
+            VerticalAlign::Baseline,
+            VerticalAlign::Top,
+            VerticalAlign::Bottom,
+        ] {
+            for eligible_first in [false, true] {
+                let p = quirk_paragraph_in(mode, true, |b| {
+                    for (i, eligible) in [eligible_first, !eligible_first].into_iter().enumerate() {
+                        b.open_inline(
+                            NodeId(100 + i as u64),
+                            &InlineStyle {
+                                line_height: LineHeight::Px(10.0),
+                                vertical_align: align,
+                                ..style(10.0)
+                            },
+                            Default::default(),
+                        );
+                        if !eligible {
+                            b.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+                        }
+                        b.push_forced_break_with_style(
+                            NodeId(200 + i as u64),
+                            &InlineStyle {
+                                line_height: LineHeight::Px(if i == 0 { 100.0 } else { 10.0 }),
+                                ..style(10.0)
+                            },
+                        );
+                        b.close_inline();
+                    }
+                });
+                let expected = if eligible_first { 100.0 } else { 10.0 };
+                let mut constraint = crate::LineConstraint::new(1000.0);
+                constraint.max_graphemes = Some(100);
+                let crate::LineResult::Line(line) = p.next_line(
+                    &mut LayoutContext::new(),
+                    p.start_token(),
+                    &crate::style::LineOptions::default(),
+                    &constraint,
+                    &AtomicSizes::EMPTY,
+                ) else {
+                    panic!("expected count-mode line")
+                };
+                assert_eq!(
+                    line.block_size(),
+                    expected,
+                    "retained {mode:?}/{align:?}/{eligible_first}"
+                );
+                let mut cx = LayoutContext::new();
+                let metric = crate::line::metric_index::measure(
+                    &p.data,
+                    0..p.data.units.len(),
+                    &AtomicSizes::EMPTY,
+                    &mut cx,
+                    &mut Saturation::default(),
+                );
+                assert_eq!(
+                    metric.block_size.to_f32(),
+                    expected,
+                    "indexed {mode:?}/{align:?}/{eligible_first}"
+                );
+                assert_eq!(
+                    metric.baseline.to_f32(),
+                    line.baseline(crate::geometry::BaselineKind::Alphabetic)
+                );
+                let mut sat = Saturation::default();
+                let range = 0..p.data.units.len();
+                let frame = crate::ruby::geometry::Frame::new(
+                    &p.data,
+                    range.clone(),
+                    &line.fragments,
+                    &line.overlay_runs,
+                    crate::geometry::LayoutUnit::ZERO,
+                    &line.block_shifts,
+                    line.block_size,
+                );
+                let root_content = frame.box_content(None, &mut sat);
+                let expected_content = line
+                    .fragments
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, _)| frame.record_bounds(i, &mut sat))
+                    .fold(root_content, |a, b| a.union(b));
+                let content = crate::line::metric_index::content(
+                    &p.data,
+                    range.clone(),
+                    std::slice::from_ref(&range),
+                    &[None],
+                    &AtomicSizes::EMPTY,
+                    &mut cx,
+                    &mut sat,
+                );
+                let actual =
+                    content.areas[0].map_or(content.contents[0], |a| a.union(content.contents[0]));
+                assert_eq!(
+                    (actual.top, actual.bottom),
+                    (expected_content.top, expected_content.bottom),
+                    "content {mode:?}/{align:?}/{eligible_first}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn styled_break_root_strut_combinations_match_retained_ranges() {
     use crate::geometry::WritingMode;
     use crate::style::LineHeight;
