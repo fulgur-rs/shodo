@@ -1,6 +1,7 @@
 //! Real scalar line profiles, with bounded selected edge replacements.
 //! Top/bottom groups are disjoint; only clipped or replaced groups need a
 //! fresh range query. Every other group reuses its cached complete height.
+mod breaks;
 mod content;
 mod ghost;
 mod quirk;
@@ -62,8 +63,8 @@ impl Group {
 pub(super) struct MetricIndex {
     tree: Vec<Summary>,
     nonglyph: Vec<Summary>,
-    /// Conditional break summaries; empty unless the quirk has styled breaks.
-    breaks: Vec<Summary>,
+    /// Compact styled-only profiles and prepared eligibility summaries.
+    breaks: breaks::Breaks,
     /// Position-only profiles without styled breaks; same allocation gate.
     ghosts: Vec<Ghost>,
     /// Groups with conditional break profiles, in source order.
@@ -160,15 +161,11 @@ impl MetricIndex {
         let mut boxes = vec![None; data.boxes.len()];
         let mut record_content = vec![None; data.units.len()];
         let quirk = data.style.line_height_quirk;
-        let mut breaks = if quirk && data.items.iter().any(|item| item.own_break_style) {
-            vec![Summary::default(); size * 2]
-        } else {
-            Vec::new()
-        };
-        let mut ghosts = if breaks.is_empty() {
-            Vec::new()
-        } else {
+        let mut breaks = breaks::Breaks::default();
+        let mut ghosts = if quirk && data.items.iter().any(|item| item.own_break_style) {
             vec![Ghost::default(); size * 2]
+        } else {
+            Vec::new()
         };
         // Glyph profiles of trimmable units, which size a line only when it
         // does not end with them: they live in the quirk tree instead.
@@ -237,7 +234,7 @@ impl MetricIndex {
                 } else if trims {
                     trimmed[i] = Some(p);
                 } else if conditional_break {
-                    breaks[size + i] = breaks[size + i].join(Summary::profile(p, active));
+                    breaks.push(data, i, p);
                 }
                 if let UnitKind::Open { box_index } | UnitKind::Close { box_index } = u.kind {
                     boxes[box_index as usize] = Some(p);
@@ -319,16 +316,6 @@ impl MetricIndex {
             .filter_map(|(i, group)| group.break_bounds.map(|_| i))
             .collect();
         for group in &groups {
-            if group.break_bounds.is_some()
-                && let Some(bounds) = union(group.bounds, group.break_bounds)
-            {
-                let leaf = &mut breaks[size + group.units.end - 1];
-                let height = bounds.bottom - bounds.top;
-                leaf.height = leaf.height.max(height);
-                if group.bottom {
-                    leaf.bottom_height = leaf.bottom_height.max(height);
-                }
-            }
             let Some(bounds) = group.bounds else {
                 continue;
             };
@@ -348,8 +335,7 @@ impl MetricIndex {
         for i in (1..size).rev() {
             tree[i] = tree[i * 2].join(tree[i * 2 + 1]);
             nonglyph[i] = nonglyph[i * 2].join(nonglyph[i * 2 + 1]);
-            if !breaks.is_empty() {
-                breaks[i] = breaks[i * 2].join(breaks[i * 2 + 1]);
+            if !ghosts.is_empty() {
                 ghosts[i] = ghosts[i * 2].join(ghosts[i * 2 + 1]);
             }
         }
@@ -581,10 +567,9 @@ impl MetricIndex {
         let mut extra = Summary::default();
         let mut group_extra = crate::hashing::FastMap::default();
         let mut side = quirk::Side::default();
-        let mut include_breaks = false;
-        // Per-break deviations from the ending break; no allocation for the
-        // ordinary one-break line. Count-mode ranges may contain several.
-        let mut break_toggles = BTreeSet::new();
+        if let Some(q) = &self.quirk {
+            self.breaks.prepare(data, q, range, cx);
+        }
         if let (Some(q), Some(t)) = (&self.quirk, trailing) {
             side = q.side(range, t, &removed, cx);
             // Groups that the trailing run clips. The run holds no Open unit,
@@ -597,39 +582,6 @@ impl MetricIndex {
                 // Constant time relies on no group starting inside the run.
                 debug_assert!(i - first < 2, "trailing run starts groups");
                 affected.insert(i);
-            }
-            // Reuse the ending break decision for cached summaries, with
-            // sparse deviations for earlier breaks in count-mode ranges.
-            if !self.breaks.is_empty()
-                && let Some((k, lo)) = q.ending_break(data, range)
-            {
-                let content = q
-                    .query(&(lo..k.min(t)), |l| l.all, cx)
-                    .join(q.query(&(lo.max(t)..k), |l| l.kept, cx))
-                    .content;
-                include_breaks = !q.credited(data.units[k].parent_box, content)
-                    && !q.break_parent_edge(data, range, k);
-                let mut end = k;
-                while end > range.start {
-                    let Some((previous, lo)) = q.ending_break(data, &(range.start..end)) else {
-                        break;
-                    };
-                    if data.items[data.units[previous].item as usize].own_break_style {
-                        let content = q
-                            .query(&(lo..previous.min(t)), |l| l.all, cx)
-                            .join(q.query(&(lo.max(t)..previous), |l| l.kept, cx))
-                            .content;
-                        let eligible = !q.credited(data.units[previous].parent_box, content)
-                            && !q.break_parent_edge(data, range, previous);
-                        if eligible != include_breaks {
-                            break_toggles.insert(previous);
-                            if let Some(key) = self.group_at[previous] {
-                                affected.insert(self.group_keys[&key]);
-                            }
-                        }
-                    }
-                    end = previous;
-                }
             }
             if let Some((k, lo)) = q.forced(data, range) {
                 let content = q
@@ -658,10 +610,10 @@ impl MetricIndex {
                 side = side.join(quirk::Side::from(q.root(), Default::default()));
             }
         }
-        if include_breaks {
-            // A physical forced-break line has at most one conditional group.
-            // Synthetic ranges may contain several; only changed placements
-            // need content queries, rather than a second dense content tree.
+        if let (Some(q), Some(t)) = (&self.quirk, trailing) {
+            // Only groups whose eligible profiles change their normal bounds
+            // need a selected content placement. Break summaries are compact
+            // and reuse each prefix's prepared parent decisions.
             let first = self
                 .break_groups
                 .partition_point(|i| self.groups[*i].units.end <= range.start);
@@ -675,14 +627,18 @@ impl MetricIndex {
                     cx.ruby_measure_visits += 1;
                 }
                 let g = &self.groups[i];
-                let base = g.placed();
-                let selected = union(g.bounds, g.break_bounds).expect("conditional group bounds");
-                if if g.bottom {
-                    base.bottom != selected.bottom
-                } else {
-                    base.top != selected.top
-                } {
-                    affected.insert(i);
+                let selected = range.start.max(g.units.start)..range.end.min(g.units.end);
+                let bounds = self
+                    .breaks
+                    .query(data, q, &selected, range.start, t, cx)
+                    .raw;
+                if let Some(bounds) = bounds {
+                    let selected = union(g.bounds, Some(bounds)).expect("selected break bounds");
+                    if g.bounds.is_none_or(|normal| {
+                        normal.top != selected.top || normal.bottom != selected.bottom
+                    }) {
+                        affected.insert(i);
+                    }
                 }
             }
         }
@@ -748,34 +704,27 @@ impl MetricIndex {
             .map(|i| self.groups[*i].units.end - 1)
             .collect();
         let mut summary = self
-            .query(
-                range,
-                &replacements,
-                &excluded,
-                &removed,
-                include_breaks,
-                &break_toggles,
-                cx,
-            )
+            .query(range, &replacements, &excluded, &removed, cx)
             .join(extra);
+        if let (Some(q), Some(t)) = (&self.quirk, trailing) {
+            summary = summary.join(self.breaks.query(data, q, range, range.start, t, cx));
+        }
         let mut partial = crate::hashing::FastMap::default();
         for i in affected {
             let group = &self.groups[i];
             let selected = range.start.max(group.units.start)..range.end.min(group.units.end);
             let mut raw = union(
-                self.query(
-                    &selected,
-                    &replacements,
-                    &BTreeSet::new(),
-                    &removed,
-                    include_breaks,
-                    &break_toggles,
-                    cx,
-                )
-                .raw,
+                self.query(&selected, &replacements, &BTreeSet::new(), &removed, cx)
+                    .raw,
                 group_extra.get(&i).copied().flatten(),
             );
             if let (Some(q), Some(t)) = (&self.quirk, trailing) {
+                raw = union(
+                    raw,
+                    self.breaks
+                        .query(data, q, &selected, range.start, t, cx)
+                        .raw,
+                );
                 raw = union(raw, q.side(&selected, t, &removed, cx).raw);
                 if raw.is_none() {
                     // No member sizes the line: place the content only.

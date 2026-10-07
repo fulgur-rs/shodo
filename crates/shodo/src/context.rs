@@ -68,6 +68,9 @@ pub struct LayoutContext {
     /// Calls of `line::metric_index::scalar::measure`.
     #[cfg(test)]
     pub(crate) ruby_scalar_calls: usize,
+    /// Styled-break eligibility decisions made by the metric index.
+    #[cfg(test)]
+    pub(crate) ruby_break_credit_queries: usize,
     /// Selected line profiles measured by `metric_index::content_shared`.
     #[cfg(test)]
     pub(crate) ruby_profile_selects: usize,

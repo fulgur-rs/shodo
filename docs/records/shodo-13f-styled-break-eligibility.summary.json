@@ -1,0 +1,3525 @@
+{
+  "issue": "shodo-13f",
+  "date": "2026-10-07",
+  "base": "3cc51c0b3572c573a4d92fcab3376afbce52d936",
+  "cpu": "AMD Ryzen 5 5600G",
+  "pinned_cpu": 0,
+  "rustc": "1.96.0 (ac68faa20 2026-05-25)",
+  "build": {
+    "profile": "release",
+    "opt_level": 3,
+    "lto": false,
+    "codegen_units": 16,
+    "default_features": true
+  },
+  "timing": {
+    "paired_order": "baseline/candidate on even samples, candidate/baseline on odd samples",
+    "samples": 5,
+    "reps_per_sample": 16,
+    "unit": "microseconds/layout",
+    "statistic": "median"
+  },
+  "allocation": {
+    "feature": "allocation-counting",
+    "reps_per_scope": 2,
+    "note": "raw scope counters; separately normalized calls and allocated bytes per layout; peak_extra_bytes is relative to scope start"
+  },
+  "output_checks": {
+    "workloads": 72,
+    "outputs_equal": true,
+    "warnings_equal": true,
+    "build_warnings": [],
+    "layout_warnings": []
+  },
+  "eligibility_decisions": {
+    "dense_baseline": [
+      4290,
+      16770,
+      66306
+    ],
+    "sparse_baseline": [
+      258,
+      514,
+      1026
+    ],
+    "dense_candidate": [
+      130,
+      258,
+      514
+    ],
+    "sparse_candidate": [
+      130,
+      258,
+      514
+    ],
+    "sizes": [
+      64,
+      128,
+      256
+    ]
+  },
+  "binaries_sha256": {
+    "baseline-timing": "cded14b6615fe690e863b16b5fd6dcd1271fe7ba9ab211d7f7df09e3e1550ecf",
+    "baseline-memory": "21e66d49204018d6d821dfb3d3c7d114fa6a813d7e3484d5b267c1ea13574c77",
+    "candidate-timing": "4041b9641c32e0d6947608c0293b60c40d5aadc695c9884e58ab448fe8a15f18",
+    "candidate-memory": "662e2a20360c36045f02181b6315874db64de9ffd61a1b349e30632380b38569"
+  },
+  "rows": [
+    {
+      "dataset": "plain",
+      "case": "control",
+      "line_mode": "normal",
+      "size": 64,
+      "context": "cold",
+      "baseline_us": 127.348875,
+      "candidate_us": 131.4915625,
+      "ratio": 1.032530224550472,
+      "baseline_allocations": {
+        "allocated_bytes": 405800,
+        "calls": 4082,
+        "deallocated_bytes": 409320,
+        "live_bytes": 505434,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 77104,
+        "start_live_bytes": 508954
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 405800,
+        "calls": 4082,
+        "deallocated_bytes": 409320,
+        "live_bytes": 505434,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 77104,
+        "start_live_bytes": 508954
+      },
+      "baseline_samples_us": [
+        127.348875,
+        127.10875,
+        128.723875,
+        128.902875,
+        125.153125
+      ],
+      "candidate_samples_us": [
+        131.2078125,
+        160.90925,
+        132.185625,
+        131.4915625,
+        129.8326875
+      ],
+      "output_sha256": "22da956a85290b8fa0839984a3075ea619b5399718c06b050ca2b653d7777d39",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 2041.0,
+      "baseline_allocated_bytes_per_layout": 202900.0,
+      "candidate_allocation_calls_per_layout": 2041.0,
+      "candidate_allocated_bytes_per_layout": 202900.0
+    },
+    {
+      "dataset": "plain",
+      "case": "control",
+      "line_mode": "normal",
+      "size": 64,
+      "context": "warm",
+      "baseline_us": 127.9818125,
+      "candidate_us": 128.344125,
+      "ratio": 1.0028309686581443,
+      "baseline_allocations": {
+        "allocated_bytes": 405800,
+        "calls": 4082,
+        "deallocated_bytes": 405800,
+        "live_bytes": 505434,
+        "net_bytes": 0,
+        "peak_extra_bytes": 77088,
+        "start_live_bytes": 505434
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 405800,
+        "calls": 4082,
+        "deallocated_bytes": 405800,
+        "live_bytes": 505434,
+        "net_bytes": 0,
+        "peak_extra_bytes": 77088,
+        "start_live_bytes": 505434
+      },
+      "baseline_samples_us": [
+        132.451875,
+        127.9818125,
+        128.104,
+        126.432125,
+        125.663875
+      ],
+      "candidate_samples_us": [
+        128.344125,
+        126.3491875,
+        163.2054375,
+        128.143375,
+        168.5179375
+      ],
+      "output_sha256": "22da956a85290b8fa0839984a3075ea619b5399718c06b050ca2b653d7777d39",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 2041.0,
+      "baseline_allocated_bytes_per_layout": 202900.0,
+      "candidate_allocation_calls_per_layout": 2041.0,
+      "candidate_allocated_bytes_per_layout": 202900.0
+    },
+    {
+      "dataset": "plain",
+      "case": "control",
+      "line_mode": "normal",
+      "size": 128,
+      "context": "cold",
+      "baseline_us": 258.4081875,
+      "candidate_us": 259.32925,
+      "ratio": 1.0035643704207322,
+      "baseline_allocations": {
+        "allocated_bytes": 813800,
+        "calls": 8116,
+        "deallocated_bytes": 817320,
+        "live_bytes": 588795,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 153904,
+        "start_live_bytes": 592315
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 813800,
+        "calls": 8116,
+        "deallocated_bytes": 817320,
+        "live_bytes": 588795,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 153904,
+        "start_live_bytes": 592315
+      },
+      "baseline_samples_us": [
+        258.4081875,
+        252.8511875,
+        259.001875,
+        261.7214375,
+        257.893125
+      ],
+      "candidate_samples_us": [
+        259.32925,
+        257.605,
+        267.1169375,
+        262.0139375,
+        256.47875
+      ],
+      "output_sha256": "bc1ea84b4925b8fd379d62533ecab81fd8ace210e929c825ec4480d1878daec0",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 4058.0,
+      "baseline_allocated_bytes_per_layout": 406900.0,
+      "candidate_allocation_calls_per_layout": 4058.0,
+      "candidate_allocated_bytes_per_layout": 406900.0
+    },
+    {
+      "dataset": "plain",
+      "case": "control",
+      "line_mode": "normal",
+      "size": 128,
+      "context": "warm",
+      "baseline_us": 254.1389375,
+      "candidate_us": 254.636625,
+      "ratio": 1.001958328404517,
+      "baseline_allocations": {
+        "allocated_bytes": 813800,
+        "calls": 8116,
+        "deallocated_bytes": 813800,
+        "live_bytes": 588795,
+        "net_bytes": 0,
+        "peak_extra_bytes": 153888,
+        "start_live_bytes": 588795
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 813800,
+        "calls": 8116,
+        "deallocated_bytes": 813800,
+        "live_bytes": 588795,
+        "net_bytes": 0,
+        "peak_extra_bytes": 153888,
+        "start_live_bytes": 588795
+      },
+      "baseline_samples_us": [
+        254.8025,
+        251.9431875,
+        254.1389375,
+        250.253875,
+        255.13425
+      ],
+      "candidate_samples_us": [
+        251.1006875,
+        258.3165,
+        254.51,
+        254.636625,
+        258.8709375
+      ],
+      "output_sha256": "bc1ea84b4925b8fd379d62533ecab81fd8ace210e929c825ec4480d1878daec0",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 4058.0,
+      "baseline_allocated_bytes_per_layout": 406900.0,
+      "candidate_allocation_calls_per_layout": 4058.0,
+      "candidate_allocated_bytes_per_layout": 406900.0
+    },
+    {
+      "dataset": "plain",
+      "case": "control",
+      "line_mode": "normal",
+      "size": 256,
+      "context": "cold",
+      "baseline_us": 511.154625,
+      "candidate_us": 534.4085625,
+      "ratio": 1.0454929611563233,
+      "baseline_allocations": {
+        "allocated_bytes": 1629800,
+        "calls": 16182,
+        "deallocated_bytes": 1633320,
+        "live_bytes": 755515,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 307504,
+        "start_live_bytes": 759035
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 1629800,
+        "calls": 16182,
+        "deallocated_bytes": 1633320,
+        "live_bytes": 755515,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 307504,
+        "start_live_bytes": 759035
+      },
+      "baseline_samples_us": [
+        529.366625,
+        509.8275625,
+        510.2248125,
+        511.154625,
+        514.3849375
+      ],
+      "candidate_samples_us": [
+        521.2908125,
+        539.3325625,
+        527.8780625,
+        536.696,
+        534.4085625
+      ],
+      "output_sha256": "4df2a048c7e412133083f75735b88e95edfcb5af974027c2c3992bbf622fdbf4",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 8091.0,
+      "baseline_allocated_bytes_per_layout": 814900.0,
+      "candidate_allocation_calls_per_layout": 8091.0,
+      "candidate_allocated_bytes_per_layout": 814900.0
+    },
+    {
+      "dataset": "plain",
+      "case": "control",
+      "line_mode": "normal",
+      "size": 256,
+      "context": "warm",
+      "baseline_us": 516.3056875,
+      "candidate_us": 530.59325,
+      "ratio": 1.0276726808282546,
+      "baseline_allocations": {
+        "allocated_bytes": 1629800,
+        "calls": 16182,
+        "deallocated_bytes": 1629800,
+        "live_bytes": 755515,
+        "net_bytes": 0,
+        "peak_extra_bytes": 307488,
+        "start_live_bytes": 755515
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 1629800,
+        "calls": 16182,
+        "deallocated_bytes": 1629800,
+        "live_bytes": 755515,
+        "net_bytes": 0,
+        "peak_extra_bytes": 307488,
+        "start_live_bytes": 755515
+      },
+      "baseline_samples_us": [
+        514.4896875,
+        514.118625,
+        516.3056875,
+        609.138125,
+        564.7604375
+      ],
+      "candidate_samples_us": [
+        530.59325,
+        519.39625,
+        522.41275,
+        558.099,
+        580.9339375
+      ],
+      "output_sha256": "4df2a048c7e412133083f75735b88e95edfcb5af974027c2c3992bbf622fdbf4",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 8091.0,
+      "baseline_allocated_bytes_per_layout": 814900.0,
+      "candidate_allocation_calls_per_layout": 8091.0,
+      "candidate_allocated_bytes_per_layout": 814900.0
+    },
+    {
+      "dataset": "plain",
+      "case": "control",
+      "line_mode": "count",
+      "size": 64,
+      "context": "cold",
+      "baseline_us": 44.482375,
+      "candidate_us": 45.338,
+      "ratio": 1.019235146504655,
+      "baseline_allocations": {
+        "allocated_bytes": 112784,
+        "calls": 256,
+        "deallocated_bytes": 116304,
+        "live_bytes": 505417,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 18512,
+        "start_live_bytes": 508937
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 112784,
+        "calls": 256,
+        "deallocated_bytes": 116304,
+        "live_bytes": 505417,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 18512,
+        "start_live_bytes": 508937
+      },
+      "baseline_samples_us": [
+        47.12775,
+        51.7156875,
+        42.6839375,
+        44.482375,
+        43.452125
+      ],
+      "candidate_samples_us": [
+        43.8231875,
+        43.7490625,
+        45.4820625,
+        48.171125,
+        45.338
+      ],
+      "output_sha256": "adf8de7ee7d946f66f265a6eaf9b39e3e00283a8e7fce4f5bdb940c2d8be6c52",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 128.0,
+      "baseline_allocated_bytes_per_layout": 56392.0,
+      "candidate_allocation_calls_per_layout": 128.0,
+      "candidate_allocated_bytes_per_layout": 56392.0
+    },
+    {
+      "dataset": "plain",
+      "case": "control",
+      "line_mode": "count",
+      "size": 64,
+      "context": "warm",
+      "baseline_us": 48.315125,
+      "candidate_us": 43.9105625,
+      "ratio": 0.9088367773031736,
+      "baseline_allocations": {
+        "allocated_bytes": 112784,
+        "calls": 256,
+        "deallocated_bytes": 112784,
+        "live_bytes": 505417,
+        "net_bytes": 0,
+        "peak_extra_bytes": 18512,
+        "start_live_bytes": 505417
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 112784,
+        "calls": 256,
+        "deallocated_bytes": 112784,
+        "live_bytes": 505417,
+        "net_bytes": 0,
+        "peak_extra_bytes": 18512,
+        "start_live_bytes": 505417
+      },
+      "baseline_samples_us": [
+        48.315125,
+        61.1621875,
+        45.259375,
+        50.8251875,
+        44.0633125
+      ],
+      "candidate_samples_us": [
+        43.6005625,
+        43.9105625,
+        63.4801875,
+        42.7406875,
+        45.0280625
+      ],
+      "output_sha256": "adf8de7ee7d946f66f265a6eaf9b39e3e00283a8e7fce4f5bdb940c2d8be6c52",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 128.0,
+      "baseline_allocated_bytes_per_layout": 56392.0,
+      "candidate_allocation_calls_per_layout": 128.0,
+      "candidate_allocated_bytes_per_layout": 56392.0
+    },
+    {
+      "dataset": "plain",
+      "case": "control",
+      "line_mode": "count",
+      "size": 128,
+      "context": "cold",
+      "baseline_us": 83.8966875,
+      "candidate_us": 88.7814375,
+      "ratio": 1.0582233952919773,
+      "baseline_allocations": {
+        "allocated_bytes": 221872,
+        "calls": 400,
+        "deallocated_bytes": 225392,
+        "live_bytes": 588778,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 36944,
+        "start_live_bytes": 592298
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 221872,
+        "calls": 400,
+        "deallocated_bytes": 225392,
+        "live_bytes": 588778,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 36944,
+        "start_live_bytes": 592298
+      },
+      "baseline_samples_us": [
+        83.355375,
+        85.8348125,
+        89.3489375,
+        83.7308125,
+        83.8966875
+      ],
+      "candidate_samples_us": [
+        88.7814375,
+        84.5296875,
+        143.3389375,
+        85.0928125,
+        89.9251875
+      ],
+      "output_sha256": "b91a41aa1d42f8d67e6b5af59417036f1ba124a35145b8a0b7657044746d602c",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 200.0,
+      "baseline_allocated_bytes_per_layout": 110936.0,
+      "candidate_allocation_calls_per_layout": 200.0,
+      "candidate_allocated_bytes_per_layout": 110936.0
+    },
+    {
+      "dataset": "plain",
+      "case": "control",
+      "line_mode": "count",
+      "size": 128,
+      "context": "warm",
+      "baseline_us": 84.2328125,
+      "candidate_us": 85.0621875,
+      "ratio": 1.009846222337643,
+      "baseline_allocations": {
+        "allocated_bytes": 221872,
+        "calls": 400,
+        "deallocated_bytes": 221872,
+        "live_bytes": 588778,
+        "net_bytes": 0,
+        "peak_extra_bytes": 36944,
+        "start_live_bytes": 588778
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 221872,
+        "calls": 400,
+        "deallocated_bytes": 221872,
+        "live_bytes": 588778,
+        "net_bytes": 0,
+        "peak_extra_bytes": 36944,
+        "start_live_bytes": 588778
+      },
+      "baseline_samples_us": [
+        87.633375,
+        86.280125,
+        84.2328125,
+        83.47325,
+        83.1895
+      ],
+      "candidate_samples_us": [
+        86.4809375,
+        83.53,
+        84.1935625,
+        93.2995,
+        85.0621875
+      ],
+      "output_sha256": "b91a41aa1d42f8d67e6b5af59417036f1ba124a35145b8a0b7657044746d602c",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 200.0,
+      "baseline_allocated_bytes_per_layout": 110936.0,
+      "candidate_allocation_calls_per_layout": 200.0,
+      "candidate_allocated_bytes_per_layout": 110936.0
+    },
+    {
+      "dataset": "plain",
+      "case": "control",
+      "line_mode": "count",
+      "size": 256,
+      "context": "cold",
+      "baseline_us": 170.58275,
+      "candidate_us": 169.28625,
+      "ratio": 0.992399583193494,
+      "baseline_allocations": {
+        "allocated_bytes": 439952,
+        "calls": 672,
+        "deallocated_bytes": 443472,
+        "live_bytes": 755498,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 73808,
+        "start_live_bytes": 759018
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 439952,
+        "calls": 672,
+        "deallocated_bytes": 443472,
+        "live_bytes": 755498,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 73808,
+        "start_live_bytes": 759018
+      },
+      "baseline_samples_us": [
+        170.58275,
+        170.5609375,
+        189.8599375,
+        168.247375,
+        193.6359375
+      ],
+      "candidate_samples_us": [
+        191.959625,
+        169.364875,
+        169.28625,
+        166.562375,
+        166.5710625
+      ],
+      "output_sha256": "11a46b79bb0c62935cae4facd1837c275dc16643a0825c8236574f5a25da6f10",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 336.0,
+      "baseline_allocated_bytes_per_layout": 219976.0,
+      "candidate_allocation_calls_per_layout": 336.0,
+      "candidate_allocated_bytes_per_layout": 219976.0
+    },
+    {
+      "dataset": "plain",
+      "case": "control",
+      "line_mode": "count",
+      "size": 256,
+      "context": "warm",
+      "baseline_us": 167.653625,
+      "candidate_us": 169.5394375,
+      "ratio": 1.0112482655832822,
+      "baseline_allocations": {
+        "allocated_bytes": 439952,
+        "calls": 672,
+        "deallocated_bytes": 439952,
+        "live_bytes": 755498,
+        "net_bytes": 0,
+        "peak_extra_bytes": 73808,
+        "start_live_bytes": 755498
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 439952,
+        "calls": 672,
+        "deallocated_bytes": 439952,
+        "live_bytes": 755498,
+        "net_bytes": 0,
+        "peak_extra_bytes": 73808,
+        "start_live_bytes": 755498
+      },
+      "baseline_samples_us": [
+        166.3178125,
+        165.313875,
+        167.653625,
+        170.6788125,
+        193.1688125
+      ],
+      "candidate_samples_us": [
+        169.5394375,
+        170.347,
+        167.064375,
+        167.055625,
+        178.903
+      ],
+      "output_sha256": "11a46b79bb0c62935cae4facd1837c275dc16643a0825c8236574f5a25da6f10",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 336.0,
+      "baseline_allocated_bytes_per_layout": 219976.0,
+      "candidate_allocation_calls_per_layout": 336.0,
+      "candidate_allocated_bytes_per_layout": 219976.0
+    },
+    {
+      "dataset": "plain",
+      "case": "sparse",
+      "line_mode": "normal",
+      "size": 64,
+      "context": "cold",
+      "baseline_us": 127.1261875,
+      "candidate_us": 131.2645,
+      "ratio": 1.0325527932629932,
+      "baseline_allocations": {
+        "allocated_bytes": 405800,
+        "calls": 4082,
+        "deallocated_bytes": 409320,
+        "live_bytes": 505562,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 77104,
+        "start_live_bytes": 509082
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 405800,
+        "calls": 4082,
+        "deallocated_bytes": 409320,
+        "live_bytes": 505562,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 77104,
+        "start_live_bytes": 509082
+      },
+      "baseline_samples_us": [
+        127.2965,
+        123.9744375,
+        127.1261875,
+        126.88175,
+        127.148
+      ],
+      "candidate_samples_us": [
+        129.1823125,
+        160.8961875,
+        131.2645,
+        129.1080625,
+        132.5043125
+      ],
+      "output_sha256": "22da956a85290b8fa0839984a3075ea619b5399718c06b050ca2b653d7777d39",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 2041.0,
+      "baseline_allocated_bytes_per_layout": 202900.0,
+      "candidate_allocation_calls_per_layout": 2041.0,
+      "candidate_allocated_bytes_per_layout": 202900.0
+    },
+    {
+      "dataset": "plain",
+      "case": "sparse",
+      "line_mode": "normal",
+      "size": 64,
+      "context": "warm",
+      "baseline_us": 126.5194375,
+      "candidate_us": 129.461625,
+      "ratio": 1.0232548259630068,
+      "baseline_allocations": {
+        "allocated_bytes": 405800,
+        "calls": 4082,
+        "deallocated_bytes": 405800,
+        "live_bytes": 505562,
+        "net_bytes": 0,
+        "peak_extra_bytes": 77088,
+        "start_live_bytes": 505562
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 405800,
+        "calls": 4082,
+        "deallocated_bytes": 405800,
+        "live_bytes": 505562,
+        "net_bytes": 0,
+        "peak_extra_bytes": 77088,
+        "start_live_bytes": 505562
+      },
+      "baseline_samples_us": [
+        127.3488125,
+        130.662125,
+        126.5194375,
+        125.4019375,
+        124.131625
+      ],
+      "candidate_samples_us": [
+        129.0600625,
+        140.8114375,
+        129.461625,
+        164.235625,
+        127.274625
+      ],
+      "output_sha256": "22da956a85290b8fa0839984a3075ea619b5399718c06b050ca2b653d7777d39",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 2041.0,
+      "baseline_allocated_bytes_per_layout": 202900.0,
+      "candidate_allocation_calls_per_layout": 2041.0,
+      "candidate_allocated_bytes_per_layout": 202900.0
+    },
+    {
+      "dataset": "plain",
+      "case": "sparse",
+      "line_mode": "normal",
+      "size": 128,
+      "context": "cold",
+      "baseline_us": 262.559625,
+      "candidate_us": 264.895,
+      "ratio": 1.0088946463112902,
+      "baseline_allocations": {
+        "allocated_bytes": 813800,
+        "calls": 8116,
+        "deallocated_bytes": 817320,
+        "live_bytes": 588923,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 153904,
+        "start_live_bytes": 592443
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 813800,
+        "calls": 8116,
+        "deallocated_bytes": 817320,
+        "live_bytes": 588923,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 153904,
+        "start_live_bytes": 592443
+      },
+      "baseline_samples_us": [
+        332.395625,
+        262.559625,
+        257.151,
+        288.1664375,
+        253.423
+      ],
+      "candidate_samples_us": [
+        264.895,
+        261.7214375,
+        291.287625,
+        269.3170625,
+        263.21
+      ],
+      "output_sha256": "bc1ea84b4925b8fd379d62533ecab81fd8ace210e929c825ec4480d1878daec0",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 4058.0,
+      "baseline_allocated_bytes_per_layout": 406900.0,
+      "candidate_allocation_calls_per_layout": 4058.0,
+      "candidate_allocated_bytes_per_layout": 406900.0
+    },
+    {
+      "dataset": "plain",
+      "case": "sparse",
+      "line_mode": "normal",
+      "size": 128,
+      "context": "warm",
+      "baseline_us": 259.6043125,
+      "candidate_us": 263.0266875,
+      "ratio": 1.0131830437138827,
+      "baseline_allocations": {
+        "allocated_bytes": 813800,
+        "calls": 8116,
+        "deallocated_bytes": 813800,
+        "live_bytes": 588923,
+        "net_bytes": 0,
+        "peak_extra_bytes": 153888,
+        "start_live_bytes": 588923
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 813800,
+        "calls": 8116,
+        "deallocated_bytes": 813800,
+        "live_bytes": 588923,
+        "net_bytes": 0,
+        "peak_extra_bytes": 153888,
+        "start_live_bytes": 588923
+      },
+      "baseline_samples_us": [
+        259.6043125,
+        260.769875,
+        262.19725,
+        253.558375,
+        252.9123125
+      ],
+      "candidate_samples_us": [
+        263.0266875,
+        259.180875,
+        298.368125,
+        259.8006875,
+        289.2665
+      ],
+      "output_sha256": "bc1ea84b4925b8fd379d62533ecab81fd8ace210e929c825ec4480d1878daec0",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 4058.0,
+      "baseline_allocated_bytes_per_layout": 406900.0,
+      "candidate_allocation_calls_per_layout": 4058.0,
+      "candidate_allocated_bytes_per_layout": 406900.0
+    },
+    {
+      "dataset": "plain",
+      "case": "sparse",
+      "line_mode": "normal",
+      "size": 256,
+      "context": "cold",
+      "baseline_us": 517.29225,
+      "candidate_us": 539.4679375,
+      "ratio": 1.042868779688851,
+      "baseline_allocations": {
+        "allocated_bytes": 1629800,
+        "calls": 16182,
+        "deallocated_bytes": 1633320,
+        "live_bytes": 755643,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 307504,
+        "start_live_bytes": 759163
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 1629800,
+        "calls": 16182,
+        "deallocated_bytes": 1633320,
+        "live_bytes": 755643,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 307504,
+        "start_live_bytes": 759163
+      },
+      "baseline_samples_us": [
+        519.466125,
+        514.4721875,
+        511.1764375,
+        517.29225,
+        519.086375
+      ],
+      "candidate_samples_us": [
+        569.592875,
+        561.7920625,
+        539.4679375,
+        525.4335,
+        534.6399375
+      ],
+      "output_sha256": "4df2a048c7e412133083f75735b88e95edfcb5af974027c2c3992bbf622fdbf4",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 8091.0,
+      "baseline_allocated_bytes_per_layout": 814900.0,
+      "candidate_allocation_calls_per_layout": 8091.0,
+      "candidate_allocated_bytes_per_layout": 814900.0
+    },
+    {
+      "dataset": "plain",
+      "case": "sparse",
+      "line_mode": "normal",
+      "size": 256,
+      "context": "warm",
+      "baseline_us": 512.7523125,
+      "candidate_us": 533.8890625,
+      "ratio": 1.041222144658782,
+      "baseline_allocations": {
+        "allocated_bytes": 1629800,
+        "calls": 16182,
+        "deallocated_bytes": 1629800,
+        "live_bytes": 755643,
+        "net_bytes": 0,
+        "peak_extra_bytes": 307488,
+        "start_live_bytes": 755643
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 1629800,
+        "calls": 16182,
+        "deallocated_bytes": 1629800,
+        "live_bytes": 755643,
+        "net_bytes": 0,
+        "peak_extra_bytes": 307488,
+        "start_live_bytes": 755643
+      },
+      "baseline_samples_us": [
+        527.7645625,
+        523.181,
+        512.4074375,
+        512.7523125,
+        508.614
+      ],
+      "candidate_samples_us": [
+        524.2810625,
+        573.7136875,
+        522.246875,
+        635.28625,
+        533.8890625
+      ],
+      "output_sha256": "4df2a048c7e412133083f75735b88e95edfcb5af974027c2c3992bbf622fdbf4",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 8091.0,
+      "baseline_allocated_bytes_per_layout": 814900.0,
+      "candidate_allocation_calls_per_layout": 8091.0,
+      "candidate_allocated_bytes_per_layout": 814900.0
+    },
+    {
+      "dataset": "plain",
+      "case": "sparse",
+      "line_mode": "count",
+      "size": 64,
+      "context": "cold",
+      "baseline_us": 44.1200625,
+      "candidate_us": 43.364875,
+      "ratio": 0.9828833538030458,
+      "baseline_allocations": {
+        "allocated_bytes": 112784,
+        "calls": 256,
+        "deallocated_bytes": 116304,
+        "live_bytes": 505545,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 18512,
+        "start_live_bytes": 509065
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 112784,
+        "calls": 256,
+        "deallocated_bytes": 116304,
+        "live_bytes": 505545,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 18512,
+        "start_live_bytes": 509065
+      },
+      "baseline_samples_us": [
+        47.4376875,
+        42.448125,
+        48.913125,
+        42.7363125,
+        44.1200625
+      ],
+      "candidate_samples_us": [
+        44.0153125,
+        43.072375,
+        43.426,
+        43.089875,
+        43.364875
+      ],
+      "output_sha256": "adf8de7ee7d946f66f265a6eaf9b39e3e00283a8e7fce4f5bdb940c2d8be6c52",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 128.0,
+      "baseline_allocated_bytes_per_layout": 56392.0,
+      "candidate_allocation_calls_per_layout": 128.0,
+      "candidate_allocated_bytes_per_layout": 56392.0
+    },
+    {
+      "dataset": "plain",
+      "case": "sparse",
+      "line_mode": "count",
+      "size": 64,
+      "context": "warm",
+      "baseline_us": 75.310125,
+      "candidate_us": 77.619375,
+      "ratio": 1.0306632076364235,
+      "baseline_allocations": {
+        "allocated_bytes": 112784,
+        "calls": 256,
+        "deallocated_bytes": 112784,
+        "live_bytes": 505545,
+        "net_bytes": 0,
+        "peak_extra_bytes": 18512,
+        "start_live_bytes": 505545
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 112784,
+        "calls": 256,
+        "deallocated_bytes": 112784,
+        "live_bytes": 505545,
+        "net_bytes": 0,
+        "peak_extra_bytes": 18512,
+        "start_live_bytes": 505545
+      },
+      "baseline_samples_us": [
+        79.230125,
+        77.2526875,
+        75.310125,
+        73.843375,
+        73.647
+      ],
+      "candidate_samples_us": [
+        75.423625,
+        80.212375,
+        74.6596875,
+        78.1999375,
+        77.619375
+      ],
+      "output_sha256": "adf8de7ee7d946f66f265a6eaf9b39e3e00283a8e7fce4f5bdb940c2d8be6c52",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 128.0,
+      "baseline_allocated_bytes_per_layout": 56392.0,
+      "candidate_allocation_calls_per_layout": 128.0,
+      "candidate_allocated_bytes_per_layout": 56392.0
+    },
+    {
+      "dataset": "plain",
+      "case": "sparse",
+      "line_mode": "count",
+      "size": 128,
+      "context": "cold",
+      "baseline_us": 87.0135,
+      "candidate_us": 86.3586875,
+      "ratio": 0.992474587276687,
+      "baseline_allocations": {
+        "allocated_bytes": 221872,
+        "calls": 400,
+        "deallocated_bytes": 225392,
+        "live_bytes": 588906,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 36944,
+        "start_live_bytes": 592426
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 221872,
+        "calls": 400,
+        "deallocated_bytes": 225392,
+        "live_bytes": 588906,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 36944,
+        "start_live_bytes": 592426
+      },
+      "baseline_samples_us": [
+        144.5786875,
+        87.0135,
+        86.157875,
+        89.1874375,
+        83.4950625
+      ],
+      "candidate_samples_us": [
+        147.141125,
+        83.385875,
+        86.3586875,
+        87.1008125,
+        84.935625
+      ],
+      "output_sha256": "b91a41aa1d42f8d67e6b5af59417036f1ba124a35145b8a0b7657044746d602c",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 200.0,
+      "baseline_allocated_bytes_per_layout": 110936.0,
+      "candidate_allocation_calls_per_layout": 200.0,
+      "candidate_allocated_bytes_per_layout": 110936.0
+    },
+    {
+      "dataset": "plain",
+      "case": "sparse",
+      "line_mode": "count",
+      "size": 128,
+      "context": "warm",
+      "baseline_us": 86.157875,
+      "candidate_us": 87.18375,
+      "ratio": 1.0119069208705531,
+      "baseline_allocations": {
+        "allocated_bytes": 221872,
+        "calls": 400,
+        "deallocated_bytes": 221872,
+        "live_bytes": 588906,
+        "net_bytes": 0,
+        "peak_extra_bytes": 36944,
+        "start_live_bytes": 588906
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 221872,
+        "calls": 400,
+        "deallocated_bytes": 221872,
+        "live_bytes": 588906,
+        "net_bytes": 0,
+        "peak_extra_bytes": 36944,
+        "start_live_bytes": 588906
+      },
+      "baseline_samples_us": [
+        83.647875,
+        85.1975,
+        123.7736875,
+        90.7283125,
+        86.157875
+      ],
+      "candidate_samples_us": [
+        84.407375,
+        87.860375,
+        87.18375,
+        84.52525,
+        88.2445
+      ],
+      "output_sha256": "b91a41aa1d42f8d67e6b5af59417036f1ba124a35145b8a0b7657044746d602c",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 200.0,
+      "baseline_allocated_bytes_per_layout": 110936.0,
+      "candidate_allocation_calls_per_layout": 200.0,
+      "candidate_allocated_bytes_per_layout": 110936.0
+    },
+    {
+      "dataset": "plain",
+      "case": "sparse",
+      "line_mode": "count",
+      "size": 256,
+      "context": "cold",
+      "baseline_us": 169.1640625,
+      "candidate_us": 170.246625,
+      "ratio": 1.0063994827506582,
+      "baseline_allocations": {
+        "allocated_bytes": 439952,
+        "calls": 672,
+        "deallocated_bytes": 443472,
+        "live_bytes": 755626,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 73808,
+        "start_live_bytes": 759146
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 439952,
+        "calls": 672,
+        "deallocated_bytes": 443472,
+        "live_bytes": 755626,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 73808,
+        "start_live_bytes": 759146
+      },
+      "baseline_samples_us": [
+        170.8883125,
+        169.1640625,
+        177.619625,
+        166.654,
+        168.0378125
+      ],
+      "candidate_samples_us": [
+        170.246625,
+        167.8588125,
+        167.483375,
+        189.694,
+        184.495
+      ],
+      "output_sha256": "11a46b79bb0c62935cae4facd1837c275dc16643a0825c8236574f5a25da6f10",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 336.0,
+      "baseline_allocated_bytes_per_layout": 219976.0,
+      "candidate_allocation_calls_per_layout": 336.0,
+      "candidate_allocated_bytes_per_layout": 219976.0
+    },
+    {
+      "dataset": "plain",
+      "case": "sparse",
+      "line_mode": "count",
+      "size": 256,
+      "context": "warm",
+      "baseline_us": 167.0905,
+      "candidate_us": 167.055625,
+      "ratio": 0.9997912807729943,
+      "baseline_allocations": {
+        "allocated_bytes": 439952,
+        "calls": 672,
+        "deallocated_bytes": 439952,
+        "live_bytes": 755626,
+        "net_bytes": 0,
+        "peak_extra_bytes": 73808,
+        "start_live_bytes": 755626
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 439952,
+        "calls": 672,
+        "deallocated_bytes": 439952,
+        "live_bytes": 755626,
+        "net_bytes": 0,
+        "peak_extra_bytes": 73808,
+        "start_live_bytes": 755626
+      },
+      "baseline_samples_us": [
+        167.6274375,
+        167.0905,
+        167.509625,
+        166.75875,
+        165.9425
+      ],
+      "candidate_samples_us": [
+        173.12775,
+        167.055625,
+        166.32225,
+        191.85925,
+        166.6190625
+      ],
+      "output_sha256": "11a46b79bb0c62935cae4facd1837c275dc16643a0825c8236574f5a25da6f10",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 336.0,
+      "baseline_allocated_bytes_per_layout": 219976.0,
+      "candidate_allocation_calls_per_layout": 336.0,
+      "candidate_allocated_bytes_per_layout": 219976.0
+    },
+    {
+      "dataset": "plain",
+      "case": "dense",
+      "line_mode": "normal",
+      "size": 64,
+      "context": "cold",
+      "baseline_us": 128.571125,
+      "candidate_us": 128.737,
+      "ratio": 1.0012901419350573,
+      "baseline_allocations": {
+        "allocated_bytes": 403496,
+        "calls": 4018,
+        "deallocated_bytes": 407016,
+        "live_bytes": 505561,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 77104,
+        "start_live_bytes": 509081
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 403496,
+        "calls": 4018,
+        "deallocated_bytes": 407016,
+        "live_bytes": 505561,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 77104,
+        "start_live_bytes": 509081
+      },
+      "baseline_samples_us": [
+        125.8865,
+        129.2084375,
+        149.29325,
+        122.99225,
+        128.571125
+      ],
+      "candidate_samples_us": [
+        128.2524375,
+        127.864,
+        129.33075,
+        128.737,
+        129.143
+      ],
+      "output_sha256": "ba39f771d2e450ae94cdd8e735205f0da44babf4fc8f08923a8866b362127905",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 2009.0,
+      "baseline_allocated_bytes_per_layout": 201748.0,
+      "candidate_allocation_calls_per_layout": 2009.0,
+      "candidate_allocated_bytes_per_layout": 201748.0
+    },
+    {
+      "dataset": "plain",
+      "case": "dense",
+      "line_mode": "normal",
+      "size": 64,
+      "context": "warm",
+      "baseline_us": 127.15675,
+      "candidate_us": 131.6835625,
+      "ratio": 1.0356002532307564,
+      "baseline_allocations": {
+        "allocated_bytes": 403496,
+        "calls": 4018,
+        "deallocated_bytes": 403496,
+        "live_bytes": 505561,
+        "net_bytes": 0,
+        "peak_extra_bytes": 77088,
+        "start_live_bytes": 505561
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 403496,
+        "calls": 4018,
+        "deallocated_bytes": 403496,
+        "live_bytes": 505561,
+        "net_bytes": 0,
+        "peak_extra_bytes": 77088,
+        "start_live_bytes": 505561
+      },
+      "baseline_samples_us": [
+        127.15675,
+        143.8060625,
+        127.2440625,
+        126.9341875,
+        125.6638125
+      ],
+      "candidate_samples_us": [
+        128.1476875,
+        128.785,
+        144.4215,
+        131.6835625,
+        132.687625
+      ],
+      "output_sha256": "ba39f771d2e450ae94cdd8e735205f0da44babf4fc8f08923a8866b362127905",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 2009.0,
+      "baseline_allocated_bytes_per_layout": 201748.0,
+      "candidate_allocation_calls_per_layout": 2009.0,
+      "candidate_allocated_bytes_per_layout": 201748.0
+    },
+    {
+      "dataset": "plain",
+      "case": "dense",
+      "line_mode": "normal",
+      "size": 128,
+      "context": "cold",
+      "baseline_us": 266.431625,
+      "candidate_us": 290.32725,
+      "ratio": 1.0896876450008515,
+      "baseline_allocations": {
+        "allocated_bytes": 809192,
+        "calls": 7988,
+        "deallocated_bytes": 812712,
+        "live_bytes": 588922,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 153904,
+        "start_live_bytes": 592442
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 809192,
+        "calls": 7988,
+        "deallocated_bytes": 812712,
+        "live_bytes": 588922,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 153904,
+        "start_live_bytes": 592442
+      },
+      "baseline_samples_us": [
+        248.6036875,
+        280.116875,
+        266.431625,
+        288.240625,
+        259.2725625
+      ],
+      "candidate_samples_us": [
+        256.7711875,
+        256.7363125,
+        291.41425,
+        332.046375,
+        290.32725
+      ],
+      "output_sha256": "9c9522f8ef01dea961a7ccfd1698975d005ae5b2fd4cd8577b947afda0bcc706",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 3994.0,
+      "baseline_allocated_bytes_per_layout": 404596.0,
+      "candidate_allocation_calls_per_layout": 3994.0,
+      "candidate_allocated_bytes_per_layout": 404596.0
+    },
+    {
+      "dataset": "plain",
+      "case": "dense",
+      "line_mode": "normal",
+      "size": 128,
+      "context": "warm",
+      "baseline_us": 253.7504375,
+      "candidate_us": 259.78325,
+      "ratio": 1.0237745895512003,
+      "baseline_allocations": {
+        "allocated_bytes": 809192,
+        "calls": 7988,
+        "deallocated_bytes": 809192,
+        "live_bytes": 588922,
+        "net_bytes": 0,
+        "peak_extra_bytes": 153888,
+        "start_live_bytes": 588922
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 809192,
+        "calls": 7988,
+        "deallocated_bytes": 809192,
+        "live_bytes": 588922,
+        "net_bytes": 0,
+        "peak_extra_bytes": 153888,
+        "start_live_bytes": 588922
+      },
+      "baseline_samples_us": [
+        318.575125,
+        253.7504375,
+        250.5725,
+        304.964125,
+        252.3535
+      ],
+      "candidate_samples_us": [
+        353.5979375,
+        272.8224375,
+        259.78325,
+        258.3514375,
+        256.3826875
+      ],
+      "output_sha256": "9c9522f8ef01dea961a7ccfd1698975d005ae5b2fd4cd8577b947afda0bcc706",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 3994.0,
+      "baseline_allocated_bytes_per_layout": 404596.0,
+      "candidate_allocation_calls_per_layout": 3994.0,
+      "candidate_allocated_bytes_per_layout": 404596.0
+    },
+    {
+      "dataset": "plain",
+      "case": "dense",
+      "line_mode": "normal",
+      "size": 256,
+      "context": "cold",
+      "baseline_us": 510.674375,
+      "candidate_us": 524.3029375,
+      "ratio": 1.026687382737777,
+      "baseline_allocations": {
+        "allocated_bytes": 1620584,
+        "calls": 15926,
+        "deallocated_bytes": 1624104,
+        "live_bytes": 755642,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 307504,
+        "start_live_bytes": 759162
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 1620584,
+        "calls": 15926,
+        "deallocated_bytes": 1624104,
+        "live_bytes": 755642,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 307504,
+        "start_live_bytes": 759162
+      },
+      "baseline_samples_us": [
+        510.674375,
+        515.3453125,
+        508.0814375,
+        527.69475,
+        505.418625
+      ],
+      "candidate_samples_us": [
+        517.0171875,
+        524.3029375,
+        582.7193125,
+        521.0550625,
+        811.8406875
+      ],
+      "output_sha256": "45b3c0408c82a4476257118789b430c53bbfc398e7c05de1bbdab5a797c607b3",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 7963.0,
+      "baseline_allocated_bytes_per_layout": 810292.0,
+      "candidate_allocation_calls_per_layout": 7963.0,
+      "candidate_allocated_bytes_per_layout": 810292.0
+    },
+    {
+      "dataset": "plain",
+      "case": "dense",
+      "line_mode": "normal",
+      "size": 256,
+      "context": "warm",
+      "baseline_us": 506.0646875,
+      "candidate_us": 529.24875,
+      "ratio": 1.0458124486308877,
+      "baseline_allocations": {
+        "allocated_bytes": 1620584,
+        "calls": 15926,
+        "deallocated_bytes": 1620584,
+        "live_bytes": 755642,
+        "net_bytes": 0,
+        "peak_extra_bytes": 307488,
+        "start_live_bytes": 755642
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 1620584,
+        "calls": 15926,
+        "deallocated_bytes": 1620584,
+        "live_bytes": 755642,
+        "net_bytes": 0,
+        "peak_extra_bytes": 307488,
+        "start_live_bytes": 755642
+      },
+      "baseline_samples_us": [
+        829.0574375,
+        510.2728125,
+        504.27925,
+        505.6455625,
+        506.0646875
+      ],
+      "candidate_samples_us": [
+        529.24875,
+        620.147375,
+        544.78925,
+        512.25025,
+        524.69575
+      ],
+      "output_sha256": "45b3c0408c82a4476257118789b430c53bbfc398e7c05de1bbdab5a797c607b3",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 7963.0,
+      "baseline_allocated_bytes_per_layout": 810292.0,
+      "candidate_allocation_calls_per_layout": 7963.0,
+      "candidate_allocated_bytes_per_layout": 810292.0
+    },
+    {
+      "dataset": "plain",
+      "case": "dense",
+      "line_mode": "count",
+      "size": 64,
+      "context": "cold",
+      "baseline_us": 45.3685,
+      "candidate_us": 45.6828125,
+      "ratio": 1.0069279896844727,
+      "baseline_allocations": {
+        "allocated_bytes": 115176,
+        "calls": 266,
+        "deallocated_bytes": 118696,
+        "live_bytes": 505544,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 19104,
+        "start_live_bytes": 509064
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 115176,
+        "calls": 266,
+        "deallocated_bytes": 118696,
+        "live_bytes": 505544,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 19104,
+        "start_live_bytes": 509064
+      },
+      "baseline_samples_us": [
+        45.770125,
+        44.8970625,
+        47.4813125,
+        44.547875,
+        45.3685
+      ],
+      "candidate_samples_us": [
+        46.848375,
+        47.6210625,
+        45.0236875,
+        45.512625,
+        45.6828125
+      ],
+      "output_sha256": "179655e760836d29983130fb373d7497dc2038d43a45dea4dadbb40183405c5d",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 133.0,
+      "baseline_allocated_bytes_per_layout": 57588.0,
+      "candidate_allocation_calls_per_layout": 133.0,
+      "candidate_allocated_bytes_per_layout": 57588.0
+    },
+    {
+      "dataset": "plain",
+      "case": "dense",
+      "line_mode": "count",
+      "size": 64,
+      "context": "warm",
+      "baseline_us": 54.1428125,
+      "candidate_us": 46.05825,
+      "ratio": 0.8506807805745223,
+      "baseline_allocations": {
+        "allocated_bytes": 115176,
+        "calls": 266,
+        "deallocated_bytes": 115176,
+        "live_bytes": 505544,
+        "net_bytes": 0,
+        "peak_extra_bytes": 19104,
+        "start_live_bytes": 505544
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 115176,
+        "calls": 266,
+        "deallocated_bytes": 115176,
+        "live_bytes": 505544,
+        "net_bytes": 0,
+        "peak_extra_bytes": 19104,
+        "start_live_bytes": 505544
+      },
+      "baseline_samples_us": [
+        44.53475,
+        57.27275,
+        54.1428125,
+        74.41525,
+        44.945125
+      ],
+      "candidate_samples_us": [
+        44.338375,
+        45.3466875,
+        57.14175,
+        46.05825,
+        48.8956875
+      ],
+      "output_sha256": "179655e760836d29983130fb373d7497dc2038d43a45dea4dadbb40183405c5d",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 133.0,
+      "baseline_allocated_bytes_per_layout": 57588.0,
+      "candidate_allocation_calls_per_layout": 133.0,
+      "candidate_allocated_bytes_per_layout": 57588.0
+    },
+    {
+      "dataset": "plain",
+      "case": "dense",
+      "line_mode": "count",
+      "size": 128,
+      "context": "cold",
+      "baseline_us": 116.3176875,
+      "candidate_us": 89.64575,
+      "ratio": 0.770697491729278,
+      "baseline_allocations": {
+        "allocated_bytes": 226600,
+        "calls": 412,
+        "deallocated_bytes": 230120,
+        "live_bytes": 588905,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 38112,
+        "start_live_bytes": 592425
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 226600,
+        "calls": 412,
+        "deallocated_bytes": 230120,
+        "live_bytes": 588905,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 38112,
+        "start_live_bytes": 592425
+      },
+      "baseline_samples_us": [
+        88.6985,
+        134.09325,
+        139.01725,
+        116.3176875,
+        86.93925
+      ],
+      "candidate_samples_us": [
+        87.559125,
+        87.2666875,
+        142.286875,
+        142.8369375,
+        89.64575
+      ],
+      "output_sha256": "04e9ca6103fb57dd68ce73acf8a92a7545360a3ac99ddfc6840de49901212430",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 206.0,
+      "baseline_allocated_bytes_per_layout": 113300.0,
+      "candidate_allocation_calls_per_layout": 206.0,
+      "candidate_allocated_bytes_per_layout": 113300.0
+    },
+    {
+      "dataset": "plain",
+      "case": "dense",
+      "line_mode": "count",
+      "size": 128,
+      "context": "warm",
+      "baseline_us": 87.533,
+      "candidate_us": 94.600375,
+      "ratio": 1.0807395496555585,
+      "baseline_allocations": {
+        "allocated_bytes": 226600,
+        "calls": 412,
+        "deallocated_bytes": 226600,
+        "live_bytes": 588905,
+        "net_bytes": 0,
+        "peak_extra_bytes": 38112,
+        "start_live_bytes": 588905
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 226600,
+        "calls": 412,
+        "deallocated_bytes": 226600,
+        "live_bytes": 588905,
+        "net_bytes": 0,
+        "peak_extra_bytes": 38112,
+        "start_live_bytes": 588905
+      },
+      "baseline_samples_us": [
+        98.0315,
+        87.083375,
+        86.4373125,
+        88.977875,
+        87.533
+      ],
+      "candidate_samples_us": [
+        94.600375,
+        98.7779375,
+        85.922125,
+        89.811625,
+        100.052625
+      ],
+      "output_sha256": "04e9ca6103fb57dd68ce73acf8a92a7545360a3ac99ddfc6840de49901212430",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 206.0,
+      "baseline_allocated_bytes_per_layout": 113300.0,
+      "candidate_allocation_calls_per_layout": 206.0,
+      "candidate_allocated_bytes_per_layout": 113300.0
+    },
+    {
+      "dataset": "plain",
+      "case": "dense",
+      "line_mode": "count",
+      "size": 256,
+      "context": "cold",
+      "baseline_us": 192.4965625,
+      "candidate_us": 197.8920625,
+      "ratio": 1.0280290719477134,
+      "baseline_allocations": {
+        "allocated_bytes": 449320,
+        "calls": 686,
+        "deallocated_bytes": 452840,
+        "live_bytes": 755625,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 76128,
+        "start_live_bytes": 759145
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 449320,
+        "calls": 686,
+        "deallocated_bytes": 452840,
+        "live_bytes": 755625,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 76128,
+        "start_live_bytes": 759145
+      },
+      "baseline_samples_us": [
+        178.5713125,
+        189.4583125,
+        197.857125,
+        192.4965625,
+        195.89275
+      ],
+      "candidate_samples_us": [
+        201.93,
+        204.56225,
+        180.732125,
+        177.04775,
+        197.8920625
+      ],
+      "output_sha256": "f5c1a157cde41b945cff9040ee54187e234e5f075dcec5932171b38bcb2ab8d7",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 343.0,
+      "baseline_allocated_bytes_per_layout": 224660.0,
+      "candidate_allocation_calls_per_layout": 343.0,
+      "candidate_allocated_bytes_per_layout": 224660.0
+    },
+    {
+      "dataset": "plain",
+      "case": "dense",
+      "line_mode": "count",
+      "size": 256,
+      "context": "warm",
+      "baseline_us": 210.32875,
+      "candidate_us": 187.3455,
+      "ratio": 0.890727016634673,
+      "baseline_allocations": {
+        "allocated_bytes": 449320,
+        "calls": 686,
+        "deallocated_bytes": 449320,
+        "live_bytes": 755625,
+        "net_bytes": 0,
+        "peak_extra_bytes": 76128,
+        "start_live_bytes": 755625
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 449320,
+        "calls": 686,
+        "deallocated_bytes": 449320,
+        "live_bytes": 755625,
+        "net_bytes": 0,
+        "peak_extra_bytes": 76128,
+        "start_live_bytes": 755625
+      },
+      "baseline_samples_us": [
+        170.12875,
+        186.6514375,
+        225.69025,
+        210.32875,
+        216.8680625
+      ],
+      "candidate_samples_us": [
+        174.6643125,
+        176.1091875,
+        187.3455,
+        281.8061875,
+        304.9771875
+      ],
+      "output_sha256": "f5c1a157cde41b945cff9040ee54187e234e5f075dcec5932171b38bcb2ab8d7",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 343.0,
+      "baseline_allocated_bytes_per_layout": 224660.0,
+      "candidate_allocation_calls_per_layout": 343.0,
+      "candidate_allocated_bytes_per_layout": 224660.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "control",
+      "line_mode": "normal",
+      "size": 64,
+      "context": "cold",
+      "baseline_us": 1909.6783125,
+      "candidate_us": 1874.926125,
+      "ratio": 0.9818020724891068,
+      "baseline_allocations": {
+        "allocated_bytes": 4534240,
+        "calls": 24320,
+        "deallocated_bytes": 4537760,
+        "live_bytes": 1548558,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 1082243,
+        "start_live_bytes": 1552078
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 4534624,
+        "calls": 24320,
+        "deallocated_bytes": 4538144,
+        "live_bytes": 1548750,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 1082435,
+        "start_live_bytes": 1552270
+      },
+      "baseline_samples_us": [
+        1972.3203125,
+        1892.479,
+        1792.264875,
+        1909.6783125,
+        2094.5138125
+      ],
+      "candidate_samples_us": [
+        1890.00825,
+        1814.8421875,
+        1871.5474375,
+        1904.7368125,
+        1874.926125
+      ],
+      "output_sha256": "c7270c2e21e04df1aa6c05feb18b23954cd861ea1275acf59d3a394281c17d5d",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 12160.0,
+      "baseline_allocated_bytes_per_layout": 2267120.0,
+      "candidate_allocation_calls_per_layout": 12160.0,
+      "candidate_allocated_bytes_per_layout": 2267312.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "control",
+      "line_mode": "normal",
+      "size": 64,
+      "context": "warm",
+      "baseline_us": 1777.0081875,
+      "candidate_us": 1858.0411875,
+      "ratio": 1.0456008028381691,
+      "baseline_allocations": {
+        "allocated_bytes": 1928044,
+        "calls": 22794,
+        "deallocated_bytes": 1928044,
+        "live_bytes": 1548558,
+        "net_bytes": 0,
+        "peak_extra_bytes": 179308,
+        "start_live_bytes": 1548558
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 1928044,
+        "calls": 22794,
+        "deallocated_bytes": 1928044,
+        "live_bytes": 1548750,
+        "net_bytes": 0,
+        "peak_extra_bytes": 179308,
+        "start_live_bytes": 1548750
+      },
+      "baseline_samples_us": [
+        1550.3269375,
+        2025.267,
+        1996.0239375,
+        1220.733875,
+        1777.0081875
+      ],
+      "candidate_samples_us": [
+        1711.76875,
+        2098.1936875,
+        2071.2074375,
+        1757.7571875,
+        1858.0411875
+      ],
+      "output_sha256": "c7270c2e21e04df1aa6c05feb18b23954cd861ea1275acf59d3a394281c17d5d",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 11397.0,
+      "baseline_allocated_bytes_per_layout": 964022.0,
+      "candidate_allocation_calls_per_layout": 11397.0,
+      "candidate_allocated_bytes_per_layout": 964022.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "control",
+      "line_mode": "normal",
+      "size": 128,
+      "context": "cold",
+      "baseline_us": 5146.2938125,
+      "candidate_us": 5098.23625,
+      "ratio": 0.9906617141867665,
+      "baseline_allocations": {
+        "allocated_bytes": 9032640,
+        "calls": 47854,
+        "deallocated_bytes": 9036160,
+        "live_bytes": 2656815,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 2155971,
+        "start_live_bytes": 2660335
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 9033024,
+        "calls": 47854,
+        "deallocated_bytes": 9036544,
+        "live_bytes": 2657007,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 2156163,
+        "start_live_bytes": 2660527
+      },
+      "baseline_samples_us": [
+        5282.9974375,
+        5103.457125,
+        4965.8716875,
+        5285.896,
+        5146.2938125
+      ],
+      "candidate_samples_us": [
+        5005.6831875,
+        5098.23625,
+        5000.4448125,
+        5417.0121875,
+        13374.571125
+      ],
+      "output_sha256": "739f6166fdce5e1755a75c528af3b17693791bda420faea7977a1f152fd203aa",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 23927.0,
+      "baseline_allocated_bytes_per_layout": 4516320.0,
+      "candidate_allocation_calls_per_layout": 23927.0,
+      "candidate_allocated_bytes_per_layout": 4516512.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "control",
+      "line_mode": "normal",
+      "size": 128,
+      "context": "warm",
+      "baseline_us": 4194.1174375,
+      "candidate_us": 4195.1214375,
+      "ratio": 1.0002393829011613,
+      "baseline_allocations": {
+        "allocated_bytes": 3831404,
+        "calls": 45260,
+        "deallocated_bytes": 3831404,
+        "live_bytes": 2656815,
+        "net_bytes": 0,
+        "peak_extra_bytes": 355308,
+        "start_live_bytes": 2656815
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 3831404,
+        "calls": 45260,
+        "deallocated_bytes": 3831404,
+        "live_bytes": 2657007,
+        "net_bytes": 0,
+        "peak_extra_bytes": 355308,
+        "start_live_bytes": 2657007
+      },
+      "baseline_samples_us": [
+        8246.3889375,
+        3776.8779375,
+        4645.7250625,
+        4194.1174375,
+        4107.0559375
+      ],
+      "candidate_samples_us": [
+        4290.71275,
+        3877.188125,
+        4789.208,
+        3995.22575,
+        4195.1214375
+      ],
+      "output_sha256": "739f6166fdce5e1755a75c528af3b17693791bda420faea7977a1f152fd203aa",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 22630.0,
+      "baseline_allocated_bytes_per_layout": 1915702.0,
+      "candidate_allocation_calls_per_layout": 22630.0,
+      "candidate_allocated_bytes_per_layout": 1915702.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "control",
+      "line_mode": "normal",
+      "size": 256,
+      "context": "cold",
+      "baseline_us": 5400.6596875,
+      "candidate_us": 6798.0135,
+      "ratio": 1.258737616023876,
+      "baseline_allocations": {
+        "allocated_bytes": 18029344,
+        "calls": 94876,
+        "deallocated_bytes": 18032864,
+        "live_bytes": 4873327,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 4303427,
+        "start_live_bytes": 4876847
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 18029728,
+        "calls": 94876,
+        "deallocated_bytes": 18033248,
+        "live_bytes": 4873519,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 4303619,
+        "start_live_bytes": 4877039
+      },
+      "baseline_samples_us": [
+        12481.6013125,
+        5400.6596875,
+        5333.9055625,
+        5305.1556875,
+        5433.6395
+      ],
+      "candidate_samples_us": [
+        12506.0295,
+        9645.7201875,
+        5476.0964375,
+        6798.0135,
+        5389.894875
+      ],
+      "output_sha256": "1dd248e0d3f3fd9d72665361cb587c1e9f814c7cd929dedc19d86304104d4eb5",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 47438.0,
+      "baseline_allocated_bytes_per_layout": 9014672.0,
+      "candidate_allocation_calls_per_layout": 47438.0,
+      "candidate_allocated_bytes_per_layout": 9014864.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "control",
+      "line_mode": "normal",
+      "size": 256,
+      "context": "warm",
+      "baseline_us": 5083.922375,
+      "candidate_us": 4904.281625,
+      "ratio": 0.9646649305891496,
+      "baseline_allocations": {
+        "allocated_bytes": 7638124,
+        "calls": 90190,
+        "deallocated_bytes": 7638124,
+        "live_bytes": 4873327,
+        "net_bytes": 0,
+        "peak_extra_bytes": 707308,
+        "start_live_bytes": 4873327
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 7638124,
+        "calls": 90190,
+        "deallocated_bytes": 7638124,
+        "live_bytes": 4873519,
+        "net_bytes": 0,
+        "peak_extra_bytes": 707308,
+        "start_live_bytes": 4873519
+      },
+      "baseline_samples_us": [
+        4986.956,
+        4610.75025,
+        5083.922375,
+        5700.4421875,
+        5793.0781875
+      ],
+      "candidate_samples_us": [
+        4595.3189375,
+        4664.05925,
+        4904.281625,
+        4988.44025,
+        5956.5193125
+      ],
+      "output_sha256": "1dd248e0d3f3fd9d72665361cb587c1e9f814c7cd929dedc19d86304104d4eb5",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 45095.0,
+      "baseline_allocated_bytes_per_layout": 3819062.0,
+      "candidate_allocation_calls_per_layout": 45095.0,
+      "candidate_allocated_bytes_per_layout": 3819062.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "control",
+      "line_mode": "count",
+      "size": 64,
+      "context": "cold",
+      "baseline_us": 989.9318125,
+      "candidate_us": 998.84575,
+      "ratio": 1.0090045974757478,
+      "baseline_allocations": {
+        "allocated_bytes": 3439958,
+        "calls": 7650,
+        "deallocated_bytes": 3443478,
+        "live_bytes": 1561449,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 988191,
+        "start_live_bytes": 1564969
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 3440342,
+        "calls": 7650,
+        "deallocated_bytes": 3443862,
+        "live_bytes": 1561641,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 988383,
+        "start_live_bytes": 1565161
+      },
+      "baseline_samples_us": [
+        974.0508125,
+        980.89125,
+        994.620125,
+        989.9318125,
+        1100.627
+      ],
+      "candidate_samples_us": [
+        1005.40675,
+        998.84575,
+        987.69675,
+        979.3459375,
+        1303.6919375
+      ],
+      "output_sha256": "418a7d9652891dd47867e5645a4cf5f670c9fa122f12ed756231081dfbb4afed",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 3825.0,
+      "baseline_allocated_bytes_per_layout": 1719979.0,
+      "candidate_allocation_calls_per_layout": 3825.0,
+      "candidate_allocated_bytes_per_layout": 1720171.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "control",
+      "line_mode": "count",
+      "size": 64,
+      "context": "warm",
+      "baseline_us": 646.85425,
+      "candidate_us": 661.3426875,
+      "ratio": 1.0223983030180293,
+      "baseline_allocations": {
+        "allocated_bytes": 781594,
+        "calls": 6116,
+        "deallocated_bytes": 781594,
+        "live_bytes": 1561449,
+        "net_bytes": 0,
+        "peak_extra_bytes": 72364,
+        "start_live_bytes": 1561449
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 781594,
+        "calls": 6116,
+        "deallocated_bytes": 781594,
+        "live_bytes": 1561641,
+        "net_bytes": 0,
+        "peak_extra_bytes": 72364,
+        "start_live_bytes": 1561641
+      },
+      "baseline_samples_us": [
+        652.223625,
+        646.85425,
+        621.9284375,
+        650.30725,
+        618.348875
+      ],
+      "candidate_samples_us": [
+        667.908125,
+        756.1656875,
+        661.3426875,
+        626.2500625,
+        618.689375
+      ],
+      "output_sha256": "418a7d9652891dd47867e5645a4cf5f670c9fa122f12ed756231081dfbb4afed",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 3058.0,
+      "baseline_allocated_bytes_per_layout": 390797.0,
+      "candidate_allocation_calls_per_layout": 3058.0,
+      "candidate_allocated_bytes_per_layout": 390797.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "control",
+      "line_mode": "count",
+      "size": 128,
+      "context": "cold",
+      "baseline_us": 2561.4260625,
+      "candidate_us": 3356.1155,
+      "ratio": 1.3102527334809608,
+      "baseline_allocations": {
+        "allocated_bytes": 6839974,
+        "calls": 14344,
+        "deallocated_bytes": 6843494,
+        "live_bytes": 2683146,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 1969407,
+        "start_live_bytes": 2686666
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 6840358,
+        "calls": 14344,
+        "deallocated_bytes": 6843878,
+        "live_bytes": 2683338,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 1969599,
+        "start_live_bytes": 2686858
+      },
+      "baseline_samples_us": [
+        3390.4441875,
+        3416.1601875,
+        2229.8205,
+        2260.7224375,
+        2561.4260625
+      ],
+      "candidate_samples_us": [
+        3476.8814375,
+        2524.9845,
+        3586.433,
+        2277.472125,
+        3356.1155
+      ],
+      "output_sha256": "acebb0b37e535f7f188608f0e4f0fc30a04ad64ff9209a9e6ca7cbe2cf361761",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 7172.0,
+      "baseline_allocated_bytes_per_layout": 3419987.0,
+      "candidate_allocation_calls_per_layout": 7172.0,
+      "candidate_allocated_bytes_per_layout": 3420179.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "control",
+      "line_mode": "count",
+      "size": 128,
+      "context": "warm",
+      "baseline_us": 2354.9561875,
+      "candidate_us": 2661.7711875,
+      "ratio": 1.130284801742198,
+      "baseline_allocations": {
+        "allocated_bytes": 1532778,
+        "calls": 11740,
+        "deallocated_bytes": 1532778,
+        "live_bytes": 2683146,
+        "net_bytes": 0,
+        "peak_extra_bytes": 142412,
+        "start_live_bytes": 2683146
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 1532778,
+        "calls": 11740,
+        "deallocated_bytes": 1532778,
+        "live_bytes": 2683338,
+        "net_bytes": 0,
+        "peak_extra_bytes": 142412,
+        "start_live_bytes": 2683338
+      },
+      "baseline_samples_us": [
+        2354.9561875,
+        2986.5886875,
+        2221.098625,
+        2168.69325,
+        2387.9709375
+      ],
+      "candidate_samples_us": [
+        1401.4528125,
+        1392.7920625,
+        3400.4058125,
+        2661.7711875,
+        4902.1513125
+      ],
+      "output_sha256": "acebb0b37e535f7f188608f0e4f0fc30a04ad64ff9209a9e6ca7cbe2cf361761",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 5870.0,
+      "baseline_allocated_bytes_per_layout": 766389.0,
+      "candidate_allocation_calls_per_layout": 5870.0,
+      "candidate_allocated_bytes_per_layout": 766389.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "control",
+      "line_mode": "count",
+      "size": 256,
+      "context": "cold",
+      "baseline_us": 5787.2068125,
+      "candidate_us": 6715.47875,
+      "ratio": 1.1604006850930213,
+      "baseline_allocations": {
+        "allocated_bytes": 13639350,
+        "calls": 27652,
+        "deallocated_bytes": 13642870,
+        "live_bytes": 4872762,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 3931839,
+        "start_live_bytes": 4876282
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 13639734,
+        "calls": 27652,
+        "deallocated_bytes": 13643254,
+        "live_bytes": 4872954,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 3932031,
+        "start_live_bytes": 4876474
+      },
+      "baseline_samples_us": [
+        14071.150375,
+        6413.12075,
+        5226.091375,
+        5736.8094375,
+        5787.2068125
+      ],
+      "candidate_samples_us": [
+        11008.2999375,
+        23079.0611875,
+        4367.1709375,
+        4633.96925,
+        6715.47875
+      ],
+      "output_sha256": "8c8a204c9b777f7c139a3bd337153b7804bdb64242b7efefba3a373121659edf",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 13826.0,
+      "baseline_allocated_bytes_per_layout": 6819675.0,
+      "candidate_allocation_calls_per_layout": 13826.0,
+      "candidate_allocated_bytes_per_layout": 6819867.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "control",
+      "line_mode": "count",
+      "size": 256,
+      "context": "warm",
+      "baseline_us": 3529.7670625,
+      "candidate_us": 3747.621625,
+      "ratio": 1.061719246239921,
+      "baseline_allocations": {
+        "allocated_bytes": 3249074,
+        "calls": 22970,
+        "deallocated_bytes": 3249074,
+        "live_bytes": 4872762,
+        "net_bytes": 0,
+        "peak_extra_bytes": 336284,
+        "start_live_bytes": 4872762
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 3249074,
+        "calls": 22970,
+        "deallocated_bytes": 3249074,
+        "live_bytes": 4872954,
+        "net_bytes": 0,
+        "peak_extra_bytes": 336284,
+        "start_live_bytes": 4872954
+      },
+      "baseline_samples_us": [
+        4155.174625,
+        3603.5100625,
+        3281.145875,
+        3529.7670625,
+        3292.23375
+      ],
+      "candidate_samples_us": [
+        4229.751375,
+        3961.2025625,
+        3747.621625,
+        3176.4835,
+        3326.7501875
+      ],
+      "output_sha256": "8c8a204c9b777f7c139a3bd337153b7804bdb64242b7efefba3a373121659edf",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 11485.0,
+      "baseline_allocated_bytes_per_layout": 1624537.0,
+      "candidate_allocation_calls_per_layout": 11485.0,
+      "candidate_allocated_bytes_per_layout": 1624537.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "sparse",
+      "line_mode": "normal",
+      "size": 64,
+      "context": "cold",
+      "baseline_us": 1363.0513125,
+      "candidate_us": 1314.915125,
+      "ratio": 0.9646849776977857,
+      "baseline_allocations": {
+        "allocated_bytes": 4657120,
+        "calls": 24324,
+        "deallocated_bytes": 4660640,
+        "live_bytes": 1610126,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 1143683,
+        "start_live_bytes": 1613646
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 4584288,
+        "calls": 24326,
+        "deallocated_bytes": 4587808,
+        "live_bytes": 1573710,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 1107267,
+        "start_live_bytes": 1577230
+      },
+      "baseline_samples_us": [
+        1363.0513125,
+        1415.138,
+        1405.5081875,
+        1313.5444375,
+        1331.6429375
+      ],
+      "candidate_samples_us": [
+        1358.1098125,
+        1314.915125,
+        1334.8601875,
+        1293.2195625,
+        1292.006
+      ],
+      "output_sha256": "c7270c2e21e04df1aa6c05feb18b23954cd861ea1275acf59d3a394281c17d5d",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 12162.0,
+      "baseline_allocated_bytes_per_layout": 2328560.0,
+      "candidate_allocation_calls_per_layout": 12163.0,
+      "candidate_allocated_bytes_per_layout": 2292144.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "sparse",
+      "line_mode": "normal",
+      "size": 64,
+      "context": "warm",
+      "baseline_us": 1336.698,
+      "candidate_us": 1269.97,
+      "ratio": 0.9500799731876609,
+      "baseline_allocations": {
+        "allocated_bytes": 1928044,
+        "calls": 22794,
+        "deallocated_bytes": 1928044,
+        "live_bytes": 1610126,
+        "net_bytes": 0,
+        "peak_extra_bytes": 179308,
+        "start_live_bytes": 1610126
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 1928044,
+        "calls": 22794,
+        "deallocated_bytes": 1928044,
+        "live_bytes": 1573710,
+        "net_bytes": 0,
+        "peak_extra_bytes": 179308,
+        "start_live_bytes": 1573710
+      },
+      "baseline_samples_us": [
+        1787.305875,
+        2059.1591875,
+        1336.698,
+        1309.842625,
+        1217.0844375
+      ],
+      "candidate_samples_us": [
+        1109.3226875,
+        1412.235125,
+        1269.97,
+        1256.1495,
+        1591.7230625
+      ],
+      "output_sha256": "c7270c2e21e04df1aa6c05feb18b23954cd861ea1275acf59d3a394281c17d5d",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 11397.0,
+      "baseline_allocated_bytes_per_layout": 964022.0,
+      "candidate_allocation_calls_per_layout": 11397.0,
+      "candidate_allocated_bytes_per_layout": 964022.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "sparse",
+      "line_mode": "normal",
+      "size": 128,
+      "context": "cold",
+      "baseline_us": 4148.081,
+      "candidate_us": 3217.7049375,
+      "ratio": 0.7757092827984796,
+      "baseline_allocations": {
+        "allocated_bytes": 9278400,
+        "calls": 47858,
+        "deallocated_bytes": 9281920,
+        "live_bytes": 2779823,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 2278851,
+        "start_live_bytes": 2783343
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 9131840,
+        "calls": 47860,
+        "deallocated_bytes": 9135360,
+        "live_bytes": 2706543,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 2205571,
+        "start_live_bytes": 2710063
+      },
+      "baseline_samples_us": [
+        2889.076625,
+        4253.424375,
+        4324.9105,
+        4148.081,
+        2665.5035
+      ],
+      "candidate_samples_us": [
+        3146.98275,
+        3217.7049375,
+        4101.43775,
+        4056.7589375,
+        2602.211
+      ],
+      "output_sha256": "739f6166fdce5e1755a75c528af3b17693791bda420faea7977a1f152fd203aa",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 23929.0,
+      "baseline_allocated_bytes_per_layout": 4639200.0,
+      "candidate_allocation_calls_per_layout": 23930.0,
+      "candidate_allocated_bytes_per_layout": 4565920.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "sparse",
+      "line_mode": "normal",
+      "size": 128,
+      "context": "warm",
+      "baseline_us": 2362.5125,
+      "candidate_us": 2335.561125,
+      "ratio": 0.9885920709414238,
+      "baseline_allocations": {
+        "allocated_bytes": 3831404,
+        "calls": 45260,
+        "deallocated_bytes": 3831404,
+        "live_bytes": 2779823,
+        "net_bytes": 0,
+        "peak_extra_bytes": 355308,
+        "start_live_bytes": 2779823
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 3831404,
+        "calls": 45260,
+        "deallocated_bytes": 3831404,
+        "live_bytes": 2706543,
+        "net_bytes": 0,
+        "peak_extra_bytes": 355308,
+        "start_live_bytes": 2706543
+      },
+      "baseline_samples_us": [
+        2372.1074375,
+        2381.7154375,
+        2362.5125,
+        2341.694375,
+        2354.6505625
+      ],
+      "candidate_samples_us": [
+        2587.6221875,
+        2378.6029375,
+        2302.6424375,
+        2268.1609375,
+        2335.561125
+      ],
+      "output_sha256": "739f6166fdce5e1755a75c528af3b17693791bda420faea7977a1f152fd203aa",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 22630.0,
+      "baseline_allocated_bytes_per_layout": 1915702.0,
+      "candidate_allocation_calls_per_layout": 22630.0,
+      "candidate_allocated_bytes_per_layout": 1915702.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "sparse",
+      "line_mode": "normal",
+      "size": 256,
+      "context": "cold",
+      "baseline_us": 5537.2061875,
+      "candidate_us": 5412.7209375,
+      "ratio": 0.9775184008352408,
+      "baseline_allocations": {
+        "allocated_bytes": 18520864,
+        "calls": 94880,
+        "deallocated_bytes": 18524384,
+        "live_bytes": 5119215,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 4549187,
+        "start_live_bytes": 5122735
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 18226848,
+        "calls": 94882,
+        "deallocated_bytes": 18230368,
+        "live_bytes": 4972207,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 4402179,
+        "start_live_bytes": 4975727
+      },
+      "baseline_samples_us": [
+        5516.41425,
+        5478.2135625,
+        5537.2061875,
+        5992.4980625,
+        5771.5790625
+      ],
+      "candidate_samples_us": [
+        5378.964125,
+        5467.178125,
+        5412.7209375,
+        5380.994,
+        6745.0973125
+      ],
+      "output_sha256": "1dd248e0d3f3fd9d72665361cb587c1e9f814c7cd929dedc19d86304104d4eb5",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 47440.0,
+      "baseline_allocated_bytes_per_layout": 9260432.0,
+      "candidate_allocation_calls_per_layout": 47441.0,
+      "candidate_allocated_bytes_per_layout": 9113424.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "sparse",
+      "line_mode": "normal",
+      "size": 256,
+      "context": "warm",
+      "baseline_us": 6702.9285,
+      "candidate_us": 6932.08925,
+      "ratio": 1.0341881537301196,
+      "baseline_allocations": {
+        "allocated_bytes": 7638124,
+        "calls": 90190,
+        "deallocated_bytes": 7638124,
+        "live_bytes": 5119215,
+        "net_bytes": 0,
+        "peak_extra_bytes": 707308,
+        "start_live_bytes": 5119215
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 7638124,
+        "calls": 90190,
+        "deallocated_bytes": 7638124,
+        "live_bytes": 4972207,
+        "net_bytes": 0,
+        "peak_extra_bytes": 707308,
+        "start_live_bytes": 4972207
+      },
+      "baseline_samples_us": [
+        6702.9285,
+        9740.940375,
+        8663.637125,
+        4831.68225,
+        4810.3578125
+      ],
+      "candidate_samples_us": [
+        6932.08925,
+        7633.6755625,
+        7758.2175,
+        4811.353125,
+        4667.634375
+      ],
+      "output_sha256": "1dd248e0d3f3fd9d72665361cb587c1e9f814c7cd929dedc19d86304104d4eb5",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 45095.0,
+      "baseline_allocated_bytes_per_layout": 3819062.0,
+      "candidate_allocation_calls_per_layout": 45095.0,
+      "candidate_allocated_bytes_per_layout": 3819062.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "sparse",
+      "line_mode": "count",
+      "size": 64,
+      "context": "cold",
+      "baseline_us": 1072.57125,
+      "candidate_us": 982.475875,
+      "ratio": 0.9160005687267863,
+      "baseline_allocations": {
+        "allocated_bytes": 3576982,
+        "calls": 7790,
+        "deallocated_bytes": 3580502,
+        "live_bytes": 1623017,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 1049631,
+        "start_live_bytes": 1626537
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 3490006,
+        "calls": 7656,
+        "deallocated_bytes": 3493526,
+        "live_bytes": 1586601,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 1013215,
+        "start_live_bytes": 1590121
+      },
+      "baseline_samples_us": [
+        1072.57125,
+        1100.6750625,
+        1089.9101875,
+        1054.6473125,
+        1038.8798125
+      ],
+      "candidate_samples_us": [
+        992.372,
+        982.475875,
+        981.266625,
+        997.296,
+        974.99375
+      ],
+      "output_sha256": "418a7d9652891dd47867e5645a4cf5f670c9fa122f12ed756231081dfbb4afed",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 3895.0,
+      "baseline_allocated_bytes_per_layout": 1788491.0,
+      "candidate_allocation_calls_per_layout": 3828.0,
+      "candidate_allocated_bytes_per_layout": 1745003.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "sparse",
+      "line_mode": "count",
+      "size": 64,
+      "context": "warm",
+      "baseline_us": 671.697125,
+      "candidate_us": 619.051625,
+      "ratio": 0.9216231571632824,
+      "baseline_allocations": {
+        "allocated_bytes": 795738,
+        "calls": 6252,
+        "deallocated_bytes": 795738,
+        "live_bytes": 1623017,
+        "net_bytes": 0,
+        "peak_extra_bytes": 72364,
+        "start_live_bytes": 1623017
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 781594,
+        "calls": 6116,
+        "deallocated_bytes": 781594,
+        "live_bytes": 1586601,
+        "net_bytes": 0,
+        "peak_extra_bytes": 72364,
+        "start_live_bytes": 1586601
+      },
+      "baseline_samples_us": [
+        681.2004375,
+        682.221875,
+        664.852375,
+        669.689125,
+        671.697125
+      ],
+      "candidate_samples_us": [
+        624.3816875,
+        617.2269375,
+        619.051625,
+        630.1308125,
+        618.1524375
+      ],
+      "output_sha256": "418a7d9652891dd47867e5645a4cf5f670c9fa122f12ed756231081dfbb4afed",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 3126.0,
+      "baseline_allocated_bytes_per_layout": 397869.0,
+      "candidate_allocation_calls_per_layout": 3058.0,
+      "candidate_allocated_bytes_per_layout": 390797.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "sparse",
+      "line_mode": "count",
+      "size": 128,
+      "context": "cold",
+      "baseline_us": 2310.2948125,
+      "candidate_us": 2149.3724375,
+      "ratio": 0.9303455238139657,
+      "baseline_allocations": {
+        "allocated_bytes": 7113190,
+        "calls": 14612,
+        "deallocated_bytes": 7116710,
+        "live_bytes": 2806154,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 2092287,
+        "start_live_bytes": 2809674
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 6939174,
+        "calls": 14350,
+        "deallocated_bytes": 6942694,
+        "live_bytes": 2732874,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 2019007,
+        "start_live_bytes": 2736394
+      },
+      "baseline_samples_us": [
+        2309.936875,
+        2319.3484375,
+        2302.092375,
+        2337.538625,
+        2310.2948125
+      ],
+      "candidate_samples_us": [
+        2142.05625,
+        2182.5486875,
+        2142.7895625,
+        2216.0,
+        2149.3724375
+      ],
+      "output_sha256": "acebb0b37e535f7f188608f0e4f0fc30a04ad64ff9209a9e6ca7cbe2cf361761",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 7306.0,
+      "baseline_allocated_bytes_per_layout": 3556595.0,
+      "candidate_allocation_calls_per_layout": 7175.0,
+      "candidate_allocated_bytes_per_layout": 3469587.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "sparse",
+      "line_mode": "count",
+      "size": 128,
+      "context": "warm",
+      "baseline_us": 1430.111,
+      "candidate_us": 1310.410125,
+      "ratio": 0.9162995914303156,
+      "baseline_allocations": {
+        "allocated_bytes": 1560234,
+        "calls": 12004,
+        "deallocated_bytes": 1560234,
+        "live_bytes": 2806154,
+        "net_bytes": 0,
+        "peak_extra_bytes": 142412,
+        "start_live_bytes": 2806154
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 1532778,
+        "calls": 11740,
+        "deallocated_bytes": 1532778,
+        "live_bytes": 2732874,
+        "net_bytes": 0,
+        "peak_extra_bytes": 142412,
+        "start_live_bytes": 2732874
+      },
+      "baseline_samples_us": [
+        1435.2489375,
+        1430.111,
+        1446.3324375,
+        1419.9965625,
+        1411.108875
+      ],
+      "candidate_samples_us": [
+        1310.410125,
+        1286.5886875,
+        1341.3295625,
+        1346.2055625,
+        1296.0483125
+      ],
+      "output_sha256": "acebb0b37e535f7f188608f0e4f0fc30a04ad64ff9209a9e6ca7cbe2cf361761",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 6002.0,
+      "baseline_allocated_bytes_per_layout": 780117.0,
+      "candidate_allocation_calls_per_layout": 5870.0,
+      "candidate_allocated_bytes_per_layout": 766389.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "sparse",
+      "line_mode": "count",
+      "size": 256,
+      "context": "cold",
+      "baseline_us": 5074.078625,
+      "candidate_us": 4556.04425,
+      "ratio": 0.8979057256922186,
+      "baseline_allocations": {
+        "allocated_bytes": 14184950,
+        "calls": 28176,
+        "deallocated_bytes": 14188470,
+        "live_bytes": 5118650,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 4177599,
+        "start_live_bytes": 5122170
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 13836854,
+        "calls": 27658,
+        "deallocated_bytes": 13840374,
+        "live_bytes": 4971642,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 4030591,
+        "start_live_bytes": 4975162
+      },
+      "baseline_samples_us": [
+        4965.67075,
+        4997.4283125,
+        6628.91925,
+        5074.078625,
+        5161.1925
+      ],
+      "candidate_samples_us": [
+        4426.997375,
+        4464.896875,
+        6311.793375,
+        4577.085,
+        4556.04425
+      ],
+      "output_sha256": "8c8a204c9b777f7c139a3bd337153b7804bdb64242b7efefba3a373121659edf",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 14088.0,
+      "baseline_allocated_bytes_per_layout": 7092475.0,
+      "candidate_allocation_calls_per_layout": 13829.0,
+      "candidate_allocated_bytes_per_layout": 6918427.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "sparse",
+      "line_mode": "count",
+      "size": 256,
+      "context": "warm",
+      "baseline_us": 3170.935125,
+      "candidate_us": 2815.6260625,
+      "ratio": 0.8879481766439482,
+      "baseline_allocations": {
+        "allocated_bytes": 3303154,
+        "calls": 23490,
+        "deallocated_bytes": 3303154,
+        "live_bytes": 5118650,
+        "net_bytes": 0,
+        "peak_extra_bytes": 336284,
+        "start_live_bytes": 5118650
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 3249074,
+        "calls": 22970,
+        "deallocated_bytes": 3249074,
+        "live_bytes": 4971642,
+        "net_bytes": 0,
+        "peak_extra_bytes": 336284,
+        "start_live_bytes": 4971642
+      },
+      "baseline_samples_us": [
+        3170.935125,
+        3472.21925,
+        3114.051,
+        3130.3771875,
+        3883.33875
+      ],
+      "candidate_samples_us": [
+        2933.375625,
+        2846.66775,
+        2757.0525,
+        2815.6260625,
+        2809.9380625
+      ],
+      "output_sha256": "8c8a204c9b777f7c139a3bd337153b7804bdb64242b7efefba3a373121659edf",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 11745.0,
+      "baseline_allocated_bytes_per_layout": 1651577.0,
+      "candidate_allocation_calls_per_layout": 11485.0,
+      "candidate_allocated_bytes_per_layout": 1624537.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "dense",
+      "line_mode": "normal",
+      "size": 64,
+      "context": "cold",
+      "baseline_us": 1313.33925,
+      "candidate_us": 1323.90325,
+      "ratio": 1.0080436185852208,
+      "baseline_allocations": {
+        "allocated_bytes": 4652768,
+        "calls": 24132,
+        "deallocated_bytes": 4656288,
+        "live_bytes": 1610125,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 1143683,
+        "start_live_bytes": 1613645
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 4595296,
+        "calls": 24150,
+        "deallocated_bytes": 4598816,
+        "live_bytes": 1577549,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 1111107,
+        "start_live_bytes": 1581069
+      },
+      "baseline_samples_us": [
+        1313.33925,
+        1283.6465,
+        1312.6320625,
+        1316.6263125,
+        1318.9835625
+      ],
+      "candidate_samples_us": [
+        1308.489375,
+        1323.9425625,
+        1323.90325,
+        1379.429875,
+        1319.7955
+      ],
+      "output_sha256": "2405336d9de4347836b29d289933bff143bdcef0b894734f4752e7fb31dc8c52",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 12066.0,
+      "baseline_allocated_bytes_per_layout": 2326384.0,
+      "candidate_allocation_calls_per_layout": 12075.0,
+      "candidate_allocated_bytes_per_layout": 2297648.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "dense",
+      "line_mode": "normal",
+      "size": 64,
+      "context": "warm",
+      "baseline_us": 1116.1281875,
+      "candidate_us": 1124.67975,
+      "ratio": 1.007661810350973,
+      "baseline_allocations": {
+        "allocated_bytes": 1923692,
+        "calls": 22602,
+        "deallocated_bytes": 1923692,
+        "live_bytes": 1610125,
+        "net_bytes": 0,
+        "peak_extra_bytes": 179308,
+        "start_live_bytes": 1610125
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 1923692,
+        "calls": 22602,
+        "deallocated_bytes": 1923692,
+        "live_bytes": 1577549,
+        "net_bytes": 0,
+        "peak_extra_bytes": 179308,
+        "start_live_bytes": 1577549
+      },
+      "baseline_samples_us": [
+        1116.1281875,
+        1097.89,
+        1123.4749375,
+        1110.968375,
+        1121.606625
+      ],
+      "candidate_samples_us": [
+        1124.67975,
+        1142.8001875,
+        1145.3669375,
+        1120.4018125,
+        1109.7199375
+      ],
+      "output_sha256": "2405336d9de4347836b29d289933bff143bdcef0b894734f4752e7fb31dc8c52",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 11301.0,
+      "baseline_allocated_bytes_per_layout": 961846.0,
+      "candidate_allocation_calls_per_layout": 11301.0,
+      "candidate_allocated_bytes_per_layout": 961846.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "dense",
+      "line_mode": "normal",
+      "size": 128,
+      "context": "cold",
+      "baseline_us": 3203.6530625,
+      "candidate_us": 3038.121,
+      "ratio": 0.9483302157659901,
+      "baseline_allocations": {
+        "allocated_bytes": 9269696,
+        "calls": 47474,
+        "deallocated_bytes": 9273216,
+        "live_bytes": 2779822,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 2278851,
+        "start_live_bytes": 2783342
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 9154880,
+        "calls": 47496,
+        "deallocated_bytes": 9158400,
+        "live_bytes": 2714478,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 2213507,
+        "start_live_bytes": 2717998
+      },
+      "baseline_samples_us": [
+        2688.718125,
+        2997.21375,
+        3529.8281875,
+        4801.1295625,
+        3203.6530625
+      ],
+      "candidate_samples_us": [
+        2888.3999375,
+        3038.121,
+        4603.9185,
+        4559.030125,
+        2767.0578125
+      ],
+      "output_sha256": "a5fa2b6d1cd9f3ad796a4e25b07d01d4592b0fdfb3d2eb61431e4f57dfbbeafe",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 23737.0,
+      "baseline_allocated_bytes_per_layout": 4634848.0,
+      "candidate_allocation_calls_per_layout": 23748.0,
+      "candidate_allocated_bytes_per_layout": 4577440.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "dense",
+      "line_mode": "normal",
+      "size": 128,
+      "context": "warm",
+      "baseline_us": 2478.625,
+      "candidate_us": 2386.5434375,
+      "ratio": 0.9628497402793887,
+      "baseline_allocations": {
+        "allocated_bytes": 3822700,
+        "calls": 44876,
+        "deallocated_bytes": 3822700,
+        "live_bytes": 2779822,
+        "net_bytes": 0,
+        "peak_extra_bytes": 355308,
+        "start_live_bytes": 2779822
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 3822700,
+        "calls": 44876,
+        "deallocated_bytes": 3822700,
+        "live_bytes": 2714478,
+        "net_bytes": 0,
+        "peak_extra_bytes": 355308,
+        "start_live_bytes": 2714478
+      },
+      "baseline_samples_us": [
+        2391.310375,
+        3265.95025,
+        2478.625,
+        2538.1983125,
+        2406.0694375
+      ],
+      "candidate_samples_us": [
+        2386.5434375,
+        2365.5550625,
+        3930.3049375,
+        3049.579875,
+        2338.0536875
+      ],
+      "output_sha256": "a5fa2b6d1cd9f3ad796a4e25b07d01d4592b0fdfb3d2eb61431e4f57dfbbeafe",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 22438.0,
+      "baseline_allocated_bytes_per_layout": 1911350.0,
+      "candidate_allocation_calls_per_layout": 22438.0,
+      "candidate_allocated_bytes_per_layout": 1911350.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "dense",
+      "line_mode": "normal",
+      "size": 256,
+      "context": "cold",
+      "baseline_us": 5389.663375,
+      "candidate_us": 5515.1308125,
+      "ratio": 1.0232792715927272,
+      "baseline_allocations": {
+        "allocated_bytes": 18503456,
+        "calls": 94112,
+        "deallocated_bytes": 18506976,
+        "live_bytes": 5119214,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 4549187,
+        "start_live_bytes": 5122734
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 18273952,
+        "calls": 94138,
+        "deallocated_bytes": 18277472,
+        "live_bytes": 4988334,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 4418307,
+        "start_live_bytes": 4991854
+      },
+      "baseline_samples_us": [
+        5337.572375,
+        5460.4118125,
+        5387.5375,
+        5470.9496875,
+        5389.663375
+      ],
+      "candidate_samples_us": [
+        5515.1308125,
+        5586.6649375,
+        5436.8479375,
+        5570.618125,
+        5435.0319375
+      ],
+      "output_sha256": "a8382794432570f0f59692a911daf345308a670b8867959145175a37932db520",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 47056.0,
+      "baseline_allocated_bytes_per_layout": 9251728.0,
+      "candidate_allocation_calls_per_layout": 47069.0,
+      "candidate_allocated_bytes_per_layout": 9136976.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "dense",
+      "line_mode": "normal",
+      "size": 256,
+      "context": "warm",
+      "baseline_us": 4629.67375,
+      "candidate_us": 4671.17025,
+      "ratio": 1.0089631585810988,
+      "baseline_allocations": {
+        "allocated_bytes": 7620716,
+        "calls": 89422,
+        "deallocated_bytes": 7620716,
+        "live_bytes": 5119214,
+        "net_bytes": 0,
+        "peak_extra_bytes": 707308,
+        "start_live_bytes": 5119214
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 7620716,
+        "calls": 89422,
+        "deallocated_bytes": 7620716,
+        "live_bytes": 4988334,
+        "net_bytes": 0,
+        "peak_extra_bytes": 707308,
+        "start_live_bytes": 4988334
+      },
+      "baseline_samples_us": [
+        4856.0755625,
+        4757.6336875,
+        4598.9420625,
+        4620.943125,
+        4629.67375
+      ],
+      "candidate_samples_us": [
+        4651.7970625,
+        4640.696125,
+        4671.17025,
+        4978.6836875,
+        4751.9719375
+      ],
+      "output_sha256": "a8382794432570f0f59692a911daf345308a670b8867959145175a37932db520",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 44711.0,
+      "baseline_allocated_bytes_per_layout": 3810358.0,
+      "candidate_allocation_calls_per_layout": 44711.0,
+      "candidate_allocated_bytes_per_layout": 3810358.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "dense",
+      "line_mode": "count",
+      "size": 64,
+      "context": "cold",
+      "baseline_us": 1856.8450625,
+      "candidate_us": 1010.4530625,
+      "ratio": 0.5441773699414406,
+      "baseline_allocations": {
+        "allocated_bytes": 3662798,
+        "calls": 8440,
+        "deallocated_bytes": 3666318,
+        "live_bytes": 1623016,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 1049631,
+        "start_live_bytes": 1626536
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 3526126,
+        "calls": 7682,
+        "deallocated_bytes": 3529646,
+        "live_bytes": 1599656,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 1026271,
+        "start_live_bytes": 1603176
+      },
+      "baseline_samples_us": [
+        1856.8450625,
+        1868.9761875,
+        1870.2726875,
+        1850.799125,
+        1846.983875
+      ],
+      "candidate_samples_us": [
+        1021.9119375,
+        1069.3845625,
+        1002.6216875,
+        1008.9688125,
+        1010.4530625
+      ],
+      "output_sha256": "1f4b7c4fd14db88dbdbcdfe83951ffdcc6693ff548361b789ac88395f9d04eff",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 4220.0,
+      "baseline_allocated_bytes_per_layout": 1831399.0,
+      "candidate_allocation_calls_per_layout": 3841.0,
+      "candidate_allocated_bytes_per_layout": 1763063.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "dense",
+      "line_mode": "count",
+      "size": 64,
+      "context": "warm",
+      "baseline_us": 1471.8999375,
+      "candidate_us": 614.0403125,
+      "ratio": 0.41717530985356127,
+      "baseline_allocations": {
+        "allocated_bytes": 881554,
+        "calls": 6902,
+        "deallocated_bytes": 881554,
+        "live_bytes": 1623016,
+        "net_bytes": 0,
+        "peak_extra_bytes": 72364,
+        "start_live_bytes": 1623016
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 783922,
+        "calls": 6122,
+        "deallocated_bytes": 783922,
+        "live_bytes": 1599656,
+        "net_bytes": 0,
+        "peak_extra_bytes": 72364,
+        "start_live_bytes": 1599656
+      },
+      "baseline_samples_us": [
+        1471.8999375,
+        1469.8133125,
+        1506.6040625,
+        1537.7024375,
+        1462.89
+      ],
+      "candidate_samples_us": [
+        614.0403125,
+        614.8173125,
+        613.1934375,
+        610.4913125,
+        616.26225
+      ],
+      "output_sha256": "1f4b7c4fd14db88dbdbcdfe83951ffdcc6693ff548361b789ac88395f9d04eff",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 3451.0,
+      "baseline_allocated_bytes_per_layout": 440777.0,
+      "candidate_allocation_calls_per_layout": 3061.0,
+      "candidate_allocated_bytes_per_layout": 391961.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "dense",
+      "line_mode": "count",
+      "size": 128,
+      "context": "cold",
+      "baseline_us": 5993.619875,
+      "candidate_us": 2204.335875,
+      "ratio": 0.36778039331364837,
+      "baseline_allocations": {
+        "allocated_bytes": 7422686,
+        "calls": 17156,
+        "deallocated_bytes": 7426206,
+        "live_bytes": 2806153,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 2092287,
+        "start_live_bytes": 2809673
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 7012446,
+        "calls": 14382,
+        "deallocated_bytes": 7015966,
+        "live_bytes": 2759241,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 2045375,
+        "start_live_bytes": 2762761
+      },
+      "baseline_samples_us": [
+        6176.8401875,
+        5993.619875,
+        5951.1324375,
+        6033.2393125,
+        5925.6609375
+      ],
+      "candidate_samples_us": [
+        2204.335875,
+        2242.75925,
+        2201.206,
+        2237.6474375,
+        2178.6111875
+      ],
+      "output_sha256": "d0540d28fc223449e7dcc01ff0096ebca6c8c656916a0216a6ff4bf36c990397",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 8578.0,
+      "baseline_allocated_bytes_per_layout": 3711343.0,
+      "candidate_allocation_calls_per_layout": 7191.0,
+      "candidate_allocated_bytes_per_layout": 3506223.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "dense",
+      "line_mode": "count",
+      "size": 128,
+      "context": "warm",
+      "baseline_us": 5061.2315,
+      "candidate_us": 1348.35325,
+      "ratio": 0.2664081360435696,
+      "baseline_allocations": {
+        "allocated_bytes": 1869730,
+        "calls": 14548,
+        "deallocated_bytes": 1869730,
+        "live_bytes": 2806153,
+        "net_bytes": 0,
+        "peak_extra_bytes": 142412,
+        "start_live_bytes": 2806153
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 1537442,
+        "calls": 11748,
+        "deallocated_bytes": 1537442,
+        "live_bytes": 2759241,
+        "net_bytes": 0,
+        "peak_extra_bytes": 142412,
+        "start_live_bytes": 2759241
+      },
+      "baseline_samples_us": [
+        5036.2750625,
+        5005.4691875,
+        5061.2315,
+        6378.503875,
+        6167.978625
+      ],
+      "candidate_samples_us": [
+        1413.3656875,
+        1274.601625,
+        2038.52875,
+        1348.35325,
+        1272.60225
+      ],
+      "output_sha256": "d0540d28fc223449e7dcc01ff0096ebca6c8c656916a0216a6ff4bf36c990397",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 7274.0,
+      "baseline_allocated_bytes_per_layout": 934865.0,
+      "candidate_allocation_calls_per_layout": 5874.0,
+      "candidate_allocated_bytes_per_layout": 768721.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "dense",
+      "line_mode": "count",
+      "size": 256,
+      "context": "cold",
+      "baseline_us": 23252.223375,
+      "candidate_us": 4627.294625,
+      "ratio": 0.19900439413355672,
+      "baseline_allocations": {
+        "allocated_bytes": 15434542,
+        "calls": 38646,
+        "deallocated_bytes": 15438062,
+        "live_bytes": 5118649,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 4177599,
+        "start_live_bytes": 5122169
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 13984398,
+        "calls": 27696,
+        "deallocated_bytes": 13987918,
+        "live_bytes": 5024633,
+        "net_bytes": -3520,
+        "peak_extra_bytes": 4083583,
+        "start_live_bytes": 5028153
+      },
+      "baseline_samples_us": [
+        23252.223375,
+        23033.6704375,
+        23112.9049375,
+        24985.7225625,
+        23260.155125
+      ],
+      "candidate_samples_us": [
+        4473.7758125,
+        4499.2255,
+        4853.2599375,
+        5848.5216875,
+        4627.294625
+      ],
+      "output_sha256": "90164b3010a4ace2374abb6aa6c4d7b655a68a26a02c66c548cbaa1eb8bd965c",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 19323.0,
+      "baseline_allocated_bytes_per_layout": 7717271.0,
+      "candidate_allocation_calls_per_layout": 13848.0,
+      "candidate_allocated_bytes_per_layout": 6992199.0
+    },
+    {
+      "dataset": "ruby",
+      "case": "dense",
+      "line_mode": "count",
+      "size": 256,
+      "context": "warm",
+      "baseline_us": 25126.293875,
+      "candidate_us": 2806.589875,
+      "ratio": 0.11169931741475345,
+      "baseline_allocations": {
+        "allocated_bytes": 4552746,
+        "calls": 33960,
+        "deallocated_bytes": 4552746,
+        "live_bytes": 5118649,
+        "net_bytes": 0,
+        "peak_extra_bytes": 336284,
+        "start_live_bytes": 5118649
+      },
+      "candidate_allocations": {
+        "allocated_bytes": 3258378,
+        "calls": 22980,
+        "deallocated_bytes": 3258378,
+        "live_bytes": 5024633,
+        "net_bytes": 0,
+        "peak_extra_bytes": 336284,
+        "start_live_bytes": 5024633
+      },
+      "baseline_samples_us": [
+        27726.405125,
+        25126.293875,
+        21342.3311875,
+        33741.61575,
+        20971.1629375
+      ],
+      "candidate_samples_us": [
+        2946.8905625,
+        4370.8115,
+        2686.2036875,
+        2806.589875,
+        2714.063
+      ],
+      "output_sha256": "90164b3010a4ace2374abb6aa6c4d7b655a68a26a02c66c548cbaa1eb8bd965c",
+      "warnings_sha256": "fa6840f23593a4df609ec3a85fa1214c858a49b5f4c5eac43c66de5d10f68402",
+      "baseline_allocation_calls_per_layout": 16980.0,
+      "baseline_allocated_bytes_per_layout": 2276373.0,
+      "candidate_allocation_calls_per_layout": 11490.0,
+      "candidate_allocated_bytes_per_layout": 1629189.0
+    }
+  ]
+}
