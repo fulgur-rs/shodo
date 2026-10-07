@@ -254,8 +254,8 @@ fn alternating_intrinsic_revisions_keep_both_range_caches() {
     assert!(growth.iter().all(|g| *g <= 2.2), "{growth:?} {all:?}");
 }
 
-/// `r` sibling rubies, then `f` × ("日" + a float that clears both sides).
-fn ruby_then_clearing_floats(r: usize, f: usize) -> (Paragraph, AtomicIntrinsics) {
+/// `r` sibling rubies, then `f` × (words + a float that clears both sides).
+fn ruby_then_clearing_floats(r: usize, f: usize, words: &str) -> (Paragraph, AtomicIntrinsics) {
     use crate::node::{NodeId, OutOfFlowKind, TextSource};
     let mut b = crate::ParagraphBuilder::new(&paragraph_style(false), &Limits::default());
     let mut inputs = AtomicIntrinsics::new();
@@ -281,7 +281,7 @@ fn ruby_then_clearing_floats(r: usize, f: usize) -> (Paragraph, AtomicIntrinsics
             TextSource::Generated {
                 node: NodeId(500_000 + i),
             },
-            "日",
+            words,
         );
         b.push_out_of_flow(NodeId(900_000 + i), OutOfFlowKind::Float);
         inputs.insert_float(
@@ -297,32 +297,57 @@ fn ruby_then_clearing_floats(r: usize, f: usize) -> (Paragraph, AtomicIntrinsics
     (finish(b), inputs)
 }
 
-/// Review of shodo-mc0: every float that clears probes the whole row from
-/// `total_unit` between word probes from another start, so the single walk
-/// restarts and visits every container again. Walk steps are charged: an
-/// operation's total walk work stays within its allowance.
+/// shodo-5wa: word and row probes alternate around clearing floats. Keeping
+/// both walks makes their work linear even with the allowance disabled.
 #[test]
-fn restarted_walks_are_charged() {
-    let (p, inputs) = ruby_then_clearing_floats(64, 512);
+fn clearing_floats_keep_walk_work_linear() {
+    for words in ["日", "日日", "日日日"] {
+        let (all, growth) = doubling(
+            |r| {
+                let (p, inputs) = ruby_then_clearing_floats(r, r * 4, words);
+                let p = with_factor(p, None);
+                let mut cx = mode_context(Mode::Accumulate);
+                p.intrinsic_sizes(&mut cx, &LineOptions::default(), &inputs);
+                assert!(cx.ruby_walk_steps <= (r * 2) as u64);
+                cx.ruby_walk_steps as usize
+            },
+            [16, 32, 64],
+        );
+        eprintln!("shodo-5wa words={words:?} steps={all:?} growth={growth:?}");
+        assert!(
+            growth.iter().all(|g| *g <= 2.2),
+            "{words}: {growth:?} {all:?}"
+        );
+    }
+}
+
+/// The remaining walk steps are still charged, but clearing floats no longer
+/// exhaust even factor 1. Both bounded and unlimited calls stay exact.
+#[test]
+fn clearing_float_intrinsics_stay_exact_with_charged_walks() {
+    let (p, inputs) = ruby_then_clearing_floats(64, 512, "日");
     let options = LineOptions::default();
-    let mut unlimited = mode_context(Mode::Accumulate);
-    let p = with_factor(p, None);
-    p.intrinsic_sizes(&mut unlimited, &options, &inputs);
-    unlimited.begin_reshape_operation();
-    let p = with_factor(p, Some(1));
-    let mut limited = mode_context(Mode::Accumulate);
-    p.intrinsic_sizes(&mut limited, &options, &inputs);
-    limited.begin_reshape_operation();
-    let work = limited.ruby_line_work_log.last().unwrap().clone();
-    assert!(work.exhausted(), "{work:?}");
-    // Without the limit the restarted walks alone exceed what factor 1
-    // allows, and with it they stop there.
-    assert!(unlimited.ruby_walk_steps > work.extent() * 2);
-    assert!(
-        limited.ruby_walk_steps <= work.extent() + work.walk(),
-        "{} {work:?}",
-        limited.ruby_walk_steps
-    );
+    let mut reference = mode_context(Mode::Reference);
+    let expected = p.intrinsic_sizes(&mut reference, &options, &inputs);
+    let warnings = reference.take_warnings();
+    let mut p = p;
+    for factor in [None, Some(1), Limits::default().max_ruby_line_work] {
+        p = with_factor(p, factor);
+        let mut cx = mode_context(Mode::Accumulate);
+        assert_eq!(p.intrinsic_sizes(&mut cx, &options, &inputs), expected);
+        assert_eq!(cx.take_warnings(), warnings, "factor {factor:?}");
+        cx.begin_reshape_operation();
+        let work = cx.ruby_line_work_log.last().unwrap();
+        assert!(!work.exhausted(), "factor {factor:?}: {work:?}");
+        assert!(cx.ruby_walk_steps > 0);
+        // This fixture never needs saturating sequential sums: its work is
+        // exactly the live measurements plus walk steps.
+        assert_eq!(
+            work.spent(),
+            cx.ruby_container_measures as u64 + cx.ruby_walk_steps
+        );
+        assert!(cx.ruby_walk_steps <= 64 * 2, "{}", cx.ruby_walk_steps);
+    }
 }
 
 /// Siblings over "12" with a float after the `at`-th ruby.

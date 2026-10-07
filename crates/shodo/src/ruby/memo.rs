@@ -12,6 +12,9 @@
 //! The memo also owns the container accumulators of `super::accumulate`
 //! (at most `MAX_ACCUMULATORS`, least recently used evicted), with the same
 //! lifetime: `clear` resets them, releasing large vectors.
+//! Look-ahead walks are also kept for two (dataset, start) keys. Intrinsic
+//! sizes protect the current row's key, so successive word starts cannot
+//! evict its walk between clearing floats.
 //!
 //! The budget is also reset in the middle of a `next_line`: formatting an
 //! accepted line lays out each annotation lane with `Paragraph::ruby_line`
@@ -119,11 +122,17 @@ pub(crate) const MAX_ENTRIES: usize = 1024;
 /// largest retained map has 256 buckets (224 usable), about 27 KiB.
 pub(crate) const RETAINED_CAPACITY: usize = 256;
 
+/// Intrinsic sizes need a word walk and a row walk. All other probes keep
+/// the two latest starts, least recently used evicted.
+const MAX_WALKS: usize = 2;
+
 #[derive(Debug, Default)]
 pub(crate) struct RubyMemo {
     entries: crate::hashing::FastMap<MemoKey, MemoEntry>,
-    /// Look-ahead walk of the latest probe start (see `advance`).
-    walk: Option<WalkState>,
+    /// Look-ahead walks, least recently used first (see `advance`).
+    walks: Vec<WalkState>,
+    /// Current intrinsic row, protected from eviction by successive words.
+    row_walk: Option<((u64, usize), usize)>,
     /// Container accumulators, least recently used first.
     accumulators: Vec<super::accumulate::Accumulator>,
     /// Clears forced by `MAX_ENTRIES`.
@@ -153,15 +162,50 @@ impl RubyMemo {
         self.entries.remove(key);
     }
 
-    /// Move the walk out while the core is measured; an unwound measurement
-    /// leaves `None`, which restarts from a full walk. A nested candidate
-    /// measured meanwhile finds `None` too and walks in full.
-    pub(crate) fn take_walk(&mut self) -> Option<WalkState> {
-        self.walk.take()
+    /// Keep the row walk while word probes change start. The intrinsic
+    /// caller updates this key at forced breaks and dataset switches.
+    pub(crate) fn retain_row_walk(&mut self, data: &ParagraphData, start: usize) {
+        self.row_walk = Some(((data.id, data as *const ParagraphData as usize), start));
     }
 
+    fn evict_walk(&mut self) {
+        let i = self
+            .walks
+            .iter()
+            .position(|w| Some((w.owner, w.start)) != self.row_walk)
+            .unwrap_or(0);
+        self.walks.remove(i);
+    }
+
+    /// Move out the walk for this dataset and start while measuring the core.
+    /// An unwound measurement loses only that walk. A nested candidate for
+    /// the same key starts a fresh one while the outer walk is out.
+    /// Atomic revisions do not affect the walk's immutable paired cuts.
+    pub(crate) fn take_walk(&mut self, data: &ParagraphData, start: usize) -> Option<WalkState> {
+        let owner = (data.id, data as *const ParagraphData as usize);
+        if let Some(i) = self
+            .walks
+            .iter()
+            .position(|w| w.owner == owner && w.start == start)
+        {
+            return Some(self.walks.remove(i));
+        }
+        if self.walks.len() >= MAX_WALKS {
+            self.evict_walk();
+        }
+        None
+    }
+
+    /// Return a walk as the most recently used. Nested take/put pairs may
+    /// have filled the slots or returned the same key: the last put wins.
     pub(crate) fn put_walk(&mut self, walk: Option<WalkState>) {
-        self.walk = walk;
+        let Some(walk) = walk else { return };
+        self.walks
+            .retain(|w| w.owner != walk.owner || w.start != walk.start);
+        while self.walks.len() >= MAX_WALKS {
+            self.evict_walk();
+        }
+        self.walks.push(walk);
     }
 
     /// Move out the accumulator of `key`, or a fresh one (reusing the least
@@ -229,8 +273,8 @@ impl RubyMemo {
         (len, bytes)
     }
 
-    /// Forget every entry and the walk, releasing a map that grew beyond
-    /// `RETAINED_CAPACITY` (the walk's vectors are dropped with it), and
+    /// Forget every entry and walk, releasing a map that grew beyond
+    /// `RETAINED_CAPACITY` (the walks' vectors are dropped with them), and
     /// reset the accumulators (`Accumulator::reset` releases large vectors).
     pub(crate) fn clear(&mut self) {
         if self.entries.capacity() > RETAINED_CAPACITY {
@@ -241,7 +285,8 @@ impl RubyMemo {
         for accumulator in &mut self.accumulators {
             accumulator.reset(None, 0);
         }
-        self.walk = None;
+        self.walks.clear();
+        self.row_walk = None;
     }
 
     #[cfg(test)]
@@ -375,6 +420,70 @@ mod tests {
         memo.put_accumulator(outer);
         assert_eq!(memo.accumulator_keys(), vec![Some(key(1))]);
         assert_eq!(memo.accumulator(key(1)).map(|a| a.len()), Some(1));
+    }
+
+    fn complete_walk(memo: &mut RubyMemo, data: &ParagraphData, start: usize) -> WalkState {
+        let mut walk = memo.take_walk(data, start);
+        assert_eq!(
+            advance(&mut walk, data, start, data.units.len()),
+            data.units.len()
+        );
+        walk.unwrap()
+    }
+
+    #[test]
+    fn walks_resume_recent_starts_and_restart_evicted_or_cleared_ones() {
+        let p = crate::ruby::accumulate_tests::digit_siblings(4);
+        let mut memo = RubyMemo::default();
+        for start in [0, 1] {
+            let walk = complete_walk(&mut memo, &p.data, start);
+            assert!(walk.steps() > 0);
+            memo.put_walk(Some(walk));
+        }
+        let recent = complete_walk(&mut memo, &p.data, 0);
+        assert_eq!(recent.steps(), 0);
+        memo.put_walk(Some(recent));
+        let new = complete_walk(&mut memo, &p.data, 2);
+        memo.put_walk(Some(new));
+        // Start 1 was least recently used when start 2 arrived.
+        let recent = complete_walk(&mut memo, &p.data, 0);
+        assert_eq!(recent.steps(), 0);
+        memo.put_walk(Some(recent));
+        let evicted = complete_walk(&mut memo, &p.data, 1);
+        assert!(evicted.steps() > 0);
+        memo.put_walk(Some(evicted));
+        memo.clear();
+        assert!(memo.walks.is_empty());
+        assert!(complete_walk(&mut memo, &p.data, 0).steps() > 0);
+    }
+
+    #[test]
+    fn nested_walk_returns_replace_same_keys_and_keep_the_bound() {
+        let p = crate::ruby::accumulate_tests::digit_siblings(4);
+        let mut memo = RubyMemo::default();
+        let outer = complete_walk(&mut memo, &p.data, 0);
+        for start in [1, 2] {
+            let nested = complete_walk(&mut memo, &p.data, start);
+            memo.put_walk(Some(nested));
+        }
+        // Slots filled while the outer walk was out: the oldest is evicted.
+        memo.put_walk(Some(outer));
+        assert_eq!(
+            memo.walks.iter().map(|w| w.start).collect::<Vec<_>>(),
+            [2, 0]
+        );
+        let outer = complete_walk(&mut memo, &p.data, 0);
+        let nested = complete_walk(&mut memo, &p.data, 0);
+        memo.put_walk(Some(nested));
+        memo.put_walk(Some(outer));
+        assert_eq!(
+            memo.walks.iter().map(|w| w.start).collect::<Vec<_>>(),
+            [2, 0]
+        );
+        assert_eq!(complete_walk(&mut memo, &p.data, 0).steps(), 0);
+        // A missing/unwound walk does not discard the other key.
+        memo.put_walk(None);
+        assert_eq!(complete_walk(&mut memo, &p.data, 2).steps(), 0);
     }
 }
 

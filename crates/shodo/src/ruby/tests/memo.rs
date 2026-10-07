@@ -1875,6 +1875,32 @@ fn walk_fixtures() -> Vec<(String, Paragraph)> {
 }
 
 #[test]
+fn cached_walks_match_full_walk_when_starts_and_datasets_alternate() {
+    use crate::ruby::memo::{RubyMemo, advance};
+    let mut memo = RubyMemo::default();
+    for (name, p) in walk_fixtures() {
+        let data = &p.data;
+        let n = data.units.len();
+        for start in 1..n {
+            for end in start + 1..=n {
+                for start in [0, start] {
+                    let mut state = memo.take_walk(data, start);
+                    let through = advance(&mut state, data, start, end);
+                    let (expected, visited) =
+                        crate::ruby::measure::walk(data, start, end, &mut LayoutContext::new());
+                    assert_eq!(
+                        (through, state.as_ref().unwrap().visited()),
+                        (expected, &visited[..]),
+                        "{name}: {start}..{end}"
+                    );
+                    memo.put_walk(state);
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn incremental_walk_matches_full_walk_for_every_range() {
     for (name, p) in walk_fixtures() {
         let data = &p.data;
