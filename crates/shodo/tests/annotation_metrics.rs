@@ -487,7 +487,7 @@ fn quirk_trimmed_trailing_space_does_not_restore_excluded_annotation_geometry() 
 }
 
 #[test]
-fn styled_break_struts_are_preserved_without_inventing_text_free_marks() {
+fn styled_break_does_not_expand_annotation_metrics_after_text() {
     for mode in [
         WritingMode::HorizontalTb,
         WritingMode::VerticalRl,
@@ -503,18 +503,22 @@ fn styled_break_struts_are_preserved_without_inventing_text_free_marks() {
             child.font_size = 5.;
             let mut br = marked(40.).root;
             br.font_size = 40.;
-            let make = |break_style: &shodo::style::InlineStyle| {
+            let make = |break_style: Option<&shodo::style::InlineStyle>| {
                 build(&root, |b| {
                     b.open_inline(NodeId(2), &child, Default::default())
-                        .push_text(TextSource::Generated { node: NodeId(3) }, "a")
-                        .push_forced_break_with_style(NodeId(4), break_style)
-                        .close_inline();
+                        .push_text(TextSource::Generated { node: NodeId(3) }, "a");
+                    if let Some(style) = break_style {
+                        b.push_forced_break_with_style(NodeId(4), style);
+                    } else {
+                        b.push_forced_break(NodeId(4));
+                    }
+                    b.close_inline();
                 })
             };
-            let p = make(&br);
+            let p = make(Some(&br));
             let actual = first_line(&p, 1000., &LineOptions::default(), &AtomicSizes::EMPTY);
             br.text_emphasis = None;
-            let plain_break = make(&br);
+            let plain_break = make(Some(&br));
             let expected = first_line(
                 &plain_break,
                 1000.,
@@ -522,24 +526,20 @@ fn styled_break_struts_are_preserved_without_inventing_text_free_marks() {
                 &AtomicSizes::EMPTY,
             );
             assert_eq!(actual.annotation_metrics(), expected.annotation_metrics());
-            let m = actual.annotation_metrics();
+            // Changing only the break's font/emphasis must not expand an
+            // already credited text parent's geometry. The legacy API is
+            // an independent input path retaining that parent's strut.
+            let legacy = make(None);
+            let expected = first_line(&legacy, 1000., &LineOptions::default(), &AtomicSizes::EMPTY);
             assert_eq!(
-                (
-                    actual.block_size(),
-                    m.unannotated_block_end - m.unannotated_block_start
-                ),
-                (40., 40.)
+                actual.block_size(),
+                expected.block_size(),
+                "{mode:?}/{forced}"
             );
-            assert_eq!((m.overflow_over, m.overflow_under), (0., 0.));
             assert_eq!(
-                (m.space_over, m.space_under),
-                match (mode, forced) {
-                    (WritingMode::HorizontalTb, false) => (25.5, 7.),
-                    (WritingMode::HorizontalTb, true) => (15., 7.),
-                    (_, false) => (15., 17.5),
-                    (_, true) => (15., 15.),
-                },
-                "{mode:?} forced={forced}"
+                actual.annotation_metrics(),
+                expected.annotation_metrics(),
+                "{mode:?}/{forced}"
             );
         }
     }

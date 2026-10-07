@@ -128,6 +128,8 @@ pub(crate) fn content_credit(data: &ParagraphData, i: usize, owner: CreditBox) -
 #[derive(Debug, Default)]
 pub(crate) struct Struts {
     pub(crate) root: bool,
+    /// The ending styled break's parent has no metrics on this line.
+    pub(crate) styled_break_strut: bool,
     pub(crate) boxes: crate::hashing::FastSet<u32>,
     /// First unit of the line's trailing run (`whitespace::trailing_start`).
     pub(crate) trailing: usize,
@@ -205,6 +207,7 @@ impl Struts {
                     // Explicit break profiles size themselves, not empty
                     // ancestor boxes. Direct root breaks keep its usual rule.
                     let inherited = !data.items[u.item as usize].own_break_style;
+                    s.styled_break_strut = !owner.credited(content) && !s.contributes(u.parent_box);
                     forced = Some((
                         u.parent_box,
                         (inherited || u.parent_box.is_none()) && !owner.credited(content),

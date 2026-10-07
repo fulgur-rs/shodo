@@ -628,6 +628,69 @@ fn styled_break_index_matches_retained_ranges_and_baselines() {
 }
 
 #[test]
+fn styled_break_content_and_pending_credit_match_retained_ranges() {
+    use crate::geometry::WritingMode;
+    use crate::node::{InlineEdges, Sides};
+    use crate::style::{LineHeight, VerticalAlign, WhiteSpaceCollapse};
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        for collapse in [WhiteSpaceCollapse::Collapse, WhiteSpaceCollapse::Preserve] {
+            for align in [
+                VerticalAlign::Baseline,
+                VerticalAlign::Top,
+                VerticalAlign::TextTop,
+            ] {
+                for edge in [0.0, 1.0] {
+                    let p = quirk_paragraph_in(mode, true, |b| {
+                        b.open_inline(
+                            NodeId(100),
+                            &InlineStyle {
+                                line_height: LineHeight::Px(10.0),
+                                white_space_collapse: collapse,
+                                ..style(10.0)
+                            },
+                            InlineEdges {
+                                padding: Sides {
+                                    inline_start: edge,
+                                    ..Default::default()
+                                },
+                                ..Default::default()
+                            },
+                        );
+                        b.push_text(TextSource::Generated { node: NodeId(1) }, " ");
+                        b.open_inline(
+                            NodeId(101),
+                            &InlineStyle {
+                                vertical_align: align,
+                                ..style(12.0)
+                            },
+                            Default::default(),
+                        );
+                        b.close_inline();
+                        b.push_forced_break_with_style(
+                            NodeId(3),
+                            &InlineStyle {
+                                line_height: LineHeight::Px(40.0),
+                                ..style(20.0)
+                            },
+                        );
+                        b.close_inline();
+                        b.push_forced_break_with_style(NodeId(4), &style(10.0));
+                    });
+                    assert!(
+                        assert_quirk_parity(&p, &AtomicSizes::EMPTY) > 5,
+                        "{mode:?}/{collapse:?}/{align:?}/{edge}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn styled_break_index_queries_do_not_rescan_prefixes() {
     use crate::style::LineHeight;
     let mut visits = Vec::new();

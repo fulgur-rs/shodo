@@ -39,6 +39,8 @@ struct Group {
     /// Members that size the line; `None` under the quirk when no member
     /// does, so the group bakes no height.
     bounds: Option<Bounds>,
+    /// Explicit break profiles, selected only for a break-only range.
+    break_bounds: Option<Bounds>,
     /// Every member's profile: positions a group that sizes nothing.
     ghost: Bounds,
     bottom: bool,
@@ -55,6 +57,8 @@ impl Group {
 pub(super) struct MetricIndex {
     tree: Vec<Summary>,
     nonglyph: Vec<Summary>,
+    /// Conditional break summaries; empty unless the quirk has styled breaks.
+    breaks: Vec<Summary>,
     contents: Vec<ContentSummary>,
     nonglyph_contents: Vec<ContentSummary>,
     box_contents: Vec<ContentBounds>,
@@ -147,6 +151,11 @@ impl MetricIndex {
         let mut boxes = vec![None; data.boxes.len()];
         let mut record_content = vec![None; data.units.len()];
         let quirk = data.style.line_height_quirk;
+        let mut breaks = if quirk && data.items.iter().any(|item| item.own_break_style) {
+            vec![Summary::default(); size * 2]
+        } else {
+            Vec::new()
+        };
         // Glyph profiles of trimmable units, which size a line only when it
         // does not end with them: they live in the quirk tree instead.
         let mut trimmed = if quirk {
@@ -193,11 +202,14 @@ impl MetricIndex {
             {
                 // Under the quirk a box strut sizes only the lines that credit
                 // it (`quirk::QuirkIndex`), as does a trimmable unit's glyph.
-                let sizes = !(quirk && record && (is_box || trims));
+                let conditional_break = quirk && record && matches!(u.kind, UnitKind::ForcedBreak);
+                let sizes = !(quirk && record && (is_box || trims)) && !conditional_break;
                 if sizes {
                     tree[size + i] = tree[size + i].join(Summary::profile(p, active));
                 } else if trims {
                     trimmed[i] = Some(p);
+                } else if conditional_break {
+                    breaks[size + i] = breaks[size + i].join(Summary::profile(p, active));
                 }
                 if let UnitKind::Open { box_index } | UnitKind::Close { box_index } = u.kind {
                     boxes[box_index as usize] = Some(p);
@@ -219,6 +231,7 @@ impl MetricIndex {
                     let group = groups.entry(key).or_insert(Group {
                         units: i..i + 1,
                         bounds: None,
+                        break_bounds: None,
                         ghost: bounds,
                         bottom,
                     });
@@ -226,6 +239,8 @@ impl MetricIndex {
                     group.ghost = union(Some(group.ghost), Some(bounds)).unwrap();
                     if sizes {
                         group.bounds = union(group.bounds, Some(bounds));
+                    } else if conditional_break {
+                        group.break_bounds = union(group.break_bounds, Some(bounds));
                     }
                 }
             }
@@ -269,6 +284,14 @@ impl MetricIndex {
             Box::new(index)
         });
         for group in &groups {
+            if let Some(bounds) = group.break_bounds {
+                let leaf = &mut breaks[size + group.units.end - 1];
+                let height = bounds.bottom - bounds.top;
+                leaf.height = leaf.height.max(height);
+                if group.bottom {
+                    leaf.bottom_height = leaf.bottom_height.max(height);
+                }
+            }
             let Some(bounds) = group.bounds else {
                 continue;
             };
@@ -288,6 +311,9 @@ impl MetricIndex {
         for i in (1..size).rev() {
             tree[i] = tree[i * 2].join(tree[i * 2 + 1]);
             nonglyph[i] = nonglyph[i * 2].join(nonglyph[i * 2 + 1]);
+            if !breaks.is_empty() {
+                breaks[i] = breaks[i * 2].join(breaks[i * 2 + 1]);
+            }
         }
         let mut contents = vec![ContentSummary::default(); size * 2];
         for (i, raw) in record_content.into_iter().enumerate() {
@@ -362,6 +388,7 @@ impl MetricIndex {
         Self {
             tree,
             nonglyph,
+            breaks,
             contents,
             nonglyph_contents,
             box_contents,
@@ -505,6 +532,7 @@ impl MetricIndex {
         let mut extra = Summary::default();
         let mut group_extra = crate::hashing::FastMap::default();
         let mut side = quirk::Side::default();
+        let mut include_breaks = false;
         if let (Some(q), Some(t)) = (&self.quirk, trailing) {
             side = q.side(range, t, &removed, cx);
             // Groups that the trailing run clips. The run holds no Open unit,
@@ -517,6 +545,16 @@ impl MetricIndex {
                 // Constant time relies on no group starting inside the run.
                 debug_assert!(i - first < 2, "trailing run starts groups");
                 affected.insert(i);
+            }
+            // Include all break profiles in synthetic retained ranges too,
+            // without scanning their units or baking them into normal groups.
+            if let Some((k, lo)) = q.ending_break(data, range) {
+                let content = q
+                    .query(&(lo..k.min(t)), |l| l.all, cx)
+                    .join(q.query(&(lo.max(t)..k), |l| l.kept, cx))
+                    .content;
+                include_breaks = !q.credited(data.units[k].parent_box, content)
+                    && !q.break_parent_edge(data, range, k);
             }
             if let Some((k, lo)) = q.forced(data, range) {
                 let content = q
@@ -595,15 +633,29 @@ impl MetricIndex {
             .map(|i| self.groups[*i].units.end - 1)
             .collect();
         let mut summary = self
-            .query(range, &replacements, &excluded, &removed, cx)
+            .query(
+                range,
+                &replacements,
+                &excluded,
+                &removed,
+                include_breaks,
+                cx,
+            )
             .join(extra);
         let mut partial = crate::hashing::FastMap::default();
         for i in affected {
             let group = &self.groups[i];
             let selected = range.start.max(group.units.start)..range.end.min(group.units.end);
             let mut raw = union(
-                self.query(&selected, &replacements, &BTreeSet::new(), &removed, cx)
-                    .raw,
+                self.query(
+                    &selected,
+                    &replacements,
+                    &BTreeSet::new(),
+                    &removed,
+                    include_breaks,
+                    cx,
+                )
+                .raw,
                 group_extra.get(&i).copied().flatten(),
             );
             if let (Some(q), Some(t)) = (&self.quirk, trailing) {

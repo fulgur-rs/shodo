@@ -320,19 +320,43 @@ impl QuirkIndex {
         data: &ParagraphData,
         range: &Range<usize>,
     ) -> Option<(usize, usize)> {
-        let k = self.forced[range.end - 1]? as usize;
-        if k < range.start {
-            return None;
-        }
+        let (k, lo) = self.ending_break(data, range)?;
         if data.items[data.units[k].item as usize].own_break_style
             && data.units[k].parent_box.is_some()
         {
+            return None;
+        }
+        Some((k, lo))
+    }
+
+    /// The ending break and the start of its parent's content on this line.
+    pub(super) fn ending_break(
+        &self,
+        data: &ParagraphData,
+        range: &Range<usize>,
+    ) -> Option<(usize, usize)> {
+        let k = self.forced[range.end - 1]? as usize;
+        if k < range.start {
             return None;
         }
         let lo = data.units[k].parent_box.map_or(range.start, |b| {
             range.start.max(self.opens[b as usize] as usize + 1)
         });
         Some((k, lo))
+    }
+
+    /// An inline-start edge credits the break parent's own strut. The Open
+    /// is excluded from the parent's descendant-content query above.
+    pub(super) fn break_parent_edge(
+        &self,
+        data: &ParagraphData,
+        range: &Range<usize>,
+        k: usize,
+    ) -> bool {
+        data.units[k].parent_box.is_some_and(|b| {
+            range.contains(&(self.opens[b as usize] as usize))
+                && super::super::quirk::start_edge(data, b)
+        })
     }
 
     /// Strut contributions of `range` on a line whose trailing run starts at
