@@ -1,0 +1,961 @@
+{
+  "date": "2026-10-07",
+  "base_revision": "17c129603eebf2ec9d6034d586d97c356729ef3f",
+  "purpose": "Bounded paragraph-local reuse of punctuation fullwidth probes and raw glyph bounds across runs.",
+  "conditions": {
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+    "machine": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+    "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  12\nOn-line CPU(s) list:                     0-11\nVendor ID:                               AuthenticAMD\nModel name:                              AMD Ryzen 5 5600G with Radeon Graphics\nCPU family:                              25\nModel:                                   80\nThread(s) per core:                      2\nCore(s) per socket:                      6\nSocket(s):                               1\nStepping:                                0\nMicrocode version:                       0xa500012\nFrequency boost:                         enabled\nCPU(s) scaling MHz:                      98%\nCPU max MHz:                             4465.9731\nCPU min MHz:                             403.5520\nBogoMIPS:                                7784.79\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpb cat_l3 cdp_l3 hw_pstate ssbd mba ibrs ibpb stibp vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif v_spec_ctrl umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor smca fsrm debug_swap\nVirtualization:                          AMD-V\nL1d cache:                               192 KiB (6 instances)\nL1i cache:                               192 KiB (6 instances)\nL2 cache:                                3 MiB (6 instances)\nL3 cache:                                16 MiB (1 instance)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-11\nVulnerability Gather data sampling:      Not affected\nVulnerability Ghostwrite:                Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Old microcode:             Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Mitigation; Safe RET\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP always-on; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Mitigation; Clear CPU buffers\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB before exit to userspace\n",
+    "cpu_affinity": 10,
+    "profile": "release defaults (opt-level=3, no added RUSTFLAGS)",
+    "features": "complex-scripts; allocation-counting only in separate allocator binaries",
+    "method": "Seven independent processes per variant and case, interleaved AB/BA, eight warmups per process. Input insertion, paragraph build and output drop included; font initialization and source digest generation excluded. Allocation counts cover three builds, with three identical process samples.",
+    "instruction_method": "perf stat instructions:u, three independent processes for each variant at 3 and 13 measured builds. Difference of median process totals divided by ten estimates instructions per build; identical initialization, eight warmups and digest preparation cancel. All counters cover the process, not just the timer.",
+    "observed_load_average_at_first_timing_end": [
+      21.73,
+      9.15,
+      4.07
+    ],
+    "cargo_lock_sha256": "6b371ec3b3f3f90ea0204540cbe30208e23734d0ada7fc7e3f982081834534f4",
+    "rustflags": null,
+    "cargo_encoded_rustflags": null
+  },
+  "binaries_sha256": {
+    "before": "3f92f981a78628cbec76048bef6d9a8c76806a8df36d0594f93525ccc3ccb749",
+    "after": "fa9d594cca213afa313bf06f505e7515ccd6b40910d604ccec22458439a3f4c4",
+    "before-alloc": "3536247c5d892aadb596a8dc6139a12a64f92f089e1de31979c8fc6df84dab00",
+    "after-alloc": "8246aa2f4a14ed2a0b5a7e48883a8da73d48f806786292ce21dad2cc0564d701"
+  },
+  "fonts_sha256": {
+    "arabic.ttf": "e9885fbcf3bdbddea94d1679d636a80f7421c6b63632a35c6f884a9ee74067d9",
+    "cjk.otf": "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b",
+    "emoji-color.ttf": "6047984e1da3b32e9629740378f2a143daa2c630f140edcf69b68696e3766362",
+    "emoji-mono.ttf": "76c91d377b0d3acb5e0feb696924d1fec7ea9cd4c7860dff52aa0cdd998f76f3",
+    "latin.ttf": "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25"
+  },
+  "source_sha256": {
+    "crates/shodo/src/line/punctuation.rs": "cd7e8245db8f0aa84ec3b16a8080639655f6b6a4b8d0bab84cdb3b5651f783cc",
+    "dev/bench/examples/source_geometry.rs": "949f4e1be9f4de8fccb401fda48891b34f7b52d92aaea4d13a14302d9a181433"
+  },
+  "results": [
+    {
+      "case": "japanese-long",
+      "scale": 1,
+      "iterations_per_process": 160,
+      "timing_ns_per_build": {
+        "before": [
+          1887007.73125,
+          2504198.575,
+          1688106.94375,
+          1463836.85625,
+          2279738.1625,
+          2686835.1875,
+          2451431.0
+        ],
+        "after": [
+          1127861.2625,
+          1259028.0875,
+          1056199.41875,
+          1482439.09375,
+          2555919.36875,
+          1579582.43125,
+          891289.80625
+        ]
+      },
+      "median_ratio_after_over_before": 0.5522687246325376,
+      "allocation_three_builds": {
+        "before": {
+          "allocated_bytes": 1567623,
+          "calls": 6999,
+          "deallocated_bytes": 1567623,
+          "live_bytes": 893851,
+          "net_bytes": 0,
+          "peak_extra_bytes": 262300,
+          "start_live_bytes": 893851
+        },
+        "after": {
+          "allocated_bytes": 1569675,
+          "calls": 7008,
+          "deallocated_bytes": 1569675,
+          "live_bytes": 893851,
+          "net_bytes": 0,
+          "peak_extra_bytes": 262300,
+          "start_live_bytes": 893851
+        }
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 516,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 240,
+          "sha256": "712bcf2a46cf9a36aca4b6af44ea0b0fed27ba1bdccf0fc99b4ea4c417ef92cf",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "6f144d20fec38cde76892002cb5c8e0687d58e870c722711d22f09f1527aebf8",
+        "selection_sha256": "8e4846c186154358d35e978297c26798f95882658a1e907c5535f02f2fe1e370"
+      },
+      "hardware_instructions": {
+        "before": {
+          "process_instructions": {
+            "3": [
+              143243481,
+              143243874,
+              143244968
+            ],
+            "13": [
+              235535863,
+              235516067,
+              235533702
+            ]
+          },
+          "estimated_instructions_per_build": 9228982.8
+        },
+        "after": {
+          "process_instructions": {
+            "3": [
+              127310450,
+              127311230,
+              127322153
+            ],
+            "13": [
+              206288073,
+              206289233,
+              206287633
+            ]
+          },
+          "estimated_instructions_per_build": 7897684.3
+        }
+      },
+      "instruction_ratio_after_over_before": 0.8557480787590155
+    },
+    {
+      "case": "japanese-long",
+      "scale": 8,
+      "iterations_per_process": 40,
+      "timing_ns_per_build": {
+        "before": [
+          13241571.2,
+          9924485.975,
+          14705702.275,
+          12280747.175,
+          10889198.6,
+          20640745.925,
+          14752133.25
+        ],
+        "after": [
+          8507241.55,
+          8896663.55,
+          10832846.225,
+          12519278.675,
+          18405355.975,
+          10560951.75,
+          9444398.775
+        ]
+      },
+      "median_ratio_after_over_before": 0.7975603189748359,
+      "allocation_three_builds": {
+        "before": {
+          "allocated_bytes": 12333819,
+          "calls": 50757,
+          "deallocated_bytes": 12333819,
+          "live_bytes": 4058243,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2057632,
+          "start_live_bytes": 4058243
+        },
+        "after": {
+          "allocated_bytes": 12335871,
+          "calls": 50766,
+          "deallocated_bytes": 12335871,
+          "live_bytes": 4058243,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2057632,
+          "start_live_bytes": 4058243
+        }
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 4128,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 1920,
+          "sha256": "3a0a700fbed3e20724d23c9dda0e4c11b6be2cfc70aeae2c41a6032e4c17d656",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "7b96dfbbec3c89dfa9da1599d4fb37d98888622b50e40ca1135620bdac9ec56f",
+        "selection_sha256": "6ab8dfdf48114191b6e1bc4b3dd3a6c380f8edc94ca6731f3b9b7fc911d563d8"
+      },
+      "hardware_instructions": {
+        "before": {
+          "process_instructions": {
+            "3": [
+              1132393125,
+              1132311347,
+              1132309700
+            ],
+            "13": [
+              1868824340,
+              1868978358,
+              1868826908
+            ]
+          },
+          "estimated_instructions_per_build": 73651556.1
+        },
+        "after": {
+          "process_instructions": {
+            "3": [
+              999198518,
+              999199777,
+              999199025
+            ],
+            "13": [
+              1624847145,
+              1624845516,
+              1625027998
+            ]
+          },
+          "estimated_instructions_per_build": 62564812.0
+        }
+      },
+      "instruction_ratio_after_over_before": 0.8494703345446357
+    },
+    {
+      "case": "japanese-long",
+      "scale": 64,
+      "iterations_per_process": 5,
+      "timing_ns_per_build": {
+        "before": [
+          163834667.0,
+          45758205.0,
+          101956192.2,
+          46094590.6,
+          46500010.4,
+          46472785.0,
+          46712617.4
+        ],
+        "after": [
+          75824776.4,
+          61406856.4,
+          43908566.8,
+          39046391.8,
+          39304146.4,
+          39191277.4,
+          43857440.6
+        ]
+      },
+      "median_ratio_after_over_before": 0.9431705546457255,
+      "allocation_three_builds": {
+        "before": {
+          "allocated_bytes": 98463387,
+          "calls": 399687,
+          "deallocated_bytes": 98463387,
+          "live_bytes": 29373380,
+          "net_bytes": 0,
+          "peak_extra_bytes": 16420288,
+          "start_live_bytes": 29373380
+        },
+        "after": {
+          "allocated_bytes": 98465439,
+          "calls": 399696,
+          "deallocated_bytes": 98465439,
+          "live_bytes": 29373380,
+          "net_bytes": 0,
+          "peak_extra_bytes": 16420288,
+          "start_live_bytes": 29373380
+        }
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 33024,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 15360,
+          "sha256": "b4c19a1906607d6bfafb808eb3649104a641b28b3bf2841faa9368bd64a07be8",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "bf7e5fd9db86f658e7daf3db97a304f7309df84f289052a3ce28358022f19ca7",
+        "selection_sha256": "b8acda64a3edd033d6ca13eb86afe78fac85cb997685baed098688dfef703454"
+      },
+      "hardware_instructions": {
+        "before": {
+          "process_instructions": {
+            "3": [
+              9164519598,
+              9163760985,
+              9163765553
+            ],
+            "13": [
+              15153950972,
+              15155332918,
+              15153883553
+            ]
+          },
+          "estimated_instructions_per_build": 599018541.9
+        },
+        "after": {
+          "process_instructions": {
+            "3": [
+              8093065647,
+              8093826453,
+              8093132143
+            ],
+            "13": [
+              13191306284,
+              13191312844,
+              13191304495
+            ]
+          },
+          "estimated_instructions_per_build": 509817414.1
+        }
+      },
+      "instruction_ratio_after_over_before": 0.8510878686374768
+    },
+    {
+      "case": "japanese-short",
+      "scale": 8,
+      "iterations_per_process": 160,
+      "timing_ns_per_build": {
+        "before": [
+          861343.075,
+          2055458.49375,
+          1204940.025,
+          1322255.35,
+          990471.74375,
+          1037161.975,
+          1089010.66875
+        ],
+        "after": [
+          1687783.49375,
+          1195523.225,
+          1535086.2125,
+          975075.8125,
+          896798.80625,
+          813615.65,
+          1271431.1875
+        ]
+      },
+      "median_ratio_after_over_before": 1.0978067151281985,
+      "allocation_three_builds": {
+        "before": {
+          "allocated_bytes": 1070307,
+          "calls": 4881,
+          "deallocated_bytes": 1070307,
+          "live_bytes": 765137,
+          "net_bytes": 0,
+          "peak_extra_bytes": 183464,
+          "start_live_bytes": 765137
+        },
+        "after": {
+          "allocated_bytes": 1072359,
+          "calls": 4890,
+          "deallocated_bytes": 1072359,
+          "live_bytes": 765137,
+          "net_bytes": 0,
+          "peak_extra_bytes": 183464,
+          "start_live_bytes": 765137
+        }
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 344,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 18,
+          "runs": 172,
+          "sha256": "28c4cb07386deb59fa26ba63d6201b137a133bacf485b7f1a749125ac5aded02",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "2d970a2f625c183cbd07d5740c2403b16dcfca23b53d8b8e9e3bde959e0b6e0d",
+        "selection_sha256": "e92ba551a92d97654fb3b8abec112e99e6eb40af52d5bb2123733e9e5acf5772"
+      },
+      "hardware_instructions": {
+        "before": {
+          "process_instructions": {
+            "3": [
+              96310364,
+              96310802,
+              96317667
+            ],
+            "13": [
+              158122359,
+              158110396,
+              158110984
+            ]
+          },
+          "estimated_instructions_per_build": 6180018.2
+        },
+        "after": {
+          "process_instructions": {
+            "3": [
+              85967803,
+              85968355,
+              85966777
+            ],
+            "13": [
+              139149485,
+              139149269,
+              139150987
+            ]
+          },
+          "estimated_instructions_per_build": 5318168.2
+        }
+      },
+      "instruction_ratio_after_over_before": 0.8605424818975452
+    },
+    {
+      "case": "latin-long",
+      "scale": 8,
+      "iterations_per_process": 80,
+      "timing_ns_per_build": {
+        "before": [
+          5490234.0625,
+          5744584.4625,
+          5670201.725,
+          4816417.15,
+          10019918.2375,
+          4177275.4625,
+          6697856.5625
+        ],
+        "after": [
+          5315382.5,
+          5666670.2,
+          5677209.7625,
+          6223566.4125,
+          5992585.125,
+          3365636.85,
+          5868799.575
+        ]
+      },
+      "median_ratio_after_over_before": 1.0012359414779022,
+      "allocation_three_builds": {
+        "before": {
+          "allocated_bytes": 13471971,
+          "calls": 936,
+          "deallocated_bytes": 13471971,
+          "live_bytes": 5242561,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2103374,
+          "start_live_bytes": 5242561
+        },
+        "after": {
+          "allocated_bytes": 13473027,
+          "calls": 939,
+          "deallocated_bytes": 13473027,
+          "live_bytes": 5242561,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2103374,
+          "start_live_bytes": 5242561
+        }
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 7672,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 144,
+          "runs": 240,
+          "sha256": "3104559e88f5ea7b5ee5cf9708d3b2b6e7cceff17066ed4f428ab7169681e712",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "fc7e4666501b7b3a8d23166d1bfa26a91239a155950ba9450bb165fe8534f450",
+        "selection_sha256": "9ba5cb2e841918004350b50f6e7e5f0aef1eaa48820e8af9eced61cabbce7cd7"
+      },
+      "hardware_instructions": {
+        "before": {
+          "process_instructions": {
+            "3": [
+              1092372973,
+              1092372878,
+              1092373606
+            ],
+            "13": [
+              1618562572,
+              1618569994,
+              1618569264
+            ]
+          },
+          "estimated_instructions_per_build": 52619629.1
+        },
+        "after": {
+          "process_instructions": {
+            "3": [
+              1094907715,
+              1094914156,
+              1094913900
+            ],
+            "13": [
+              1623418040,
+              1623417812,
+              1623427005
+            ]
+          },
+          "estimated_instructions_per_build": 52850414.0
+        }
+      },
+      "instruction_ratio_after_over_before": 1.0043859089078984
+    },
+    {
+      "case": "arabic-long",
+      "scale": 8,
+      "iterations_per_process": 20,
+      "timing_ns_per_build": {
+        "before": [
+          5862363.4,
+          6296171.65,
+          6441375.0,
+          8011739.75,
+          6385146.65,
+          6305722.85,
+          6220578.85
+        ],
+        "after": [
+          5923847.55,
+          12033960.2,
+          6790622.4,
+          9800403.7,
+          7741619.25,
+          6611834.25,
+          7140341.25
+        ]
+      },
+      "median_ratio_after_over_before": 1.1323588777771925,
+      "allocation_three_builds": {
+        "before": {
+          "allocated_bytes": 12157281,
+          "calls": 3561,
+          "deallocated_bytes": 12157281,
+          "live_bytes": 5150847,
+          "net_bytes": 0,
+          "peak_extra_bytes": 1754188,
+          "start_live_bytes": 5150847
+        },
+        "after": {
+          "allocated_bytes": 12158337,
+          "calls": 3564,
+          "deallocated_bytes": 12158337,
+          "live_bytes": 5150847,
+          "net_bytes": 0,
+          "peak_extra_bytes": 1754188,
+          "start_live_bytes": 5150847
+        }
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 6040,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 97,
+          "runs": 192,
+          "sha256": "1126923a8347056e6230840a9a05a3fcd1a8feb730a73deb8e5dff4130c558f6",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "dcfa1c80bb6090628ca0b4e66e2286361ed9eb22437f40533cbca137efe04e51",
+        "selection_sha256": "3185df8b1a20d11e3d9b6557e17591ea488833bfdb11257b72c17573d01fb900"
+      },
+      "hardware_instructions": {
+        "before": {
+          "process_instructions": {
+            "3": [
+              1084877766,
+              1084866750,
+              1084860115
+            ],
+            "13": [
+              1618601103,
+              1618601185,
+              1618601233
+            ]
+          },
+          "estimated_instructions_per_build": 53373443.5
+        },
+        "after": {
+          "process_instructions": {
+            "3": [
+              1087402702,
+              1087402745,
+              1087403122
+            ],
+            "13": [
+              1623096410,
+              1623077584,
+              1623077254
+            ]
+          },
+          "estimated_instructions_per_build": 53567483.9
+        }
+      },
+      "instruction_ratio_after_over_before": 1.003635523347861
+    },
+    {
+      "case": "mixed-scripts",
+      "scale": 8,
+      "iterations_per_process": 80,
+      "timing_ns_per_build": {
+        "before": [
+          490478.3625,
+          621459.6625,
+          607287.325,
+          530746.3875,
+          540921.0,
+          580070.6375,
+          546611.5875
+        ],
+        "after": [
+          577414.8,
+          545404.15,
+          576993.975,
+          508037.3,
+          629153.925,
+          570702.7375,
+          510522.8875
+        ]
+      },
+      "median_ratio_after_over_before": 1.0440736174477823,
+      "allocation_three_builds": {
+        "before": {
+          "allocated_bytes": 859545,
+          "calls": 2973,
+          "deallocated_bytes": 859545,
+          "live_bytes": 727826,
+          "net_bytes": 0,
+          "peak_extra_bytes": 138178,
+          "start_live_bytes": 727826
+        },
+        "after": {
+          "allocated_bytes": 860601,
+          "calls": 2976,
+          "deallocated_bytes": 860601,
+          "live_bytes": 727826,
+          "net_bytes": 0,
+          "peak_extra_bytes": 138178,
+          "start_live_bytes": 727826
+        }
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 320,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 10,
+          "runs": 84,
+          "sha256": "c6cb2b5a4d42650f8bdb6d9dea0f01246b967b6b83114f04efec1ab9ecc8192e",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "cba90355d7dabd177cbb617dfd7ea95b0e17884fe5bda2854b7ff358e503b432",
+        "selection_sha256": "2c39986a9a9a711eb0f8b0640b3c43d323f3e7659868e7ff886c6c870965e1b4"
+      },
+      "hardware_instructions": {
+        "before": {
+          "process_instructions": {
+            "3": [
+              70434584,
+              70431809,
+              70430317
+            ],
+            "13": [
+              110713965,
+              110714448,
+              110714700
+            ]
+          },
+          "estimated_instructions_per_build": 4028263.9
+        },
+        "after": {
+          "process_instructions": {
+            "3": [
+              69617776,
+              69616840,
+              69616179
+            ],
+            "13": [
+              109224057,
+              109221396,
+              109219661
+            ]
+          },
+          "estimated_instructions_per_build": 3960455.6
+        }
+      },
+      "instruction_ratio_after_over_before": 0.9831668674934629
+    },
+    {
+      "case": "nested-atomic",
+      "scale": 8,
+      "iterations_per_process": 160,
+      "timing_ns_per_build": {
+        "before": [
+          503945.7125,
+          502052.4875,
+          798071.30625,
+          512110.1125,
+          438776.7875,
+          411226.15625,
+          433955.325
+        ],
+        "after": [
+          528218.8875,
+          600968.575,
+          519894.71875,
+          453606.96875,
+          373754.53125,
+          392358.95,
+          470415.94375
+        ]
+      },
+      "median_ratio_after_over_before": 0.936985585097813,
+      "allocation_three_builds": {
+        "before": {
+          "allocated_bytes": 1362882,
+          "calls": 816,
+          "deallocated_bytes": 1362882,
+          "live_bytes": 890019,
+          "net_bytes": 0,
+          "peak_extra_bytes": 201389,
+          "start_live_bytes": 890019
+        },
+        "after": {
+          "allocated_bytes": 1363938,
+          "calls": 819,
+          "deallocated_bytes": 1363938,
+          "live_bytes": 890019,
+          "net_bytes": 0,
+          "peak_extra_bytes": 201389,
+          "start_live_bytes": 890019
+        }
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 632,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 17,
+          "runs": 17,
+          "sha256": "82e33cd96d0f76b8040a5549e12c6e3d6980cf9f98d7f2db1d9b09a175eae519",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "4de4e1692373f3aad7af303eaa95c5e72bbfc50746a508e4ae51adcb9dbb9c44",
+        "selection_sha256": "22e54c9db17fa4b410c550df2293d1a7b072453dbbed50c3ebefac0ab9a007aa"
+      },
+      "hardware_instructions": {
+        "before": {
+          "process_instructions": {
+            "3": [
+              89508694,
+              89508197,
+              89508420
+            ],
+            "13": [
+              133131364,
+              133131516,
+              133131792
+            ]
+          },
+          "estimated_instructions_per_build": 4362309.6
+        },
+        "after": {
+          "process_instructions": {
+            "3": [
+              89529617,
+              89529791,
+              89530450
+            ],
+            "13": [
+              133186732,
+              133186240,
+              133186703
+            ]
+          },
+          "estimated_instructions_per_build": 4365691.2
+        }
+      },
+      "instruction_ratio_after_over_before": 1.0007751856952107
+    },
+    {
+      "case": "plain",
+      "scale": 4096,
+      "iterations_per_process": 160,
+      "timing_ns_per_build": {
+        "before": [
+          2433444.30625,
+          1847890.86875,
+          2247222.925,
+          3852464.1,
+          3804943.15625,
+          7037592.0,
+          6490290.7
+        ],
+        "after": [
+          3022862.7625,
+          2883761.6,
+          4096790.94375,
+          3575468.33125,
+          3620772.15,
+          4683168.54375,
+          4365887.73125
+        ]
+      },
+      "median_ratio_after_over_before": 0.9515969099439815,
+      "allocation_three_builds": {
+        "before": {
+          "allocated_bytes": 7443099,
+          "calls": 894,
+          "deallocated_bytes": 7443099,
+          "live_bytes": 2682281,
+          "net_bytes": 0,
+          "peak_extra_bytes": 1143062,
+          "start_live_bytes": 2682281
+        },
+        "after": {
+          "allocated_bytes": 7444155,
+          "calls": 897,
+          "deallocated_bytes": 7444155,
+          "live_bytes": 2682281,
+          "net_bytes": 0,
+          "peak_extra_bytes": 1143062,
+          "start_live_bytes": 2682281
+        }
+      },
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 4096,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 1,
+          "sha256": "7debff63c2c99a3dcb0046ef17ea3917519f34a3e831c080d2ffccf86da9955d",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "46e0de03ee209204aab77f6a375854d125f04e6857d6b7dc8c6db42efef51378",
+        "selection_sha256": "c74ad88eaa3ba1ddd2ac3e68e4cee1b71731c1b3d83a33993e7673aa2dce8949"
+      },
+      "hardware_instructions": {
+        "before": {
+          "process_instructions": {
+            "3": [
+              582671616,
+              582671508,
+              582672570
+            ],
+            "13": [
+              876853970,
+              876854060,
+              876854731
+            ]
+          },
+          "estimated_instructions_per_build": 29418244.4
+        },
+        "after": {
+          "process_instructions": {
+            "3": [
+              583979902,
+              583979673,
+              583979594
+            ],
+            "13": [
+              879212272,
+              879212297,
+              879211776
+            ]
+          },
+          "estimated_instructions_per_build": 29523259.9
+        }
+      },
+      "instruction_ratio_after_over_before": 1.0035697405518869
+    }
+  ],
+  "limitations": [
+    "This is a targeted warm-build experiment, not a whole-page or all-font speed guarantee.",
+    "Per-iteration output is not hashed inside the timed build loop; geometry, glyph ownership, paint and selection digests from the prepared build are compared across all processes, and the test suite separately verifies behavior.",
+    "Small timing ratios near one can reflect scheduling and thermal variation.",
+    "Cache lookup and bounded temporary allocations add cost when no bounds repeat; raw bounds and nominal probes are retained only until this build finishes.",
+    "High shared-machine load produced large elapsed-time variation; elapsed ratios are diagnostic and should not be treated as a stable speed guarantee. Hardware instruction slopes provide the primary CPU-work evidence."
+  ],
+  "reproduction": {
+    "build": "TMPDIR=\"$HOME/tmp\" CARGO_TARGET_DIR=\"$measurement_dir/target\" cargo build --offline --locked --release -p shodo-bench --example source_geometry [--features allocation-counting]",
+    "run": "taskset -c 10 \"$binary\" build \"$case\" \"$scale\" \"$iterations\"",
+    "baseline": "Build each variant at the recorded base revision and patch under the same toolchain, lockfile and features. Save each executable before changing build features.",
+    "cleanup": "Temporary target directory, four saved executables and validation logs are removed after recording results and merging the PR."
+  },
+  "conclusion": {
+    "cpu_work": "Japanese cases show approximately 14–15% fewer estimated instructions per warm paragraph build; geometry/glyph, paint and selection digests match in every measured process.",
+    "controls": "Latin/Arabic/plain controls increase estimated instructions by at most 0.44%; mixed scripts decreases by 1.68%.",
+    "memory": "Japanese builds add three temporary allocation calls and 684 requested bytes per build; Latin/Arabic/plain controls add one temporary call and 352 bytes. No additional net retention after build/drop.",
+    "timing": "Elapsed results are retained for transparency but shared-machine load prevents a stable wall-time speed claim.",
+    "cache_scope": "Only paragraph construction. At most eight font/size/coordinate entries with at most 64 raw glyph bounds per entry. Coordinates are borrowed; no cache retained by the paragraph or context."
+  },
+  "review": {
+    "result": "Read-only independent code review: no Critical or Important findings; merge approved.",
+    "minor_followup": "Current mixed-location regression varies HVAR advances while retaining the outline. A future outline-varying gvar/CFF2 fixture would further protect a refactor that separates nominal and bounds keys. Both cache values currently use the same complete instance key."
+  },
+  "validation": {
+    "environment": "Rust 1.96.0, CARGO_PROFILE_DEV_OPT_LEVEL=1, TMPDIR and CARGO_TARGET_DIR under ~/tmp; inherited kache test runner removed from command environment so tests run directly.",
+    "checks": [
+      {
+        "command": "cargo fmt --all --check",
+        "result": "passed",
+        "test_totals": null
+      },
+      {
+        "command": "cargo clippy --offline --locked --workspace --all-targets -- -D warnings",
+        "result": "passed",
+        "test_totals": null
+      },
+      {
+        "command": "cargo test --offline --locked --workspace",
+        "result": "passed",
+        "test_totals": {
+          "passed": 1711,
+          "failed": 0,
+          "ignored": 9
+        }
+      },
+      {
+        "command": "cargo test --offline --locked -p shodo --no-default-features",
+        "result": "passed",
+        "test_totals": {
+          "passed": 1176,
+          "failed": 0,
+          "ignored": 9
+        }
+      },
+      {
+        "command": "cargo test --offline --locked -p shodo --no-default-features --features complex-scripts",
+        "result": "passed",
+        "test_totals": {
+          "passed": 1179,
+          "failed": 0,
+          "ignored": 9
+        }
+      },
+      {
+        "command": "RUSTDOCFLAGS=\"-D warnings\" cargo doc --offline --locked --workspace --no-deps",
+        "result": "passed",
+        "test_totals": null
+      },
+      {
+        "command": "cargo test --offline --locked -p shodo-bench --features allocation-counting --test allocator --test probe --test ruby_hit_path_allocations --test ruby_base_caret_range --test ruby_base_decoration --test style_memory --test suppressed_warning_format --test selection_allocations --test paint_geometry_allocations",
+        "result": "passed",
+        "test_totals": {
+          "passed": 17,
+          "failed": 0,
+          "ignored": 0
+        }
+      }
+    ],
+    "targeted_punctuation_tests": 14,
+    "tdd": "Initial repeated-run regression failed because fullwidth probes still scaled with run count; after cache implementation, the regression and existing punctuation tests pass."
+  }
+}

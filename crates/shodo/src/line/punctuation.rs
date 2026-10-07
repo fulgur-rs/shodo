@@ -10,6 +10,40 @@ use skrifa::{
     FontRef, GlyphId, MetadataProvider,
     instance::{LocationRef, Size},
 };
+use std::collections::HashMap;
+
+// These entries live only for this paragraph build. Coordinates are borrowed
+// from retained runs; raw bounds can be shared across languages, orientations,
+// features and synthetic styles because their placement is applied below.
+struct FontGeometry<'a> {
+    font: crate::font::FontId,
+    size: u32,
+    coords: &'a [crate::font::NormalizedCoord],
+    nominal: Option<f32>,
+    proportional: bool,
+    bounds: HashMap<u32, Option<skrifa::metrics::BoundingBox>>,
+}
+
+impl FontGeometry<'_> {
+    fn bounds(
+        &mut self,
+        metrics: &skrifa::metrics::GlyphMetrics<'_>,
+        id: u32,
+    ) -> Option<skrifa::metrics::BoundingBox> {
+        if let Some(bounds) = self.bounds.get(&id) {
+            return *bounds;
+        }
+        #[cfg(test)]
+        tests::BOUNDS_REQUESTS.with(|count| count.set(count.get() + 1));
+        let bounds = metrics.bounds(GlyphId::new(id));
+        // A full cache remains useful for its existing glyphs; new glyphs use
+        // the uncached path without growing paragraph-local working storage.
+        if self.bounds.len() < 64 {
+            self.bounds.insert(id, bounds);
+        }
+        bounds
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum PunctuationClass {
@@ -214,6 +248,7 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
         }
     }
     let mut shaping = 0;
+    let mut geometry: Vec<FontGeometry<'_>> = Vec::new();
     for run in &data.runs {
         while data
             .shape_items
@@ -236,17 +271,42 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
             Size::new(run.font_size),
             LocationRef::new(&run.instance.coords),
         );
-        let charmap = font.charmap();
-        let nominal_metric = charmap.map('水').and_then(|g| metrics.advance_width(g));
+        let cached = geometry.iter().rposition(|entry| {
+            entry.font == run.font
+                && entry.size == run.font_size.to_bits()
+                && entry.coords == run.instance.coords
+        });
+        let cached = cached.unwrap_or_else(|| {
+            // Bound both the number of instances and glyphs per instance.
+            if geometry.len() == 8 {
+                geometry.clear();
+            }
+            #[cfg(test)]
+            tests::METRIC_PROBES.with(|count| count.set(count.get() + 1));
+            let charmap = font.charmap();
+            let nominal = charmap.map('水').and_then(|g| metrics.advance_width(g));
+            // A proportional ideograph face cannot supply a dependable
+            // fullwidth measure. Only compare glyphs the face contains.
+            let fullwidth_probes =
+                ['卜', '一'].map(|ch| charmap.map(ch).and_then(|g| metrics.advance_width(g)));
+            let proportional = fullwidth_probes
+                .iter()
+                .flatten()
+                .any(|width| (*width - nominal.unwrap_or(run.font_size)).abs() > 1.0 / 64.0);
+            geometry.push(FontGeometry {
+                font: run.font,
+                size: run.font_size.to_bits(),
+                coords: &run.instance.coords,
+                nominal,
+                proportional,
+                bounds: HashMap::new(),
+            });
+            geometry.len() - 1
+        });
+        let cached = &mut geometry[cached];
+        let nominal_metric = cached.nominal;
         let nominal = nominal_metric.unwrap_or(run.font_size);
-        // A proportional ideograph face cannot supply a dependable fullwidth
-        // measure. Only compare characters that the retained face contains.
-        let fullwidth_probes =
-            ['卜', '一'].map(|ch| charmap.map(ch).and_then(|g| metrics.advance_width(g)));
-        let proportional = fullwidth_probes
-            .iter()
-            .flatten()
-            .any(|width| (*width - nominal).abs() > 1.0 / 64.0);
+        let proportional = cached.proportional;
         let reliable_fullwidth_metric = nominal_metric.is_some() && !proportional;
         if proportional {
             continue;
@@ -304,7 +364,7 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
             let upright = run.orientation == crate::shape::orientation::RunOrientation::Upright;
             let mut bounds: Option<(f32, f32)> = None;
             for glyph in begin..g {
-                if let Some(b) = metrics.bounds(GlyphId::new(data.glyphs.id[glyph])) {
+                if let Some(b) = cached.bounds(&metrics, data.glyphs.id[glyph]) {
                     let (start, end) = if upright {
                         (-b.y_max, -b.y_min)
                     } else {
