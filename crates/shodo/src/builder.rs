@@ -126,7 +126,7 @@ pub struct ParagraphBuilder {
     /// Explicit alternatives, keyed by the normal/alternate pair's index.
     /// Sparse storage adds no alternate style allocations to legacy inputs.
     pub(crate) first_line_styles: HashMap<u32, InlineStyle>,
-    style_index: HashMap<u64, Vec<(String, u32)>>,
+    style_index: HashMap<u64, Vec<u32>>,
     /// Data and keys already retained by this builder, excluding ruby inputs.
     pub(crate) style_bytes: u64,
     /// Index of the most recently interned or reused style.
@@ -185,17 +185,7 @@ impl ParagraphBuilder {
             return builder;
         }
         let pair = (root, None);
-        let (hash, bytes) = match style_key::fingerprint(
-            pair,
-            builder.style_index.hasher(),
-            limits.max_style_bytes,
-        ) {
-            Ok(key) => key,
-            Err(error) => {
-                builder.error = Some(error);
-                return builder;
-            }
-        };
+        let bytes = style_key::BYTES;
         if !builder.check(
             limits.max_style_bytes,
             LimitKind::StyleBytes,
@@ -203,15 +193,14 @@ impl ParagraphBuilder {
         ) {
             return builder;
         }
+        let hash = style_key::fingerprint(pair, builder.style_index.hasher());
         if let Some(style) = style {
             builder.style = style.clone();
         } else {
             builder.style.root = root.clone();
         }
         builder.styles.push(root.clone());
-        builder
-            .style_index
-            .insert(hash, vec![(style_key::allocate(pair, bytes), 0)]);
+        builder.style_index.insert(hash, vec![0]);
         builder.style_bytes = data.saturating_add(bytes);
         builder
     }
@@ -509,10 +498,11 @@ impl ParagraphBuilder {
         // Consecutive and nested elements usually share a style; compare
         // with the enclosing box's style and the last interned one before
         // building the map key, whose cost grows with the style's size.
+        let pair = (style, first_line);
         for index in [self.current_style(), self.last_interned] {
-            if self.styles.get(index as usize) == Some(style)
-                && self.first_line_styles.get(&index) == first_line
-            {
+            if self.styles.get(index as usize).is_some_and(|stored| {
+                style_key::Key((stored, self.first_line_styles.get(&index))) == style_key::Key(pair)
+            }) {
                 self.last_interned = index;
                 return Some(index);
             }
@@ -522,21 +512,15 @@ impl ParagraphBuilder {
         if !self.check(self.limits.max_style_bytes, LimitKind::StyleBytes, data) {
             return None;
         }
-        let pair = (style, first_line);
-        let (hash, key_bytes) = match style_key::fingerprint(
-            pair,
-            self.style_index.hasher(),
-            self.limits.max_style_bytes,
-        ) {
-            Ok(key) => key,
-            Err(error) => {
-                self.error = Some(error);
-                return None;
-            }
-        };
+        let hash = style_key::fingerprint(pair, self.style_index.hasher());
+        let key_bytes = style_key::BYTES;
         if let Some(bucket) = self.style_index.get(&hash) {
-            for (key, index) in bucket {
-                if style_key::matches(pair, key) {
+            for index in bucket {
+                let stored = (
+                    &self.styles[*index as usize],
+                    self.first_line_styles.get(index),
+                );
+                if style_key::Key(pair) == style_key::Key(stored) {
                     self.last_interned = *index;
                     return Some(*index);
                 }
@@ -563,10 +547,7 @@ impl ParagraphBuilder {
         if let Some(first_line) = first_line {
             self.first_line_styles.insert(index, first_line.clone());
         }
-        self.style_index
-            .entry(hash)
-            .or_default()
-            .push((style_key::allocate(pair, key_bytes), index));
+        self.style_index.entry(hash).or_default().push(index);
         self.style_bytes = self
             .style_bytes
             .saturating_add(data)

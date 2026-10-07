@@ -1,0 +1,1152 @@
+{
+  "schema": 1,
+  "measured_at": "2026-10-08T00:13:12.710287+09:00",
+  "baseline_commit": "c33658da4ad4b82229f0bcd4266d0240dd92656c",
+  "scope": "standalone ParagraphBuilder recording and complete builds; no whole-page layout claim",
+  "cpu": "AMD Ryzen 5 5600G with Radeon Graphics",
+  "os": "Linux",
+  "kernel": "7.2.5-3-omarchy",
+  "arch": "x86_64",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0\nLLVM version: 22.1.2",
+  "profile": "release defaults, opt-level 3, RUSTC_WRAPPER disabled, no extra RUSTFLAGS",
+  "features": {
+    "time": "shodo-bench default complex-scripts",
+    "alloc": "default complex-scripts + allocation-counting"
+  },
+  "protocol": "3 rounds, before/after then after/before then before/after; 3 warmup iterations and 9 samples per process; separate timing/allocation binaries; prepared inputs; drop included; output validation outside timing; no concurrent task build/test during timing",
+  "hasher": "std RandomState retained; direct structural Hash replaces Debug writes",
+  "harness_sha256": "2201737b208e7257a097df7c10fe3a5faa982411ba7c27c202f91d06adbd77e0",
+  "lock_sha256": "6b371ec3b3f3f90ea0204540cbe30208e23734d0ada7fc7e3f982081834534f4",
+  "engine_sha256": {
+    "before": "1af2fc14b8c084701bcdc4e72976198459ec4f3cc1f3756559e54621864a908e",
+    "after": "f52d346526b72b56a21ef8fb744b35644d2e11f423ec16218b7509d143da473b"
+  },
+  "binary_sha256": {
+    "before-time": "f1e0f16eb671fd9c01071484e4350716b631c5fa289d7365d3282b45be45a8b6",
+    "before-alloc": "1c132edb05d439b5d21a522f9973eb9905abc35be555b5cc4e4fa539b91aec07",
+    "after-time": "c61461af00a2fe6f10c2c14654ce681bf8d38e84adbb0d154c2b58e540157d63",
+    "after-alloc": "30a60bd4e181750eadc1209fa1882994dd2e3a9987721540a2f8b8d9f2374e0a"
+  },
+  "results": [
+    {
+      "case": "consecutive-1x512",
+      "op": "build",
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 512,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 512,
+          "sha256": "bcfd1aa097b6cfb5d4b57e8ea53fcaad27a0b28dc3526da19a82995bcc0ff09e",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "cb8588d518f25a4d1aee00d873698e8ee144059e63db03b3a21ad32e91e7a2a7"
+      },
+      "before": {
+        "ns_per_iteration": [
+          458736.66,
+          460383.6,
+          460837.6,
+          460351.46,
+          460900.44,
+          460755.16,
+          461045.72,
+          461685.52,
+          459875.14,
+          464451.36,
+          464097.94,
+          466733.88,
+          467362.48,
+          465774.22,
+          467218.6,
+          462622.82,
+          470410.5,
+          464321.44,
+          465686.2,
+          463252.82,
+          463187.18,
+          459081.7,
+          456322.84,
+          457953.02,
+          459217.2,
+          459155.74,
+          458640.28
+        ],
+        "median_ns": 461045.72,
+        "round_medians_ns": [
+          460755.16,
+          465774.22,
+          459155.74
+        ],
+        "time_iterations_per_sample": 50,
+        "allocation_medians": {
+          "allocated_bytes": 1413519,
+          "calls": 288,
+          "deallocated_bytes": 1413509,
+          "live_bytes": 1043783,
+          "net_bytes": 10,
+          "peak_extra_bytes": 698594,
+          "start_live_bytes": 1043773
+        }
+      },
+      "after": {
+        "ns_per_iteration": [
+          453023.38,
+          454367.18,
+          459280.06,
+          475111.04,
+          469052.72,
+          482081.54,
+          453589.12,
+          453506.7,
+          452450.64,
+          451588.76,
+          447565.72,
+          449708.56,
+          450581.62,
+          450974.14,
+          453313.92,
+          449788.16,
+          447435.8,
+          447289.14,
+          457788.18,
+          457553.5,
+          472156.62,
+          455818.56,
+          455019.54,
+          457172.14,
+          455716.58,
+          457204.28,
+          458918.28
+        ],
+        "median_ns": 454367.18,
+        "round_medians_ns": [
+          454367.18,
+          449788.16,
+          457204.28
+        ],
+        "time_iterations_per_sample": 50,
+        "allocation_medians": {
+          "allocated_bytes": 1409977,
+          "calls": 286,
+          "deallocated_bytes": 1409967,
+          "live_bytes": 1043783,
+          "net_bytes": 10,
+          "peak_extra_bytes": 698594,
+          "start_live_bytes": 1043773
+        }
+      },
+      "time_ratio_after_before": 0.9855143650395454
+    },
+    {
+      "case": "consecutive-1x512",
+      "op": "record",
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 512,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 512,
+          "sha256": "bcfd1aa097b6cfb5d4b57e8ea53fcaad27a0b28dc3526da19a82995bcc0ff09e",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "cb8588d518f25a4d1aee00d873698e8ee144059e63db03b3a21ad32e91e7a2a7"
+      },
+      "before": {
+        "ns_per_iteration": [
+          30061.12,
+          30179.86,
+          30114.2,
+          30080.68,
+          30097.44,
+          30002.46,
+          30125.38,
+          29956.34,
+          30135.16,
+          30534.66,
+          29936.8,
+          29931.22,
+          29811.08,
+          30171.48,
+          29833.42,
+          30927.2,
+          31097.62,
+          29918.64,
+          30749.8,
+          30400.56,
+          30052.74,
+          30246.92,
+          30916.02,
+          30348.9,
+          29987.08,
+          30508.14,
+          29889.3
+        ],
+        "median_ns": 30114.2,
+        "round_medians_ns": [
+          30097.44,
+          29936.8,
+          30348.9
+        ],
+        "time_iterations_per_sample": 50,
+        "allocation_medians": {
+          "allocated_bytes": 301065,
+          "calls": 32,
+          "deallocated_bytes": 301055,
+          "live_bytes": 1043783,
+          "net_bytes": 10,
+          "peak_extra_bytes": 153359,
+          "start_live_bytes": 1043773
+        }
+      },
+      "after": {
+        "ns_per_iteration": [
+          25849.5,
+          25567.32,
+          25546.36,
+          25596.64,
+          25831.34,
+          25634.36,
+          25577.1,
+          25755.9,
+          25568.72,
+          26465.52,
+          26324.44,
+          26427.82,
+          26599.62,
+          26215.48,
+          26419.44,
+          26486.48,
+          26426.42,
+          26370.52,
+          25901.18,
+          25733.54,
+          25610.62,
+          26005.94,
+          25628.78,
+          25652.54,
+          25782.44,
+          25498.86,
+          25634.36
+        ],
+        "median_ns": 25782.44,
+        "round_medians_ns": [
+          25596.64,
+          26426.42,
+          25652.54
+        ],
+        "time_iterations_per_sample": 50,
+        "allocation_medians": {
+          "allocated_bytes": 297523,
+          "calls": 30,
+          "deallocated_bytes": 297513,
+          "live_bytes": 1043783,
+          "net_bytes": 10,
+          "peak_extra_bytes": 149817,
+          "start_live_bytes": 1043773
+        }
+      },
+      "time_ratio_after_before": 0.8561555678052214
+    },
+    {
+      "case": "first-line-16x512",
+      "op": "build",
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 512,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 512,
+          "sha256": "57d14266caa98853282e3d8f5349d0c60273045b6e4388d5baa840dad99b56f3",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "4589dc01fc1017b57c1444530fd3119bf1e0e620d745372489ebedb2ae97ae41"
+      },
+      "before": {
+        "ns_per_iteration": [
+          6306125.42,
+          6301957.08,
+          6301630.2,
+          6326872.06,
+          6113165.68,
+          6155966.46,
+          6209940.98,
+          6287309.26,
+          6194544.44,
+          6249080.52,
+          6264910.1,
+          6306522.12,
+          6272368.1,
+          6383486.7,
+          6275156.3,
+          6283649.4,
+          6337778.98,
+          6296454.72,
+          6251932.96,
+          6258992.86,
+          6208665.62,
+          6190399.84,
+          6195385.36,
+          6165466.72,
+          6219283.38,
+          6150550.68,
+          6145519.1
+        ],
+        "median_ns": 6258992.86,
+        "round_medians_ns": [
+          6287309.26,
+          6283649.4,
+          6195385.36
+        ],
+        "time_iterations_per_sample": 50,
+        "allocation_medians": {
+          "allocated_bytes": 2740541,
+          "calls": 912,
+          "deallocated_bytes": 2740531,
+          "live_bytes": 1016024,
+          "net_bytes": 10,
+          "peak_extra_bytes": 1267430,
+          "start_live_bytes": 1016014
+        }
+      },
+      "after": {
+        "ns_per_iteration": [
+          1316125.46,
+          1371090.4,
+          1362531.64,
+          1328024.2,
+          1322533.0,
+          1324191.14,
+          1331816.76,
+          1323603.04,
+          1338086.02,
+          1322933.92,
+          1319285.24,
+          1316171.56,
+          1328953.12,
+          1323649.14,
+          1324786.2,
+          1320226.74,
+          1330709.04,
+          1319926.42,
+          1314723.0,
+          1307315.26,
+          1307517.8,
+          1307956.42,
+          1333008.32,
+          1318509.96,
+          1317439.94,
+          1324524.98,
+          1323446.58
+        ],
+        "median_ns": 1323446.58,
+        "round_medians_ns": [
+          1328024.2,
+          1322933.92,
+          1317439.94
+        ],
+        "time_iterations_per_sample": 50,
+        "allocation_medians": {
+          "allocated_bytes": 2682641,
+          "calls": 895,
+          "deallocated_bytes": 2682631,
+          "live_bytes": 1016024,
+          "net_bytes": 10,
+          "peak_extra_bytes": 1267430,
+          "start_live_bytes": 1016014
+        }
+      },
+      "time_ratio_after_before": 0.21144721037435407
+    },
+    {
+      "case": "first-line-16x512",
+      "op": "record",
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 512,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 512,
+          "sha256": "57d14266caa98853282e3d8f5349d0c60273045b6e4388d5baa840dad99b56f3",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "4589dc01fc1017b57c1444530fd3119bf1e0e620d745372489ebedb2ae97ae41"
+      },
+      "before": {
+        "ns_per_iteration": [
+          4997610.22,
+          4950736.1,
+          5034900.24,
+          4975459.7,
+          4946898.84,
+          5066559.44,
+          5079016.9,
+          5018317.74,
+          5162729.88,
+          5323686.8,
+          5387438.16,
+          5410268.98,
+          5415211.2,
+          5418530.2,
+          5376064.66,
+          5389967.96,
+          5374116.02,
+          5111623.16,
+          5084238.48,
+          5112088.32,
+          5116661.76,
+          5121923.84,
+          5050633.44,
+          5019341.66,
+          5104310.44,
+          5423591.14,
+          5209669.64
+        ],
+        "median_ns": 5112088.32,
+        "round_medians_ns": [
+          5018317.74,
+          5387438.16,
+          5112088.32
+        ],
+        "time_iterations_per_sample": 50,
+        "allocation_medians": {
+          "allocated_bytes": 404040,
+          "calls": 134,
+          "deallocated_bytes": 404030,
+          "live_bytes": 1016024,
+          "net_bytes": 10,
+          "peak_extra_bytes": 233558,
+          "start_live_bytes": 1016014
+        }
+      },
+      "after": {
+        "ns_per_iteration": [
+          389700.84,
+          390026.32,
+          389069.44,
+          393525.54,
+          392624.54,
+          390262.4,
+          390212.1,
+          388710.44,
+          390822.56,
+          387537.06,
+          410763.18,
+          396189.4,
+          387080.28,
+          394967.14,
+          386576.0,
+          403266.08,
+          481042.24,
+          394281.24,
+          386430.72,
+          388940.92,
+          387182.24,
+          389295.74,
+          390819.76,
+          389218.92,
+          387246.5,
+          388784.48,
+          387159.9
+        ],
+        "median_ns": 389700.84,
+        "round_medians_ns": [
+          390212.1,
+          394967.14,
+          388784.48
+        ],
+        "time_iterations_per_sample": 50,
+        "allocation_medians": {
+          "allocated_bytes": 346140,
+          "calls": 117,
+          "deallocated_bytes": 346130,
+          "live_bytes": 1016024,
+          "net_bytes": 10,
+          "peak_extra_bytes": 175658,
+          "start_live_bytes": 1016014
+        }
+      },
+      "time_ratio_after_before": 0.07623124163864212
+    },
+    {
+      "case": "reuse-16x512",
+      "op": "build",
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 512,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 512,
+          "sha256": "bcfd1aa097b6cfb5d4b57e8ea53fcaad27a0b28dc3526da19a82995bcc0ff09e",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "0180fe11d18a0eba95cb5e4e430989fd0aed1055158826e93aef2ff5ca1ae7f8"
+      },
+      "before": {
+        "ns_per_iteration": [
+          2897911.94,
+          2951512.1,
+          2980859.4,
+          3006798.3,
+          2892339.74,
+          2958565.0,
+          2972271.3,
+          2947711.14,
+          2952538.8,
+          2964971.14,
+          2962561.52,
+          2972081.32,
+          2990018.82,
+          3028173.54,
+          3000931.34,
+          2995290.68,
+          2984503.9,
+          3004341.16,
+          3056230.12,
+          3030490.98,
+          3000186.8,
+          3007144.72,
+          3004297.86,
+          3005552.26,
+          3009213.52,
+          3006788.52,
+          3006995.24
+        ],
+        "median_ns": 2995290.68,
+        "round_medians_ns": [
+          2952538.8,
+          2990018.82,
+          3006995.24
+        ],
+        "time_iterations_per_sample": 50,
+        "allocation_medians": {
+          "allocated_bytes": 1469134,
+          "calls": 433,
+          "deallocated_bytes": 1469124,
+          "live_bytes": 1056030,
+          "net_bytes": 10,
+          "peak_extra_bytes": 711311,
+          "start_live_bytes": 1056020
+        }
+      },
+      "after": {
+        "ns_per_iteration": [
+          647138.34,
+          648269.82,
+          647776.72,
+          651873.82,
+          643946.44,
+          648254.44,
+          645469.04,
+          644009.3,
+          647532.26,
+          641785.44,
+          640595.3,
+          642704.6,
+          644799.94,
+          643401.66,
+          643560.88,
+          642599.84,
+          660927.06,
+          663381.4,
+          649613.62,
+          651065.0,
+          646650.82,
+          672093.82,
+          660074.96,
+          666489.5,
+          648920.78,
+          664961.3,
+          647959.7
+        ],
+        "median_ns": 647776.72,
+        "round_medians_ns": [
+          647532.26,
+          643401.66,
+          651065.0
+        ],
+        "time_iterations_per_sample": 50,
+        "allocation_medians": {
+          "allocated_bytes": 1438376,
+          "calls": 416,
+          "deallocated_bytes": 1438366,
+          "live_bytes": 1056030,
+          "net_bytes": 10,
+          "peak_extra_bytes": 711311,
+          "start_live_bytes": 1056020
+        }
+      },
+      "time_ratio_after_before": 0.21626506045817226
+    },
+    {
+      "case": "reuse-16x512",
+      "op": "record",
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 512,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 512,
+          "sha256": "bcfd1aa097b6cfb5d4b57e8ea53fcaad27a0b28dc3526da19a82995bcc0ff09e",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "0180fe11d18a0eba95cb5e4e430989fd0aed1055158826e93aef2ff5ca1ae7f8"
+      },
+      "before": {
+        "ns_per_iteration": [
+          2453253.14,
+          2470690.56,
+          2495845.8,
+          2523643.94,
+          2437772.8,
+          2365994.86,
+          2405905.48,
+          2453359.3,
+          2430440.5,
+          2528264.86,
+          2584376.64,
+          2666629.86,
+          2568347.3,
+          2495942.18,
+          2453783.96,
+          2394763.86,
+          2349257.3,
+          2413510.14,
+          2373936.18,
+          2381079.9,
+          2401107.14,
+          2482603.24,
+          2466031.92,
+          2457347.42,
+          2495316.36,
+          2534629.1,
+          2506139.48
+        ],
+        "median_ns": 2457347.42,
+        "round_medians_ns": [
+          2453253.14,
+          2495942.18,
+          2466031.92
+        ],
+        "time_iterations_per_sample": 50,
+        "allocation_medians": {
+          "allocated_bytes": 352566,
+          "calls": 98,
+          "deallocated_bytes": 352556,
+          "live_bytes": 1056030,
+          "net_bytes": 10,
+          "peak_extra_bytes": 193136,
+          "start_live_bytes": 1056020
+        }
+      },
+      "after": {
+        "ns_per_iteration": [
+          201704.28,
+          202514.48,
+          202638.8,
+          201700.08,
+          201711.26,
+          201496.14,
+          202740.76,
+          202404.12,
+          201561.78,
+          201220.96,
+          201116.18,
+          201025.38,
+          201341.08,
+          201053.32,
+          201332.7,
+          200966.72,
+          200941.58,
+          201054.72,
+          201919.4,
+          201114.78,
+          202292.36,
+          201823.02,
+          201476.6,
+          202654.16,
+          201477.98,
+          202045.12,
+          201952.92
+        ],
+        "median_ns": 201561.78,
+        "round_medians_ns": [
+          201711.26,
+          201054.72,
+          201919.4
+        ],
+        "time_iterations_per_sample": 50,
+        "allocation_medians": {
+          "allocated_bytes": 321808,
+          "calls": 81,
+          "deallocated_bytes": 321798,
+          "live_bytes": 1056030,
+          "net_bytes": 10,
+          "peak_extra_bytes": 162378,
+          "start_live_bytes": 1056020
+        }
+      },
+      "time_ratio_after_before": 0.08202412827731131
+    },
+    {
+      "case": "root",
+      "op": "build",
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 1,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 1,
+          "sha256": "e06a8afbcfd68d8e2296b4bb0d25afeec47bc638fa81751148ff844c38c194a4",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "dbceba7d7ae736000ea23ed5d92d6d2cf476c0207cc02201430ba13244d5dcd1"
+      },
+      "before": {
+        "ns_per_iteration": [
+          14667.2862,
+          14484.3074,
+          14594.2848,
+          14580.5812,
+          14446.4516,
+          14430.3872,
+          14572.4514,
+          14477.3508,
+          14497.7454,
+          14731.1242,
+          14882.1842,
+          14768.6308,
+          14734.407,
+          14846.2562,
+          14693.7294,
+          14831.7284,
+          14619.6384,
+          14606.4378,
+          14215.6012,
+          14093.4568,
+          14165.1592,
+          14123.504,
+          14161.4156,
+          14099.5612,
+          14035.4856,
+          14087.534,
+          14263.8778
+        ],
+        "median_ns": 14497.7454,
+        "round_medians_ns": [
+          14497.7454,
+          14734.407,
+          14123.504
+        ],
+        "time_iterations_per_sample": 5000,
+        "allocation_medians": {
+          "allocated_bytes": 10974,
+          "calls": 98,
+          "deallocated_bytes": 10964,
+          "live_bytes": 481988,
+          "net_bytes": 10,
+          "peak_extra_bytes": 6228,
+          "start_live_bytes": 481978
+        }
+      },
+      "after": {
+        "ns_per_iteration": [
+          8823.9596,
+          8877.1114,
+          8888.7336,
+          8873.703,
+          8909.212,
+          8835.917,
+          8954.5552,
+          8932.5262,
+          8945.2936,
+          8908.9606,
+          8816.668,
+          8859.8598,
+          8949.3168,
+          8786.9838,
+          8831.2654,
+          9156.3922,
+          8878.648,
+          8809.3064,
+          8819.0566,
+          9069.0584,
+          8833.9194,
+          8895.4246,
+          8881.4278,
+          8807.4902,
+          8850.4028,
+          8756.1406,
+          8771.8974
+        ],
+        "median_ns": 8873.703,
+        "round_medians_ns": [
+          8888.7336,
+          8859.8598,
+          8833.9194
+        ],
+        "time_iterations_per_sample": 5000,
+        "allocation_medians": {
+          "allocated_bytes": 9246,
+          "calls": 97,
+          "deallocated_bytes": 9236,
+          "live_bytes": 481988,
+          "net_bytes": 10,
+          "peak_extra_bytes": 6228,
+          "start_live_bytes": 481978
+        }
+      },
+      "time_ratio_after_before": 0.6120746885236376
+    },
+    {
+      "case": "root",
+      "op": "record",
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 1,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 1,
+          "sha256": "e06a8afbcfd68d8e2296b4bb0d25afeec47bc638fa81751148ff844c38c194a4",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "dbceba7d7ae736000ea23ed5d92d6d2cf476c0207cc02201430ba13244d5dcd1"
+      },
+      "before": {
+        "ns_per_iteration": [
+          4896.3592,
+          4727.0698,
+          4745.2436,
+          4736.2054,
+          4846.8812,
+          4738.3428,
+          4782.2332,
+          4797.599,
+          4831.4874,
+          4759.7152,
+          4894.18,
+          4920.4556,
+          4902.813,
+          4979.9074,
+          4820.4102,
+          4891.3444,
+          4999.1984,
+          4972.043,
+          4815.1998,
+          4750.2442,
+          4845.722,
+          4832.8006,
+          4834.0858,
+          4831.2082,
+          5040.0436,
+          5046.7488,
+          5029.958
+        ],
+        "median_ns": 4834.0858,
+        "round_medians_ns": [
+          4782.2332,
+          4902.813,
+          4834.0858
+        ],
+        "time_iterations_per_sample": 5000,
+        "allocation_medians": {
+          "allocated_bytes": 3832,
+          "calls": 12,
+          "deallocated_bytes": 3822,
+          "live_bytes": 481988,
+          "net_bytes": 10,
+          "peak_extra_bytes": 3798,
+          "start_live_bytes": 481978
+        }
+      },
+      "after": {
+        "ns_per_iteration": [
+          616.9794,
+          620.29,
+          623.3214,
+          627.1488,
+          707.079,
+          617.5802,
+          613.1938,
+          614.1716,
+          613.7106,
+          627.1488,
+          627.037,
+          629.0346,
+          629.817,
+          627.8612,
+          637.402,
+          625.5422,
+          626.6598,
+          622.9442,
+          629.1604,
+          622.6928,
+          630.8506,
+          632.485,
+          656.4276,
+          621.6172,
+          622.5948,
+          623.0978,
+          623.056
+        ],
+        "median_ns": 625.5422,
+        "round_medians_ns": [
+          617.5802,
+          627.1488,
+          623.0978
+        ],
+        "time_iterations_per_sample": 5000,
+        "allocation_medians": {
+          "allocated_bytes": 2104,
+          "calls": 11,
+          "deallocated_bytes": 2094,
+          "live_bytes": 481988,
+          "net_bytes": 10,
+          "peak_extra_bytes": 2070,
+          "start_live_bytes": 481978
+        }
+      },
+      "time_ratio_after_before": 0.12940237841868674
+    },
+    {
+      "case": "unique-64",
+      "op": "build",
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 64,
+          "sha256": "b1248af340559f6f3f50da63583455aeca32f708389fb84d53510ce05aad7c96",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "6bfd338e298a6d16a64246bcb6808951e2ef6279de931694721e107b5eab269d"
+      },
+      "before": {
+        "ns_per_iteration": [
+          410799.52,
+          409454.3,
+          405192.38,
+          406407.68,
+          409895.72,
+          406613.02,
+          406620.0,
+          412626.66,
+          421047.12,
+          414728.98,
+          412547.04,
+          413432.66,
+          410194.64,
+          412221.54,
+          410469.84,
+          409215.44,
+          410476.84,
+          407780.82,
+          410763.18,
+          408071.36,
+          407567.1,
+          406565.52,
+          408976.58,
+          407539.18,
+          405586.3,
+          405656.14,
+          406325.26
+        ],
+        "median_ns": 409215.44,
+        "round_medians_ns": [
+          409454.3,
+          410476.84,
+          407539.18
+        ],
+        "time_iterations_per_sample": 50,
+        "allocation_medians": {
+          "allocated_bytes": 424206,
+          "calls": 799,
+          "deallocated_bytes": 424196,
+          "live_bytes": 599955,
+          "net_bytes": 10,
+          "peak_extra_bytes": 215326,
+          "start_live_bytes": 599945
+        }
+      },
+      "after": {
+        "ns_per_iteration": [
+          122950.28,
+          124855.64,
+          123281.34,
+          121814.6,
+          125336.18,
+          127995.86,
+          121755.94,
+          121775.5,
+          122236.46,
+          121367.6,
+          125322.2,
+          129571.56,
+          120705.46,
+          119945.56,
+          120414.9,
+          121057.48,
+          142290.26,
+          120620.26,
+          123884.78,
+          121479.34,
+          122140.08,
+          124518.98,
+          121184.6,
+          121380.16,
+          121533.84,
+          121367.6,
+          122145.68
+        ],
+        "median_ns": 121814.6,
+        "round_medians_ns": [
+          122950.28,
+          121057.48,
+          121533.84
+        ],
+        "time_iterations_per_sample": 50,
+        "allocation_medians": {
+          "allocated_bytes": 306328,
+          "calls": 734,
+          "deallocated_bytes": 306318,
+          "live_bytes": 599955,
+          "net_bytes": 10,
+          "peak_extra_bytes": 145631,
+          "start_live_bytes": 599945
+        }
+      },
+      "time_ratio_after_before": 0.29767840626932357
+    },
+    {
+      "case": "unique-64",
+      "op": "record",
+      "output": {
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 64,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 64,
+          "sha256": "b1248af340559f6f3f50da63583455aeca32f708389fb84d53510ce05aad7c96",
+          "synthetic_glyphs": 0
+        },
+        "paint_sha256": "6bfd338e298a6d16a64246bcb6808951e2ef6279de931694721e107b5eab269d"
+      },
+      "before": {
+        "ns_per_iteration": [
+          335979.16,
+          322664.0,
+          321676.38,
+          327025.08,
+          321149.74,
+          322113.6,
+          322691.92,
+          328131.42,
+          324122.34,
+          322714.28,
+          323679.54,
+          323728.42,
+          322015.82,
+          326931.48,
+          322232.34,
+          323225.52,
+          322423.72,
+          324453.4,
+          319947.02,
+          319603.4,
+          321666.6,
+          324418.48,
+          325052.66,
+          325306.9,
+          325327.86,
+          324457.6,
+          323694.9
+        ],
+        "median_ns": 323679.54,
+        "round_medians_ns": [
+          322691.92,
+          323225.52,
+          324418.48
+        ],
+        "time_iterations_per_sample": 50,
+        "allocation_medians": {
+          "allocated_bytes": 263670,
+          "calls": 288,
+          "deallocated_bytes": 263660,
+          "live_bytes": 599955,
+          "net_bytes": 10,
+          "peak_extra_bytes": 193648,
+          "start_live_bytes": 599945
+        }
+      },
+      "after": {
+        "ns_per_iteration": [
+          35705.98,
+          36003.5,
+          35847.06,
+          35807.94,
+          35733.9,
+          35795.38,
+          36355.52,
+          35907.12,
+          35925.28,
+          36041.22,
+          35717.14,
+          35805.14,
+          35820.52,
+          38457.84,
+          35841.46,
+          35655.68,
+          35840.08,
+          36806.72,
+          35834.48,
+          35641.7,
+          35715.74,
+          35841.48,
+          35791.18,
+          35570.46,
+          35583.04,
+          35814.92,
+          35732.5
+        ],
+        "median_ns": 35814.92,
+        "round_medians_ns": [
+          35847.06,
+          35840.08,
+          35732.5
+        ],
+        "time_iterations_per_sample": 50,
+        "allocation_medians": {
+          "allocated_bytes": 145792,
+          "calls": 223,
+          "deallocated_bytes": 145782,
+          "live_bytes": 599955,
+          "net_bytes": 10,
+          "peak_extra_bytes": 75770,
+          "start_live_bytes": 599945
+        }
+      },
+      "time_ratio_after_before": 0.11064931691388341
+    }
+  ]
+}
