@@ -4,6 +4,7 @@ use super::{ItemKind, whitespace::Processed};
 use crate::font::{FontCluster, FontCollection, FontMatch, FontQuery};
 use crate::style::{FontFamily, FontStyle, InlineStyle};
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 
 mod graphemes;
 
@@ -81,36 +82,55 @@ pub(crate) fn inline_boundary_breaks_shaping(
 }
 
 #[derive(Hash, PartialEq, Eq)]
-struct QueryKey {
-    families: Vec<(u8, String)>,
+struct QueryKey<'a> {
+    families: &'a [FontFamily],
     weight: u32,
     width: u32,
     style: (u8, u32),
-    language: Option<String>,
+    language: Option<QueryLanguage<'a>>,
     synthesis: u8,
 }
-impl QueryKey {
-    fn new(s: &FontQuery) -> Self {
+impl<'a> QueryKey<'a> {
+    fn new(s: &'a InlineStyle) -> Self {
+        let (weight, width, style) =
+            FontQuery::normalized_attributes(s.font_weight, s.font_width, s.font_style);
         Self {
-            families: s
-                .families
-                .iter()
-                .map(|f| match f {
-                    FontFamily::Named(name) => (0, name.clone()),
-                    FontFamily::Generic(generic) => (*generic as u8 + 1, String::new()),
-                })
-                .collect(),
-            weight: s.weight.to_bits(),
-            width: s.width.to_bits(),
-            style: match s.style {
+            families: &s.font_families,
+            weight: weight.to_bits(),
+            width: width.to_bits(),
+            style: match style {
                 FontStyle::Normal => (0, 0),
                 FontStyle::Italic => (1, 0),
                 FontStyle::Oblique(angle) => (2, if angle == 0.0 { 0 } else { angle.to_bits() }),
             },
-            language: s.language.clone(),
-            synthesis: u8::from(s.synthesis.weight)
-                | u8::from(s.synthesis.style) << 1
-                | u8::from(s.synthesis.small_caps) << 2,
+            language: s.lang.as_deref().map(QueryLanguage),
+            synthesis: u8::from(s.font_synthesis.weight)
+                | u8::from(s.font_synthesis.style) << 1
+                | u8::from(s.font_synthesis.small_caps) << 2,
+        }
+    }
+}
+
+/// Match FontQuery's ASCII-only normalization without an owned lowercase copy.
+#[derive(Eq)]
+struct QueryLanguage<'a>(&'a str);
+
+impl PartialEq for QueryLanguage<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq_ignore_ascii_case(other.0)
+    }
+}
+
+impl Hash for QueryLanguage<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.len().hash(state);
+        // Feed blocks, not one hasher call per byte of an author-supplied tag.
+        let mut folded = [0; 64];
+        for chunk in self.0.as_bytes().chunks(folded.len()) {
+            for (out, byte) in folded.iter_mut().zip(chunk) {
+                *out = byte.to_ascii_lowercase();
+            }
+            state.write(&folded[..chunk.len()]);
         }
     }
 }
@@ -184,25 +204,26 @@ pub(crate) fn itemize(
             .levels
         })
         .collect();
-    // Canonical query identities are built once per style, without searching a
-    // growing list of styles or cloning family/language strings per scalar.
+    // Borrow canonical keys from the retained styles. Only a new query identity
+    // needs owned family/language payloads; paint-only styles reuse that query.
     let mut query_ids = HashMap::new();
     let mut queries = Vec::new();
     let style_queries: Vec<_> = styles
         .iter()
         .map(|s| {
-            let query = FontQuery {
-                families: s.font_families.clone(),
-                weight: s.font_weight,
-                width: s.font_width,
-                style: s.font_style,
-                language: s.lang.clone(),
-                synthesis: s.font_synthesis,
-                ..Default::default()
-            }
-            .normalized();
             let next = queries.len();
-            *query_ids.entry(QueryKey::new(&query)).or_insert_with(|| {
+            *query_ids.entry(QueryKey::new(s)).or_insert_with(|| {
+                let query = FontQuery {
+                    families: s.font_families.clone(),
+                    weight: s.font_weight,
+                    width: s.font_width,
+                    style: s.font_style,
+                    language: s.lang.clone(),
+                    synthesis: s.font_synthesis,
+                    script: *b"Latn",
+                    presentation: crate::font::FontPresentation::Auto,
+                }
+                .normalized();
                 queries.push(query);
                 next
             })
@@ -481,6 +502,7 @@ pub(crate) fn itemize(
 
 #[cfg(test)]
 mod tests {
+    use super::QueryKey;
     use crate::font::{FontCollection, FontOptions};
     use crate::geometry::WritingMode;
     use crate::limits::Limits;
@@ -488,6 +510,142 @@ mod tests {
     use crate::shape::orientation::RunOrientation;
     use crate::style::{ParagraphStyle, TextOrientation};
     use crate::{LayoutContext, Paragraph, ParagraphBuilder};
+
+    #[test]
+    fn borrowed_query_keys_preserve_normalization_and_collision_identity() {
+        use crate::style::{FontFamily, FontStyle, GenericFamily, InlineStyle};
+        use std::collections::HashMap;
+        use std::hash::{BuildHasher, BuildHasherDefault, Hasher};
+
+        #[derive(Default)]
+        struct ConstantHasher;
+        impl Hasher for ConstantHasher {
+            fn finish(&self) -> u64 {
+                0
+            }
+            fn write(&mut self, _: &[u8]) {}
+        }
+
+        let normal = InlineStyle {
+            lang: Some("EN-us".into()),
+            ..Default::default()
+        };
+        let same = InlineStyle {
+            font_weight: f32::NAN,
+            font_width: f32::INFINITY,
+            lang: Some("en-US".into()),
+            ..normal.clone()
+        };
+        let clamped = InlineStyle {
+            font_weight: 2000.0,
+            font_width: 0.0,
+            font_style: FontStyle::Oblique(100.0),
+            ..normal.clone()
+        };
+        let clamped_same = InlineStyle {
+            font_weight: 1000.0,
+            font_width: 0.01,
+            font_style: FontStyle::Oblique(90.0),
+            ..normal.clone()
+        };
+        let zero = InlineStyle {
+            font_style: FontStyle::Oblique(-0.0),
+            ..normal.clone()
+        };
+        let zero_same = InlineStyle {
+            font_style: FontStyle::Oblique(0.0),
+            ..normal.clone()
+        };
+        let invalid_angle = InlineStyle {
+            font_style: FontStyle::Oblique(f32::NAN),
+            ..normal.clone()
+        };
+        let invalid_angle_same = InlineStyle {
+            font_style: FontStyle::Oblique(14.0),
+            ..normal.clone()
+        };
+        let long_language = InlineStyle {
+            lang: Some(format!("EN-x-{}", "ABCD123-".repeat(16))),
+            ..normal.clone()
+        };
+        let long_language_same = InlineStyle {
+            lang: Some(format!("en-X-{}", "abcd123-".repeat(16))),
+            ..normal.clone()
+        };
+        let state = std::collections::hash_map::RandomState::new();
+        for (a, b) in [
+            (&normal, &same),
+            (&clamped, &clamped_same),
+            (&zero, &zero_same),
+            (&invalid_angle, &invalid_angle_same),
+            (&long_language, &long_language_same),
+        ] {
+            assert!(QueryKey::new(a) == QueryKey::new(b));
+            assert_eq!(
+                state.hash_one(QueryKey::new(a)),
+                state.hash_one(QueryKey::new(b))
+            );
+        }
+
+        let unicode_upper = InlineStyle {
+            lang: Some("en-É".into()),
+            ..normal.clone()
+        };
+        let unicode_lower = InlineStyle {
+            lang: Some("en-é".into()),
+            ..normal.clone()
+        };
+        let absent = InlineStyle {
+            lang: None,
+            ..normal.clone()
+        };
+        let empty = InlineStyle {
+            lang: Some(String::new()),
+            ..normal.clone()
+        };
+        let named = InlineStyle {
+            font_families: vec![FontFamily::Named("SansSerif".into())],
+            ..normal.clone()
+        };
+        let ordered = InlineStyle {
+            font_families: vec![
+                FontFamily::Generic(GenericFamily::Serif),
+                FontFamily::Named("A".into()),
+            ],
+            ..normal.clone()
+        };
+        let reversed = InlineStyle {
+            font_families: vec![
+                FontFamily::Named("A".into()),
+                FontFamily::Generic(GenericFamily::Serif),
+            ],
+            ..normal.clone()
+        };
+        let mut synthesis = normal.clone();
+        synthesis.font_synthesis.weight = false;
+        let styles = [
+            &normal,
+            &same,
+            &clamped,
+            &unicode_upper,
+            &unicode_lower,
+            &absent,
+            &empty,
+            &named,
+            &ordered,
+            &reversed,
+            &synthesis,
+        ];
+        let mut ids = HashMap::with_hasher(BuildHasherDefault::<ConstantHasher>::default());
+        let actual: Vec<_> = styles
+            .into_iter()
+            .map(|s| {
+                let next = ids.len();
+                *ids.entry(QueryKey::new(s)).or_insert(next)
+            })
+            .collect();
+        assert_eq!(actual, [0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    }
 
     std::thread_local! {
         pub(super) static AFTER_CONTEXT_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
