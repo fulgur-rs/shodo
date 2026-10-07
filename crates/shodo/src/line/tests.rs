@@ -394,12 +394,7 @@ fn arabic_fonts() -> crate::font::FontCollection {
     fonts
 }
 
-fn break_all_arabic(
-    limits: Limits,
-    reps: usize,
-    width: f32,
-    cx: &mut LayoutContext,
-) -> (Vec<(std::ops::Range<usize>, u32)>, Vec<String>) {
+fn arabic_paragraph(limits: Limits, reps: usize) -> crate::Paragraph {
     let sentence = "\u{0645}\u{0631}\u{062d}\u{0628}\u{0627} \u{0628}\u{0627}\u{0644}\u{0639}\u{0627}\u{0644}\u{0645}. \u{0627}\u{0644}\u{0643}\u{062a}\u{0627}\u{0628}\u{0629} \u{0627}\u{0644}\u{0639}\u{0631}\u{0628}\u{064a}\u{0629} \u{062c}\u{0645}\u{064a}\u{0644}\u{0629}\u{060c}";
     let mut style = ParagraphStyle::default();
     style.root.font_families = vec![crate::style::FontFamily::Named(
@@ -410,7 +405,14 @@ fn break_all_arabic(
     let text = vec![sentence; reps].join(" ");
     let mut b = ParagraphBuilder::new(&style, &limits);
     b.push_text(TextSource::Generated { node: NodeId(1) }, &text);
-    let p = b.build(&mut LayoutContext::new(), &arabic_fonts()).unwrap();
+    b.build(&mut LayoutContext::new(), &arabic_fonts()).unwrap()
+}
+
+fn break_all_arabic(
+    p: &crate::Paragraph,
+    width: f32,
+    cx: &mut LayoutContext,
+) -> (Vec<(std::ops::Range<usize>, u32)>, Vec<String>) {
     let lines = p.break_all(cx, &LineOptions::default(), width, &AtomicSizes::EMPTY);
     let summary = lines
         .iter()
@@ -432,8 +434,9 @@ fn edge_reshape_work_per_line_is_budgeted_and_deterministic() {
     // only while windows are small, so the scan keeps requesting large windows
     // at every candidate; the per-line budget bounds the total.
     let limits = Limits::default();
+    let paragraph = arabic_paragraph(limits, 24);
     let mut cold = LayoutContext::new();
-    let (lines, warnings) = break_all_arabic(limits.clone(), 24, 200_000.0, &mut cold);
+    let (lines, warnings) = break_all_arabic(&paragraph, 200_000.0, &mut cold);
     assert!(
         warnings.iter().any(|m| m.contains("edge reshape budget")),
         "a line needing more than the per-line reshape budget must warn; got {warnings:?}"
@@ -442,16 +445,23 @@ fn edge_reshape_work_per_line_is_budgeted_and_deterministic() {
     // The same layout with a warm cache is identical: the budget charges
     // requests, not cache misses.
     let mut warm = LayoutContext::new();
-    let first = break_all_arabic(limits.clone(), 24, 200_000.0, &mut warm);
-    let second = break_all_arabic(limits, 24, 200_000.0, &mut warm);
+    let first = break_all_arabic(&paragraph, 200_000.0, &mut warm);
+    assert!(
+        warm.edge_shapes.len() > 0,
+        "second layout must start with cached windows"
+    );
+    let second = break_all_arabic(&paragraph, 200_000.0, &mut warm);
     assert_eq!(first.0, second.0);
     assert_eq!(first.0, lines);
+    assert_eq!(first.1, second.1);
+    assert_eq!(first.1, warnings);
 }
 
 #[test]
 fn ordinary_text_stays_under_the_edge_reshape_budget() {
     let mut cx = LayoutContext::new();
-    let (lines, warnings) = break_all_arabic(Limits::default(), 24, 320.0, &mut cx);
+    let (lines, warnings) =
+        break_all_arabic(&arabic_paragraph(Limits::default(), 24), 320.0, &mut cx);
     assert!(lines.len() > 1);
     assert!(
         !warnings.iter().any(|m| m.contains("edge reshape budget")),
