@@ -266,8 +266,17 @@ pub(crate) struct RecordProfile {
 impl ProfileResolver {
     pub(crate) fn new(data: &ParagraphData, units: Range<usize>) -> Self {
         let mut result = Self::default();
+        let mut previous_parent = None;
         for u in &data.units[units] {
-            result.parents.insert(u.item, u.parent_box);
+            let parent = (u.item, u.parent_box);
+            // Consecutive clusters of one item repeat the same parent. Keep
+            // last-write semantics when either component changes.
+            if previous_parent != Some(parent) {
+                #[cfg(test)]
+                tests::PARENT_INSERTIONS.with(|count| count.set(count.get() + 1));
+                result.parents.insert(u.item, u.parent_box);
+                previous_parent = Some(parent);
+            }
             if let UnitKind::Atomic { node } = u.kind {
                 result.atomic_styles.insert(node, (u.item, u.parent_box));
             }
@@ -777,5 +786,131 @@ fn measure_profile(
         empty,
         root_strut,
         trimmed_trailing: quirk.map(|q| q.trailing),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::node::{NodeId, TextSource};
+    use crate::{LayoutContext, Paragraph, ParagraphBuilder, RichText};
+
+    std::thread_local! {
+        pub(super) static PARENT_INSERTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    fn build(builder: ParagraphBuilder) -> Paragraph {
+        builder
+            .build(
+                &mut LayoutContext::new(),
+                &crate::font::FontCollection::with_options(
+                    &crate::limits::Limits::default(),
+                    crate::font::FontOptions {
+                        system_fonts: false,
+                        ..Default::default()
+                    },
+                ),
+            )
+            .unwrap()
+    }
+
+    #[test]
+    fn parent_registration_is_bounded_for_long_single_span_text() {
+        let style = crate::style::ParagraphStyle::default();
+        let p = RichText::new(&style)
+            .push(&"a".repeat(4096), &style.root)
+            .build(
+                &mut LayoutContext::new(),
+                &crate::font::FontCollection::with_options(
+                    &crate::limits::Limits::default(),
+                    crate::font::FontOptions {
+                        system_fonts: false,
+                        ..Default::default()
+                    },
+                ),
+            )
+            .unwrap();
+        assert_eq!(p.data.units.len(), 4098);
+        PARENT_INSERTIONS.with(|count| count.set(0));
+        let resolver = ProfileResolver::new(&p.data, 0..p.data.units.len());
+        assert_eq!(resolver.parents.len(), 3);
+        assert!(
+            PARENT_INSERTIONS.with(|count| count.get()) <= 3,
+            "repeated text units must not rehash unchanged parent information"
+        );
+    }
+
+    #[test]
+    fn parent_and_atomic_registration_match_all_units_in_selected_range() {
+        let style = crate::style::ParagraphStyle::default();
+        let mut b = ParagraphBuilder::new(&style, &crate::limits::Limits::default());
+        b.open_inline(NodeId(10), &style.root, Default::default())
+            .push_text(TextSource::Generated { node: NodeId(11) }, "abc")
+            .open_inline(NodeId(12), &style.root, Default::default())
+            .push_text(TextSource::Generated { node: NodeId(13) }, "def")
+            .push_atomic(NodeId(14), &style.root, Default::default())
+            .push_forced_break_with_style(NodeId(15), &style.root)
+            .close_inline()
+            .push_atomic(NodeId(16), &style.root, Default::default())
+            .close_inline();
+        let p = build(b);
+        let n = p.data.units.len();
+        // Includes empty ranges and cuts starting/ending inside an inline box.
+        for start in 0..=n {
+            for end in start..=n {
+                let units = &p.data.units[start..end];
+                let parents: crate::hashing::FastMap<_, _> =
+                    units.iter().map(|u| (u.item, u.parent_box)).collect();
+                let atomics: crate::hashing::FastMap<_, _> = units
+                    .iter()
+                    .filter_map(|u| {
+                        if let UnitKind::Atomic { node } = u.kind {
+                            Some((node, (u.item, u.parent_box)))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                let resolver = ProfileResolver::new(&p.data, start..end);
+                assert_eq!(resolver.parents, parents, "range {start}..{end}");
+                assert_eq!(resolver.atomic_styles, atomics, "range {start}..{end}");
+            }
+        }
+    }
+
+    #[test]
+    fn changed_parent_and_repeated_item_preserve_last_write_and_all_atomics() {
+        let style = crate::style::ParagraphStyle::default();
+        let mut b = ParagraphBuilder::new(&style, &crate::limits::Limits::default());
+        b.push_atomic(NodeId(1), &style.root, Default::default());
+        let mut p = build(b);
+        let data = std::sync::Arc::get_mut(&mut p.data).unwrap();
+        let template = data.units[0].clone();
+        // Exercise constructor semantics independently of the builder's usual
+        // one-parent-per-item invariant. Equal pairs still own distinct atomics.
+        data.units = [
+            (0, None, 1),
+            (0, None, 2),
+            (0, Some(0), 1),
+            (1, None, 3),
+            (0, Some(1), 4),
+        ]
+        .into_iter()
+        .map(|(item, parent_box, node)| {
+            let mut u = template.clone();
+            u.item = item;
+            u.parent_box = parent_box;
+            u.kind = UnitKind::Atomic { node: NodeId(node) };
+            u
+        })
+        .collect();
+        let resolver = ProfileResolver::new(data, 0..data.units.len());
+        assert_eq!(resolver.parents.get(&0), Some(&Some(1)));
+        assert_eq!(resolver.parents.get(&1), Some(&None));
+        assert_eq!(resolver.atomic_styles.len(), 4);
+        assert_eq!(resolver.atomic_styles.get(&NodeId(1)), Some(&(0, Some(0))));
+        assert_eq!(resolver.atomic_styles.get(&NodeId(2)), Some(&(0, None)));
+        assert_eq!(resolver.atomic_styles.get(&NodeId(3)), Some(&(1, None)));
+        assert_eq!(resolver.atomic_styles.get(&NodeId(4)), Some(&(0, Some(1))));
     }
 }
