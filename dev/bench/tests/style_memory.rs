@@ -51,4 +51,25 @@ fn rejected_roots_and_ruby_text_do_not_copy_the_oversized_payload() {
         counts.allocated_bytes
     );
     drop(content);
+
+    // An accepted root owns two family payload copies (paragraph + style
+    // slot). Interning must not allocate a third copy for a string key.
+    let payload_bytes = 64 * 1024;
+    let paragraph = ParagraphStyle {
+        root: InlineStyle {
+            font_families: vec![FontFamily::Named("x".repeat(payload_bytes))],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let scope = ALLOCATOR.begin().unwrap();
+    let builder = ParagraphBuilder::new(&paragraph, &Limits::unlimited());
+    let counts = scope.finish();
+    assert_eq!(builder.error(), None);
+    assert!(
+        counts.allocated_bytes < (3 * payload_bytes) as u64,
+        "accepted root allocated {} bytes; interning must borrow its key payload",
+        counts.allocated_bytes
+    );
+    drop(builder);
 }

@@ -2,12 +2,95 @@ use super::*;
 use crate::style::FontFamily;
 
 #[test]
+fn escaped_names_fit_the_owned_data_budget_without_a_string_key() {
+    let paragraph = ParagraphStyle {
+        root: InlineStyle {
+            font_families: vec![FontFamily::Named("\0".repeat(4096))],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let limits = Limits {
+        max_style_bytes: Some(12_000),
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&paragraph, &limits);
+    assert_eq!(b.error(), None, "two owned copies fit the budget");
+    let alternate = InlineStyle {
+        font_size: 20.0,
+        ..paragraph.root.clone()
+    };
+    b.open_inline(NodeId(1), &alternate, InlineEdges::default());
+    assert_eq!(b.error().unwrap().kind, LimitKind::StyleBytes);
+    assert_eq!(b.styles.len(), 1, "reject the third copy before retention");
+}
+
+#[test]
+fn signed_zero_style_identity_does_not_depend_on_reuse_order() {
+    let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+    let negative = InlineStyle {
+        letter_spacing: -0.0,
+        ..Default::default()
+    };
+    assert_eq!(b.intern_styles(&negative, None), Some(1));
+    assert_eq!(b.intern_styles(&InlineStyle::default(), None), Some(0));
+    let other = InlineStyle {
+        font_weight: 600.0,
+        ..Default::default()
+    };
+    assert_eq!(b.intern_styles(&other, None), Some(2));
+    assert_eq!(b.intern_styles(&negative, None), Some(1));
+    assert_eq!(b.styles.len(), 3);
+    assert_eq!(b.styles[1].letter_spacing.to_bits(), (-0.0_f32).to_bits());
+}
+
+#[test]
+fn nan_payloads_share_normal_and_first_line_style_pairs() {
+    let normal = InlineStyle {
+        font_style: crate::style::FontStyle::Oblique(f32::from_bits(0x7fc0_0001)),
+        ..Default::default()
+    };
+    let first = InlineStyle {
+        paint: crate::style::PaintStyle {
+            underline: Some(crate::style::TextDecoration {
+                offset: Some(f32::from_bits(0xffc0_1234)),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+    let index = b.intern_styles(&normal, Some(&first)).unwrap();
+    let mut same_normal = normal.clone();
+    same_normal.font_style = crate::style::FontStyle::Oblique(f32::from_bits(0xffc0_0002));
+    let mut same_first = first.clone();
+    same_first.paint.underline.as_mut().unwrap().offset = Some(f32::NAN);
+    assert_eq!(
+        b.intern_styles(&same_normal, Some(&same_first)),
+        Some(index)
+    );
+    assert_ne!(b.intern_styles(&normal, None), Some(index));
+    assert_ne!(
+        b.intern_styles(&normal, Some(&InlineStyle::default())),
+        Some(index)
+    );
+    assert_eq!(b.styles.len(), 4);
+}
+
+#[test]
 fn paint_changes_cannot_multiply_unbounded_family_storage() {
     let mut inline = InlineStyle {
         font_families: vec![FontFamily::Named("x".repeat(256 * 1024))],
         ..Default::default()
     };
-    let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+    // With no duplicated Debug key, 192 copies retain about 48 MiB. Choose
+    // a smaller explicit cap so this still exercises rejection before cloning.
+    let limits = Limits {
+        max_style_bytes: Some(32 * 1024 * 1024),
+        ..Default::default()
+    };
+    let mut b = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
     for i in 0..192u64 {
         inline.paint.color = [i as u8, 0, 0, 255];
         b.open_inline(NodeId(i), &inline, InlineEdges::default())
@@ -23,7 +106,7 @@ fn paint_changes_cannot_multiply_unbounded_family_storage() {
 }
 
 #[test]
-fn escaped_root_key_is_bounded_before_retention() {
+fn oversized_root_data_is_bounded_before_retention() {
     let paragraph = ParagraphStyle {
         root: InlineStyle {
             font_families: vec![FontFamily::Named("\0".repeat(16 * 1024 * 1024))],
@@ -31,10 +114,14 @@ fn escaped_root_key_is_bounded_before_retention() {
         },
         ..Default::default()
     };
-    let b = ParagraphBuilder::new(&paragraph, &Limits::default());
+    let limits = Limits {
+        max_style_bytes: Some(16 * 1024 * 1024),
+        ..Default::default()
+    };
+    let b = ParagraphBuilder::new(&paragraph, &limits);
     assert!(
         b.error().is_some(),
-        "escaped Debug keys must also have a byte cap"
+        "owned style copies must have a byte cap"
     );
 }
 
@@ -178,11 +265,8 @@ fn hash_collisions_and_nan_keys_preserve_debug_equality() {
         ..Default::default()
     };
     let pair = (&a, None);
-    let (hash, _) = super::style_key::fingerprint(pair, b.style_index.hasher(), None).unwrap();
-    b.style_index
-        .entry(hash)
-        .or_default()
-        .push(("different key".into(), 0));
+    let hash = super::style_key::fingerprint(pair, b.style_index.hasher());
+    b.style_index.entry(hash).or_default().push(0);
     b.open_inline(NodeId(1), &a, InlineEdges::default())
         .close_inline();
     assert_eq!(b.styles.len(), 2);

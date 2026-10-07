@@ -7,7 +7,7 @@ use crate::geometry::{Direction, WritingMode};
 
 pub(crate) mod memory;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum FontFamily {
     Named(String),
     Generic(GenericFamily),
@@ -38,13 +38,13 @@ pub struct FontVariation {
     pub value: f32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FontFeature {
     pub tag: [u8; 4],
     pub value: u32,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum FontKerning {
     #[default]
     Auto,
@@ -54,7 +54,7 @@ pub enum FontKerning {
 
 /// Resolved `font-variant-ligatures` components; `None` leaves that
 /// component at the font's default. `none` disables all optional ligatures.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct FontVariantLigatures {
     pub none: bool,
     pub common: Option<bool>,
@@ -63,7 +63,7 @@ pub struct FontVariantLigatures {
     pub contextual: Option<bool>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum FontVariantCaps {
     #[default]
     Normal,
@@ -77,7 +77,7 @@ pub enum FontVariantCaps {
 
 /// Computed numeric components. Mutually exclusive CSS keywords must be
 /// resolved by the caller before constructing the style.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct FontVariantNumeric {
     pub lining_nums: bool,
     pub oldstyle_nums: bool,
@@ -89,7 +89,7 @@ pub struct FontVariantNumeric {
     pub slashed_zero: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FontVariantEastAsianVariant {
     Jis78,
     Jis83,
@@ -98,18 +98,18 @@ pub enum FontVariantEastAsianVariant {
     Simplified,
     Traditional,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FontVariantEastAsianWidth {
     FullWidth,
     ProportionalWidth,
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct FontVariantEastAsian {
     pub variant: Option<FontVariantEastAsianVariant>,
     pub width: Option<FontVariantEastAsianWidth>,
     pub ruby: bool,
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum FontVariantPosition {
     #[default]
     Normal,
@@ -118,7 +118,7 @@ pub enum FontVariantPosition {
 }
 /// Numeric alternates after the caller resolves CSS `@font-feature-values`.
 /// Selectors apply directly to the chosen font, like `font_features`.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct FontVariantAlternates {
     pub historical_forms: bool,
     pub stylistic: Option<u32>,
@@ -132,7 +132,7 @@ pub struct FontVariantAlternates {
 }
 
 /// `font-synthesis`: which faces may be synthesized.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FontSynthesis {
     pub weight: bool,
     pub style: bool,
@@ -149,7 +149,7 @@ impl Default for FontSynthesis {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FontMetricKind {
     ExHeight,
     CapHeight,
@@ -174,7 +174,7 @@ pub enum LineHeight {
     Number(f32),
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum WhiteSpaceCollapse {
     #[default]
     Collapse,
@@ -184,14 +184,14 @@ pub enum WhiteSpaceCollapse {
     BreakSpaces,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TextWrapMode {
     #[default]
     Wrap,
     NoWrap,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum LineBreak {
     #[default]
     Auto,
@@ -201,7 +201,7 @@ pub enum LineBreak {
     Anywhere,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum WordBreak {
     #[default]
     Normal,
@@ -213,7 +213,7 @@ pub enum WordBreak {
     BreakWord,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum OverflowWrap {
     #[default]
     Normal,
@@ -221,7 +221,7 @@ pub enum OverflowWrap {
     Anywhere,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Hyphens {
     None,
     #[default]
@@ -229,7 +229,7 @@ pub enum Hyphens {
     Auto,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TextTransform {
     #[default]
     None,
@@ -256,7 +256,7 @@ pub enum TextTransform {
 /// zero-width-space opportunities, but automatic phrase segmentation is not
 /// currently available and produces an [`Unsupported`](crate::limits::WarningKind::Unsupported)
 /// warning.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum WordSpaceTransform {
     #[default]
     None,
@@ -311,7 +311,7 @@ impl Default for TabSize {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 /// Character-class-based spacing, applied after bidi reordering without
 /// modifying paragraph text or its source mapping.
 ///
@@ -337,7 +337,7 @@ pub enum TextAutospace {
     },
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TextSpacingTrim {
     /// Collapse adjacent punctuation blanks; trim a closing line end only
     /// when it would not otherwise fit before justification.
@@ -371,7 +371,7 @@ pub enum VerticalAlign {
     Length(f32),
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum UnicodeBidi {
     #[default]
     Normal,
@@ -382,7 +382,7 @@ pub enum UnicodeBidi {
     Plaintext,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TextOrientation {
     #[default]
     Mixed,
@@ -390,14 +390,14 @@ pub enum TextOrientation {
     Sideways,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TextCombineUpright {
     #[default]
     None,
     All,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TextEmphasisShape {
     Dot,
     Circle,
@@ -407,7 +407,7 @@ pub enum TextEmphasisShape {
     Custom(char),
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TextEmphasisPosition {
     #[default]
     OverRight,
@@ -419,14 +419,14 @@ pub enum TextEmphasisPosition {
 /// `text-emphasis`. Lines grow where emphasized text and its marks overflow
 /// the line box, as in Chromium 152; see
 /// [`crate::GlyphRunView::emphasis_mark`] for drawing them.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct TextEmphasis {
     pub shape: TextEmphasisShape,
     pub filled: bool,
     pub position: TextEmphasisPosition,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TextBoxEdge {
     #[default]
     Auto,
@@ -437,7 +437,7 @@ pub enum TextBoxEdge {
     Ex,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum BoxDecorationBreak {
     #[default]
     Slice,
@@ -681,7 +681,7 @@ pub struct TextIndent {
 /// CSS `hanging-punctuation` flags; set them paragraph-wide via
 /// [`LineOptions::hanging_punctuation`] or per box via
 /// [`InlineStyle::hanging_punctuation`].
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct HangingPunctuation {
     /// Hangs one eligible opening mark on the first formatted line.
     pub first: bool,

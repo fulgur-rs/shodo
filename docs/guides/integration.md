@@ -150,8 +150,10 @@ Read build warnings through `Paragraph::warnings()` and line layout warnings thr
 `Limits::max_style_bytes` bounds logical owned style data and builder interning
 keys to 64 MiB by default. Checks precede caller-data cloning and key allocation;
 normal/first-line output and ruby input occurrences share their respective
-budgets. The count covers style slots, all String/Vec payloads, and escaped Debug
-keys. It excludes allocator overhead, spare capacity, and bounded temporary
+budgets. The count covers style slots, all String/Vec payloads, and the fixed
+fingerprint/index keys (12 bytes per interned pair). Keys borrow the retained
+styles during lookup; no Debug strings or extra style payloads are retained.
+It excludes allocator overhead, spare capacity, and bounded temporary
 copies, so it is not an RSS limit. Exceeding it returns `LimitKind::StyleBytes`
 and stops further builder input. `None` disables this budget, as does
 `Limits::unlimited()` for trusted input. Existing `InlineStyle` field types and
