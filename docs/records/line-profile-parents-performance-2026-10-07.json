@@ -1,0 +1,1492 @@
+{
+  "date": "2026-10-07",
+  "purpose": "Skip repeated consecutive parent registration in ProfileResolver without changing maps, Atomic handling, layout output, warnings or budgets.",
+  "baseline_revision": "445f7e1baa275f12e384453328aef4785c9749b2",
+  "candidate": "Implementation committed with this record: local previous (item,parent_box) pair; Atomic registration remains independent.",
+  "baseline_engine_source_fingerprint_sha256": "ba9fed79f2e0be41a96dbda538f0676b210a42902b5af3c4fbbbea46bb0400d1",
+  "candidate_engine_source_fingerprint_sha256": "fead8a56812686b7f37f3401b118576a25a2e512bf2ef039547e6232b5340919",
+  "engine_fingerprint_definition": "Lexicographically sorted relative path strings for crates/shodo/src/**/*.rs, followed by crates/shodo/Cargo.toml, Cargo.toml and Cargo.lock in that order; each UTF-8 path and file bytes terminated separately with NUL.",
+  "build_notes": "Baseline release binaries were saved before adding the consecutive-pair optimization; regression scaffolding is cfg(test) only and excluded from release. Candidate binaries saved separately after recompilation in the same target directory. All4 binary hashes differ. Documentation-only harness comment clarification followed compilation; hashes recorded below. No Rust items or CLI behavior differ between compiled and retained harness. After measurement, the long-text unit test was made independent of system font discovery; this changes only cfg(test) source. The measured and retained engine fingerprints are separately recorded.",
+  "conditions": {
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+    "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)\n",
+    "cpu": "AMD Ryzen 5 5600G, x86_64 Linux",
+    "profile": "release, default shodo-bench features (complex-scripts), locked build",
+    "system_fonts": false,
+    "fonts": "Fixed shodo fixture Latin/CJK/Arabic, manifest checksums verified by load_fonts()",
+    "fixture_manifest_sha256": "8ff4c966f09124494ae8a6be9bed079575f88a571b9ae430d433ce35936cf0f1",
+    "fixture_cases_sha256": "8c641d37deb7328e603f604dc220295b3784f483de6d65f8ffabada57978f384",
+    "cargo_lock_sha256": "7f6eb934a9044db268e4fa51fe520717a926b49d51cf5ce360f653c2c4ba0c40",
+    "cargo_home_config_sha256": "5af4dde0536b72eff88ce4c2e77e0cb7a48d88004cec0367b0964fe61bdee189",
+    "wrapper": "kache rustc-wrapper; cargo shim bypassed by using the actual Cargo executable",
+    "runner": "/usr/bin/env",
+    "elapsed_measurement": "Normal allocator binaries; CPU10 affinity;12 independent processes per variant and condition, alternating AB/BA pairs;3 warmup calls per process. Iterations recorded per condition; reuses same prepared paragraph/context and includes accepted output drop. Digests and paint hashing outside measurement. No concurrent task-owned builds/tests/profiles during timing.",
+    "allocation_measurement": "Separate allocation-counting binaries;3 processes per variant/condition,10 measured calls per process, including output destruction. Counts captured before JSON. Stable identical scope counters across samples and variants."
+  },
+  "initial_evidence": {
+    "case": "plain, 4096 a characters, one wide line, one RichText span",
+    "parents_insert_calls": 4098,
+    "consecutive_item_parent_groups": 3,
+    "unique_items": 3,
+    "profile_resolver_inclusive_instructions": 6461450,
+    "next_line_collected_instructions": 33794079,
+    "resolver_fraction_of_next_line_instructions": 0.19120065381867635,
+    "resolver_fraction_of_metric_solver_instructions": 0.5863588011853043
+  },
+  "implementation_constraints": [
+    "Only immediately consecutive equal full pairs skip parents.insert; changed parent or later repeated item still overwrites.",
+    "Atomic registration never skips with a repeated parent pair.",
+    "No persistent cache, struct-size change or public API change."
+  ],
+  "measurements": [
+    {
+      "case": "plain",
+      "length": 256,
+      "width": 1000000,
+      "iterations": 2000,
+      "times_ns_per_layout": {
+        "baseline": [
+          4809.6005,
+          5416.9335,
+          4850.285,
+          4986.726,
+          4915.17,
+          4798.076,
+          4801.3235,
+          4785.853,
+          4901.935,
+          4768.6715,
+          5074.6955,
+          4976.04
+        ],
+        "candidate": [
+          4166.6815,
+          3939.791,
+          3885.208,
+          4012.29,
+          3830.5195,
+          3723.867,
+          3934.029,
+          3701.342,
+          3687.059,
+          3670.1565,
+          3782.676,
+          3700.7835
+        ]
+      },
+      "allocations": {
+        "baseline": [
+          {
+            "allocated_bytes": 34200,
+            "calls": 120,
+            "deallocated_bytes": 34200,
+            "live_bytes": 516044,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2092,
+            "start_live_bytes": 516044
+          },
+          {
+            "allocated_bytes": 34200,
+            "calls": 120,
+            "deallocated_bytes": 34200,
+            "live_bytes": 516044,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2092,
+            "start_live_bytes": 516044
+          },
+          {
+            "allocated_bytes": 34200,
+            "calls": 120,
+            "deallocated_bytes": 34200,
+            "live_bytes": 516044,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2092,
+            "start_live_bytes": 516044
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 34200,
+            "calls": 120,
+            "deallocated_bytes": 34200,
+            "live_bytes": 516044,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2092,
+            "start_live_bytes": 516044
+          },
+          {
+            "allocated_bytes": 34200,
+            "calls": 120,
+            "deallocated_bytes": 34200,
+            "live_bytes": 516044,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2092,
+            "start_live_bytes": 516044
+          },
+          {
+            "allocated_bytes": 34200,
+            "calls": 120,
+            "deallocated_bytes": 34200,
+            "live_bytes": 516044,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2092,
+            "start_live_bytes": 516044
+          }
+        ]
+      },
+      "output": {
+        "case": "plain",
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 1,
+          "sha256": "817d0923d4d3cd1fc4a5a053a48015679902aaa685402564271f2ec1ba011a09",
+          "synthetic_glyphs": 0
+        },
+        "length": 256,
+        "op": "layout",
+        "paint_sha256": "0de4ff2de297373d6a19a8392c13a99302de4951cdb47ae246d85b5deefa2fa3",
+        "width": 1000000.0
+      },
+      "median_ns_per_layout": {
+        "baseline": 4876.110000000001,
+        "candidate": 3806.59775
+      },
+      "candidate_over_baseline": 0.7806628131851003,
+      "time_reduction_percent": 21.933718681489967,
+      "median_absolute_deviation_ns": {
+        "baseline": 84.14550000000054,
+        "candidate": 112.6764999999998
+      }
+    },
+    {
+      "case": "plain",
+      "length": 1024,
+      "width": 1000000,
+      "iterations": 1000,
+      "times_ns_per_layout": {
+        "baseline": [
+          17025.027,
+          16621.116,
+          16581.026,
+          16628.45,
+          16892.881,
+          16906.99,
+          16806.693,
+          16676.224,
+          16699.273,
+          16529.131,
+          16524.312,
+          16512.019
+        ],
+        "candidate": [
+          12106.434,
+          12282.373,
+          12925.781,
+          12337.9,
+          12637.253,
+          12618.185,
+          12856.565,
+          12212.249,
+          12835.193,
+          12103.501,
+          12607.36,
+          11967.095
+        ]
+      },
+      "allocations": {
+        "baseline": [
+          {
+            "allocated_bytes": 64920,
+            "calls": 120,
+            "deallocated_bytes": 64920,
+            "live_bytes": 763341,
+            "net_bytes": 0,
+            "peak_extra_bytes": 4456,
+            "start_live_bytes": 763341
+          },
+          {
+            "allocated_bytes": 64920,
+            "calls": 120,
+            "deallocated_bytes": 64920,
+            "live_bytes": 763341,
+            "net_bytes": 0,
+            "peak_extra_bytes": 4456,
+            "start_live_bytes": 763341
+          },
+          {
+            "allocated_bytes": 64920,
+            "calls": 120,
+            "deallocated_bytes": 64920,
+            "live_bytes": 763341,
+            "net_bytes": 0,
+            "peak_extra_bytes": 4456,
+            "start_live_bytes": 763341
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 64920,
+            "calls": 120,
+            "deallocated_bytes": 64920,
+            "live_bytes": 763341,
+            "net_bytes": 0,
+            "peak_extra_bytes": 4456,
+            "start_live_bytes": 763341
+          },
+          {
+            "allocated_bytes": 64920,
+            "calls": 120,
+            "deallocated_bytes": 64920,
+            "live_bytes": 763341,
+            "net_bytes": 0,
+            "peak_extra_bytes": 4456,
+            "start_live_bytes": 763341
+          },
+          {
+            "allocated_bytes": 64920,
+            "calls": 120,
+            "deallocated_bytes": 64920,
+            "live_bytes": 763341,
+            "net_bytes": 0,
+            "peak_extra_bytes": 4456,
+            "start_live_bytes": 763341
+          }
+        ]
+      },
+      "output": {
+        "case": "plain",
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 1024,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 1,
+          "sha256": "7a9a43f3cd5b515680e4b55d5f48e7c9a02af2777ebe2a5cd4b7aa7eae022234",
+          "synthetic_glyphs": 0
+        },
+        "length": 1024,
+        "op": "layout",
+        "paint_sha256": "9f4392ebada6f65e03902cf626ca9c57227e1afad62b49c39cb59aaa6d026809",
+        "width": 1000000.0
+      },
+      "median_ns_per_layout": {
+        "baseline": 16652.337,
+        "candidate": 12472.630000000001
+      },
+      "candidate_over_baseline": 0.7490017767476121,
+      "time_reduction_percent": 25.099822325238787,
+      "median_absolute_deviation_ns": {
+        "baseline": 125.61549999999806,
+        "candidate": 311.47199999999975
+      }
+    },
+    {
+      "case": "plain",
+      "length": 4096,
+      "width": 1000000,
+      "iterations": 500,
+      "times_ns_per_layout": {
+        "baseline": [
+          64123.302,
+          64660.546,
+          64698.82,
+          64385.358,
+          65314.152,
+          65187.034,
+          64533.29,
+          64940.902,
+          64006.102,
+          64519.46,
+          65121.38,
+          64874.968
+        ],
+        "candidate": [
+          45597.036,
+          45081.862,
+          47364.102,
+          47041.142,
+          45270.024,
+          46126.876,
+          49593.4,
+          45184.254,
+          45176.43,
+          46991.272,
+          45800.422,
+          45749.856
+        ]
+      },
+      "allocations": {
+        "baseline": [
+          {
+            "allocated_bytes": 187800,
+            "calls": 120,
+            "deallocated_bytes": 187800,
+            "live_bytes": 1752525,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752525
+          },
+          {
+            "allocated_bytes": 187800,
+            "calls": 120,
+            "deallocated_bytes": 187800,
+            "live_bytes": 1752525,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752525
+          },
+          {
+            "allocated_bytes": 187800,
+            "calls": 120,
+            "deallocated_bytes": 187800,
+            "live_bytes": 1752525,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752525
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 187800,
+            "calls": 120,
+            "deallocated_bytes": 187800,
+            "live_bytes": 1752525,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752525
+          },
+          {
+            "allocated_bytes": 187800,
+            "calls": 120,
+            "deallocated_bytes": 187800,
+            "live_bytes": 1752525,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752525
+          },
+          {
+            "allocated_bytes": 187800,
+            "calls": 120,
+            "deallocated_bytes": 187800,
+            "live_bytes": 1752525,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752525
+          }
+        ]
+      },
+      "output": {
+        "case": "plain",
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 4096,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 1,
+          "sha256": "7debff63c2c99a3dcb0046ef17ea3917519f34a3e831c080d2ffccf86da9955d",
+          "synthetic_glyphs": 0
+        },
+        "length": 4096,
+        "op": "layout",
+        "paint_sha256": "46e0de03ee209204aab77f6a375854d125f04e6857d6b7dc8c6db42efef51378",
+        "width": 1000000.0
+      },
+      "median_ns_per_layout": {
+        "baseline": 64679.683000000005,
+        "candidate": 45775.138999999996
+      },
+      "candidate_over_baseline": 0.7077205217595144,
+      "time_reduction_percent": 29.227947824048563,
+      "median_absolute_deviation_ns": {
+        "baseline": 277.77200000000084,
+        "candidate": 594.796999999995
+      }
+    },
+    {
+      "case": "emphasis",
+      "length": 1024,
+      "width": 1000000,
+      "iterations": 1000,
+      "times_ns_per_layout": {
+        "baseline": [
+          24634.521,
+          24179.274,
+          24182.697,
+          23967.156,
+          23959.683,
+          24709.534,
+          23669.898,
+          23995.653,
+          27293.084,
+          26375.956,
+          29491.72,
+          29365.092
+        ],
+        "candidate": [
+          15188.884,
+          15155.568,
+          15230.512,
+          15229.254,
+          15380.677,
+          15215.705,
+          15171.074,
+          15307.341,
+          17844.024,
+          17611.722,
+          17749.944,
+          18978.789
+        ]
+      },
+      "allocations": {
+        "baseline": [
+          {
+            "allocated_bytes": 66920,
+            "calls": 170,
+            "deallocated_bytes": 66920,
+            "live_bytes": 763344,
+            "net_bytes": 0,
+            "peak_extra_bytes": 4456,
+            "start_live_bytes": 763344
+          },
+          {
+            "allocated_bytes": 66920,
+            "calls": 170,
+            "deallocated_bytes": 66920,
+            "live_bytes": 763344,
+            "net_bytes": 0,
+            "peak_extra_bytes": 4456,
+            "start_live_bytes": 763344
+          },
+          {
+            "allocated_bytes": 66920,
+            "calls": 170,
+            "deallocated_bytes": 66920,
+            "live_bytes": 763344,
+            "net_bytes": 0,
+            "peak_extra_bytes": 4456,
+            "start_live_bytes": 763344
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 66920,
+            "calls": 170,
+            "deallocated_bytes": 66920,
+            "live_bytes": 763344,
+            "net_bytes": 0,
+            "peak_extra_bytes": 4456,
+            "start_live_bytes": 763344
+          },
+          {
+            "allocated_bytes": 66920,
+            "calls": 170,
+            "deallocated_bytes": 66920,
+            "live_bytes": 763344,
+            "net_bytes": 0,
+            "peak_extra_bytes": 4456,
+            "start_live_bytes": 763344
+          },
+          {
+            "allocated_bytes": 66920,
+            "calls": 170,
+            "deallocated_bytes": 66920,
+            "live_bytes": 763344,
+            "net_bytes": 0,
+            "peak_extra_bytes": 4456,
+            "start_live_bytes": 763344
+          }
+        ]
+      },
+      "output": {
+        "case": "emphasis",
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 1024,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 1,
+          "sha256": "91aa5497d275011de7a2f455dc792a6912213c21ce2edbf9414cdae8aa2246f8",
+          "synthetic_glyphs": 0
+        },
+        "length": 1024,
+        "op": "layout",
+        "paint_sha256": "14f5f08feee03a5a52daeb0987579f147111d49fdd225e87a547d99d2af9f6a3",
+        "width": 1000000.0
+      },
+      "median_ns_per_layout": {
+        "baseline": 24408.609,
+        "candidate": 15268.926500000001
+      },
+      "candidate_over_baseline": 0.6255549630050611,
+      "time_reduction_percent": 37.44450369949389,
+      "median_absolute_deviation_ns": {
+        "baseline": 445.1895000000004,
+        "candidate": 104.80149999999958
+      }
+    },
+    {
+      "case": "emphasis",
+      "length": 4096,
+      "width": 1000000,
+      "iterations": 500,
+      "times_ns_per_layout": {
+        "baseline": [
+          112585.36,
+          111609.49,
+          115269.626,
+          110012.288,
+          100850.218,
+          98933.824,
+          95516.61,
+          95531.834,
+          94344.058,
+          94817.604,
+          94452.04,
+          95724.468
+        ],
+        "candidate": [
+          73473.252,
+          79986.396,
+          75653.938,
+          102399.79,
+          58695.682,
+          58193.218,
+          58789.692,
+          57855.452,
+          60001.634,
+          58031.18,
+          58815.674,
+          61001.808
+        ]
+      },
+      "allocations": {
+        "baseline": [
+          {
+            "allocated_bytes": 189800,
+            "calls": 170,
+            "deallocated_bytes": 189800,
+            "live_bytes": 1752528,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752528
+          },
+          {
+            "allocated_bytes": 189800,
+            "calls": 170,
+            "deallocated_bytes": 189800,
+            "live_bytes": 1752528,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752528
+          },
+          {
+            "allocated_bytes": 189800,
+            "calls": 170,
+            "deallocated_bytes": 189800,
+            "live_bytes": 1752528,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752528
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 189800,
+            "calls": 170,
+            "deallocated_bytes": 189800,
+            "live_bytes": 1752528,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752528
+          },
+          {
+            "allocated_bytes": 189800,
+            "calls": 170,
+            "deallocated_bytes": 189800,
+            "live_bytes": 1752528,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752528
+          },
+          {
+            "allocated_bytes": 189800,
+            "calls": 170,
+            "deallocated_bytes": 189800,
+            "live_bytes": 1752528,
+            "net_bytes": 0,
+            "peak_extra_bytes": 16744,
+            "start_live_bytes": 1752528
+          }
+        ]
+      },
+      "output": {
+        "case": "emphasis",
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 4096,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 1,
+          "sha256": "33ae8e97f0a7760f2b67b5013c08b4b0671ab71bd036a138e072ac09c12e5a88",
+          "synthetic_glyphs": 0
+        },
+        "length": 4096,
+        "op": "layout",
+        "paint_sha256": "5065d2a9b0f0c1e27df88c5d2253ff4555d1c29c12977b1e8610bcbc38c23dc2",
+        "width": 1000000.0
+      },
+      "median_ns_per_layout": {
+        "baseline": 97329.146,
+        "candidate": 59408.653999999995
+      },
+      "candidate_over_baseline": 0.6103891428370285,
+      "time_reduction_percent": 38.96108571629715,
+      "median_absolute_deviation_ns": {
+        "baseline": 2931.0969999999943,
+        "candidate": 1465.337999999996
+      }
+    },
+    {
+      "case": "colors",
+      "length": 256,
+      "width": 1000000,
+      "iterations": 500,
+      "times_ns_per_layout": {
+        "baseline": [
+          49132.846,
+          47680.358,
+          47550.728,
+          47666.528,
+          48343.182,
+          47583.554,
+          47221.2,
+          47078.02,
+          48605.938,
+          47210.862,
+          47590.958,
+          47518.46
+        ],
+        "candidate": [
+          47571.542,
+          48578.278,
+          47394.134,
+          47426.122,
+          47808.872,
+          47936.968,
+          47236.566,
+          47523.208,
+          48295.968,
+          47230.56,
+          47859.02,
+          47665.692
+        ]
+      },
+      "allocations": {
+        "baseline": [
+          {
+            "allocated_bytes": 1419760,
+            "calls": 2950,
+            "deallocated_bytes": 1419760,
+            "live_bytes": 752455,
+            "net_bytes": 0,
+            "peak_extra_bytes": 73536,
+            "start_live_bytes": 752455
+          },
+          {
+            "allocated_bytes": 1419760,
+            "calls": 2950,
+            "deallocated_bytes": 1419760,
+            "live_bytes": 752455,
+            "net_bytes": 0,
+            "peak_extra_bytes": 73536,
+            "start_live_bytes": 752455
+          },
+          {
+            "allocated_bytes": 1419760,
+            "calls": 2950,
+            "deallocated_bytes": 1419760,
+            "live_bytes": 752455,
+            "net_bytes": 0,
+            "peak_extra_bytes": 73536,
+            "start_live_bytes": 752455
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 1419760,
+            "calls": 2950,
+            "deallocated_bytes": 1419760,
+            "live_bytes": 752455,
+            "net_bytes": 0,
+            "peak_extra_bytes": 73536,
+            "start_live_bytes": 752455
+          },
+          {
+            "allocated_bytes": 1419760,
+            "calls": 2950,
+            "deallocated_bytes": 1419760,
+            "live_bytes": 752455,
+            "net_bytes": 0,
+            "peak_extra_bytes": 73536,
+            "start_live_bytes": 752455
+          },
+          {
+            "allocated_bytes": 1419760,
+            "calls": 2950,
+            "deallocated_bytes": 1419760,
+            "live_bytes": 752455,
+            "net_bytes": 0,
+            "peak_extra_bytes": 73536,
+            "start_live_bytes": 752455
+          }
+        ]
+      },
+      "output": {
+        "case": "colors",
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 256,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 256,
+          "sha256": "6d95021813f26dd48fd3c958466de452f569f693bfbff61a7e25cffe728b019a",
+          "synthetic_glyphs": 0
+        },
+        "length": 256,
+        "op": "layout",
+        "paint_sha256": "daa75fe1d6359148a3a66eb658a2df9db14d072988bfc4504d81900057d3511f",
+        "width": 1000000.0
+      },
+      "median_ns_per_layout": {
+        "baseline": 47587.255999999994,
+        "candidate": 47618.617
+      },
+      "candidate_over_baseline": 1.0006590209782216,
+      "time_reduction_percent": -0.06590209782215695,
+      "median_absolute_deviation_ns": {
+        "baseline": 229.57900000000154,
+        "candidate": 232.4429999999993
+      }
+    },
+    {
+      "case": "colors",
+      "length": 1024,
+      "width": 1000000,
+      "iterations": 200,
+      "times_ns_per_layout": {
+        "baseline": [
+          192890.735,
+          191406.89,
+          190755.235,
+          190876.42,
+          191498.38,
+          192248.165,
+          189273.485,
+          192164.35,
+          192499.255,
+          194043.17,
+          193929.32,
+          191489.305
+        ],
+        "candidate": [
+          190628.82,
+          190433.95,
+          189444.605,
+          190352.235,
+          193433.075,
+          189835.385,
+          191303.515,
+          191851.1,
+          198154.92,
+          196158.065,
+          191668.105,
+          189828.75
+        ]
+      },
+      "allocations": {
+        "baseline": [
+          {
+            "allocated_bytes": 5629040,
+            "calls": 10710,
+            "deallocated_bytes": 5629040,
+            "live_bytes": 1713224,
+            "net_bytes": 0,
+            "peak_extra_bytes": 293952,
+            "start_live_bytes": 1713224
+          },
+          {
+            "allocated_bytes": 5629040,
+            "calls": 10710,
+            "deallocated_bytes": 5629040,
+            "live_bytes": 1713224,
+            "net_bytes": 0,
+            "peak_extra_bytes": 293952,
+            "start_live_bytes": 1713224
+          },
+          {
+            "allocated_bytes": 5629040,
+            "calls": 10710,
+            "deallocated_bytes": 5629040,
+            "live_bytes": 1713224,
+            "net_bytes": 0,
+            "peak_extra_bytes": 293952,
+            "start_live_bytes": 1713224
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 5629040,
+            "calls": 10710,
+            "deallocated_bytes": 5629040,
+            "live_bytes": 1713224,
+            "net_bytes": 0,
+            "peak_extra_bytes": 293952,
+            "start_live_bytes": 1713224
+          },
+          {
+            "allocated_bytes": 5629040,
+            "calls": 10710,
+            "deallocated_bytes": 5629040,
+            "live_bytes": 1713224,
+            "net_bytes": 0,
+            "peak_extra_bytes": 293952,
+            "start_live_bytes": 1713224
+          },
+          {
+            "allocated_bytes": 5629040,
+            "calls": 10710,
+            "deallocated_bytes": 5629040,
+            "live_bytes": 1713224,
+            "net_bytes": 0,
+            "peak_extra_bytes": 293952,
+            "start_live_bytes": 1713224
+          }
+        ]
+      },
+      "output": {
+        "case": "colors",
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 1024,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 1024,
+          "sha256": "deef7972d73a5a95f4bb40ba83df4d54176e7e1d90d19be2b389481bbd1fc347",
+          "synthetic_glyphs": 0
+        },
+        "length": 1024,
+        "op": "layout",
+        "paint_sha256": "1dd729e01e4e2087c051ce7ed02c34979df52a1c011bdc4a2b563ef7234467cc",
+        "width": 1000000.0
+      },
+      "median_ns_per_layout": {
+        "baseline": 191831.365,
+        "candidate": 190966.1675
+      },
+      "candidate_over_baseline": 0.9954898016807628,
+      "time_reduction_percent": 0.45101983192371575,
+      "median_absolute_deviation_ns": {
+        "baseline": 811.4174999999959,
+        "candidate": 1007.8574999999983
+      }
+    },
+    {
+      "case": "colors",
+      "length": 4096,
+      "width": 1000000,
+      "iterations": 100,
+      "times_ns_per_layout": {
+        "baseline": [
+          819072.59,
+          826640.25,
+          815826.92,
+          822488.69,
+          819189.23,
+          819587.35,
+          824152.39,
+          835294.69,
+          825015.67,
+          900298.31,
+          826354.59,
+          822895.19
+        ],
+        "candidate": [
+          821820.28,
+          818751.31,
+          820350.76,
+          819656.5,
+          819020.21,
+          833098.78,
+          825058.27,
+          831579.66,
+          819055.13,
+          824750.26,
+          821026.85,
+          822907.76
+        ]
+      },
+      "allocations": {
+        "baseline": [
+          {
+            "allocated_bytes": 22464240,
+            "calls": 41510,
+            "deallocated_bytes": 22464240,
+            "live_bytes": 5556296,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1175616,
+            "start_live_bytes": 5556296
+          },
+          {
+            "allocated_bytes": 22464240,
+            "calls": 41510,
+            "deallocated_bytes": 22464240,
+            "live_bytes": 5556296,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1175616,
+            "start_live_bytes": 5556296
+          },
+          {
+            "allocated_bytes": 22464240,
+            "calls": 41510,
+            "deallocated_bytes": 22464240,
+            "live_bytes": 5556296,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1175616,
+            "start_live_bytes": 5556296
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 22464240,
+            "calls": 41510,
+            "deallocated_bytes": 22464240,
+            "live_bytes": 5556296,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1175616,
+            "start_live_bytes": 5556296
+          },
+          {
+            "allocated_bytes": 22464240,
+            "calls": 41510,
+            "deallocated_bytes": 22464240,
+            "live_bytes": 5556296,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1175616,
+            "start_live_bytes": 5556296
+          },
+          {
+            "allocated_bytes": 22464240,
+            "calls": 41510,
+            "deallocated_bytes": 22464240,
+            "live_bytes": 5556296,
+            "net_bytes": 0,
+            "peak_extra_bytes": 1175616,
+            "start_live_bytes": 5556296
+          }
+        ]
+      },
+      "output": {
+        "case": "colors",
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 4096,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 4096,
+          "sha256": "21d62fd79f44d7019ddcde226c88c4414ac9ef555e4e5d5913865ed15c5fcb34",
+          "synthetic_glyphs": 0
+        },
+        "length": 4096,
+        "op": "layout",
+        "paint_sha256": "fed6e6a1f826b6bc9b4084c2cabe7093392b958216a9905bc5bd804d8f05e63d",
+        "width": 1000000.0
+      },
+      "median_ns_per_layout": {
+        "baseline": 823523.79,
+        "candidate": 821423.565
+      },
+      "candidate_over_baseline": 0.9974497093763374,
+      "time_reduction_percent": 0.2550290623662632,
+      "median_absolute_deviation_ns": {
+        "baseline": 3526.4500000000116,
+        "candidate": 2385.8949999999604
+      }
+    },
+    {
+      "case": "languages",
+      "length": 1024,
+      "width": 1000000,
+      "iterations": 200,
+      "times_ns_per_layout": {
+        "baseline": [
+          194091.71,
+          192599.135,
+          192056.445,
+          192847.085,
+          191786.84,
+          194205.555,
+          192489.825,
+          192908.895,
+          194840.445,
+          192275.055,
+          193253.58,
+          192568.405
+        ],
+        "candidate": [
+          194925.655,
+          192453.16,
+          194413.345,
+          194696.215,
+          193897.895,
+          192238.735,
+          193424.695,
+          192774.79,
+          192531.385,
+          193403.04,
+          194311.02,
+          191850.75
+        ]
+      },
+      "allocations": {
+        "baseline": [
+          {
+            "allocated_bytes": 5629040,
+            "calls": 10710,
+            "deallocated_bytes": 5629040,
+            "live_bytes": 1996391,
+            "net_bytes": 0,
+            "peak_extra_bytes": 293952,
+            "start_live_bytes": 1996391
+          },
+          {
+            "allocated_bytes": 5629040,
+            "calls": 10710,
+            "deallocated_bytes": 5629040,
+            "live_bytes": 1996391,
+            "net_bytes": 0,
+            "peak_extra_bytes": 293952,
+            "start_live_bytes": 1996391
+          },
+          {
+            "allocated_bytes": 5629040,
+            "calls": 10710,
+            "deallocated_bytes": 5629040,
+            "live_bytes": 1996391,
+            "net_bytes": 0,
+            "peak_extra_bytes": 293952,
+            "start_live_bytes": 1996391
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 5629040,
+            "calls": 10710,
+            "deallocated_bytes": 5629040,
+            "live_bytes": 1996391,
+            "net_bytes": 0,
+            "peak_extra_bytes": 293952,
+            "start_live_bytes": 1996391
+          },
+          {
+            "allocated_bytes": 5629040,
+            "calls": 10710,
+            "deallocated_bytes": 5629040,
+            "live_bytes": 1996391,
+            "net_bytes": 0,
+            "peak_extra_bytes": 293952,
+            "start_live_bytes": 1996391
+          },
+          {
+            "allocated_bytes": 5629040,
+            "calls": 10710,
+            "deallocated_bytes": 5629040,
+            "live_bytes": 1996391,
+            "net_bytes": 0,
+            "peak_extra_bytes": 293952,
+            "start_live_bytes": 1996391
+          }
+        ]
+      },
+      "output": {
+        "case": "languages",
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 1024,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 1,
+          "runs": 1024,
+          "sha256": "deef7972d73a5a95f4bb40ba83df4d54176e7e1d90d19be2b389481bbd1fc347",
+          "synthetic_glyphs": 0
+        },
+        "length": 1024,
+        "op": "layout",
+        "paint_sha256": "6f282747cdf0caac186b38e15f9f17efe35474b87f447d91b37ae409e1397a2a",
+        "width": 1000000.0
+      },
+      "median_ns_per_layout": {
+        "baseline": 192723.11,
+        "candidate": 193413.8675
+      },
+      "candidate_over_baseline": 1.003584196519037,
+      "time_reduction_percent": -0.3584196519037075,
+      "median_absolute_deviation_ns": {
+        "baseline": 489.2624999999971,
+        "candidate": 928.929999999993
+      }
+    },
+    {
+      "case": "spaces",
+      "length": 256,
+      "width": 128,
+      "iterations": 10,
+      "times_ns_per_layout": {
+        "baseline": [
+          1300945.5,
+          1268160.4,
+          1290343.1,
+          1294876.0,
+          1277093.6,
+          1266602.9,
+          1274327.8,
+          1289903.1,
+          1276800.2,
+          1278720.9,
+          1290182.5,
+          1268509.6
+        ],
+        "candidate": [
+          1283316.7,
+          1279321.6,
+          1270074.2,
+          1285419.0,
+          1267601.7,
+          1276478.9,
+          1269969.5,
+          1272400.1,
+          1271582.9,
+          1274649.0,
+          1296740.9,
+          1289281.5
+        ]
+      },
+      "allocations": {
+        "baseline": [
+          {
+            "allocated_bytes": 11771396,
+            "calls": 109032,
+            "deallocated_bytes": 11659825,
+            "live_bytes": 822339,
+            "net_bytes": 111571,
+            "peak_extra_bytes": 197796,
+            "start_live_bytes": 710768
+          },
+          {
+            "allocated_bytes": 11771396,
+            "calls": 109032,
+            "deallocated_bytes": 11659825,
+            "live_bytes": 822339,
+            "net_bytes": 111571,
+            "peak_extra_bytes": 197796,
+            "start_live_bytes": 710768
+          },
+          {
+            "allocated_bytes": 11771396,
+            "calls": 109032,
+            "deallocated_bytes": 11659825,
+            "live_bytes": 822339,
+            "net_bytes": 111571,
+            "peak_extra_bytes": 197796,
+            "start_live_bytes": 710768
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 11771396,
+            "calls": 109032,
+            "deallocated_bytes": 11659825,
+            "live_bytes": 822339,
+            "net_bytes": 111571,
+            "peak_extra_bytes": 197796,
+            "start_live_bytes": 710768
+          },
+          {
+            "allocated_bytes": 11771396,
+            "calls": 109032,
+            "deallocated_bytes": 11659825,
+            "live_bytes": 822339,
+            "net_bytes": 111571,
+            "peak_extra_bytes": 197796,
+            "start_live_bytes": 710768
+          },
+          {
+            "allocated_bytes": 11771396,
+            "calls": 109032,
+            "deallocated_bytes": 11659825,
+            "live_bytes": 822339,
+            "net_bytes": 111571,
+            "peak_extra_bytes": 197796,
+            "start_live_bytes": 710768
+          }
+        ]
+      },
+      "output": {
+        "case": "spaces",
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 512,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 26,
+          "runs": 26,
+          "sha256": "9abc44c8212590b9de197d84f61434c185af367e5ccb93a7d48e571631605fb2",
+          "synthetic_glyphs": 0
+        },
+        "length": 256,
+        "op": "layout",
+        "paint_sha256": "62d95224179069c94333d891d29faa1ac5d06f16e05b3fa4a10d237ae8d9c4e6",
+        "width": 128.0
+      },
+      "median_ns_per_layout": {
+        "baseline": 1277907.25,
+        "candidate": 1275563.95
+      },
+      "candidate_over_baseline": 0.9981662988452409,
+      "time_reduction_percent": 0.18337011547591153,
+      "median_absolute_deviation_ns": {
+        "baseline": 10525.600000000093,
+        "candidate": 5542.099999999977
+      }
+    },
+    {
+      "case": "spaces",
+      "length": 1024,
+      "width": 128,
+      "iterations": 5,
+      "times_ns_per_layout": {
+        "baseline": [
+          5212596.4,
+          5327560.4,
+          5489949.0,
+          5287078.4,
+          5226663.0,
+          5353277.2,
+          5314569.4,
+          5297988.2,
+          5249250.8,
+          5218519.0,
+          5290668.6,
+          5363027.6
+        ],
+        "candidate": [
+          5222612.0,
+          5240548.2,
+          5283600.4,
+          5230434.8,
+          5254573.0,
+          5187312.6,
+          5243481.6,
+          5326903.8,
+          5378183.8,
+          5276671.6,
+          5243984.6,
+          5197468.0
+        ]
+      },
+      "allocations": {
+        "baseline": [
+          {
+            "allocated_bytes": 48734918,
+            "calls": 450141,
+            "deallocated_bytes": 48622559,
+            "live_bytes": 1509605,
+            "net_bytes": 112359,
+            "peak_extra_bytes": 326431,
+            "start_live_bytes": 1397246
+          },
+          {
+            "allocated_bytes": 48734918,
+            "calls": 450141,
+            "deallocated_bytes": 48622559,
+            "live_bytes": 1509605,
+            "net_bytes": 112359,
+            "peak_extra_bytes": 326431,
+            "start_live_bytes": 1397246
+          },
+          {
+            "allocated_bytes": 48734918,
+            "calls": 450141,
+            "deallocated_bytes": 48622559,
+            "live_bytes": 1509605,
+            "net_bytes": 112359,
+            "peak_extra_bytes": 326431,
+            "start_live_bytes": 1397246
+          }
+        ],
+        "candidate": [
+          {
+            "allocated_bytes": 48734918,
+            "calls": 450141,
+            "deallocated_bytes": 48622559,
+            "live_bytes": 1509605,
+            "net_bytes": 112359,
+            "peak_extra_bytes": 326431,
+            "start_live_bytes": 1397246
+          },
+          {
+            "allocated_bytes": 48734918,
+            "calls": 450141,
+            "deallocated_bytes": 48622559,
+            "live_bytes": 1509605,
+            "net_bytes": 112359,
+            "peak_extra_bytes": 326431,
+            "start_live_bytes": 1397246
+          },
+          {
+            "allocated_bytes": 48734918,
+            "calls": 450141,
+            "deallocated_bytes": 48622559,
+            "live_bytes": 1509605,
+            "net_bytes": 112359,
+            "peak_extra_bytes": 326431,
+            "start_live_bytes": 1397246
+          }
+        ]
+      },
+      "output": {
+        "case": "spaces",
+        "geometry": {
+          "float_reports": 0,
+          "glyphs": 2048,
+          "height_retries": 0,
+          "intrinsic_measurements": 0,
+          "lines": 103,
+          "runs": 103,
+          "sha256": "5c4375409b84c2a4350e6a5f845aea6f491af70d21a45bb33bc4ba1bd73c8b35",
+          "synthetic_glyphs": 0
+        },
+        "length": 1024,
+        "op": "layout",
+        "paint_sha256": "d88af69fcf0503437d2a39551eeaeb68a0821e077a68805fb310a59cba6b2175",
+        "width": 128.0
+      },
+      "median_ns_per_layout": {
+        "baseline": 5294328.4,
+        "candidate": 5243733.1
+      },
+      "candidate_over_baseline": 0.9904434904340274,
+      "time_reduction_percent": 0.9556509565972648,
+      "median_absolute_deviation_ns": {
+        "baseline": 52013.200000000186,
+        "candidate": 27029.799999999814
+      }
+    }
+  ],
+  "summary": {
+    "same_span_4096_parent_inserts_before": 4098,
+    "same_span_4096_parent_inserts_after": 3,
+    "allocation_change": "None in all11 valid conditions: calls, gross/net bytes and additional peak unchanged.",
+    "output_validation": "All baseline/candidate samples have identical geometry/glyph digest, paint hash and no warnings. The two spaces cases have26 and103 accepted lines.",
+    "interpretation": "Approximately29%/39% lower time for4096-character normal/emphasis wide one-line layout. Many-span ratios close to1.00. Real26/103-line narrow cases show no material whole-layout improvement; line-edge shaping dominates these fixtures. No whole-app speedup claim."
+  },
+  "excluded_condition": {
+    "case": "spaces",
+    "length": 4096,
+    "width": 8192,
+    "iterations": 5,
+    "baseline_exit_code": 101,
+    "reason": "Fails strict no-warning setup guard on baseline before timing. Candidate-only diagnostic with warnings displayed reproduced five Unsupported warnings: line edge reshape budget exceeded; keeping shared glyphs. Excluded from performance summary; limits not relaxed.",
+    "diagnostic_change": "In a disposable probe, replace each assert!(cx.take_warnings().is_empty()) with let warnings=cx.take_warnings(); assert!(warnings.is_empty(), \"{warnings:?}\"); other behavior unchanged.",
+    "candidate_diagnostic_log_sha256": "d71ac35651189382aaf4884528f777473ded0cf3e7a76f1f8f266215b0d95dbc"
+  },
+  "validation": {
+    "baseline_line_tests": {
+      "passed": 153,
+      "failed": 0
+    },
+    "red_tests": {
+      "passed": 2,
+      "failed": 1,
+      "expected_failure": "parent_registration_is_bounded_for_long_single_span_text"
+    },
+    "workspace_tests": {
+      "passed": 1684,
+      "failed": 0,
+      "ignored": 9
+    },
+    "new_test_names": [
+      "parent_registration_is_bounded_for_long_single_span_text",
+      "parent_and_atomic_registration_match_all_units_in_selected_range",
+      "changed_parent_and_repeated_item_preserve_last_write_and_all_atomics"
+    ],
+    "clippy": "cargo clippy --workspace --all-targets --features shodo-harness/accesskit --locked with -D warnings passed.",
+    "ci": "Check, MSRV and wasm must pass before merging.",
+    "allocation_feature_tests": {
+      "passed": 28,
+      "failed": 0,
+      "ignored": 0,
+      "command": "cargo test -p shodo-bench --features allocation-counting --locked"
+    },
+    "workspace_accesskit_tests": {
+      "passed": 1700,
+      "failed": 0,
+      "ignored": 9,
+      "command": "cargo test --workspace --features shodo-harness/accesskit --locked"
+    },
+    "independent_review": "No unresolved Critical/Important/Minor findings. Reviewer independently recalculated all samples/statistics, allocator equality and source/data hashes; merging conditional on successful CI."
+  },
+  "harness": {
+    "path": "dev/bench/examples/line_profile.rs",
+    "compiled_sha256": "acad6d4fc199e482d262b1174eb84f41f7b6de137aeb7bb4e5b553c04720c0ac",
+    "retained_sha256": "6aace238b2e2c304df9ee8c473ffae54ee01cf460fed4c847d1fdc8bfda62e0d",
+    "difference": "Documentation-only scope clarification after binaries were built; Rust items and all CLI behavior are identical."
+  },
+  "binary_sha256": {
+    "baseline-time": "064a18044690b56cca82c2da780a5a8ec1cc143f55516adf6839f183d3bc8faa",
+    "candidate-time": "45a83c700ca7b17d5ffc4c990ba79ae1a9a78e2c426af674f3ed6ff3cb576e7f",
+    "baseline-alloc": "b0af47590af5f2794e1989387a5183cedffeb0bc1dc741665b3f18ffadd05e1f",
+    "candidate-alloc": "10560bd2bc3752267f3df82191a22ae7816e765f6de1c28db883a6bea3994cd4"
+  },
+  "raw_sha256": {
+    "comparison.json": "d6b175b5f102d99ab7bec9b5b5b92bc23b6443f2a8f5da478b4561b90fd879ac",
+    "comparison.log": "04ec7b96d91b84e9457fb7018add86c6088b8afec8871a95897b63fb21dbb4cd",
+    "baseline-tests.log": "028de8230632afe260176b60278ae41053a82e0b254dde50d9ca2ffd7df552e6",
+    "red-tests.log": "6718989573e18e013f9d18a927beadd0d218c94ee93734034e475c0ada2fde8e",
+    "workspace-tests.log": "3c4c68c47b58d01aaa5e7b5170d71ef979307e9cb521e996a4a0bf0a5fa490fd",
+    "warning-reproduction.log": "d71ac35651189382aaf4884528f777473ded0cf3e7a76f1f8f266215b0d95dbc",
+    "allocator-tests.log": "aedbff8b94809a6ef66d63e72c517014442c56bb6df132ce89ff410d40a32993",
+    "accesskit-tests.log": "0669e4861afc1e7eabd38915f9a011e3d27ef6b39fbf306d84b1d66aa75a1d88",
+    "clippy-final.log": "62c2ba6e2d0e27dae5f7741e0956e271a411c8b1d651c0eaabd9a406aeedba6f"
+  },
+  "comparison_driver": {
+    "source": "import hashlib, json, os, pathlib, statistics, subprocess, time\nROOT = pathlib.Path(__file__).parent\nCONDITIONS = [(\"plain\",256,2000,1000000), (\"plain\",1024,1000,1000000), (\"plain\",4096,500,1000000), (\"emphasis\",1024,1000,1000000), (\"emphasis\",4096,500,1000000), (\"colors\",256,500,1000000), (\"colors\",1024,200,1000000), (\"colors\",4096,100,1000000), (\"languages\",1024,200,1000000), (\"spaces\",256,10,128), (\"spaces\",1024,5,128)]\ndef execute(variant, kind, case, length, iterations, width):\n    args=[\"taskset\",\"-c\",\"10\",str(ROOT/f\"{variant}-{kind}\"),\"layout\",case,str(length),str(iterations),str(width)]\n    r = json.loads(subprocess.check_output(args, text=True, env=dict(os.environ, TMPDIR=str(pathlib.Path.home()/\"tmp\"))))\n    return r\nresults=[]\nfor case,length,iterations,width in CONDITIONS:\n    out={\"case\":case,\"length\":length,\"width\":width,\"iterations\":iterations,\"times_ns_per_layout\":{\"baseline\":[],\"candidate\":[]},\"allocations\":{\"baseline\":[],\"candidate\":[]}}\n    expected=None\n    for i in range(12):\n        for variant in ([\"baseline\",\"candidate\"] if i%2==0 else [\"candidate\",\"baseline\"]):\n            r=execute(variant,\"time\",case,length,iterations,width)\n            signature={k:v for k,v in r.items() if k not in (\"measure\",\"iterations\")}\n            if expected is None: expected=signature\n            assert signature == expected, (case,variant,\"output changed\")\n            out[\"times_ns_per_layout\"][variant].append(r[\"measure\"][\"ns\"]/iterations)\n    for i in range(3):\n        for variant in (\"baseline\",\"candidate\"):\n            r=execute(variant,\"alloc\",case,length,10,width)\n            assert {k:v for k,v in r.items() if k not in (\"measure\",\"iterations\")} == expected\n            out[\"allocations\"][variant].append(r[\"measure\"][\"allocation\"])\n    out[\"output\"]=expected\n    medians={k:statistics.median(v) for k,v in out[\"times_ns_per_layout\"].items()}\n    out[\"median_ns_per_layout\"]=medians\n    out[\"candidate_over_baseline\"]=medians[\"candidate\"]/medians[\"baseline\"]\n    out[\"time_reduction_percent\"]=(1-out[\"candidate_over_baseline\"])*100\n    out[\"median_absolute_deviation_ns\"]={k:statistics.median(abs(x-medians[k]) for x in v) for k,v in out[\"times_ns_per_layout\"].items()}\n    results.append(out)\n    (ROOT/\"comparison.json\").write_text(json.dumps(results,indent=2)+\"\\n\")\n    print(f\"{case} {length} width={width} lines={expected['geometry']['lines']}: {medians['baseline']/1000:.2f} -> {medians['candidate']/1000:.2f} us, ratio {out['candidate_over_baseline']:.4f}\",flush=True)\n",
+    "purpose": "Reproduces only the11 valid conditions. ROOT points to four separately saved binaries. The original collection also attempted the excluded12th condition, which failed before producing a measurement."
+  },
+  "reproduction": [
+    "Create task-owned temporary directory with mktemp -d -p \"$HOME/tmp\"; export TMPDIR=\"$HOME/tmp\".",
+    "Prepare separate baseline/candidate source snapshots of baseline_revision and this commit. Copy retained dev/bench/examples/line_profile.rs into the baseline. Keep Cargo.lock and all build/fixture/config conditions identical.",
+    "Build each variant with CARGO_TARGET_DIR set explicitly under the temporary directory: cargo build --locked --release -p shodo-bench --example line_profile. Save executable as baseline-time or candidate-time outside target. Rebuild with --features allocation-counting; save baseline-alloc or candidate-alloc. Do not use instrumented binaries for timing.",
+    "Save comparison_driver.source as compare.py next to the four binaries and run python3 compare.py with no concurrent builds or tests. Compare output digests and all allocation counters before interpreting time ratios.",
+    "Run cargo test --workspace; cargo clippy --workspace --all-targets --features shodo-harness/accesskit; cargo test -p shodo-bench --features allocation-counting. Override CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=/usr/bin/env when needed on this host.",
+    "Remove task-owned binaries, target directories, logs and worktree after preserving conditions, all timing/allocator samples, hashes and this reproduction record."
+  ],
+  "limitations": [
+    "Fixed static fixture fonts on one machine; no arbitrary-font or consumer trace claim.",
+    "Time ratios vary with scheduling, thermal state and frequency scaling despite CPU affinity.",
+    "The repeated pair check still traverses each unit; it reduces redundant hash operations, not the asymptotic unit scan.",
+    "Warm reusable paragraph measurements, not first-use build or cold-layout speedup evidence.",
+    "Allocation totals in measurements aggregate10 calls including output drop; divide calls/gross bytes by10 for per-layout totals. Peak is a scope peak, not a sum of per-call peaks."
+  ],
+  "retained_engine_source_fingerprint_sha256": "1f2551b76fed1e783b474fd8bd38a4a5ee6fd71509e448cca65f918b3293dc8d"
+}
