@@ -56,37 +56,30 @@ pub(crate) fn upright_analysis_text(
         {
             continue;
         }
-        let start = item.text.start as usize;
-        let end = item.text.end as usize;
-        for (offset, c) in input.text[start..end].char_indices() {
-            let ltr: &[u8] = match c.len_utf8() {
-                1 => b"A",
-                2 => "À".as_bytes(),
-                3 => "अ".as_bytes(),
-                4 => "𐐀".as_bytes(),
-                _ => unreachable!("UTF-8 scalar length"),
-            };
-            bytes[start + offset..start + offset + ltr.len()].copy_from_slice(ltr);
-        }
+        replace_with_ltr(&input.text, &mut bytes, &item.text);
     }
     // The composition is upright (strong LTR) in its containing paragraph.
     // Internal direction still belongs to the independent horizontal isolate.
     // Same-width scalars preserve external byte levels and source offsets.
     for span in combined {
-        let start = span.text.start as usize;
-        let end = span.text.end as usize;
-        for (offset, c) in input.text[start..end].char_indices() {
-            let ltr: &[u8] = match c.len_utf8() {
-                1 => b"A",
-                2 => "À".as_bytes(),
-                3 => "अ".as_bytes(),
-                4 => "𐐀".as_bytes(),
-                _ => unreachable!("UTF-8 scalar length"),
-            };
-            bytes[start + offset..start + offset + ltr.len()].copy_from_slice(ltr);
-        }
+        replace_with_ltr(&input.text, &mut bytes, &span.text);
     }
     Some(String::from_utf8(bytes).expect("same-width Unicode scalar replacement"))
+}
+
+fn replace_with_ltr(text: &str, bytes: &mut [u8], range: &Range<u32>) {
+    let start = range.start as usize;
+    let end = range.end as usize;
+    for (offset, c) in text[start..end].char_indices() {
+        let ltr: &[u8] = match c.len_utf8() {
+            1 => b"A",
+            2 => "À".as_bytes(),
+            3 => "अ".as_bytes(),
+            4 => "𐐀".as_bytes(),
+            _ => unreachable!("UTF-8 scalar length"),
+        };
+        bytes[start + offset..start + offset + ltr.len()].copy_from_slice(ltr);
+    }
 }
 
 /// Bidi-class shortcuts for ASCII. ASCII has no R/AL/explicit-format
@@ -274,6 +267,55 @@ mod tests {
     use crate::output::Fragment;
     use crate::style::{InlineStyle, ParagraphStyle, UnicodeBidi, WhiteSpaceCollapse};
     use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult, ParagraphBuilder};
+
+    #[test]
+    fn upright_and_combined_text_preserve_utf8_offsets_and_surrounding_text() {
+        let input = Processed {
+            text: "אבaé水😀/bö火😁גד".into(),
+            items: [(0..4, 0), (4..14, 1), (14..29, 0)]
+                .into_iter()
+                .map(|(text, style)| super::super::Item {
+                    kind: ItemKind::Text,
+                    text,
+                    style,
+                    node: None,
+                    own_break_style: false,
+                })
+                .collect(),
+            mapping: None,
+            indivisible: Vec::new(),
+            source_spans: Vec::new(),
+            width_origins: Vec::new(),
+        };
+        let styles = [
+            InlineStyle::default(),
+            InlineStyle {
+                text_orientation: TextOrientation::Upright,
+                ..Default::default()
+            },
+        ];
+        let combined = [super::super::combine::CombineSpan {
+            text: 15..25,
+            item: 2,
+            em: 16.0,
+            units: 0..0,
+        }];
+
+        let text = upright_analysis_text(&input, &styles, WritingMode::VerticalRl, &combined)
+            .expect("upright and combined text need an LTR analysis view");
+
+        assert_eq!(text, "אבAÀअ𐐀/AÀअ𐐀גד");
+        assert_eq!(text.len(), input.text.len());
+        assert_eq!(
+            text.char_indices().map(|(i, _)| i).collect::<Vec<_>>(),
+            input
+                .text
+                .char_indices()
+                .map(|(i, _)| i)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(input.text, "אבaé水😀/bö火😁גד");
+    }
 
     #[test]
     fn bidi_analysis_text_borrows_without_preserved_line_separators() {
