@@ -4,12 +4,18 @@ use crate::geometry::{LayoutUnit, Saturation};
 use crate::output::BreakReason;
 use crate::paragraph::ParagraphData;
 use crate::style::{LineOptions, TextAlign, TextAlignLast, TextJustify};
+use std::ops::Range;
 use unicode_bidi::{BidiInfo, Level};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Point {
     unit: usize,
     owned: Option<(usize, usize)>,
+}
+
+struct Cluster {
+    point: Point,
+    text: Range<u32>,
 }
 
 #[derive(Clone, Copy)]
@@ -78,16 +84,7 @@ pub(super) struct Alignment {
     pub(super) justified: bool,
 }
 
-pub(super) fn apply(
-    data: &ParagraphData,
-    start: usize,
-    scan: &mut Scan,
-    options: &LineOptions,
-    available: LayoutUnit,
-    indent: LayoutUnit,
-    sat: &mut Saturation,
-) -> Alignment {
-    let last = !matches!(scan.reason, BreakReason::Regular | BreakReason::Emergency);
+fn line_alignment(options: &LineOptions, last: bool) -> TextAlign {
     let mut align = options.text_align;
     if last {
         align = match options.text_align_last {
@@ -101,56 +98,30 @@ pub(super) fn apply(
             TextAlignLast::Justify => TextAlign::Justify,
         };
     }
-    let spare = available
-        .sub(indent, sat)
-        .sub(scan.content, sat)
-        .max(LayoutUnit::ZERO);
-    let inline_level = data
-        .bidi_paragraph_at_unit(start)
-        .map_or(data.base_level, |p| p.inline_level);
-    let reversed_start = inline_level % 2 != data.base_level % 2;
-    let mut result = Alignment {
-        shift: shift_for(
-            align,
-            spare,
-            reversed_start,
-            data.base_level % 2 == 1,
-            indent,
-            sat,
-        ),
-        justified: false,
-    };
-    // Disabled justification keeps start alignment; the unexpandable-text
-    // fallback below applies only when justification is enabled.
-    if !matches!(align, TextAlign::Justify | TextAlign::JustifyAll)
-        || spare == LayoutUnit::ZERO
-        || options.text_justify == TextJustify::None
-    {
-        return result;
-    }
-    let fallback = |sat: &mut Saturation| {
-        shift_for(
-            unexpandable_alignment(options),
-            spare,
-            reversed_start,
-            data.base_level % 2 == 1,
-            indent,
-            sat,
-        )
-    };
+    align
+}
+
+fn rendered_clusters(
+    data: &ParagraphData,
+    start: usize,
+    scan: &Scan,
+    visible_hyphen: Option<u32>,
+) -> Vec<Cluster> {
     // Owned windows may have a different number of clusters from their
     // shared source. Enumerate the glyph source that will actually render.
     let mut clusters = Vec::new();
     let mut seen = vec![false; scan.overlays.len()];
-    let visible_hyphen = scan
-        .overlays
-        .iter()
-        .find_map(|w| w.hyphen.as_ref().map(|text| text.start));
     for i in start..scan.hang_start {
         if let Some(index) = data.units[i].combine {
             let span = &data.combine_spans[index as usize];
             if i + 1 == span.units.end {
-                clusters.push((i, None, span.text.clone()));
+                clusters.push(Cluster {
+                    point: Point {
+                        unit: i,
+                        owned: None,
+                    },
+                    text: span.text.clone(),
+                });
             }
             continue;
         }
@@ -204,7 +175,13 @@ pub(super) fn apply(
                         .get(end)
                         .copied()
                         .unwrap_or(window.text.end);
-                    clusters.push((unit, Some((w, end - 1)), cluster..text_end));
+                    clusters.push(Cluster {
+                        point: Point {
+                            unit,
+                            owned: Some((w, end - 1)),
+                        },
+                        text: cluster..text_end,
+                    });
                 }
                 g = end;
             }
@@ -212,75 +189,110 @@ pub(super) fn apply(
             let end = c.slices.partition_point(|i| *i < scan.hang_start);
             end > 0 && c.slices[end - 1] == i
         }) {
-            clusters.push((i, None, data.units[i].shaping_text().clone()));
-        }
-    }
-    let mut opportunities = Vec::new();
-    if clusters.is_empty() {
-        result.shift = fallback(sat);
-        return result;
-    }
-    let content_end = data.units[scan.hang_start - 1].text.end;
-    if options.text_justify == TextJustify::InterCharacter {
-        let mut previous = None;
-        for (unit, owned, text) in &clusters {
-            let text = text.start.max(data.units[start].text.start)..text.end.min(content_end);
-            let point = Point {
-                unit: *unit,
-                owned: *owned,
-            };
-            let (internal, first, last) =
-                super::spacing::justification_metadata(data, text.clone(), visible_hyphen);
-            if let Some((first, first_offset)) = first {
-                if let Some((previous_point, previous_kind, previous_offset)) = previous
-                    && !(previous_kind == super::spacing_summary::Kind::Cursive
-                        && first == super::spacing_summary::Kind::Cursive)
-                    && super::punctuation::justify_boundary(data, previous_offset, first_offset)
-                {
-                    add_opportunity(&mut opportunities, previous_point, 1);
-                }
-                add_opportunity(&mut opportunities, point, internal);
-                let (last, last_offset) = last.unwrap();
-                previous = Some((point, last, last_offset));
-            } else if data.breaks.caret_cuts.binary_search(&text.start).is_err()
-                && let Some((previous_point, _, _)) = &mut previous
-            {
-                // A mark or indivisible transformed continuation belongs to
-                // the preceding typographic unit; place its following gap
-                // after the final glyph piece, rather than inside the unit.
-                *previous_point = point;
-            }
-        }
-    } else {
-        for (unit, owned, text) in &clusters {
-            // Word separators include NBSP and other Unicode separators;
-            // the unit's ASCII-space flag instead controls wrapping/hanging.
-            // A combined square has no internal justification opportunities.
-            if data.combine_at_text(text.start).is_some() {
-                continue;
-            }
-            let text = text.start.max(data.units[start].text.start)..text.end.min(content_end);
-            if text.start >= text.end {
-                continue;
-            }
-            let count = data.text[text.start as usize..text.end as usize]
-                .chars()
-                .filter(|ch| super::spacing::word_separator(*ch))
-                .count();
-            add_opportunity(
-                &mut opportunities,
-                Point {
-                    unit: *unit,
-                    owned: *owned,
+            clusters.push(Cluster {
+                point: Point {
+                    unit: i,
+                    owned: None,
                 },
-                count,
-            );
+                text: data.units[i].shaping_text().clone(),
+            });
         }
     }
-    if opportunities.is_empty() {
-        result.shift = fallback(sat);
-        return result;
+    clusters
+}
+
+fn inter_character_opportunities(
+    data: &ParagraphData,
+    clusters: &[Cluster],
+    content: Range<u32>,
+    visible_hyphen: Option<u32>,
+) -> Vec<Opportunity> {
+    let mut opportunities = Vec::new();
+    let mut previous = None;
+    for Cluster { point, text } in clusters {
+        let text = text.start.max(content.start)..text.end.min(content.end);
+        let (internal, first, last) =
+            super::spacing::justification_metadata(data, text.clone(), visible_hyphen);
+        if let Some((first, first_offset)) = first {
+            if let Some((previous_point, previous_kind, previous_offset)) = previous
+                && !(previous_kind == super::spacing_summary::Kind::Cursive
+                    && first == super::spacing_summary::Kind::Cursive)
+                && super::punctuation::justify_boundary(data, previous_offset, first_offset)
+            {
+                add_opportunity(&mut opportunities, previous_point, 1);
+            }
+            add_opportunity(&mut opportunities, *point, internal);
+            let (last, last_offset) = last.unwrap();
+            previous = Some((*point, last, last_offset));
+        } else if data.breaks.caret_cuts.binary_search(&text.start).is_err()
+            && let Some((previous_point, _, _)) = &mut previous
+        {
+            // A mark or indivisible transformed continuation belongs to
+            // the preceding typographic unit; place its following gap
+            // after the final glyph piece, rather than inside the unit.
+            *previous_point = *point;
+        }
     }
+    opportunities
+}
+
+fn inter_word_opportunities(
+    data: &ParagraphData,
+    clusters: &[Cluster],
+    content: Range<u32>,
+) -> Vec<Opportunity> {
+    let mut opportunities = Vec::new();
+    for Cluster { point, text } in clusters {
+        // Word separators include NBSP and other Unicode separators;
+        // the unit's ASCII-space flag instead controls wrapping/hanging.
+        // A combined square has no internal justification opportunities.
+        if data.combine_at_text(text.start).is_some() {
+            continue;
+        }
+        let text = text.start.max(content.start)..text.end.min(content.end);
+        if text.start >= text.end {
+            continue;
+        }
+        let count = data.text[text.start as usize..text.end as usize]
+            .chars()
+            .filter(|ch| super::spacing::word_separator(*ch))
+            .count();
+        add_opportunity(&mut opportunities, *point, count);
+    }
+    opportunities
+}
+
+fn justification_opportunities(
+    data: &ParagraphData,
+    start: usize,
+    scan: &Scan,
+    justify: TextJustify,
+) -> Vec<Opportunity> {
+    let visible_hyphen = scan
+        .overlays
+        .iter()
+        .find_map(|w| w.hyphen.as_ref().map(|text| text.start));
+    let clusters = rendered_clusters(data, start, scan, visible_hyphen);
+    if clusters.is_empty() {
+        return Vec::new();
+    }
+    let content = data.units[start].text.start..data.units[scan.hang_start - 1].text.end;
+    if justify == TextJustify::InterCharacter {
+        inter_character_opportunities(data, &clusters, content, visible_hyphen)
+    } else {
+        inter_word_opportunities(data, &clusters, content)
+    }
+}
+
+fn expand_opportunities(
+    data: &ParagraphData,
+    start: usize,
+    scan: &mut Scan,
+    justify: TextJustify,
+    spare: LayoutUnit,
+    sat: &mut Saturation,
+    mut opportunities: Vec<Opportunity>,
+) {
     let levels: Vec<_> = opportunities
         .iter()
         .map(|o| Level::new(data.units[o.point.unit].level).unwrap())
@@ -303,7 +315,7 @@ pub(super) fn apply(
         scan.widths[i - start] = scan.widths[i - start].add(extra, sat);
         // Word justification follows word-spacing: half precedes the
         // separator's ink, with the other half following it.
-        if options.text_justify != TextJustify::InterCharacter {
+        if justify != TextJustify::InterCharacter {
             let before = extra.div_i32(2);
             if let Some((window, g)) = owned {
                 let store = &mut scan.overlays[window].store;
@@ -339,6 +351,70 @@ pub(super) fn apply(
         }
     }
     scan.content = scan.content.add(spare, sat);
+}
+
+pub(super) fn apply(
+    data: &ParagraphData,
+    start: usize,
+    scan: &mut Scan,
+    options: &LineOptions,
+    available: LayoutUnit,
+    indent: LayoutUnit,
+    sat: &mut Saturation,
+) -> Alignment {
+    let last = !matches!(scan.reason, BreakReason::Regular | BreakReason::Emergency);
+    let align = line_alignment(options, last);
+    let spare = available
+        .sub(indent, sat)
+        .sub(scan.content, sat)
+        .max(LayoutUnit::ZERO);
+    let inline_level = data
+        .bidi_paragraph_at_unit(start)
+        .map_or(data.base_level, |p| p.inline_level);
+    let reversed_start = inline_level % 2 != data.base_level % 2;
+    let mut result = Alignment {
+        shift: shift_for(
+            align,
+            spare,
+            reversed_start,
+            data.base_level % 2 == 1,
+            indent,
+            sat,
+        ),
+        justified: false,
+    };
+    // Disabled justification keeps start alignment; the unexpandable-text
+    // fallback below applies only when justification is enabled.
+    if !matches!(align, TextAlign::Justify | TextAlign::JustifyAll)
+        || spare == LayoutUnit::ZERO
+        || options.text_justify == TextJustify::None
+    {
+        return result;
+    }
+    let fallback = |sat: &mut Saturation| {
+        shift_for(
+            unexpandable_alignment(options),
+            spare,
+            reversed_start,
+            data.base_level % 2 == 1,
+            indent,
+            sat,
+        )
+    };
+    let opportunities = justification_opportunities(data, start, scan, options.text_justify);
+    if opportunities.is_empty() {
+        result.shift = fallback(sat);
+        return result;
+    }
+    expand_opportunities(
+        data,
+        start,
+        scan,
+        options.text_justify,
+        spare,
+        sat,
+        opportunities,
+    );
     // Successful justification consumes the spare width in either direction;
     // the start-alignment fallback shift is only appropriate without expansion.
     result.shift = if reversed_start {
