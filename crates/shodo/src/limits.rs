@@ -253,23 +253,7 @@ impl WarningSink {
     }
 
     pub(crate) fn push(&mut self, kind: WarningKind, message: impl Into<String>) {
-        if self.suppressed {
-            return;
-        }
-        if let Some(max) = self.max
-            && self.warnings.len() as u64 >= max
-        {
-            self.warnings.push(Warning {
-                kind: WarningKind::Suppressed,
-                message: "further warnings suppressed".into(),
-            });
-            self.suppressed = true;
-            return;
-        }
-        self.warnings.push(Warning {
-            kind,
-            message: message.into(),
-        });
+        self.push_lazy(kind, || message.into());
     }
 
     /// Push a dynamically formatted message without building it when the sink
