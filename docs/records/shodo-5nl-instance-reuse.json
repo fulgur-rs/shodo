@@ -2,7 +2,7 @@
   "schema": 1,
   "issue": "shodo-5nl",
   "date": "2026-10-09",
-  "status": "measurements complete; PR/CI pending",
+  "status": "measurements independently reviewed; integration status tracked by PR #272",
   "provenance": {
     "baseline_commit": "8557359ef88f0f47e2a46281a7485a649cec45c1",
     "candidate_code_commit": "d5c04658abf6878e6cb618cbabcffaf3295ac19e",
@@ -1803,8 +1803,8 @@
     },
     "reference_matrix": "18 conditions x 4 warning caps x 2 writing modes; real fvar/opsz, signed zero, synthesis, width feature",
     "clippy": "workspace --all-targets and new probe --features allocation-counting passed with -D warnings",
-    "review": "independent read-only full d5c0465 review; no unresolved findings",
-    "ci": "pending"
+    "review": "independent read-only full d5c0465 code review and 8d49e06 measurement-record review; no unresolved findings",
+    "ci": "final-head status tracked by https://github.com/fulgur-rs/shodo/pull/272/checks"
   },
   "timing_samples": [
     {
@@ -9044,5 +9044,14 @@
     "signed-zero-red.log": "dcff1dd025b219864b142d35980aba66f1cc3b49251d619aa51f4bada68fb5b3",
     "final_measure.py": "f62f75fa43f1915154986f16a48de436b18179a254c9b4039a846be9ca834750",
     "repeat_shape_time.py": "695f62dca73eb4c0166813d6f29f2ab8a80a82b2bdebcf05b3fe80293b94ff3a"
+  },
+  "cleanup": {
+    "scratch": "~/tmp/shodo-5nl.fubm2vQy",
+    "scratch_removed": true,
+    "comparison_worktree_removed": true,
+    "implementation_worktree_retained": ".claude/worktrees/shodo-5nl",
+    "retention_reason": "PR #272 review",
+    "existing_user_files_preserved": true,
+    "preexisting_container_image_retained": true
   }
 }

@@ -12,9 +12,10 @@ Baseline: main `8557359ef88f0f47e2a46281a7485a649cec45c1` (#271).
 Measured implementation: `d5c04658abf6878e6cb618cbabcffaf3295ac19e`.
 The companion [JSON](shodo-5nl-instance-reuse.json) retains source/font/binary
 hashes, all timing samples, allocation counters, output digests, warning
-sequences, Callgrind counters, Massif peaks and Memcheck summaries. PR and CI
-verification are still pending; these measurements establish the implementation
-choice, not completion of the work.
+sequences, Callgrind counters, Massif peaks and Memcheck summaries. Independent
+code and measurement-record reviews found no unresolved issues.
+[PR #272](https://github.com/fulgur-rs/shodo/pull/272) contains the implementation;
+its final-head CI status is tracked in the [PR checks](https://github.com/fulgur-rs/shodo/pull/272/checks).
 
 The cache has eight fixed stack slots, FIFO replacement, and a 16,384-byte
 retained heap budget. Keys borrow immutable paragraph inputs. Charged heap
@@ -140,8 +141,9 @@ no-default 1,200 passed / 9 ignored; complex-scripts 1,203 passed / 9 ignored;
 allocation-counting Clippy pass. An extra allocation-counting Clippy sweep of
 all existing bench targets encountered pre-existing `needless_question_mark`
 and `bool_comparison` diagnostics; no unrelated source changes were retained.
-Independent read-only review of the complete code commit found no unresolved
-issues. CI and formal-record review remain to be completed.
+Independent read-only reviews of the complete code commit and the measurement
+records found no unresolved issues. Official CI, including MSRV, AccessKit,
+Wasm, package and fixture checks, is tracked by PR #272 checks.
 
 Use the same probe source and Cargo example declaration on both revisions.
 The probe SHA256 is
@@ -193,9 +195,11 @@ warning-limit0, oversized, in both revisions, using `--leak-check=full
 --error-exitcode=97`. Install Valgrind/libc6-dbg only inside the disposable
 container; use the image digest and runtime versions recorded in JSON.
 
-Temporary data is retained at `~/tmp/shodo-5nl.fubm2vQy` while formal-record
-review and CI continue. Comparison worktree `.claude/worktrees/shodo-5nl-base`
-and implementation worktree `.claude/worktrees/shodo-5nl` are owned by this task.
-After records and review are finalized, remove only owned measurement/build
-artifacts and the clean comparison worktree. Preserve the implementation branch
-for PR review, and leave existing user files untouched.
+After the results, samples, artifact hashes and reproduction steps were archived
+and independently reviewed, the owned measurement/build scratch
+`~/tmp/shodo-5nl.fubm2vQy` (16 GiB) and clean comparison worktree
+`.claude/worktrees/shodo-5nl-base` were removed. The disposable Memcheck
+container left no container mounting that scratch directory; the preexisting
+image was retained. Implementation worktree `.claude/worktrees/shodo-5nl` and
+branch `perf/shodo-5nl-instance-reuse` remain for PR review. Existing user
+files were left untouched.
