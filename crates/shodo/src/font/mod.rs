@@ -165,7 +165,9 @@ pub struct FontMetrics {
 #[derive(Clone, Debug)]
 pub struct FontOptions {
     pub system_fonts: bool,
-    /// Maximum cached cluster queries. Zero disables this cache.
+    /// Maximum cached cluster queries. Also bounds a smaller registered-candidate
+    /// cache (up to 16 entries, 256 candidates and 64 KiB of owned storage).
+    /// Zero disables both matching caches.
     pub match_cache_entries: usize,
     /// Source cache age in calls to `prune`, including failed file loads.
     pub source_cache_max_age: u64,
@@ -267,6 +269,7 @@ impl LayerState {
 #[derive(Default)]
 struct LayerCaches {
     matches: matching::MatchCache,
+    prepared: matching::prepared::Cache,
     units: metrics::UnitCache,
     shapers: shapers::ShaperCache,
 }

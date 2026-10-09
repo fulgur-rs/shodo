@@ -8,6 +8,7 @@ use fontique::{FontInfo, SourceId, SourceInfo, SourceKind};
 use skrifa::{FontRef, MetadataProvider};
 
 mod cluster;
+pub(super) mod prepared;
 pub(crate) use cluster::FontCluster;
 
 const MAX_CACHE_KEY_BYTES: usize = 4096;
@@ -545,12 +546,12 @@ impl FontCollection {
             }
         }
         // Last resort is deterministic registration order, still whole-cluster.
-        self.best_match(self.registered_candidates(None), query, cluster, false)
-            .or_else(|| {
-                self.layer.parent.as_ref().and_then(|parent| {
-                    parent.best_match(parent.registered_candidates(None), query, cluster, false)
-                })
-            })
+        self.registered_match(None, query, cluster).or_else(|| {
+            self.layer
+                .parent
+                .as_ref()
+                .and_then(|parent| parent.registered_match(None, query, cluster))
+        })
     }
 
     fn named_match(
@@ -559,7 +560,7 @@ impl FontCollection {
         query: &FontQuery,
         cluster: &mut FontCluster<'_>,
     ) -> Option<FontMatch> {
-        self.best_match(self.registered_candidates(Some(name)), query, cluster, true)
+        self.registered_match(Some(name), query, cluster)
             .or_else(|| self.best_match(self.native_candidates(name), query, cluster, true))
             .or_else(|| {
                 self.layer
@@ -622,6 +623,48 @@ impl FontCollection {
             }
         }
         candidates
+    }
+
+    fn registered_match(
+        &self,
+        name: Option<&str>,
+        query: &FontQuery,
+        cluster: &mut FontCluster<'_>,
+    ) -> Option<FontMatch> {
+        let cap = self.layer.match_cache_entries.min(prepared::MAX_ENTRIES);
+        if cap == 0 {
+            return self.best_match(
+                self.registered_candidates(name),
+                query,
+                cluster,
+                name.is_some(),
+            );
+        }
+        let generations = self.generations();
+        let cached = self.caches().prepared.get(generations, name, query);
+        let candidates = if let Some(candidates) = cached {
+            candidates
+        } else {
+            // Drop obsolete payloads even when this particular key is too big
+            // to retain. No cache guard may be held while accessing the catalog.
+            self.write_caches().prepared.sync_generations(generations);
+            let candidates = self.registered_candidates(name);
+            if !prepared::Candidates::can_retain(&candidates, name) {
+                return self.best_match(candidates, query, cluster, name.is_some());
+            }
+            let candidates =
+                std::sync::Arc::new(prepared::Candidates::new(candidates, query, name.is_some()));
+            let mut caches = self.write_caches();
+            if self.generations() == generations {
+                caches
+                    .prepared
+                    .insert(cap, generations, name, query, candidates.clone());
+            }
+            candidates
+        };
+        candidates
+            .best(cluster, query.presentation)
+            .map(|selected| self.selected_match(selected, query))
     }
 
     fn native_candidates(&self, name: &str) -> Vec<Candidate> {
@@ -757,6 +800,10 @@ impl FontCollection {
             selected.id.index = index as u32;
             selected.id.layer = self.layer.id;
         }
+        Some(self.selected_match(&selected, query))
+    }
+
+    fn selected_match(&self, selected: &Candidate, query: &FontQuery) -> FontMatch {
         let info = &selected.info;
         let synthesis = info.synthesis(
             fontique::FontWidth::from_percentage(query.width),
@@ -834,12 +881,12 @@ impl FontCollection {
         } else {
             None
         };
-        Some(FontMatch {
+        FontMatch {
             id: selected.id,
             variations,
             embolden,
             skew,
-        })
+        }
     }
 }
 

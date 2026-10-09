@@ -9,7 +9,12 @@ std::thread_local! {
     static KEY_COMPARISONS: Cell<usize> = const { Cell::new(0) };
 static REGISTERED_FACE_VISITS: Cell<usize> = const { Cell::new(0) };
     static NATIVE_FACE_ID_LOOKUPS: Cell<usize> = const { Cell::new(0) };
+    static PREPARED_RANKS: Cell<usize> = const { Cell::new(0) };
     static RANK_SCANS: Cell<usize> = const { Cell::new(0) };
+}
+
+pub(super) fn record_prepared_rank() {
+    PREPARED_RANKS.with(|n| n.set(n.get() + 1));
 }
 
 pub(super) fn record_rank() {
@@ -700,4 +705,211 @@ fn old_variable_matches_survive_generation_invalidation() {
         assert_eq!(new.variations[0].value, 650.);
         assert_eq!(fonts.caches().matches.len(), 1);
     }
+}
+
+#[test]
+fn distinct_clusters_reuse_registered_candidate_preparation() {
+    let fonts = FontCollection::with_options(
+        &Limits::default(),
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    let mut expected = None;
+    for _ in 0..4 {
+        expected = Some(
+            fonts
+                .register_face(
+                    super::super::browser_tests::test_font("Internal", &['水', '日', '本'], 600),
+                    0,
+                    FontFaceDescriptor {
+                        family: "Web".into(),
+                        ..Default::default()
+                    },
+                )
+                .unwrap(),
+        );
+    }
+    let query = FontQuery {
+        families: vec![FontFamily::Named("Web".into())],
+        ..Default::default()
+    };
+    REGISTERED_FACE_VISITS.with(|n| n.set(0));
+    PREPARED_RANKS.with(|n| n.set(0));
+    FONT_READS.with(|n| n.set(0));
+    for cluster in ["水", "日", "本"] {
+        assert_eq!(
+            Some(fonts.match_cluster(&query, cluster).unwrap().id),
+            expected
+        );
+    }
+    assert_eq!(
+        REGISTERED_FACE_VISITS.with(Cell::get),
+        4,
+        "prepare the four faces once, including the initial miss"
+    );
+    assert_eq!(PREPARED_RANKS.with(Cell::get), 4);
+    assert_eq!(
+        FONT_READS.with(Cell::get),
+        12,
+        "coverage still checks each face for each distinct cluster"
+    );
+}
+
+#[test]
+fn prepared_registered_selection_matches_uncached_attributes_and_coverage() {
+    let fonts = FontCollection::with_options(
+        &Limits::unlimited(),
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    for (family, weight, ranges, bytes) in [
+        ("Web", (400., 400.), vec![(97, 97)], multi_axis_font()),
+        ("Web", (400., 400.), vec![(98, 98)], multi_axis_font()),
+        ("Web", (700., 700.), vec![], multi_axis_font()),
+        (
+            "Fallback",
+            (400., 400.),
+            vec![],
+            super::super::browser_tests::test_font("Fallback", &['a', 'b', '水'], 600),
+        ),
+    ] {
+        fonts
+            .register_face(
+                bytes,
+                0,
+                FontFaceDescriptor {
+                    family: family.into(),
+                    weight,
+                    unicode_ranges: ranges,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+    for style in [
+        FontStyle::Normal,
+        FontStyle::Italic,
+        FontStyle::Oblique(-12.),
+        FontStyle::Oblique(14.),
+    ] {
+        for weight in [100., 400., 450., 650., 900.] {
+            for width in [50., 100., 150.] {
+                for name in [Some("Web"), Some("Fallback"), None] {
+                    let query = FontQuery {
+                        style,
+                        weight,
+                        width,
+                        ..Default::default()
+                    };
+                    for text in ["a", "b", "ab", "水", "a\u{fe0e}", "b\u{fe0f}", "z"] {
+                        let old = fonts.best_match(
+                            fonts.registered_candidates(name),
+                            &query,
+                            &mut FontCluster::new(text),
+                            name.is_some(),
+                        );
+                        assert_eq!(
+                            fonts.registered_match(name, &query, &mut FontCluster::new(text)),
+                            old,
+                            "{name:?}/{query:?}/{text}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn prepared_candidates_keep_cluster_presentation_and_query_synthesis_dynamic() {
+    let fonts = FontCollection::with_options(
+        &Limits::unlimited(),
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    let mono = super::super::browser_tests::test_font("Internal", &['☺', '😀'], 600);
+    let font = FontRef::new(&mono).unwrap();
+    let mut tables: Vec<_> = font
+        .table_directory()
+        .table_records()
+        .iter()
+        .map(|r| {
+            (
+                r.tag().to_be_bytes(),
+                font.table_data(r.tag()).unwrap().as_bytes().to_vec(),
+            )
+        })
+        .collect();
+    tables.push((*b"COLR", vec![0; 14]));
+    let color = super::super::sfnt::build_sfnt(&tables);
+    let color_id = fonts
+        .register_face(
+            color,
+            0,
+            FontFaceDescriptor {
+                family: "Emoji".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mono_id = fonts
+        .register_face(
+            mono,
+            0,
+            FontFaceDescriptor {
+                family: "Emoji".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    PREPARED_RANKS.with(|n| n.set(0));
+    for presentation in [
+        FontPresentation::Auto,
+        FontPresentation::Text,
+        FontPresentation::Emoji,
+    ] {
+        for (text, auto_color) in [
+            ("☺", false),
+            ("☺\u{fe0e}", false),
+            ("☺\u{fe0f}", true),
+            ("😀", true),
+        ] {
+            for synth in [false, true] {
+                let query = FontQuery {
+                    families: vec![FontFamily::Named("Emoji".into())],
+                    presentation,
+                    weight: 650.,
+                    style: FontStyle::Italic,
+                    script: *b"Zyyy",
+                    language: Some("ja".into()),
+                    synthesis: FontSynthesis {
+                        weight: synth,
+                        style: synth,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+                let expected = match presentation {
+                    FontPresentation::Auto => auto_color,
+                    FontPresentation::Text => false,
+                    FontPresentation::Emoji => true,
+                };
+                let found = fonts.match_cluster(&query, text).unwrap();
+                assert_eq!(found.id, if expected { color_id } else { mono_id });
+                assert_eq!(found.embolden, synth);
+                assert_eq!(found.skew, if synth { Some(14.) } else { None });
+            }
+        }
+    }
+    assert_eq!(
+        PREPARED_RANKS.with(Cell::get),
+        2,
+        "presentation/language/script/synthesis are not preparation keys"
+    );
 }
