@@ -93,3 +93,6 @@ name = "tab_scale"
 
 [[example]]
 name = "styled_break_scale"
+
+[[example]]
+name = "font_candidate_prep"
