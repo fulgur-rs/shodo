@@ -212,6 +212,40 @@ fn compact_output(mut lines: Value) -> Value {
     json!({"texts":texts,"mappings":mappings,"lines":lines})
 }
 
+// break_all assigns slice-decoration offsets after collecting its lines;
+// next_line/manual and public lines intentionally leave them unassigned.
+// Normalize only that API difference for the manual oracle. Captured outputs
+// keep the original offsets for strict before/after revision comparisons.
+fn comparable_output(mut value: Value) -> Value {
+    fn visit(value: &mut Value) {
+        match value {
+            Value::Object(fields) => {
+                if let Some(debug) = fields.get_mut("debug")
+                    && let Some(text) = debug.as_str()
+                    && text.starts_with("InlineBox(")
+                    && let Some((before, after)) = text.split_once("slice_offset: ")
+                    && let Some((_, rest)) = after.split_once(',')
+                {
+                    *debug = json!(format!(
+                        "{before}slice_offset: <assigned by break_all>,{rest}"
+                    ));
+                }
+                for child in fields.values_mut() {
+                    visit(child);
+                }
+            }
+            Value::Array(children) => {
+                for child in children {
+                    visit(child);
+                }
+            }
+            _ => {}
+        }
+    }
+    visit(&mut value);
+    value
+}
+
 fn manual(
     p: &Paragraph,
     cx: &mut LayoutContext,
@@ -337,8 +371,9 @@ fn capture(q: Query<'_>, samples: usize, reverse: bool, rows: &mut Vec<Value>) {
     for mode in modes {
         let actual = run(q.ps, &q.options, q.width, q.max, q.atomics, mode, true);
         assert_eq!(
-            actual["output"], oracle["output"],
-            "full public output {} {mode}",
+            comparable_output(actual["output"].clone()),
+            comparable_output(oracle["output"].clone()),
+            "public output except API-specific slice assignment {} {mode}",
             q.key
         );
         assert_eq!(
@@ -364,6 +399,8 @@ fn main() {
         .unwrap_or(3);
     assert!(samples > 0);
     let reverse = std::env::var_os("SHODO_CLONE_REVERSE").is_some();
+    let prefix = std::env::var("SHODO_CLONE_PREFIX").ok();
+    let selected = |key: &str| prefix.as_ref().is_none_or(|p| key.starts_with(p));
     let fonts = shodo_fixtures::load_fonts(&Limits::default()).unwrap();
     let mut rows = Vec::new();
     let mut workloads = shodo_bench::workloads();
@@ -371,6 +408,10 @@ fn main() {
         workloads.reverse();
     }
     for w in workloads {
+        let key = format!("standard/{}/{}", w.id, w.scale);
+        if !selected(&key) {
+            continue;
+        }
         let ps = w
             .build(&mut LayoutContext::new(), &fonts, &Limits::default())
             .unwrap();
@@ -384,7 +425,7 @@ fn main() {
         };
         capture(
             Query {
-                key: format!("standard/{}/{}", w.id, w.scale),
+                key,
                 ps: &ps,
                 options,
                 width: w.width,
@@ -428,6 +469,10 @@ fn main() {
         cases.reverse();
     }
     for c in cases {
+        let key = format!("rich/{}", c.key("width"));
+        if !selected(&key) {
+            continue;
+        }
         let limits = c.limits();
         let ps = [c
             .builder(&limits)
@@ -435,7 +480,7 @@ fn main() {
             .unwrap()];
         capture(
             Query {
-                key: format!("rich/{}", c.key("width")),
+                key,
                 ps: &ps,
                 options: LineOptions::default(),
                 width: c.width,
@@ -481,6 +526,9 @@ fn main() {
         (-1., "negative"),
         (f32::MAX, "saturated"),
     ] {
+        if !selected(&format!("control/{key}")) {
+            continue;
+        }
         capture(
             Query {
                 key: format!("control/{key}"),

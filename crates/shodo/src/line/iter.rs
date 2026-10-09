@@ -1,3 +1,4 @@
+use super::cache::Retention;
 use crate::line::fragments::RecordKind;
 use crate::style::{BoxDecorationBreak, LineOptions};
 use crate::{AtomicSizes, BreakToken, LayoutContext, Line, LineConstraint, LineResult, Paragraph};
@@ -65,7 +66,7 @@ impl Paragraph {
         width: f32,
         atomics: &AtomicSizes,
     ) -> f32 {
-        self.fixed_width_lines(cx, options, width, None, atomics)
+        self.fixed_width_lines(cx, options, width, None, atomics, Retention::LastLine)
             .map(|line| line.inline_size() - line.hang_start() + line.hang_end())
             .reduce(f32::max)
             .unwrap_or(0.0)
@@ -85,7 +86,8 @@ impl Paragraph {
         width: f32,
         atomics: &AtomicSizes,
     ) -> f32 {
-        self.fixed_width_lines(cx, options, width, None, atomics)
+        // This iterator stops after one line; its token can still be retried.
+        self.fixed_width_lines(cx, options, width, None, atomics, Retention::AllLines)
             .next()
             .map(|line| line.inline_size() - line.hang_start() + line.hang_end())
             .unwrap_or(0.0)
@@ -124,7 +126,14 @@ impl Paragraph {
         atomics: &AtomicSizes,
     ) -> Vec<Line> {
         let mut lines: Vec<_> = self
-            .fixed_width_lines(cx, options, width, max_graphemes, atomics)
+            .fixed_width_lines(
+                cx,
+                options,
+                width,
+                max_graphemes,
+                atomics,
+                Retention::LastLine,
+            )
             .collect();
         add_slice_offsets(&mut lines);
         lines
@@ -139,7 +148,7 @@ impl Paragraph {
         width: f32,
         atomics: &AtomicSizes,
     ) -> Vec<u32> {
-        self.fixed_width_lines(cx, options, width, None, atomics)
+        self.fixed_width_lines(cx, options, width, None, atomics, Retention::LastLine)
             .map(|line| line.break_token().unit)
             .collect()
     }
@@ -151,6 +160,7 @@ impl Paragraph {
         width: f32,
         max_graphemes: Option<usize>,
         atomics: &'p AtomicSizes,
+        scan_retention: Retention,
     ) -> impl Iterator<Item = Line> + 'cx
     where
         'p: 'cx,
@@ -171,6 +181,7 @@ impl Paragraph {
                 c
             },
             atomics,
+            scan_retention,
         )
         .filter_map(|r| match r {
             LineResult::Line(l) => Some(l),
@@ -256,7 +267,14 @@ impl Paragraph {
         'p: 'cx,
         F: FnMut(Option<&LineResult>, f32) -> LineConstraint<'p> + 'cx,
     {
-        self.lines_with_previous::<true, _>(cx, token, options, constraint_fn, atomics)
+        self.lines_with_previous::<true, _>(
+            cx,
+            token,
+            options,
+            constraint_fn,
+            atomics,
+            Retention::AllLines,
+        )
     }
 
     // Internal fixed-width drivers only inspect float results and the block
@@ -268,6 +286,7 @@ impl Paragraph {
         options: &LineOptions,
         constraint_fn: F,
         atomics: &'p AtomicSizes,
+        scan_retention: Retention,
     ) -> impl Iterator<Item = LineResult> + 'cx
     where
         'p: 'cx,
@@ -280,6 +299,7 @@ impl Paragraph {
             options: *options,
             constraint_fn,
             atomics,
+            scan_retention,
             previous: None,
             offset: 0.0,
             done: false,
@@ -344,6 +364,7 @@ struct Lines<'p, 'cx, F, const KEEP_PREVIOUS_LINE: bool> {
     options: LineOptions,
     constraint_fn: F,
     atomics: &'p AtomicSizes,
+    scan_retention: Retention,
     previous: Option<LineResult>,
     offset: f32,
     done: bool,
@@ -359,9 +380,14 @@ impl<'p, F: FnMut(Option<&LineResult>, f32) -> LineConstraint<'p>, const KEEP_PR
         }
         loop {
             let c = (self.constraint_fn)(self.previous.as_ref(), self.offset);
-            let result = self
-                .para
-                .next_line(self.cx, self.token, &self.options, &c, self.atomics);
+            let result = self.para.next_line_with_retention(
+                self.cx,
+                self.token,
+                &self.options,
+                &c,
+                self.atomics,
+                self.scan_retention,
+            );
             match &result {
                 LineResult::FloatEncountered { .. } | LineResult::BlockSizeExceeded { .. } => {
                     self.previous = Some(result);
