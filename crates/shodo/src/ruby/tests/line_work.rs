@@ -321,6 +321,236 @@ fn clearing_floats_keep_walk_work_linear() {
     }
 }
 
+/// Two distinct words, each with two ruby containers, before every clearing
+/// float. Word probes need accumulators of their own and must not evict the
+/// growing row's accumulator (shodo-ogn).
+#[derive(Clone, Copy, Debug, Default)]
+struct RowFixture {
+    first_line: bool,
+    forced_breaks: bool,
+    atomics: bool,
+    missing_atomics: bool,
+}
+
+fn ruby_words_between_clearing_floats(
+    groups: usize,
+    fixture: RowFixture,
+    limits: &Limits,
+) -> (Paragraph, AtomicIntrinsics) {
+    use crate::node::{NodeId, OutOfFlowKind, TextSource};
+    let mut b = crate::ParagraphBuilder::new(&paragraph_style(fixture.first_line), limits);
+    let mut inputs = AtomicIntrinsics::new();
+    if fixture.atomics {
+        b.push_atomic(NodeId(99), &style(24.0), Default::default());
+        inputs.insert_atomic(
+            NodeId(99),
+            crate::AtomicIntrinsic {
+                min_content: 4.0,
+                max_content: 8.0,
+            },
+        );
+    }
+    if fixture.missing_atomics {
+        for node in [97, 98, 99] {
+            b.push_atomic(NodeId(node), &style(24.0), Default::default());
+        }
+    }
+    for group in 0..groups as u64 {
+        for word in 0..2 {
+            for position in 0..2 {
+                let id = group * 4 + word * 2 + position;
+                b.push_ruby(
+                    NodeId(1000 + id),
+                    &style(24.0),
+                    annotated(
+                        vec![base_text(300_000 + id, "12", &style(24.0), limits)],
+                        &["日日日"],
+                        crate::ruby::RubyOverhang::None,
+                        limits,
+                    ),
+                );
+            }
+            b.push_text(
+                TextSource::Generated {
+                    node: NodeId(500_000 + group * 2 + word),
+                },
+                " ",
+            );
+        }
+        let node = NodeId(900_000 + group);
+        b.push_out_of_flow(node, OutOfFlowKind::Float);
+        inputs.insert_float(
+            node,
+            crate::paragraph::FloatIntrinsic {
+                min_content: 1.0,
+                max_content: 1.0,
+                side: Default::default(),
+                clear: crate::paragraph::FloatClear::Both,
+            },
+        );
+        if fixture.forced_breaks && group % 4 == 3 {
+            b.push_forced_break(NodeId(600_000 + group));
+        }
+    }
+    (finish(b), inputs)
+}
+
+#[test]
+fn clearing_floats_with_ruby_words_keep_container_measurements_linear() {
+    let mut measures = Vec::new();
+    let mut walks = Vec::new();
+    for groups in [8, 16, 32] {
+        let (p, inputs) = ruby_words_between_clearing_floats(
+            groups,
+            RowFixture::default(),
+            &Limits {
+                max_ruby_line_work: None,
+                ..Default::default()
+            },
+        );
+        let mut cx = mode_context(Mode::Accumulate);
+        let actual = p.intrinsic_sizes(&mut cx, &LineOptions::default(), &inputs);
+        measures.push(cx.ruby_container_measures);
+        walks.push(cx.ruby_walk_steps);
+        let warnings = cx.take_warnings();
+        let mut reference = mode_context(Mode::Reference);
+        assert_eq!(
+            actual,
+            p.intrinsic_sizes(&mut reference, &LineOptions::default(), &inputs)
+        );
+        assert_eq!(warnings, reference.take_warnings());
+    }
+    eprintln!("shodo-ogn containers={measures:?} walks={walks:?}");
+    for pair in measures.windows(2) {
+        assert!(
+            pair[1] as f64 / pair[0] as f64 <= 2.2,
+            "container growth: {measures:?}"
+        );
+    }
+    for pair in walks.windows(2) {
+        assert!(
+            pair[1] as f64 / pair[0] as f64 <= 2.2,
+            "walk growth: {walks:?}"
+        );
+    }
+}
+
+#[test]
+fn protected_ruby_rows_match_reference_across_intrinsic_boundaries_and_caps() {
+    for first_line in [false, true] {
+        for forced_breaks in [false, true] {
+            for atomics in [false, true] {
+                let fixture = RowFixture {
+                    first_line,
+                    forced_breaks,
+                    atomics,
+                    ..Default::default()
+                };
+                for warnings in [None, Some(0), Some(2)] {
+                    let limits = Limits {
+                        max_ruby_line_work: None,
+                        max_warnings: warnings,
+                        ..Default::default()
+                    };
+                    let (p, inputs) = ruby_words_between_clearing_floats(8, fixture, &limits);
+                    let mut reference = mode_context(Mode::Reference);
+                    let expected =
+                        p.intrinsic_sizes(&mut reference, &LineOptions::default(), &inputs);
+                    let expected_warnings = reference.take_warnings();
+                    for cap in [None, Some(3)] {
+                        let mut cx = mode_context(Mode::Verify);
+                        cx.ruby_accumulate_cap = cap;
+                        for _ in 0..2 {
+                            assert_eq!(
+                                p.intrinsic_sizes(&mut cx, &LineOptions::default(), &inputs),
+                                expected,
+                                "{fixture:?}, cap={cap:?}"
+                            );
+                            assert_eq!(cx.take_warnings(), expected_warnings);
+                            assert!(cx.ruby_memo.accumulator_keys().len() <= 2);
+                            assert!(
+                                cx.ruby_memo.accumulator_footprint().0
+                                    <= cap.unwrap_or(crate::ruby::accumulate::MAX_CONTAINERS)
+                            );
+                        }
+                        cx.shrink_to(0);
+                        assert_eq!(cx.ruby_memo.accumulator_footprint(), (0, 0));
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn protected_ruby_rows_keep_budget_refusal_sticky_and_operation_local() {
+    for factor in [0, 1, 16] {
+        let limits = Limits {
+            max_ruby_line_work: Some(factor),
+            ..Default::default()
+        };
+        let (p, inputs) = ruby_words_between_clearing_floats(32, RowFixture::default(), &limits);
+        let mut retained = mode_context(Mode::Accumulate);
+        for _ in 0..2 {
+            let actual = p.intrinsic_sizes(&mut retained, &LineOptions::default(), &inputs);
+            let warnings = retained.take_warnings();
+            let mut cold = mode_context(Mode::Accumulate);
+            assert_eq!(
+                actual,
+                p.intrinsic_sizes(&mut cold, &LineOptions::default(), &inputs)
+            );
+            assert_eq!(warnings, cold.take_warnings());
+            assert_eq!(retained.ruby_line_work, cold.ruby_line_work);
+            if factor == 0 {
+                assert!(retained.ruby_line_work.exhausted());
+                assert_eq!(exceeded(&warnings), 1);
+                assert_eq!(cold.ruby_container_measures, 0);
+                assert_eq!(cold.ruby_walk_steps, 0);
+            } else {
+                assert!(exceeded(&warnings) <= 1);
+            }
+        }
+    }
+}
+
+#[test]
+fn protected_ruby_rows_preserve_real_warning_order_and_suppression() {
+    for max_warnings in [None, Some(0), Some(2)] {
+        let limits = Limits {
+            max_ruby_line_work: None,
+            max_warnings,
+            ..Default::default()
+        };
+        let (p, inputs) = ruby_words_between_clearing_floats(
+            8,
+            RowFixture {
+                missing_atomics: true,
+                ..Default::default()
+            },
+            &limits,
+        );
+        let mut reference = mode_context(Mode::Reference);
+        let expected = p.intrinsic_sizes(&mut reference, &LineOptions::default(), &inputs);
+        let warnings = reference.take_warnings();
+        assert!(!warnings.is_empty());
+        if let Some(max) = max_warnings {
+            assert_eq!(warnings.len() as u64, max + 1);
+            assert_eq!(
+                warnings.last().unwrap().kind,
+                crate::limits::WarningKind::Suppressed
+            );
+        }
+        let mut cx = mode_context(Mode::Verify);
+        for _ in 0..2 {
+            assert_eq!(
+                p.intrinsic_sizes(&mut cx, &LineOptions::default(), &inputs),
+                expected
+            );
+            assert_eq!(cx.take_warnings(), warnings);
+        }
+    }
+}
+
 /// The remaining walk steps are still charged, but clearing floats no longer
 /// exhaust even factor 1. Both bounded and unlimited calls stay exact.
 #[test]

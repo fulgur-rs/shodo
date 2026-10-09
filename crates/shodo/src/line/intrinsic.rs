@@ -73,7 +73,8 @@ impl Paragraph {
         let mut word_start = data.units.first().map_or(0, |u| u.text.start);
         let mut total = indent;
         let mut total_unit = 0;
-        cx.ruby_memo.retain_row_walk(data, total_unit);
+        cx.ruby_memo
+            .retain_intrinsic_row(data, &ruby_max_atomics, total_unit);
         let mut trailing = LayoutUnit::ZERO;
         let mut word_trailing = LayoutUnit::ZERO;
         let mut left = LayoutUnit::ZERO;
@@ -165,7 +166,8 @@ impl Paragraph {
                     .map_or(data.text.len() as u32, |u| u.text.start);
                 total = word;
                 total_unit = i;
-                cx.ruby_memo.retain_row_walk(data, total_unit);
+                cx.ruby_memo
+                    .retain_intrinsic_row(data, &ruby_max_atomics, total_unit);
                 trailing = LayoutUnit::ZERO;
                 word_trailing = LayoutUnit::ZERO;
                 left = LayoutUnit::ZERO;
@@ -365,7 +367,8 @@ impl Paragraph {
                     data = &self.data;
                     i = normal as usize;
                     total_unit = i;
-                    cx.ruby_memo.retain_row_walk(data, total_unit);
+                    cx.ruby_memo
+                        .retain_intrinsic_row(data, &ruby_max_atomics, total_unit);
                     word_unit = i;
                     word_start = data
                         .units

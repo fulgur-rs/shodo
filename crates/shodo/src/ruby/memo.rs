@@ -10,7 +10,8 @@
 //! Only look-ahead probes (`through > end`) are stored, at most `MAX_ENTRIES`
 //! at once, and a clear releases a map larger than `RETAINED_CAPACITY`.
 //! The memo also owns the container accumulators of `super::accumulate`
-//! (at most `MAX_ACCUMULATORS`, least recently used evicted), with the same
+//! (at most `MAX_ACCUMULATORS`, least recently used evicted except the current
+//! intrinsic row), with the same
 //! lifetime: `clear` resets them, releasing large vectors.
 //! Look-ahead walks are also kept for two (dataset, start) keys. Intrinsic
 //! sizes protect the current row's key, so successive word starts cannot
@@ -135,6 +136,9 @@ pub(crate) struct RubyMemo {
     row_walk: Option<((u64, usize), usize)>,
     /// Container accumulators, least recently used first.
     accumulators: Vec<super::accumulate::Accumulator>,
+    /// Max-content row, protected from min-content word probes. Unlike the
+    /// walk, this key includes the atomic revision.
+    row_accumulator: Option<super::accumulate::AccumulatorKey>,
     /// Clears forced by `MAX_ENTRIES`.
     #[cfg(test)]
     pub(crate) overflow_clears: usize,
@@ -162,10 +166,17 @@ impl RubyMemo {
         self.entries.remove(key);
     }
 
-    /// Keep the row walk while word probes change start. The intrinsic
-    /// caller updates this key at forced breaks and dataset switches.
-    pub(crate) fn retain_row_walk(&mut self, data: &ParagraphData, start: usize) {
+    /// Keep the row walk and max-content accumulator while word probes
+    /// change start. Update at forced breaks and dataset switches; min-content
+    /// atomics can have a different revision even at the same start.
+    pub(crate) fn retain_intrinsic_row(
+        &mut self,
+        data: &ParagraphData,
+        atomics: &AtomicSizes,
+        start: usize,
+    ) {
         self.row_walk = Some(((data.id, data as *const ParagraphData as usize), start));
+        self.row_accumulator = Some(super::accumulate::AccumulatorKey::new(data, atomics, start));
     }
 
     fn evict_walk(&mut self) {
@@ -219,13 +230,21 @@ impl RubyMemo {
             return self.accumulators.remove(i);
         }
         let mut accumulator = if self.accumulators.len() >= super::accumulate::MAX_ACCUMULATORS {
-            self.accumulators.remove(0)
+            self.evict_accumulator()
         } else {
             Default::default()
         };
         // Reset under the caller's epoch so `prepare` does not reset again.
         accumulator.reset(Some(key), epoch);
         accumulator
+    }
+
+    fn evict_accumulator(&mut self) -> super::accumulate::Accumulator {
+        let i = self
+            .row_accumulator
+            .and_then(|row| self.accumulators.iter().position(|a| a.key() != Some(row)))
+            .unwrap_or(0);
+        self.accumulators.remove(i)
     }
 
     /// Put an accumulator back as the most recently used. Take/put pairs
@@ -243,7 +262,7 @@ impl RubyMemo {
             self.accumulators.retain(|a| a.key() != Some(key));
         }
         while self.accumulators.len() >= super::accumulate::MAX_ACCUMULATORS {
-            self.accumulators.remove(0);
+            self.evict_accumulator();
         }
         self.accumulators.push(accumulator);
     }
@@ -287,6 +306,7 @@ impl RubyMemo {
         }
         self.walks.clear();
         self.row_walk = None;
+        self.row_accumulator = None;
     }
 
     #[cfg(test)]
@@ -402,6 +422,77 @@ mod tests {
         assert_eq!(memo.accumulator_keys(), vec![Some(key(1))]);
         memo.put_accumulator(fresh);
         assert_eq!(memo.accumulator_keys(), vec![Some(key(1)), Some(key(4))]);
+    }
+
+    #[test]
+    fn intrinsic_row_survives_nested_word_returns_and_clear_restores_lru() {
+        use crate::ruby::accumulate::{AccumulatorKey, Entry};
+        let p = crate::ruby::accumulate_tests::digit_siblings(4);
+        let key = |start| AccumulatorKey::new(&p.data, &AtomicSizes::EMPTY, start);
+        let mut memo = RubyMemo::default();
+        memo.retain_intrinsic_row(&p.data, &AtomicSizes::EMPTY, 0);
+        for start in [0, 1] {
+            let mut acc = memo.take_accumulator(key(start), 0);
+            acc.push_raw(Entry::placeholder(None));
+            memo.put_accumulator(acc);
+        }
+        let outer = memo.take_accumulator(key(1), 0);
+        for start in [2, 3] {
+            let acc = memo.take_accumulator(key(start), 0);
+            memo.put_accumulator(acc);
+        }
+        // The nested words filled both slots while the outer word was out.
+        // Returning it must evict a word, preserving the row's actual payload.
+        memo.put_accumulator(outer);
+        assert_eq!(memo.accumulator_keys().len(), 2);
+        let row = memo.take_accumulator(key(0), 0);
+        assert_eq!(row.len(), 1);
+        memo.put_accumulator(row);
+        let word = memo.take_accumulator(key(1), 0);
+        assert_eq!(word.len(), 1);
+        memo.put_accumulator(word);
+        memo.clear();
+        // Following non-intrinsic probes use ordinary LRU again, even if the
+        // old row is repopulated. Its data must not be pinned across operations.
+        for start in [0, 1, 2] {
+            let mut acc = memo.take_accumulator(key(start), 0);
+            acc.push_raw(Entry::placeholder(None));
+            memo.put_accumulator(acc);
+        }
+        assert_eq!(memo.take_accumulator(key(0), 0).len(), 0);
+    }
+
+    #[test]
+    fn intrinsic_row_protection_tracks_dataset_revision_and_start() {
+        use crate::ruby::accumulate::{AccumulatorKey, Entry};
+        let p = crate::ruby::accumulate_tests::digit_siblings(4);
+        let other = crate::ruby::accumulate_tests::digit_siblings(4);
+        let mut revised = AtomicSizes::new();
+        revised.insert(crate::node::NodeId(99), crate::AtomicSize::default());
+        let old = AccumulatorKey::new(&p.data, &AtomicSizes::EMPTY, 0);
+        for (data, atomics, start) in [
+            (&*other.data, &AtomicSizes::EMPTY, 0),
+            (&*p.data, &revised, 0),
+            (&*p.data, &AtomicSizes::EMPTY, 1),
+        ] {
+            let next = AccumulatorKey::new(data, atomics, start);
+            let mut memo = RubyMemo::default();
+            memo.retain_intrinsic_row(&p.data, &AtomicSizes::EMPTY, 0);
+            for key in [next, old] {
+                let mut acc = memo.take_accumulator(key, 0);
+                acc.push_raw(Entry::placeholder(None));
+                memo.put_accumulator(acc);
+            }
+            // The next row is LRU. Repinning must protect it and allow the
+            // previous row to be evicted despite its more recent use.
+            memo.retain_intrinsic_row(data, atomics, start);
+            let word =
+                memo.take_accumulator(AccumulatorKey::new(&p.data, &AtomicSizes::EMPTY, 2), 0);
+            memo.put_accumulator(word);
+            assert_eq!(memo.accumulator_keys().len(), 2);
+            assert_eq!(memo.take_accumulator(next, 0).len(), 1);
+            assert_eq!(memo.take_accumulator(old, 0).len(), 0);
+        }
     }
 
     /// A nested probe for the same start takes and puts a fresh accumulator
