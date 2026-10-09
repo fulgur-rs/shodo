@@ -52,6 +52,7 @@ struct Case {
     name: &'static str,
     content: Content,
     fonts: Fonts,
+    font_size: f32,
     mode: WritingMode,
     lang: Option<&'static str>,
     budget: Option<u64>,
@@ -68,6 +69,7 @@ fn cases() -> Vec<Case> {
         name,
         content: Content::Text(text),
         fonts: Fonts::Fixture,
+        font_size: 16.0,
         mode,
         lang,
         budget,
@@ -81,6 +83,7 @@ fn cases() -> Vec<Case> {
             base_glyphs,
         },
         fonts: Fonts::Fixture,
+        font_size: 16.0,
         mode: WritingMode::HorizontalTb,
         lang: Some("ja"),
         budget: None,
@@ -130,6 +133,79 @@ fn cases() -> Vec<Case> {
         ),
         ruby("ruby-base-split6", Some(6), None),
         ruby("ruby-base-glyph-limit", Some(6), Some(4)),
+        text(
+            "cjk-horizontal-single",
+            CJK,
+            WritingMode::HorizontalTb,
+            Some("ja"),
+            None,
+        ),
+        text(
+            "cjk-horizontal-split16",
+            CJK,
+            WritingMode::HorizontalTb,
+            Some("ja"),
+            SPLIT,
+        ),
+        text(
+            "combining-single",
+            "a\u{0301}a\u{0323}a\u{0308}",
+            WritingMode::HorizontalTb,
+            Some("en"),
+            None,
+        ),
+        text(
+            "combining-split16",
+            "a\u{0301}a\u{0323}a\u{0308}",
+            WritingMode::HorizontalTb,
+            Some("en"),
+            SPLIT,
+        ),
+        text(
+            "leading-ignorables-single",
+            "\u{200b}\u{00ad}abc",
+            WritingMode::HorizontalTb,
+            Some("en"),
+            None,
+        ),
+        text(
+            "leading-ignorables-split16",
+            "\u{200b}\u{00ad}abc",
+            WritingMode::HorizontalTb,
+            Some("en"),
+            SPLIT,
+        ),
+        text(
+            "ignorables-only",
+            "\u{200b}\u{00ad}\u{2060}",
+            WritingMode::HorizontalTb,
+            Some("en"),
+            SPLIT,
+        ),
+        text(
+            "arabic-marks-single",
+            "مَرْحَبًا",
+            WritingMode::HorizontalTb,
+            Some("ar"),
+            None,
+        ),
+        text(
+            "arabic-marks-split16",
+            "مَرْحَبًا",
+            WritingMode::HorizontalTb,
+            Some("ar"),
+            SPLIT,
+        ),
+        Case {
+            font_size: 1e6,
+            ..text(
+                "latin-pen-split",
+                "WWWW",
+                WritingMode::HorizontalTb,
+                Some("en"),
+                None,
+            )
+        },
     ];
     for (name, budget) in [
         ("cjk-upright-novorg-single", None),
@@ -220,6 +296,7 @@ fn builder(case: &Case) -> ParagraphBuilder {
     };
     let mut root = InlineStyle {
         lang: case.lang.map(Into::into),
+        font_size: case.font_size,
         ..Default::default()
     };
     if case.fonts == Fonts::CjkWithoutVorg {

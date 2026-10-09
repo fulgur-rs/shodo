@@ -5,6 +5,114 @@ use crate::limits::{LimitExceeded, LimitKind, Limits};
 use skrifa::MetadataProvider;
 use skrifa::raw::TableProvider;
 
+#[test]
+fn ordered_windows_do_not_allocate_glyph_indices() {
+    use crate::node::{NodeId, TextSource};
+    use crate::style::{FontFamily, InlineStyle, ParagraphStyle};
+
+    for (text, bytes, mode) in [
+        (
+            "a",
+            crate::test_support::fonts::LATIN,
+            WritingMode::HorizontalTb,
+        ),
+        (
+            "日",
+            crate::test_support::fonts::CJK,
+            WritingMode::HorizontalTb,
+        ),
+        (
+            "日",
+            crate::test_support::fonts::CJK,
+            WritingMode::VerticalRl,
+        ),
+    ] {
+        for budget in [None, Some(16)] {
+            let limits = Limits {
+                max_shaping_run_bytes: budget,
+                ..Limits::default()
+            };
+            let fonts = FontCollection::with_options(
+                &limits,
+                crate::font::FontOptions {
+                    system_fonts: false,
+                    ..Default::default()
+                },
+            );
+            fonts
+                .register_face(
+                    bytes.to_vec(),
+                    0,
+                    crate::font::FontFaceDescriptor {
+                        family: "Ordered".into(),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+            let style = ParagraphStyle {
+                root: InlineStyle {
+                    font_families: vec![FontFamily::Named("Ordered".into())],
+                    ..Default::default()
+                },
+                writing_mode: mode,
+                ..Default::default()
+            };
+            let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, &text.repeat(64));
+            GLYPH_ORDER_ALLOCATIONS.with(|count| count.set(0));
+            HARFRUST_SHAPE_CALLS.with(|count| count.set(0));
+            let mut cx = crate::LayoutContext::new();
+            let paragraph = builder.build(&mut cx, &fonts).unwrap();
+            assert_eq!(paragraph.data.glyphs.len(), 64);
+            assert!(paragraph.warnings().is_empty());
+            assert!(cx.take_warnings().is_empty());
+            assert_eq!(
+                paragraph.data.glyphs.cluster,
+                (0..64).map(|i| i * text.len() as u32).collect::<Vec<_>>()
+            );
+            if budget.is_some() {
+                assert!(HARFRUST_SHAPE_CALLS.with(std::cell::Cell::get) > 1);
+            }
+            assert_eq!(
+                GLYPH_ORDER_ALLOCATIONS.with(std::cell::Cell::get),
+                0,
+                "text={text}, mode={mode:?}, budget={budget:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn glyph_order_uses_corrected_clusters_and_preserves_ties() {
+    type Case<'a> = (&'a [u32], u32, Option<&'a [usize]>);
+    let cases: &[Case<'_>] = &[
+        (&[], 0, None),
+        (&[4], 0, None),
+        (&[0, 0, 2, 2, 4], 0, None),
+        // An inversion removed by the leading-control correction needs no sort.
+        (&[2, 0, 1], 2, None),
+        (&[4, 2, 2, 0, 0], 0, Some(&[3, 4, 1, 2, 0])),
+        (&[0, 4, 2, 2], 0, Some(&[0, 2, 3, 1])),
+        // The correction also changes which glyphs must retain their tie order.
+        (&[4, 0, 3, 0, 4], 3, Some(&[1, 2, 3, 0, 4])),
+    ];
+    for &(clusters, leading_end, expected) in cases {
+        let infos: Vec<_> = clusters
+            .iter()
+            .map(|&cluster| {
+                let mut info = harfrust::GlyphInfo::default();
+                info.cluster = cluster;
+                info
+            })
+            .collect();
+        assert_eq!(
+            glyph_order(&infos, leading_end).as_deref(),
+            expected,
+            "clusters={clusters:?}, leading_end={leading_end}"
+        );
+    }
+}
+
 #[derive(Clone, Copy)]
 struct WidthProbeCase {
     name: &'static str,
