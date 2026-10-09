@@ -1,0 +1,5097 @@
+{
+  "schema": 1,
+  "issue": "shodo-ogn",
+  "date": "2026-10-10",
+  "status": "adopt; integration tracked by associated PR checks",
+  "provenance": {
+    "baseline_commit": "46cc12cfc695b698d027cd8c998724abce2b31dc",
+    "candidate_code_commit": "5c34dd1c611873daa6b8caf953a193cc094b0533",
+    "source_sha256": {
+      "crates/shodo/src/line/intrinsic.rs": "dcd297b898dac58d41bdcee7075ebb5af1705d5bb78480aa81b61a01caf5e4c0",
+      "crates/shodo/src/ruby/memo.rs": "25e16113424294049a6dc2381ffd6ff5f01ff7c862937b3f2c82a7923a920164",
+      "crates/shodo/src/ruby/tests/line_work.rs": "1a94a840deb572e25fa8d041e4ae75691f2ea703ac0ea67f9947576d02063626",
+      "dev/bench/Cargo.toml": "8b16034947c883f10ea00fcb964ae9ce7383e0523113c10c6143bfd1e16ba44b",
+      "dev/bench/examples/intrinsic_ruby_rows.rs": "3c602f38a1b27f4439b5367c0dd6c687e2420b22e5386d74a65a4f19731b1cc7"
+    },
+    "probe_sha256": "3c602f38a1b27f4439b5367c0dd6c687e2420b22e5386d74a65a4f19731b1cc7",
+    "baseline_probe_sha256": "3c602f38a1b27f4439b5367c0dd6c687e2420b22e5386d74a65a4f19731b1cc7",
+    "binaries_sha256": {
+      "baseline-time": "0a94f4c269f36ce862ae64913e243aac0fc786033953e4d1cc271bd7a401ba46",
+      "baseline-alloc": "7c59b53daeed348520eb102ec853bcae07efe22dbf1fbf18ef7ae1f442501394",
+      "candidate-time": "55b815cbab5f26216f5e299ed1d8a94aa48405f6037dfa12b7fa921e926b6365",
+      "candidate-alloc": "f86bd6d7b71f452cb36b3c5762f2be00f744341f3b4c71206cb7e5da21e8b68e"
+    },
+    "font_sha256": {
+      "cjk.otf": "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b"
+    },
+    "cargo_lock_sha256": "df8c483a6c041043ad210bcd419d7c49ac06ab09cf91f11d1ddd42c11af00830",
+    "toolchain": "rustc 1.91.0 (f8297e351 2025-10-28), LLVM 21.1.2",
+    "cpu": "AMD Ryzen 5 5600G, 6 cores / 12 threads",
+    "host": "forge, Linux 7.2.5-3-omarchy, x86_64",
+    "release": {
+      "opt_level": 3,
+      "debug": 1,
+      "incremental": false,
+      "complex_scripts": true,
+      "timing_allocator": "System",
+      "allocation_allocator": "CountingAllocator<System>",
+      "system_font_discovery": false
+    },
+    "valgrind_host": "3.25.1",
+    "memcheck_container_image": "debian@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171",
+    "memcheck_version": "valgrind-3.19.0",
+    "container_libc": "ldd (Debian GLIBC 2.36-9+deb12u14) 2.36"
+  },
+  "design": {
+    "scope": "current intrinsic max-content row",
+    "key": [
+      "dataset_id",
+      "dataset_address",
+      "atomic_revision",
+      "start"
+    ],
+    "retained_accumulators": 2,
+    "max_containers_per_accumulator": 16384,
+    "retained_containers_on_reset": 256,
+    "context_inline_bytes": {
+      "baseline": 1720,
+      "candidate": 1760
+    },
+    "fixed_inline_delta_bytes": 40,
+    "unchanged": [
+      "accumulator validity/replay",
+      "range epochs",
+      "dirty/profile gates",
+      "shrinking-end/rollback behavior",
+      "work charge and admission rules",
+      "warning sink",
+      "container fallback limits",
+      "ordinary non-intrinsic LRU"
+    ],
+    "linear_claim": "specific repeated-clear-float fixture only; no claim for arbitrary ruby input"
+  },
+  "fixture": {
+    "default_groups": 64,
+    "per_group": {
+      "words": 2,
+      "ruby_per_word": 2,
+      "base": "12",
+      "annotation": "日日日",
+      "base_size": 24,
+      "annotation_size": 12,
+      "word_separator": " ",
+      "clear_float": "Both",
+      "float_min_max": 1
+    },
+    "one-word": "one word per group",
+    "one-ruby": "one ruby per word",
+    "plain": "ruby replaced with base text",
+    "forced": "forced break every 8 groups (unit differential matrix uses every 4)",
+    "first-line": "root first-line font size 30",
+    "atomics": "root atomic min 4 max 8; min/max atomic revisions differ",
+    "warning0_warning2": "three root atomics with missing intrinsic inputs; warning caps 0 or 2",
+    "budget0_budget1_default-budget": "ruby work allowance factor 0, 1, or default 16; other cases unlimited"
+  },
+  "operations": {
+    "groups": [
+      8,
+      16,
+      32
+    ],
+    "baseline_container_measures": [
+      147,
+      547,
+      2115
+    ],
+    "candidate_container_measures": [
+      63,
+      127,
+      255
+    ],
+    "baseline_walk_steps": [
+      62,
+      126,
+      254
+    ],
+    "candidate_walk_steps": [
+      62,
+      126,
+      254
+    ],
+    "red_test": "container growth threshold <=2.2 fails baseline",
+    "green_test": "same threshold passes candidate; widths/warnings equal unbounded reference"
+  },
+  "cases": {
+    "eviction": {
+      "baseline": {
+        "digest": {
+          "case": "eviction",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1176153728
+              ]
+            },
+            "sha256": "cfe1bddab6ae929da80ca22f42e5cb2c73cc02d5d62ac6e28d63e1f80b368656"
+          }
+        },
+        "alloc": {
+          "case": "eviction",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 14065290,
+              "calls": 223984,
+              "deallocated_bytes": 6925150,
+              "live_bytes": 10902728,
+              "net_bytes": 7140140,
+              "peak_extra_bytes": 7141065,
+              "start_live_bytes": 3762588
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 128,
+              "live_bytes": 3766181,
+              "net_bytes": -128,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 3766309
+            },
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1176153728
+              ]
+            },
+            "sha256": "cfe1bddab6ae929da80ca22f42e5cb2c73cc02d5d62ac6e28d63e1f80b368656",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 7140012,
+              "live_bytes": 3765583,
+              "net_bytes": -7140012,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 10905595
+            }
+          }
+        }
+      },
+      "candidate": {
+        "digest": {
+          "case": "eviction",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1176153728
+              ]
+            },
+            "sha256": "cfe1bddab6ae929da80ca22f42e5cb2c73cc02d5d62ac6e28d63e1f80b368656"
+          }
+        },
+        "alloc": {
+          "case": "eviction",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 9582938,
+              "calls": 26133,
+              "deallocated_bytes": 2507310,
+              "live_bytes": 10838216,
+              "net_bytes": 7075628,
+              "peak_extra_bytes": 7076553,
+              "start_live_bytes": 3762588
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 128,
+              "live_bytes": 3766181,
+              "net_bytes": -128,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 3766309
+            },
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1176153728
+              ]
+            },
+            "sha256": "cfe1bddab6ae929da80ca22f42e5cb2c73cc02d5d62ac6e28d63e1f80b368656",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 7075500,
+              "live_bytes": 3765583,
+              "net_bytes": -7075500,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 10841083
+            }
+          }
+        }
+      }
+    },
+    "one-word": {
+      "baseline": {
+        "digest": {
+          "case": "one-word",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1167760640
+              ]
+            },
+            "sha256": "6bda07f328f24d4ff28ee5a5d3269b66523ddd2ea87eb3a1a44f4949622fc0d3"
+          }
+        },
+        "alloc": {
+          "case": "one-word",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 4796376,
+              "calls": 13212,
+              "deallocated_bytes": 1256108,
+              "live_bytes": 5548360,
+              "net_bytes": 3540268,
+              "peak_extra_bytes": 3541193,
+              "start_live_bytes": 2008092
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 128,
+              "live_bytes": 2011685,
+              "net_bytes": -128,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 2011813
+            },
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1167760640
+              ]
+            },
+            "sha256": "6bda07f328f24d4ff28ee5a5d3269b66523ddd2ea87eb3a1a44f4949622fc0d3",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 3540140,
+              "live_bytes": 2011087,
+              "net_bytes": -3540140,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 5551227
+            }
+          }
+        }
+      },
+      "candidate": {
+        "digest": {
+          "case": "one-word",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1167760640
+              ]
+            },
+            "sha256": "6bda07f328f24d4ff28ee5a5d3269b66523ddd2ea87eb3a1a44f4949622fc0d3"
+          }
+        },
+        "alloc": {
+          "case": "one-word",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 4796376,
+              "calls": 13212,
+              "deallocated_bytes": 1256108,
+              "live_bytes": 5548360,
+              "net_bytes": 3540268,
+              "peak_extra_bytes": 3541193,
+              "start_live_bytes": 2008092
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 128,
+              "live_bytes": 2011685,
+              "net_bytes": -128,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 2011813
+            },
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1167760640
+              ]
+            },
+            "sha256": "6bda07f328f24d4ff28ee5a5d3269b66523ddd2ea87eb3a1a44f4949622fc0d3",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 3540140,
+              "live_bytes": 2011087,
+              "net_bytes": -3540140,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 5551227
+            }
+          }
+        }
+      }
+    },
+    "one-ruby": {
+      "baseline": {
+        "digest": {
+          "case": "one-ruby",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1108344832,
+                1168465152
+              ]
+            },
+            "sha256": "e8e9c386304d85d431d04a2a413d15bd911b6cae47d73f3590559d91041af2de"
+          }
+        },
+        "alloc": {
+          "case": "one-ruby",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 5063006,
+              "calls": 13623,
+              "deallocated_bytes": 1495418,
+              "live_bytes": 5610240,
+              "net_bytes": 3567588,
+              "peak_extra_bytes": 3569700,
+              "start_live_bytes": 2042652
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 128,
+              "live_bytes": 2046245,
+              "net_bytes": -128,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 2046373
+            },
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1108344832,
+                1168465152
+              ]
+            },
+            "sha256": "e8e9c386304d85d431d04a2a413d15bd911b6cae47d73f3590559d91041af2de",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 3567460,
+              "live_bytes": 2045647,
+              "net_bytes": -3567460,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 5613107
+            }
+          }
+        }
+      },
+      "candidate": {
+        "digest": {
+          "case": "one-ruby",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1108344832,
+                1168465152
+              ]
+            },
+            "sha256": "e8e9c386304d85d431d04a2a413d15bd911b6cae47d73f3590559d91041af2de"
+          }
+        },
+        "alloc": {
+          "case": "one-ruby",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 5063006,
+              "calls": 13623,
+              "deallocated_bytes": 1495418,
+              "live_bytes": 5610240,
+              "net_bytes": 3567588,
+              "peak_extra_bytes": 3569700,
+              "start_live_bytes": 2042652
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 128,
+              "live_bytes": 2046245,
+              "net_bytes": -128,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 2046373
+            },
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1108344832,
+                1168465152
+              ]
+            },
+            "sha256": "e8e9c386304d85d431d04a2a413d15bd911b6cae47d73f3590559d91041af2de",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 3567460,
+              "live_bytes": 2045647,
+              "net_bytes": -3567460,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 5613107
+            }
+          }
+        }
+      }
+    },
+    "plain": {
+      "baseline": {
+        "digest": {
+          "case": "plain",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1112866816,
+                1172987136
+              ]
+            },
+            "sha256": "2073eb5eb59dc625c46a52fe7822a75dea7eb54b7384a9d53c02f77ec8d5c720"
+          }
+        },
+        "alloc": {
+          "case": "plain",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 8256,
+              "calls": 129,
+              "deallocated_bytes": 8256,
+              "live_bytes": 510440,
+              "net_bytes": 0,
+              "peak_extra_bytes": 192,
+              "start_live_bytes": 510440
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 0,
+              "live_bytes": 514033,
+              "net_bytes": 0,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 514033
+            },
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1112866816,
+                1172987136
+              ]
+            },
+            "sha256": "2073eb5eb59dc625c46a52fe7822a75dea7eb54b7384a9d53c02f77ec8d5c720",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 0,
+              "live_bytes": 513307,
+              "net_bytes": 0,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 513307
+            }
+          }
+        }
+      },
+      "candidate": {
+        "digest": {
+          "case": "plain",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1112866816,
+                1172987136
+              ]
+            },
+            "sha256": "2073eb5eb59dc625c46a52fe7822a75dea7eb54b7384a9d53c02f77ec8d5c720"
+          }
+        },
+        "alloc": {
+          "case": "plain",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 8256,
+              "calls": 129,
+              "deallocated_bytes": 8256,
+              "live_bytes": 510440,
+              "net_bytes": 0,
+              "peak_extra_bytes": 192,
+              "start_live_bytes": 510440
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 0,
+              "live_bytes": 514033,
+              "net_bytes": 0,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 514033
+            },
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1112866816,
+                1172987136
+              ]
+            },
+            "sha256": "2073eb5eb59dc625c46a52fe7822a75dea7eb54b7384a9d53c02f77ec8d5c720",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 0,
+              "live_bytes": 513307,
+              "net_bytes": 0,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 513307
+            }
+          }
+        }
+      }
+    },
+    "forced": {
+      "baseline": {
+        "digest": {
+          "case": "forced",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1150956544
+              ]
+            },
+            "sha256": "3681c0582b2f94dc77c0751cd4abae9388a2265b27d66895ec8809c818a7fff1"
+          }
+        },
+        "alloc": {
+          "case": "forced",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 9860576,
+              "calls": 43000,
+              "deallocated_bytes": 2836756,
+              "live_bytes": 10797722,
+              "net_bytes": 7023820,
+              "peak_extra_bytes": 7024745,
+              "start_live_bytes": 3773902
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 128,
+              "live_bytes": 3777495,
+              "net_bytes": -128,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 3777623
+            },
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1150956544
+              ]
+            },
+            "sha256": "3681c0582b2f94dc77c0751cd4abae9388a2265b27d66895ec8809c818a7fff1",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 7023692,
+              "live_bytes": 3776897,
+              "net_bytes": -7023692,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 10800589
+            }
+          }
+        }
+      },
+      "candidate": {
+        "digest": {
+          "case": "forced",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1150956544
+              ]
+            },
+            "sha256": "3681c0582b2f94dc77c0751cd4abae9388a2265b27d66895ec8809c818a7fff1"
+          }
+        },
+        "alloc": {
+          "case": "forced",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 9481248,
+              "calls": 25992,
+              "deallocated_bytes": 2457428,
+              "live_bytes": 10797722,
+              "net_bytes": 7023820,
+              "peak_extra_bytes": 7024745,
+              "start_live_bytes": 3773902
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 128,
+              "live_bytes": 3777495,
+              "net_bytes": -128,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 3777623
+            },
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1150956544
+              ]
+            },
+            "sha256": "3681c0582b2f94dc77c0751cd4abae9388a2265b27d66895ec8809c818a7fff1",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 7023692,
+              "live_bytes": 3776897,
+              "net_bytes": -7023692,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 10800589
+            }
+          }
+        }
+      }
+    },
+    "first-line": {
+      "baseline": {
+        "digest": {
+          "case": "first-line",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1176328480
+              ]
+            },
+            "sha256": "4b367e20b24417eedb973208a4d9ac25a7aa3649547db4b5d45dd4be6fdebd66"
+          }
+        },
+        "alloc": {
+          "case": "first-line",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 33140094,
+              "calls": 447040,
+              "deallocated_bytes": 25999954,
+              "live_bytes": 12440843,
+              "net_bytes": 7140140,
+              "peak_extra_bytes": 7141065,
+              "start_live_bytes": 5300703
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 128,
+              "live_bytes": 5304296,
+              "net_bytes": -128,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 5304424
+            },
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1176328480
+              ]
+            },
+            "sha256": "4b367e20b24417eedb973208a4d9ac25a7aa3649547db4b5d45dd4be6fdebd66",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 7140012,
+              "live_bytes": 5303698,
+              "net_bytes": -7140012,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 12443710
+            }
+          }
+        }
+      },
+      "candidate": {
+        "digest": {
+          "case": "first-line",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1176328480
+              ]
+            },
+            "sha256": "4b367e20b24417eedb973208a4d9ac25a7aa3649547db4b5d45dd4be6fdebd66"
+          }
+        },
+        "alloc": {
+          "case": "first-line",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 24502430,
+              "calls": 54503,
+              "deallocated_bytes": 17362290,
+              "live_bytes": 12440843,
+              "net_bytes": 7140140,
+              "peak_extra_bytes": 7141065,
+              "start_live_bytes": 5300703
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 128,
+              "live_bytes": 5304296,
+              "net_bytes": -128,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 5304424
+            },
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1176328480
+              ]
+            },
+            "sha256": "4b367e20b24417eedb973208a4d9ac25a7aa3649547db4b5d45dd4be6fdebd66",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 7140012,
+              "live_bytes": 5303698,
+              "net_bytes": -7140012,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 12443710
+            }
+          }
+        }
+      }
+    },
+    "atomics": {
+      "baseline": {
+        "digest": {
+          "case": "atomics",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1176161920
+              ]
+            },
+            "sha256": "a0bc49b375a93555c1756accbf02f442ff5ef4b6e009ebbf35f10c3983d2295a"
+          }
+        },
+        "alloc": {
+          "case": "atomics",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 28937618,
+              "calls": 238900,
+              "deallocated_bytes": 14828994,
+              "live_bytes": 17880059,
+              "net_bytes": 14108624,
+              "peak_extra_bytes": 14110461,
+              "start_live_bytes": 3771435
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 128,
+              "live_bytes": 3775028,
+              "net_bytes": -128,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 3775156
+            },
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1176161920
+              ]
+            },
+            "sha256": "a0bc49b375a93555c1756accbf02f442ff5ef4b6e009ebbf35f10c3983d2295a",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 14108496,
+              "live_bytes": 3774430,
+              "net_bytes": -14108496,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 17882926
+            }
+          }
+        }
+      },
+      "candidate": {
+        "digest": {
+          "case": "atomics",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1176161920
+              ]
+            },
+            "sha256": "a0bc49b375a93555c1756accbf02f442ff5ef4b6e009ebbf35f10c3983d2295a"
+          }
+        },
+        "alloc": {
+          "case": "atomics",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 24457442,
+              "calls": 41149,
+              "deallocated_bytes": 10413330,
+              "live_bytes": 17815547,
+              "net_bytes": 14044112,
+              "peak_extra_bytes": 14045949,
+              "start_live_bytes": 3771435
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 128,
+              "live_bytes": 3775028,
+              "net_bytes": -128,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 3775156
+            },
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1176161920
+              ]
+            },
+            "sha256": "a0bc49b375a93555c1756accbf02f442ff5ef4b6e009ebbf35f10c3983d2295a",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 14043984,
+              "live_bytes": 3774430,
+              "net_bytes": -14043984,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 17818414
+            }
+          }
+        }
+      }
+    },
+    "warning0": {
+      "baseline": {
+        "digest": {
+          "case": "warning0",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [
+                "Warning { kind: Suppressed, message: \"further warnings suppressed\" }"
+              ],
+              "width_bits": [
+                1116733440,
+                1176153728
+              ]
+            },
+            "sha256": "6a94bfd8708c01561a5d36475dacf9213884152d633f470b43ba6d6f850189a4"
+          }
+        },
+        "alloc": {
+          "case": "warning0",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 14116065,
+              "calls": 224042,
+              "deallocated_bytes": 6950986,
+              "live_bytes": 10937083,
+              "net_bytes": 7165079,
+              "peak_extra_bytes": 7166004,
+              "start_live_bytes": 3772004
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 283,
+              "live_bytes": 3775949,
+              "net_bytes": -283,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 3776232
+            },
+            "output": {
+              "warnings": [
+                "Warning { kind: Suppressed, message: \"further warnings suppressed\" }"
+              ],
+              "width_bits": [
+                1116733440,
+                1176153728
+              ]
+            },
+            "sha256": "6a94bfd8708c01561a5d36475dacf9213884152d633f470b43ba6d6f850189a4",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 7164796,
+              "live_bytes": 3775506,
+              "net_bytes": -7164796,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 10940302
+            }
+          }
+        }
+      },
+      "candidate": {
+        "digest": {
+          "case": "warning0",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [
+                "Warning { kind: Suppressed, message: \"further warnings suppressed\" }"
+              ],
+              "width_bits": [
+                1116733440,
+                1176153728
+              ]
+            },
+            "sha256": "6a94bfd8708c01561a5d36475dacf9213884152d633f470b43ba6d6f850189a4"
+          }
+        },
+        "alloc": {
+          "case": "warning0",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 9633713,
+              "calls": 26191,
+              "deallocated_bytes": 2533146,
+              "live_bytes": 10872571,
+              "net_bytes": 7100567,
+              "peak_extra_bytes": 7101492,
+              "start_live_bytes": 3772004
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 283,
+              "live_bytes": 3775949,
+              "net_bytes": -283,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 3776232
+            },
+            "output": {
+              "warnings": [
+                "Warning { kind: Suppressed, message: \"further warnings suppressed\" }"
+              ],
+              "width_bits": [
+                1116733440,
+                1176153728
+              ]
+            },
+            "sha256": "6a94bfd8708c01561a5d36475dacf9213884152d633f470b43ba6d6f850189a4",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 7100284,
+              "live_bytes": 3775506,
+              "net_bytes": -7100284,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 10875790
+            }
+          }
+        }
+      }
+    },
+    "warning2": {
+      "baseline": {
+        "digest": {
+          "case": "warning2",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [
+                "Warning { kind: MissingAtomicSize, message: \"missing atomic intrinsic widths\" }",
+                "Warning { kind: MissingAtomicSize, message: \"missing atomic intrinsic widths\" }",
+                "Warning { kind: Suppressed, message: \"further warnings suppressed\" }"
+              ],
+              "width_bits": [
+                1116733440,
+                1176153728
+              ]
+            },
+            "sha256": "704b40738325e989379f63efdcf482f869c03bb1729cae191c0975af255aadf4"
+          }
+        },
+        "alloc": {
+          "case": "warning2",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 14116127,
+              "calls": 224044,
+              "deallocated_bytes": 6950986,
+              "live_bytes": 10937145,
+              "net_bytes": 7165141,
+              "peak_extra_bytes": 7166066,
+              "start_live_bytes": 3772004
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 345,
+              "live_bytes": 3776705,
+              "net_bytes": -345,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 3777050
+            },
+            "output": {
+              "warnings": [
+                "Warning { kind: MissingAtomicSize, message: \"missing atomic intrinsic widths\" }",
+                "Warning { kind: MissingAtomicSize, message: \"missing atomic intrinsic widths\" }",
+                "Warning { kind: Suppressed, message: \"further warnings suppressed\" }"
+              ],
+              "width_bits": [
+                1116733440,
+                1176153728
+              ]
+            },
+            "sha256": "704b40738325e989379f63efdcf482f869c03bb1729cae191c0975af255aadf4",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 7164796,
+              "live_bytes": 3776324,
+              "net_bytes": -7164796,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 10941120
+            }
+          }
+        }
+      },
+      "candidate": {
+        "digest": {
+          "case": "warning2",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [
+                "Warning { kind: MissingAtomicSize, message: \"missing atomic intrinsic widths\" }",
+                "Warning { kind: MissingAtomicSize, message: \"missing atomic intrinsic widths\" }",
+                "Warning { kind: Suppressed, message: \"further warnings suppressed\" }"
+              ],
+              "width_bits": [
+                1116733440,
+                1176153728
+              ]
+            },
+            "sha256": "704b40738325e989379f63efdcf482f869c03bb1729cae191c0975af255aadf4"
+          }
+        },
+        "alloc": {
+          "case": "warning2",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 9633775,
+              "calls": 26193,
+              "deallocated_bytes": 2533146,
+              "live_bytes": 10872633,
+              "net_bytes": 7100629,
+              "peak_extra_bytes": 7101554,
+              "start_live_bytes": 3772004
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 345,
+              "live_bytes": 3776705,
+              "net_bytes": -345,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 3777050
+            },
+            "output": {
+              "warnings": [
+                "Warning { kind: MissingAtomicSize, message: \"missing atomic intrinsic widths\" }",
+                "Warning { kind: MissingAtomicSize, message: \"missing atomic intrinsic widths\" }",
+                "Warning { kind: Suppressed, message: \"further warnings suppressed\" }"
+              ],
+              "width_bits": [
+                1116733440,
+                1176153728
+              ]
+            },
+            "sha256": "704b40738325e989379f63efdcf482f869c03bb1729cae191c0975af255aadf4",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 7100284,
+              "live_bytes": 3776324,
+              "net_bytes": -7100284,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 10876608
+            }
+          }
+        }
+      }
+    },
+    "budget0": {
+      "baseline": {
+        "digest": {
+          "case": "budget0",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [
+                "Warning { kind: Unsupported, message: \"ruby line measurement budget exceeded; fitting without ruby adjustments\" }"
+              ],
+              "width_bits": [
+                1112866816,
+                1172987136
+              ]
+            },
+            "sha256": "36ca211cce817c078caf47398acdd52e4ee3d9f19f8352529b51333547def9e9"
+          }
+        },
+        "alloc": {
+          "case": "budget0",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 41479,
+              "calls": 260,
+              "deallocated_bytes": 41280,
+              "live_bytes": 3762786,
+              "net_bytes": 199,
+              "peak_extra_bytes": 775,
+              "start_live_bytes": 3762587
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 199,
+              "live_bytes": 3766622,
+              "net_bytes": -199,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 3766821
+            },
+            "output": {
+              "warnings": [
+                "Warning { kind: Unsupported, message: \"ruby line measurement budget exceeded; fitting without ruby adjustments\" }"
+              ],
+              "width_bits": [
+                1112866816,
+                1172987136
+              ]
+            },
+            "sha256": "36ca211cce817c078caf47398acdd52e4ee3d9f19f8352529b51333547def9e9",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 0,
+              "live_bytes": 3766095,
+              "net_bytes": 0,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 3766095
+            }
+          }
+        }
+      },
+      "candidate": {
+        "digest": {
+          "case": "budget0",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [
+                "Warning { kind: Unsupported, message: \"ruby line measurement budget exceeded; fitting without ruby adjustments\" }"
+              ],
+              "width_bits": [
+                1112866816,
+                1172987136
+              ]
+            },
+            "sha256": "36ca211cce817c078caf47398acdd52e4ee3d9f19f8352529b51333547def9e9"
+          }
+        },
+        "alloc": {
+          "case": "budget0",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 41479,
+              "calls": 260,
+              "deallocated_bytes": 41280,
+              "live_bytes": 3762786,
+              "net_bytes": 199,
+              "peak_extra_bytes": 775,
+              "start_live_bytes": 3762587
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 199,
+              "live_bytes": 3766622,
+              "net_bytes": -199,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 3766821
+            },
+            "output": {
+              "warnings": [
+                "Warning { kind: Unsupported, message: \"ruby line measurement budget exceeded; fitting without ruby adjustments\" }"
+              ],
+              "width_bits": [
+                1112866816,
+                1172987136
+              ]
+            },
+            "sha256": "36ca211cce817c078caf47398acdd52e4ee3d9f19f8352529b51333547def9e9",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 0,
+              "live_bytes": 3766095,
+              "net_bytes": 0,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 3766095
+            }
+          }
+        }
+      }
+    },
+    "default-budget": {
+      "baseline": {
+        "digest": {
+          "case": "default-budget",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1176153728
+              ]
+            },
+            "sha256": "cfe1bddab6ae929da80ca22f42e5cb2c73cc02d5d62ac6e28d63e1f80b368656"
+          }
+        },
+        "alloc": {
+          "case": "default-budget",
+          "context_inline_bytes": 1720,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 14065290,
+              "calls": 223984,
+              "deallocated_bytes": 6925150,
+              "live_bytes": 10902734,
+              "net_bytes": 7140140,
+              "peak_extra_bytes": 7141065,
+              "start_live_bytes": 3762594
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 128,
+              "live_bytes": 3766187,
+              "net_bytes": -128,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 3766315
+            },
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1176153728
+              ]
+            },
+            "sha256": "cfe1bddab6ae929da80ca22f42e5cb2c73cc02d5d62ac6e28d63e1f80b368656",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 7140012,
+              "live_bytes": 3765589,
+              "net_bytes": -7140012,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 10905601
+            }
+          }
+        }
+      },
+      "candidate": {
+        "digest": {
+          "case": "default-budget",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1176153728
+              ]
+            },
+            "sha256": "cfe1bddab6ae929da80ca22f42e5cb2c73cc02d5d62ac6e28d63e1f80b368656"
+          }
+        },
+        "alloc": {
+          "case": "default-budget",
+          "context_inline_bytes": 1760,
+          "groups": 64,
+          "result": {
+            "allocations": {
+              "allocated_bytes": 9582938,
+              "calls": 26133,
+              "deallocated_bytes": 2507310,
+              "live_bytes": 10838222,
+              "net_bytes": 7075628,
+              "peak_extra_bytes": 7076553,
+              "start_live_bytes": 3762594
+            },
+            "context_and_warnings_drop": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 128,
+              "live_bytes": 3766187,
+              "net_bytes": -128,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 3766315
+            },
+            "output": {
+              "warnings": [],
+              "width_bits": [
+                1116733440,
+                1176153728
+              ]
+            },
+            "sha256": "cfe1bddab6ae929da80ca22f42e5cb2c73cc02d5d62ac6e28d63e1f80b368656",
+            "shrink": {
+              "allocated_bytes": 0,
+              "calls": 0,
+              "deallocated_bytes": 7075500,
+              "live_bytes": 3765589,
+              "net_bytes": -7075500,
+              "peak_extra_bytes": 0,
+              "start_live_bytes": 10841089
+            }
+          }
+        }
+      }
+    }
+  },
+  "binding_budget_1": {
+    "public_results": {
+      "baseline": {
+        "case": "budget1",
+        "context_inline_bytes": 1720,
+        "groups": 64,
+        "result": {
+          "output": {
+            "warnings": [
+              "Warning { kind: Unsupported, message: \"ruby line measurement budget exceeded; fitting without ruby adjustments\" }"
+            ],
+            "width_bits": [
+              1116733440,
+              1172987136
+            ]
+          },
+          "sha256": "5728e2c56af6e3e1b3ba08cc2ac468a9c84a379b2b8da1d0c8bd06055deaef79"
+        }
+      },
+      "candidate": {
+        "case": "budget1",
+        "context_inline_bytes": 1760,
+        "groups": 64,
+        "result": {
+          "output": {
+            "warnings": [],
+            "width_bits": [
+              1116733440,
+              1176153728
+            ]
+          },
+          "sha256": "cfe1bddab6ae929da80ca22f42e5cb2c73cc02d5d62ac6e28d63e1f80b368656"
+        }
+      }
+    },
+    "interpretation": "Baseline reaches live-work allowance and warns with degraded width. Candidate avoids redundant work and returns exact unlimited-case width without warning. Public parity is intentionally not claimed for this binding allowance. Actual work-charge/refusal definitions are unchanged; Reference bypasses work allowance and is not an oracle for bounded refusal."
+  },
+  "callgrind": {
+    "groups": 64,
+    "iterations": 5,
+    "entry": "crates/shodo/src/line/intrinsic.rs:shodo::line::intrinsic::<impl shodo::paragraph::Paragraph>::intrinsic_sizes",
+    "entry_selection": "single primary source-attributed inclusive entry; inline-source partitions are not summed",
+    "process_scope": "one paragraph/font preparation plus five fresh-context intrinsic calls and their destruction",
+    "cases": {
+      "eviction": {
+        "baseline": {
+          "intrinsic_ir": 1242149023,
+          "process_ir": 1311845128
+        },
+        "candidate": {
+          "intrinsic_ir": 181324872,
+          "process_ir": 250915308
+        },
+        "ratios": {
+          "intrinsic_ir": 0.14597674565815763,
+          "process_ir": 0.19126900168660763
+        }
+      },
+      "one-word": {
+        "baseline": {
+          "intrinsic_ir": 94711844,
+          "process_ir": 130348418
+        },
+        "candidate": {
+          "intrinsic_ir": 94656030,
+          "process_ir": 130241901
+        },
+        "ratios": {
+          "intrinsic_ir": 0.9994106967234214,
+          "process_ir": 0.9991828285940532
+        }
+      },
+      "one-ruby": {
+        "baseline": {
+          "intrinsic_ir": 96336585,
+          "process_ir": 133009259
+        },
+        "candidate": {
+          "intrinsic_ir": 96264720,
+          "process_ir": 132886445
+        },
+        "ratios": {
+          "intrinsic_ir": 0.999254021719786,
+          "process_ir": 0.999076650746547
+        }
+      },
+      "plain": {
+        "baseline": {
+          "intrinsic_ir": 4769340,
+          "process_ir": 11015245
+        },
+        "candidate": {
+          "intrinsic_ir": 4771945,
+          "process_ir": 11017743
+        },
+        "ratios": {
+          "intrinsic_ir": 1.0005461971677423,
+          "process_ir": 1.0002267766173154
+        }
+      },
+      "forced": {
+        "baseline": {
+          "intrinsic_ir": 261860609,
+          "process_ir": 331600105
+        },
+        "candidate": {
+          "intrinsic_ir": 179496570,
+          "process_ir": 249115228
+        },
+        "ratios": {
+          "intrinsic_ir": 0.685466098492118,
+          "process_ir": 0.7512519575348144
+        }
+      },
+      "first-line": {
+        "baseline": {
+          "intrinsic_ir": 2522617514,
+          "process_ir": 2610251936
+        },
+        "candidate": {
+          "intrinsic_ir": 415327155,
+          "process_ir": 502823787
+        },
+        "ratios": {
+          "intrinsic_ir": 0.16464135077752418,
+          "process_ir": 0.1926341975137223
+        }
+      },
+      "atomics": {
+        "baseline": {
+          "intrinsic_ir": 1377683319,
+          "process_ir": 1451024729
+        },
+        "candidate": {
+          "intrinsic_ir": 323831807,
+          "process_ir": 397051338
+        },
+        "ratios": {
+          "intrinsic_ir": 0.2350553298671391,
+          "process_ir": 0.27363512837829795
+        }
+      }
+    }
+  },
+  "timing": {
+    "order": [
+      "baseline",
+      "candidate",
+      "candidate",
+      "baseline",
+      "candidate",
+      "baseline",
+      "baseline",
+      "candidate"
+    ],
+    "affinity_cpu": 2,
+    "groups": 64,
+    "samples_per_process": 21,
+    "samples": {
+      "eviction": [
+        {
+          "label": "baseline",
+          "launch_index": 0,
+          "data": {
+            "case": "eviction",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 25094644,
+              "samples_ns": [
+                25469989,
+                28023162,
+                25350555,
+                24745071,
+                25904283,
+                25094644,
+                25198922,
+                25155968,
+                26365259,
+                24931696,
+                24743395,
+                25769763,
+                24840898,
+                24961939,
+                24657696,
+                25390855,
+                24816243,
+                24875611,
+                24945037,
+                25160926,
+                24671105
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 1,
+          "data": {
+            "case": "eviction",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 5149720,
+              "samples_ns": [
+                5135052,
+                5495871,
+                5222568,
+                5197773,
+                5334739,
+                5622638,
+                5348429,
+                5258329,
+                5100968,
+                5283612,
+                5149720,
+                5012475,
+                5038317,
+                3888744,
+                5016945,
+                5046978,
+                5133237,
+                5137358,
+                5071913,
+                5369452,
+                5168857
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 2,
+          "data": {
+            "case": "eviction",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 5144342,
+              "samples_ns": [
+                5144342,
+                5132957,
+                5122899,
+                5185411,
+                5118150,
+                5090072,
+                5139453,
+                5248271,
+                5022603,
+                5090422,
+                5488606,
+                5149231,
+                5172838,
+                5192186,
+                5103552,
+                5171931,
+                5177867,
+                5284031,
+                5105858,
+                5177797,
+                5019110
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 3,
+          "data": {
+            "case": "eviction",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 25535853,
+              "samples_ns": [
+                26275369,
+                26597143,
+                26238980,
+                25681479,
+                24988270,
+                25525307,
+                25005033,
+                26479944,
+                26200914,
+                25740568,
+                25866637,
+                24741719,
+                24651339,
+                25998434,
+                25535853,
+                25027523,
+                24785022,
+                25553663,
+                24813100,
+                24859546,
+                25310045
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 4,
+          "data": {
+            "case": "eviction",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 4095624,
+              "samples_ns": [
+                5410939,
+                4071877,
+                5291365,
+                4214220,
+                4086474,
+                4095624,
+                3899150,
+                3958589,
+                3959775,
+                3887836,
+                3796619,
+                3934142,
+                4166028,
+                4301456,
+                5270272,
+                4149893,
+                4353421,
+                5188274,
+                4141232,
+                4031436,
+                4004407
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 5,
+          "data": {
+            "case": "eviction",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 24570809,
+              "samples_ns": [
+                26770427,
+                26242472,
+                24239605,
+                24571228,
+                24473235,
+                24458009,
+                31294689,
+                24737947,
+                24322650,
+                24401924,
+                24330473,
+                24522266,
+                24330054,
+                24472537,
+                24570809,
+                25139623,
+                24616557,
+                24650990,
+                24983451,
+                24872118,
+                24382228
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 6,
+          "data": {
+            "case": "eviction",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 25154361,
+              "samples_ns": [
+                26057383,
+                28398088,
+                26540569,
+                26268105,
+                25079557,
+                24966339,
+                25154361,
+                25169518,
+                25076624,
+                25115248,
+                25016977,
+                25094225,
+                25370111,
+                25704527,
+                24848791,
+                24707844,
+                25628048,
+                24864506,
+                25436114,
+                24978073,
+                25354326
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 7,
+          "data": {
+            "case": "eviction",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 4060771,
+              "samples_ns": [
+                5324261,
+                5272088,
+                5237235,
+                4068664,
+                3966551,
+                4250958,
+                4096532,
+                4041773,
+                3975491,
+                3972138,
+                4004895,
+                3959776,
+                4300898,
+                4233707,
+                4105402,
+                4008947,
+                4054904,
+                4156459,
+                4060771,
+                4050085,
+                3939870
+              ]
+            }
+          }
+        }
+      ],
+      "one-word": [
+        {
+          "label": "baseline",
+          "launch_index": 0,
+          "data": {
+            "case": "one-word",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 2840794,
+              "samples_ns": [
+                4173221,
+                3646242,
+                2960228,
+                2826057,
+                2766479,
+                3529183,
+                2769272,
+                2842400,
+                3093841,
+                2965886,
+                2816068,
+                2770670,
+                2782753,
+                2787572,
+                3926948,
+                2626929,
+                3182893,
+                2992287,
+                2767107,
+                2840794,
+                2793718
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 1,
+          "data": {
+            "case": "one-word",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 2888078,
+              "samples_ns": [
+                3677952,
+                3653087,
+                3765957,
+                3855288,
+                3709173,
+                2640968,
+                3436011,
+                2905331,
+                2839677,
+                2746085,
+                2798048,
+                2825079,
+                2888078,
+                2951079,
+                3163336,
+                3014358,
+                2806710,
+                2713606,
+                2747901,
+                2804265,
+                2720801
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 2,
+          "data": {
+            "case": "one-word",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 3686963,
+              "samples_ns": [
+                3698068,
+                3703097,
+                3540009,
+                3530371,
+                3707287,
+                3483296,
+                3619911,
+                3837477,
+                3685635,
+                3576468,
+                3758413,
+                3651761,
+                3822531,
+                3831052,
+                3569763,
+                3686963,
+                3754851,
+                3794035,
+                3481829,
+                3579611,
+                3762535
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 3,
+          "data": {
+            "case": "one-word",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 2347969,
+              "samples_ns": [
+                2551287,
+                2496948,
+                2503584,
+                2390086,
+                2416138,
+                2511196,
+                2430316,
+                2413274,
+                1869743,
+                1811213,
+                1740879,
+                1710497,
+                1768119,
+                2535852,
+                1870092,
+                2565676,
+                1871279,
+                1846414,
+                2318704,
+                2347969,
+                2337284
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 4,
+          "data": {
+            "case": "one-word",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 2472713,
+              "samples_ns": [
+                2512244,
+                2376466,
+                2472713,
+                1911161,
+                1905573,
+                2144861,
+                1854517,
+                2670722,
+                1801085,
+                2479557,
+                2628465,
+                2471385,
+                2675471,
+                2451479,
+                2415440,
+                2442400,
+                2598711,
+                2489684,
+                2517203,
+                2597036,
+                2538366
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 5,
+          "data": {
+            "case": "one-word",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 2429339,
+              "samples_ns": [
+                2543605,
+                2469708,
+                2502187,
+                2536271,
+                2678615,
+                2059092,
+                1908855,
+                1877915,
+                1802203,
+                2466147,
+                2433250,
+                1861641,
+                1797593,
+                1781878,
+                2429339,
+                2503094,
+                3464507,
+                2853505,
+                1898729,
+                1860244,
+                1850675
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 6,
+          "data": {
+            "case": "one-word",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 2405521,
+              "samples_ns": [
+                2517552,
+                2405521,
+                2403775,
+                2450641,
+                2382542,
+                2397839,
+                2462864,
+                2471594,
+                2526772,
+                2431294,
+                2366409,
+                2348948,
+                2336096,
+                1770563,
+                1752962,
+                1718040,
+                1718389,
+                2542417,
+                2588096,
+                2483119,
+                2641806
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 7,
+          "data": {
+            "case": "one-word",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 2376047,
+              "samples_ns": [
+                2465658,
+                2482002,
+                2376047,
+                2427732,
+                2465378,
+                2409294,
+                2379749,
+                2670442,
+                2430805,
+                2503654,
+                2416068,
+                1773846,
+                1768188,
+                1765605,
+                1765325,
+                1785859,
+                1752194,
+                1719646,
+                1719088,
+                1762880,
+                1762741
+              ]
+            }
+          }
+        }
+      ],
+      "one-ruby": [
+        {
+          "label": "baseline",
+          "launch_index": 0,
+          "data": {
+            "case": "one-ruby",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 2489964,
+              "samples_ns": [
+                2582997,
+                2489964,
+                2445053,
+                2507215,
+                2583416,
+                2666112,
+                2482420,
+                2449314,
+                1830141,
+                1783624,
+                1856332,
+                2638244,
+                2491849,
+                2457066,
+                2455041,
+                2474808,
+                2483189,
+                2535223,
+                2492339,
+                2615055,
+                2500790
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 1,
+          "data": {
+            "case": "one-ruby",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 2433669,
+              "samples_ns": [
+                2528868,
+                2470966,
+                2404613,
+                2484726,
+                2519718,
+                2445892,
+                2420050,
+                2392042,
+                2394625,
+                2433669,
+                2505819,
+                2734700,
+                2012086,
+                1869114,
+                1855914,
+                2026684,
+                1809187,
+                1747445,
+                2503164,
+                2529776,
+                2513292
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 2,
+          "data": {
+            "case": "one-ruby",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 1874003,
+              "samples_ns": [
+                2605417,
+                2561345,
+                2483399,
+                2531731,
+                2455320,
+                1874003,
+                1888112,
+                1910742,
+                1829583,
+                1804299,
+                1795218,
+                1822737,
+                1890207,
+                1829233,
+                1845157,
+                1917726,
+                1882176,
+                1864365,
+                1806533,
+                1819245,
+                1763929
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 3,
+          "data": {
+            "case": "one-ruby",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 2440933,
+              "samples_ns": [
+                2515248,
+                2483329,
+                2399236,
+                2460279,
+                2734769,
+                2693072,
+                2549611,
+                2440933,
+                2470058,
+                2404543,
+                2472712,
+                2397420,
+                2357608,
+                2383451,
+                2433599,
+                2432901,
+                2508333,
+                2479277,
+                2408665,
+                1794590,
+                1786209
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 4,
+          "data": {
+            "case": "one-ruby",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 3952861,
+              "samples_ns": [
+                5016595,
+                4869084,
+                4805805,
+                4981534,
+                5130303,
+                3867721,
+                3786002,
+                3923526,
+                3966900,
+                3826163,
+                4867059,
+                4961488,
+                3805978,
+                3760719,
+                3715948,
+                4017048,
+                3903760,
+                3740603,
+                4727160,
+                3952861,
+                3798295
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 5,
+          "data": {
+            "case": "one-ruby",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 3835103,
+              "samples_ns": [
+                4738055,
+                5044604,
+                4768578,
+                3711338,
+                3716786,
+                3839224,
+                3745981,
+                3835103,
+                3682981,
+                3666847,
+                3728450,
+                4235104,
+                4482913,
+                4744551,
+                4563094,
+                4573571,
+                4078930,
+                2322965,
+                2202693,
+                2253190,
+                2269255
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 6,
+          "data": {
+            "case": "one-ruby",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 1796336,
+              "samples_ns": [
+                2545840,
+                1850256,
+                1796336,
+                1721532,
+                2361240,
+                1871768,
+                1861990,
+                2373952,
+                1719925,
+                1695689,
+                1754499,
+                1760994,
+                1730752,
+                1704560,
+                1891953,
+                1850605,
+                1910532,
+                1796056,
+                2362288,
+                1717202,
+                1766722
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 7,
+          "data": {
+            "case": "one-ruby",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 1945804,
+              "samples_ns": [
+                2369481,
+                2362567,
+                2325968,
+                2376257,
+                1997838,
+                1786069,
+                1721044,
+                1705259,
+                2495621,
+                1781878,
+                1725374,
+                2468032,
+                1916958,
+                1945804,
+                1849697,
+                1790259,
+                1766862,
+                2445263,
+                2454622,
+                1829233,
+                2097158
+              ]
+            }
+          }
+        }
+      ],
+      "plain": [
+        {
+          "label": "baseline",
+          "launch_index": 0,
+          "data": {
+            "case": "plain",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 60136,
+              "samples_ns": [
+                61045,
+                60485,
+                59857,
+                60625,
+                60066,
+                60136,
+                60067,
+                60067,
+                69984,
+                60136,
+                59787,
+                60555,
+                59647,
+                60067,
+                59856,
+                60276,
+                60066,
+                60137,
+                60486,
+                60276,
+                59648
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 1,
+          "data": {
+            "case": "plain",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 60835,
+              "samples_ns": [
+                61044,
+                60975,
+                74384,
+                60555,
+                60556,
+                60626,
+                61115,
+                60555,
+                60555,
+                60974,
+                60555,
+                60835,
+                60834,
+                61045,
+                60556,
+                60975,
+                61253,
+                61045,
+                68658,
+                60555,
+                60415
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 2,
+          "data": {
+            "case": "plain",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 60555,
+              "samples_ns": [
+                61114,
+                60625,
+                60695,
+                61114,
+                60555,
+                60066,
+                60206,
+                60625,
+                59647,
+                69565,
+                60137,
+                59648,
+                60625,
+                60555,
+                61044,
+                60765,
+                60486,
+                60555,
+                60555,
+                60695,
+                60555
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 3,
+          "data": {
+            "case": "plain",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 59927,
+              "samples_ns": [
+                61184,
+                60626,
+                60067,
+                60555,
+                70054,
+                59857,
+                60066,
+                60136,
+                59717,
+                59648,
+                59647,
+                59996,
+                59578,
+                59927,
+                59647,
+                59718,
+                59578,
+                59857,
+                59647,
+                60066,
+                100577
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 4,
+          "data": {
+            "case": "plain",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 60486,
+              "samples_ns": [
+                61114,
+                60206,
+                60136,
+                60555,
+                59158,
+                60066,
+                77877,
+                61044,
+                60066,
+                60625,
+                60486,
+                60555,
+                60136,
+                72359,
+                60346,
+                60555,
+                60136,
+                60136,
+                60765,
+                60765,
+                60067
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 5,
+          "data": {
+            "case": "plain",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 59996,
+              "samples_ns": [
+                60416,
+                59996,
+                60066,
+                59648,
+                59857,
+                59787,
+                60485,
+                60067,
+                113009,
+                59996,
+                59717,
+                59648,
+                60066,
+                59577,
+                60067,
+                59578,
+                59996,
+                59368,
+                60136,
+                59997,
+                59718
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 6,
+          "data": {
+            "case": "plain",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 60556,
+              "samples_ns": [
+                64606,
+                64816,
+                65374,
+                64397,
+                138013,
+                60485,
+                60555,
+                60276,
+                60066,
+                60625,
+                60137,
+                60765,
+                60556,
+                63908,
+                60486,
+                60556,
+                59438,
+                59997,
+                60136,
+                69984,
+                60346
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 7,
+          "data": {
+            "case": "plain",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 61044,
+              "samples_ns": [
+                62022,
+                61534,
+                60765,
+                61254,
+                60975,
+                60555,
+                61044,
+                60904,
+                61044,
+                66772,
+                60974,
+                61254,
+                61044,
+                61114,
+                60974,
+                70683,
+                61044,
+                60625,
+                61044,
+                60695,
+                61114
+              ]
+            }
+          }
+        }
+      ],
+      "forced": [
+        {
+          "label": "baseline",
+          "launch_index": 0,
+          "data": {
+            "case": "forced",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 5521573,
+              "samples_ns": [
+                6837378,
+                6811116,
+                6766555,
+                5632138,
+                5691924,
+                5576540,
+                5492029,
+                5542248,
+                5521573,
+                5514449,
+                6041567,
+                5429727,
+                5485952,
+                5432172,
+                5583735,
+                5442509,
+                5329360,
+                5388798,
+                5639820,
+                5449633,
+                5439086
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 1,
+          "data": {
+            "case": "forced",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 3856616,
+              "samples_ns": [
+                5340745,
+                5258258,
+                5126672,
+                5140431,
+                3838804,
+                3816245,
+                3830424,
+                3885740,
+                4209331,
+                3902433,
+                3838455,
+                3750521,
+                3692829,
+                3751918,
+                4092620,
+                4149893,
+                3750591,
+                3927298,
+                3851097,
+                3712525,
+                3856616
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 2,
+          "data": {
+            "case": "forced",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 5100549,
+              "samples_ns": [
+                5149370,
+                5062623,
+                4964073,
+                5121922,
+                5084904,
+                5318744,
+                5222987,
+                5290806,
+                5049703,
+                5034546,
+                5150069,
+                5045581,
+                5074776,
+                5135542,
+                5187925,
+                5293600,
+                5100549,
+                5136939,
+                5070167,
+                5094822,
+                4988309
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 3,
+          "data": {
+            "case": "forced",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 6451835,
+              "samples_ns": [
+                6722274,
+                6562538,
+                6548570,
+                6741550,
+                6848203,
+                6717943,
+                6712495,
+                6821243,
+                6816774,
+                6512251,
+                6397356,
+                6451835,
+                5755413,
+                5292133,
+                5509071,
+                5322585,
+                5304566,
+                5249459,
+                5380137,
+                5665943,
+                5469958
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 4,
+          "data": {
+            "case": "forced",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 3794104,
+              "samples_ns": [
+                5277465,
+                5218238,
+                3887766,
+                4079071,
+                3753385,
+                3620959,
+                3865346,
+                3732221,
+                3828328,
+                3794104,
+                4048619,
+                3792498,
+                3667476,
+                3781532,
+                3647919,
+                3774687,
+                3838875,
+                3665729,
+                4198855,
+                3911723,
+                3759880
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 5,
+          "data": {
+            "case": "forced",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 5473520,
+              "samples_ns": [
+                6955834,
+                6812723,
+                6628263,
+                5399554,
+                5473520,
+                5433778,
+                6743926,
+                6328559,
+                5370848,
+                5354923,
+                5427912,
+                5544482,
+                5380556,
+                5357647,
+                5469539,
+                7938130,
+                9494480,
+                5606086,
+                5226689,
+                5465279,
+                5661472
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 6,
+          "data": {
+            "case": "forced",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 5499153,
+              "samples_ns": [
+                6650822,
+                5501388,
+                5419111,
+                5747102,
+                5504531,
+                5464650,
+                5510468,
+                5597005,
+                5499153,
+                5565506,
+                5403326,
+                5386564,
+                5477431,
+                5514589,
+                5309734,
+                5636467,
+                5342980,
+                5451240,
+                5563550,
+                5493146,
+                5406190
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 7,
+          "data": {
+            "case": "forced",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 4962256,
+              "samples_ns": [
+                5228924,
+                5100829,
+                5240658,
+                5433639,
+                3904249,
+                5247363,
+                5219285,
+                4879980,
+                3853821,
+                3999448,
+                4025360,
+                3790402,
+                3858501,
+                5416038,
+                4962256,
+                5013103,
+                5183594,
+                3805069,
+                3812334,
+                4136274,
+                5186738
+              ]
+            }
+          }
+        }
+      ],
+      "first-line": [
+        {
+          "label": "baseline",
+          "launch_index": 0,
+          "data": {
+            "case": "first-line",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 49780068,
+              "samples_ns": [
+                49468909,
+                50068107,
+                49748008,
+                49756529,
+                49780068,
+                49212859,
+                50017469,
+                49433148,
+                49802209,
+                48682458,
+                49343887,
+                48905472,
+                49841810,
+                49633952,
+                50568824,
+                50306208,
+                49563479,
+                50021102,
+                50269888,
+                50901284,
+                50910574
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 1,
+          "data": {
+            "case": "first-line",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 11531151,
+              "samples_ns": [
+                11531151,
+                11356958,
+                11489384,
+                11222368,
+                11767436,
+                10626173,
+                10835987,
+                10834380,
+                14898923,
+                14799395,
+                9654633,
+                9636125,
+                10054355,
+                11041470,
+                13381268,
+                13427435,
+                13238854,
+                13459982,
+                13463475,
+                14087886,
+                14369849
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 2,
+          "data": {
+            "case": "first-line",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 11347320,
+              "samples_ns": [
+                14246853,
+                11347320,
+                9520113,
+                12263892,
+                13579487,
+                14265361,
+                13430858,
+                13568521,
+                14364541,
+                15713871,
+                11198411,
+                9326782,
+                14488027,
+                12278280,
+                9430851,
+                10430328,
+                9274678,
+                8829558,
+                8847159,
+                8723743,
+                9059487
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 3,
+          "data": {
+            "case": "first-line",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 49696463,
+              "samples_ns": [
+                49421065,
+                49446001,
+                50102889,
+                49561453,
+                49431193,
+                50100934,
+                50378496,
+                50049878,
+                50114344,
+                49629203,
+                49571930,
+                49390614,
+                50595854,
+                49534214,
+                49604897,
+                49696463,
+                50152060,
+                50277013,
+                56760208,
+                49996935,
+                49517522
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 4,
+          "data": {
+            "case": "first-line",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 8822503,
+              "samples_ns": [
+                8872582,
+                8781086,
+                9517318,
+                8787092,
+                8634831,
+                9548470,
+                8822503,
+                8988664,
+                8729959,
+                9177594,
+                8544243,
+                8808535,
+                8830535,
+                9011434,
+                8812585,
+                8905479,
+                9515084,
+                8707959,
+                8628196,
+                8647053,
+                9222505
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 5,
+          "data": {
+            "case": "first-line",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 49777064,
+              "samples_ns": [
+                50115113,
+                49972560,
+                49628784,
+                49326007,
+                49714693,
+                49268315,
+                49967530,
+                55611123,
+                49662030,
+                49431682,
+                49777064,
+                50100654,
+                49910956,
+                49946018,
+                49080503,
+                50388625,
+                49178914,
+                50407482,
+                49496219,
+                50925311,
+                49340115
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 6,
+          "data": {
+            "case": "first-line",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 51627669,
+              "samples_ns": [
+                50294963,
+                50918816,
+                51627669,
+                51572003,
+                51421069,
+                51105720,
+                51366380,
+                50903310,
+                51967114,
+                50733238,
+                50934950,
+                52149969,
+                52070066,
+                52298528,
+                53449219,
+                51927443,
+                52624913,
+                52041290,
+                52499261,
+                51608602,
+                51886794
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 7,
+          "data": {
+            "case": "first-line",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 9217755,
+              "samples_ns": [
+                9467101,
+                9655611,
+                9542742,
+                9514036,
+                9256519,
+                9217755,
+                8868252,
+                9263154,
+                9102651,
+                8846531,
+                9194287,
+                8858264,
+                8715222,
+                8964568,
+                9040000,
+                9099088,
+                9489939,
+                10081245,
+                11877791,
+                8710473,
+                9620130
+              ]
+            }
+          }
+        }
+      ],
+      "atomics": [
+        {
+          "label": "baseline",
+          "launch_index": 0,
+          "data": {
+            "case": "atomics",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 28778603,
+              "samples_ns": [
+                28276279,
+                27953946,
+                28233186,
+                36327908,
+                42040505,
+                33529300,
+                27722691,
+                28034548,
+                28778603,
+                29023408,
+                28579197,
+                28415619,
+                28874430,
+                29153599,
+                28860950,
+                28737045,
+                28519199,
+                28661753,
+                29229451,
+                31521753,
+                30438601
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 1,
+          "data": {
+            "case": "atomics",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 8573018,
+              "samples_ns": [
+                10960939,
+                10702653,
+                13723437,
+                13546241,
+                12218773,
+                8419360,
+                7978919,
+                8575673,
+                8991109,
+                8278902,
+                8785346,
+                8211432,
+                8864481,
+                9377071,
+                8100240,
+                8003994,
+                7465771,
+                8573018,
+                8436891,
+                7988977,
+                7481625
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 2,
+          "data": {
+            "case": "atomics",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 8226030,
+              "samples_ns": [
+                7685851,
+                7707713,
+                8027811,
+                7827846,
+                7723777,
+                7594703,
+                8226030,
+                8041990,
+                8512324,
+                9370855,
+                9021003,
+                8612201,
+                9567398,
+                9847754,
+                9061583,
+                8412725,
+                7817019,
+                8175952,
+                8090252,
+                9242061,
+                8236018
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 3,
+          "data": {
+            "case": "atomics",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 29383458,
+              "samples_ns": [
+                28942319,
+                31721719,
+                48316471,
+                48832485,
+                49905089,
+                41696730,
+                28193304,
+                29513857,
+                30967536,
+                37416507,
+                35838436,
+                39208372,
+                28476874,
+                28095102,
+                28199660,
+                29383458,
+                28111656,
+                28192955,
+                28227667,
+                28244151,
+                28054662
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 4,
+          "data": {
+            "case": "atomics",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 10985874,
+              "samples_ns": [
+                9888124,
+                8233154,
+                7615727,
+                9518646,
+                10985874,
+                10369843,
+                10546760,
+                10965200,
+                11177667,
+                11159997,
+                11269303,
+                10995163,
+                11395652,
+                11236337,
+                11279850,
+                12589089,
+                12700142,
+                11073878,
+                8949622,
+                7341935,
+                7889728
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 5,
+          "data": {
+            "case": "atomics",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 28928559,
+              "samples_ns": [
+                28546719,
+                29524614,
+                34160906,
+                28342283,
+                28626621,
+                28632069,
+                32051595,
+                37069519,
+                30615867,
+                28299957,
+                28750245,
+                28184643,
+                28928559,
+                29588452,
+                28818554,
+                28727826,
+                30163134,
+                28568440,
+                28942388,
+                33696299,
+                46820677
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 6,
+          "data": {
+            "case": "atomics",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 88525858,
+              "samples_ns": [
+                64350581,
+                50604584,
+                79551094,
+                62531056,
+                75277505,
+                97801095,
+                157917621,
+                121596838,
+                170843222,
+                226042679,
+                283553019,
+                76589817,
+                103747185,
+                144237837,
+                103781270,
+                52821734,
+                88525858,
+                70032098,
+                64752537,
+                85978552,
+                179441105
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 7,
+          "data": {
+            "case": "atomics",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 12471889,
+              "samples_ns": [
+                14201175,
+                12776622,
+                11599459,
+                11525424,
+                12471889,
+                12774806,
+                17820946,
+                59866760,
+                16855832,
+                16106888,
+                20556135,
+                12479432,
+                12828587,
+                10664378,
+                8223725,
+                10545642,
+                10033750,
+                11717288,
+                9319030,
+                11595478,
+                10460222
+              ]
+            }
+          }
+        }
+      ],
+      "warning0": [
+        {
+          "label": "baseline",
+          "launch_index": 0,
+          "data": {
+            "case": "warning0",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 133659437,
+              "samples_ns": [
+                44198567,
+                61069766,
+                115511618,
+                83743942,
+                120485259,
+                231003540,
+                160144760,
+                94087383,
+                199799789,
+                233770786,
+                249402031,
+                138206956,
+                135571575,
+                133659437,
+                121645450,
+                189031831,
+                121125875,
+                140345252,
+                88620777,
+                222319119,
+                113233842
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 1,
+          "data": {
+            "case": "warning0",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 15164403,
+              "samples_ns": [
+                11324900,
+                10327308,
+                10595791,
+                24847952,
+                54464273,
+                12612068,
+                21956870,
+                21285802,
+                13512156,
+                13479679,
+                30111170,
+                11043356,
+                16490265,
+                15485479,
+                10483272,
+                15164403,
+                12486697,
+                15975580,
+                32572079,
+                12237910,
+                33797504
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 2,
+          "data": {
+            "case": "warning0",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 10541172,
+              "samples_ns": [
+                10539497,
+                13123052,
+                10541172,
+                9416324,
+                10286798,
+                8451279,
+                8579863,
+                9312534,
+                7649531,
+                8008394,
+                8465248,
+                18979880,
+                9530660,
+                20762805,
+                17463970,
+                21267154,
+                33502689,
+                55490780,
+                46018232,
+                40505319,
+                48296217
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 3,
+          "data": {
+            "case": "warning0",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 59918236,
+              "samples_ns": [
+                93132466,
+                72429518,
+                49214116,
+                142433609,
+                160895869,
+                59918236,
+                63748589,
+                57028761,
+                46085143,
+                43079585,
+                31936561,
+                46485563,
+                58980989,
+                170688865,
+                94626445,
+                92986490,
+                50636224,
+                73579442,
+                94168123,
+                58989441,
+                54412867
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 4,
+          "data": {
+            "case": "warning0",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 7756464,
+              "samples_ns": [
+                8909880,
+                9887216,
+                8928248,
+                7402491,
+                7914941,
+                8110227,
+                8637205,
+                7495244,
+                29116511,
+                15295711,
+                7786078,
+                38493093,
+                7756464,
+                7718120,
+                7099784,
+                6923845,
+                6467969,
+                4561628,
+                4704670,
+                5199170,
+                7124998
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 5,
+          "data": {
+            "case": "warning0",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 38574951,
+              "samples_ns": [
+                51312810,
+                62093270,
+                49566412,
+                48015790,
+                42720863,
+                35813990,
+                26539870,
+                27303412,
+                41119324,
+                46605835,
+                38574951,
+                41895299,
+                47177165,
+                34215035,
+                40215883,
+                38014448,
+                24879592,
+                25010690,
+                25173010,
+                24685075,
+                24778178
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 6,
+          "data": {
+            "case": "warning0",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 25333932,
+              "samples_ns": [
+                26211111,
+                26010797,
+                26205663,
+                24950135,
+                25165257,
+                24687798,
+                29082637,
+                25333932,
+                29993202,
+                24633390,
+                24768818,
+                24371472,
+                24912139,
+                26621588,
+                24725375,
+                24595045,
+                25162602,
+                28748779,
+                26196095,
+                26029934,
+                25617082
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 7,
+          "data": {
+            "case": "warning0",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 4292166,
+              "samples_ns": [
+                5680400,
+                5105159,
+                5260214,
+                5253579,
+                5296953,
+                5542247,
+                5605177,
+                5627807,
+                5407727,
+                4106869,
+                4095624,
+                4085496,
+                4292166,
+                4333585,
+                3981497,
+                3956912,
+                4064194,
+                4045755,
+                4226582,
+                3861923,
+                4250329
+              ]
+            }
+          }
+        }
+      ],
+      "warning2": [
+        {
+          "label": "baseline",
+          "launch_index": 0,
+          "data": {
+            "case": "warning2",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 44562807,
+              "samples_ns": [
+                27966728,
+                26846559,
+                42505323,
+                47290173,
+                49604897,
+                47155583,
+                43370768,
+                43038377,
+                44515313,
+                43924706,
+                44825214,
+                45354078,
+                44342378,
+                43534484,
+                43646585,
+                55341033,
+                49216421,
+                44562807,
+                44584040,
+                44713183,
+                47316924
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 1,
+          "data": {
+            "case": "warning2",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 7162434,
+              "samples_ns": [
+                8369141,
+                8277575,
+                8447997,
+                6586425,
+                6480261,
+                6321155,
+                6457003,
+                6515603,
+                8130413,
+                13212662,
+                7162434,
+                6701529,
+                15477378,
+                23309273,
+                7434620,
+                6527406,
+                6838355,
+                7991143,
+                7366032,
+                6904707,
+                6645933
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 2,
+          "data": {
+            "case": "warning2",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 9163975,
+              "samples_ns": [
+                9163975,
+                9584579,
+                9615381,
+                9530659,
+                9621667,
+                8939563,
+                10757272,
+                9289625,
+                10180913,
+                9306388,
+                9000468,
+                9014297,
+                8624703,
+                9127096,
+                9134710,
+                9079323,
+                7770153,
+                13708420,
+                9677962,
+                7910681,
+                8033957
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 3,
+          "data": {
+            "case": "warning2",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 57931224,
+              "samples_ns": [
+                56233509,
+                43556205,
+                42647945,
+                89630732,
+                53150075,
+                77386397,
+                54725072,
+                108925052,
+                128919356,
+                76701499,
+                104511566,
+                70303795,
+                54766421,
+                51885466,
+                50417610,
+                58915964,
+                53338865,
+                64251820,
+                61962241,
+                48404127,
+                57931224
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 4,
+          "data": {
+            "case": "warning2",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 9886029,
+              "samples_ns": [
+                10089347,
+                9935898,
+                9831620,
+                9992752,
+                9886029,
+                9656170,
+                9808641,
+                9889452,
+                9820305,
+                9814927,
+                9918228,
+                9717075,
+                9841538,
+                9888404,
+                9882816,
+                9755908,
+                9909078,
+                9972008,
+                9849081,
+                10135515,
+                10022296
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 5,
+          "data": {
+            "case": "warning2",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 55784127,
+              "samples_ns": [
+                56506881,
+                56337158,
+                56269688,
+                56908348,
+                56966250,
+                55103980,
+                57546799,
+                55668605,
+                55784127,
+                56683029,
+                55281805,
+                53213913,
+                57080166,
+                52150248,
+                51922763,
+                52639440,
+                59203306,
+                51476944,
+                49578146,
+                58703427,
+                53710159
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 6,
+          "data": {
+            "case": "warning2",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 71136762,
+              "samples_ns": [
+                71136762,
+                69345315,
+                52281066,
+                51033291,
+                51002978,
+                53397744,
+                50424874,
+                70069605,
+                51998964,
+                78743130,
+                57529058,
+                119050928,
+                122557761,
+                93978006,
+                101541909,
+                127125186,
+                117198367,
+                95973958,
+                121642097,
+                105381622,
+                68290870
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 7,
+          "data": {
+            "case": "warning2",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 17368422,
+              "samples_ns": [
+                19579845,
+                19218329,
+                17368422,
+                14033547,
+                13990174,
+                15788047,
+                23295095,
+                23441349,
+                14696024,
+                20146146,
+                18408550,
+                13635642,
+                14746243,
+                13131294,
+                17848814,
+                15689985,
+                11121861,
+                7672651,
+                19357460,
+                20026363,
+                18571777
+              ]
+            }
+          }
+        }
+      ],
+      "budget0": [
+        {
+          "label": "baseline",
+          "launch_index": 0,
+          "data": {
+            "case": "budget0",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 598639,
+              "samples_ns": [
+                608976,
+                625390,
+                598639,
+                607090,
+                618265,
+                588511,
+                604366,
+                593610,
+                573355,
+                597801,
+                594658,
+                610164,
+                597033,
+                611699,
+                588791,
+                563996,
+                607649,
+                595985,
+                1440617,
+                594169,
+                1560400
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 1,
+          "data": {
+            "case": "budget0",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 607509,
+              "samples_ns": [
+                598500,
+                587953,
+                1967944,
+                607509,
+                1999025,
+                593959,
+                603737,
+                2984534,
+                595985,
+                605484,
+                2008943,
+                614284,
+                2009014,
+                595915,
+                600525,
+                2001261,
+                1865273,
+                2221550,
+                604506,
+                601782,
+                1185964
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 2,
+          "data": {
+            "case": "budget0",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 593541,
+              "samples_ns": [
+                593541,
+                1915631,
+                582365,
+                533963,
+                576010,
+                596404,
+                601502,
+                582784,
+                558338,
+                580619,
+                570282,
+                612677,
+                594588,
+                603318,
+                603947,
+                586206,
+                607300,
+                590328,
+                603948,
+                605414,
+                589839
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 3,
+          "data": {
+            "case": "budget0",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 607929,
+              "samples_ns": [
+                635028,
+                596613,
+                596334,
+                617846,
+                595216,
+                609465,
+                614563,
+                594588,
+                612678,
+                598290,
+                605903,
+                613097,
+                601363,
+                607929,
+                610513,
+                604856,
+                614634,
+                606392,
+                1422876,
+                601572,
+                939411
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 4,
+          "data": {
+            "case": "budget0",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 644457,
+              "samples_ns": [
+                1448370,
+                611909,
+                1575976,
+                605624,
+                836111,
+                634120,
+                612817,
+                666877,
+                992563,
+                631466,
+                620990,
+                644457,
+                619173,
+                864747,
+                1424133,
+                1538958,
+                655422,
+                598569,
+                623783,
+                3286193,
+                607020
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 5,
+          "data": {
+            "case": "budget0",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 642781,
+              "samples_ns": [
+                2275680,
+                642781,
+                2237266,
+                641733,
+                622875,
+                2281198,
+                628812,
+                2278404,
+                622526,
+                648788,
+                2252631,
+                640266,
+                876341,
+                625110,
+                608347,
+                2968400,
+                613167,
+                2032341,
+                599756,
+                614144,
+                2019141
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 6,
+          "data": {
+            "case": "budget0",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 622456,
+              "samples_ns": [
+                2042609,
+                623085,
+                2026265,
+                609256,
+                624133,
+                3006046,
+                607719,
+                2021515,
+                610023,
+                622875,
+                2017185,
+                609954,
+                621618,
+                617637,
+                616729,
+                637822,
+                619383,
+                605344,
+                622456,
+                617637,
+                627205
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 7,
+          "data": {
+            "case": "budget0",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 598639,
+              "samples_ns": [
+                540528,
+                593191,
+                562320,
+                554707,
+                591375,
+                588721,
+                601922,
+                621268,
+                595566,
+                612468,
+                606392,
+                611840,
+                610861,
+                590747,
+                615053,
+                598080,
+                611420,
+                612887,
+                598639,
+                617358,
+                596614
+              ]
+            }
+          }
+        }
+      ],
+      "default-budget": [
+        {
+          "label": "baseline",
+          "launch_index": 0,
+          "data": {
+            "case": "default-budget",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 50930130,
+              "samples_ns": [
+                53292488,
+                52578325,
+                51061788,
+                50287839,
+                50421941,
+                51254420,
+                50657107,
+                50393304,
+                50611429,
+                52808814,
+                50187052,
+                50244535,
+                49305822,
+                50721994,
+                50930130,
+                51535754,
+                51440137,
+                72812826,
+                109881436,
+                52120074,
+                41045778
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 1,
+          "data": {
+            "case": "default-budget",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 6638250,
+              "samples_ns": [
+                17446229,
+                16564090,
+                16108913,
+                24754221,
+                7784332,
+                5890283,
+                7966557,
+                5771408,
+                5981012,
+                5937009,
+                6491018,
+                7821141,
+                6314590,
+                5998612,
+                5878550,
+                6111830,
+                6457912,
+                8784439,
+                6638250,
+                11919557,
+                8204168
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 2,
+          "data": {
+            "case": "default-budget",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 7846284,
+              "samples_ns": [
+                21636772,
+                21011593,
+                16189305,
+                16019931,
+                16938808,
+                16122742,
+                16071476,
+                12829914,
+                7939108,
+                7455783,
+                7615658,
+                7261545,
+                7530796,
+                7736279,
+                7529818,
+                7495524,
+                7419114,
+                7354019,
+                7279006,
+                8563589,
+                7846284
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 3,
+          "data": {
+            "case": "default-budget",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 51727966,
+              "samples_ns": [
+                50013209,
+                57988845,
+                54850863,
+                52129783,
+                53790620,
+                103406274,
+                89637996,
+                50756776,
+                50642300,
+                50352724,
+                52661790,
+                49881901,
+                51227040,
+                53148189,
+                51727966,
+                50482635,
+                51085255,
+                50157997,
+                51733204,
+                55510476,
+                51331318
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 4,
+          "data": {
+            "case": "default-budget",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 8116654,
+              "samples_ns": [
+                10123362,
+                9730904,
+                8019499,
+                8209965,
+                7786776,
+                9747457,
+                8719274,
+                7872267,
+                7889867,
+                8109878,
+                10089487,
+                7813597,
+                7743962,
+                8116654,
+                10745748,
+                10694482,
+                7878623,
+                7991631,
+                7850754,
+                11025615,
+                9942255
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 5,
+          "data": {
+            "case": "default-budget",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 51949933,
+              "samples_ns": [
+                51949933,
+                51676910,
+                56210460,
+                49733551,
+                52138583,
+                50367671,
+                51846423,
+                52355870,
+                52509319,
+                51671672,
+                51568301,
+                53914105,
+                50854978,
+                59441057,
+                51415063,
+                51065629,
+                54215136,
+                50964494,
+                52520564,
+                53301637,
+                52557302
+              ]
+            }
+          }
+        },
+        {
+          "label": "baseline",
+          "launch_index": 6,
+          "data": {
+            "case": "default-budget",
+            "context_inline_bytes": 1720,
+            "groups": 64,
+            "result": {
+              "median_ns": 52346721,
+              "samples_ns": [
+                55708416,
+                53818209,
+                55040631,
+                51956638,
+                53079951,
+                53354510,
+                52670870,
+                53356046,
+                51695558,
+                52695734,
+                52346721,
+                51229345,
+                51874291,
+                62597339,
+                53563415,
+                50688538,
+                49716998,
+                50368159,
+                49336204,
+                50174760,
+                50155762
+              ]
+            }
+          }
+        },
+        {
+          "label": "candidate",
+          "launch_index": 7,
+          "data": {
+            "case": "default-budget",
+            "context_inline_bytes": 1760,
+            "groups": 64,
+            "result": {
+              "median_ns": 7736210,
+              "samples_ns": [
+                9731044,
+                9767782,
+                10200959,
+                7756184,
+                7790548,
+                7445865,
+                7828334,
+                7715675,
+                7736210,
+                7504324,
+                7695699,
+                7702894,
+                7763588,
+                7690670,
+                7584366,
+                7473942,
+                7720773,
+                7963833,
+                7662034,
+                7789152,
+                7805984
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "summary": {
+      "eviction": {
+        "baseline_ns": 25124502.5,
+        "candidate_ns": 4619983.0,
+        "ratio": 0.1838835614754959
+      },
+      "one-word": {
+        "baseline_ns": 2417430.0,
+        "candidate_ns": 2680395.5,
+        "ratio": 1.1087789512002415
+      },
+      "one-ruby": {
+        "baseline_ns": 2465448.5,
+        "candidate_ns": 2189736.5,
+        "ratio": 0.888169637289118
+      },
+      "plain": {
+        "baseline_ns": 60066.0,
+        "candidate_ns": 60695.0,
+        "ratio": 1.010471814337562
+      },
+      "forced": {
+        "baseline_ns": 5510363.0,
+        "candidate_ns": 4409436.0,
+        "ratio": 0.8002078991892185
+      },
+      "first-line": {
+        "baseline_ns": 49778566.0,
+        "candidate_ns": 10282537.5,
+        "ratio": 0.20656556277655727
+      },
+      "atomics": {
+        "baseline_ns": 29156008.5,
+        "candidate_ns": 9779446.0,
+        "ratio": 0.33541786078159497
+      },
+      "warning0": {
+        "baseline_ns": 49246593.5,
+        "candidate_ns": 9148818.0,
+        "ratio": 0.1857756516702013
+      },
+      "warning2": {
+        "baseline_ns": 56857675.5,
+        "candidate_ns": 9525002.0,
+        "ratio": 0.16752359142786272
+      },
+      "budget0": {
+        "baseline_ns": 615192.5,
+        "candidate_ns": 603074.0,
+        "ratio": 0.9803012878082876
+      },
+      "default-budget": {
+        "baseline_ns": 51838949.5,
+        "candidate_ns": 7791247.0,
+        "ratio": 0.15029716217532532
+      }
+    },
+    "start_utc": "2026-10-09T16:45:27Z",
+    "end_utc": "2026-10-09T16:46:05Z"
+  },
+  "timing_conditions": {
+    "measurement_scope": "intrinsic_sizes only; one fresh context per trial, preparation/context destruction excluded",
+    "warmups_per_process": 1,
+    "aggregation": "median of four candidate process medians / median of four baseline process medians",
+    "launch_order_per_case": "ABBA then BAAB",
+    "other_host_jobs": "active cargo-mutants tests and independent raikiri tests/diff workloads observed before launch",
+    "sibling_load_frequency_scheduling": "uncontrolled; no control-case speedup/regression claim; elapsed ratios are observations"
+  },
+  "allocation_scope": {
+    "measure": "fresh-context intrinsic_sizes with prebuilt paragraph and fonts; retained context and warning storage survive scope",
+    "shrink": "context.shrink_to(0), separate scope",
+    "final_drop": "context plus original warning vector, separate scope",
+    "reconciliation": "intrinsic net + shrink net + final_drop net = 0 in all 22 runs; report formatting excluded from accounting scopes",
+    "exclusions": [
+      "inline Context/stack",
+      "RSS",
+      "native allocator administration",
+      "mmap"
+    ]
+  },
+  "massif": {
+    "groups": 64,
+    "iterations": 2,
+    "flags": [
+      "--time-unit=B",
+      "--stacks=no",
+      "--detailed-freq=1",
+      "--max-snapshots=200"
+    ],
+    "scope": "whole process including paragraph/fonts preparation; distinct from allocation scopes",
+    "cases": {
+      "eviction": {
+        "baseline": {
+          "peak_heap_bytes": 10886052,
+          "peak_heap_plus_admin_bytes": 11125840,
+          "snapshots": 184
+        },
+        "candidate": {
+          "peak_heap_bytes": 10822340,
+          "peak_heap_plus_admin_bytes": 11061960,
+          "snapshots": 161
+        }
+      },
+      "one-word": {
+        "baseline": {
+          "peak_heap_bytes": 5539932,
+          "peak_heap_plus_admin_bytes": 5664128,
+          "snapshots": 175
+        },
+        "candidate": {
+          "peak_heap_bytes": 5539932,
+          "peak_heap_plus_admin_bytes": 5664128,
+          "snapshots": 175
+        }
+      },
+      "plain": {
+        "baseline": {
+          "peak_heap_bytes": 580771,
+          "peak_heap_plus_admin_bytes": 586280,
+          "snapshots": 107
+        },
+        "candidate": {
+          "peak_heap_bytes": 580771,
+          "peak_heap_plus_admin_bytes": 586280,
+          "snapshots": 107
+        }
+      }
+    }
+  },
+  "memcheck": {
+    "groups": 32,
+    "iterations": 2,
+    "flags": [
+      "--leak-check=full",
+      "--show-leak-kinds=all",
+      "--errors-for-leak-kinds=definite,indirect,possible",
+      "--error-exitcode=97"
+    ],
+    "cases": {
+      "eviction": {
+        "baseline": {
+          "definite_lost_bytes": 0,
+          "indirect_lost_bytes": 0,
+          "possible_lost_bytes": 0,
+          "still_reachable_bytes": 456,
+          "errors": 0,
+          "in_use_blocks": 1
+        },
+        "candidate": {
+          "definite_lost_bytes": 0,
+          "indirect_lost_bytes": 0,
+          "possible_lost_bytes": 0,
+          "still_reachable_bytes": 456,
+          "errors": 0,
+          "in_use_blocks": 1
+        }
+      },
+      "warning0": {
+        "baseline": {
+          "definite_lost_bytes": 0,
+          "indirect_lost_bytes": 0,
+          "possible_lost_bytes": 0,
+          "still_reachable_bytes": 456,
+          "errors": 0,
+          "in_use_blocks": 1
+        },
+        "candidate": {
+          "definite_lost_bytes": 0,
+          "indirect_lost_bytes": 0,
+          "possible_lost_bytes": 0,
+          "still_reachable_bytes": 456,
+          "errors": 0,
+          "in_use_blocks": 1
+        }
+      },
+      "plain": {
+        "baseline": {
+          "definite_lost_bytes": 0,
+          "indirect_lost_bytes": 0,
+          "possible_lost_bytes": 0,
+          "still_reachable_bytes": 456,
+          "errors": 0,
+          "in_use_blocks": 1
+        },
+        "candidate": {
+          "definite_lost_bytes": 0,
+          "indirect_lost_bytes": 0,
+          "possible_lost_bytes": 0,
+          "still_reachable_bytes": 456,
+          "errors": 0,
+          "in_use_blocks": 1
+        }
+      }
+    },
+    "still_reachable": "same 456 bytes in one Rust std stack-overflow thread-info BTreeMap allocation in all six runs; no lost blocks",
+    "runtime": "working Debian runtime avoids known host glibc loader-debuginfo incompatibility; no host package changes"
+  },
+  "validation": {
+    "workspace": {
+      "passed": 1741,
+      "failed": 0,
+      "ignored": 9,
+      "test_suites": 101,
+      "library_passed": 794,
+      "library_ignored": 8,
+      "exact_code_commit": "5c34dd1c611873daa6b8caf953a193cc094b0533",
+      "rustflags": "-D warnings"
+    },
+    "new_tests": 6,
+    "differential_boundary_matrix": {
+      "first_line": 2,
+      "forced_break": 2,
+      "atomic_input": 2,
+      "warning_caps": [
+        null,
+        0,
+        2
+      ],
+      "accumulator_caps": [
+        null,
+        3
+      ],
+      "repeated_calls": 2,
+      "comparisons": 96,
+      "mode": "Verify (step oracle) vs unlimited Reference; shrink footprint must become zero"
+    },
+    "real_warning_matrix": "missing atomic warnings at caps None/0/2, ordered reference comparison, two calls, suppressed marker explicitly asserted",
+    "budget_matrix": "factors 0/1/16; repeated retained vs fresh contexts compare widths/warnings/LineWork; factor 0 refuses all measures/walks with one budget warning",
+    "memo_tests": "nested take/put capacity and payload preservation; clear restores ordinary LRU; repin dataset/revision/start evicts former row",
+    "existing_contract_tests": "workspace includes accumulator epoch, shrinking-end, rollback/retry, dirty/profile and overflow fallback tests",
+    "clippy_workspace": "strict workspace/all-targets passed",
+    "clippy_probe": "strict allocation-counting example passed",
+    "fmt_diff_check": "passed",
+    "final_filtered_counter_test": "passed after final lint-only test/probe cleanup",
+    "development_test_corrections": [
+      "new fixture helper originally overwrote requested ruby budget with None; removed override",
+      "Reference bypasses allowance, so bounded factor-0 test uses repeated-vs-fresh Accumulate contexts, not Reference"
+    ],
+    "independent_code_review": {
+      "commit": "5c34dd1c611873daa6b8caf953a193cc094b0533",
+      "findings": 0,
+      "reviewer": "review_5nl_identity",
+      "scope": "all five files and relevant contracts; tests not independently reexecuted"
+    },
+    "independent_measurement_record_review": {
+      "draft_json_sha256": "ed374dc35473b78854f19169fef5826472ec8ad428abe90f1c0d4ca236192ae1",
+      "draft_md_sha256": "1f1bc40335ee108e49060e7cbd2b0c08aa952d9b4e4865028fa4d31272e77546",
+      "findings": 0,
+      "reviewer": "review_5nl_identity",
+      "scope": "five changed source/probe files, all 88 archived artifact hashes, four binaries, 88 timing processes, 22 allocation scopes, public outputs, Callgrind/Massif/Memcheck and validation summaries; adopt supported"
+    }
+  },
+  "artifacts_sha256": {
+    "baseline-alloc-build.log": "c5a26e3ffe20868a309008f0dca321ff7d777b5b26485404456078b1945a1dd9",
+    "baseline-alloc-final-build.log": "5ac88f600453daa3456648362eab68a710d2a6e3a298087e5b58da3b44065211",
+    "baseline-probe-build.log": "7a382766e9d017b96ffb0590a03952c06ffc9ec6c70c767a9fa9eb21eb8d72db",
+    "baseline-ruby-tests.log": "2827bcfb01287e1596471bc179052025f72bb6598c21951982a86d4f0242b0b5",
+    "baseline-time-final-build.log": "a8012dd07fa71e279d53a195ae50b466bd9cec4ac68ff70491fe5ac17bfca2e9",
+    "binaries.json": "2d1295b8552cf62d9f7444cf971893892bcd47f458b834c86fb5f734e0738f91",
+    "binding-budget-1.json": "aff0709bd9452120be85cbedc272edf33849c4767648024db91728ec0aad13c6",
+    "binding-budget-128.json": "fb679eee829147e443dc7a16bb74dab6d54ebee040bb1997fa3512a9cdb6bbb0",
+    "callgrind-baseline-atomics.log": "8fe86ff1e52d89e1ee2025e968dc1d82ac0f73407a9257b1b6221324c779a688",
+    "callgrind-baseline-atomics.out": "a8f87a76bfb0f75be35fad58809c010be44917c9f0d3dc2fcbb31c4727eed005",
+    "callgrind-baseline-atomics.txt": "981bfaa4ed8f0ff30a66623100224f27698135d4f7411db0bc10060c38e77597",
+    "callgrind-baseline-eviction.log": "0b59b609a45438f57ec295d53a3788ff98d3361c7314a91a1065646f34429b75",
+    "callgrind-baseline-eviction.out": "8d2474a118f553710cf3e4115226e962c1fb81be2bd82847b792176bada86d4c",
+    "callgrind-baseline-eviction.txt": "ccac015b5927a4bfd90a62ca843b72a1401b8b82f9cb1e5203e6fa3eea5b225f",
+    "callgrind-baseline-first-line.log": "95e6c45fbe098e0c8340ef4341f541630e1c7c4069febe7992d4c54a8dd56d99",
+    "callgrind-baseline-first-line.out": "ef82b53f14a57d78454337fc216257695154a9133a159e149a7a93ac45333243",
+    "callgrind-baseline-first-line.txt": "603566df13e540d2d41d3214f07aad648cc941d023b222093380ecd246396b20",
+    "callgrind-baseline-forced.log": "f9cf59976cccab49395f1299b26a31fbb651a82e8a47617e54b7061e53c31736",
+    "callgrind-baseline-forced.out": "cf3b22ab81240435d536362a00b208475b1e6699356bf75dc8934b0bb0d0a411",
+    "callgrind-baseline-forced.txt": "8d62ce4029c832b9bc10e66f63d278ee3efc0e61e0c41ee32ce53bb735071ba9",
+    "callgrind-baseline-one-ruby.log": "6b613cb954d4d22491783aeef5c6cb46485ac18afac7c2c8758b9f1bed71379e",
+    "callgrind-baseline-one-ruby.out": "f655824d6b31826126995115353ab4e695fe2c98b7a886d6450388136109115b",
+    "callgrind-baseline-one-ruby.txt": "629b1306bda6d3dd138dc283a593f34dd6c280336f9da06de0a6ba2908e9e6d7",
+    "callgrind-baseline-one-word.log": "5d3ae6b86612d6b1ca337438d442ca60f3d98a3e8dd2de3d19f3e671c48311b0",
+    "callgrind-baseline-one-word.out": "2fe2148aee9605530d0586b967b7b044516eae3bf5d3fc3c97e3cea49e01a013",
+    "callgrind-baseline-one-word.txt": "4da00a43a76ae9dbbb18802f502e3e2f3b6eccbccc3f1b3d4078465bfd1ea71c",
+    "callgrind-baseline-plain.log": "fd10b90c17bd2ce7363dbde0497cacc31eef1724346aceb4ab553b70a4402d6f",
+    "callgrind-baseline-plain.out": "ee1e24b51a0d442754780604388061ce999ea3429714e43daa5880eb49c79002",
+    "callgrind-baseline-plain.txt": "7206cdc206a877813b295b1ac70d740710ac2642641a6648eaeefe3687a339ee",
+    "callgrind-candidate-atomics.log": "5302ca3c928cb90a734477174b84b70acb6620c52e17ab2263792af1e1db4e6c",
+    "callgrind-candidate-atomics.out": "5d19283fedd6a61db186261d87dabd877d4c75b27fd74dad1a8597fee175eb64",
+    "callgrind-candidate-atomics.txt": "04c0b7623784c19520d6c25ed38c37edc424de5cb3e1b7a2b26916f612319d2a",
+    "callgrind-candidate-eviction.log": "d40d57ddd066a15b6ea95af3fbc25234fca046050d36ef99381603a942281661",
+    "callgrind-candidate-eviction.out": "f17ec39a494de04ab5a1dfe3dd9e83e85ec979d1f080762d9f31fd593e8d5cb3",
+    "callgrind-candidate-eviction.txt": "63aee1fcdd65ccb5502428230df2327e95ccd0643c6211ee924a25435e0c7fd1",
+    "callgrind-candidate-first-line.log": "688497e87f93ac40e4dc1197f65884a7c1a65219f09d33cd38791df328127007",
+    "callgrind-candidate-first-line.out": "d54919406dfa4ae04c9ad1216a04ec3409846703303d03d99d7771b0180525d0",
+    "callgrind-candidate-first-line.txt": "89bd1d41c2bc8c04456494a0a5516007e9173e175787b7b6df2b7a729116a84f",
+    "callgrind-candidate-forced.log": "cf3406936e1b8671da8f78db60bd38c4f2dc03964ef1ab33bd3989acb317ef55",
+    "callgrind-candidate-forced.out": "10663a5c03a6db8fae6e28df16e297c3689f1c3f6ad3f54fde0f0b6ad6a8d817",
+    "callgrind-candidate-forced.txt": "dd547f325e0b7a3f215e0b20bc8e05257fb891c8c312540bd513e34ab0f6088b",
+    "callgrind-candidate-one-ruby.log": "be1e06fac3fb1db8d9db621efc6051bb0153fc4d86807610476ab3e70af63064",
+    "callgrind-candidate-one-ruby.out": "637481a32f9c0f757a5c39ec1fb65cd11f721255739bda47ca9bb8133e676a8e",
+    "callgrind-candidate-one-ruby.txt": "3a2e91f9d07a4ac8a891beb7c276f3ecab29ed304abf70ab7024dc41787cf09f",
+    "callgrind-candidate-one-word.log": "a01b8d33b8611499b8b61661c2f9443c124a29272da559d5437b338f393adba6",
+    "callgrind-candidate-one-word.out": "516cac52598087b293c5542ccd3757ce241b68c89cd3002cc53d53f6519dbd18",
+    "callgrind-candidate-one-word.txt": "e4e54e000d39d6989096b443db3c36610c5dda43a4a0be0c548f519f5c73e88d",
+    "callgrind-candidate-plain.log": "ad8899dd9f6b0a45810eb01b8626dbc26974f7bbf8b4ade947388911b31b4b1a",
+    "callgrind-candidate-plain.out": "0912f0e7bb8fc4f59da0baaa1cc29b3335de4ba9f2ef9a4fc85dbdbb71172a16",
+    "callgrind-candidate-plain.txt": "1ec16b8515b304be6d62ebe670a4a37b45ee14d6d114897b67caaa16606aec45",
+    "candidate-alloc-build.log": "3ff72fba10204a1c10081f5e9a1d5c974cff00dc52083dd5289511c0b59722a7",
+    "candidate-alloc-final-build.log": "3bbe954a6af94608d91c3758869df2211eab53263a1633e21246105a4178b54b",
+    "candidate-probe-build.log": "e30299a0447ab29123f4d11061efe7df239778b5efa321ff04def963f83022f4",
+    "candidate-probe-final-build.log": "a23d5709f01c40d4af752583a32cb04f4179d7585bb60408dae7c1df69b29651",
+    "candidate-ruby-tests.log": "640ac6cf3b22c672964f0dab1eeea6f27149c32915027f5f6057b5b9554b7592",
+    "candidate-time-final-build.log": "795316da7418ebdc65d78d1128690f5ac8cfd3a6aed91c9ec0b644a82145c67c",
+    "clippy-probe-final.log": "fb9512d1b128b652e26483973d41cfb4b3802f65d95804145189e2a16e9e00bb",
+    "clippy-workspace-final.log": "b75270fce9dd88bdd5d872ed7bd7ea74a4941f61dde05500a161858d80fcece4",
+    "clippy-workspace.log": "6f88f842c2adcdeb15349e7e324ec3ce1c7a0ca85b0f5b835f98d124b62600f8",
+    "final-container-counts.log": "086cd2366740a8f65d9eb909e8d44392f173663acd79fb463ca8d7762bc94c9c",
+    "green-container-growth.log": "20949d4274c7a0de2bc7f48e4adb1cc7d14d8f3f7de3a21244b36d7774ed3b43",
+    "initial-user-status.txt": "b420feea8c8c1cbf1a1ec9bad19609a8f3b56d57df38d918a360c7a78a9ce6e8",
+    "massif-baseline-eviction.log": "21700563a0e3a83818d10b0bd83de070d48e9d82aa47a505323923afc3745542",
+    "massif-baseline-eviction.out": "463a9ead031c8103e5695495e35706ceaca6e59060c8ed7de9c8c19010cca75c",
+    "massif-baseline-one-word.log": "882677b2cbb2bebb3d8f48532ce193e21a39d0ca36cdb63c742088227afdd717",
+    "massif-baseline-one-word.out": "8c8e772d9e940ed31024af227f1e7fbac52e86b1bfdfd1ac7526059f6648091b",
+    "massif-baseline-plain.log": "8ed4ad38b98cde2a03c0c516f998b49dd2a336eef937bf119dc6a65d03e22ff2",
+    "massif-baseline-plain.out": "3d4d0f65ac03a3b39d9076c363012a09f35b712b65deb4793591431acb316c1f",
+    "massif-candidate-eviction.log": "e1a24acae2d845f887005bc5e079a8d82b776838d3564f6726309f18a9656d75",
+    "massif-candidate-eviction.out": "5229d933a8c8bb6cb1c4bf01c2e8e47ce8d66c9c96c498bcca5e76a3de254199",
+    "massif-candidate-one-word.log": "a935ffb6123e4396361614e514c3f4e14e5c5261555e5ddec617915bab9368c7",
+    "massif-candidate-one-word.out": "b7d67b27637c351275ba78084c8b49e134afc90fca631b429e806c94d7eaf59c",
+    "massif-candidate-plain.log": "cc96b2d6659dc09643ee76f0e8a47a45bbd151a6fa6a15d006629e3c3388b434",
+    "massif-candidate-plain.out": "aadc98091c9cbbc441c44177324ae3f4dc6992dda25726b56a4fc2be0f7f1072",
+    "memcheck-baseline-eviction.log": "3049a60748423dbf717376d38d7a558f254baa6fc20d50e1c9c32b64cf0ca3d5",
+    "memcheck-baseline-plain.log": "6ecee268bc2510efbdc6f40c2a0b96c54e66b8c31e235a47e09db9ce8848e47f",
+    "memcheck-baseline-warning0.log": "e4f5a6d13e0d00c52221290c2274fccc0e759435e34ce797df18590429c145a8",
+    "memcheck-candidate-eviction.log": "5d6122888ce1aa2428119b99f5abd9b3bb13511ca1530070a7d176195416ccfd",
+    "memcheck-candidate-plain.log": "8c4f82edcdb20e1f2ceab9f9df7d938fb7db86e669e6bc3a3066563dd6499979",
+    "memcheck-candidate-warning0.log": "abbc8a3b0b101cc38530fcfdefc825755663f7f3f19f5b3a206c37b59f5ac830",
+    "memcheck-install.log": "a4b49d382d010a32ac59960d338e77655fdebf3657123e218fb3b05073cb6c68",
+    "memcheck-libc.txt": "747a81a36c49d3ef737ba15d36365d789c08b385fae9af3627994939143935f1",
+    "memcheck-version.txt": "5bab91573bebc05ffc92c8eeb308080506cc4d725759183beeb2922f8c390a18",
+    "outputs.json": "7d70353df3aaa3fb976686461f707c9cf09a46888d1f58f76a631a77088af8d7",
+    "red-container-growth.log": "3357ea8520fb9ee0495f6c62eac39583bcbae61fd5de0576d797ce13778a3fa4",
+    "timing.json": "eb91a102c157c3c055b4a346e4170dc837269a8ecf4468789e81c858dd66cbc0",
+    "workspace-tests-final.log": "27219ef44e94c69cb73d80dc4b664012439a1d2811258a03d73088dfdc85418c",
+    "workspace-tests.log": "b8b53fc516eb3a2a928aa68f230908deafcead87d026327151ba0262a3e96014",
+    "workspace-tests-immutable.log": "946fb75a10f153adab155b879a6cd7e3f762f8bffa59c01b8d32ddacd681bf04"
+  },
+  "cleanup": {
+    "owned_scratch": "~/tmp/shodo-ogn.h5C53K3Q",
+    "owned_comparison_worktree": ".claude/worktrees/shodo-ogn-base",
+    "status": "owned scratch and clean comparison worktree removed after archival and independent review; implementation worktree retained for PR",
+    "implementation_worktree": ".claude/worktrees/shodo-ogn",
+    "implementation_branch": "perf/shodo-ogn-row-accumulator",
+    "implementation_retention_reason": "PR review and follow-up; no performance build outputs in this worktree",
+    "preexisting_user_untracked_entries": 17,
+    "comparison_worktree_removed_without_force": true,
+    "scratch_removed": true,
+    "owned_memcheck_containers_remaining": 0,
+    "preexisting_image_retained": true,
+    "root_main_and_user_status_unchanged": true
+  }
+}
