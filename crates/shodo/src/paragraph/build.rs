@@ -671,7 +671,12 @@ fn build_data(
         (glyphs, runs, shape_features)
     };
     let base_level = u8::from(used_direction == Direction::Rtl);
-    let style_metrics = crate::line::font_metrics::resolve_styles(fonts, &styles, warnings);
+    let style_metrics = crate::line::font_metrics::resolve_styles_memo(
+        &mut cx.style_metrics,
+        fonts,
+        &styles,
+        warnings,
+    );
     let combine_geometry = crate::analysis::combine::geometry(
         &processed.text,
         &processed.items,

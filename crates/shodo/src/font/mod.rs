@@ -594,6 +594,13 @@ impl FontCollection {
         }
     }
 
+    /// Process-unique identity of this layer. Identities are never reused,
+    /// so together with [`Self::generations`] it keys results that outlive
+    /// one call.
+    pub(crate) fn layer_id(&self) -> u32 {
+        self.layer.id
+    }
+
     /// Weak lifecycle observer for this layer.
     pub fn layer_handle(&self) -> WeakFontLayer {
         WeakFontLayer {
