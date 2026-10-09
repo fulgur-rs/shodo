@@ -1410,5 +1410,447 @@
     "partial": false,
     "updated": false,
     "changed_pixels": 0
+  },
+  "valgrind_memory": {
+    "metadata": {
+      "baseline_commit": "eb5b1fb96b6b379ab80093cc1c900727b4dc5a83",
+      "candidate_commit": "01f3a265a50ef12f5a9c4f8af74a17a34853f7d1",
+      "profile": "release opt-level=3 debug=0 incremental=false",
+      "probes": [
+        "scan_cache_cost",
+        "internal_line_clone",
+        "balance_summary"
+      ],
+      "binaries": {
+        "baseline-scan_cache_cost": "1ea95685e5dc92190e177dd835d5723424d2fa870ab153fa4f00751bcdf3b165",
+        "baseline-internal_line_clone": "819a1c804131180617c7cea145a1af8022498a5587b35d169cb75aeff7769dd5",
+        "baseline-balance_summary": "cb0d739967742eddfe4fd40731ce9725f4999f2599c62e25ae198f03481a9bd9",
+        "candidate-scan_cache_cost": "3ec9bb300d480e976d9ef28d6909dffcb38ee53cef0b6b3e085c258c3fecbc34",
+        "candidate-internal_line_clone": "d2d622f5affd8202d8b14411a2eb092504e434a4b1a8229ea507714f98b49881",
+        "candidate-balance_summary": "7f821e746ff05011945fc81e349f4a2b18681064343c1f2ec6308c3072951df6"
+      },
+      "same_as_original_binaries": {
+        "baseline-scan_cache_cost": false,
+        "baseline-internal_line_clone": true,
+        "baseline-balance_summary": false,
+        "candidate-scan_cache_cost": true,
+        "candidate-internal_line_clone": true,
+        "candidate-balance_summary": true
+      },
+      "debian_image": [
+        "debian@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171"
+      ],
+      "host_loader_build_id": "1e794eb14f4bccf6186bf8d9aa2018e8963ea668",
+      "host_glibc": "2.44+r24+g16be1518495f-1",
+      "probe_sha256": {
+        "scan_cache_cost": "393df7b7dd7c5fedb2fc07b57ff7d5886665a6864a1bb23d6a814d2281f6a422",
+        "internal_line_clone": "f78f249362811073bfb88ebb8623ee7ee1c057894aefd8cee266e0eb673cc99e",
+        "balance_summary": "2d12f903288ab29b91c9b81e028956eab5914ad724da3465acad173b805ccada"
+      }
+    },
+    "massif": {
+      "environment": "host; Valgrind 3.25.1, glibc 2.44+r24+g16be1518495f-1",
+      "scope": "whole process, including font load and paragraph preparation; not RSS",
+      "options": {
+        "time_unit": "B",
+        "stacks": false,
+        "pages_as_heap": false,
+        "heap_admin": 8,
+        "peak_inaccuracy": 0,
+        "detailed_freq": 1,
+        "max_snapshots": 1000,
+        "case": "long",
+        "operations": [
+          "fixed",
+          "balance"
+        ],
+        "repeats": 20
+      },
+      "results": {
+        "baseline-fixed": {
+          "exit_code": 0,
+          "snapshots": 650,
+          "peak_total_bytes": 1201360,
+          "peak_snapshot": {
+            "time": 3603312,
+            "mem_heap_B": 1135125,
+            "mem_heap_extra_B": 66235,
+            "mem_stacks_B": 0,
+            "index": 41,
+            "heap_tree": "peak"
+          },
+          "max_requested_heap_bytes": 1135125
+        },
+        "candidate-fixed": {
+          "exit_code": 0,
+          "snapshots": 670,
+          "peak_total_bytes": 1201024,
+          "peak_snapshot": {
+            "time": 3584608,
+            "mem_heap_B": 1135125,
+            "mem_heap_extra_B": 65899,
+            "mem_stacks_B": 0,
+            "index": 42,
+            "heap_tree": "peak"
+          },
+          "max_requested_heap_bytes": 1135125
+        },
+        "baseline-balance": {
+          "exit_code": 0,
+          "snapshots": 681,
+          "peak_total_bytes": 1162808,
+          "peak_snapshot": {
+            "time": 9107656,
+            "mem_heap_B": 1097361,
+            "mem_heap_extra_B": 65447,
+            "mem_stacks_B": 0,
+            "index": 11,
+            "heap_tree": "peak"
+          },
+          "max_requested_heap_bytes": 1097361
+        },
+        "candidate-balance": {
+          "exit_code": 0,
+          "snapshots": 526,
+          "peak_total_bytes": 1162768,
+          "peak_snapshot": {
+            "time": 9049360,
+            "mem_heap_B": 1097337,
+            "mem_heap_extra_B": 65431,
+            "mem_stacks_B": 0,
+            "index": 9,
+            "heap_tree": "peak"
+          },
+          "max_requested_heap_bytes": 1097337
+        }
+      },
+      "requested_heap_max_is_from_observed_snapshots": true
+    },
+    "memcheck": {
+      "environment": {
+        "valgrind": "valgrind-3.19.0",
+        "glibc": "ldd (Debian GLIBC 2.36-9+deb12u14) 2.36",
+        "packages": "libc6:amd64\t2.36-9+deb12u14\nlibc6-dbg:amd64\t2.36-9+deb12u14\nvalgrind\t1:3.19.0-1\n"
+      },
+      "host_startup_failure": "mandatory memcmp redirection in ld-linux-x86-64.so.2; matching loader debuginfo unavailable from debuginfod and official mirror",
+      "scope": "same executables in disposable Debian container; rich with samples=1, Balance plain and first-line-ruby/32/80/default with samples=1",
+      "options": {
+        "leak_check": "full",
+        "show_leak_kinds": "all",
+        "errors_for_leak_kinds": [
+          "definite",
+          "indirect",
+          "possible"
+        ],
+        "track_origins": true,
+        "num_callers": 24,
+        "error_exitcode": 99,
+        "vgdb": false
+      },
+      "results": {
+        "baseline-rich": {
+          "exit_code": 0,
+          "errors": 0,
+          "contexts": 0,
+          "leaks": {
+            "definitely lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "indirectly lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "possibly lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "still reachable": {
+              "bytes": 8155,
+              "blocks": 65
+            },
+            "suppressed": {
+              "bytes": 0,
+              "blocks": 0
+            }
+          },
+          "all_heap_freed": false,
+          "stderr": ""
+        },
+        "baseline-balance-plain": {
+          "exit_code": 0,
+          "errors": 0,
+          "contexts": 0,
+          "leaks": {
+            "definitely lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "indirectly lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "possibly lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "still reachable": {
+              "bytes": 456,
+              "blocks": 1
+            },
+            "suppressed": {
+              "bytes": 0,
+              "blocks": 0
+            }
+          },
+          "all_heap_freed": false,
+          "stderr": ""
+        },
+        "baseline-balance-first-line-ruby": {
+          "exit_code": 0,
+          "errors": 0,
+          "contexts": 0,
+          "leaks": {
+            "definitely lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "indirectly lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "possibly lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "still reachable": {
+              "bytes": 456,
+              "blocks": 1
+            },
+            "suppressed": {
+              "bytes": 0,
+              "blocks": 0
+            }
+          },
+          "all_heap_freed": false,
+          "stderr": ""
+        },
+        "candidate-rich": {
+          "exit_code": 0,
+          "errors": 0,
+          "contexts": 0,
+          "leaks": {
+            "definitely lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "indirectly lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "possibly lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "still reachable": {
+              "bytes": 8155,
+              "blocks": 65
+            },
+            "suppressed": {
+              "bytes": 0,
+              "blocks": 0
+            }
+          },
+          "all_heap_freed": false,
+          "stderr": ""
+        },
+        "candidate-balance-plain": {
+          "exit_code": 0,
+          "errors": 0,
+          "contexts": 0,
+          "leaks": {
+            "definitely lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "indirectly lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "possibly lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "still reachable": {
+              "bytes": 456,
+              "blocks": 1
+            },
+            "suppressed": {
+              "bytes": 0,
+              "blocks": 0
+            }
+          },
+          "all_heap_freed": false,
+          "stderr": ""
+        },
+        "candidate-balance-first-line-ruby": {
+          "exit_code": 0,
+          "errors": 0,
+          "contexts": 0,
+          "leaks": {
+            "definitely lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "indirectly lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "possibly lost": {
+              "bytes": 0,
+              "blocks": 0
+            },
+            "still reachable": {
+              "bytes": 456,
+              "blocks": 1
+            },
+            "suppressed": {
+              "bytes": 0,
+              "blocks": 0
+            }
+          },
+          "all_heap_freed": false,
+          "stderr": ""
+        }
+      },
+      "equal_output_rows": 110,
+      "output_sha256": {
+        "rich/plain/1/80/default/width/internal": "a8b9250b949d4cf7de8eb03e192b71c2f8a17abce70d3b557e619c1b7ba2331b",
+        "rich/plain/1/80/default/width/public": "a8b9250b949d4cf7de8eb03e192b71c2f8a17abce70d3b557e619c1b7ba2331b",
+        "rich/plain/1/80/default/width/manual": "a8b9250b949d4cf7de8eb03e192b71c2f8a17abce70d3b557e619c1b7ba2331b",
+        "rich/plain/1/240/default/width/internal": "84f1d3600b8c7221211b56887b509725c02bfee719990628d29051f5e13f2513",
+        "rich/plain/1/240/default/width/public": "84f1d3600b8c7221211b56887b509725c02bfee719990628d29051f5e13f2513",
+        "rich/plain/1/240/default/width/manual": "84f1d3600b8c7221211b56887b509725c02bfee719990628d29051f5e13f2513",
+        "rich/plain/32/80/default/width/internal": "ddb91b617bbaff3331dd92229550ec0a632b92654bf2af65c8e05ad40f7a913f",
+        "rich/plain/32/80/default/width/public": "ddb91b617bbaff3331dd92229550ec0a632b92654bf2af65c8e05ad40f7a913f",
+        "rich/plain/32/80/default/width/manual": "ddb91b617bbaff3331dd92229550ec0a632b92654bf2af65c8e05ad40f7a913f",
+        "rich/plain/32/240/default/width/internal": "1a2c72e54c612e331fc1bb591431d7cd0a8ccfc3523331e137a44d238f7e30ea",
+        "rich/plain/32/240/default/width/public": "1a2c72e54c612e331fc1bb591431d7cd0a8ccfc3523331e137a44d238f7e30ea",
+        "rich/plain/32/240/default/width/manual": "1a2c72e54c612e331fc1bb591431d7cd0a8ccfc3523331e137a44d238f7e30ea",
+        "rich/first-line/1/80/default/width/internal": "c011c2ce6a330ac9a3dcad3770f9b3e5c2b2fa64662f007783baa9077755e413",
+        "rich/first-line/1/80/default/width/public": "c011c2ce6a330ac9a3dcad3770f9b3e5c2b2fa64662f007783baa9077755e413",
+        "rich/first-line/1/80/default/width/manual": "c011c2ce6a330ac9a3dcad3770f9b3e5c2b2fa64662f007783baa9077755e413",
+        "rich/first-line/1/240/default/width/internal": "1cd1253124fc3d73979e8c0d3f71b30ff33b72225e9fa0b2a41ced79d4e5755f",
+        "rich/first-line/1/240/default/width/public": "1cd1253124fc3d73979e8c0d3f71b30ff33b72225e9fa0b2a41ced79d4e5755f",
+        "rich/first-line/1/240/default/width/manual": "1cd1253124fc3d73979e8c0d3f71b30ff33b72225e9fa0b2a41ced79d4e5755f",
+        "rich/first-line/32/80/default/width/internal": "973bf59587c243dddb1650884cbcefef776757b27f3fee57a3b07814668fd55e",
+        "rich/first-line/32/80/default/width/public": "973bf59587c243dddb1650884cbcefef776757b27f3fee57a3b07814668fd55e",
+        "rich/first-line/32/80/default/width/manual": "973bf59587c243dddb1650884cbcefef776757b27f3fee57a3b07814668fd55e",
+        "rich/first-line/32/240/default/width/internal": "4936b1d1c548b57a85b201e4e2ce3f2861ae5b76725037fa7a6841225a99b532",
+        "rich/first-line/32/240/default/width/public": "4936b1d1c548b57a85b201e4e2ce3f2861ae5b76725037fa7a6841225a99b532",
+        "rich/first-line/32/240/default/width/manual": "4936b1d1c548b57a85b201e4e2ce3f2861ae5b76725037fa7a6841225a99b532",
+        "rich/ruby/1/80/default/width/internal": "24b5eeb7277c997d5e8b2a4d0bce5a0980ecbdf4f21c86b2653a75ce40e7529e",
+        "rich/ruby/1/80/default/width/public": "8a690f78fb1ac79f1bcfb76bd2342c20bfa98a6dd4e313152f38067b2b563f8b",
+        "rich/ruby/1/80/default/width/manual": "8a690f78fb1ac79f1bcfb76bd2342c20bfa98a6dd4e313152f38067b2b563f8b",
+        "rich/ruby/1/240/default/width/internal": "814224e0c742e52c9ecf19406ce85e59696eb21d7a43aeb6633ed4e854db65b3",
+        "rich/ruby/1/240/default/width/public": "de506ac0b4e12fea2fc171e957e10337a906e3b17dfa4bbf45efa534d44982b2",
+        "rich/ruby/1/240/default/width/manual": "de506ac0b4e12fea2fc171e957e10337a906e3b17dfa4bbf45efa534d44982b2",
+        "rich/ruby/32/80/default/width/internal": "ecd9bb8eac8dbd3675595eeceb64f1460e8f9c05a674c81c44c3b33e7a970201",
+        "rich/ruby/32/80/default/width/public": "ed59d348fab0dfc6cf16f261656738830c8257120bde329f80924e571a7ee2be",
+        "rich/ruby/32/80/default/width/manual": "ed59d348fab0dfc6cf16f261656738830c8257120bde329f80924e571a7ee2be",
+        "rich/ruby/32/240/default/width/internal": "8f43113fd3031611e6522e8ebc597766ef52a293c31383e680674d967649502d",
+        "rich/ruby/32/240/default/width/public": "82c6bd1476293dd75671c92adb7d75817ae8cc3e5b9450151e111a289107dc72",
+        "rich/ruby/32/240/default/width/manual": "82c6bd1476293dd75671c92adb7d75817ae8cc3e5b9450151e111a289107dc72",
+        "rich/first-line-ruby/1/80/default/width/internal": "c7f8320ab4fbf53c65a0c471ba35b34e181b3971e3cee8c02ae2d5217d9aa183",
+        "rich/first-line-ruby/1/80/default/width/public": "f6cfd06c6694a7f117e3723eceb1feb1d030c9014ffefaf0e6f08d852186b1dd",
+        "rich/first-line-ruby/1/80/default/width/manual": "f6cfd06c6694a7f117e3723eceb1feb1d030c9014ffefaf0e6f08d852186b1dd",
+        "rich/first-line-ruby/1/240/default/width/internal": "58b285607aef319d0aa3e8d1eca01ade59b3cd0f0dc66462ff8fa84172021607",
+        "rich/first-line-ruby/1/240/default/width/public": "b42aa0b5963560ba2ba5245259e24da7e2abed0c03c7ab2221d5d304ff4a03b6",
+        "rich/first-line-ruby/1/240/default/width/manual": "b42aa0b5963560ba2ba5245259e24da7e2abed0c03c7ab2221d5d304ff4a03b6",
+        "rich/first-line-ruby/32/80/default/width/internal": "880098b2296c9bcc943ffd87403399e82352fb9c7d08e4187ebeb98222bb6008",
+        "rich/first-line-ruby/32/80/default/width/public": "431561531dc642c77b622d037f092dd24026c7414c152dd73d2b1b0de7babfa6",
+        "rich/first-line-ruby/32/80/default/width/manual": "431561531dc642c77b622d037f092dd24026c7414c152dd73d2b1b0de7babfa6",
+        "rich/first-line-ruby/32/240/default/width/internal": "f7662272a23746b464ba0f874335aafa625ed0db6177a35a7f96f4fb4a916bff",
+        "rich/first-line-ruby/32/240/default/width/public": "0e2db3167fd114692557b73d1af1becac3e0eeb46c066a54205201f0b949008a",
+        "rich/first-line-ruby/32/240/default/width/manual": "0e2db3167fd114692557b73d1af1becac3e0eeb46c066a54205201f0b949008a",
+        "rich/forced/1/80/default/width/internal": "d405ccfc49c98fc54df4952aadc2aae24c70b9db99689bcbb997878057498fad",
+        "rich/forced/1/80/default/width/public": "d405ccfc49c98fc54df4952aadc2aae24c70b9db99689bcbb997878057498fad",
+        "rich/forced/1/80/default/width/manual": "d405ccfc49c98fc54df4952aadc2aae24c70b9db99689bcbb997878057498fad",
+        "rich/forced/1/240/default/width/internal": "1c42891fcac445a40397b2c0cfab1804b158607fc35e96b2fa2c11e4aa7f78c9",
+        "rich/forced/1/240/default/width/public": "1c42891fcac445a40397b2c0cfab1804b158607fc35e96b2fa2c11e4aa7f78c9",
+        "rich/forced/1/240/default/width/manual": "1c42891fcac445a40397b2c0cfab1804b158607fc35e96b2fa2c11e4aa7f78c9",
+        "rich/forced/32/80/default/width/internal": "1d8926e565be4d533c3e37d6d81908fd4a5930a0e04d7a1b809050832b075003",
+        "rich/forced/32/80/default/width/public": "1d8926e565be4d533c3e37d6d81908fd4a5930a0e04d7a1b809050832b075003",
+        "rich/forced/32/80/default/width/manual": "1d8926e565be4d533c3e37d6d81908fd4a5930a0e04d7a1b809050832b075003",
+        "rich/forced/32/240/default/width/internal": "bafafc3f20551e6e938fcbe32554b1f994a5079c0e111b7d72932d727b09fedd",
+        "rich/forced/32/240/default/width/public": "bafafc3f20551e6e938fcbe32554b1f994a5079c0e111b7d72932d727b09fedd",
+        "rich/forced/32/240/default/width/manual": "bafafc3f20551e6e938fcbe32554b1f994a5079c0e111b7d72932d727b09fedd",
+        "rich/block/1/80/default/width/internal": "e63b4380e6814a1be3f73d6e71a266f02769756c0cdb20be30b9136384a3fb03",
+        "rich/block/1/80/default/width/public": "e63b4380e6814a1be3f73d6e71a266f02769756c0cdb20be30b9136384a3fb03",
+        "rich/block/1/80/default/width/manual": "e63b4380e6814a1be3f73d6e71a266f02769756c0cdb20be30b9136384a3fb03",
+        "rich/block/1/240/default/width/internal": "ad5566d7f806715f370ab2e5e4b3239f0af50a2e8d2520db777e8594fc2e441d",
+        "rich/block/1/240/default/width/public": "ad5566d7f806715f370ab2e5e4b3239f0af50a2e8d2520db777e8594fc2e441d",
+        "rich/block/1/240/default/width/manual": "ad5566d7f806715f370ab2e5e4b3239f0af50a2e8d2520db777e8594fc2e441d",
+        "rich/block/32/80/default/width/internal": "7496510101c2a293f226cb7818814da8610bd3be9cb3d955b3fdad11c0124e90",
+        "rich/block/32/80/default/width/public": "7496510101c2a293f226cb7818814da8610bd3be9cb3d955b3fdad11c0124e90",
+        "rich/block/32/80/default/width/manual": "7496510101c2a293f226cb7818814da8610bd3be9cb3d955b3fdad11c0124e90",
+        "rich/block/32/240/default/width/internal": "40da23a2817905b3887a2cd5e9a8f3a1c70bd2cb82ae77a2a4fab5d648eb56d7",
+        "rich/block/32/240/default/width/public": "40da23a2817905b3887a2cd5e9a8f3a1c70bd2cb82ae77a2a4fab5d648eb56d7",
+        "rich/block/32/240/default/width/manual": "40da23a2817905b3887a2cd5e9a8f3a1c70bd2cb82ae77a2a4fab5d648eb56d7",
+        "rich/float/1/80/default/width/internal": "944b3f947a9b185b2b89f55ddde9de3d5479ef637440327935057773f097ebae",
+        "rich/float/1/80/default/width/public": "944b3f947a9b185b2b89f55ddde9de3d5479ef637440327935057773f097ebae",
+        "rich/float/1/80/default/width/manual": "944b3f947a9b185b2b89f55ddde9de3d5479ef637440327935057773f097ebae",
+        "rich/float/1/240/default/width/internal": "019145ef958d122f41753547338c20e9c9fb2c0b7b05779ac74786146eb257fa",
+        "rich/float/1/240/default/width/public": "019145ef958d122f41753547338c20e9c9fb2c0b7b05779ac74786146eb257fa",
+        "rich/float/1/240/default/width/manual": "019145ef958d122f41753547338c20e9c9fb2c0b7b05779ac74786146eb257fa",
+        "rich/float/32/80/default/width/internal": "b0ee3f73b48e75b8cd3da609c3c451cd65a9b92672ab56f46b0a4d8f49f4c415",
+        "rich/float/32/80/default/width/public": "b0ee3f73b48e75b8cd3da609c3c451cd65a9b92672ab56f46b0a4d8f49f4c415",
+        "rich/float/32/80/default/width/manual": "b0ee3f73b48e75b8cd3da609c3c451cd65a9b92672ab56f46b0a4d8f49f4c415",
+        "rich/float/32/240/default/width/internal": "728ae3c10c0bc0bbdcb1e2493eab433f3235fb1f5c959af06dea286d04bfc669",
+        "rich/float/32/240/default/width/public": "728ae3c10c0bc0bbdcb1e2493eab433f3235fb1f5c959af06dea286d04bfc669",
+        "rich/float/32/240/default/width/manual": "728ae3c10c0bc0bbdcb1e2493eab433f3235fb1f5c959af06dea286d04bfc669",
+        "rich/edge/1/80/default/width/internal": "cf635bccd5e10a5c7afb6715ce18596f2ac69a893188d822105b94bc77812e40",
+        "rich/edge/1/80/default/width/public": "cf635bccd5e10a5c7afb6715ce18596f2ac69a893188d822105b94bc77812e40",
+        "rich/edge/1/80/default/width/manual": "cf635bccd5e10a5c7afb6715ce18596f2ac69a893188d822105b94bc77812e40",
+        "rich/edge/1/80/default/width/grapheme0/internal": "8c98abbb0bbedcd0b8054f1c4979ef9d42b395dbf13468cc4cb85bf14604d860",
+        "rich/edge/1/80/default/width/grapheme0/public": "8c98abbb0bbedcd0b8054f1c4979ef9d42b395dbf13468cc4cb85bf14604d860",
+        "rich/edge/1/80/default/width/grapheme0/manual": "8c98abbb0bbedcd0b8054f1c4979ef9d42b395dbf13468cc4cb85bf14604d860",
+        "rich/edge/1/80/default/width/grapheme1/internal": "8c98abbb0bbedcd0b8054f1c4979ef9d42b395dbf13468cc4cb85bf14604d860",
+        "rich/edge/1/80/default/width/grapheme1/public": "8c98abbb0bbedcd0b8054f1c4979ef9d42b395dbf13468cc4cb85bf14604d860",
+        "rich/edge/1/80/default/width/grapheme1/manual": "8c98abbb0bbedcd0b8054f1c4979ef9d42b395dbf13468cc4cb85bf14604d860",
+        "rich/edge/1/80/default/width/grapheme3/internal": "6fe34a47a11f93240c88474bda66bf2e843fca1402f15dcdfe848999062b73b5",
+        "rich/edge/1/80/default/width/grapheme3/public": "6fe34a47a11f93240c88474bda66bf2e843fca1402f15dcdfe848999062b73b5",
+        "rich/edge/1/80/default/width/grapheme3/manual": "6fe34a47a11f93240c88474bda66bf2e843fca1402f15dcdfe848999062b73b5",
+        "rich/edge/1/240/default/width/internal": "782f1201d897d3e1db183b7b5d3679442cb35f401aa63784989809c75ddc353f",
+        "rich/edge/1/240/default/width/public": "782f1201d897d3e1db183b7b5d3679442cb35f401aa63784989809c75ddc353f",
+        "rich/edge/1/240/default/width/manual": "782f1201d897d3e1db183b7b5d3679442cb35f401aa63784989809c75ddc353f",
+        "rich/edge/32/80/default/width/internal": "0f1090198c8b729f928689c4f5bfd369cdc8daf08ae69d43598eef30178b90eb",
+        "rich/edge/32/80/default/width/public": "0f1090198c8b729f928689c4f5bfd369cdc8daf08ae69d43598eef30178b90eb",
+        "rich/edge/32/80/default/width/manual": "0f1090198c8b729f928689c4f5bfd369cdc8daf08ae69d43598eef30178b90eb",
+        "rich/edge/32/240/default/width/internal": "9a1c3d97c9f3b341fbe0914b0ab691277666512b347c91ddd387c6d923a9df80",
+        "rich/edge/32/240/default/width/public": "9a1c3d97c9f3b341fbe0914b0ab691277666512b347c91ddd387c6d923a9df80",
+        "rich/edge/32/240/default/width/manual": "9a1c3d97c9f3b341fbe0914b0ab691277666512b347c91ddd387c6d923a9df80",
+        "rich/edge/1/8/edge-zero/width/internal": "af1ea9b90a88fbbaa53449422657473b8c4f6688ca63ecfb761e03237085497d",
+        "rich/edge/1/8/edge-zero/width/public": "af1ea9b90a88fbbaa53449422657473b8c4f6688ca63ecfb761e03237085497d",
+        "rich/edge/1/8/edge-zero/width/manual": "af1ea9b90a88fbbaa53449422657473b8c4f6688ca63ecfb761e03237085497d",
+        "plain/32/80/default/Balance": "b684006f4450d78463f4424b2f6354a181e1d39643dabdcd9a45faf5660b01ba",
+        "first-line-ruby/32/80/default/Balance": "31ffa07f3b87d1a2d11e17200dd2559afa268d1834508845fa98deb141cf725d"
+      },
+      "reachable_origins": {
+        "rich": "7699 bytes in fixture cases OnceLock plus 456 bytes in Rust stack-overflow thread_info; total 8155 bytes/65 blocks",
+        "balance": "456 bytes/1 block in Rust stack-overflow thread_info"
+      }
+    }
+  },
+  "ci": {
+    "tested_commit": "01f3a265a50ef12f5a9c4f8af74a17a34853f7d1",
+    "run_id": 37901601746,
+    "jobs": [
+      "check",
+      "msrv",
+      "wasm"
+    ],
+    "conclusion": "success",
+    "follow_up": "Valgrind memory measurement records only; production and probe sources unchanged"
   }
 }

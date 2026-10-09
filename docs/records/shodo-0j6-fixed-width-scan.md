@@ -34,6 +34,33 @@ test-only counterで17行のraw Scan cloneが17→1に減ることをRED/GREEN�
 
 テストfixtureの初回失敗も修正した。forced newlineには既定の空白collapseではなくPreserveBreaksが必要だった。32個のfloatは3-byte source anchorを持つので、文字範囲は0..32ではなく0..128である。これらは製品挙動の変更ではない。
 
+## Valgrindのメモリ検証（追加）
+
+Massifではヒープピークはほぼ変わらず、Memcheckでは変更前後とも検出エラー・lost分類のリークは0。主な効果は短命な確保・コピーの削減であり、保持量やピーク量の大幅な削減ではない。
+
+### Massif
+
+ホストのValgrind 3.25.1で、同じrelease probeを各側1 process、longのfixed／balanceを各20操作。`--time-unit=B --stacks=no --pages-as-heap=no --peak-inaccuracy=0 --detailed-freq=1 --max-snapshots=1000`。font load、Paragraph build、context破棄、出力を含むプロセス全体のヒープを測った。RSS、stack、ページ単位の使用量は測っていない。JSONにpeak snapshotと実行ファイルhashを保存した。最後のsampleはプロセス終了時の残存量を表さないので、その値でリークを判断しない。
+
+| 操作 | 総ピーク時の要求ヒープ量: 前→後 (bytes) | 要求量＋Massif推定overheadのピーク: 前→後 (bytes) |
+|---|---:|---:|
+| long / fixed | 1,135,125 → 1,135,125 | 1,201,360 → 1,201,024 |
+| long / balance | 1,097,361 → 1,097,337 | 1,162,808 → 1,162,768 |
+
+推定overheadはMassif既定の8 bytes/blockとalignmentであり、native allocatorの実占有量ではない。ピークtreeにはfixture font、Paragraph data、Line出力等が含まれる。操作だけを測った前節のallocator scopeとは範囲が異なる。`scan_cache_cost`の入力準備には既存の1,472-byte `Box::leak`があり、両版に共通して含む。このprobeで終了時リークの有無は評価していない。
+
+### Memcheck
+
+ホストのglibc `2.44+r24+g16be1518495f-1`では、ローダーのmandatory `memcmp` redirectionに必要なデバッグ情報が見つからず、Memcheckがmain前に停止した。build ID `1e794eb14f4bccf6186bf8d9aa2018e8963ea668`のdebuginfod照会はnot found、公式core-debugミラーにも同版がなかった。ホストのパッケージや設定を変更せず、既存のDebian bookworm-slimイメージから使い捨てコンテナを作り、そこだけにValgrindと`libc6-dbg`を導入した。[debuginfodによる検索の説明](https://valgrind.org/docs/manual/manual-core.html)も参照。
+
+Valgrind 3.19.0、Debian glibc `2.36-9+deb12u14`。ホストでbuildした同じ実行ファイルを使い、libcとlibgccはコンテナのもの。image digest、package版、実行ファイルhashはJSONに記録。Memcheckはホストのglibc 2.44での検証ではない。
+
+`--leak-check=full --show-leak-kinds=all --errors-for-leak-kinds=definite,indirect,possible --track-origins=yes --num-callers=24 --error-exitcode=99 --vgdb=no`。各側でrich全入力（samples=1）、Balanceのplain／first-line-ruby（32反復・80px・default budget、samples=1）の計3 processを実行した。richは内部fixed／公開lines／manual、first-line、ruby、float、block、forced、grapheme limit等を含む。baselineとcandidate計6 processすべてexit=0、ERROR SUMMARY=0、suppression=0。definitely／indirectly／possibly lostはすべて0 bytes。raw出力・警告を110行で前後照合し、一致した。
+
+still reachableはrichで8,155 bytes／65 blocks、Balanceで456 bytes／1 blockで、前後同じ。backtraceを確認し、richの7,699 bytesはfixture casesの`OnceLock`、共通の456 bytesはRustのstack-overflow `thread_info`に由来する。lost分類のリークと区別する。これらの入力範囲で検出エラーがないことを示す検証であり、任意の入力・環境でのメモリ安全性の証明ではない。
+
+再現は同一probeを2版でbuildし、前節の`~/tmp`内へ実行ファイルを保存して行う。Massifはホストで`SHODO_SCAN_CASE=long SHODO_SCAN_OPERATION=fixed SHODO_SCAN_REPEATS=20`を指定し、上記optionで`scan_cache_cost loop`を実行（balanceへも切り替える）。MemcheckはJSONのimage digestを固定して使い捨てコンテナに`valgrind libc6-dbg`を導入し、`SHODO_CLONE_PREFIX=rich/ SHODO_CLONE_SAMPLES=1`で`internal_line_clone`、`SHODO_BALANCE_CASE=plain/32/80/default/Balance SHODO_BALANCE_SAMPLES=1`で`balance_summary`を実行（first-line-rubyへも切り替える）。コンテナのTMPDIRと出力は測定用ディレクトリのmount内に置き、`--rm`でコンテナを削除する。ログ・一時build・取得したデバッグ情報cacheは正式記録への集計保存後に削除する。
+
 ## Callgrind
 
 Valgrind 3.25.1、各側1 process、20操作。`--collect-atstart=no --toggle-collect='*scan_cache_cost*run*'`でrunと子関数のIrを取得し、runのinclusive IrがPROGRAM TOTALSと一致することを確認した。fresh context生成・操作内Line／plan破棄を含み、font load・Paragraph build・返されたcontextの破棄・snapshot生成は収集外。cache／branch simulationは無効。命令数は実時間と区別する。
@@ -72,7 +99,7 @@ long fixedは約1.4%短く、Balanceは約2.0%長かった。ただしround比�
 - 固定snapshot 46ケース全一致、changed pixels=0、更新なし。
 - 製品コード、observer、確保集計、raw digest、時間／Callgrind記録を独立レビューし、指摘なし。
 
-MSRV／Wasmと残りのCI専用チェックはPRのCIで確認する。
+製品commit `01f3a265a50ef12f5a9c4f8af74a17a34853f7d1`のPR CI（run `37901601746`）はcheck／MSRV／Wasmすべて成功。追加のValgrind記録では製品・probeソースhashが不変であることを確認した。
 
 ## 再現
 
