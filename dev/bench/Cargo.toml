@@ -99,3 +99,6 @@ name = "font_candidate_prep"
 
 [[example]]
 name = "shape_instance_reuse"
+
+[[example]]
+name = "intrinsic_ruby_rows"
