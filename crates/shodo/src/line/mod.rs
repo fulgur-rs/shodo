@@ -210,6 +210,25 @@ impl Paragraph {
         constraint: &LineConstraint<'_>,
         atomics: &AtomicSizes,
     ) -> LineResult {
+        self.next_line_with_retention(
+            cx,
+            token,
+            options,
+            constraint,
+            atomics,
+            cache::Retention::AllLines,
+        )
+    }
+
+    fn next_line_with_retention(
+        &self,
+        cx: &mut LayoutContext,
+        token: BreakToken,
+        options: &LineOptions,
+        constraint: &LineConstraint<'_>,
+        atomics: &AtomicSizes,
+        retention: cache::Retention,
+    ) -> LineResult {
         let data = &*self.data;
         cx.warnings.set_max(data.limits.max_warnings);
         if cx
@@ -264,6 +283,7 @@ impl Paragraph {
                 planned_end,
                 None,
                 Some(&first.normal_cursors),
+                retention,
             );
             match &mut result {
                 LineResult::Line(line) => {
@@ -284,7 +304,9 @@ impl Paragraph {
             }
             return result;
         }
-        self.next_line_in_set(cx, token, options, constraint, atomics, None, None, None)
+        self.next_line_in_set(
+            cx, token, options, constraint, atomics, None, None, None, retention,
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -298,6 +320,7 @@ impl Paragraph {
         planned_end_override: Option<usize>,
         annotation_align: Option<crate::ruby::align::AnnotationAlign<'_>>,
         normal_cursors: Option<&[Option<u32>]>,
+        retention: cache::Retention,
     ) -> LineResult {
         let data = &*self.data;
         let start = token.unit as usize;
@@ -411,6 +434,7 @@ impl Paragraph {
                 indent,
                 atomics,
                 normal_cursors,
+                retention,
                 cx,
                 &mut sat,
             ) {
@@ -553,6 +577,7 @@ impl Paragraph {
             Some(units.end),
             Some(align),
             None,
+            cache::Retention::AllLines,
         ) {
             LineResult::Line(line) => line,
             _ => unreachable!("prepared annotation ranges contain no block boundaries"),

@@ -36,6 +36,9 @@ pub struct LayoutContext {
     pub(crate) ruby_line_work_log: Vec<crate::ruby::line_work::LineWork>,
     #[cfg(test)]
     pub(crate) cache_visits: usize,
+    /// Deep copies made to retain a raw line scan for a later retry.
+    #[cfg(test)]
+    pub(crate) raw_scan_clones: usize,
     #[cfg(test)]
     pub(crate) cache_prepare_visits: usize,
     #[cfg(test)]

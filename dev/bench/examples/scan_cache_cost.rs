@@ -3,7 +3,7 @@
 use serde_json::{Value, json};
 use shodo::font::FontQuery;
 use shodo::limits::Limits;
-use shodo::style::{FontFamily, LineOptions, ParagraphStyle};
+use shodo::style::{FontFamily, LineOptions, ParagraphStyle, TextWrapStyle};
 use shodo::{AtomicSizes, LayoutContext, Line, LineConstraint, LineResult, RichText};
 use std::hint::black_box;
 use std::time::Instant;
@@ -29,6 +29,12 @@ fn cases() -> Vec<Case> {
     // Leaked strings keep the workload definition outside the measured scope.
     let long = Box::leak("alpha beta gamma delta ".repeat(64).into_boxed_str());
     vec![
+        Case {
+            name: "one_line",
+            text: "alpha beta",
+            initial_width: 10000.,
+            retries: [512., 320., 192., 96.],
+        },
         Case {
             name: "short",
             text: "alpha beta gamma delta epsilon",
@@ -118,6 +124,8 @@ fn line(
     )
 }
 
+// Keep a stable operation boundary for Callgrind's toggle-collect scope.
+#[inline(never)]
 fn run(
     paragraph: &shodo::Paragraph,
     case: Case,
@@ -128,6 +136,46 @@ fn run(
     let mut signatures = Vec::new();
     let start = paragraph.start_token();
     match operation {
+        "fixed" | "fixed_wide" => {
+            let width = if operation == "fixed" { 96. } else { 10000. };
+            let lines =
+                paragraph.break_all(&mut cx, &Default::default(), width, &AtomicSizes::EMPTY);
+            if inspect {
+                signatures.extend(
+                    lines
+                        .iter()
+                        .map(|l| signature_with_continuation(paragraph, l, width)),
+                );
+            }
+        }
+        "max_inline_size" => {
+            let value =
+                paragraph.max_inline_size(&mut cx, &Default::default(), 96., &AtomicSizes::EMPTY);
+            if inspect {
+                signatures.push(json!({"advance_bits": value.to_bits()}));
+            }
+        }
+        "first_line_advance" => {
+            let value = paragraph.first_line_advance(
+                &mut cx,
+                &Default::default(),
+                96.,
+                &AtomicSizes::EMPTY,
+            );
+            if inspect {
+                signatures.push(json!({"advance_bits": value.to_bits()}));
+            }
+        }
+        "balance" => {
+            let options = LineOptions {
+                text_wrap_style: TextWrapStyle::Balance,
+                ..Default::default()
+            };
+            let plan = paragraph.plan_breaks(&mut cx, &options, 96., &AtomicSizes::EMPTY);
+            if inspect {
+                signatures.push(json!({"plan": format!("{plan:?}")}));
+            }
+        }
         "continuous" => {
             let mut token = start;
             loop {
@@ -187,11 +235,14 @@ fn run(
         }
         _ => unreachable!(),
     }
+    if inspect {
+        signatures.push(json!({"warnings": format!("{:?}", cx.take_warnings())}));
+    }
     (cx, signatures)
 }
 
 fn main() {
-    let mode = std::env::args().nth(1).expect("time or alloc");
+    let mode = std::env::args().nth(1).expect("time, alloc, or loop");
     let case_filter = std::env::var("SHODO_SCAN_CASE").ok();
     let operation_filter = std::env::var("SHODO_SCAN_OPERATION").ok();
     let repeats = std::env::var("SHODO_SCAN_REPEATS")
@@ -215,7 +266,17 @@ fn main() {
             .id
             .is_some()
     );
-    let operations = ["continuous", "height_retry", "shrink_1", "shrink_4"];
+    let operations = [
+        "fixed",
+        "fixed_wide",
+        "max_inline_size",
+        "first_line_advance",
+        "balance",
+        "continuous",
+        "height_retry",
+        "shrink_1",
+        "shrink_4",
+    ];
     let mut results = serde_json::Map::new();
     for case in cases() {
         let paragraph = RichText::with_limits(&style, &limits)
@@ -235,6 +296,13 @@ fn main() {
                 continue;
             }
             let key = format!("{}:{operation}", case.name);
+            if mode == "loop" {
+                for _ in 0..repeats {
+                    black_box(run(&paragraph, case, operation, false));
+                }
+                results.insert(key, json!({"iterations": repeats}));
+                continue;
+            }
             let (_, signatures) = run(&paragraph, case, operation, true);
             for _ in 0..WARMUP {
                 black_box(run(&paragraph, case, operation, false));

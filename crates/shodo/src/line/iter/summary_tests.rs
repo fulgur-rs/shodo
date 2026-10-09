@@ -63,6 +63,10 @@ fn balance_releases_each_trial_line_before_constructing_next() {
         "initial32 plus one complete32-line trial; post-scan is not short-circuited"
     );
     assert_eq!(crate::output::clone_probe::count(), 0);
+    assert_eq!(
+        cx.raw_scan_clones, 2,
+        "one final scan per complete32-line pass"
+    );
     assert!(cx.take_warnings().is_empty());
     assert!(owner_peak > 0, "actual constructor observation must run");
     assert!(

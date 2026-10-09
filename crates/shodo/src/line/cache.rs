@@ -9,6 +9,14 @@ use crate::paragraph::{
 use crate::style::LineOptions;
 use std::sync::Arc;
 
+/// Raw scans kept for callers that can retry, or only after a complete pass.
+/// Indexed float retries retain their cache under either policy.
+#[derive(Clone, Copy)]
+pub(super) enum Retention {
+    AllLines,
+    LastLine,
+}
+
 /// Candidate costs need not increase with text position (fonts can change).
 /// The frontier retains the latest candidate for each increasing cost. Undo
 /// records restore dominated candidates when a shrinking scan drops its tail.
@@ -466,6 +474,7 @@ pub(super) fn resolve(
     indent: LayoutUnit,
     atomics: &AtomicSizes,
     normal_cursors: Option<&[Option<u32>]>,
+    retention: Retention,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> Result<Scan, (NodeId, u32, LayoutUnit)> {
@@ -534,6 +543,14 @@ pub(super) fn resolve(
         let has_float = units
             .iter()
             .any(|u| matches!(u.kind, UnitKind::Float { .. }));
+        if !has_float
+            && matches!(retention, Retention::LastLine)
+            && scanned.end < para.data.units.len()
+        {
+            // A fixed-width driver accepts this line and advances its token.
+            // The next scan would discard this entry before it could be reused.
+            return Ok(scanned);
+        }
         let cached = PartialLine {
             data: Arc::clone(&para.data),
             token,
@@ -558,6 +575,10 @@ pub(super) fn resolve(
             // Ordinary first calls retain one raw result. They do not repeat
             // unit measurement or build candidate searches until a retry
             // actually needs a smaller width.
+            #[cfg(test)]
+            {
+                cx.raw_scan_clones += 1;
+            }
             let result = cached.scan.clone();
             cx.partial = Some(cached);
             return Ok(result);
@@ -582,13 +603,21 @@ pub(super) fn resolve(
             indent,
             atomics,
             normal_cursors,
+            retention,
             cx,
             sat,
         );
     }
     if cached.prefix.is_empty() {
         if valid && cached.width == available {
+            if matches!(retention, Retention::LastLine) && cached.scan.end < para.data.units.len() {
+                return Ok(cached.scan);
+            }
             cached.cursor = constraint.floats_placed_through;
+            #[cfg(test)]
+            {
+                cx.raw_scan_clones += 1;
+            }
             let result = cached.scan.clone();
             cx.partial = Some(cached);
             return Ok(result);
@@ -623,6 +652,7 @@ pub(super) fn resolve(
                     indent,
                     atomics,
                     normal_cursors,
+                    retention,
                     cx,
                     sat,
                 );
@@ -774,6 +804,136 @@ mod tests {
             ),
             glyphs,
         )
+    }
+
+    #[test]
+    fn fixed_width_retains_only_the_final_raw_scan_and_reuses_it() {
+        use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult};
+        for first_line in [false, true] {
+            let mut style = crate::style::ParagraphStyle::default();
+            style.root.white_space_collapse = crate::style::WhiteSpaceCollapse::PreserveBreaks;
+            if first_line {
+                style.first_line = Some(crate::style::InlineStyle {
+                    font_size: 32.,
+                    ..style.root.clone()
+                });
+            }
+            for (text, width, multiple) in [
+                ("alpha beta gamma delta ".repeat(8) + "omega", 96., true),
+                ("alpha\nbeta\ngamma".into(), 10000., true),
+                ("ffi office".into(), 10000., false),
+            ] {
+                let p = plain_paragraph_with_style(&text, &style);
+                for warm in [false, true] {
+                    let mut cx = LayoutContext::new();
+                    let options = Default::default();
+                    let mut constraint = LineConstraint::new(width);
+                    if warm {
+                        assert!(matches!(
+                            p.next_line(
+                                &mut cx,
+                                p.start_token(),
+                                &options,
+                                &constraint,
+                                &AtomicSizes::EMPTY
+                            ),
+                            LineResult::Line(_)
+                        ));
+                    }
+                    cx.raw_scan_clones = 0;
+                    let lines = p.break_all(&mut cx, &options, width, &AtomicSizes::EMPTY);
+                    assert_eq!(
+                        lines.len() > 1,
+                        multiple,
+                        "text={text:?}, first_line={first_line}, warm={warm}"
+                    );
+                    let last = lines.last().unwrap();
+                    assert_eq!(last.text_range().end, text.len());
+                    assert!(last.is_last());
+                    assert!(cx.take_warnings().is_empty());
+                    assert_eq!(cx.cache_prepare_visits, 0);
+                    assert_eq!(
+                        cx.raw_scan_clones, 1,
+                        "only the final scan is useful after fixed-width acceptance; first_line={first_line}, warm={warm}"
+                    );
+                    let last_start = lines
+                        .iter()
+                        .rev()
+                        .nth(1)
+                        .map_or(p.start_token(), |l| l.break_token());
+                    constraint.block_offset = last.block_offset();
+                    cx.cache_visits = 0;
+                    let LineResult::Line(retry) = p.next_line(
+                        &mut cx,
+                        last_start,
+                        &options,
+                        &constraint,
+                        &AtomicSizes::EMPTY,
+                    ) else {
+                        panic!("final-line retry")
+                    };
+                    assert_eq!(line_signature(&retry), line_signature(last));
+                    assert_eq!(
+                        cx.cache_visits, 0,
+                        "retain the final scan for a same-token retry"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn first_line_advance_keeps_its_intermediate_scan_for_retry() {
+        use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult};
+        let p = plain_paragraph(&"alpha beta gamma delta ".repeat(8));
+        let mut cx = LayoutContext::new();
+        let options = Default::default();
+        let width = 96.;
+        assert!(p.first_line_advance(&mut cx, &options, width, &AtomicSizes::EMPTY) > 0.);
+        assert_eq!(cx.raw_scan_clones, 1);
+        cx.cache_visits = 0;
+        assert!(matches!(
+            p.next_line(&mut cx, p.start_token(), &options, &LineConstraint::new(width), &AtomicSizes::EMPTY),
+            LineResult::Line(line) if line.text_range().end < p.text().len()
+        ));
+        assert_eq!(
+            cx.cache_visits, 0,
+            "a first-line-only call can still be retried"
+        );
+    }
+
+    #[test]
+    fn fixed_width_float_retries_still_scan_and_index_once() {
+        use crate::font::{FontCollection, FontOptions};
+        use crate::limits::Limits;
+        use crate::node::{NodeId, OutOfFlowKind, TextSource};
+        use crate::{AtomicSizes, LayoutContext, ParagraphBuilder};
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register(crate::test_support::fonts::LATIN.to_vec())
+            .unwrap();
+        let mut builder = ParagraphBuilder::new(&Default::default(), &limits);
+        for node in 2..34 {
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+            builder.push_out_of_flow(NodeId(node), OutOfFlowKind::Float);
+        }
+        let p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        let mut cx = LayoutContext::new();
+        let lines = p.break_all(&mut cx, &Default::default(), 10000., &AtomicSizes::EMPTY);
+        assert_eq!(lines.len(), 1);
+        // Each float also owns a three-byte source anchor.
+        assert_eq!(lines[0].text_range(), 0..128);
+        assert_eq!(line_signature(&lines[0]).1.len(), 32);
+        assert!(cx.take_warnings().is_empty());
+        assert!(cx.cache_visits > 0 && cx.cache_visits <= p.data.units.len());
+        assert!(cx.cache_prepare_visits > 0 && cx.cache_prepare_visits <= p.data.units.len());
     }
 
     #[test]
