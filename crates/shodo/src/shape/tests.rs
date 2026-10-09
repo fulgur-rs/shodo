@@ -3856,3 +3856,374 @@ fn colon_punctuation_class_follows_synthetic_and_sideways_glyphs() {
         (P::Middle, 70.0, false)
     );
 }
+
+#[test]
+fn repeated_mixed_runs_prepare_each_instance_once_per_shape_call() {
+    for text in ["a水b", "a😀b"] {
+        let (p, fonts, style) = mixed_instance_paragraph(&text.repeat(16));
+        let limits = Limits::default();
+        assert_eq!(p.data.shape_items.len(), 33);
+        for _ in 0..2 {
+            instance::INSTANCE_BUILDS.with(|count| count.set(0));
+            instance::COORDINATE_INSTANCE_BUILDS.with(|count| count.set(0));
+            let (glyphs, runs) = shape_items(
+                &mut crate::LayoutContext::new(),
+                &p.data.shape_items,
+                &p.data.styles,
+                &fonts,
+                style.writing_mode,
+                &limits,
+                &mut crate::limits::WarningSink::default(),
+                &mut Saturation::default(),
+            )
+            .unwrap();
+            assert_eq!(glyphs.id, p.data.glyphs.id);
+            assert_eq!(glyphs.cluster, p.data.glyphs.cluster);
+            assert_eq!(glyphs.advance, p.data.glyphs.advance);
+            assert_eq!(glyphs.pen, p.data.glyphs.pen);
+            let builds = instance::INSTANCE_BUILDS.with(std::cell::Cell::get);
+            assert_eq!(builds, 2);
+            let count = instance::COORDINATE_INSTANCE_BUILDS.with(std::cell::Cell::get);
+            println!(
+                "text={text}, mixed items={}, runs={}, instance builds={builds}, coordinate builds={count}",
+                p.data.shape_items.len(),
+                runs.len()
+            );
+            assert_eq!(count, 2, "each separate call must resolve both faces once");
+            assert!(Arc::ptr_eq(&runs[0].instance, &runs[2].instance));
+            assert_ne!(runs[0].shaping_input, runs[2].shaping_input);
+        }
+    }
+}
+
+fn mixed_instance_paragraph(
+    text: &str,
+) -> (
+    crate::Paragraph,
+    FontCollection,
+    crate::style::ParagraphStyle,
+) {
+    use crate::node::{NodeId, TextSource};
+    use crate::style::{FontFamily, InlineStyle, ParagraphStyle};
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        crate::font::FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    for (family, bytes) in [
+        ("Latin", variable_latin(2).as_slice()),
+        ("CJK", crate::test_support::fonts::CJK),
+        ("Emoji", crate::test_support::fonts::EMOJI_COLOR),
+    ] {
+        fonts
+            .register_face(
+                bytes.to_vec(),
+                0,
+                crate::font::FontFaceDescriptor {
+                    family: family.into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+    let style = ParagraphStyle {
+        root: InlineStyle {
+            font_families: vec![
+                FontFamily::Named("Latin".into()),
+                FontFamily::Named("CJK".into()),
+                FontFamily::Named("Emoji".into()),
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+    builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
+    let p = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    (p, fonts, style)
+}
+
+#[test]
+fn mixed_instance_reuse_preserves_distinct_conditions_and_warning_effects() {
+    use crate::style::{FontFeature, FontMetricKind, FontSizeAdjust, FontVariation};
+    let (p, fonts, _) = mixed_instance_paragraph(&"a水b".repeat(8));
+    for condition in 0..18 {
+        let mut styles = p.data.styles.clone();
+        if condition == 14 {
+            styles[0].font_variations = vec![FontVariation {
+                tag: *b"TEST",
+                value: 0.0,
+            }];
+        }
+        if condition == 15 {
+            styles[0].font_size_adjust = Some(FontSizeAdjust {
+                metric: FontMetricKind::ExHeight,
+                value: 0.0,
+            });
+        }
+        let mut changed = styles[0].clone();
+        match condition {
+            0 => changed.font_size = 31.0,
+            1 => {
+                changed.font_size_adjust = Some(FontSizeAdjust {
+                    metric: FontMetricKind::ExHeight,
+                    value: 0.75,
+                })
+            }
+            2 => {
+                changed.font_size_adjust = Some(FontSizeAdjust {
+                    metric: FontMetricKind::IcHeight,
+                    value: 0.5,
+                })
+            }
+            3 => {
+                changed.font_size_adjust = Some(FontSizeAdjust {
+                    metric: FontMetricKind::ExHeight,
+                    value: f32::MAX,
+                })
+            }
+            4 => {
+                changed.font_variations = vec![FontVariation {
+                    tag: *b"opsz",
+                    value: 21.0,
+                }]
+            }
+            5 => changed.font_optical_sizing = false,
+            6 => changed.lang = Some("tr".into()),
+            7 => {
+                changed.font_features = vec![FontFeature {
+                    tag: *b"liga",
+                    value: 0,
+                }]
+            }
+            // Paint-only changes should be eligible for sharing.
+            8 => changed.paint.color = [17, 23, 29, 255],
+            9..=13 => (),
+            14 => changed.font_variations[0].value = -0.0,
+            15 => changed.font_size_adjust.as_mut().unwrap().value = -0.0,
+            16..=17 => (),
+            _ => unreachable!(),
+        }
+        styles.push(changed);
+        let mut items = p.data.shape_items.clone();
+        let index = styles.len() as u32 - 1;
+        for (i, item) in items.iter_mut().enumerate() {
+            if condition == 16 {
+                Arc::make_mut(item.font.as_mut().unwrap())
+                    .variations
+                    .push(FontVariation {
+                        tag: *b"TEST",
+                        value: 0.0,
+                    });
+            }
+            if condition == 17 {
+                Arc::make_mut(item.font.as_mut().unwrap()).skew = Some(0.0);
+            }
+            if i % 3 != 0 {
+                continue;
+            }
+            item.style = index;
+            match condition {
+                9 => item.script = *b"Zyyy",
+                10 => Arc::make_mut(item.font.as_mut().unwrap()).embolden = true,
+                11 => Arc::make_mut(item.font.as_mut().unwrap()).skew = Some(12.0),
+                12 => Arc::make_mut(item.font.as_mut().unwrap())
+                    .variations
+                    .push(FontVariation {
+                        tag: *b"wght",
+                        value: 700.0,
+                    }),
+                13 => item.width_feature = Some(*b"hwid"),
+                16 => {
+                    Arc::make_mut(item.font.as_mut().unwrap())
+                        .variations
+                        .last_mut()
+                        .unwrap()
+                        .value = -0.0
+                }
+                17 => Arc::make_mut(item.font.as_mut().unwrap()).skew = Some(-0.0),
+                _ => (),
+            }
+        }
+        for max in [None, Some(0), Some(1), Some(3)] {
+            for mode in [WritingMode::HorizontalTb, WritingMode::VerticalRl] {
+                let limits = Limits {
+                    max_warnings: max,
+                    ..Limits::default()
+                };
+                let shape = |bypass| {
+                    struct Reset(bool);
+                    impl Drop for Reset {
+                        fn drop(&mut self) {
+                            instance_cache::BYPASS.with(|v| v.set(self.0));
+                        }
+                    }
+                    let _reset = Reset(instance_cache::BYPASS.with(|v| v.replace(bypass)));
+                    let mut warnings = crate::limits::WarningSink::new(max);
+                    warnings.push(
+                        crate::limits::WarningKind::Unsupported,
+                        "before instance resolution",
+                    );
+                    let mut sat = Saturation::default();
+                    instance::COORDINATE_INSTANCE_BUILDS.with(|count| count.set(0));
+                    let (glyphs, runs) = shape_items(
+                        &mut crate::LayoutContext::new(),
+                        &items,
+                        &styles,
+                        &fonts,
+                        mode,
+                        &limits,
+                        &mut warnings,
+                        &mut sat,
+                    )
+                    .unwrap();
+                    let count = instance::COORDINATE_INSTANCE_BUILDS.with(std::cell::Cell::get);
+                    (
+                        glyphs,
+                        runs.iter()
+                            .map(|run| format!("{run:?}"))
+                            .collect::<Vec<_>>(),
+                        format!("{:?}", warnings.take()),
+                        format!("{sat:?}"),
+                        count,
+                    )
+                };
+                let (cached, runs, warnings, sat, count) = shape(false);
+                let (reference, reference_runs, reference_warnings, reference_sat, reference_count) =
+                    shape(true);
+                assert_eq!(
+                    cached.id, reference.id,
+                    "condition={condition}, max={max:?}, mode={mode:?}"
+                );
+                assert_eq!(cached.advance, reference.advance);
+                assert_eq!(cached.cluster, reference.cluster);
+                assert_eq!(cached.pen, reference.pen);
+                assert_eq!(cached.offset_inline, reference.offset_inline);
+                assert_eq!(cached.offset_block, reference.offset_block);
+                assert_eq!(cached.flags, reference.flags);
+                assert_eq!(cached.spacing, reference.spacing);
+                assert_eq!(cached.leading, reference.leading);
+                assert_eq!(runs.len(), reference_runs.len());
+                for (run, reference) in runs.iter().zip(&reference_runs) {
+                    assert_eq!(
+                        run, reference,
+                        "condition={condition}, max={max:?}, mode={mode:?}"
+                    );
+                }
+                assert_eq!(warnings, reference_warnings);
+                if max.is_none() && condition == 3 {
+                    assert!(warnings.contains("adjusted font size clamped to 1e6 px"));
+                }
+                if max.is_none() && condition == 2 {
+                    assert!(warnings.contains("font-size-adjust metric unavailable"));
+                }
+                assert_eq!(sat, reference_sat);
+                if condition == 8 {
+                    assert_eq!(count, 2, "paint-only changes share preparation");
+                }
+                assert!(
+                    count < reference_count,
+                    "condition={condition}: reuse must actually occur"
+                );
+            }
+        }
+    }
+}
+
+fn variable_latin(axis_count: u16) -> Vec<u8> {
+    let bytes = crate::test_support::fonts::LATIN;
+    let mut tables = Vec::new();
+    for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
+        let at = 12 + n * 16;
+        let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
+        let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
+        tables.push((
+            bytes[at..at + 4].try_into().unwrap(),
+            bytes[offset..offset + len].to_vec(),
+        ));
+    }
+    let mut fvar = Vec::new();
+    for field in [1u16, 0, 16, 2, axis_count, 20, 0, 4 + axis_count * 4] {
+        fvar.extend(field.to_be_bytes());
+    }
+    for index in 0..axis_count {
+        let (tag, values) = match index {
+            0 => (*b"wght", [100i32, 400, 900]),
+            1 => (*b"opsz", [8, 12, 72]),
+            _ => ((0x70000000 + u32::from(index)).to_be_bytes(), [0, 0, 1]),
+        };
+        fvar.extend(tag);
+        for value in values {
+            fvar.extend((value << 16).to_be_bytes());
+        }
+        fvar.extend([0, 0, 1, 0]);
+    }
+    tables.push((*b"fvar", fvar));
+    crate::font::sfnt::build_sfnt(&tables)
+}
+
+#[test]
+fn high_axis_default_instance_bypasses_reuse_without_retaining_hidden_coordinate_heap() {
+    use crate::style::{FontFamily, InlineStyle, ParagraphStyle};
+    let fonts = FontCollection::with_options(
+        &Limits::default(),
+        crate::font::FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    let id = fonts
+        .register_face(
+            variable_latin(12),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Many axes".into(),
+                weight: (100.0, 900.0),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    fonts
+        .register_face(
+            crate::test_support::fonts::CJK.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let style = ParagraphStyle {
+        root: InlineStyle {
+            font_families: vec![
+                FontFamily::Named("Many axes".into()),
+                FontFamily::Named("CJK".into()),
+                FontFamily::Named("Emoji".into()),
+            ],
+            font_optical_sizing: false,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut b = crate::ParagraphBuilder::new(&style, &Limits::default());
+    b.push_text(
+        crate::node::TextSource::Generated {
+            node: crate::node::NodeId(1),
+        },
+        &"a水".repeat(4),
+    );
+    let p = b.build(&mut crate::LayoutContext::new(), &fonts).unwrap();
+    assert_eq!(p.data.shape_items.len(), 8);
+    let runs: Vec<_> = p.data.runs.iter().filter(|run| run.font == id).collect();
+    assert_eq!(runs.len(), 4);
+    assert!(runs.iter().all(|run| run.instance.coords.is_empty()));
+    assert!(
+        runs.windows(2)
+            .all(|runs| !Arc::ptr_eq(&runs[0].instance, &runs[1].instance))
+    );
+}

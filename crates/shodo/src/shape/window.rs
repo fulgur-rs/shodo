@@ -8,6 +8,7 @@ use crate::limits::WarningSink;
 use std::{collections::HashMap, sync::Arc};
 
 pub(super) struct GlyphWindow<'a, 'font> {
+    pub(super) shaping_input: u32,
     pub(super) shaped: &'a harfrust::GlyphBuffer,
     pub(super) original: &'a ShapeItem,
     pub(super) scalars: &'a [Scalar],
@@ -35,6 +36,7 @@ impl GlyphWindow<'_, '_> {
         sat: &mut Saturation,
     ) {
         let Self {
+            shaping_input,
             shaped,
             original,
             scalars,
@@ -70,6 +72,7 @@ impl GlyphWindow<'_, '_> {
                 finish += 1;
             }
             runs.push(ShapedRun {
+                shaping_input,
                 glyphs: store.len() as u32..store.len() as u32,
                 text: first.offset..scalars[finish - 1].end,
                 item: first.item,
@@ -262,6 +265,7 @@ impl GlyphWindow<'_, '_> {
                     run.text.end = cluster_end;
                 } else {
                     runs.push(ShapedRun {
+                        shaping_input,
                         glyphs: run_start..store.len() as u32,
                         text: cluster..cluster_end,
                         item: owner,

@@ -9,6 +9,7 @@ mod features;
 pub(crate) use features::FeatureSets;
 mod input;
 mod instance;
+mod instance_cache;
 pub(crate) mod orientation;
 mod window;
 pub(crate) use instance::RunInstance;
@@ -135,6 +136,9 @@ impl GlyphStore {
 
 #[derive(Clone, Debug)]
 pub(crate) struct ShapedRun {
+    /// First run index emitted by this shaping input. Preparation identity is
+    /// shared across inputs; edge windows must still respect input boundaries.
+    pub(crate) shaping_input: u32,
     pub(crate) glyphs: Range<u32>,
     pub(crate) text: Range<u32>,
     pub(crate) item: u32,
@@ -718,7 +722,9 @@ fn append_shape_output(
     let old_len = target.len();
     let added_len = source.len();
     let glyph_offset = old_len as u32;
+    let input_offset = target_runs.len() as u32;
     for run in &mut source_runs {
+        run.shaping_input += input_offset;
         run.glyphs.start += glyph_offset;
         run.glyphs.end += glyph_offset;
     }
@@ -839,7 +845,9 @@ fn shape_inputs<'a>(
     cx.bound_shaping_scratch(limits);
     let mut store = GlyphStore::default();
     let mut runs: Vec<ShapedRun> = Vec::new();
+    let mut instance_cache = instance_cache::InstanceCache::default();
     for input in items {
+        let shaping_input = runs.len() as u32;
         let original = input.original;
         let style = &styles[original.style as usize];
         let features = feature_sets.get(original, input.width_feature);
@@ -853,22 +861,32 @@ fn shape_inputs<'a>(
             .as_ref()
             .zip(font_data.as_ref())
             .map(|(found, data)| {
-                let (shaper, mut instance, size) = instance::resolve(
-                    data.data.as_ref(),
-                    data.index,
-                    found,
-                    style,
-                    original.script,
+                instance_cache.resolve(
+                    instance_cache::Key {
+                        found,
+                        style,
+                        script: original.script,
+                    },
+                    &features,
                     warnings,
-                );
-                let (metrics, vertical_metrics) =
-                    fonts.metrics_from_data(found.id, data, size, &instance.coords);
-                Arc::get_mut(&mut instance).expect("new instance").metrics = metrics;
-                Arc::get_mut(&mut instance)
-                    .expect("new instance")
-                    .vertical_metrics = vertical_metrics;
-                Arc::get_mut(&mut instance).expect("new instance").features = features.clone();
-                (shaper, instance, size)
+                    || {
+                        let (shaper, mut instance, size, warning, inline_coords) =
+                            instance::resolve_with_warning(
+                                data.data.as_ref(),
+                                data.index,
+                                found,
+                                style,
+                                original.script,
+                            );
+                        let (metrics, vertical_metrics) =
+                            fonts.metrics_from_data(found.id, data, size, &instance.coords);
+                        let instance_mut = Arc::get_mut(&mut instance).expect("new instance");
+                        instance_mut.metrics = metrics;
+                        instance_mut.vertical_metrics = vertical_metrics;
+                        instance_mut.features = features.clone();
+                        ((shaper, instance, size), warning, inline_coords)
+                    },
+                )
             });
         let missing_instance = if resolved.is_none() {
             Some(Arc::new(RunInstance {
@@ -894,7 +912,7 @@ fn shape_inputs<'a>(
         let shaper = shared
             .as_ref()
             .zip(font.as_ref())
-            .zip(resolved.as_ref())
+            .zip(resolved.as_deref())
             .map(|((shared, font), (instance, _, _))| {
                 shared.shaper(font).instance(Some(instance)).build()
             });
@@ -989,6 +1007,7 @@ fn shape_inputs<'a>(
                         previous.text.end = scalar.end;
                     } else {
                         runs.push(ShapedRun {
+                            shaping_input,
                             glyphs: glyph as u32..glyph as u32 + 1,
                             text: scalar.offset..scalar.end,
                             item: scalar.item,
@@ -1001,7 +1020,8 @@ fn shape_inputs<'a>(
                 }
                 continue;
             };
-            let (instance, run_instance, font_size) = resolved.as_ref().expect("matched instance");
+            let (instance, run_instance, font_size) =
+                resolved.as_deref().expect("matched instance");
             let font_size = *font_size;
             let shaper = shaper.as_ref().expect("matched shaper");
             let mut buffer = cx.scratch.take().unwrap_or_default();
@@ -1092,6 +1112,7 @@ fn shape_inputs<'a>(
                 .map_or(scalars[0].offset, |scalar| scalar.offset);
             let order = glyph_order(shaped.glyph_infos(), leading_end);
             let window = window::GlyphWindow {
+                shaping_input,
                 shaped: &shaped,
                 original,
                 scalars,

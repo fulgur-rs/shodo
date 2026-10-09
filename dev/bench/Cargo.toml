@@ -96,3 +96,6 @@ name = "styled_break_scale"
 
 [[example]]
 name = "font_candidate_prep"
+
+[[example]]
+name = "shape_instance_reuse"

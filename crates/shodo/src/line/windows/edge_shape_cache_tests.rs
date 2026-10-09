@@ -254,6 +254,7 @@ fn retained_run_instances_count_their_owned_settings() {
         ..Default::default()
     };
     let run = crate::shape::ShapedRun {
+        shaping_input: 0,
         glyphs: 0..8,
         text: 0..8,
         item: 0,
