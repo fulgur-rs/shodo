@@ -50,7 +50,7 @@ CallgrindはホストValgrind 3.25.1、collect-atstart=no、toggle-collect=*run_
 
 ## 実時間
 
-他の本作業のbuild/Valgrind実行後にCPU 2固定、ABBA 4 round＋BAAB 4 round。各processのnはJSONに保存。初回coldを含むloop全体の時間を取り、round内の後2回平均/前2回平均の中央値を示す。CPUの周波数・SMT sibling CPU 8・外部processは制御していない。
+他の本作業のbuild/Valgrind実行後にCPU 2固定、ABBA 4 round＋BAAB 4 round。各processのnはJSONに保存。初回coldを含むloop全体の時間を取り、round内の変更後版2回の平均÷変更前版2回の平均の中央値を示す。CPUの周波数・SMT sibling CPU 8・外部processは制御していない。
 
 | 経路 / 候補数 / 入力 | 後/前中央値 | 短縮round | round比の範囲 |
 |---|---:|---:|---:|
@@ -91,7 +91,7 @@ Massifはホスト3.25.1、stacks=no/time-unit=B/detailed-freq=1/max-snapshots=2
 - release font suite: 133 passed。allocation tests: 18 passed。
 - fmt/diffチェック、全target strict Clippy（通常/AccessKit、最終probe含む）、strict rustdoc（通常/AccessKit）。
 - 固定snapshot46件、全match、changed_pixels=0、更新なし。matching/build/Valgrindの前後digest一致。
-- 独立レビューの未解決指摘なし。並行hitのrecency stamp指摘はfetch_maxで修正、上限超過のfallbackも再レビュー済み。
+- 製品・記録の独立レビューに未解決指摘なし。並行hitのrecency stamp指摘はfetch_maxで修正、上限超過のfallbackも再レビュー済み。
 
 ## 再現と後片付け
 
