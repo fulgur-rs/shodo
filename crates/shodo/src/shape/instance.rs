@@ -11,7 +11,8 @@ use std::{collections::HashMap, sync::Arc};
 
 #[cfg(test)]
 std::thread_local! {
-    static COORDINATE_INSTANCE_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(super) static INSTANCE_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(super) static COORDINATE_INSTANCE_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static VARIATION_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -36,6 +37,53 @@ pub(crate) fn resolve(
     script: [u8; 4],
     warnings: &mut WarningSink,
 ) -> (harfrust::ShaperInstance, Arc<RunInstance>, f32) {
+    let (shaper, instance, size, warning, _) =
+        resolve_with_warning(bytes, index, found, style, script);
+    if let Some(warning) = warning {
+        warning.emit(warnings);
+    }
+    (shaper, instance, size)
+}
+
+/// Resolution emits at most one size-adjust warning. Keep its effect even when
+/// the caller's sink suppresses it, so reuse can replay every attempted push.
+#[derive(Clone, Copy)]
+pub(super) enum ResolutionWarning {
+    SizeClamped,
+    AdjustUnavailable,
+}
+impl ResolutionWarning {
+    pub(super) fn emit(self, warnings: &mut WarningSink) {
+        let (kind, message) = match self {
+            Self::SizeClamped => (
+                WarningKind::Saturated,
+                "adjusted font size clamped to 1e6 px",
+            ),
+            Self::AdjustUnavailable => (
+                WarningKind::Unsupported,
+                "font-size-adjust metric unavailable; retaining font size",
+            ),
+        };
+        warnings.push(kind, message);
+    }
+}
+
+pub(super) fn resolve_with_warning(
+    bytes: &[u8],
+    index: u32,
+    found: &FontMatch,
+    style: &InlineStyle,
+    script: [u8; 4],
+) -> (
+    harfrust::ShaperInstance,
+    Arc<RunInstance>,
+    f32,
+    Option<ResolutionWarning>,
+    bool,
+) {
+    #[cfg(test)]
+    INSTANCE_BUILDS.with(|count| count.set(count.get() + 1));
+    let mut warning = None;
     let font = harfrust::FontRef::from_index(bytes, index).expect("registered face");
     #[cfg(test)]
     crate::font::record_metric_font_ref_open();
@@ -99,17 +147,11 @@ pub(crate) fn resolve(
         if let Some(metric) = metric.filter(|v| v.is_finite() && *v > 0.0) {
             size = style.font_size * adjust.value * (m.units_per_em as f32 / metric);
             if !size.is_finite() || size > 1e6 {
-                warnings.push(
-                    WarningKind::Saturated,
-                    "adjusted font size clamped to 1e6 px",
-                );
+                warning = Some(ResolutionWarning::SizeClamped);
                 size = 1e6;
             }
         } else {
-            warnings.push(
-                WarningKind::Unsupported,
-                "font-size-adjust metric unavailable; retaining font size",
-            );
+            warning = Some(ResolutionWarning::AdjustUnavailable);
         }
     }
     if style.font_optical_sizing
@@ -164,7 +206,10 @@ pub(crate) fn resolve(
         // consumers only need the resolved coordinates and size.
         features: Arc::default(),
     });
-    (instance, result, size)
+    // Default coordinates may be cleared while Harfrust retains its heap
+    // capacity. Inspect the face's axis count, not the resulting slice length.
+    let inline_coords = font.fvar().ok().is_none_or(|fvar| fvar.axis_count() <= 11);
+    (instance, result, size, warning, inline_coords)
 }
 fn set_variation(
     variations: &mut Vec<FontVariation>,

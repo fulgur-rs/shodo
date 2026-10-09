@@ -103,6 +103,7 @@ fn compatible(data: &ParagraphData, a: usize, b: usize) -> bool {
     let (a_run, b_run) = (&data.runs[*a_run as usize], &data.runs[*b_run as usize]);
     data.units[a].level == data.units[b].level
         && a_run.font == b_run.font
+        && a_run.shaping_input == b_run.shaping_input
         && Arc::ptr_eq(&a_run.instance, &b_run.instance)
 }
 fn unsafe_join(data: &ParagraphData, a: usize, b: usize) -> bool {
@@ -246,15 +247,17 @@ fn window_storage_cost(window: &OwnedShapedWindow, snapshot: bool) -> usize {
         + bytes(runs, snapshot);
     // Edge shaping resolves fresh instances. Their Arcs keep coordinates,
     // variations, language and features alive as well as the run scalars.
-    // Consecutive runs from one input share an instance; other sharing may be
-    // conservatively counted more than once without allocating a dedup set.
+    // Count preparation once per consecutive input, preserving the conservative
+    // admission cost even when different inputs now share their instance Arc.
     let mut previous = None;
     for run in runs {
-        if previous.is_some_and(|p| Arc::ptr_eq(p, &run.instance)) {
+        if previous
+            .is_some_and(|(p, input)| input == run.shaping_input && Arc::ptr_eq(p, &run.instance))
+        {
             continue;
         }
         let instance = &run.instance;
-        previous = Some(instance);
+        previous = Some((instance, run.shaping_input));
         cost += size_of::<crate::shape::RunInstance>()
             + 2 * size_of::<usize>()
             + bytes(&instance.coords, false)
