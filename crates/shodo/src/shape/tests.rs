@@ -3671,6 +3671,104 @@ fn vertical_spacing_fonts(family: &str) -> (Limits, FontCollection) {
 }
 
 #[test]
+fn rtl_punctuation_trimming_follows_the_shaping_orientation() {
+    use crate::font::FontFaceDescriptor;
+    use crate::geometry::Direction;
+    use crate::line::punctuation::PunctuationClass as P;
+    use crate::node::{NodeId, TextSource};
+    use crate::style::{FontFamily, InlineStyle, ParagraphStyle, TextOrientation, TextSpacingTrim};
+
+    let (limits, fonts) = vertical_spacing_fonts("RTL spacing");
+    fonts
+        .register_face(
+            crate::test_support::fonts::ARABIC.to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "RTL spacing".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let layout = |text: &str, mode, orientation, trim| {
+        let style = ParagraphStyle {
+            writing_mode: mode,
+            direction: Direction::Rtl,
+            root: InlineStyle {
+                font_families: vec![FontFamily::Named("RTL spacing".into())],
+                font_size: 20.0,
+                lang: Some("ja".into()),
+                text_orientation: orientation,
+                text_spacing_trim: trim,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        assert!(
+            paragraph
+                .data
+                .shape_items
+                .iter()
+                .all(|item| item.level % 2 == 1),
+            "{mode:?} {orientation:?} {text}: must exercise odd bidi levels"
+        );
+        let crate::LineResult::Line(line) = paragraph.next_line(
+            &mut crate::LayoutContext::new(),
+            paragraph.start_token(),
+            &Default::default(),
+            &crate::LineConstraint::new(400.0),
+            &crate::AtomicSizes::EMPTY,
+        ) else {
+            panic!("expected one line")
+        };
+        (paragraph, line.inline_size())
+    };
+    let half = LayoutUnit::from_f32_round(10.0, &mut Saturation::default());
+    for (mode, orientation, upright) in [
+        (WritingMode::VerticalRl, TextOrientation::Mixed, true),
+        (WritingMode::VerticalLr, TextOrientation::Mixed, true),
+        (WritingMode::HorizontalTb, TextOrientation::Mixed, false),
+        (WritingMode::SidewaysRl, TextOrientation::Mixed, false),
+        (WritingMode::SidewaysLr, TextOrientation::Mixed, false),
+        (WritingMode::VerticalRl, TextOrientation::Sideways, false),
+    ] {
+        for (text, source_classes, mirrored_classes) in [
+            ("ب））ا", [P::Closing, P::Closing], [P::Opening, P::Opening]),
+            ("ب（（ا", [P::Opening, P::Opening], [P::Closing, P::Closing]),
+            ("ب）。ا", [P::Closing, P::Closing], [P::Opening, P::Closing]),
+            ("ب。。ا", [P::Closing, P::Closing], [P::Closing, P::Closing]),
+        ] {
+            let context = format!("{mode:?} {orientation:?} {text}");
+            let (normal, normal_size) = layout(text, mode, orientation, TextSpacingTrim::Normal);
+            let (space_all, spaced_size) =
+                layout(text, mode, orientation, TextSpacingTrim::SpaceAll);
+            let (_, trimmed_size) = layout(text, mode, orientation, TextSpacingTrim::TrimAll);
+            let classes = if upright {
+                source_classes
+            } else {
+                mirrored_classes
+            };
+            for (punctuation, class) in normal.data.punctuation[1..3].iter().zip(classes) {
+                assert_eq!(punctuation.class, class, "{context}");
+                let blanks = match class {
+                    P::Opening => (half, LayoutUnit::ZERO),
+                    P::Closing => (LayoutUnit::ZERO, half),
+                    _ => unreachable!(),
+                };
+                assert_eq!((punctuation.left, punctuation.right), blanks, "{context}");
+            }
+            assert_eq!(normal.data.glyphs.id, space_all.data.glyphs.id, "{context}");
+            assert_eq!(normal_size, spaced_size - 10.0, "{context}");
+            assert_eq!(trimmed_size, spaced_size - 20.0, "{context}");
+        }
+    }
+}
+
+#[test]
 fn colon_punctuation_class_follows_the_shaped_glyph() {
     use crate::line::punctuation::PunctuationClass as P;
     use crate::node::{NodeId, TextSource};
