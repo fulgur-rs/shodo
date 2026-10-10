@@ -172,17 +172,19 @@ pub(super) fn scan(
         // break opportunity. A `shared_cluster` unit's shared advance can
         // under-count a window that turns out unshapeable within budget
         // (the edge falls back to wider un-sliced glyphs), so those always
-        // get the real measurement. A discretionary hyphen position is the
-        // same for its unhyphenated edge: the line can end there only with
-        // the hyphen, which is measured separately, so the plain edge only
-        // confirms overflow.
+        // get the real measurement. A slice cut only to give the first line
+        // a resume cursor is not an end the normal set can take, so it
+        // defers that confirmation to the cluster's own last slice. A
+        // discretionary hyphen position is the same for its unhyphenated
+        // edge: the line can end there only with the hyphen, which is
+        // measured separately, so the plain edge only confirms overflow.
         let need_edge = if count_mode {
             limited_cut
         } else {
             !matches!(
                 unit.break_after,
                 BreakClass::Prohibited | BreakClass::Hyphen
-            ) || unit.shared_cluster.is_some()
+            ) || unit.shared_cluster.is_some() && !unit.first_line_cursor
                 || (!hangs && !overflowing && shared_extent > available)
         };
         // Once a fitting break is known, an `Allowed` opportunity whose shared
