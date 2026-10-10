@@ -7,6 +7,7 @@ std::thread_local! {
     static INFO_READS: Cell<usize> = const { Cell::new(0) };
     static FONT_READS: Cell<usize> = const { Cell::new(0) };
     static KEY_COMPARISONS: Cell<usize> = const { Cell::new(0) };
+    static SHARED_LOOKUPS: Cell<usize> = const { Cell::new(0) };
 static REGISTERED_FACE_VISITS: Cell<usize> = const { Cell::new(0) };
     static NATIVE_FACE_ID_LOOKUPS: Cell<usize> = const { Cell::new(0) };
     static PREPARED_RANKS: Cell<usize> = const { Cell::new(0) };
@@ -19,6 +20,10 @@ pub(super) fn record_prepared_rank() {
 
 pub(super) fn record_rank() {
     RANK_SCANS.with(|scans| scans.set(scans.get() + 1));
+}
+
+pub(super) fn record_shared_lookup() {
+    SHARED_LOOKUPS.with(|n| n.set(n.get() + 1));
 }
 
 pub(super) fn record_key_comparison() {
@@ -130,15 +135,20 @@ fn cache_evicts_least_recently_used_entry_first() {
         families: vec![FontFamily::Named("Web".into())],
         ..Default::default()
     };
+    // Observe the shared cache: skip this thread's front cache every time.
+    let shared_match = |c: &str| {
+        thread_cache::clear();
+        fonts.match_cluster(&query, c);
+    };
     let hit_cost = |c: &str| {
         KEY_COMPARISONS.with(|n| n.set(0));
-        fonts.match_cluster(&query, c);
+        shared_match(c);
         KEY_COMPARISONS.with(Cell::get)
     };
-    fonts.match_cluster(&query, "A");
-    fonts.match_cluster(&query, "B");
-    fonts.match_cluster(&query, "A"); // A is now most recent
-    fonts.match_cluster(&query, "C"); // evicts B, not A
+    shared_match("A");
+    shared_match("B");
+    shared_match("A"); // A is now most recent
+    shared_match("C"); // evicts B, not A
     assert!(
         hit_cost("A") > 0,
         "A must still be cached: a hit compares its key"
@@ -146,7 +156,7 @@ fn cache_evicts_least_recently_used_entry_first() {
     // A miss on B compares no cached key against an equal entry; re-inserting
     // it must not have kept a stale copy.
     assert_eq!(fonts.caches().matches.len(), 2);
-    fonts.match_cluster(&query, "B"); // evicts C (A was just touched)
+    shared_match("B"); // evicts C (A was just touched)
     let a_after = hit_cost("A");
     assert!(a_after > 0);
     assert_eq!(fonts.caches().matches.len(), 2);
@@ -912,4 +922,132 @@ fn prepared_candidates_keep_cluster_presentation_and_query_synthesis_dynamic() {
         2,
         "presentation/language/script/synthesis are not preparation keys"
     );
+}
+
+fn web_fonts(cap: usize) -> (FontCollection, FontQuery) {
+    let fonts = FontCollection::with_options(
+        &Limits::default(),
+        FontOptions {
+            system_fonts: false,
+            match_cache_entries: cap,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register(super::super::browser_tests::test_font("Web", &['a'], 600))
+        .unwrap();
+    let query = FontQuery {
+        families: vec![FontFamily::Named("Web".into())],
+        ..Default::default()
+    };
+    (fonts, query)
+}
+
+#[test]
+fn a_repeated_match_on_one_thread_skips_the_shared_cache() {
+    let (fonts, query) = web_fonts(8);
+    thread_cache::clear();
+    let first = fonts.match_cluster(&query, "a");
+    assert!(first.is_some());
+    SHARED_LOOKUPS.with(|n| n.set(0));
+    for _ in 0..4 {
+        assert_eq!(fonts.match_cluster(&query, "a"), first);
+    }
+    assert_eq!(SHARED_LOOKUPS.with(Cell::get), 0);
+    // Another thread starts cold and is served by the shared entry.
+    let fonts_for_thread = fonts.clone();
+    let query_for_thread = query.clone();
+    let (other, lookups) = std::thread::spawn(move || {
+        let found = fonts_for_thread.match_cluster(&query_for_thread, "a");
+        (found, SHARED_LOOKUPS.with(Cell::get))
+    })
+    .join()
+    .unwrap();
+    assert_eq!(other, first);
+    assert_eq!(lookups, 1);
+}
+
+#[test]
+fn a_thread_cache_hit_shares_its_result_without_cloning_variations() {
+    let (fonts, query) = web_fonts(8);
+    thread_cache::clear();
+    let base = query.normalized();
+    let first = fonts.match_scripted(&base, *b"Latn", "a").unwrap();
+    let again = fonts.match_scripted(&base, *b"Latn", "a").unwrap();
+    assert!(std::sync::Arc::ptr_eq(&first, &again));
+}
+
+#[test]
+fn the_thread_cache_follows_generation_changes() {
+    let (fonts, _) = web_fonts(8);
+    let other = fonts
+        .register_face(
+            super::super::browser_tests::test_font("Other", &['a'], 600),
+            0,
+            FontFaceDescriptor {
+                family: "Other".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let query = FontQuery {
+        families: vec![FontFamily::Generic(GenericFamily::Serif)],
+        ..Default::default()
+    };
+    thread_cache::clear();
+    fonts.set_generic_families(GenericFamily::Serif, vec!["Web".into()]);
+    let web = fonts.match_cluster(&query, "a").unwrap().id;
+    assert_ne!(web, other);
+    fonts.set_generic_families(GenericFamily::Serif, vec!["Other".into()]);
+    assert_eq!(fonts.match_cluster(&query, "a").unwrap().id, other);
+}
+
+#[test]
+fn the_thread_cache_keeps_layers_apart() {
+    let (shared, query) = web_fonts(8);
+    let document = FontCollection::for_document(&shared, &Limits::default());
+    let local = document
+        .register_face(
+            super::super::browser_tests::test_font("Web", &['a'], 600),
+            0,
+            FontFaceDescriptor {
+                family: "Web".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    thread_cache::clear();
+    let from_shared = shared.match_cluster(&query, "a").unwrap().id;
+    let from_document = document.match_cluster(&query, "a").unwrap().id;
+    assert_eq!(from_document, local);
+    assert_ne!(from_shared, local);
+    assert_eq!(shared.match_cluster(&query, "a").unwrap().id, from_shared);
+}
+
+#[test]
+fn concurrent_matches_agree_with_sequential_ones() {
+    let (fonts, query) = web_fonts(16);
+    let clusters: Vec<String> = ('a'..='z').map(String::from).collect();
+    let expected: Vec<_> = clusters
+        .iter()
+        .map(|c| fonts.match_cluster(&query, c))
+        .collect();
+    let threads: Vec<_> = (0..4)
+        .map(|_| {
+            let fonts = fonts.clone();
+            let query = query.clone();
+            let clusters = clusters.clone();
+            std::thread::spawn(move || {
+                (0..8)
+                    .flat_map(|_| clusters.iter().map(|c| fonts.match_cluster(&query, c)))
+                    .collect::<Vec<_>>()
+            })
+        })
+        .collect();
+    for thread in threads {
+        let found = thread.join().unwrap();
+        for chunk in found.chunks(clusters.len()) {
+            assert_eq!(chunk, expected.as_slice());
+        }
+    }
 }
