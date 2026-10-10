@@ -126,7 +126,8 @@ fn main() {
         };
         let mut b = ParagraphBuilder::new(&ps, &limits);
         let mut node = 1;
-        for _ in 0..rng.below(4) + 1 {
+        let chunks = rng.below(4) + 1;
+        for chunk in 0..chunks {
             let span = rng.below(3) == 0;
             if span {
                 node += 1;
@@ -135,10 +136,17 @@ fn main() {
             let text: Vec<_> = (0..rng.below(30) + 1)
                 .map(|_| word(&mut rng, shy))
                 .collect();
+            // Some paragraphs end right after a soft hyphen, where the line
+            // must still fit without the hyphen.
+            let tail = if chunk + 1 == chunks && rng.below(3) == 0 {
+                "\u{ad}"
+            } else {
+                " "
+            };
             node += 1;
             b.push_text(
                 TextSource::Generated { node: NodeId(node) },
-                &(text.join(" ") + " "),
+                &(text.join(" ") + tail),
             );
             if span {
                 b.close_inline();

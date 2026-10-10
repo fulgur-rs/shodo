@@ -52,15 +52,13 @@ pub(super) fn scan(
             _ => false,
         });
         if terminating
-            && let Some(Deferred::Opportunity(last)) = pending.back()
+            && let Some(last) = pending.back().map(Deferred::plain)
             && last.end == i
             && !last.hangs
         {
-            let Some(Deferred::Opportunity(last)) = pending.pop_back() else {
-                unreachable!("deferred opportunity");
-            };
             let (edge_delta, _) = super::windows::candidate(data, start, last.end, cx, sat);
             if last.overflows(data, edge_delta, flags, options, available, sat) {
+                let last = pending.pop_back().expect("checked above");
                 if let Some(b) = settle(
                     data,
                     start,
@@ -74,13 +72,33 @@ pub(super) fn scan(
                 ) {
                     last_break = Some(b);
                 }
-                let (b, edge) = last_break
-                    .take()
-                    .expect("opportunities are deferred only after a verified break");
-                taken_hyphen = edge.then_some(b);
-                widths.truncate(b - start);
-                i = b;
-                break BreakReason::Regular;
+                if let Some((b, edge)) = last_break.take() {
+                    taken_hyphen = edge.then_some(b);
+                    widths.truncate(b - start);
+                    i = b;
+                    break BreakReason::Regular;
+                }
+                if let Some(b) = last_emergency {
+                    widths.truncate(b - start);
+                    i = b;
+                    break BreakReason::Emergency;
+                }
+                if let Some(b) = first_hyphen.take() {
+                    taken_hyphen = Some(b);
+                    widths.truncate(b - start);
+                    i = b;
+                    break BreakReason::Regular;
+                }
+                // The run overflows with no earlier break, so it ends here,
+                // hyphenated when that is possible.
+                if let Deferred::Hyphen(hyphen) = &last
+                    && hyphen
+                        .required(data, start, flags, options, cx, sat)
+                        .is_some()
+                {
+                    taken_hyphen = Some(i);
+                    break BreakReason::Regular;
+                }
             }
         }
         let Some(unit) = units.get(i) else {
@@ -324,6 +342,14 @@ pub(super) fn scan(
             }
             BreakClass::Hyphen => {
                 let hyphen = PendingHyphen {
+                    plain: Pending {
+                        end: i,
+                        hangs,
+                        shared_extent,
+                        required,
+                        summary: spacing.summary(Some(data)),
+                        last,
+                    },
                     end: i,
                     pos,
                     summary: super::spacing::hyphen_summary(data, &spacing, i - 1, sat),
@@ -510,6 +536,14 @@ enum Deferred {
 }
 
 impl Deferred {
+    /// The candidate's position as an unhyphenated line end.
+    fn plain(&self) -> &Pending {
+        match self {
+            Self::Opportunity(opportunity) => opportunity,
+            Self::Hyphen(hyphen) => &hyphen.plain,
+        }
+    }
+
     /// The verified break this candidate gives, if it fits. A measurable
     /// hyphen that does not fit is reported through `unfit_hyphen`.
     #[allow(clippy::too_many_arguments)]
@@ -615,6 +649,9 @@ fn settle(
 /// line can only end at its last fitting candidate, so the measurement waits
 /// until the line overflows.
 struct PendingHyphen {
+    /// The same position ending without a hyphen. Its edge is measured only
+    /// when the line ends there, where it must still fit.
+    plain: Pending,
     end: usize,
     pos: LayoutUnit,
     summary: super::spacing_summary::Summary,
