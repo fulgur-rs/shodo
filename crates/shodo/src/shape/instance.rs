@@ -170,10 +170,8 @@ pub(super) fn resolve_with_warning(
             },
         );
     }
-    // Explicit settings are last; axes() and harfrust clamp to supported ranges.
-    for v in &style.font_variations {
-        set_variation(&mut variations, &mut variation_indices, *v);
-    }
+    // Explicit settings were applied before size-adjust. Automatic opsz is
+    // inserted only without explicit opsz, so precedence is already final.
     #[cfg(test)]
     COORDINATE_INSTANCE_BUILDS.with(|count| count.set(count.get() + 1));
     let instance = harfrust::ShaperInstance::from_variations(
@@ -297,7 +295,8 @@ mod tests {
                 assert_eq!(value.value, (i + 1) as f32);
             }
             assert!(
-                VARIATION_LOOKUPS.with(|visits| visits.get()) <= 4 * style.font_variations.len()
+                VARIATION_LOOKUPS.with(|visits| visits.get()) <= style.font_variations.len(),
+                "author settings must not require a second lookup pass"
             );
         }
     }
@@ -457,6 +456,16 @@ mod tests {
         tables.sort_by_key(|(tag, _)| *tag);
         let bytes = crate::font::sfnt::build_sfnt(&tables);
         let style = InlineStyle {
+            font_variations: vec![
+                FontVariation {
+                    tag: *b"wght",
+                    value: 100.0,
+                },
+                FontVariation {
+                    tag: *b"wght",
+                    value: 900.0,
+                },
+            ],
             font_size_adjust: Some(crate::style::FontSizeAdjust {
                 metric: FontMetricKind::IcHeight,
                 value: 0.6,
@@ -467,7 +476,7 @@ mod tests {
             id: crate::font::FontCollection::new(&crate::limits::Limits::default()).primary_font(),
             variations: vec![FontVariation {
                 tag: *b"wght",
-                value: 900.0,
+                value: 100.0,
             }],
             embolden: false,
             skew: None,

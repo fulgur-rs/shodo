@@ -2449,23 +2449,51 @@ fn optical_sizing_and_explicit_variations_survive_public_views() {
             },
         )
         .unwrap();
-    for (optical, explicit, want) in [
-        (true, None, vec![1.0, 1.0]),
-        (false, None, vec![1.0, 0.0]),
-        (true, Some(8.0), vec![1.0, -1.0]),
+    let metrics = skrifa::FontRef::from_index(bytes, 0).unwrap().metrics(
+        skrifa::instance::Size::unscaled(),
+        skrifa::instance::LocationRef::default(),
+    );
+    let double_size = crate::style::FontSizeAdjust {
+        metric: crate::style::FontMetricKind::ExHeight,
+        value: 2.0 * metrics.x_height.unwrap() / f32::from(metrics.units_per_em),
+    };
+    for (optical, explicit, want, adjusted) in [
+        (true, vec![], vec![1.0, 1.0], false),
+        (false, vec![], vec![1.0, 0.0], false),
+        (true, vec![(*b"opsz", 8.0)], vec![1.0, -1.0], false),
+        (
+            true,
+            vec![(*b"opsz", 72.0), (*b"opsz", 8.0)],
+            vec![1.0, -1.0],
+            false,
+        ),
+        (true, vec![(*b"opsz", 0.0)], vec![1.0, -1.0], false),
+        (true, vec![(*b"opsz", 100.0)], vec![1.0, 1.0], false),
+        (false, vec![(*b"opsz", 100.0)], vec![1.0, 1.0], false),
+        (
+            true,
+            vec![(*b"wght", 900.0), (*b"wght", 50.0)],
+            vec![-1.0, 1.0],
+            false,
+        ),
+        (true, vec![], vec![1.0, 1.0], true),
+        (
+            true,
+            vec![(*b"opsz", 72.0), (*b"opsz", 8.0)],
+            vec![1.0, -1.0],
+            true,
+        ),
     ] {
         let style = crate::style::ParagraphStyle {
             root: crate::style::InlineStyle {
-                font_size: 72.0,
+                font_size: if adjusted { 36.0 } else { 72.0 },
+                font_size_adjust: adjusted.then_some(double_size),
                 font_families: vec![crate::style::FontFamily::Named("Variable".into())],
                 font_weight: 900.0,
                 font_optical_sizing: optical,
                 font_variations: explicit
-                    .map(|value| crate::style::FontVariation {
-                        tag: *b"opsz",
-                        value,
-                    })
                     .into_iter()
+                    .map(|(tag, value)| crate::style::FontVariation { tag, value })
                     .collect(),
                 ..Default::default()
             },
@@ -2498,6 +2526,7 @@ fn optical_sizing_and_explicit_variations_survive_public_views() {
                 }
             })
             .unwrap();
+        assert!((run.font_size() - 72.0).abs() < 0.01);
         assert_eq!(
             run.normalized_coords()
                 .iter()
@@ -2508,8 +2537,13 @@ fn optical_sizing_and_explicit_variations_survive_public_views() {
         assert!(
             run.variations()
                 .iter()
-                .any(|v| v.tag == *b"wght" && v.value == 900.0)
+                .any(|v| v.tag == *b"wght" && v.value == if want[0] < 0.0 { 100.0 } else { 900.0 })
         );
+        if want[1] != 0.0 {
+            assert!(run.variations().iter().any(|v| {
+                v.tag == *b"opsz" && v.value == if want[1] < 0.0 { 8.0 } else { 72.0 }
+            }));
+        }
     }
 }
 #[test]
