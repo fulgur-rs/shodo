@@ -102,3 +102,6 @@ name = "shape_instance_reuse"
 
 [[example]]
 name = "intrinsic_ruby_rows"
+
+[[example]]
+name = "edge_scan"

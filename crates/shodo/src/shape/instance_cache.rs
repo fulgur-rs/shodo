@@ -1,5 +1,7 @@
 //! Bounded preparation reuse within one shape_inputs call. Keys borrow the
 //! paragraph's immutable input; only fully initialized instances are shared.
+//! `WindowInstances` extends the same reuse across the line-edge window
+//! shapes of one paragraph.
 use super::instance::{ResolutionWarning, RunInstance};
 use crate::{font::FontMatch, limits::WarningSink, style::InlineStyle};
 use std::{ops::Deref, sync::Arc};
@@ -94,18 +96,7 @@ impl<'items, 'styles> InstanceCache<'items, 'styles> {
         warnings: &mut WarningSink,
         prepare: impl FnOnce() -> (Resolved, Option<ResolutionWarning>, bool),
     ) -> Cached<'_> {
-        // Large authored vectors are also excluded before equality checks.
-        let eligible = key.style.font_variations.len()
-            <= BYTES / size_of::<crate::style::FontVariation>()
-            && key.found.variations.len() <= BYTES / size_of::<crate::style::FontVariation>()
-            && features.len() <= BYTES / size_of::<harfrust::Feature>()
-            && key
-                .style
-                .lang
-                .as_ref()
-                .is_none_or(|language| language.len() <= BYTES);
-        #[cfg(test)]
-        let eligible = eligible && !BYPASS.with(std::cell::Cell::get);
+        let eligible = eligible(key, features);
         if eligible
             && let Some(index) = self.entries.iter().position(|entry| {
                 entry.as_ref().is_some_and(|entry| {
@@ -155,6 +146,131 @@ impl<'items, 'styles> InstanceCache<'items, 'styles> {
                 .expect("inserted instance")
                 .resolved,
         )
+    }
+}
+
+/// Large authored vectors are excluded before equality checks.
+fn eligible(key: Key<'_, '_>, features: &Arc<[harfrust::Feature]>) -> bool {
+    let eligible = key.style.font_variations.len()
+        <= BYTES / size_of::<crate::style::FontVariation>()
+        && key.found.variations.len() <= BYTES / size_of::<crate::style::FontVariation>()
+        && features.len() <= BYTES / size_of::<harfrust::Feature>()
+        && key
+            .style
+            .lang
+            .as_ref()
+            .is_none_or(|language| language.len() <= BYTES);
+    #[cfg(test)]
+    let eligible = eligible && !BYPASS.with(std::cell::Cell::get);
+    eligible
+}
+
+struct WindowEntry {
+    found: Arc<FontMatch>,
+    style: u32,
+    script: [u8; 4],
+    resolved: Resolved,
+    warning: Option<ResolutionWarning>,
+    bytes: usize,
+}
+
+/// Prepared instances of the most recent paragraph's line-edge windows.
+///
+/// A line scan shapes a window at many break candidates, and each call used
+/// to resolve the instance and read the font metrics again although the
+/// window repeats an input the paragraph already prepared. Entries are keyed
+/// by the paragraph's own style index and font match, so they are dropped
+/// whenever a window of another paragraph is shaped. Bounds and eligibility
+/// are those of `InstanceCache`.
+#[derive(Default)]
+pub(crate) struct WindowInstances {
+    owner: Option<(u64, usize)>,
+    entries: Vec<WindowEntry>,
+    bytes: usize,
+}
+
+impl std::fmt::Debug for WindowInstances {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WindowInstances")
+            .field("entries", &self.entries.len())
+            .field("bytes", &self.bytes)
+            .finish()
+    }
+}
+
+impl WindowInstances {
+    pub(crate) fn begin(&mut self, data: &crate::paragraph::ParagraphData) {
+        let owner = (
+            data.id,
+            data as *const crate::paragraph::ParagraphData as usize,
+        );
+        if self.owner != Some(owner) {
+            self.clear();
+            self.owner = Some(owner);
+        }
+    }
+
+    pub(crate) fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// `styles` must be the styles of the paragraph passed to `begin`.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn resolve<'s>(
+        &'s mut self,
+        found: &Arc<FontMatch>,
+        style: u32,
+        styles: &[InlineStyle],
+        script: [u8; 4],
+        features: &Arc<[harfrust::Feature]>,
+        warnings: &mut WarningSink,
+        prepare: impl FnOnce() -> (Resolved, Option<ResolutionWarning>, bool),
+    ) -> Cached<'s> {
+        let key = Key {
+            found,
+            style: &styles[style as usize],
+            script,
+        };
+        let eligible = eligible(key, features);
+        if eligible
+            && let Some(index) = self.entries.iter().position(|entry| {
+                key.matches(Key {
+                    found: &entry.found,
+                    style: &styles[entry.style as usize],
+                    script: entry.script,
+                }) && (Arc::ptr_eq(features, &entry.resolved.1.features)
+                    || **features == *entry.resolved.1.features)
+            })
+        {
+            let entry = &self.entries[index];
+            if let Some(warning) = entry.warning {
+                warning.emit(warnings);
+            }
+            return Cached::Borrowed(&entry.resolved);
+        }
+        let (resolved, warning, inline_coords) = prepare();
+        if let Some(warning) = warning {
+            warning.emit(warnings);
+        }
+        let bytes = retained_bytes(&resolved);
+        if !eligible || !inline_coords || bytes > BYTES {
+            return Cached::Owned(resolved);
+        }
+        // FIFO eviction, as in `InstanceCache`; entries stay in insertion order.
+        while self.bytes + bytes > BYTES || self.entries.len() == ENTRIES {
+            let evicted = self.entries.remove(0);
+            self.bytes -= evicted.bytes;
+        }
+        self.entries.push(WindowEntry {
+            found: Arc::clone(found),
+            style,
+            script,
+            resolved,
+            warning,
+            bytes,
+        });
+        self.bytes += bytes;
+        Cached::Borrowed(&self.entries.last().expect("inserted instance").resolved)
     }
 }
 

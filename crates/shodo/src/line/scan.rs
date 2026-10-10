@@ -40,7 +40,44 @@ pub(super) fn scan(
     let mut counted_through = units[start].text.start;
     let max_graphemes = max_graphemes.map(|limit| limit.max(1));
     let count_mode = max_graphemes.is_some();
+    let mut pending: Vec<Pending> = Vec::new();
     let reason = loop {
+        // A line that ends here without overflowing still has to fit at its
+        // last opportunity, whose edge reshape may have been deferred.
+        let terminating = units.get(i).is_none_or(|unit| match unit.kind {
+            UnitKind::ForcedBreak => !count_mode,
+            UnitKind::BlockInInline { .. } => true,
+            _ => false,
+        });
+        if terminating
+            && let Some(last) = pending.last()
+            && last.end == i
+            && !last.hangs
+        {
+            let last = pending.pop().expect("deferred opportunity");
+            let (edge_delta, _) = super::windows::candidate(data, start, last.end, cx, sat);
+            if last.overflows(data, edge_delta, flags, options, available, sat) {
+                if let Some(b) = settle(
+                    data,
+                    start,
+                    &mut pending,
+                    flags,
+                    options,
+                    available,
+                    cx,
+                    sat,
+                ) {
+                    last_break = Some((b, false));
+                }
+                let (b, edge) = last_break
+                    .take()
+                    .expect("opportunities are deferred only after a verified break");
+                taken_hyphen = edge.then_some(b);
+                widths.truncate(b - start);
+                i = b;
+                break BreakReason::Regular;
+            }
+        }
         let Some(unit) = units.get(i) else {
             break BreakReason::End;
         };
@@ -138,7 +175,20 @@ pub(super) fn scan(
                 || unit.shared_cluster.is_some()
                 || (!hangs && !overflowing && shared_extent > available)
         };
-        let (edge_delta, viable) = if need_edge {
+        // Once a fitting break is known, an `Allowed` opportunity whose shared
+        // advances fit only matters if no later one fits. With kerning fonts
+        // most word ends are unsafe to break, so measuring the edge reshape
+        // of every opportunity costs a shaping call per word. Defer it: when
+        // the line overflows, `settle` measures the deferred opportunities
+        // from the last one backwards and takes the first that really fits,
+        // like a browser that reshapes only the end of the line it chose.
+        let defer = !count_mode
+            && !overflowing
+            && last_break.is_some()
+            && unit.break_after == BreakClass::Allowed
+            && unit.shared_cluster.is_none()
+            && (hangs || shared_extent <= available);
+        let (edge_delta, viable) = if need_edge && !defer {
             super::windows::candidate(data, start, i + 1, cx, sat)
         } else {
             (LayoutUnit::ZERO, false)
@@ -162,6 +212,18 @@ pub(super) fn scan(
             extent
         };
         if !count_mode && !hangs && !overflowing && extent > available {
+            if let Some(b) = settle(
+                data,
+                start,
+                &mut pending,
+                flags,
+                options,
+                available,
+                cx,
+                sat,
+            ) {
+                last_break = Some((b, false));
+            }
             if let Some((b, edge)) = last_break.take() {
                 taken_hyphen = edge.then_some(b);
                 widths.truncate(b - start);
@@ -214,6 +276,14 @@ pub(super) fn scan(
         let last = super::punctuation::last_edge(data, i);
         match unit.break_after {
             BreakClass::Mandatory => break BreakReason::Forced,
+            BreakClass::Allowed if defer => pending.push(Pending {
+                end: i,
+                hangs,
+                shared_extent,
+                required,
+                summary: spacing.summary(Some(data)),
+                last,
+            }),
             BreakClass::Allowed if viable => {
                 if overflowing {
                     break BreakReason::Regular;
@@ -224,6 +294,7 @@ pub(super) fn scan(
                 ) <= available
                 {
                     last_break = Some((i, false));
+                    pending.clear();
                 }
             }
             BreakClass::Hyphen => {
@@ -252,6 +323,7 @@ pub(super) fn scan(
                     }
                     if required <= available {
                         last_break = Some((i, true));
+                        pending.clear();
                     } else if first_hyphen.is_none() {
                         first_hyphen = Some(i);
                     }
@@ -329,6 +401,104 @@ pub(super) fn scan(
         sat,
     );
     result
+}
+
+/// An `Allowed` break opportunity whose edge reshape was deferred, with the
+/// shared-advance measurements the eager path would have combined with it.
+struct Pending {
+    /// Unit index the line would end at.
+    end: usize,
+    hangs: bool,
+    shared_extent: LayoutUnit,
+    /// The line's required width at `end` without the edge reshape delta.
+    required: LayoutUnit,
+    summary: super::spacing_summary::Summary,
+    last: bool,
+}
+
+impl Pending {
+    /// Whether the unit before `end` overflows once its edge delta is added.
+    fn overflows(
+        &self,
+        data: &ParagraphData,
+        edge_delta: LayoutUnit,
+        flags: u8,
+        options: &crate::style::LineOptions,
+        available: LayoutUnit,
+        sat: &mut Saturation,
+    ) -> bool {
+        let extent = self.shared_extent.add(edge_delta, sat);
+        !self.hangs
+            && extent > available
+            && extent.sub(
+                super::punctuation::edges(
+                    data,
+                    self.summary,
+                    flags,
+                    self.last,
+                    Some(options),
+                    LayoutUnit::ZERO,
+                    extent,
+                    sat,
+                )
+                .removed(sat),
+                sat,
+            ) > available
+    }
+
+    /// Whether the line can end at `end`, given the measured edge reshape.
+    fn fits(
+        &self,
+        data: &ParagraphData,
+        (edge_delta, viable): (LayoutUnit, bool),
+        flags: u8,
+        options: &crate::style::LineOptions,
+        available: LayoutUnit,
+        sat: &mut Saturation,
+    ) -> bool {
+        if !viable || self.overflows(data, edge_delta, flags, options, available, sat) {
+            return false;
+        }
+        let required = self.required.add(edge_delta, sat);
+        required.sub(
+            super::punctuation::edges(
+                data,
+                self.summary,
+                flags,
+                self.last,
+                Some(options),
+                LayoutUnit::ZERO,
+                required,
+                sat,
+            )
+            .removed(sat),
+            sat,
+        ) <= available
+    }
+}
+
+/// Measure deferred opportunities from the last one backwards and return the
+/// first that fits. All of them are consumed. `None` keeps the verified break
+/// found before them.
+#[allow(clippy::too_many_arguments)]
+fn settle(
+    data: &ParagraphData,
+    start: usize,
+    pending: &mut Vec<Pending>,
+    flags: u8,
+    options: &crate::style::LineOptions,
+    available: LayoutUnit,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> Option<usize> {
+    while let Some(opportunity) = pending.pop() {
+        let measured = super::windows::candidate(data, start, opportunity.end, cx, sat);
+        if opportunity.fits(data, measured, flags, options, available, sat) {
+            pending.clear();
+            return Some(opportunity.end);
+        }
+    }
+    None
 }
 
 /// A continuation inside a shaping cluster must use its own exact prefix
