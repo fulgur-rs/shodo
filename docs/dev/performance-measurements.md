@@ -5,9 +5,10 @@ development workspace package; the library's normal dependencies are unchanged.
 Run it from the repository with Rust stable (at least 1.89) and Python 3.11 or newer:
 
 ```sh
-python3 tools/bench/run.py --output /tmp/shodo-full --quick
-python3 tools/bench/run.py --output /tmp/shodo-latin-before --quick --case latin-short
-python3 tools/bench/run.py --output /tmp/shodo-latin-after --quick --case latin-short --baseline /tmp/shodo-latin-before
+mkdir -p "$HOME/tmp"
+TMPDIR="$HOME/tmp" python3 tools/bench/run.py --output "$HOME/tmp/shodo-full" --quick
+TMPDIR="$HOME/tmp" python3 tools/bench/run.py --output "$HOME/tmp/shodo-latin-before" --quick --case latin-short
+TMPDIR="$HOME/tmp" python3 tools/bench/run.py --output "$HOME/tmp/shodo-latin-after" --quick --case latin-short --baseline "$HOME/tmp/shodo-latin-before"
 ```
 
 Each output directory must be new. Failed commands, invalid output or incompatible
@@ -92,12 +93,13 @@ would be harmless. Config contents are not copied into the report. Older reports
 without this build fingerprint cannot serve as compatible baselines. Changes to
 these settings during collection also reject publication.
 
-Engine fingerprint version 2 covers every Rust source under `crates/shodo/src`,
-the crate manifest, and the workspace manifest. Source file additions, removals,
+Engine fingerprint version 3 covers every Rust source and embedded `.dat` file
+(including `analysis/languages.dat`) under `crates/shodo/src`, the crate manifest,
+and the workspace manifest. Source file additions, removals,
 and byte changes are checked again before publication; output artifacts are not
 part of the fingerprint. The version is a comparison condition, so older reports
 with missing or incomplete engine coverage cannot serve as baselines. Engine
-hashes themselves may differ when comparing two revisions under version 2.
+hashes themselves may differ when comparing two revisions under version 3.
 
 Baseline comparison requires identical machine/toolchain/build conditions,
 configuration, selected inputs, harness/lock/font hashes and operation output.
