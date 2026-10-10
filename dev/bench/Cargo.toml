@@ -104,4 +104,7 @@ name = "shape_instance_reuse"
 name = "intrinsic_ruby_rows"
 
 [[example]]
+name = "first_line_scale"
+
+[[example]]
 name = "edge_scan"

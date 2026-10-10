@@ -410,8 +410,9 @@ impl Paragraph {
                 error
             })?;
             budget.paragraph_shaping(alternate.glyphs.len() as u64)?;
-            finalize_data(&mut data, cx, &mut warnings, &mut sat);
-            finalize_data(&mut alternate, cx, &mut warnings, &mut sat);
+            let cuts = first_line_cuts(&data, &alternate);
+            finalize_data(&mut data, Some(&cuts), cx, &mut warnings, &mut sat);
+            finalize_data(&mut alternate, None, cx, &mut warnings, &mut sat);
             let mut normal_search = 0;
             let mut normal_cursors: Vec<_> = alternate
                 .units
@@ -480,7 +481,7 @@ impl Paragraph {
             alternate_bases
         } else {
             data.source_spans = Vec::new();
-            finalize_data(&mut data, cx, &mut warnings, &mut sat);
+            finalize_data(&mut data, None, cx, &mut warnings, &mut sat);
             normal_bases
         };
         crate::ruby::prepare::prepare(&mut data, &rubies, cx, fonts, budget, &mut bases)?;
@@ -817,15 +818,47 @@ fn build_data(
     Ok(data)
 }
 
+/// Normal-set grapheme cuts where a first line built from `alternate` can
+/// end: every alternate unit boundary and soft break opportunity, mapped
+/// through source positions. Other graphemes inside a normal ligature never
+/// receive an alternate cursor, so slicing there would only add edge work.
+fn first_line_cuts(normal: &ParagraphData, alternate: &ParagraphData) -> Vec<u32> {
+    use crate::analysis::units::BreakClass;
+    use crate::mapping::TransformSpan;
+    let boundaries = alternate
+        .units
+        .iter()
+        .flat_map(|u| [u.text.start, u.text.end])
+        .chain(
+            alternate
+                .breaks
+                .opportunities
+                .iter()
+                .filter(|o| o.class != BreakClass::Prohibited)
+                .map(|o| o.offset),
+        );
+    let mut cuts: Vec<u32> = boundaries
+        .map(|offset| {
+            let source = TransformSpan::source_position(&alternate.source_spans, offset);
+            TransformSpan::map_position(&normal.source_spans, source)
+        })
+        .filter(|cut| normal.breaks.graphemes.binary_search(cut).is_ok())
+        .collect();
+    cuts.sort_unstable();
+    cuts.dedup();
+    cuts
+}
+
 fn finalize_data(
     data: &mut ParagraphData,
+    first_line_cuts: Option<&[u32]>,
     cx: &mut crate::LayoutContext,
     warnings: &mut WarningSink,
     sat: &mut Saturation,
 ) {
     data.spacing_tree = crate::line::autospace::Tree::build(data);
     crate::line::autospace::initialize(data, warnings);
-    crate::line::reshape::initialize_slices(data, cx, warnings, sat);
+    crate::line::reshape::initialize_slices(data, first_line_cuts, cx, warnings, sat);
     data.punctuation = crate::line::punctuation::build(data, sat);
     (data.unit_spacing, data.internal_autospace_gaps) = crate::line::spacing::build(data, sat);
     data.last_content_unit = crate::line::spacing::last_content(data);
@@ -1550,5 +1583,67 @@ mod tests {
                     .message
                     .contains("font-size-adjust metric unavailable")
         }));
+    }
+
+    fn first_line_ligature_paragraph(
+        first: InlineStyle,
+        fonts: &FontCollection,
+    ) -> crate::Paragraph {
+        let limits = Limits::default();
+        let style = ParagraphStyle {
+            root: font_style("Latin"),
+            first_line: Some(first),
+            ..Default::default()
+        };
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, "office office");
+        builder
+            .build(&mut crate::LayoutContext::new(), fonts)
+            .unwrap()
+    }
+
+    #[test]
+    fn first_line_with_matching_ligatures_leaves_normal_ligatures_whole() {
+        let (fonts, _) = fonts();
+        let mut first = font_style("Latin");
+        first.font_size = 32.;
+        let p = first_line_ligature_paragraph(first, &fonts);
+        let alternate = &p.data.first_line.as_ref().unwrap().data;
+        let ligature = |data: &ParagraphData| {
+            data.units.iter().any(|u| {
+                matches!(u.kind, crate::analysis::units::UnitKind::Cluster { .. })
+                    && u.text.end - u.text.start > 1
+            })
+        };
+        assert!(ligature(&p.data) && ligature(alternate));
+        // Neither set breaks inside "ffi", so no first line can end there.
+        assert!(p.data.units.iter().all(|u| u.shared_cluster.is_none()));
+    }
+
+    #[test]
+    fn first_line_cluster_boundaries_still_slice_normal_ligatures() {
+        let (fonts, _) = fonts();
+        let mut first = font_style("Latin");
+        first.text_transform = crate::style::TextTransform::Uppercase;
+        let p = first_line_ligature_paragraph(first, &fonts);
+        let cursors: Vec<_> = p
+            .data
+            .units
+            .iter()
+            .filter(|u| u.first_line_cursor)
+            .map(|u| u.text.end)
+            .collect();
+        // The uppercase first line has no ligature, so each grapheme inside
+        // the normal "ffi" (bytes 1..4) is a cursor for a grapheme limit.
+        assert_eq!(cursors, [2, 3, 9, 10]);
+        let lines = p.break_all_with_grapheme_limit(
+            &mut crate::LayoutContext::new(),
+            &LineOptions::default(),
+            1000.,
+            2,
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(lines[0].text_range(), 0..2);
+        assert_eq!(lines[1].text_range().start, 2);
     }
 }
