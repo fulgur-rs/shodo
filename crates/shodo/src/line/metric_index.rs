@@ -272,7 +272,15 @@ impl MetricIndex {
                 }
             }
             nonglyph[size + i] = if matches!(u.kind, UnitKind::Cluster { .. }) {
-                combination.map_or(Summary::default(), |p| Summary::profile(p, true))
+                // Reshaping replaces glyph profiles, not the text content.
+                // A hidden soft hyphen can have no replacement glyph at all.
+                combination.map_or(
+                    Summary {
+                        active,
+                        ..Default::default()
+                    },
+                    |p| Summary::profile(p, true),
+                )
             } else {
                 tree[size + i]
             };
@@ -813,6 +821,85 @@ mod tests {
     use crate::limits::Limits;
     use crate::node::{InlineEdges, NodeId, Sides, TextSource};
     use crate::style::{FontFamily, InlineStyle, LineHeight, ParagraphStyle};
+
+    #[test]
+    fn hidden_soft_hyphen_scalar_and_retained_metrics_keep_the_strut() {
+        let fonts = FontCollection::with_options(
+            &Limits::default(),
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        for quirk in [false, true] {
+            for mode in [
+                WritingMode::HorizontalTb,
+                WritingMode::VerticalRl,
+                WritingMode::VerticalLr,
+            ] {
+                for text in ["\u{ad}", "a\u{ad}b"] {
+                    let root = InlineStyle {
+                        font_size: 10.0,
+                        line_height: LineHeight::Px(20.0),
+                        ..Default::default()
+                    };
+                    let mut b = ParagraphBuilder::new(
+                        &ParagraphStyle {
+                            root: root.clone(),
+                            line_height_quirk: quirk,
+                            writing_mode: mode,
+                            ..Default::default()
+                        },
+                        &Limits::default(),
+                    );
+                    b.open_inline(
+                        NodeId(2),
+                        &InlineStyle {
+                            line_height: LineHeight::Px(40.0),
+                            ..root
+                        },
+                        InlineEdges::default(),
+                    );
+                    b.push_text(TextSource::Generated { node: NodeId(3) }, text);
+                    b.close_inline();
+                    let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+                    let owner = p
+                        .data
+                        .units
+                        .iter()
+                        .position(|u| {
+                            matches!(u.kind, UnitKind::Cluster { .. })
+                                && &p.data.text[u.text.start as usize..u.text.end as usize]
+                                    == "\u{ad}"
+                        })
+                        .unwrap();
+                    for range in [0..p.data.units.len(), owner..owner + 1] {
+                        let mut cx = LayoutContext::new();
+                        cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
+                        let metrics = measure(
+                            &p.data,
+                            range.clone(),
+                            &AtomicSizes::EMPTY,
+                            &mut cx,
+                            &mut Saturation::default(),
+                        );
+                        let line = p.ruby_line(
+                            &mut LayoutContext::new(),
+                            range.clone(),
+                            100.0,
+                            &AtomicSizes::EMPTY,
+                            crate::ruby::align::AnnotationAlign::Policy(crate::RubyAlign::Start),
+                        );
+                        assert_eq!(metrics.block_size.to_f32(), 40.0, "{mode:?} {range:?}");
+                        assert!(!metrics.empty);
+                        assert_eq!(line.block_size, metrics.block_size, "{mode:?} {range:?}");
+                        assert_eq!(line.baseline, metrics.baseline, "{mode:?} {range:?}");
+                        assert_eq!(line.empty, metrics.empty, "{mode:?} {range:?}");
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn forced_root_strut_matches_retained_metrics_for_selected_ranges() {

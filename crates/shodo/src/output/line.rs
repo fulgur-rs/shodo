@@ -697,8 +697,9 @@ impl Line {
         self.data.fonts.font_data(id)
     }
 
-    /// True when the line has no glyphs, atomic inlines, or painted inline
-    /// edges. An empty line before a block has zero line advance.
+    /// True when the line has no text, atomic inlines, forced breaks, or
+    /// painted inline edges. Hidden soft hyphens count as text even though
+    /// they produce no glyphs. An empty line before a block has zero line advance.
     pub fn is_empty(&self) -> bool {
         self.empty
     }
