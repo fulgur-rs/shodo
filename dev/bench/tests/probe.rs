@@ -1,4 +1,24 @@
 use std::process::Command;
+
+#[test]
+fn describe_matches_the_complete_timing_matrix() {
+    let output = Command::new(env!("CARGO_BIN_EXE_shodo-probe"))
+        .arg("--describe")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let actual: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let expected: Vec<_> = shodo_bench::workloads()
+        .iter()
+        .map(shodo_bench::Workload::settings)
+        .collect();
+    assert_eq!(actual.as_array().unwrap().len(), 54);
+    assert!(
+        actual == serde_json::json!(expected),
+        "probe settings differ from timing matrix"
+    );
+}
+
 fn probe(mode: &str, id: &str, scale: &str) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_shodo-probe"))
         .args([mode, id, scale])

@@ -30,6 +30,10 @@ def main():
         env.update(CARGO_BUILD_JOBS="1", CARGO_PROFILE_RELEASE_OPT_LEVEL="3",
                    CARGO_PROFILE_RELEASE_DEBUG="0", CARGO_PROFILE_RELEASE_INCREMENTAL="false",
                    CARGO_INCREMENTAL="0")
+        compiler = runner.execute(["rustup", "which", "--toolchain", "stable", "rustc"],
+                                  stage / "compiler-path.log", env=env).strip()
+        # Explicit values override Cargo config as well as environment defaults.
+        env.update(RUSTC=compiler, RUSTC_WRAPPER="", RUSTC_WORKSPACE_WRAPPER="")
         paths = [runner.ROOT / "dev/raikiri/examples/core_compare.rs",
                  runner.ROOT / "dev/raikiri/Cargo.toml", Path(__file__).resolve()]
         paths += list((runner.ROOT / "dev/fixtures/assets/fonts").glob("*"))
@@ -57,7 +61,7 @@ def main():
             **before, binary_sha256=runner.file_hash(binary), lock_sha256=lock_hash,
             source_fingerprint_version=runner.SOURCE_FINGERPRINT_VERSION,
             features=["shodo/complex-scripts"],
-            rustc=runner.execute(["rustc", "+stable", "-Vv"], stage / "rustc.log").strip(),
+            rustc=runner.execute([compiler, "-Vv"], stage / "rustc.log", env=env).strip(),
             cargo=runner.execute(["cargo", "+stable", "-V"], stage / "cargo.log").strip(),
             os=platform.platform(), affinity=sorted(os.sched_getaffinity(0)),
             cpu_models=sorted({line.split(":", 1)[1].strip() for line in Path("/proc/cpuinfo").read_text().splitlines() if line.startswith("model name")}),

@@ -17,10 +17,9 @@ fn main() {
 fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args == ["--describe"] {
-        let mut definitions: Vec<_> = workloads().iter().map(Workload::settings).collect();
-        for size in [1_024, 4_096, 16_384] {
-            definitions.push(workload("itemize-graphemes", size)?.settings());
-        }
+        // This is the timing matrix consumed by tools/bench/run.py. Ad hoc
+        // cold/memory probes remain addressable directly by ID and scale.
+        let definitions: Vec<_> = workloads().iter().map(Workload::settings).collect();
         println!("{}", serde_json::to_string(&definitions)?);
         return Ok(());
     }
