@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.25](https://github.com/fulgur-rs/shodo/compare/v0.0.24...v0.0.25) - 2026-10-10
+
+### Other
+
+- Merge pull request #274 from fulgur-rs/claude/project-thread-tdggln
+- *(line)* reuse style metrics across paragraphs of one layout context
+- *(ruby)* protect intrinsic row accumulator from word eviction
+- *(shaping)* reuse bounded font preparations within one call
+- *(font)* share bounded registered candidate preparation
+- *(line)* move intermediate fixed-width scans without cloning
+- *(shape)* skip index allocation for ordered glyphs
+- *(line)* split alignment and justification phases
+- share bidi replacement and warning suppression
+
 ## [0.0.24](https://github.com/fulgur-rs/shodo/compare/v0.0.23...v0.0.24) - 2026-10-07
 
 ### Other
