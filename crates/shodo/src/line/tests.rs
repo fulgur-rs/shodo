@@ -424,22 +424,20 @@ fn break_all_arabic(
     )
 }
 
-/// Each edge window is bounded, but a long unsafe-joined line asks for one per
-/// break candidate. The total requested per line must fail closed (warn and
-/// keep shared glyphs) instead of growing with the candidate count, without
-/// depending on what the cache already holds.
+/// Each edge window is bounded, but a long unsafe-joined line could ask for
+/// one per break candidate. Once a fitting break is known, the scan defers
+/// the edge reshape of later candidates and measures only the ones it needs
+/// when the line ends, so a line that fits whole stays far under the per-line
+/// budget. The result must not depend on what the cache already holds.
 #[test]
-fn edge_reshape_work_per_line_is_budgeted_and_deterministic() {
-    // Default limits: a 5 KB unsafe-joined run stays under the 4 KiB window cap
-    // only while windows are small, so the scan keeps requesting large windows
-    // at every candidate; the per-line budget bounds the total.
+fn edge_reshape_work_per_line_is_deferred_and_deterministic() {
     let limits = Limits::default();
     let paragraph = arabic_paragraph(limits, 24);
     let mut cold = LayoutContext::new();
     let (lines, warnings) = break_all_arabic(&paragraph, 200_000.0, &mut cold);
     assert!(
-        warnings.iter().any(|m| m.contains("edge reshape budget")),
-        "a line needing more than the per-line reshape budget must warn; got {warnings:?}"
+        !warnings.iter().any(|m| m.contains("edge reshape budget")),
+        "deferred candidates must not exhaust the per-line reshape budget; got {warnings:?}"
     );
     assert!(!lines.is_empty());
     // The same layout with a warm cache is identical: the budget charges

@@ -10,6 +10,7 @@ pub(crate) use features::FeatureSets;
 mod input;
 mod instance;
 mod instance_cache;
+pub(crate) use instance_cache::WindowInstances;
 pub(crate) mod orientation;
 mod window;
 pub(crate) use instance::RunInstance;
@@ -837,10 +838,45 @@ fn shape_inputs<'a>(
     limits: &Limits,
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
+    bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
+    trace: Option<&mut Vec<WindowCharge>>,
+    feature_sets: &FeatureSets,
+    glyph_offset: u64,
+) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
+    shape_inputs_with(
+        cx,
+        items,
+        styles,
+        fonts,
+        mode,
+        limits,
+        warnings,
+        sat,
+        bases,
+        trace,
+        feature_sets,
+        glyph_offset,
+        None,
+    )
+}
+
+/// `window_instances` keeps prepared instances across calls for the line-edge
+/// windows of one paragraph; `None` prepares them once per call.
+#[allow(clippy::too_many_arguments)]
+fn shape_inputs_with<'a>(
+    cx: &mut crate::LayoutContext,
+    items: impl IntoIterator<Item = input::ShapeInput<'a>>,
+    styles: &[crate::style::InlineStyle],
+    fonts: &crate::font::FontCollection,
+    mode: WritingMode,
+    limits: &Limits,
+    warnings: &mut crate::limits::WarningSink,
+    sat: &mut Saturation,
     mut bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
     mut trace: Option<&mut Vec<WindowCharge>>,
     feature_sets: &FeatureSets,
     glyph_offset: u64,
+    mut window_instances: Option<&mut WindowInstances>,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
     cx.bound_shaping_scratch(limits);
     let mut store = GlyphStore::default();
@@ -861,32 +897,44 @@ fn shape_inputs<'a>(
             .as_ref()
             .zip(font_data.as_ref())
             .map(|(found, data)| {
-                instance_cache.resolve(
-                    instance_cache::Key {
+                let prepare = || {
+                    let (shaper, mut instance, size, warning, inline_coords) =
+                        instance::resolve_with_warning(
+                            data.data.as_ref(),
+                            data.index,
+                            found,
+                            style,
+                            original.script,
+                        );
+                    let (metrics, vertical_metrics) =
+                        fonts.metrics_from_data(found.id, data, size, &instance.coords);
+                    let instance_mut = Arc::get_mut(&mut instance).expect("new instance");
+                    instance_mut.metrics = metrics;
+                    instance_mut.vertical_metrics = vertical_metrics;
+                    instance_mut.features = features.clone();
+                    ((shaper, instance, size), warning, inline_coords)
+                };
+                match window_instances.as_deref_mut() {
+                    Some(cache) => cache.resolve(
                         found,
-                        style,
-                        script: original.script,
-                    },
-                    &features,
-                    warnings,
-                    || {
-                        let (shaper, mut instance, size, warning, inline_coords) =
-                            instance::resolve_with_warning(
-                                data.data.as_ref(),
-                                data.index,
-                                found,
-                                style,
-                                original.script,
-                            );
-                        let (metrics, vertical_metrics) =
-                            fonts.metrics_from_data(found.id, data, size, &instance.coords);
-                        let instance_mut = Arc::get_mut(&mut instance).expect("new instance");
-                        instance_mut.metrics = metrics;
-                        instance_mut.vertical_metrics = vertical_metrics;
-                        instance_mut.features = features.clone();
-                        ((shaper, instance, size), warning, inline_coords)
-                    },
-                )
+                        original.style,
+                        styles,
+                        original.script,
+                        &features,
+                        warnings,
+                        prepare,
+                    ),
+                    None => instance_cache.resolve(
+                        instance_cache::Key {
+                            found,
+                            style,
+                            script: original.script,
+                        },
+                        &features,
+                        warnings,
+                        prepare,
+                    ),
+                }
             });
         let missing_instance = if resolved.is_none() {
             Some(Arc::new(RunInstance {
@@ -1297,7 +1345,9 @@ pub(crate) fn shape_window_edit(
     let result = if !contains_replacement
         && input::can_borrow(&data.shape_items[index..], &unit.text)
     {
-        shape_inputs(
+        let mut instances = std::mem::take(&mut cx.window_instances);
+        instances.begin(data);
+        let result = shape_inputs_with(
             cx,
             input::clipped_items(&data.shape_items[index..], unit.text.clone()),
             &data.styles,
@@ -1310,7 +1360,10 @@ pub(crate) fn shape_window_edit(
             None,
             &data.shape_features,
             0,
-        )
+            Some(&mut instances),
+        );
+        cx.window_instances = instances;
+        result
     } else {
         let mut items: Vec<crate::analysis::itemize::ShapeItem> = Vec::new();
         for original in data.shape_items[index..]
