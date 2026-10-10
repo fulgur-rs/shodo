@@ -49,6 +49,170 @@ fn quirk_annotation_block_profiles_do_not_rescan_long_prefixes() {
     );
 }
 
+/// Warm scalar queries include the whole Close chain and have root-owned
+/// endpoints, so the intentional boundary-ancestor walk does not scale with
+/// nesting. Only index construction is excluded from the visit count.
+fn quirk_trailing_query_visits(
+    spaces: usize,
+    controls: usize,
+    depth: usize,
+    marker: &str,
+    forced: bool,
+) -> usize {
+    use crate::analysis::units::UnitKind;
+    use crate::style::{LineHeight, WhiteSpaceCollapse};
+
+    // Give each three-byte marker its own shaping window; otherwise the
+    // shaper can merge an entire ignorable run into the preceding space.
+    let mut b = ParagraphBuilder::new(
+        &ParagraphStyle {
+            root: InlineStyle {
+                line_height: LineHeight::Px(30.0),
+                ..style(24.0)
+            },
+            line_height_quirk: true,
+            ..Default::default()
+        },
+        &Limits {
+            max_shaping_run_bytes: Some(3),
+            ..Default::default()
+        },
+    );
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "xx");
+    for i in 0..depth {
+        b.open_inline(
+            NodeId(100 + i as u64),
+            &InlineStyle {
+                line_height: LineHeight::Px(80.0),
+                white_space_collapse: WhiteSpaceCollapse::Preserve,
+                ..style(24.0)
+            },
+            Default::default(),
+        );
+    }
+    // Preserve the spaces so preprocessing cannot coalesce the run.
+    b.push_text(
+        TextSource::Generated { node: NodeId(2) },
+        &" ".repeat(spaces),
+    );
+    b.push_text(
+        TextSource::Generated { node: NodeId(3) },
+        &marker.repeat(controls),
+    );
+    if forced {
+        b.push_forced_break(NodeId(4));
+    }
+    for _ in 0..depth {
+        b.close_inline();
+    }
+    let p = b.build(&mut LayoutContext::new(), &fonts()).unwrap();
+    let data = &p.data;
+    assert_eq!(
+        data.units
+            .iter()
+            .filter(|u| matches!(u.kind, UnitKind::Cluster { space: true, .. }))
+            .count(),
+        spaces,
+        "the fixture must retain a long trailing run"
+    );
+    assert_eq!(
+        data.units
+            .iter()
+            .filter(|u| { &data.text[u.text.start as usize..u.text.end as usize] == marker })
+            .count(),
+        controls
+    );
+    assert!(
+        data.units[data.units.len() - depth..]
+            .iter()
+            .all(|u| matches!(u.kind, UnitKind::Close { .. }))
+    );
+    // Authored LRM is a class-L cluster, not a transparent BidiControl.
+    // ZWSP is class BN and keeps the backward trailing run open. Exercise
+    // both, and verify that the transparent fixture really crosses the run.
+    let trailing = crate::line::quirk::Struts::line(data, 0..data.units.len()).trailing;
+    let expected_trailing = if marker == "\u{200e}" && controls > 0 {
+        2 + depth + spaces + controls
+    } else {
+        2 + depth
+    };
+    assert_eq!(trailing, expected_trailing);
+    // Preserved spaces still credit the innermost box's 80px strut under
+    // the quirk, including when their advance hangs at the line end.
+    let expected = 80.0;
+    let mut cx = LayoutContext::new();
+    let mut sat = Saturation::default();
+    let warm = crate::line::metric_index::measure(
+        data,
+        0..data.units.len(),
+        &AtomicSizes::EMPTY,
+        &mut cx,
+        &mut sat,
+    );
+    assert_eq!(warm.block_size.to_f32(), expected);
+    let before = cx.ruby_measure_visits;
+    let calls = cx.ruby_scalar_calls;
+    for _ in 0..4 {
+        for start in [0, 1] {
+            let metric = crate::line::metric_index::measure(
+                data,
+                start..data.units.len(),
+                &AtomicSizes::EMPTY,
+                &mut cx,
+                &mut sat,
+            );
+            assert_eq!(metric.block_size.to_f32(), expected);
+            assert_eq!(metric.baseline, warm.baseline);
+        }
+    }
+    assert_eq!(cx.ruby_scalar_calls - calls, 8);
+    let visits = cx.ruby_measure_visits - before;
+    assert!(
+        visits > 0,
+        "queries must exercise the index, not a range cache"
+    );
+    visits
+}
+
+fn assert_quirk_trailing_query_bound(
+    small: (usize, usize, usize),
+    large: (usize, usize, usize),
+    marker: &str,
+) {
+    for forced in [false, true] {
+        let visits = [small, large].map(|(spaces, controls, depth)| {
+            quirk_trailing_query_visits(spaces, controls, depth, marker, forced)
+        });
+        // Allow logarithmic tree growth, but reject visits proportional to
+        // the tenfold input. Grow each dimension separately so a linear scan
+        // cannot hide behind another dimension's constant cost.
+        assert!(
+            visits[1] <= 3 * visits[0],
+            "quirk queries rescanned {small:?} vs {large:?}: forced={forced}, visits={visits:?}"
+        );
+    }
+}
+
+#[test]
+fn quirk_index_queries_do_not_rescan_trailing_spaces() {
+    assert_quirk_trailing_query_bound((64, 0, 8), (640, 0, 8), "\u{200b}");
+}
+
+#[test]
+fn quirk_index_queries_do_not_rescan_lrm_runs() {
+    assert_quirk_trailing_query_bound((1, 64, 8), (1, 640, 8), "\u{200e}");
+}
+
+#[test]
+fn quirk_index_queries_do_not_rescan_transparent_runs() {
+    assert_quirk_trailing_query_bound((1, 64, 8), (1, 640, 8), "\u{200b}");
+}
+
+#[test]
+fn quirk_index_queries_do_not_rescan_close_chains() {
+    assert_quirk_trailing_query_bound((1, 0, 32), (1, 0, 320), "\u{200b}");
+}
+
 #[test]
 fn annotation_paragraphs_inherit_line_height_quirk() {
     for quirk in [false, true] {
