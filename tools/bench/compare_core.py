@@ -14,6 +14,15 @@ from pathlib import Path
 import run as runner
 
 
+def system_metadata():
+    cpuinfo = Path("/proc/cpuinfo")
+    return dict(
+        affinity=sorted(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None,
+        cpu_models=sorted({line.split(":", 1)[1].strip() for line in cpuinfo.read_text().splitlines()
+                           if line.startswith("model name")}) if cpuinfo.is_file() else [],
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
@@ -63,8 +72,7 @@ def main():
             features=["shodo/complex-scripts"],
             rustc=runner.execute([compiler, "-Vv"], stage / "rustc.log", env=env).strip(),
             cargo=runner.execute(["cargo", "+stable", "-V"], stage / "cargo.log").strip(),
-            os=platform.platform(), affinity=sorted(os.sched_getaffinity(0)),
-            cpu_models=sorted({line.split(":", 1)[1].strip() for line in Path("/proc/cpuinfo").read_text().splitlines() if line.startswith("model name")}),
+            os=platform.platform(), **system_metadata(),
             profiles=profiles, build_configuration=configuration,
             versions=dict(shodo=tomllib.loads((runner.ROOT / "crates/shodo/Cargo.toml").read_text())["package"]["version"],
                           parley=next(package["version"] for package in tomllib.loads((runner.ROOT / "Cargo.lock").read_text())["package"] if package["name"] == "parley")),

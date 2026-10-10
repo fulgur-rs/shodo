@@ -36,6 +36,12 @@ fresh checkout when reproducing dependency versions. Raw samples remain in the
 formal compressed artifacts; redundant command logs, executable copies and
 measurement directories are removed after validation.
 
+A subsequent review fix guards Linux-only affinity and CPU metadata collection:
+other platforms record null affinity and an empty CPU-model list when those
+interfaces are absent. It changes the core runner's comparison hash, but does not
+change the measured Rust example or timing windows. The archived measurements
+retain the original runner hash and revision above; they were not regenerated.
+
 ## Core measurement and oracle
 
 Shodo 0.0.25 and Parley 0.11.1 receive the 12 scale-1 fixture texts, fixed font bytes,
