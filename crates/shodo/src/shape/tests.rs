@@ -4359,3 +4359,61 @@ fn high_axis_default_instance_bypasses_reuse_without_retaining_hidden_coordinate
             .all(|runs| !Arc::ptr_eq(&runs[0].instance, &runs[1].instance))
     );
 }
+
+#[test]
+fn edge_windows_of_one_paragraph_reuse_prepared_instances() {
+    let (p, _fonts, _style) = mixed_instance_paragraph(&"a水b".repeat(16));
+    let mut cx = crate::LayoutContext::new();
+    let window = |at: usize, cx: &mut crate::LayoutContext| {
+        let mut unit = p.data.units[at].clone();
+        unit.text = unit.text.start..p.data.units[at + 2].text.end;
+        shape_window(
+            &p.data,
+            &unit,
+            cx,
+            &mut crate::limits::WarningSink::default(),
+            &mut Saturation::default(),
+        )
+        .unwrap()
+    };
+    instance::INSTANCE_BUILDS.with(|count| count.set(0));
+    let (first_glyphs, first_runs) = window(0, &mut cx);
+    assert_eq!(instance::INSTANCE_BUILDS.with(std::cell::Cell::get), 2);
+    // Later windows of the same paragraph prepare nothing and return the
+    // same output as a cold context.
+    for at in [0, 3, 6] {
+        let (glyphs, runs) = window(at, &mut cx);
+        let (cold_glyphs, cold_runs) = window(at, &mut crate::LayoutContext::new());
+        assert_eq!(glyphs.id, cold_glyphs.id);
+        assert_eq!(glyphs.advance, cold_glyphs.advance);
+        assert_eq!(runs.len(), cold_runs.len());
+        for (run, cold) in runs.iter().zip(&cold_runs) {
+            assert_eq!(run.instance.coords, cold.instance.coords);
+            assert_eq!(run.instance.metrics, cold.instance.metrics);
+        }
+    }
+    assert!(Arc::ptr_eq(
+        &first_runs[0].instance,
+        &window(3, &mut cx).1[0].instance
+    ));
+    assert_eq!(first_glyphs.len(), 3);
+    // Each cold window above prepared both faces; the warm context did not.
+    assert_eq!(
+        instance::INSTANCE_BUILDS.with(std::cell::Cell::get),
+        2 + 3 * 2
+    );
+    // Another paragraph starts over.
+    let (other, _fonts, _style) = mixed_instance_paragraph("a水b");
+    let mut unit = other.data.units[0].clone();
+    unit.text = unit.text.start..other.data.units[2].text.end;
+    instance::INSTANCE_BUILDS.with(|count| count.set(0));
+    shape_window(
+        &other.data,
+        &unit,
+        &mut cx,
+        &mut crate::limits::WarningSink::default(),
+        &mut Saturation::default(),
+    )
+    .unwrap();
+    assert_eq!(instance::INSTANCE_BUILDS.with(std::cell::Cell::get), 2);
+}

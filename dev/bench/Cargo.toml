@@ -104,6 +104,9 @@ name = "shape_instance_reuse"
 name = "intrinsic_ruby_rows"
 
 [[example]]
+name = "edge_scan"
+
+[[example]]
 name = "soft_hyphen_scale"
 
 [[example]]

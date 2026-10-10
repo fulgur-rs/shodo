@@ -356,6 +356,56 @@ fn soft_hyphens_are_measured_only_near_the_line_end() {
     );
 }
 
+/// A line holding more deferred candidates than the scan retains measures
+/// the oldest ones early. It must still end at the last fitting hyphen, not
+/// at an early one that was measured to bound the retained state.
+#[test]
+fn soft_hyphens_beyond_the_deferred_bound_still_break_late() {
+    let fonts = final_review_fonts();
+    fonts
+        .register_face(
+            crate::test_support::fonts::LATIN.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Shodo Fixture Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut style = ParagraphStyle::default();
+    style.root.font_families = vec![crate::style::FontFamily::Named(
+        "Shodo Fixture Latin".into(),
+    )];
+    style.root.font_size = 16.0;
+    let count = 3 * super::scan::DEFERRED_MAX;
+    let text = "ab\u{ad}".repeat(count);
+    let mut b = ParagraphBuilder::new(&style, &Limits::default());
+    b.push_text(TextSource::Generated { node: NodeId(1) }, &text);
+    let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+    let whole = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        1.0e6,
+        &AtomicSizes::EMPTY,
+    );
+    let width = whole[0].inline_size() * 2.0 / 3.0;
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        width,
+        &AtomicSizes::EMPTY,
+    );
+    let first = &lines[0];
+    let taken = first.text()[first.text_range()].matches('\u{ad}').count();
+    assert!(first.text()[first.text_range()].ends_with('\u{ad}'));
+    assert!(first.inline_size() <= width);
+    // About two thirds of the hyphens fit; the bound is a third of them.
+    assert!(
+        taken > 3 * count / 5,
+        "took {taken} of {count} hyphens at {width}px"
+    );
+}
+
 /// Every allowed break candidate on a line used to reshape the same handful of
 /// edge windows again (a 959-character Latin paragraph made 482 shape calls for
 /// 41 distinct windows). Identical windows must be shaped once per context.
@@ -484,22 +534,20 @@ fn break_all_arabic(
     )
 }
 
-/// Each edge window is bounded, but a long unsafe-joined line asks for one per
-/// break candidate. The total requested per line must fail closed (warn and
-/// keep shared glyphs) instead of growing with the candidate count, without
-/// depending on what the cache already holds.
+/// Each edge window is bounded, but a long unsafe-joined line could ask for
+/// one per break candidate. Once a fitting break is known, the scan defers
+/// the edge reshape of later candidates and measures only the ones it needs
+/// when the line ends, so a line that fits whole stays far under the per-line
+/// budget. The result must not depend on what the cache already holds.
 #[test]
-fn edge_reshape_work_per_line_is_budgeted_and_deterministic() {
-    // Default limits: a 5 KB unsafe-joined run stays under the 4 KiB window cap
-    // only while windows are small, so the scan keeps requesting large windows
-    // at every candidate; the per-line budget bounds the total.
+fn edge_reshape_work_per_line_is_deferred_and_deterministic() {
     let limits = Limits::default();
     let paragraph = arabic_paragraph(limits, 24);
     let mut cold = LayoutContext::new();
     let (lines, warnings) = break_all_arabic(&paragraph, 200_000.0, &mut cold);
     assert!(
-        warnings.iter().any(|m| m.contains("edge reshape budget")),
-        "a line needing more than the per-line reshape budget must warn; got {warnings:?}"
+        !warnings.iter().any(|m| m.contains("edge reshape budget")),
+        "deferred candidates must not exhaust the per-line reshape budget; got {warnings:?}"
     );
     assert!(!lines.is_empty());
     // The same layout with a warm cache is identical: the budget charges
