@@ -13,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import jt1_attribution as attribution  # noqa: E402
+import report_paths  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = Path(os.environ.get("JT1_ARTIFACTS", ROOT / "target" / "8ei-artifacts"))
@@ -68,8 +69,9 @@ def run_probe(binary, mode, engine, doc, output, operation):
     argv = [str(binary), mode, engine, str(WPT), str(SELECTION), doc, str(output), operation]
     result = subprocess.run(argv, capture_output=True, text=True)
     if result.returncode != 0:
-        return {"argv": argv, "ok": False, "returncode": result.returncode, "stderr_tail": result.stderr[-400:]}
-    return {"argv": argv, "ok": True, "report": json.loads(Path(output).read_text())}
+        return report_paths.portable({"argv": argv, "ok": False, "returncode": result.returncode,
+                                      "stderr_tail": result.stderr[-400:]}, ROOT)
+    return report_paths.portable({"argv": argv, "ok": True, "report": json.loads(Path(output).read_text())}, ROOT)
 
 
 def measure_document(scratch, operation, doc, probe=None):
@@ -117,7 +119,7 @@ def reproduce(scratch, output):
         "saved candidate fe67a281 vs native raikiri ab7e619a, original parse/screen cascade/Ahem preflight/layout at 800x600, "
         "warm calls per independent process (first call is not cold startup); not current main, not WPT PASS, not a switching-necessity decision"
     )
-    output.write_text(json.dumps(summary, indent=2) + "\n")
+    report_paths.write_json(output, summary, ROOT)
     return summary
 
 
@@ -191,7 +193,7 @@ def memory(scratch, output):
         "isolated was not attempted with the memory binary (its SHA256 is recorded, not enforced); a separate isolated-release binary exists but is out of scope.",
         MEMORY_NOTE_PEAK,
     ]
-    output.write_text(json.dumps(summary, indent=2) + "\n")
+    report_paths.write_json(output, summary, ROOT)
     return summary
 
 
@@ -259,7 +261,7 @@ def perf(scratch, output):
     summary["sampling_hz"] = 20000
     summary["scope"] = PERF_SCOPE
     summary["notes"] = PERF_NOTES
-    output.write_text(json.dumps(summary, indent=2) + "\n")
+    report_paths.write_json(output, summary, ROOT)
     return summary
 
 

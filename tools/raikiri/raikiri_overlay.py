@@ -5,11 +5,17 @@ No original source is edited. The generated layout routine is deliberately not
 checked into main: its exact original bytes and extraction recipe are recorded.
 """
 import hashlib
+import importlib.util
 import io
 import json
+import os
 import subprocess
 import tarfile
 from pathlib import Path
+
+spec = importlib.util.spec_from_file_location("report_paths", Path(__file__).with_name("report_paths.py"))
+report_paths = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(report_paths)
 
 S4_REVISION = "fe67a281210fbc52d22032911ac3584405aa8198"
 RAIKIRI_REVISION = "ab7e619a8f321f03de8b8c8b9342954868e044c8"
@@ -189,13 +195,13 @@ serde_json = "1"
 sha2 = "0.10.9"
 [[bin]]
 name = "layout-check"
-path = {json.dumps(str(main))}
+path = {json.dumps(os.path.relpath(main, destination))}
 [[bin]]
 name = "core-contract-check"
-path = {json.dumps(str(root / "dev/raikiri/probe/core_contract_check.rs"))}
+path = {json.dumps(os.path.relpath(root / "dev/raikiri/probe/core_contract_check.rs", destination))}
 [[bin]]
 name = "measurement-probe"
-path = {json.dumps(str(root / "dev/raikiri/probe/main.rs"))}
+path = {json.dumps(os.path.relpath(root / "dev/raikiri/probe/main.rs", destination))}
 '''
     (destination / "Cargo.toml").write_text(manifest)
     (destination / "Cargo.lock").write_bytes(original_lock)
@@ -210,7 +216,8 @@ path = {json.dumps(str(root / "dev/raikiri/probe/main.rs"))}
         for path in sorted((root / "dev/raikiri/probe").glob("*.rs"))
     }
     provenance["allocator_source_sha256"] = sha((root / "dev/bench/src/allocator.rs").read_bytes())
-    (destination / "archive-provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
+    provenance = report_paths.portable(provenance, root)
+    report_paths.write_json(destination / "archive-provenance.json", provenance, root)
     if fingerprint() != checkout_before or (spike / "Cargo.lock").read_bytes() != original_lock:
         raise ValueError("protected checkout changed during archive preparation")
     return provenance

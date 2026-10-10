@@ -215,7 +215,8 @@ def collect(args):
               "pure_glyph_shaping_ratio": None, "raw_manifest_sha256": file_hash(stage / "progress.json"),
               "wpt_image_verdicts": 0, "baseline_pass_delta": None}
     write_json(stage / "results.json", result)
-    print(json.dumps({"collection_complete": True, "coverage": result["coverage"], "output": str(stage)}))
+    print(json.dumps({"collection_complete": True, "coverage": result["coverage"],
+                      "output": measurement.report_paths.portable(str(stage), measurement.ROOT)}))
 
 
 def main():

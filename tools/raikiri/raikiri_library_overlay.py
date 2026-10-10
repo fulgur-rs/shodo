@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import subprocess
 import tarfile
 import tomllib
@@ -99,7 +100,7 @@ path = "lib.rs"
     manifest = destination / "Cargo.toml"
     dependency(manifest, 'shodo-benchmark-observer = { path = "observer" }')
     value = manifest.read_text().replace('exclude = ["s4"]', 'exclude = ["s4", "raikiri", "observer"]')
-    value += '\n[[bin]]\nname = "library-probe"\npath = ' + json.dumps(str(root / "dev/raikiri/probe/library.rs")) + '\n'
+    value += '\n[[bin]]\nname = "library-probe"\npath = ' + json.dumps(os.path.relpath(root / "dev/raikiri/probe/library.rs", destination)) + '\n'
     value += '\n[patch."https://github.com/fulgur-rs/raikiri.git"]\n'
     # Patch all internal packages together so original DOM/style/trait types
     # share one identity, retaining original upstream workspace dependency specs.
@@ -116,5 +117,5 @@ path = "lib.rs"
             "raikiri/crates/raikiri-dom/src/layout/inline_text.rs":NATIVE_SHA},
         observed_library_sources_sha256={str(p.relative_to(destination)):layout.sha(p.read_bytes()) for p in [builder,projection,native]},
         observer_sha256=layout.sha(observer_source.read_bytes()), recipe_sha256=layout.sha(Path(__file__).read_bytes()))
-    (destination / "library-provenance.json").write_text(json.dumps(provenance,indent=2)+'\n')
+    layout.report_paths.write_json(destination / "library-provenance.json", provenance, root)
     return provenance

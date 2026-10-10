@@ -71,7 +71,9 @@ class DiagnosticArchiveTests(unittest.TestCase):
         saved = inventory_path.parent / source
         self.assertTrue(saved.resolve().is_relative_to(inventory_path.parent.resolve()))
         self.assertEqual(saved.read_bytes(), self.raw)
-        self.assertEqual(value["original_source"], str(self.log))
+        original_source = ("~/" + str(self.log.relative_to(Path.home()))
+                           if self.log.is_relative_to(Path.home()) else str(self.log))
+        self.assertEqual(value["original_source"], original_source)
         self.assertEqual(value["source_sha256"], hashlib.sha256(self.raw).hexdigest())
         for key in ["messages", "diagnostic_count", "documents", "document_count"]:
             self.assertEqual(value[key], self.inventory[key])
