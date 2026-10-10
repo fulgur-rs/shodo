@@ -323,7 +323,9 @@ impl MatchCache {
 /// generations, and a probe compares the full key, so a hit returns exactly
 /// what the shared cache would. Results are a pure function of the key while
 /// the generations are unchanged, so an entry evicted from the shared cache
-/// stays correct here. Each slot keeps a private copy of the result, so
+/// stays correct here. A collection that caches at most `n` matches uses at
+/// most `n` slots, so the front never keeps more of its entries than the
+/// shared cache may. Each slot keeps a private copy of the result, so
 /// handing it out does not touch a reference count shared with other threads.
 /// Hits here do not refresh the shared entry's recency.
 pub(super) mod thread_cache {
@@ -344,12 +346,15 @@ pub(super) mod thread_cache {
         static SLOTS_BY_HASH: RefCell<Vec<Option<Slot>>> = const { RefCell::new(Vec::new()) };
     }
 
-    fn index(hash: u64) -> usize {
+    /// The slot of `hash` for a collection that caches at most `cap`
+    /// matches: such a collection never occupies more than `cap` slots here.
+    fn index(hash: u64, cap: usize) -> usize {
         // The low bits also pick the shared index bucket; use the high ones.
-        (hash >> 56) as usize % SLOTS
+        (hash >> 56) as usize % cap.clamp(1, SLOTS)
     }
 
     pub(in crate::font) fn get(
+        cap: usize,
         layer: u32,
         generations: (u64, Option<u64>),
         hash: u64,
@@ -359,7 +364,7 @@ pub(super) mod thread_cache {
     ) -> Option<Option<Arc<FontMatch>>> {
         SLOTS_BY_HASH.with(|slots| {
             let slots = slots.borrow();
-            let slot = slots.get(index(hash))?.as_ref()?;
+            let slot = slots.get(index(hash, cap))?.as_ref()?;
             (slot.layer == layer
                 && slot.generations == generations
                 && slot.entry.hash == hash
@@ -370,6 +375,7 @@ pub(super) mod thread_cache {
 
     /// Remember `entry` for this thread and return its result.
     pub(in crate::font) fn insert(
+        cap: usize,
         layer: u32,
         generations: (u64, Option<u64>),
         entry: Arc<CacheEntry>,
@@ -387,7 +393,7 @@ pub(super) mod thread_cache {
             if slots.is_empty() {
                 slots.resize_with(SLOTS, || None);
             }
-            let at = index(entry.hash);
+            let at = index(entry.hash, cap);
             slots[at] = Some(Slot {
                 layer,
                 generations,
@@ -396,6 +402,12 @@ pub(super) mod thread_cache {
             });
         });
         result
+    }
+
+    /// Entries this thread holds.
+    #[cfg(test)]
+    pub(in crate::font) fn len() -> usize {
+        SLOTS_BY_HASH.with(|slots| slots.borrow().iter().flatten().count())
     }
 
     /// Forget this thread's entries, so a test observes the shared cache.
@@ -567,9 +579,15 @@ impl FontCollection {
             .then(|| key_hash(base, script, cluster.as_str()));
         let layer = self.layer.id;
         if let Some(hash) = hash {
-            if let Some(result) =
-                thread_cache::get(layer, generations, hash, base, script, cluster.as_str())
-            {
+            if let Some(result) = thread_cache::get(
+                cap,
+                layer,
+                generations,
+                hash,
+                base,
+                script,
+                cluster.as_str(),
+            ) {
                 return result;
             }
             let shared =
@@ -577,7 +595,7 @@ impl FontCollection {
                     .matches
                     .get(generations, hash, base, script, cluster.as_str());
             if let Some(entry) = shared {
-                return thread_cache::insert(layer, generations, entry);
+                return thread_cache::insert(cap, layer, generations, entry);
             }
         }
         let query = FontQuery {
@@ -594,7 +612,7 @@ impl FontCollection {
                 hash,
                 result.clone(),
             );
-            return thread_cache::insert(layer, generations, entry);
+            return thread_cache::insert(cap, layer, generations, entry);
         }
         result
     }

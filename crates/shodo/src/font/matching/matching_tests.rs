@@ -1051,3 +1051,13 @@ fn concurrent_matches_agree_with_sequential_ones() {
         }
     }
 }
+
+#[test]
+fn the_thread_cache_keeps_no_more_entries_of_a_collection_than_its_cap() {
+    let (fonts, query) = web_fonts(2);
+    thread_cache::clear();
+    for c in 'a'..='z' {
+        fonts.match_cluster(&query, &c.to_string());
+    }
+    assert!(thread_cache::len() <= 2, "{}", thread_cache::len());
+}
