@@ -183,13 +183,17 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
             {
                 shaping += 1;
             }
-            let level = data
+            let mirrored = data
                 .shape_items
                 .get(shaping)
-                .map_or(data.base_level, |i| i.level);
-            // Shaping mirrors brackets in odd embedding levels. Classification
-            // and safe blanks describe the physical glyph, not its source name.
-            let shaped = if level % 2 == 1 {
+                .map_or(data.base_level % 2 == 1, |i| {
+                    i.level % 2 == 1
+                        && i.orientation != crate::shape::orientation::RunOrientation::Upright
+                });
+            // RTL shaping mirrors brackets, but upright runs shape top-to-bottom
+            // without mirroring even at odd bidi levels. Classify the physical
+            // glyph so its class agrees with the measured blanks.
+            let shaped = if mirrored {
                 CodePointMapData::<BidiMirroringGlyph>::new()
                     .get(ch)
                     .mirroring_glyph
