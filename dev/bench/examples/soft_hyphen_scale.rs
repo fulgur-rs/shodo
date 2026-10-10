@@ -66,6 +66,10 @@ fn layout(p: &Paragraph, cx: &mut LayoutContext, width: f32) -> Vec<Line> {
 fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
     assert_eq!(args.len(), 3, "use: <plain|shy> <words> <reps>");
+    assert!(
+        ["plain", "shy"].contains(&args[0].as_str()),
+        "use: <plain|shy> <words> <reps>"
+    );
     let words: usize = args[1].parse().unwrap();
     let reps: usize = args[2].parse().unwrap();
     let limits = Limits::default();

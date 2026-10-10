@@ -164,8 +164,13 @@ fn main() {
         };
         let mut cx = LayoutContext::new();
         let mut out = Vec::new();
-        for _ in 0..3 {
-            let width = 15.0 + rng.below(500) as f32 + 0.25 * rng.below(4) as f32;
+        for pass in 0..4 {
+            // The last pass uses wide lines that hold hundreds of hyphens.
+            let width = if pass == 3 {
+                1000.0 + rng.below(6000) as f32
+            } else {
+                15.0 + rng.below(500) as f32 + 0.25 * rng.below(4) as f32
+            };
             let constraint = LineConstraint::new(width);
             let mut token = p.start_token();
             let mut lines = Vec::new();

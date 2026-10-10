@@ -32,7 +32,7 @@ pub(super) fn scan(
     let mut first_hyphen = None;
     // Discretionary hyphens after the latest fitting regular break, measured
     // only once the line overflows: only the last fitting one can be taken.
-    let mut pending: Vec<PendingHyphen> = Vec::new();
+    let mut pending: std::collections::VecDeque<PendingHyphen> = Default::default();
     let mut last_emergency: Option<usize> = None;
     let mut overflowing = false;
     let mut hanging = LayoutUnit::ZERO;
@@ -266,7 +266,20 @@ pub(super) fn scan(
                         break BreakReason::Regular;
                     }
                 } else {
-                    pending.push(hyphen);
+                    // Bound the retained state on very wide lines: measure the
+                    // oldest candidate now, exactly as an eager scan would.
+                    if pending.len() == PENDING_HYPHENS_MAX
+                        && let Some(oldest) = pending.pop_front()
+                        && let Some(required) =
+                            oldest.required(data, start, flags, options, cx, sat)
+                    {
+                        if required <= available {
+                            last_break = Some((oldest.end, true));
+                        } else if first_hyphen.is_none() {
+                            first_hyphen = Some(oldest.end);
+                        }
+                    }
+                    pending.push_back(hyphen);
                 }
             }
             BreakClass::Emergency if viable => {
@@ -343,6 +356,10 @@ pub(super) fn scan(
     result
 }
 
+/// Pending hyphen candidates kept per scan before the oldest is measured.
+/// Unit tests use a small bound so that eviction runs in every hyphen test.
+const PENDING_HYPHENS_MAX: usize = if cfg!(test) { 4 } else { 256 };
+
 /// A discretionary hyphen break candidate, with the scan state needed to
 /// measure it later. Shaping the hyphenated edge is the costly part, and a
 /// line can only end at its last fitting candidate, so the measurement waits
@@ -398,7 +415,7 @@ impl PendingHyphen {
 fn resolve_pending(
     data: &ParagraphData,
     start: usize,
-    pending: &mut Vec<PendingHyphen>,
+    pending: &mut std::collections::VecDeque<PendingHyphen>,
     first_hyphen: &mut Option<usize>,
     available: LayoutUnit,
     flags: u8,
@@ -407,7 +424,7 @@ fn resolve_pending(
     sat: &mut Saturation,
 ) -> Option<usize> {
     let mut first = None;
-    while let Some(hyphen) = pending.pop() {
+    while let Some(hyphen) = pending.pop_back() {
         if let Some(required) = hyphen.required(data, start, flags, options, cx, sat) {
             if required <= available {
                 pending.clear();
