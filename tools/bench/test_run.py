@@ -30,9 +30,19 @@ def valid_report():
     timing["page_retry"]["digest"]["height_retries"]=2
     timing["intrinsic"]["digest"].update(lines=0,glyphs=0,runs=0,intrinsic_measurements=1)
     timing["next_line"]["digest"].update(lines=1,glyphs=5)
-    return dict(schema=1, metadata=dict(revision="one",source_hash="f"*64,conditions=dict(source_fingerprint_version=2,rustc="rust",cargo="cargo",cpu="cpu",os="os",features=["complex-scripts"],profile="release",flags=[],build_configuration=dict(workspace_profiles={},cargo_configs={},environment={}),font_hashes=["b"*64],input_hash="c"*64,harness_hash="d"*64,lock_hash="e"*64,measurement_config=dict(quick=True,cold_samples=2))), selected=[dict(key=key,settings=settings)], rows=[dict(key=key,settings=settings,timing=timing,cold=[cold,cold],process_wall_ns=[20,20],memory=memory)])
+    return dict(schema=1, metadata=dict(revision="one",source_hash="f"*64,conditions=dict(source_fingerprint_version=runner.SOURCE_FINGERPRINT_VERSION,rustc="rust",cargo="cargo",cpu="cpu",os="os",features=["complex-scripts"],profile="release",flags=[],build_configuration=dict(workspace_profiles={},cargo_configs={},environment={}),font_hashes=["b"*64],input_hash="c"*64,harness_hash="d"*64,lock_hash="e"*64,measurement_config=dict(quick=True,cold_samples=2))), selected=[dict(key=key,settings=settings)], rows=[dict(key=key,settings=settings,timing=timing,cold=[cold,cold],process_wall_ns=[20,20],memory=memory)])
 
 class SourceFingerprintTests(unittest.TestCase):
+    def test_embedded_language_data_changes_engine_fingerprint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);self.prepare(root)
+            data=root/"crates/shodo/src/languages.dat"
+            data.write_bytes(b"en")
+            with patch.object(runner,"ROOT",root):
+                before=runner.source_hashes()
+                data.write_bytes(b"ja")
+                self.assertNotEqual(runner.source_hashes()["source_hash"],before["source_hash"])
+
     def prepare(self, root):
         for rel, body in {
             "Cargo.toml": "[workspace]\n",
@@ -85,7 +95,7 @@ class SourceFingerprintTests(unittest.TestCase):
 
     def test_legacy_or_unknown_fingerprint_coverage_is_rejected(self):
         current=valid_report()
-        for value in [None,1,3,True]:
+        for value in [None,1,2,4,True]:
             legacy=copy.deepcopy(current)
             if value is None:legacy["metadata"]["conditions"].pop("source_fingerprint_version")
             else:legacy["metadata"]["conditions"]["source_fingerprint_version"]=value

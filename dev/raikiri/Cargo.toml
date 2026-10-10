@@ -73,3 +73,7 @@ test = true
 [[example]]
 name = "caller_windows"
 test = false
+
+[[example]]
+name = "core_compare"
+test = true

@@ -5,9 +5,10 @@ development workspace package; the library's normal dependencies are unchanged.
 Run it from the repository with Rust stable (at least 1.89) and Python 3.11 or newer:
 
 ```sh
-python3 tools/bench/run.py --output /tmp/shodo-full --quick
-python3 tools/bench/run.py --output /tmp/shodo-latin-before --quick --case latin-short
-python3 tools/bench/run.py --output /tmp/shodo-latin-after --quick --case latin-short --baseline /tmp/shodo-latin-before
+mkdir -p "$HOME/tmp"
+TMPDIR="$HOME/tmp" python3 tools/bench/run.py --output "$HOME/tmp/shodo-full" --quick
+TMPDIR="$HOME/tmp" python3 tools/bench/run.py --output "$HOME/tmp/shodo-latin-before" --quick --case latin-short
+TMPDIR="$HOME/tmp" python3 tools/bench/run.py --output "$HOME/tmp/shodo-latin-after" --quick --case latin-short --baseline "$HOME/tmp/shodo-latin-before"
 ```
 
 Each output directory must be new. Failed commands, invalid output or incompatible
@@ -92,12 +93,13 @@ would be harmless. Config contents are not copied into the report. Older reports
 without this build fingerprint cannot serve as compatible baselines. Changes to
 these settings during collection also reject publication.
 
-Engine fingerprint version 2 covers every Rust source under `crates/shodo/src`,
-the crate manifest, and the workspace manifest. Source file additions, removals,
+Engine fingerprint version 3 covers every Rust source and embedded `.dat` file
+(including `analysis/languages.dat`) under `crates/shodo/src`, the crate manifest,
+and the workspace manifest. Source file additions, removals,
 and byte changes are checked again before publication; output artifacts are not
 part of the fingerprint. The version is a comparison condition, so older reports
 with missing or incomplete engine coverage cannot serve as baselines. Engine
-hashes themselves may differ when comparing two revisions under version 2.
+hashes themselves may differ when comparing two revisions under version 3.
 
 Baseline comparison requires identical machine/toolchain/build conditions,
 configuration, selected inputs, harness/lock/font hashes and operation output.
@@ -139,5 +141,51 @@ with the first representative run using identical recorded conditions. Warm
 ratios ranged from approximately 0.96 to 1.09 and all scope net byte deltas were
 zero. Both runs use the same engine revision; this checks baseline comparison
 and illustrates measurement variation, without claiming a code improvement.
-Full raw outputs are retained under the root checkout's
-`target/performance-artifacts/{full-profile-fixed,latin-profile-before,latin-profile-after}`.
+Those historical raw outputs were originally stored under the root checkout's
+`target/performance-artifacts/{full-profile-fixed,latin-profile-before,latin-profile-after}`;
+they are no longer present in this checkout. The initial summary is historical
+evidence and is incompatible with the current fingerprint coverage.
+
+## Current baseline and core comparison
+
+The 2026-10-11 baseline is summarized in `dev/bench/results/current.json`.
+`current.raw.json.gz` retains the complete validated report, including raw warm
+samples, cold samples, memory scopes and output digests. `current.Cargo.lock.gz`
+retains the actual dependency resolution. Source, harness, binary and lock hashes,
+toolchain, effective profiles and machine conditions are recorded. This is one
+54-workload quick run with two cold processes per workload, pinned to logical
+CPU 2 on the recorded machine. It is diagnostic evidence without a regression
+threshold or a comparison to the incompatible initial report.
+
+To use the complete report as a future baseline, extract it into a new temporary
+directory. New runs still need identical recorded conditions, dependency
+resolution, input matrix and output digests; a different machine is rejected:
+
+```sh
+mkdir -p "$HOME/tmp"
+task_baseline=$(mktemp -d -p "$HOME/tmp")
+gzip -dc dev/bench/results/current.raw.json.gz > "$task_baseline/results.json"
+TMPDIR="$HOME/tmp" CARGO_TARGET_DIR="$PWD/target" taskset -c 2 \
+  python3 tools/bench/run.py --output "$HOME/tmp/shodo-next-full" \
+  --quick --cold-samples 2 --baseline "$task_baseline"
+rm -r "$task_baseline"
+```
+
+The separate core comparison is reproducible with:
+
+```sh
+TMPDIR="$HOME/tmp" taskset -c 2 python3 tools/bench/compare_core.py \
+  --output "$HOME/tmp/shodo-core-comparison"
+```
+
+It uses the 12 original fixture cases at scale 1 on both engines, three warmups
+and 21 samples, alternating engine order. Font/context initialization is outside
+timing. Build and full line layout are separate windows; full layout includes
+Parley's start alignment. Language, actual base direction, metric quantization,
+fallback policy, reference text, ranges and positioned output are saved.
+Range equality is meaningful only when reference texts match. The comparison
+does not claim equal-output speedups or measure DOM, CSS, paint or process startup.
+See `docs/records/core-comparison-2026-10-11.md` for observations, limits, retained
+data and the unchanged C3 decision about edge reshaping. Measurement logs, copied
+executables and redundant raw directories are removed after these formal
+artifacts have been validated and saved.

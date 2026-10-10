@@ -18,7 +18,7 @@ from pathlib import Path
 OPS = ("build", "next_line", "all_lines", "intrinsic", "reuse_widths", "rebuild_widths", "page_retry")
 PHASES = ("context_init", "font_initialization_registration", "build", "all_lines")
 SCOPES = ("font_context_init", "build", "plain_lines", "release_plain_lines", "justify_lines", "release_justify_lines", "reuse_widths", "release_reuse", "rebuild_widths", "release_rebuild", "page_retry", "release_pages", "intrinsic", "release_intrinsic", "drop_paragraphs", "context_shrink_zero", "drop_context", "drop_fonts")
-SOURCE_FINGERPRINT_VERSION = 2
+SOURCE_FINGERPRINT_VERSION = 3
 CONDITIONS = ("rustc", "cargo", "cpu", "os", "features", "profile", "flags", "build_configuration", "font_hashes", "input_hash", "harness_hash", "lock_hash", "measurement_config", "source_fingerprint_version")
 ROOT = Path(__file__).resolve().parents[2]
 VARIANTS = ("many-short-latin", "nested-atomic", "preserved-tabs", "float-retry", "justify", "fallback")
@@ -220,7 +220,7 @@ def tree_hash(paths):
 def source_hashes():
     harness=list((ROOT/"dev/bench/src").rglob("*.rs"))+list((ROOT/"dev/bench/benches").rglob("*.rs"))+list((ROOT/"dev/fixtures/src").rglob("*.rs"))
     harness += [ROOT/"tools/bench/run.py",ROOT/"dev/bench/Cargo.toml",ROOT/"dev/fixtures/Cargo.toml",ROOT/"dev/fixtures/assets/cases.json"]
-    engine=list((ROOT/"crates/shodo/src").rglob("*.rs"))+[ROOT/"crates/shodo/Cargo.toml",ROOT/"Cargo.toml"]
+    engine=list((ROOT/"crates/shodo/src").rglob("*.rs"))+list((ROOT/"crates/shodo/src").rglob("*.dat"))+[ROOT/"crates/shodo/Cargo.toml",ROOT/"Cargo.toml"]
     return dict(harness_hash=tree_hash(harness),source_hash=tree_hash(engine))
 
 def collect(stage,args):

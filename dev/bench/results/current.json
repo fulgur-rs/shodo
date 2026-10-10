@@ -1,0 +1,2073 @@
+{
+  "schema": 1,
+  "kind": "current-standalone-summary",
+  "measurement_revision": "3186adca27f89ac1bc1b9529a00315b6d2850e2b",
+  "source_hash": "b447d8e8dbf3cb77123f96950f16ffa258cb68a2538f55a3600390f08be44ff9",
+  "conditions": {
+    "source_fingerprint_version": 3,
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
+    "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+    "cpu": {
+      "models": [
+        "AMD Ryzen 5 5600G with Radeon Graphics"
+      ],
+      "machine": "x86_64",
+      "logical_cpus": 12,
+      "affinity": [
+        2
+      ]
+    },
+    "os": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+    "features": [
+      "complex-scripts"
+    ],
+    "profile": {
+      "name": "release",
+      "opt_level": 3,
+      "debug": 0,
+      "incremental": false,
+      "effective": {
+        "cold": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "timing": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": true
+        },
+        "memory": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        }
+      }
+    },
+    "build_configuration": {
+      "workspace_profiles": {},
+      "cargo_configs": {
+        "ancestor-3/config.toml": "5af4dde0536b72eff88ce4c2e77e0cb7a48d88004cec0367b0964fe61bdee189",
+        "cargo-home/config.toml": "5af4dde0536b72eff88ce4c2e77e0cb7a48d88004cec0367b0964fe61bdee189"
+      },
+      "environment": {
+        "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER": "kache test-runner",
+        "CARGO_BUILD_JOBS": "1",
+        "CARGO_PROFILE_RELEASE_OPT_LEVEL": "3",
+        "CARGO_PROFILE_RELEASE_DEBUG": "0",
+        "CARGO_PROFILE_RELEASE_INCREMENTAL": "false",
+        "CARGO_INCREMENTAL": "0"
+      }
+    },
+    "flags": {
+      "RUSTFLAGS": "",
+      "CARGO_ENCODED_RUSTFLAGS": "",
+      "RUSTDOCFLAGS": "",
+      "RUSTC": "",
+      "RUSTC_WRAPPER": "",
+      "RUSTC_WORKSPACE_WRAPPER": "",
+      "CARGO_PROFILE_RELEASE_LTO": "",
+      "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "",
+      "CARGO_PROFILE_RELEASE_PANIC": "",
+      "CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS": "",
+      "CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS": ""
+    },
+    "font_hashes": {
+      "arabic.ttf": "e9885fbcf3bdbddea94d1679d636a80f7421c6b63632a35c6f884a9ee74067d9",
+      "cjk.otf": "d8b52a1ddcb511adc93bce9b2caff2d7dcadba609c3bfe25ade99343b7a5aa8b",
+      "emoji-color.ttf": "6047984e1da3b32e9629740378f2a143daa2c630f140edcf69b68696e3766362",
+      "emoji-mono.ttf": "76c91d377b0d3acb5e0feb696924d1fec7ea9cd4c7860dff52aa0cdd998f76f3",
+      "latin.ttf": "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25"
+    },
+    "input_hash": "171c092234774400c999bb9e03d3d0a9c3c59c69bf2071a0e51b5eda417f4f35",
+    "harness_hash": "23b03f5db162b278a48802354654a6459d1182ea84ea8438e934987a64047220",
+    "lock_hash": "5be9b6e6002abb6e14ef666569861c54f7ba4809098dbd502816137188adb477",
+    "measurement_config": {
+      "quick": true,
+      "cold_samples": 2
+    }
+  },
+  "dirty_status": [
+    " M docs/dev/performance-measurements.md",
+    "?? 271.diff",
+    "?? docs/records/astra-performance-diagnosis.md",
+    "?? docs/records/debug-key-followup-2026-10-08.json",
+    "?? docs/records/hyphenation-candidates-2026-10-08.md",
+    "?? docs/records/jscpd-duplicates-2026-10-09.json",
+    "?? docs/records/performance-candidates-post-254-2026-10-07.json",
+    "?? docs/records/performance-followup-2026-10-07.json",
+    "?? docs/records/performance-opportunities-2026-10-07.json",
+    "?? docs/records/raikiri-paragraph-cost-2026-10-08.json",
+    "?? docs/records/raikiri-parley-comparison-2026-10-08.json",
+    "?? docs/records/rust-complexity-2026-10-09.json",
+    "?? docs/superpowers/plans/2026-10-05-shodo-2j6-sibling-ruby-accumulator.md",
+    "?? docs/superpowers/plans/2026-10-05-shodo-9an-2-inline-hanging.md",
+    "?? docs/superpowers/plans/2026-10-05-shodo-b7d-tab-prefix.md",
+    "?? docs/superpowers/plans/2026-10-05-shodo-d77-ruby-through-memo.md",
+    "?? mutants.out.old/",
+    "?? mutants.out/"
+  ],
+  "binary_sha256": {
+    "cold": "87774ac83ae1d2af774449467769d074786ae9125035f144a121474667a3e659",
+    "layout": "c0890fa504fd270549e70ba7bef59ab9a23af1afc41463bb096f3f2e1b23d2e2",
+    "memory": "68cdcb4de530809cda67dd78b0b89071d5ea3d6fd2e4ef1dfc1cc91c49c68ceb"
+  },
+  "raw_results_sha256": "19158c769ca695818a621d3fba68f5c243e193b23b1da678b87b5bf68a10154a",
+  "raw_artifacts": "dev/bench/results/current.raw.json.gz",
+  "raw_archive_sha256": "f4c5e701abed62d8a19849ebdf0f922d51b61917cd833e72d3ee951f8fbd4719",
+  "lock_archive": "dev/bench/results/current.Cargo.lock.gz",
+  "lock_archive_sha256": "a39fc8c0e687cc54d4db01ca8ce1c0692a900de43f0dbad09ba878d15244c4d4",
+  "scope": "One validated full 54-workload quick run on CPU 2. Fresh cold processes and a separate allocator build. Diagnostic baseline, no incompatible historical ratio or equal-output engine speedup claim.",
+  "rows": [
+    {
+      "key": "latin-short/1",
+      "paragraphs": 1,
+      "glyphs": 79,
+      "lines": 3,
+      "warm_median_ns": {
+        "build": 47273.76372549019,
+        "next_line": 1608.9187659033078,
+        "all_lines": 16330.108441558441,
+        "intrinsic": 8434.787777777778,
+        "reuse_widths": 54250.42536945813,
+        "rebuild_widths": 222404.0182291667,
+        "page_retry": 16313.015183246072
+      },
+      "cold_median_ns": {
+        "context_init": 7787.5,
+        "font_initialization_registration": 584459.5,
+        "build": 511716.5,
+        "all_lines": 72917.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 4644388.5,
+      "memory": {
+        "build_allocated_bytes": 128617,
+        "build_peak_extra_bytes": 58089,
+        "build_net_bytes": 58089,
+        "plain_line_net_bytes": 2680,
+        "justify_line_net_bytes": 3556
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 876,
+        "justify_line_and_context_net_bytes_per_line": 1185.3333333333333,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 735.3037974683544,
+        "plain_line_and_context_net_bytes_per_line": 893.3333333333334
+      }
+    },
+    {
+      "key": "latin-short/8",
+      "paragraphs": 1,
+      "glyphs": 632,
+      "lines": 17,
+      "warm_median_ns": {
+        "build": 266118.75,
+        "next_line": 1452.3358799016987,
+        "all_lines": 105157.41342592593,
+        "intrinsic": 64876.93786549708,
+        "reuse_widths": 399668.53125,
+        "rebuild_widths": 1407383.519047619,
+        "page_retry": 109602.13849206349
+      },
+      "cold_median_ns": {
+        "context_init": 6915.0,
+        "font_initialization_registration": 433001.5,
+        "build": 2658356.5,
+        "all_lines": 257272.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 9208316.0,
+      "memory": {
+        "build_allocated_bytes": 572368,
+        "build_peak_extra_bytes": 261950,
+        "build_net_bytes": 261950,
+        "plain_line_net_bytes": 19368,
+        "justify_line_net_bytes": 26880
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 7512,
+        "justify_line_and_context_net_bytes_per_line": 1581.1764705882354,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 414.4778481012658,
+        "plain_line_and_context_net_bytes_per_line": 1139.2941176470588
+      }
+    },
+    {
+      "key": "latin-short/64",
+      "paragraphs": 1,
+      "glyphs": 5056,
+      "lines": 129,
+      "warm_median_ns": {
+        "build": 2587831.3214285714,
+        "next_line": 1463.3704033655035,
+        "all_lines": 852380.3500000001,
+        "intrinsic": 513182.8660714286,
+        "reuse_widths": 3329249.138888889,
+        "rebuild_widths": 12227838.25,
+        "page_retry": 863397.5625
+      },
+      "cold_median_ns": {
+        "context_init": 7682.5,
+        "font_initialization_registration": 463733.5,
+        "build": 5958235.5,
+        "all_lines": 1731099.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 11637896.0,
+      "memory": {
+        "build_allocated_bytes": 4122488,
+        "build_peak_extra_bytes": 1892838,
+        "build_net_bytes": 1892838,
+        "plain_line_net_bytes": 152872,
+        "justify_line_net_bytes": 213472
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 60600,
+        "justify_line_and_context_net_bytes_per_line": 1654.8217054263566,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 374.37460443037975,
+        "plain_line_and_context_net_bytes_per_line": 1185.0542635658915
+      }
+    },
+    {
+      "key": "latin-long/1",
+      "paragraphs": 1,
+      "glyphs": 959,
+      "lines": 18,
+      "warm_median_ns": {
+        "build": 655997.8722222222,
+        "next_line": 1717.2852067183462,
+        "all_lines": 241735.19260204083,
+        "intrinsic": 128282.50471380472,
+        "reuse_widths": 662633.8333333334,
+        "rebuild_widths": 2399585.45,
+        "page_retry": 251465.91581632654
+      },
+      "cold_median_ns": {
+        "context_init": 6879.5,
+        "font_initialization_registration": 421617.5,
+        "build": 1283814.5,
+        "all_lines": 862615.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 5779224.0,
+      "memory": {
+        "build_allocated_bytes": 691737,
+        "build_peak_extra_bytes": 329989,
+        "build_net_bytes": 328985,
+        "plain_line_net_bytes": 27086,
+        "justify_line_net_bytes": 38742
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 11656,
+        "justify_line_and_context_net_bytes_per_line": 2152.3333333333335,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 343.0500521376434,
+        "plain_line_and_context_net_bytes_per_line": 1504.7777777777778
+      }
+    },
+    {
+      "key": "latin-long/8",
+      "paragraphs": 1,
+      "glyphs": 7672,
+      "lines": 144,
+      "warm_median_ns": {
+        "build": 3947740.5,
+        "next_line": 2316.089265627511,
+        "all_lines": 2354751.2875,
+        "intrinsic": 887116.1507936508,
+        "reuse_widths": 5881076.5375,
+        "rebuild_widths": 21119863.0,
+        "page_retry": 2187151.1875
+      },
+      "cold_median_ns": {
+        "context_init": 6844.5,
+        "font_initialization_registration": 455073.0,
+        "build": 9088113.0,
+        "all_lines": 6733546.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 20301214.5,
+      "memory": {
+        "build_allocated_bytes": 5077328,
+        "build_peak_extra_bytes": 2453334,
+        "build_net_bytes": 2429118,
+        "plain_line_net_bytes": 216688,
+        "justify_line_net_bytes": 314612
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 97924,
+        "justify_line_and_context_net_bytes_per_line": 2184.8055555555557,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 316.62122002085505,
+        "plain_line_and_context_net_bytes_per_line": 1504.7777777777778
+      }
+    },
+    {
+      "key": "latin-long/64",
+      "paragraphs": 1,
+      "glyphs": 61376,
+      "lines": 1152,
+      "warm_median_ns": {
+        "build": 31118261.0,
+        "next_line": 2003.5705284552846,
+        "all_lines": 99577625.0,
+        "intrinsic": 43662531.0,
+        "reuse_widths": 336809336.5,
+        "rebuild_widths": 258684733.5,
+        "page_retry": 59862154.0
+      },
+      "cold_median_ns": {
+        "context_init": 8067.0,
+        "font_initialization_registration": 464432.0,
+        "build": 115210041.0,
+        "all_lines": 135257754.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 267651354.5,
+      "memory": {
+        "build_allocated_bytes": 40162168,
+        "build_peak_extra_bytes": 19440094,
+        "build_net_bytes": 19230182,
+        "plain_line_net_bytes": 1814042,
+        "justify_line_net_bytes": 2602110
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 788068,
+        "justify_line_and_context_net_bytes_per_line": 2258.7760416666665,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 313.3176160062565,
+        "plain_line_and_context_net_bytes_per_line": 1574.689236111111
+      }
+    },
+    {
+      "key": "latin-spacing/1",
+      "paragraphs": 1,
+      "glyphs": 34,
+      "lines": 2,
+      "warm_median_ns": {
+        "build": 33647.58417508418,
+        "next_line": 1131.1425963661063,
+        "all_lines": 12097.684501845019,
+        "intrinsic": 8091.242929292929,
+        "reuse_widths": 52827.73870967742,
+        "rebuild_widths": 193662.62962962964,
+        "page_retry": 12214.271598002497
+      },
+      "cold_median_ns": {
+        "context_init": 4505.0,
+        "font_initialization_registration": 302427.5,
+        "build": 245888.0,
+        "all_lines": 40580.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2060277.0,
+      "memory": {
+        "build_allocated_bytes": 94423,
+        "build_peak_extra_bytes": 42243,
+        "build_net_bytes": 42243,
+        "plain_line_net_bytes": 2384,
+        "justify_line_net_bytes": 2552
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 168,
+        "justify_line_and_context_net_bytes_per_line": 1276.0,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 1242.4411764705883,
+        "plain_line_and_context_net_bytes_per_line": 1192.0
+      }
+    },
+    {
+      "key": "latin-spacing/8",
+      "paragraphs": 1,
+      "glyphs": 280,
+      "lines": 17,
+      "warm_median_ns": {
+        "build": 148309.0,
+        "next_line": 1116.5883245614036,
+        "all_lines": 383475.77222222224,
+        "intrinsic": 61834.876240079364,
+        "reuse_widths": 772329.4285714286,
+        "rebuild_widths": 1690499.3571428573,
+        "page_retry": 386207.1728395062
+      },
+      "cold_median_ns": {
+        "context_init": 4470.0,
+        "font_initialization_registration": 277562.5,
+        "build": 375554.5,
+        "all_lines": 697189.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2753449.5,
+      "memory": {
+        "build_allocated_bytes": 305298,
+        "build_peak_extra_bytes": 137884,
+        "build_net_bytes": 137884,
+        "plain_line_net_bytes": 37221,
+        "justify_line_net_bytes": 42513
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 5292,
+        "justify_line_and_context_net_bytes_per_line": 2500.764705882353,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 492.4428571428571,
+        "plain_line_and_context_net_bytes_per_line": 2189.470588235294
+      }
+    },
+    {
+      "key": "latin-spacing/64",
+      "paragraphs": 1,
+      "glyphs": 2240,
+      "lines": 129,
+      "warm_median_ns": {
+        "build": 1033230.1,
+        "next_line": 1123.1193313222725,
+        "all_lines": 3322127.7767857146,
+        "intrinsic": 481123.21875,
+        "reuse_widths": 7783217.5,
+        "rebuild_widths": 13905436.5,
+        "page_retry": 3383326.6428571427
+      },
+      "cold_median_ns": {
+        "context_init": 5029.0,
+        "font_initialization_registration": 264467.0,
+        "build": 1902637.5,
+        "all_lines": 5503023.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 9667195.0,
+      "memory": {
+        "build_allocated_bytes": 1992522,
+        "build_peak_extra_bytes": 903012,
+        "build_net_bytes": 903012,
+        "plain_line_net_bytes": 303837,
+        "justify_line_net_bytes": 348553
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 44716,
+        "justify_line_and_context_net_bytes_per_line": 2701.9612403100773,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 403.1303571428571,
+        "plain_line_and_context_net_bytes_per_line": 2355.3255813953488
+      }
+    },
+    {
+      "key": "latin-case-mapping/1",
+      "paragraphs": 1,
+      "glyphs": 44,
+      "lines": 1,
+      "warm_median_ns": {
+        "build": 36032.85245310245,
+        "next_line": 1615.885053968254,
+        "all_lines": 1588.718849378433,
+        "intrinsic": 5654.167691693291,
+        "reuse_widths": 32084.337234042552,
+        "rebuild_widths": 171051.73469387754,
+        "page_retry": 1808.3063792579076
+      },
+      "cold_median_ns": {
+        "context_init": 4784.0,
+        "font_initialization_registration": 303125.5,
+        "build": 285175.5,
+        "all_lines": 28182.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2371993.0,
+      "memory": {
+        "build_allocated_bytes": 105605,
+        "build_peak_extra_bytes": 47165,
+        "build_net_bytes": 47165,
+        "plain_line_net_bytes": 2092,
+        "justify_line_net_bytes": 2092
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 2092.0,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 1071.9318181818182,
+        "plain_line_and_context_net_bytes_per_line": 2092.0
+      }
+    },
+    {
+      "key": "latin-case-mapping/8",
+      "paragraphs": 1,
+      "glyphs": 352,
+      "lines": 9,
+      "warm_median_ns": {
+        "build": 189169.7435897436,
+        "next_line": 1609.369333897827,
+        "all_lines": 65218.245859213246,
+        "intrinsic": 41720.5184754522,
+        "reuse_widths": 245864.04903846153,
+        "rebuild_widths": 962226.125,
+        "page_retry": 67451.0489361702
+      },
+      "cold_median_ns": {
+        "context_init": 5029.5,
+        "font_initialization_registration": 278889.5,
+        "build": 479413.5,
+        "all_lines": 134346.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2657797.5,
+      "memory": {
+        "build_allocated_bytes": 309953,
+        "build_peak_extra_bytes": 141023,
+        "build_net_bytes": 141023,
+        "plain_line_net_bytes": 9892,
+        "justify_line_net_bytes": 14068
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 4176,
+        "justify_line_and_context_net_bytes_per_line": 1563.111111111111,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 400.63352272727275,
+        "plain_line_and_context_net_bytes_per_line": 1099.111111111111
+      }
+    },
+    {
+      "key": "latin-case-mapping/64",
+      "paragraphs": 1,
+      "glyphs": 2816,
+      "lines": 65,
+      "warm_median_ns": {
+        "build": 1420674.8,
+        "next_line": 1621.0060979060554,
+        "all_lines": 510067.54285714286,
+        "intrinsic": 332155.41287878784,
+        "reuse_widths": 1969976.8892857144,
+        "rebuild_widths": 7270860.5,
+        "page_retry": 520430.51020408166
+      },
+      "cold_median_ns": {
+        "context_init": 5099.0,
+        "font_initialization_registration": 302322.5,
+        "build": 2309867.0,
+        "all_lines": 743985.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 5583135.0,
+      "memory": {
+        "build_allocated_bytes": 1950081,
+        "build_peak_extra_bytes": 894447,
+        "build_net_bytes": 894447,
+        "plain_line_net_bytes": 77092,
+        "justify_line_net_bytes": 110836
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 33744,
+        "justify_line_and_context_net_bytes_per_line": 1705.1692307692308,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 317.63032670454544,
+        "plain_line_and_context_net_bytes_per_line": 1186.0307692307692
+      }
+    },
+    {
+      "key": "japanese-short/1",
+      "paragraphs": 1,
+      "glyphs": 43,
+      "lines": 3,
+      "warm_median_ns": {
+        "build": 67584.91818181818,
+        "next_line": 3331.019205569206,
+        "all_lines": 18917.286877394636,
+        "intrinsic": 7556.256291390729,
+        "reuse_widths": 56433.5274122807,
+        "rebuild_widths": 304655.9,
+        "page_retry": 19399.38382352941
+      },
+      "cold_median_ns": {
+        "context_init": 5552.5,
+        "font_initialization_registration": 313427.5,
+        "build": 345242.0,
+        "all_lines": 59019.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2656575.0,
+      "memory": {
+        "build_allocated_bytes": 88540,
+        "build_peak_extra_bytes": 44270,
+        "build_net_bytes": 44270,
+        "plain_line_net_bytes": 5000,
+        "justify_line_net_bytes": 5000
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 1666.6666666666667,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 1029.5348837209303,
+        "plain_line_and_context_net_bytes_per_line": 1666.6666666666667
+      }
+    },
+    {
+      "key": "japanese-short/8",
+      "paragraphs": 1,
+      "glyphs": 344,
+      "lines": 18,
+      "warm_median_ns": {
+        "build": 345615.32653061225,
+        "next_line": 3344.7598188848187,
+        "all_lines": 152000.15584415584,
+        "intrinsic": 56925.12634408602,
+        "reuse_widths": 460311.70714285714,
+        "rebuild_widths": 1575590.0625,
+        "page_retry": 155294.47354497353
+      },
+      "cold_median_ns": {
+        "context_init": 6844.5,
+        "font_initialization_registration": 426960.0,
+        "build": 1111053.5,
+        "all_lines": 408730.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 4717341.5,
+      "memory": {
+        "build_allocated_bytes": 363639,
+        "build_peak_extra_bytes": 173665,
+        "build_net_bytes": 173665,
+        "plain_line_net_bytes": 40344,
+        "justify_line_net_bytes": 40344
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 2241.3333333333335,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 504.8401162790698,
+        "plain_line_and_context_net_bytes_per_line": 2241.3333333333335
+      }
+    },
+    {
+      "key": "japanese-short/64",
+      "paragraphs": 1,
+      "glyphs": 2752,
+      "lines": 139,
+      "warm_median_ns": {
+        "build": 2738787.1785714286,
+        "next_line": 3356.1306644880174,
+        "all_lines": 1252492.4537037038,
+        "intrinsic": 472130.0104166666,
+        "reuse_widths": 3800976.05,
+        "rebuild_widths": 12149892.0,
+        "page_retry": 1263065.3214285714
+      },
+      "cold_median_ns": {
+        "context_init": 6565.5,
+        "font_initialization_registration": 401781.5,
+        "build": 5673898.5,
+        "all_lines": 2424761.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 11723246.0,
+      "memory": {
+        "build_allocated_bytes": 2564383,
+        "build_peak_extra_bytes": 1208825,
+        "build_net_bytes": 1208825,
+        "plain_line_net_bytes": 322060,
+        "justify_line_net_bytes": 322060
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 2316.978417266187,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 439.2532703488372,
+        "plain_line_and_context_net_bytes_per_line": 2316.978417266187
+      }
+    },
+    {
+      "key": "japanese-long/1",
+      "paragraphs": 1,
+      "glyphs": 516,
+      "lines": 20,
+      "warm_median_ns": {
+        "build": 517220.9071428571,
+        "next_line": 3887.603516377649,
+        "all_lines": 225642.74591836735,
+        "intrinsic": 84959.52678571429,
+        "reuse_widths": 679512.2875,
+        "rebuild_widths": 2380479.45,
+        "page_retry": 228617.13265306124
+      },
+      "cold_median_ns": {
+        "context_init": 6950.0,
+        "font_initialization_registration": 444526.5,
+        "build": 1503405.5,
+        "all_lines": 625459.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 5687204.0,
+      "memory": {
+        "build_allocated_bytes": 513155,
+        "build_peak_extra_bytes": 237621,
+        "build_net_bytes": 237621,
+        "plain_line_net_bytes": 46316,
+        "justify_line_net_bytes": 46316
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 2315.8,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 460.50581395348837,
+        "plain_line_and_context_net_bytes_per_line": 2315.8
+      }
+    },
+    {
+      "key": "japanese-long/8",
+      "paragraphs": 1,
+      "glyphs": 4128,
+      "lines": 160,
+      "warm_median_ns": {
+        "build": 6583449.666666667,
+        "next_line": 6413.142645530145,
+        "all_lines": 3611541.833333333,
+        "intrinsic": 1337385.1416666666,
+        "reuse_widths": 10635014.5,
+        "rebuild_widths": 18011567.5,
+        "page_retry": 2101843.125
+      },
+      "cold_median_ns": {
+        "context_init": 7613.0,
+        "font_initialization_registration": 452104.0,
+        "build": 9383835.0,
+        "all_lines": 7290382.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 21908723.0,
+      "memory": {
+        "build_allocated_bytes": 3760511,
+        "build_peak_extra_bytes": 1720473,
+        "build_net_bytes": 1720473,
+        "plain_line_net_bytes": 382092,
+        "justify_line_net_bytes": 382092
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 2388.075,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 416.78125,
+        "plain_line_and_context_net_bytes_per_line": 2388.075
+      }
+    },
+    {
+      "key": "japanese-long/64",
+      "paragraphs": 1,
+      "glyphs": 33024,
+      "lines": 1280,
+      "warm_median_ns": {
+        "build": 32556676.5,
+        "next_line": 3980.218243571082,
+        "all_lines": 17585271.0,
+        "intrinsic": 8669918.5,
+        "reuse_widths": 56338248.5,
+        "rebuild_widths": 151347091.5,
+        "page_retry": 21838634.0
+      },
+      "cold_median_ns": {
+        "context_init": 5971.5,
+        "font_initialization_registration": 316047.0,
+        "build": 44680656.0,
+        "all_lines": 20879527.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 72983585.0,
+      "memory": {
+        "build_allocated_bytes": 29739359,
+        "build_peak_extra_bytes": 13583289,
+        "build_net_bytes": 13583289,
+        "plain_line_net_bytes": 3068300,
+        "justify_line_net_bytes": 3068300
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 2397.109375,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 411.31567950581393,
+        "plain_line_and_context_net_bytes_per_line": 2397.109375
+      }
+    },
+    {
+      "key": "japanese-supplementary/1",
+      "paragraphs": 1,
+      "glyphs": 18,
+      "lines": 2,
+      "warm_median_ns": {
+        "build": 47954.6175,
+        "next_line": 4537.88469858156,
+        "all_lines": 19149.862962962965,
+        "intrinsic": 8386.630828373016,
+        "reuse_widths": 64812.17741935484,
+        "rebuild_widths": 306327.6125,
+        "page_retry": 14778.20449790795
+      },
+      "cold_median_ns": {
+        "context_init": 7333.5,
+        "font_initialization_registration": 418648.5,
+        "build": 503091.0,
+        "all_lines": 117130.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 4210898.0,
+      "memory": {
+        "build_allocated_bytes": 69924,
+        "build_peak_extra_bytes": 33622,
+        "build_net_bytes": 33622,
+        "plain_line_net_bytes": 3344,
+        "justify_line_net_bytes": 3344
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 1672.0,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 1867.888888888889,
+        "plain_line_and_context_net_bytes_per_line": 1672.0
+      }
+    },
+    {
+      "key": "japanese-supplementary/8",
+      "paragraphs": 1,
+      "glyphs": 144,
+      "lines": 12,
+      "warm_median_ns": {
+        "build": 277021.6785714286,
+        "next_line": 2836.6912864851606,
+        "all_lines": 165351.39182194616,
+        "intrinsic": 65547.5260989011,
+        "reuse_widths": 482101.3229166666,
+        "rebuild_widths": 1702651.4,
+        "page_retry": 160565.03781512604
+      },
+      "cold_median_ns": {
+        "context_init": 7369.0,
+        "font_initialization_registration": 436773.5,
+        "build": 722088.5,
+        "all_lines": 324184.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 4346257.0,
+      "memory": {
+        "build_allocated_bytes": 178013,
+        "build_peak_extra_bytes": 83326,
+        "build_net_bytes": 83326,
+        "plain_line_net_bytes": 17824,
+        "justify_line_net_bytes": 17824
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 1485.3333333333333,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 578.6527777777778,
+        "plain_line_and_context_net_bytes_per_line": 1485.3333333333333
+      }
+    },
+    {
+      "key": "japanese-supplementary/64",
+      "paragraphs": 1,
+      "glyphs": 1152,
+      "lines": 96,
+      "warm_median_ns": {
+        "build": 2031605.5,
+        "next_line": 4634.94164933264,
+        "all_lines": 1142718.1230158731,
+        "intrinsic": 473908.03211805556,
+        "reuse_widths": 4464483.083333334,
+        "rebuild_widths": 11783329.75,
+        "page_retry": 1429011.0666666667
+      },
+      "cold_median_ns": {
+        "context_init": 6809.5,
+        "font_initialization_registration": 443269.0,
+        "build": 2513987.0,
+        "all_lines": 2091078.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 8148074.0,
+      "memory": {
+        "build_allocated_bytes": 1041085,
+        "build_peak_extra_bytes": 480422,
+        "build_net_bytes": 480422,
+        "plain_line_net_bytes": 142592,
+        "justify_line_net_bytes": 142592
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 1485.3333333333333,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 417.0329861111111,
+        "plain_line_and_context_net_bytes_per_line": 1485.3333333333333
+      }
+    },
+    {
+      "key": "arabic-short/1",
+      "paragraphs": 1,
+      "glyphs": 62,
+      "lines": 2,
+      "warm_median_ns": {
+        "build": 91693.39338235294,
+        "next_line": 3177.9604014598544,
+        "all_lines": 31493.432098765432,
+        "intrinsic": 21422.72319347319,
+        "reuse_widths": 139773.62972222222,
+        "rebuild_widths": 485654.61904761905,
+        "page_retry": 30785.121717171718
+      },
+      "cold_median_ns": {
+        "context_init": 6775.0,
+        "font_initialization_registration": 420115.5,
+        "build": 464780.5,
+        "all_lines": 116081.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 4180061.5,
+      "memory": {
+        "build_allocated_bytes": 111670,
+        "build_peak_extra_bytes": 50421,
+        "build_net_bytes": 50421,
+        "plain_line_net_bytes": 3099,
+        "justify_line_net_bytes": 3711
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 612,
+        "justify_line_and_context_net_bytes_per_line": 1855.5,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 813.241935483871,
+        "plain_line_and_context_net_bytes_per_line": 1549.5
+      }
+    },
+    {
+      "key": "arabic-short/8",
+      "paragraphs": 1,
+      "glyphs": 496,
+      "lines": 11,
+      "warm_median_ns": {
+        "build": 549674.2083333333,
+        "next_line": 4022.2128399747,
+        "all_lines": 328659.125,
+        "intrinsic": 175206.42727272725,
+        "reuse_widths": 1844249.6357142855,
+        "rebuild_widths": 4753770.916666666,
+        "page_retry": 333601.35
+      },
+      "cold_median_ns": {
+        "context_init": 6635.5,
+        "font_initialization_registration": 432373.5,
+        "build": 956557.0,
+        "all_lines": 1426192.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 5541228.5,
+      "memory": {
+        "build_allocated_bytes": 407294,
+        "build_peak_extra_bytes": 185003,
+        "build_net_bytes": 185003,
+        "plain_line_net_bytes": 26133,
+        "justify_line_net_bytes": 34269
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 8136,
+        "justify_line_and_context_net_bytes_per_line": 3115.3636363636365,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 372.9899193548387,
+        "plain_line_and_context_net_bytes_per_line": 2375.7272727272725
+      }
+    },
+    {
+      "key": "arabic-short/64",
+      "paragraphs": 1,
+      "glyphs": 3968,
+      "lines": 85,
+      "warm_median_ns": {
+        "build": 4166249.75,
+        "next_line": 3028.8655185758516,
+        "all_lines": 3223440.020833333,
+        "intrinsic": 1081701.3,
+        "reuse_widths": 28183460.0,
+        "rebuild_widths": 24988836.0,
+        "page_retry": 1658651.4388888888
+      },
+      "cold_median_ns": {
+        "context_init": 5518.0,
+        "font_initialization_registration": 342238.5,
+        "build": 4390887.5,
+        "all_lines": 6054446.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 13529393.5,
+      "memory": {
+        "build_allocated_bytes": 2803806,
+        "build_peak_extra_bytes": 1274195,
+        "build_net_bytes": 1261659,
+        "plain_line_net_bytes": 208189,
+        "justify_line_net_bytes": 275209
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 67020,
+        "justify_line_and_context_net_bytes_per_line": 3237.752941176471,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 317.9584173387097,
+        "plain_line_and_context_net_bytes_per_line": 2449.2823529411767
+      }
+    },
+    {
+      "key": "arabic-long/1",
+      "paragraphs": 1,
+      "glyphs": 755,
+      "lines": 12,
+      "warm_median_ns": {
+        "build": 834945.475,
+        "next_line": 3496.806613431613,
+        "all_lines": 503262.8163265306,
+        "intrinsic": 225774.1666666667,
+        "reuse_widths": 1626349.525,
+        "rebuild_widths": 7135234.166666667,
+        "page_retry": 928640.4494047619
+      },
+      "cold_median_ns": {
+        "context_init": 5413.0,
+        "font_initialization_registration": 273023.0,
+        "build": 794552.0,
+        "all_lines": 1031640.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 3862966.5,
+      "memory": {
+        "build_allocated_bytes": 656540,
+        "build_peak_extra_bytes": 290018,
+        "build_net_bytes": 290018,
+        "plain_line_net_bytes": 29904,
+        "justify_line_net_bytes": 41100
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 11196,
+        "justify_line_and_context_net_bytes_per_line": 3425.0,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 384.1298013245033,
+        "plain_line_and_context_net_bytes_per_line": 2492.0
+      }
+    },
+    {
+      "key": "arabic-long/8",
+      "paragraphs": 1,
+      "glyphs": 6040,
+      "lines": 97,
+      "warm_median_ns": {
+        "build": 5943463.0,
+        "next_line": 3237.178358208955,
+        "all_lines": 5493297.5,
+        "intrinsic": 7141775.833333334,
+        "reuse_widths": 103808813.0,
+        "rebuild_widths": 59309089.5,
+        "page_retry": 6242375.166666667
+      },
+      "cold_median_ns": {
+        "context_init": 4993.5,
+        "font_initialization_registration": 272149.5,
+        "build": 5097225.5,
+        "all_lines": 9259477.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 17208250.0,
+      "memory": {
+        "build_allocated_bytes": 4765918,
+        "build_peak_extra_bytes": 2106411,
+        "build_net_bytes": 2101779,
+        "plain_line_net_bytes": 283037,
+        "justify_line_net_bytes": 388773
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 105736,
+        "justify_line_and_context_net_bytes_per_line": 4007.9690721649486,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 347.9766556291391,
+        "plain_line_and_context_net_bytes_per_line": 2917.907216494845
+      }
+    },
+    {
+      "key": "arabic-long/64",
+      "paragraphs": 1,
+      "glyphs": 48320,
+      "lines": 769,
+      "warm_median_ns": {
+        "build": 50617624.0,
+        "next_line": 3586.506141169154,
+        "all_lines": 192356679.5,
+        "intrinsic": 36781228.5,
+        "reuse_widths": 570748750.5,
+        "rebuild_widths": 529937208.0,
+        "page_retry": 214887648.5
+      },
+      "cold_median_ns": {
+        "context_init": 4820.0,
+        "font_initialization_registration": 300472.0,
+        "build": 38261655.5,
+        "all_lines": 172807798.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 216728719.0,
+      "memory": {
+        "build_allocated_bytes": 37641054,
+        "build_peak_extra_bytes": 16649107,
+        "build_net_bytes": 16595867,
+        "plain_line_net_bytes": 2426179,
+        "justify_line_net_bytes": 3280747
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 854568,
+        "justify_line_and_context_net_bytes_per_line": 4266.250975292588,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 343.45751241721854,
+        "plain_line_and_context_net_bytes_per_line": 3154.9791937581276
+      }
+    },
+    {
+      "key": "combining-latin/1",
+      "paragraphs": 1,
+      "glyphs": 18,
+      "lines": 1,
+      "warm_median_ns": {
+        "build": 28362.73611111111,
+        "next_line": 1844.9003207964602,
+        "all_lines": 1175.5094482891195,
+        "intrinsic": 2778.799228791774,
+        "reuse_widths": 13820.411111111112,
+        "rebuild_widths": 138549.0,
+        "page_retry": 2556.4756929637524
+      },
+      "cold_median_ns": {
+        "context_init": 4505.5,
+        "font_initialization_registration": 288213.5,
+        "build": 234189.5,
+        "all_lines": 21512.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2081964.0,
+      "memory": {
+        "build_allocated_bytes": 76039,
+        "build_peak_extra_bytes": 33826,
+        "build_net_bytes": 33826,
+        "plain_line_net_bytes": 2088,
+        "justify_line_net_bytes": 2088
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 2088.0,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 1879.2222222222222,
+        "plain_line_and_context_net_bytes_per_line": 2088.0
+      }
+    },
+    {
+      "key": "combining-latin/8",
+      "paragraphs": 1,
+      "glyphs": 144,
+      "lines": 5,
+      "warm_median_ns": {
+        "build": 157117.26493506494,
+        "next_line": 1383.7247294748338,
+        "all_lines": 47955.19117647059,
+        "intrinsic": 31227.4529040404,
+        "reuse_widths": 259071.1979166667,
+        "rebuild_widths": 1059946.0714285714,
+        "page_retry": 90941.94761904763
+      },
+      "cold_median_ns": {
+        "context_init": 4225.5,
+        "font_initialization_registration": 286118.5,
+        "build": 273930.5,
+        "all_lines": 134415.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 1985927.0,
+      "memory": {
+        "build_allocated_bytes": 182208,
+        "build_peak_extra_bytes": 80957,
+        "build_net_bytes": 80957,
+        "plain_line_net_bytes": 7696,
+        "justify_line_net_bytes": 9676
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 1980,
+        "justify_line_and_context_net_bytes_per_line": 1935.2,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 562.2013888888889,
+        "plain_line_and_context_net_bytes_per_line": 1539.2
+      }
+    },
+    {
+      "key": "combining-latin/64",
+      "paragraphs": 1,
+      "glyphs": 1152,
+      "lines": 33,
+      "warm_median_ns": {
+        "build": 984351.75,
+        "next_line": 1807.5265610438023,
+        "all_lines": 422409.7125,
+        "intrinsic": 167304.1157142857,
+        "reuse_widths": 1324105.7375,
+        "rebuild_widths": 4941736.814285714,
+        "page_retry": 454494.63125
+      },
+      "cold_median_ns": {
+        "context_init": 4295.0,
+        "font_initialization_registration": 266911.5,
+        "build": 922438.5,
+        "all_lines": 1030313.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 3672395.5,
+      "memory": {
+        "build_allocated_bytes": 1031448,
+        "build_peak_extra_bytes": 458005,
+        "build_net_bytes": 458005,
+        "plain_line_net_bytes": 61904,
+        "justify_line_net_bytes": 78668
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 16764,
+        "justify_line_and_context_net_bytes_per_line": 2383.878787878788,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 397.57378472222223,
+        "plain_line_and_context_net_bytes_per_line": 1875.878787878788
+      }
+    },
+    {
+      "key": "combining-arabic/1",
+      "paragraphs": 1,
+      "glyphs": 20,
+      "lines": 1,
+      "warm_median_ns": {
+        "build": 34986.48188405797,
+        "next_line": 1356.329044117647,
+        "all_lines": 1186.2918798559788,
+        "intrinsic": 2598.5269663631766,
+        "reuse_widths": 21274.26129032258,
+        "rebuild_widths": 113437.725,
+        "page_retry": 1411.4688251201924
+      },
+      "cold_median_ns": {
+        "context_init": 4750.0,
+        "font_initialization_registration": 296455.5,
+        "build": 226541.0,
+        "all_lines": 17287.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 1902044.5,
+      "memory": {
+        "build_allocated_bytes": 76783,
+        "build_peak_extra_bytes": 33909,
+        "build_net_bytes": 33909,
+        "plain_line_net_bytes": 2088,
+        "justify_line_net_bytes": 2088
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 2088.0,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 1695.45,
+        "plain_line_and_context_net_bytes_per_line": 2088.0
+      }
+    },
+    {
+      "key": "combining-arabic/8",
+      "paragraphs": 1,
+      "glyphs": 160,
+      "lines": 4,
+      "warm_median_ns": {
+        "build": 123334.42361111111,
+        "next_line": 1395.3567064506963,
+        "all_lines": 36312.03835227272,
+        "intrinsic": 17362.018464052286,
+        "reuse_widths": 125012.06837606838,
+        "rebuild_widths": 914429.1375,
+        "page_retry": 37163.01598837209
+      },
+      "cold_median_ns": {
+        "context_init": 4504.5,
+        "font_initialization_registration": 230627.0,
+        "build": 308049.5,
+        "all_lines": 234783.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2108574.0,
+      "memory": {
+        "build_allocated_bytes": 172279,
+        "build_peak_extra_bytes": 73108,
+        "build_net_bytes": 71324,
+        "plain_line_net_bytes": 7478,
+        "justify_line_net_bytes": 9678
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 2200,
+        "justify_line_and_context_net_bytes_per_line": 2419.5,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 445.775,
+        "plain_line_and_context_net_bytes_per_line": 1869.5
+      }
+    },
+    {
+      "key": "combining-arabic/64",
+      "paragraphs": 1,
+      "glyphs": 1280,
+      "lines": 32,
+      "warm_median_ns": {
+        "build": 801211.75,
+        "next_line": 1427.6033161806747,
+        "all_lines": 336341.8707142857,
+        "intrinsic": 184396.29133333336,
+        "reuse_widths": 1770238.2083333335,
+        "rebuild_widths": 7743097.75,
+        "page_retry": 346689.3
+      },
+      "cold_median_ns": {
+        "context_init": 4121.0,
+        "font_initialization_registration": 289994.5,
+        "build": 1099214.5,
+        "all_lines": 1961865.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 4793925.0,
+      "memory": {
+        "build_allocated_bytes": 943559,
+        "build_peak_extra_bytes": 401100,
+        "build_net_bytes": 370644,
+        "plain_line_net_bytes": 73558,
+        "justify_line_net_bytes": 98158
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 24600,
+        "justify_line_and_context_net_bytes_per_line": 3067.4375,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 289.565625,
+        "plain_line_and_context_net_bytes_per_line": 2298.6875
+      }
+    },
+    {
+      "key": "mixed-scripts/1",
+      "paragraphs": 1,
+      "glyphs": 40,
+      "lines": 2,
+      "warm_median_ns": {
+        "build": 61573.850000000006,
+        "next_line": 4988.884795321637,
+        "all_lines": 17127.089715267553,
+        "intrinsic": 6517.999809885931,
+        "reuse_widths": 56360.60009578544,
+        "rebuild_widths": 258173.77232142858,
+        "page_retry": 17472.31834586466
+      },
+      "cold_median_ns": {
+        "context_init": 4505.0,
+        "font_initialization_registration": 249170.0,
+        "build": 364449.0,
+        "all_lines": 55841.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2152297.5,
+      "memory": {
+        "build_allocated_bytes": 179087,
+        "build_peak_extra_bytes": 74318,
+        "build_net_bytes": 74318,
+        "plain_line_net_bytes": 4152,
+        "justify_line_net_bytes": 4152
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 2076.0,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 1857.95,
+        "plain_line_and_context_net_bytes_per_line": 2076.0
+      }
+    },
+    {
+      "key": "mixed-scripts/8",
+      "paragraphs": 1,
+      "glyphs": 320,
+      "lines": 10,
+      "warm_median_ns": {
+        "build": 518348.9583333333,
+        "next_line": 9813.383469911938,
+        "all_lines": 254969.1185897436,
+        "intrinsic": 58841.046875,
+        "reuse_widths": 425483.43125,
+        "rebuild_widths": 1454382.9,
+        "page_retry": 132311.12166666667
+      },
+      "cold_median_ns": {
+        "context_init": 4016.0,
+        "font_initialization_registration": 266841.0,
+        "build": 573703.5,
+        "all_lines": 231360.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2390153.0,
+      "memory": {
+        "build_allocated_bytes": 405635,
+        "build_peak_extra_bytes": 176980,
+        "build_net_bytes": 176980,
+        "plain_line_net_bytes": 23416,
+        "justify_line_net_bytes": 23416
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 2341.6,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 553.0625,
+        "plain_line_and_context_net_bytes_per_line": 2341.6
+      }
+    },
+    {
+      "key": "mixed-scripts/64",
+      "paragraphs": 1,
+      "glyphs": 2560,
+      "lines": 77,
+      "warm_median_ns": {
+        "build": 2195986.166666667,
+        "next_line": 5707.677122347066,
+        "all_lines": 1219463.9444444445,
+        "intrinsic": 389829.9296875,
+        "reuse_widths": 3532495.166666667,
+        "rebuild_widths": 10685529.25,
+        "page_retry": 1098018.625
+      },
+      "cold_median_ns": {
+        "context_init": 4330.0,
+        "font_initialization_registration": 292998.0,
+        "build": 2855563.0,
+        "all_lines": 1593086.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 6395882.5,
+      "memory": {
+        "build_allocated_bytes": 2218243,
+        "build_peak_extra_bytes": 998276,
+        "build_net_bytes": 998276,
+        "plain_line_net_bytes": 189836,
+        "justify_line_net_bytes": 189836
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 2465.4025974025976,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 389.9515625,
+        "plain_line_and_context_net_bytes_per_line": 2465.4025974025976
+      }
+    },
+    {
+      "key": "many-short-latin/1",
+      "paragraphs": 1,
+      "glyphs": 79,
+      "lines": 3,
+      "warm_median_ns": {
+        "build": 46660.75833333333,
+        "next_line": 1476.826517967782,
+        "all_lines": 16394.136331569665,
+        "intrinsic": 9793.905438596492,
+        "reuse_widths": 51991.50409836066,
+        "rebuild_widths": 232324.5025510204,
+        "page_retry": 15986.183067375885
+      },
+      "cold_median_ns": {
+        "context_init": 4505.0,
+        "font_initialization_registration": 262022.0,
+        "build": 280950.5,
+        "all_lines": 36354.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2047914.5,
+      "memory": {
+        "build_allocated_bytes": 128617,
+        "build_peak_extra_bytes": 58089,
+        "build_net_bytes": 58089,
+        "plain_line_net_bytes": 2680,
+        "justify_line_net_bytes": 3556
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 876,
+        "justify_line_and_context_net_bytes_per_line": 1185.3333333333333,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 735.3037974683544,
+        "plain_line_and_context_net_bytes_per_line": 893.3333333333334
+      }
+    },
+    {
+      "key": "many-short-latin/8",
+      "paragraphs": 8,
+      "glyphs": 632,
+      "lines": 24,
+      "warm_median_ns": {
+        "build": 350922.9419642857,
+        "next_line": 55436.69711538462,
+        "all_lines": 243116.84489795918,
+        "intrinsic": 424687.3930555555,
+        "reuse_widths": 535919.9910714286,
+        "rebuild_widths": 1637590.2291666667,
+        "page_retry": 124117.16346153847
+      },
+      "cold_median_ns": {
+        "context_init": 4051.0,
+        "font_initialization_registration": 260381.0,
+        "build": 664432.0,
+        "all_lines": 143914.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2392388.5,
+      "memory": {
+        "build_allocated_bytes": 562645,
+        "build_peak_extra_bytes": 272912,
+        "build_net_bytes": 272912,
+        "plain_line_net_bytes": 21440,
+        "justify_line_net_bytes": 28448
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 7008,
+        "justify_line_and_context_net_bytes_per_line": 1185.3333333333333,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 431.82278481012656,
+        "plain_line_and_context_net_bytes_per_line": 893.3333333333334
+      }
+    },
+    {
+      "key": "many-short-latin/64",
+      "paragraphs": 64,
+      "glyphs": 5056,
+      "lines": 192,
+      "warm_median_ns": {
+        "build": 2782768.775,
+        "next_line": 430659.4345238095,
+        "all_lines": 938565.8125,
+        "intrinsic": 1527380.7804232803,
+        "reuse_widths": 6254446.25,
+        "rebuild_widths": 12895500.5,
+        "page_retry": 970829.0982142857
+      },
+      "cold_median_ns": {
+        "context_init": 4330.5,
+        "font_initialization_registration": 275746.0,
+        "build": 4049696.5,
+        "all_lines": 1039497.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 7177164.5,
+      "memory": {
+        "build_allocated_bytes": 4034869,
+        "build_peak_extra_bytes": 1991496,
+        "build_net_bytes": 1991496,
+        "plain_line_net_bytes": 171520,
+        "justify_line_net_bytes": 227584
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 56064,
+        "justify_line_and_context_net_bytes_per_line": 1185.3333333333333,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 393.8876582278481,
+        "plain_line_and_context_net_bytes_per_line": 893.3333333333334
+      }
+    },
+    {
+      "key": "nested-atomic/1",
+      "paragraphs": 1,
+      "glyphs": 79,
+      "lines": 3,
+      "warm_median_ns": {
+        "build": 49923.53999999999,
+        "next_line": 1998.336767578125,
+        "all_lines": 17775.40564971751,
+        "intrinsic": 9191.27673160173,
+        "reuse_widths": 82391.74107142858,
+        "rebuild_widths": 478739.88095238095,
+        "page_retry": 20069.47962962963
+      },
+      "cold_median_ns": {
+        "context_init": 4574.5,
+        "font_initialization_registration": 265060.0,
+        "build": 272115.0,
+        "all_lines": 34468.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2031815.0,
+      "memory": {
+        "build_allocated_bytes": 135308,
+        "build_peak_extra_bytes": 60215,
+        "build_net_bytes": 60215,
+        "plain_line_net_bytes": 3584,
+        "justify_line_net_bytes": 4460
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 876,
+        "justify_line_and_context_net_bytes_per_line": 1486.6666666666667,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 762.2151898734177,
+        "plain_line_and_context_net_bytes_per_line": 1194.6666666666667
+      }
+    },
+    {
+      "key": "nested-atomic/8",
+      "paragraphs": 1,
+      "glyphs": 632,
+      "lines": 17,
+      "warm_median_ns": {
+        "build": 579932.905,
+        "next_line": 3676.124900793651,
+        "all_lines": 125019.94083333333,
+        "intrinsic": 81244.89539007092,
+        "reuse_widths": 809450.4194444445,
+        "rebuild_widths": 2492314.7583333333,
+        "page_retry": 192970.2447916667
+      },
+      "cold_median_ns": {
+        "context_init": 4226.0,
+        "font_initialization_registration": 258425.5,
+        "build": 538607.0,
+        "all_lines": 138362.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2244317.5,
+      "memory": {
+        "build_allocated_bytes": 580165,
+        "build_peak_extra_bytes": 264629,
+        "build_net_bytes": 264629,
+        "plain_line_net_bytes": 24472,
+        "justify_line_net_bytes": 31984
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 7512,
+        "justify_line_and_context_net_bytes_per_line": 1881.4117647058824,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 418.71677215189874,
+        "plain_line_and_context_net_bytes_per_line": 1439.5294117647059
+      }
+    },
+    {
+      "key": "nested-atomic/64",
+      "paragraphs": 1,
+      "glyphs": 5056,
+      "lines": 129,
+      "warm_median_ns": {
+        "build": 3760760.275,
+        "next_line": 3312.5725580422504,
+        "all_lines": 1570525.6333333333,
+        "intrinsic": 514866.6875,
+        "reuse_widths": 3395583.75,
+        "rebuild_widths": 11299935.5,
+        "page_retry": 902995.0590277778
+      },
+      "cold_median_ns": {
+        "context_init": 4714.5,
+        "font_initialization_registration": 277702.0,
+        "build": 3429965.0,
+        "all_lines": 953518.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 6392704.0,
+      "memory": {
+        "build_allocated_bytes": 4139133,
+        "build_peak_extra_bytes": 1899941,
+        "build_net_bytes": 1899941,
+        "plain_line_net_bytes": 191576,
+        "justify_line_net_bytes": 252176
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 60600,
+        "justify_line_and_context_net_bytes_per_line": 1954.8527131782946,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 375.77946993670884,
+        "plain_line_and_context_net_bytes_per_line": 1485.0852713178294
+      }
+    },
+    {
+      "key": "preserved-tabs/1",
+      "paragraphs": 1,
+      "glyphs": 22,
+      "lines": 3,
+      "warm_median_ns": {
+        "build": 29623.98333333333,
+        "next_line": 2471.3853026634383,
+        "all_lines": 7645.44036226931,
+        "intrinsic": 2568.9050331294598,
+        "reuse_widths": 26747.50292740047,
+        "rebuild_widths": 131303.11111111112,
+        "page_retry": 20385.90844867359
+      },
+      "cold_median_ns": {
+        "context_init": 4680.0,
+        "font_initialization_registration": 280251.0,
+        "build": 223922.0,
+        "all_lines": 34503.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 1979501.5,
+      "memory": {
+        "build_allocated_bytes": 78931,
+        "build_peak_extra_bytes": 35681,
+        "build_net_bytes": 35681,
+        "plain_line_net_bytes": 3188,
+        "justify_line_net_bytes": 3284
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 96,
+        "justify_line_and_context_net_bytes_per_line": 1094.6666666666667,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 1621.8636363636363,
+        "plain_line_and_context_net_bytes_per_line": 1062.6666666666667
+      }
+    },
+    {
+      "key": "preserved-tabs/8",
+      "paragraphs": 1,
+      "glyphs": 176,
+      "lines": 24,
+      "warm_median_ns": {
+        "build": 234762.62962962964,
+        "next_line": 5310.069717261905,
+        "all_lines": 88939.16826923077,
+        "intrinsic": 22874.417302798982,
+        "reuse_widths": 233807.9375,
+        "rebuild_widths": 748648.77,
+        "page_retry": 98266.9478021978
+      },
+      "cold_median_ns": {
+        "context_init": 4260.0,
+        "font_initialization_registration": 283709.0,
+        "build": 314685.0,
+        "all_lines": 138571.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2049765.0,
+      "memory": {
+        "build_allocated_bytes": 198805,
+        "build_peak_extra_bytes": 95544,
+        "build_net_bytes": 95544,
+        "plain_line_net_bytes": 25140,
+        "justify_line_net_bytes": 25236
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 96,
+        "justify_line_and_context_net_bytes_per_line": 1051.5,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 542.8636363636364,
+        "plain_line_and_context_net_bytes_per_line": 1047.5
+      }
+    },
+    {
+      "key": "preserved-tabs/64",
+      "paragraphs": 1,
+      "glyphs": 1408,
+      "lines": 192,
+      "warm_median_ns": {
+        "build": 930167.5,
+        "next_line": 3011.5050373134327,
+        "all_lines": 558883.9444444445,
+        "intrinsic": 152992.38095238095,
+        "reuse_widths": 1676536.888888889,
+        "rebuild_widths": 5068102.25,
+        "page_retry": 812619.1114285714
+      },
+      "cold_median_ns": {
+        "context_init": 4295.0,
+        "font_initialization_registration": 264990.5,
+        "build": 1247774.0,
+        "all_lines": 818579.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 3824307.5,
+      "memory": {
+        "build_allocated_bytes": 1143973,
+        "build_peak_extra_bytes": 584800,
+        "build_net_bytes": 569584,
+        "plain_line_net_bytes": 200756,
+        "justify_line_net_bytes": 200852
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 96,
+        "justify_line_and_context_net_bytes_per_line": 1046.1041666666667,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 404.53409090909093,
+        "plain_line_and_context_net_bytes_per_line": 1045.6041666666667
+      }
+    },
+    {
+      "key": "float-retry/1",
+      "paragraphs": 1,
+      "glyphs": 79,
+      "lines": 4,
+      "warm_median_ns": {
+        "build": 50174.41591591592,
+        "next_line": 14606.596808510638,
+        "all_lines": 26637.847926267284,
+        "intrinsic": 8453.636773780418,
+        "reuse_widths": 92134.00405092593,
+        "rebuild_widths": 296679.2552083334,
+        "page_retry": 27432.717690677964
+      },
+      "cold_median_ns": {
+        "context_init": 4504.5,
+        "font_initialization_registration": 253955.5,
+        "build": 250219.0,
+        "all_lines": 63349.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2039952.5,
+      "memory": {
+        "build_allocated_bytes": 128312,
+        "build_peak_extra_bytes": 57819,
+        "build_net_bytes": 57819,
+        "plain_line_net_bytes": 3388,
+        "justify_line_net_bytes": 4216
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 828,
+        "justify_line_and_context_net_bytes_per_line": 1054.0,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 731.8860759493671,
+        "plain_line_and_context_net_bytes_per_line": 847.0
+      }
+    },
+    {
+      "key": "float-retry/8",
+      "paragraphs": 1,
+      "glyphs": 632,
+      "lines": 27,
+      "warm_median_ns": {
+        "build": 276343.70714285714,
+        "next_line": 14592.517167381975,
+        "all_lines": 151558.36477272728,
+        "intrinsic": 63706.48908730159,
+        "reuse_widths": 548814.575,
+        "rebuild_widths": 1674464.888888889,
+        "page_retry": 155954.92
+      },
+      "cold_median_ns": {
+        "context_init": 4295.5,
+        "font_initialization_registration": 268448.0,
+        "build": 521948.5,
+        "all_lines": 264397.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2411525.5,
+      "memory": {
+        "build_allocated_bytes": 573169,
+        "build_peak_extra_bytes": 262233,
+        "build_net_bytes": 262233,
+        "plain_line_net_bytes": 25962,
+        "justify_line_net_bytes": 33698
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 7736,
+        "justify_line_and_context_net_bytes_per_line": 1248.0740740740741,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 414.9256329113924,
+        "plain_line_and_context_net_bytes_per_line": 961.5555555555555
+      }
+    },
+    {
+      "key": "float-retry/64",
+      "paragraphs": 1,
+      "glyphs": 5056,
+      "lines": 214,
+      "warm_median_ns": {
+        "build": 2198427.3571428573,
+        "next_line": 15110.152024872448,
+        "all_lines": 1172761.1629629629,
+        "intrinsic": 518170.38125,
+        "reuse_widths": 4255176.511904762,
+        "rebuild_widths": 13301682.25,
+        "page_retry": 1218647.0833333335
+      },
+      "cold_median_ns": {
+        "context_init": 4749.0,
+        "font_initialization_registration": 276759.5,
+        "build": 3462198.5,
+        "all_lines": 1916222.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 7440199.5,
+      "memory": {
+        "build_allocated_bytes": 4132137,
+        "build_peak_extra_bytes": 1897545,
+        "build_net_bytes": 1897545,
+        "plain_line_net_bytes": 212401,
+        "justify_line_net_bytes": 276481
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 64080,
+        "justify_line_and_context_net_bytes_per_line": 1291.9672897196263,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 375.30557753164555,
+        "plain_line_and_context_net_bytes_per_line": 992.5280373831775
+      }
+    },
+    {
+      "key": "justify/1",
+      "paragraphs": 1,
+      "glyphs": 79,
+      "lines": 3,
+      "warm_median_ns": {
+        "build": 47450.2864010989,
+        "next_line": 2959.7656262505,
+        "all_lines": 18950.705749354005,
+        "intrinsic": 8446.03117505995,
+        "reuse_widths": 61947.346153846156,
+        "rebuild_widths": 247450.45918367346,
+        "page_retry": 18796.164327002476
+      },
+      "cold_median_ns": {
+        "context_init": 39637.5,
+        "font_initialization_registration": 276410.5,
+        "build": 261568.5,
+        "all_lines": 36808.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2022072.5,
+      "memory": {
+        "build_allocated_bytes": 128617,
+        "build_peak_extra_bytes": 58089,
+        "build_net_bytes": 58089,
+        "plain_line_net_bytes": 2680,
+        "justify_line_net_bytes": 3556
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 876,
+        "justify_line_and_context_net_bytes_per_line": 1185.3333333333333,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 735.3037974683544,
+        "plain_line_and_context_net_bytes_per_line": 893.3333333333334
+      }
+    },
+    {
+      "key": "justify/8",
+      "paragraphs": 1,
+      "glyphs": 632,
+      "lines": 17,
+      "warm_median_ns": {
+        "build": 273373.93518518517,
+        "next_line": 2975.7533737373737,
+        "all_lines": 131917.94666666666,
+        "intrinsic": 63924.70869883041,
+        "reuse_widths": 895085.956632653,
+        "rebuild_widths": 2960263.652777778,
+        "page_retry": 249188.80654761905
+      },
+      "cold_median_ns": {
+        "context_init": 4330.0,
+        "font_initialization_registration": 267505.0,
+        "build": 531692.0,
+        "all_lines": 166055.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2240406.0,
+      "memory": {
+        "build_allocated_bytes": 572368,
+        "build_peak_extra_bytes": 261950,
+        "build_net_bytes": 261950,
+        "plain_line_net_bytes": 19368,
+        "justify_line_net_bytes": 26880
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 7512,
+        "justify_line_and_context_net_bytes_per_line": 1581.1764705882354,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 414.4778481012658,
+        "plain_line_and_context_net_bytes_per_line": 1139.2941176470588
+      }
+    },
+    {
+      "key": "justify/64",
+      "paragraphs": 1,
+      "glyphs": 5056,
+      "lines": 129,
+      "warm_median_ns": {
+        "build": 3966716.6071428573,
+        "next_line": 5815.788735667803,
+        "all_lines": 2015702.875,
+        "intrinsic": 1188765.5142857144,
+        "reuse_widths": 14398051.0,
+        "rebuild_widths": 23776683.0,
+        "page_retry": 4464276.541666666
+      },
+      "cold_median_ns": {
+        "context_init": 4609.5,
+        "font_initialization_registration": 297747.5,
+        "build": 3397173.0,
+        "all_lines": 1121914.5
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 6560122.0,
+      "memory": {
+        "build_allocated_bytes": 4122488,
+        "build_peak_extra_bytes": 1892838,
+        "build_net_bytes": 1892838,
+        "plain_line_net_bytes": 152872,
+        "justify_line_net_bytes": 213472
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 60600,
+        "justify_line_and_context_net_bytes_per_line": 1654.8217054263566,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 374.37460443037975,
+        "plain_line_and_context_net_bytes_per_line": 1185.0542635658915
+      }
+    },
+    {
+      "key": "fallback/1",
+      "paragraphs": 1,
+      "glyphs": 40,
+      "lines": 2,
+      "warm_median_ns": {
+        "build": 116434.6447368421,
+        "next_line": 5076.419320214669,
+        "all_lines": 17353.478591160223,
+        "intrinsic": 6575.477004160888,
+        "reuse_widths": 56486.64059934318,
+        "rebuild_widths": 257942.3919642857,
+        "page_retry": 18105.179144385023
+      },
+      "cold_median_ns": {
+        "context_init": 4819.0,
+        "font_initialization_registration": 258704.5,
+        "build": 342832.5,
+        "all_lines": 59752.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2121076.5,
+      "memory": {
+        "build_allocated_bytes": 177585,
+        "build_peak_extra_bytes": 74672,
+        "build_net_bytes": 74672,
+        "plain_line_net_bytes": 4152,
+        "justify_line_net_bytes": 4152
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 2076.0,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 1866.8,
+        "plain_line_and_context_net_bytes_per_line": 2076.0
+      }
+    },
+    {
+      "key": "fallback/8",
+      "paragraphs": 1,
+      "glyphs": 320,
+      "lines": 10,
+      "warm_median_ns": {
+        "build": 540853.1875,
+        "next_line": 9419.12008154944,
+        "all_lines": 239667.82121212123,
+        "intrinsic": 94520.94512195123,
+        "reuse_widths": 902403.9,
+        "rebuild_widths": 3182036.478571429,
+        "page_retry": 275657.578021978
+      },
+      "cold_median_ns": {
+        "context_init": 3632.5,
+        "font_initialization_registration": 278261.5,
+        "build": 572376.5,
+        "all_lines": 264502.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 2477598.5,
+      "memory": {
+        "build_allocated_bytes": 404133,
+        "build_peak_extra_bytes": 177334,
+        "build_net_bytes": 177334,
+        "plain_line_net_bytes": 23416,
+        "justify_line_net_bytes": 23416
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 2341.6,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 554.16875,
+        "plain_line_and_context_net_bytes_per_line": 2341.6
+      }
+    },
+    {
+      "key": "fallback/64",
+      "paragraphs": 1,
+      "glyphs": 2560,
+      "lines": 77,
+      "warm_median_ns": {
+        "build": 4158258.0,
+        "next_line": 9905.621075085324,
+        "all_lines": 2439416.916666667,
+        "intrinsic": 789309.3571428572,
+        "reuse_widths": 7626008.833333334,
+        "rebuild_widths": 22600883.5,
+        "page_retry": 2203024.2142857146
+      },
+      "cold_median_ns": {
+        "context_init": 4994.0,
+        "font_initialization_registration": 270369.0,
+        "build": 2891812.0,
+        "all_lines": 1590851.0
+      },
+      "cold_samples": 2,
+      "process_wall_median_ns": 6418651.5,
+      "memory": {
+        "build_allocated_bytes": 2216741,
+        "build_peak_extra_bytes": 998630,
+        "build_net_bytes": 998630,
+        "plain_line_net_bytes": 189836,
+        "justify_line_net_bytes": 189836
+      },
+      "normalization": {
+        "justify_incremental_net_bytes": 0,
+        "justify_line_and_context_net_bytes_per_line": 2465.4025974025976,
+        "paragraph_and_context_net_bytes_per_painted_glyph": 390.08984375,
+        "plain_line_and_context_net_bytes_per_line": 2465.4025974025976
+      }
+    }
+  ]
+}
