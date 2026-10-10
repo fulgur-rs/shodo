@@ -39,6 +39,7 @@ def sibling(name):
 
 foundation = load("run", ROOT / "tools" / "bench" / "run.py")
 overlay = sibling("raikiri_overlay")
+report_paths = overlay.report_paths
 require = foundation.require
 file_hash = foundation.file_hash
 
@@ -247,12 +248,12 @@ def validate_build(artifact, mode, *, binary_name="measurement-probe"):
 
 
 def write_json(path, value):
-    Path(path).write_text(json.dumps(value, indent=2, ensure_ascii=False, allow_nan=False) + "\n")
+    report_paths.write_json(path, value, ROOT)
 
 
 def source_hashes():
     paths = list((ROOT / "dev/raikiri/probe").glob("*.rs"))
-    paths += [HERE / "raikiri_measure.py", HERE / "raikiri_overlay.py",
+    paths += [HERE / "raikiri_measure.py", HERE / "raikiri_overlay.py", HERE / "report_paths.py",
               ROOT / "tools" / "bench" / "run.py", ROOT / "dev/bench/src/allocator.rs"]
     return {str(p.relative_to(ROOT)): file_hash(p) for p in sorted(paths)}
 
@@ -495,7 +496,8 @@ def collect(args):
               "retained_memory_comparison": "engine-specific named owners; net retained bytes are not equivalent outputs and have no cross-engine ratio",
               "raw_manifest": "progress.json", "raw_manifest_sha256": file_hash(stage / "progress.json")}
     write_json(stage / "results.json", report)
-    print(json.dumps({"collection_complete": True, "coverage": report["coverage"], "output": str(stage)}, ensure_ascii=False))
+    print(json.dumps({"collection_complete": True, "coverage": report["coverage"],
+                      "output": report_paths.portable(str(stage), ROOT)}, ensure_ascii=False))
     return report
 
 
