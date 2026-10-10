@@ -142,7 +142,7 @@ impl CacheEntry {
 /// different keys just replaces the older entry, which is safe for a cache.
 #[derive(Default)]
 pub(super) struct MatchCache {
-    slots: Vec<CacheEntry>,
+    slots: Vec<std::sync::Arc<CacheEntry>>,
     index: std::collections::HashMap<u64, u32, std::hash::BuildHasherDefault<PreHashed>>,
     clock: std::sync::atomic::AtomicU64,
     generations: Option<(u64, Option<u64>)>,
@@ -222,7 +222,9 @@ impl MatchCache {
         query: &FontQuery,
         script: [u8; 4],
         cluster: &str,
-    ) -> Option<Option<std::sync::Arc<FontMatch>>> {
+    ) -> Option<std::sync::Arc<CacheEntry>> {
+        #[cfg(test)]
+        matching_tests::record_shared_lookup();
         if self.generations != Some(generations) {
             return None;
         }
@@ -239,7 +241,7 @@ impl MatchCache {
         entry
             .used
             .fetch_max(stamp, std::sync::atomic::Ordering::Relaxed);
-        Some(entry.result.clone())
+        Some(entry.clone())
     }
     /// Reuse the shared query when an equal one is already retained by a live
     /// entry; dead references are pruned as we look, so the list never
@@ -269,24 +271,24 @@ impl MatchCache {
         cluster: &str,
         hash: u64,
         result: Option<std::sync::Arc<FontMatch>>,
-    ) {
+    ) -> std::sync::Arc<CacheEntry> {
         self.sync(generations);
         let stamp = self
             .clock
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             .wrapping_add(1);
-        let entry = CacheEntry {
+        let entry = std::sync::Arc::new(CacheEntry {
             query: self.intern(query),
             cluster: cluster.into(),
             result,
             hash,
             used: std::sync::atomic::AtomicU64::new(stamp),
-        };
+        });
         if let Some(&slot) = self.index.get(&entry.hash) {
             // Same hash: an equal key was concurrently inserted, or a
             // 64-bit collision. Either way keep exactly one entry.
-            self.slots[slot as usize] = entry;
-            return;
+            self.slots[slot as usize] = entry.clone();
+            return entry;
         }
         if self.slots.len() >= cap {
             let Some((victim, _)) = self
@@ -295,17 +297,126 @@ impl MatchCache {
                 .enumerate()
                 .min_by_key(|(_, e)| e.used.load(std::sync::atomic::Ordering::Relaxed))
             else {
-                return;
+                return entry;
             };
             self.index.remove(&self.slots[victim].hash);
             self.index.insert(entry.hash, victim as u32);
-            self.slots[victim] = entry;
+            self.slots[victim] = entry.clone();
         } else {
             self.index.insert(entry.hash, self.slots.len() as u32);
-            self.slots.push(entry);
+            self.slots.push(entry.clone());
         }
+        entry
     }
 }
+
+/// A small per-thread front for [`MatchCache`].
+///
+/// Every shared hit takes the cache's read lock and bumps two atomic recency
+/// stamps. When several threads build paragraphs against one collection,
+/// those writes bounce the same cache lines between cores, and a hit costs
+/// more than on one thread. Most clusters repeat a key the same thread just
+/// matched, so each thread first probes a direct-mapped table of recent
+/// entries that only it writes.
+///
+/// A slot is valid for one layer (layer ids are never reused) and one pair of
+/// generations, and a probe compares the full key, so a hit returns exactly
+/// what the shared cache would. Results are a pure function of the key while
+/// the generations are unchanged, so an entry evicted from the shared cache
+/// stays correct here. A collection that caches at most `n` matches uses at
+/// most `n` slots, so the front never keeps more of its entries than the
+/// shared cache may. Each slot keeps a private copy of the result, so
+/// handing it out does not touch a reference count shared with other threads.
+/// Hits here do not refresh the shared entry's recency.
+pub(super) mod thread_cache {
+    use super::{CacheEntry, FontMatch, FontQuery};
+    use std::cell::RefCell;
+    use std::sync::Arc;
+
+    const SLOTS: usize = 256;
+
+    struct Slot {
+        layer: u32,
+        generations: (u64, Option<u64>),
+        entry: Arc<CacheEntry>,
+        result: Option<Arc<FontMatch>>,
+    }
+
+    std::thread_local! {
+        static SLOTS_BY_HASH: RefCell<Vec<Option<Slot>>> = const { RefCell::new(Vec::new()) };
+    }
+
+    /// The slot of `hash` for a collection that caches at most `cap`
+    /// matches: such a collection never occupies more than `cap` slots here.
+    fn index(hash: u64, cap: usize) -> usize {
+        // The low bits also pick the shared index bucket; use the high ones.
+        (hash >> 56) as usize % cap.clamp(1, SLOTS)
+    }
+
+    pub(in crate::font) fn get(
+        cap: usize,
+        layer: u32,
+        generations: (u64, Option<u64>),
+        hash: u64,
+        query: &FontQuery,
+        script: [u8; 4],
+        cluster: &str,
+    ) -> Option<Option<Arc<FontMatch>>> {
+        SLOTS_BY_HASH.with(|slots| {
+            let slots = slots.borrow();
+            let slot = slots.get(index(hash, cap))?.as_ref()?;
+            (slot.layer == layer
+                && slot.generations == generations
+                && slot.entry.hash == hash
+                && slot.entry.matches_key(query, script, cluster))
+            .then(|| slot.result.clone())
+        })
+    }
+
+    /// Remember `entry` for this thread and return its result.
+    pub(in crate::font) fn insert(
+        cap: usize,
+        layer: u32,
+        generations: (u64, Option<u64>),
+        entry: Arc<CacheEntry>,
+    ) -> Option<Arc<FontMatch>> {
+        let result = entry.result.as_deref().map(|found| {
+            Arc::new(FontMatch {
+                id: found.id,
+                variations: found.variations.clone(),
+                embolden: found.embolden,
+                skew: found.skew,
+            })
+        });
+        SLOTS_BY_HASH.with(|slots| {
+            let mut slots = slots.borrow_mut();
+            if slots.is_empty() {
+                slots.resize_with(SLOTS, || None);
+            }
+            let at = index(entry.hash, cap);
+            slots[at] = Some(Slot {
+                layer,
+                generations,
+                entry,
+                result: result.clone(),
+            });
+        });
+        result
+    }
+
+    /// Entries this thread holds.
+    #[cfg(test)]
+    pub(in crate::font) fn len() -> usize {
+        SLOTS_BY_HASH.with(|slots| slots.borrow().iter().flatten().count())
+    }
+
+    /// Forget this thread's entries, so a test observes the shared cache.
+    #[cfg(test)]
+    pub(in crate::font) fn clear() {
+        SLOTS_BY_HASH.with(|slots| slots.borrow_mut().clear());
+    }
+}
+
 pub(super) struct FallbackEntry {
     script: [u8; 4],
     language: Option<String>,
@@ -466,13 +577,26 @@ impl FontCollection {
         );
         let hash = (cap > 0 && key_bytes <= MAX_CACHE_KEY_BYTES && base.families.len() <= 128)
             .then(|| key_hash(base, script, cluster.as_str()));
-        if let Some(hash) = hash
-            && let Some(result) =
+        let layer = self.layer.id;
+        if let Some(hash) = hash {
+            if let Some(result) = thread_cache::get(
+                cap,
+                layer,
+                generations,
+                hash,
+                base,
+                script,
+                cluster.as_str(),
+            ) {
+                return result;
+            }
+            let shared =
                 self.caches()
                     .matches
-                    .get(generations, hash, base, script, cluster.as_str())
-        {
-            return result;
+                    .get(generations, hash, base, script, cluster.as_str());
+            if let Some(entry) = shared {
+                return thread_cache::insert(cap, layer, generations, entry);
+            }
         }
         let query = FontQuery {
             script,
@@ -480,7 +604,7 @@ impl FontCollection {
         };
         let result = self.find_cluster(&query, cluster).map(std::sync::Arc::new);
         if let Some(hash) = hash {
-            self.write_caches().matches.insert(
+            let entry = self.write_caches().matches.insert(
                 cap,
                 generations,
                 query,
@@ -488,6 +612,7 @@ impl FontCollection {
                 hash,
                 result.clone(),
             );
+            return thread_cache::insert(cap, layer, generations, entry);
         }
         result
     }
