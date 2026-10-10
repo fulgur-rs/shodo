@@ -598,7 +598,12 @@ fn measure_profile(
     let mut own_groups: crate::hashing::FastMap<usize, (f32, f32, bool)> =
         crate::hashing::FastMap::default();
     for (offset, u) in data.units[units.clone()].iter().enumerate() {
-        empty &= !matches!(u.kind, UnitKind::Tab | UnitKind::ForcedBreak);
+        // Hidden soft hyphens have no glyph record, but still count as text
+        // for CSS's empty-line rule, just as in the scalar metric index.
+        empty &= !matches!(
+            u.kind,
+            UnitKind::Cluster { .. } | UnitKind::Tab | UnitKind::ForcedBreak
+        );
         if quirk
             .as_ref()
             .is_none_or(|q| q.styled_break_contributes(units.start + offset))

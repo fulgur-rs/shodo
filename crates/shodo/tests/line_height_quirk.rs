@@ -118,6 +118,39 @@ fn q(width: f32, input: impl FnOnce(&mut ParagraphBuilder, &mut Doc)) -> Vec<f32
 const WIDE: f32 = 1000.0;
 
 #[test]
+fn lone_hidden_soft_hyphen_keeps_the_line_strut() {
+    // Chromium 152: hidden text still creates a line, unlike an empty span.
+    for quirk in [false, true] {
+        for nested_height in [None, Some(10.0), Some(40.0)] {
+            let p = build(&root(quirk), |b| {
+                if let Some(height) = nested_height {
+                    b.open_inline(NodeId(2), &span(height), Default::default());
+                }
+                text(b, "\u{ad}");
+                if nested_height.is_some() {
+                    b.close_inline();
+                }
+            });
+            let line = common::first_line(&p, WIDE, &LineOptions::default(), &AtomicSizes::EMPTY);
+            let expected = match (quirk, nested_height) {
+                (_, None) => 20.0,
+                (true, Some(height)) => height,
+                (false, Some(height)) => height.max(20.0),
+            };
+            assert_eq!(
+                line.block_size(),
+                expected,
+                "quirk={quirk}, {nested_height:?}"
+            );
+            assert!(!line.is_empty());
+            assert_eq!(line.inline_size(), 0.0);
+            assert!(glyphs(&line).is_empty(), "the soft hyphen stays hidden");
+            assert_eq!(line.text_range(), 0..2);
+        }
+    }
+}
+
+#[test]
 fn styled_break_eligibility_is_independent_in_grapheme_count_lines() {
     for eligible_first in [false, true] {
         let p = build(&root(true), |b| {
@@ -1043,14 +1076,12 @@ fn white_space_presence() {
         }),
         [20.0, 2.0]
     );
-    // F: <span lh40>&shy;</span>x = 40 (a lone soft hyphen line is empty
-    // and 0 high regardless of the quirk, so keep text beside it)
+    // F: <span lh40>&shy;</span> = 40 (hidden text still credits its span).
     assert_eq!(
         q(WIDE, |b, _| {
             b.open_inline(NodeId(2), &span(40.0), InlineEdges::default());
             text(b, "\u{ad}");
             b.close_inline();
-            text(b, "x");
         }),
         [40.0]
     );
