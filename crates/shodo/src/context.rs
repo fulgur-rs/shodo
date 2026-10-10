@@ -26,6 +26,9 @@ pub struct LayoutContext {
     pub(crate) ruby_memo: crate::ruby::memo::RubyMemo,
     /// Ruby line-measurement work of the current operation (shodo-mc0).
     pub(crate) ruby_line_work: crate::ruby::line_work::LineWork,
+    /// Style metrics of earlier paragraphs, reused while their font
+    /// collection is unchanged.
+    pub(crate) style_metrics: crate::line::font_metrics::StyleMetricsMemo,
     /// Admit every ruby probe: tests that sweep every range of a paragraph
     /// in one operation (not a layout call) check reuse exactness alone.
     #[cfg(test)]

@@ -430,6 +430,110 @@ impl<'a> StyleMetricsCache<'a> {
     }
 }
 
+/// Entries kept by [`StyleMetricsMemo`]. A document uses a handful of
+/// distinct font styles, and the lookup is a linear scan.
+const STYLE_METRICS_MEMO_CAPACITY: usize = 16;
+
+/// Style metrics resolved by earlier paragraphs of one layout context.
+///
+/// Resolving a style matches its primary face and probes three advances, which
+/// costs as much as shaping a short paragraph. Paragraphs built with the same
+/// context usually repeat their styles, so results are kept across calls,
+/// keyed by the collection's layer identity and generations: loading or
+/// registering a face makes every older entry unreachable. Only resolutions
+/// that recorded no warning are kept, so a reuse never hides one.
+#[derive(Default)]
+pub(crate) struct StyleMetricsMemo {
+    entries: Vec<MemoEntry>,
+    /// Slot replaced next once the memo is full.
+    next: usize,
+}
+
+struct MemoEntry {
+    layer: u32,
+    generations: (u64, Option<u64>),
+    style: InlineStyle,
+    metrics: StyleMetrics,
+}
+
+impl std::fmt::Debug for StyleMetricsMemo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StyleMetricsMemo")
+            .field("entries", &self.entries.len())
+            .finish()
+    }
+}
+
+impl StyleMetricsMemo {
+    fn get(
+        &self,
+        layer: u32,
+        generations: (u64, Option<u64>),
+        style: &InlineStyle,
+    ) -> Option<StyleMetrics> {
+        self.entries
+            .iter()
+            .find(|entry| {
+                entry.layer == layer
+                    && entry.generations == generations
+                    && same_metric_inputs(&entry.style, style)
+            })
+            .map(|entry| entry.metrics)
+    }
+
+    fn insert(
+        &mut self,
+        layer: u32,
+        generations: (u64, Option<u64>),
+        style: &InlineStyle,
+        metrics: StyleMetrics,
+    ) {
+        let entry = MemoEntry {
+            layer,
+            generations,
+            style: style.clone(),
+            metrics,
+        };
+        if self.entries.len() < STYLE_METRICS_MEMO_CAPACITY {
+            self.entries.push(entry);
+        } else {
+            self.entries[self.next] = entry;
+            self.next = (self.next + 1) % STYLE_METRICS_MEMO_CAPACITY;
+        }
+    }
+}
+
+/// [`resolve_styles`] that first reuses metrics an earlier paragraph of the
+/// same context resolved, and keeps the new ones for later paragraphs.
+pub(crate) fn resolve_styles_memo(
+    memo: &mut StyleMetricsMemo,
+    fonts: &FontCollection,
+    styles: &[InlineStyle],
+    warnings: &mut WarningSink,
+) -> Vec<StyleMetrics> {
+    let layer = fonts.layer_id();
+    let mut cache = StyleMetricsCache::default();
+    let mut resolved = Vec::with_capacity(styles.len());
+    for style in styles {
+        let generations = fonts.generations();
+        if let Some(metrics) = memo.get(layer, generations, style) {
+            resolved.push(metrics);
+            continue;
+        }
+        let before = warnings.checkpoint();
+        let metrics = cache.resolve(fonts, style, &resolved, warnings);
+        let after = warnings.checkpoint();
+        if matches!((before, after), (Some(before), Some(after)) if before == after)
+            && fonts.generations() == generations
+        {
+            memo.insert(layer, generations, style, metrics);
+        }
+        resolved.push(metrics);
+    }
+    resolved
+}
+
+#[cfg(test)]
 pub(crate) fn resolve_styles(
     fonts: &FontCollection,
     styles: &[InlineStyle],
@@ -996,5 +1100,90 @@ mod tests {
         assert!(actual_warnings.is_suppressed());
         assert_eq!(resolve_counts::snapshot().0, 2);
         assert_eq!(resolve_counts::snapshot().1, 6);
+    }
+
+    #[test]
+    fn memo_reuses_metrics_across_calls_of_one_collection_and_generation() {
+        let fonts = fonts();
+        let styles = [style()];
+        let mut memo = StyleMetricsMemo::default();
+        let mut warnings = WarningSink::default();
+
+        resolve_counts::reset();
+        let first = resolve_styles_memo(&mut memo, &fonts, &styles, &mut warnings);
+        let second = resolve_styles_memo(&mut memo, &fonts, &styles, &mut warnings);
+        assert_metrics_eq(second[0], first[0]);
+        assert_eq!(resolve_counts::snapshot().0, 1);
+
+        // Another collection never answers from this one's entries.
+        let other = self::fonts();
+        let elsewhere = resolve_styles_memo(&mut memo, &other, &styles, &mut warnings);
+        assert_ne!(elsewhere[0].font, first[0].font);
+        assert_eq!(resolve_counts::snapshot().0, 2);
+
+        let replacement = fonts
+            .register_face(
+                LATIN.to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: "Latin".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let after = resolve_styles_memo(&mut memo, &fonts, &styles, &mut warnings);
+        assert_eq!(after[0].font, replacement);
+        assert_eq!(resolve_counts::snapshot().0, 3);
+        assert!(warnings.as_slice().is_empty());
+    }
+
+    #[test]
+    fn memo_matches_resolve_styles_and_keeps_no_warning_resolution() {
+        let fonts = fonts();
+        let warned = InlineStyle {
+            font_size_adjust: Some(FontSizeAdjust {
+                metric: FontMetricKind::IcHeight,
+                value: 0.5,
+            }),
+            ..style()
+        };
+        let styles = [style(), warned.clone(), style(), warned];
+
+        let mut expected_warnings = WarningSink::default();
+        let expected = resolve_styles(&fonts, &styles, &mut expected_warnings);
+        assert!(!expected_warnings.as_slice().is_empty());
+
+        let mut memo = StyleMetricsMemo::default();
+        for _ in 0..2 {
+            let mut warnings = WarningSink::default();
+            let actual = resolve_styles_memo(&mut memo, &fonts, &styles, &mut warnings);
+            assert_eq!(actual.len(), expected.len());
+            for (actual, expected) in actual.into_iter().zip(&expected) {
+                assert_metrics_eq(actual, *expected);
+            }
+            // A reused result must not hide a warning the style records.
+            assert_eq!(warnings.as_slice(), expected_warnings.as_slice());
+        }
+    }
+
+    #[test]
+    fn memo_stays_bounded_and_still_resolves_evicted_styles() {
+        let fonts = fonts();
+        let styles: Vec<_> = (0..STYLE_METRICS_MEMO_CAPACITY * 2)
+            .map(|i| InlineStyle {
+                font_size: 8.0 + i as f32,
+                ..style()
+            })
+            .collect();
+        let mut memo = StyleMetricsMemo::default();
+        let mut warnings = WarningSink::default();
+        let expected = resolve_styles(&fonts, &styles, &mut warnings);
+        for _ in 0..2 {
+            let actual = resolve_styles_memo(&mut memo, &fonts, &styles, &mut warnings);
+            assert!(memo.entries.len() <= STYLE_METRICS_MEMO_CAPACITY);
+            for (actual, expected) in actual.into_iter().zip(&expected) {
+                assert_metrics_eq(actual, *expected);
+            }
+        }
     }
 }
