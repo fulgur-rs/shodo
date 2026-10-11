@@ -1,5 +1,6 @@
 use crate::limits::Limits;
 use crate::node::{InlineEdges, NodeId, TextSource};
+use crate::output::BreakReason;
 use crate::style::{LineOptions, ParagraphStyle};
 use crate::{AtomicSize, AtomicSizes, Fragment, LayoutContext, ParagraphBuilder};
 
@@ -575,4 +576,129 @@ fn ordinary_text_stays_under_the_edge_reshape_budget() {
         !warnings.iter().any(|m| m.contains("edge reshape budget")),
         "default limits must not trip the budget on ordinary wrapping: {warnings:?}"
     );
+}
+
+#[derive(Clone, Copy, Debug)]
+enum Terminator {
+    Forced,
+    BlockInInline,
+}
+
+/// Kerned Latin text in RTL-override spans, every position a soft break,
+/// followed by the spans' ends and `terminator`. Shaped in visual order, a
+/// pair's kerning sits on its logically second glyph, so a line that starts
+/// after a cut through the pair loses it: every candidate on that line is
+/// wider once its edges are reshaped than its shared advances say.
+fn closing_units_before(terminator: Terminator, nested: usize, isolate: bool) -> crate::Paragraph {
+    let fonts = final_review_fonts();
+    fonts
+        .register_face(
+            crate::test_support::fonts::LATIN.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Shodo Fixture Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut style = ParagraphStyle::default();
+    style.root.font_families = vec![crate::style::FontFamily::Named(
+        "Shodo Fixture Latin".into(),
+    )];
+    style.root.font_size = 16.0;
+    let mut rtl = style.root.clone();
+    rtl.direction = crate::geometry::Direction::Rtl;
+    rtl.unicode_bidi = if isolate {
+        crate::style::UnicodeBidi::IsolateOverride
+    } else {
+        crate::style::UnicodeBidi::BidiOverride
+    };
+    let mut b = ParagraphBuilder::new(&style, &Limits::default());
+    b.with_line_break_override(|_| crate::LineBreakOverride::Allow);
+    b.open_inline(NodeId(2), &rtl, Default::default());
+    for n in 0..nested {
+        b.open_inline(NodeId(10 + n as u64), &rtl, Default::default());
+    }
+    b.push_text(TextSource::Generated { node: NodeId(3) }, "VAVAVAVAVAVA");
+    for _ in 0..=nested {
+        b.close_inline();
+    }
+    match terminator {
+        Terminator::Forced => b.push_forced_break(NodeId(4)),
+        Terminator::BlockInInline => b.push_block_in_inline(NodeId(4)),
+    };
+    b.push_text(TextSource::Generated { node: NodeId(5) }, "x");
+    b.build(&mut LayoutContext::new(), &fonts).unwrap()
+}
+
+/// A deferred break candidate followed only by box ends and bidi controls
+/// before a forced break or block-in-inline is still where the line ends, so
+/// its reshaped edge must fit. Each line here starts after a cut through a
+/// kerned pair and is wider than its shared advances; the last text line has
+/// to fall back to an earlier verified break instead of overflowing.
+#[test]
+fn deferred_break_before_closing_units_is_checked_at_the_line_end() {
+    for terminator in [Terminator::Forced, Terminator::BlockInInline] {
+        for (nested, isolate) in [(0, false), (2, false), (0, true), (2, true)] {
+            let p = closing_units_before(terminator, nested, isolate);
+            for width in [28.125, 28.25, 28.625, 28.75] {
+                let lines = p.break_all(
+                    &mut LayoutContext::new(),
+                    &LineOptions::default(),
+                    width,
+                    &AtomicSizes::EMPTY,
+                );
+                let case = format!("{terminator:?} nested={nested} isolate={isolate} at {width}px");
+                for line in &lines {
+                    assert!(
+                        line.inline_size() <= width,
+                        "{case}: line {:?} is {}px wide",
+                        line.text_range(),
+                        line.inline_size()
+                    );
+                }
+                let (last, before) = lines.split_last().unwrap();
+                let (terminal, regular) = before.split_last().unwrap();
+                assert_eq!(
+                    last.text_range(),
+                    p.text().len() - 1..p.text().len(),
+                    "{case}"
+                );
+                assert_eq!(
+                    terminal.break_reason(),
+                    match terminator {
+                        Terminator::Forced => BreakReason::Forced,
+                        Terminator::BlockInInline => BreakReason::BlockInInline,
+                    },
+                    "{case}"
+                );
+                assert!(
+                    regular
+                        .iter()
+                        .all(|l| l.break_reason() == BreakReason::Regular),
+                    "{case}"
+                );
+                // Every box end and its closing controls stay on the line
+                // that ends the span's text.
+                let closers = |text: &str| {
+                    text.chars()
+                        .filter(|c| matches!(c, '\u{202c}' | '\u{2069}'))
+                        .count()
+                };
+                assert_eq!(
+                    closers(&p.text()[terminal.text_range()]),
+                    closers(p.text()),
+                    "{case}"
+                );
+                assert_eq!(closers(p.text()), (nested + 1) * (1 + isolate as usize));
+                let boxes = |line: &crate::Line| {
+                    line.fragments()
+                        .filter(|f| matches!(f, Fragment::InlineBox(_)))
+                        .count()
+                };
+                assert_eq!(boxes(terminal), nested + 1, "{case}");
+                assert_eq!(boxes(last), 0, "{case}");
+            }
+        }
+    }
 }

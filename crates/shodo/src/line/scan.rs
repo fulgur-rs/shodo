@@ -45,7 +45,9 @@ pub(super) fn scan(
     let mut pending: std::collections::VecDeque<Deferred> = Default::default();
     let reason = loop {
         // A line that ends here without overflowing still has to fit at its
-        // last opportunity, whose edge reshape may have been deferred.
+        // last opportunity, whose edge reshape may have been deferred. Box
+        // ends and bidi controls scanned after that opportunity belong to the
+        // cut (`pulls_after_break`), so the line still ends there logically.
         let terminating = units.get(i).is_none_or(|unit| match unit.kind {
             UnitKind::ForcedBreak => !count_mode,
             UnitKind::BlockInInline { .. } => true,
@@ -53,7 +55,8 @@ pub(super) fn scan(
         });
         if terminating
             && let Some(last) = pending.back().map(Deferred::plain)
-            && last.end == i
+            && last.end <= i
+            && (last.end..i).all(|at| super::pulls_after_break(data, at))
             && !last.hangs
         {
             let (edge_delta, _) = super::windows::candidate(data, start, last.end, cx, sat);
