@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.26](https://github.com/fulgur-rs/shodo/compare/v0.0.25...v0.0.26) - 2026-10-11
+
+### Fixed
+
+- *(line)* check the plain edge of a deferred hyphen at the line end
+- *(font)* bound a collection's per-thread entries by its match cache size
+- *(line)* retain struts for hidden soft-hyphen lines
+- *(punctuation)* trim upright vertical RTL brackets
+
+### Other
+
+- Merge remote-tracking branch 'origin/main' into claude/project-thread-6h8vda
+- Merge origin/main into claude/project-thread-6h8vda
+- Merge pull request #283 from fulgur-rs/claude/project-thread-ktevgw
+- Merge pull request #284 from fulgur-rs/claude/project-thread-67iimx
+- *(line)* bound pending soft hyphen candidates per scan
+- Merge remote-tracking branch 'origin/main' into claude/project-thread-ktevgw
+- *(line)* measure soft hyphen breaks only when the line overflows
+- *(font)* add a per-thread front for the cluster match cache
+- *(line)* slice normal ligatures only where a first line can end
+- *(line)* defer edge reshapes of fitting break candidates
+- *(shape)* avoid replaying explicit font variations
+- *(quirks)* bound trailing-run and Close-chain queries
+
 ## [0.0.25](https://github.com/fulgur-rs/shodo/compare/v0.0.24...v0.0.25) - 2026-10-10
 
 ### Other
