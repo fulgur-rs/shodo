@@ -101,6 +101,7 @@ pub(crate) struct ParagraphData {
     pub(crate) style_metrics: Vec<crate::line::font_metrics::StyleMetrics>,
     pub(crate) autospace_spaces: Vec<(f32, f32)>,
     pub(crate) unit_spacing: Vec<crate::line::spacing::UnitSpacing>,
+    pub(crate) spacing_summaries: crate::line::spacing::Summaries,
     pub(crate) punctuation: Vec<crate::line::punctuation::Punctuation>,
     pub(crate) last_content_unit: Option<usize>,
     pub(crate) internal_autospace_gaps: Vec<crate::line::autospace::Gap>,

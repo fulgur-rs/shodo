@@ -60,6 +60,7 @@ raikiri examples read at build time live in `dev/raikiri/inputs/`.
 | `ch`/`ic` unit-resolution cost before and after PR #87 | [Font-unit cost record](records/ch-unit-cost.md) |
 | Bounded `ch`/`ic` cache cost and exact-width validation | [Font-unit cache record](records/ch-unit-cache.md) |
 | Build-stage slice initialization profile and before/after timing | [Slice initialization record](records/initialize-slices-build-profile.md) |
+| SHODO-1 retained unit-spacing memory and before/after timing | [Spacing memory record](records/shodo-1-spacing-memory-2026-10-11.md) |
 | Frozen raikiri S4 residual fields, all109 document classification and caller gaps | [raikiri style diagnostics](records/raikiri-style-diagnostics.md) |
 | Representative caller wiring of hanging-punctuation none/first | [raikiri hanging-punctuation](records/raikiri-hanging-punctuation.md) |
 | Representative caller ownership split of flow/paint CSS | [raikiri style handoff](records/raikiri-style-handoff.md) |
