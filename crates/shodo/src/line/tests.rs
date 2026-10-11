@@ -580,6 +580,7 @@ fn ordinary_text_stays_under_the_edge_reshape_budget() {
 
 #[derive(Clone, Copy, Debug)]
 enum Terminator {
+    End,
     Forced,
     BlockInInline,
 }
@@ -624,10 +625,13 @@ fn closing_units_before(terminator: Terminator, nested: usize, isolate: bool) ->
         b.close_inline();
     }
     match terminator {
+        Terminator::End => &mut b,
         Terminator::Forced => b.push_forced_break(NodeId(4)),
         Terminator::BlockInInline => b.push_block_in_inline(NodeId(4)),
     };
-    b.push_text(TextSource::Generated { node: NodeId(5) }, "x");
+    if !matches!(terminator, Terminator::End) {
+        b.push_text(TextSource::Generated { node: NodeId(5) }, "x");
+    }
     b.build(&mut LayoutContext::new(), &fonts).unwrap()
 }
 
@@ -667,6 +671,7 @@ fn deferred_break_before_closing_units_is_checked_at_the_line_end() {
                 assert_eq!(
                     terminal.break_reason(),
                     match terminator {
+                        Terminator::End => unreachable!(),
                         Terminator::Forced => BreakReason::Forced,
                         Terminator::BlockInInline => BreakReason::BlockInInline,
                     },
@@ -699,6 +704,62 @@ fn deferred_break_before_closing_units_is_checked_at_the_line_end() {
                 assert_eq!(boxes(terminal), nested + 1, "{case}");
                 assert_eq!(boxes(last), 0, "{case}");
             }
+        }
+    }
+}
+
+/// The paragraph end must include the line-start reshape delta even when
+/// its last units prohibit a break. Closing bidi controls and inline boxes
+/// stay with the final text rather than hiding the overflowing last line.
+#[test]
+fn paragraph_end_checks_the_reshaped_line_start_width() {
+    for (nested, isolate) in [(0, false), (2, false), (0, true), (2, true)] {
+        let p = closing_units_before(Terminator::End, nested, isolate);
+        for width in [28.125, 28.25, 28.625, 28.75] {
+            let mut cx = LayoutContext::new();
+            let lines = p.break_all(&mut cx, &LineOptions::default(), width, &AtomicSizes::EMPTY);
+            let case = format!("nested={nested} isolate={isolate} at {width}px");
+            for line in &lines {
+                assert!(
+                    line.inline_size() <= width,
+                    "{case}: line {:?} is {}px wide",
+                    line.text_range(),
+                    line.inline_size()
+                );
+            }
+            let (last, before) = lines.split_last().unwrap();
+            assert_eq!(last.break_reason(), BreakReason::End, "{case}");
+            assert_eq!(last.text_range().end, p.text().len(), "{case}");
+            assert!(
+                p.text()[last.text_range()]
+                    .trim_end_matches(['\u{202c}', '\u{2069}'])
+                    .ends_with('A'),
+                "{case}"
+            );
+            assert!(
+                before
+                    .iter()
+                    .all(|line| line.break_reason() == BreakReason::Regular),
+                "{case}"
+            );
+            let closers = |text: &str| {
+                text.chars()
+                    .filter(|c| matches!(c, '\u{202c}' | '\u{2069}'))
+                    .count()
+            };
+            assert_eq!(
+                closers(&p.text()[last.text_range()]),
+                (nested + 1) * (1 + isolate as usize),
+                "{case}"
+            );
+            assert_eq!(
+                last.fragments()
+                    .filter(|f| matches!(f, Fragment::InlineBox(_)))
+                    .count(),
+                nested + 1,
+                "{case}"
+            );
+            assert!(cx.take_warnings().is_empty(), "{case}");
         }
     }
 }

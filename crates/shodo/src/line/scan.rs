@@ -199,13 +199,17 @@ pub(super) fn scan(
         // discretionary hyphen position is the same for its unhyphenated
         // edge: the line can end there only with the hyphen, which is
         // measured separately, so the plain edge only confirms overflow.
+        // The paragraph end must include the line-start reshape even when
+        // its final glyph or closing controls prohibit a break. Measure it
+        // once here rather than probing every prohibited position.
         let need_edge = if count_mode {
             limited_cut
         } else {
             !matches!(
                 unit.break_after,
                 BreakClass::Prohibited | BreakClass::Hyphen
-            ) || unit.shared_cluster.is_some() && !unit.first_line_cursor
+            ) || i + 1 == units.len()
+                || unit.shared_cluster.is_some() && !unit.first_line_cursor
                 || (!hangs && !overflowing && shared_extent > available)
         };
         // Once a fitting break is known, an `Allowed` opportunity whose shared
