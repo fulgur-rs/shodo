@@ -1,6 +1,7 @@
 # SHODO-1: unit spacing の保持メモリ削減
 
 2026-10-11。変更前は `94ac48c8a368eb7e421a26b710ebf8cc2a2b46bf`。
+測定した変更後のコードは `4f92a5ef71979173639d66f70c36d7cb1d4f8dfe` に保存した。
 SHODO-1 の最初の改善として、段落が保持する spacing 情報だけを圧縮した。
 公開 API、段落の幅変更による再利用、ページ高さ不足時の retry は維持する。
 測定値と条件の要約は [JSON](shodo-1-spacing-memory-2026-10-11.json) に保存した。
@@ -90,7 +91,7 @@ quick の単一比較なので速度改善を保証せず、残る日本語の�
 ## 再現
 
 リポジトリ直下で以下を実行する。依存はキャッシュ済み、元と同じ toolchain を使う。
-比較対象のブランチは今回のローカル実装を指す。計測が終わるまでソースを変更しない。
+比較対象は記録時のコミットに固定する。計測が終わるまでソースを変更しない。
 
 ```bash
 set -e
@@ -101,7 +102,7 @@ export RUSTC_WRAPPER=""
 unset CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER
 spacing_run=$(mktemp -d -p "$HOME/tmp" shodo-1-repro-XXXXXXXX)
 git worktree add --detach .worktrees/shodo-1-repro-before 94ac48c8a368eb7e421a26b710ebf8cc2a2b46bf
-git worktree add --detach .worktrees/shodo-1-repro-after perf/shodo-1-spacing
+git worktree add --detach .worktrees/shodo-1-repro-after 4f92a5ef71979173639d66f70c36d7cb1d4f8dfe
 for spacing_case in latin-long japanese-long combining-latin; do
   (cd .worktrees/shodo-1-repro-before
    CARGO_TARGET_DIR="$spacing_run/build-before" taskset -c 2 python tools/bench/run.py \
