@@ -40,7 +40,70 @@ pub(super) fn scan(
     let mut counted_through = units[start].text.start;
     let max_graphemes = max_graphemes.map(|limit| limit.max(1));
     let count_mode = max_graphemes.is_some();
+    // Break candidates after the latest verified break whose measurement
+    // waits until the line overflows, in line order.
+    let mut pending: std::collections::VecDeque<Deferred> = Default::default();
     let reason = loop {
+        // A line that ends here without overflowing still has to fit at its
+        // last opportunity, whose edge reshape may have been deferred. Box
+        // ends and bidi controls scanned after that opportunity belong to the
+        // cut (`pulls_after_break`), so the line still ends there logically.
+        let terminating = units.get(i).is_none_or(|unit| match unit.kind {
+            UnitKind::ForcedBreak => !count_mode,
+            UnitKind::BlockInInline { .. } => true,
+            _ => false,
+        });
+        if terminating
+            && let Some(last) = pending.back().map(Deferred::plain)
+            && last.end <= i
+            && (last.end..i).all(|at| super::pulls_after_break(data, at))
+            && !last.hangs
+        {
+            let (edge_delta, _) = super::windows::candidate(data, start, last.end, cx, sat);
+            if last.overflows(data, edge_delta, flags, options, available, sat) {
+                let last = pending.pop_back().expect("checked above");
+                if let Some(b) = settle(
+                    data,
+                    start,
+                    &mut pending,
+                    &mut first_hyphen,
+                    flags,
+                    options,
+                    available,
+                    cx,
+                    sat,
+                ) {
+                    last_break = Some(b);
+                }
+                if let Some((b, edge)) = last_break.take() {
+                    taken_hyphen = edge.then_some(b);
+                    widths.truncate(b - start);
+                    i = b;
+                    break BreakReason::Regular;
+                }
+                if let Some(b) = last_emergency {
+                    widths.truncate(b - start);
+                    i = b;
+                    break BreakReason::Emergency;
+                }
+                if let Some(b) = first_hyphen.take() {
+                    taken_hyphen = Some(b);
+                    widths.truncate(b - start);
+                    i = b;
+                    break BreakReason::Regular;
+                }
+                // The run overflows with no earlier break, so it ends here,
+                // hyphenated when that is possible.
+                if let Deferred::Hyphen(hyphen) = &last
+                    && hyphen
+                        .required(data, start, flags, options, cx, sat)
+                        .is_some()
+                {
+                    taken_hyphen = Some(i);
+                    break BreakReason::Regular;
+                }
+            }
+        }
         let Some(unit) = units.get(i) else {
             break BreakReason::End;
         };
@@ -130,15 +193,35 @@ pub(super) fn scan(
         // break opportunity. A `shared_cluster` unit's shared advance can
         // under-count a window that turns out unshapeable within budget
         // (the edge falls back to wider un-sliced glyphs), so those always
-        // get the real measurement.
+        // get the real measurement. A slice cut only to give the first line
+        // a resume cursor is not an end the normal set can take, so it
+        // defers that confirmation to the cluster's own last slice. A
+        // discretionary hyphen position is the same for its unhyphenated
+        // edge: the line can end there only with the hyphen, which is
+        // measured separately, so the plain edge only confirms overflow.
         let need_edge = if count_mode {
             limited_cut
         } else {
-            unit.break_after != BreakClass::Prohibited
-                || unit.shared_cluster.is_some()
+            !matches!(
+                unit.break_after,
+                BreakClass::Prohibited | BreakClass::Hyphen
+            ) || unit.shared_cluster.is_some() && !unit.first_line_cursor
                 || (!hangs && !overflowing && shared_extent > available)
         };
-        let (edge_delta, viable) = if need_edge {
+        // Once a fitting break is known, an `Allowed` opportunity whose shared
+        // advances fit only matters if no later one fits. With kerning fonts
+        // most word ends are unsafe to break, so measuring the edge reshape
+        // of every opportunity costs a shaping call per word. Defer it: when
+        // the line overflows, `settle` measures the deferred opportunities
+        // from the last one backwards and takes the first that really fits,
+        // like a browser that reshapes only the end of the line it chose.
+        let defer = !count_mode
+            && !overflowing
+            && last_break.is_some()
+            && unit.break_after == BreakClass::Allowed
+            && unit.shared_cluster.is_none()
+            && (hangs || shared_extent <= available);
+        let (edge_delta, viable) = if need_edge && !defer {
             super::windows::candidate(data, start, i + 1, cx, sat)
         } else {
             (LayoutUnit::ZERO, false)
@@ -162,6 +245,19 @@ pub(super) fn scan(
             extent
         };
         if !count_mode && !hangs && !overflowing && extent > available {
+            if let Some(b) = settle(
+                data,
+                start,
+                &mut pending,
+                &mut first_hyphen,
+                flags,
+                options,
+                available,
+                cx,
+                sat,
+            ) {
+                last_break = Some(b);
+            }
             if let Some((b, edge)) = last_break.take() {
                 taken_hyphen = edge.then_some(b);
                 widths.truncate(b - start);
@@ -214,6 +310,26 @@ pub(super) fn scan(
         let last = super::punctuation::last_edge(data, i);
         match unit.break_after {
             BreakClass::Mandatory => break BreakReason::Forced,
+            BreakClass::Allowed if defer => defer_candidate(
+                Deferred::Opportunity(Pending {
+                    end: i,
+                    hangs,
+                    shared_extent,
+                    required,
+                    summary: spacing.summary(Some(data)),
+                    last,
+                }),
+                data,
+                start,
+                &mut pending,
+                &mut last_break,
+                &mut first_hyphen,
+                flags,
+                options,
+                available,
+                cx,
+                sat,
+            ),
             BreakClass::Allowed if viable => {
                 if overflowing {
                     break BreakReason::Regular;
@@ -224,37 +340,48 @@ pub(super) fn scan(
                 ) <= available
                 {
                     last_break = Some((i, false));
+                    pending.clear();
                 }
             }
             BreakClass::Hyphen => {
-                if let Some(windows) = super::hyphen::line(data, start, i, cx, sat) {
-                    let summary = super::spacing::hyphen_summary(data, &spacing, i - 1, sat);
-                    let required = pos
-                        .add(summary.width(sat), sat)
-                        .sub(hanging, sat)
-                        .add(suffix, sat)
-                        .add(super::windows::cost(&windows, i, sat), sat);
-                    let required = required.add(ruby_delta, sat);
-                    let adjustment = super::punctuation::edges(
-                        data,
-                        summary,
-                        flags,
-                        false,
-                        Some(options),
-                        LayoutUnit::ZERO,
+                let hyphen = PendingHyphen {
+                    plain: Pending {
+                        end: i,
+                        hangs,
+                        shared_extent,
                         required,
-                        sat,
-                    );
-                    let required = required.sub(adjustment.removed(sat), sat);
-                    if overflowing {
+                        summary: spacing.summary(Some(data)),
+                        last,
+                    },
+                    end: i,
+                    pos,
+                    summary: super::spacing::hyphen_summary(data, &spacing, i - 1, sat),
+                    hanging,
+                    suffix,
+                    ruby_delta,
+                };
+                if overflowing {
+                    if hyphen
+                        .required(data, start, flags, options, cx, sat)
+                        .is_some()
+                    {
                         taken_hyphen = Some(i);
                         break BreakReason::Regular;
                     }
-                    if required <= available {
-                        last_break = Some((i, true));
-                    } else if first_hyphen.is_none() {
-                        first_hyphen = Some(i);
-                    }
+                } else {
+                    defer_candidate(
+                        Deferred::Hyphen(hyphen),
+                        data,
+                        start,
+                        &mut pending,
+                        &mut last_break,
+                        &mut first_hyphen,
+                        flags,
+                        options,
+                        available,
+                        cx,
+                        sat,
+                    );
                 }
             }
             BreakClass::Emergency if viable => {
@@ -329,6 +456,245 @@ pub(super) fn scan(
         sat,
     );
     result
+}
+
+/// An `Allowed` break opportunity whose edge reshape was deferred, with the
+/// shared-advance measurements the eager path would have combined with it.
+struct Pending {
+    /// Unit index the line would end at.
+    end: usize,
+    hangs: bool,
+    shared_extent: LayoutUnit,
+    /// The line's required width at `end` without the edge reshape delta.
+    required: LayoutUnit,
+    summary: super::spacing_summary::Summary,
+    last: bool,
+}
+
+impl Pending {
+    /// Whether the unit before `end` overflows once its edge delta is added.
+    fn overflows(
+        &self,
+        data: &ParagraphData,
+        edge_delta: LayoutUnit,
+        flags: u8,
+        options: &crate::style::LineOptions,
+        available: LayoutUnit,
+        sat: &mut Saturation,
+    ) -> bool {
+        let extent = self.shared_extent.add(edge_delta, sat);
+        !self.hangs
+            && extent > available
+            && extent.sub(
+                super::punctuation::edges(
+                    data,
+                    self.summary,
+                    flags,
+                    self.last,
+                    Some(options),
+                    LayoutUnit::ZERO,
+                    extent,
+                    sat,
+                )
+                .removed(sat),
+                sat,
+            ) > available
+    }
+
+    /// Whether the line can end at `end`, given the measured edge reshape.
+    fn fits(
+        &self,
+        data: &ParagraphData,
+        (edge_delta, viable): (LayoutUnit, bool),
+        flags: u8,
+        options: &crate::style::LineOptions,
+        available: LayoutUnit,
+        sat: &mut Saturation,
+    ) -> bool {
+        if !viable || self.overflows(data, edge_delta, flags, options, available, sat) {
+            return false;
+        }
+        let required = self.required.add(edge_delta, sat);
+        required.sub(
+            super::punctuation::edges(
+                data,
+                self.summary,
+                flags,
+                self.last,
+                Some(options),
+                LayoutUnit::ZERO,
+                required,
+                sat,
+            )
+            .removed(sat),
+            sat,
+        ) <= available
+    }
+}
+
+/// A break candidate whose measurement is deferred until the line overflows.
+enum Deferred {
+    Opportunity(Pending),
+    Hyphen(PendingHyphen),
+}
+
+impl Deferred {
+    /// The candidate's position as an unhyphenated line end.
+    fn plain(&self) -> &Pending {
+        match self {
+            Self::Opportunity(opportunity) => opportunity,
+            Self::Hyphen(hyphen) => &hyphen.plain,
+        }
+    }
+
+    /// The verified break this candidate gives, if it fits. A measurable
+    /// hyphen that does not fit is reported through `unfit_hyphen`.
+    #[allow(clippy::too_many_arguments)]
+    fn verify(
+        &self,
+        data: &ParagraphData,
+        start: usize,
+        unfit_hyphen: &mut Option<usize>,
+        flags: u8,
+        options: &crate::style::LineOptions,
+        available: LayoutUnit,
+        cx: &mut LayoutContext,
+        sat: &mut Saturation,
+    ) -> Option<(usize, bool)> {
+        match self {
+            Self::Opportunity(opportunity) => {
+                let measured = super::windows::candidate(data, start, opportunity.end, cx, sat);
+                opportunity
+                    .fits(data, measured, flags, options, available, sat)
+                    .then_some((opportunity.end, false))
+            }
+            Self::Hyphen(hyphen) => {
+                let required = hyphen.required(data, start, flags, options, cx, sat)?;
+                if required <= available {
+                    return Some((hyphen.end, true));
+                }
+                *unfit_hyphen = Some(hyphen.end);
+                None
+            }
+        }
+    }
+}
+
+/// Deferred candidates kept per scan before the oldest is measured.
+pub(super) const DEFERRED_MAX: usize = 256;
+
+/// Defer a candidate. On very wide lines, keep the retained state bounded by
+/// measuring the oldest candidate now; it is earlier than every candidate
+/// still deferred, so a later fitting one still takes precedence.
+#[allow(clippy::too_many_arguments)]
+fn defer_candidate(
+    candidate: Deferred,
+    data: &ParagraphData,
+    start: usize,
+    pending: &mut std::collections::VecDeque<Deferred>,
+    last_break: &mut Option<(usize, bool)>,
+    first_hyphen: &mut Option<usize>,
+    flags: u8,
+    options: &crate::style::LineOptions,
+    available: LayoutUnit,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) {
+    if pending.len() == DEFERRED_MAX
+        && let Some(oldest) = pending.pop_front()
+    {
+        let mut unfit = None;
+        if let Some(b) = oldest.verify(data, start, &mut unfit, flags, options, available, cx, sat)
+        {
+            *last_break = Some(b);
+        }
+        if first_hyphen.is_none() {
+            *first_hyphen = unfit;
+        }
+    }
+    pending.push_back(candidate);
+}
+
+/// Measure deferred candidates from the last one backwards and return the
+/// first that fits, which is the last fitting one in line order. All of them
+/// are consumed. `None` keeps the verified break found before them; when no
+/// hyphen fits, the first measurable one becomes the overflow fallback, as an
+/// eager scan would have recorded it.
+#[allow(clippy::too_many_arguments)]
+fn settle(
+    data: &ParagraphData,
+    start: usize,
+    pending: &mut std::collections::VecDeque<Deferred>,
+    first_hyphen: &mut Option<usize>,
+    flags: u8,
+    options: &crate::style::LineOptions,
+    available: LayoutUnit,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> Option<(usize, bool)> {
+    let mut unfit = None;
+    while let Some(candidate) = pending.pop_back() {
+        if let Some(b) =
+            candidate.verify(data, start, &mut unfit, flags, options, available, cx, sat)
+        {
+            pending.clear();
+            return Some(b);
+        }
+    }
+    if first_hyphen.is_none() {
+        *first_hyphen = unfit;
+    }
+    None
+}
+
+/// A discretionary hyphen break candidate, with the scan state needed to
+/// measure it later. Shaping the hyphenated edge is the costly part, and a
+/// line can only end at its last fitting candidate, so the measurement waits
+/// until the line overflows.
+struct PendingHyphen {
+    /// The same position ending without a hyphen. Its edge is measured only
+    /// when the line ends there, where it must still fit.
+    plain: Pending,
+    end: usize,
+    pos: LayoutUnit,
+    summary: super::spacing_summary::Summary,
+    hanging: LayoutUnit,
+    suffix: LayoutUnit,
+    ruby_delta: LayoutUnit,
+}
+
+impl PendingHyphen {
+    /// The width needed to end the line here with a hyphen, or `None` when
+    /// the hyphenated edge cannot be shaped.
+    fn required(
+        &self,
+        data: &ParagraphData,
+        start: usize,
+        flags: u8,
+        options: &crate::style::LineOptions,
+        cx: &mut LayoutContext,
+        sat: &mut Saturation,
+    ) -> Option<LayoutUnit> {
+        let windows = super::hyphen::line(data, start, self.end, cx, sat)?;
+        let required = self
+            .pos
+            .add(self.summary.width(sat), sat)
+            .sub(self.hanging, sat)
+            .add(self.suffix, sat)
+            .add(super::windows::cost(&windows, self.end, sat), sat);
+        let required = required.add(self.ruby_delta, sat);
+        let adjustment = super::punctuation::edges(
+            data,
+            self.summary,
+            flags,
+            false,
+            Some(options),
+            LayoutUnit::ZERO,
+            required,
+            sat,
+        );
+        Some(required.sub(adjustment.removed(sat), sat))
+    }
 }
 
 /// A continuation inside a shaping cluster must use its own exact prefix

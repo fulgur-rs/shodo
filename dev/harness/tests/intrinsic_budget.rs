@@ -1,7 +1,7 @@
 use shodo::limits::Limits;
 use shodo::node::{NodeId, TextSource};
-use shodo::style::{FontFamily, LineOptions, ParagraphStyle, WordBreak};
-use shodo::{AtomicIntrinsics, AtomicSizes, LayoutContext, Paragraph, ParagraphBuilder};
+use shodo::style::{FontFamily, LineOptions, ParagraphStyle};
+use shodo::{AtomicIntrinsics, LayoutContext, Paragraph, ParagraphBuilder};
 
 fn latin_intrinsic_paragraph(text: &str, limits: &Limits, first_line: bool) -> Paragraph {
     let fonts = shodo_fixtures::load_fonts(limits).unwrap();
@@ -47,28 +47,24 @@ fn intrinsic_reshape_budget_does_not_accumulate_between_calls() {
     }
 }
 
+/// Line layout defers the edge reshapes of break candidates, so an ordinary
+/// line no longer exhausts the per-operation budget. A first-line intrinsic
+/// pass under a small window cap still does; the next operation must start
+/// with a fresh budget.
 #[test]
-fn intrinsic_reshape_budget_is_independent_of_previous_line_layout() {
+fn intrinsic_reshape_budget_is_independent_of_previous_operation() {
     let mut cx = LayoutContext::new();
-    let limits = Limits::default();
-    let fonts = shodo_fixtures::load_fonts(&limits).unwrap();
-    let mut style = ParagraphStyle::default();
-    style.root.font_families = vec![FontFamily::Named("Shodo Fixture Arabic".into())];
-    style.root.font_size = 16.0;
-    style.root.word_break = WordBreak::BreakAll;
-    let text = vec!["مرحبا بالعالم. الكتابة العربية جميلة،"; 24].join(" ");
-    let mut b = ParagraphBuilder::new(&style, &limits);
-    b.push_text(TextSource::Generated { node: NodeId(2) }, &text);
-    let previous = b
-        .build(&mut LayoutContext::new(), &fonts.collection)
-        .unwrap();
-    let lines = previous.break_all(
+    let limits = Limits {
+        max_reshape_window_bytes: Some(16),
+        ..Default::default()
+    };
+    let text = format!("{} ", LATIN_SPACING).repeat(32);
+    let previous = latin_intrinsic_paragraph(&text, &limits, true);
+    previous.intrinsic_sizes(
         &mut cx,
         &LineOptions::default(),
-        200_000.0,
-        &AtomicSizes::EMPTY,
+        &AtomicIntrinsics::default(),
     );
-    assert!(!lines.is_empty());
     let warnings = cx.take_warnings();
     assert!(
         warnings

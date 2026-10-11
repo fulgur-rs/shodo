@@ -16,6 +16,8 @@ pub struct LayoutContext {
     pub(crate) completed: Option<Box<crate::line::completed::CompletedLine>>,
     pub(crate) ruby_ranges: crate::line::range::RangeCache,
     pub(crate) edge_shapes: crate::line::windows::EdgeShapeCache,
+    /// Prepared font instances of the most recent paragraph's edge windows.
+    pub(crate) window_instances: crate::shape::WindowInstances,
     /// Bytes of edge reshape windows requested by the current `next_line` or
     /// `intrinsic_sizes` call. First-line intrinsic passes share one budget.
     pub(crate) edge_reshape_spent: u64,
@@ -219,6 +221,7 @@ impl LayoutContext {
         self.ruby_ranges = Default::default();
         self.ruby_memo = Default::default();
         self.edge_shapes.clear();
+        self.window_instances.clear();
         if bytes == 0 || self.scratch_bytes > bytes {
             self.scratch = None;
             self.scratch_bytes = 0;

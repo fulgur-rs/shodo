@@ -77,6 +77,9 @@ pub(crate) struct Unit {
     pub(crate) text: Range<u32>,
     pub(crate) break_after: BreakClass,
     pub(crate) emergency_min_content: bool,
+    /// A slice ending at a cut that only exists so a first line from the
+    /// alternate style set can resume here; normal lines never end at it.
+    pub(crate) first_line_cursor: bool,
     pub(crate) level: u8,
     /// Innermost inline box containing the unit (for `Open`/`Close`, the
     /// box's parent).
@@ -157,6 +160,7 @@ pub(crate) fn build_units(
                 text: item.text.clone(),
                 break_after,
                 emergency_min_content: false,
+                first_line_cursor: false,
                 level: base_level,
                 parent_box,
             });
@@ -186,6 +190,7 @@ pub(crate) fn build_units(
                             text: run.text.clone(),
                             break_after: breaks.at(run.text.end).class,
                             emergency_min_content: breaks.at(run.text.end).min_content,
+                            first_line_cursor: false,
                             level: base_level,
                             parent_box,
                         });
@@ -242,6 +247,7 @@ pub(crate) fn build_units(
                                 text: cluster..end,
                                 break_after: breaks.at(end).class,
                                 emergency_min_content: breaks.at(end).min_content,
+                                first_line_cursor: false,
                                 level: base_level,
                                 parent_box,
                             });
@@ -288,6 +294,7 @@ pub(crate) fn build_units(
                     text: item.text.clone(),
                     break_after: breaks.at(item.text.end).class,
                     emergency_min_content: breaks.at(item.text.end).min_content,
+                    first_line_cursor: false,
                     level: base_level,
                     parent_box,
                 });

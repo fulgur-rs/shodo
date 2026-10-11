@@ -17,6 +17,7 @@ pub(crate) struct EdgeOverlay {
 /// its shared glyphs. Prefix differences come from actual bounded shapes.
 pub(crate) fn initialize_slices(
     data: &mut crate::paragraph::ParagraphData,
+    first_line_cuts: Option<&[u32]>,
     cx: &mut LayoutContext,
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
@@ -31,11 +32,12 @@ pub(crate) fn initialize_slices(
         }
     }
     let mut offsets: Vec<_> = markers.iter().map(|(_, u)| u.text.start).collect();
-    if data.style.first_line.is_some() {
+    let marker_offsets = first_line_cuts.map(|_| offsets.clone());
+    if let Some(cuts) = first_line_cuts {
         // The alternate line may end within a normal-set ligature even if
         // normal CSS forbids a soft break there. These are cursor slices,
         // and retain the normal set's original break class.
-        offsets.extend(data.breaks.graphemes.iter().copied());
+        offsets.extend(cuts.iter().copied());
         offsets.sort_unstable();
     }
     offsets.dedup();
@@ -154,6 +156,10 @@ pub(crate) fn initialize_slices(
             slice.text = start..boundary.offset;
             slice.break_after = boundary.class;
             slice.emergency_min_content = boundary.min_content;
+            slice.first_line_cursor = boundary.class == BreakClass::Prohibited
+                && marker_offsets
+                    .as_ref()
+                    .is_some_and(|m| m.binary_search(&boundary.offset).is_err());
             slice.unsafe_to_break = true;
             slice.unsafe_to_concat |= start > unit.text.start;
             units.push((i, slice));
