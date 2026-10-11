@@ -118,6 +118,14 @@ impl Summary {
     }
 
     pub(super) fn join(self, other: Self, data: Option<&ParagraphData>) -> Self {
+        let boundary = |d: &ParagraphData, a: Edge, b: Edge| {
+            let blocked = self.after || other.before;
+            let (right, left) = super::punctuation::boundary(d, a, b, blocked);
+            let autospace_blocked = blocked || self.autospace_after || other.autospace_before;
+            super::autospace::gap(d, a, b, autospace_blocked)
+                - i64::from(right.raw())
+                - i64::from(left.raw())
+        };
         Self {
             first: self.first.or(other.first),
             last: other.last.or(self.last),
@@ -126,13 +134,17 @@ impl Summary {
                 + self.last.zip(other.first).map_or(0, |(a, b)| {
                     gap(a, b)
                         + data.map_or(0, |d| {
-                            let blocked = self.after || other.before;
-                            let (right, left) = super::punctuation::boundary(d, a, b, blocked);
-                            let autospace_blocked =
-                                blocked || self.autospace_after || other.autospace_before;
-                            super::autospace::gap(d, a, b, autospace_blocked)
-                                - i64::from(right.raw())
-                                - i64::from(left.raw())
+                            // Without spacing, `spacing::needed` has checked
+                            // that no unit edge has an ideograph class or a
+                            // punctuation blank that a pair could use, and
+                            // that there are no autospace spaces, so the
+                            // boundary term is zero.
+                            if d.needs_spacing {
+                                boundary(d, a, b)
+                            } else {
+                                debug_assert_eq!(boundary(d, a, b), 0);
+                                0
+                            }
                         })
                 }),
             before: if self.first.is_some() {

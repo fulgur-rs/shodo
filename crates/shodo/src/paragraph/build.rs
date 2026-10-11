@@ -792,7 +792,7 @@ fn build_data(
         punctuation: Vec::new(),
         last_content_unit: None,
         internal_autospace_gaps: Vec::new(),
-        needs_spacing: false,
+        needs_spacing: true,
         spacing_tree: Default::default(),
         glyphs,
         clusters: Vec::new(),
