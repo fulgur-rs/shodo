@@ -3,6 +3,7 @@
 2026-10-12。変更前の実装は `68e13e27ed1fec40bc184cd0e08e873c632c02ae`。
 初回修正の実装・性能測定対象は `87397ff355950407add5adda3ed5da1702add89b`。
 PRレビュー後の追加修正は `85303f0d0dba1ba84606cbfe7532c7a70d01e61c` に保存した。
+閉じ余白の句読点barrierを保持する最終修正は `20727f77ba96c6d91ae89797e8fc2e31b4d5e6f7`。
 測定結果と条件の集計は [JSON](shodo-15-paragraph-end-2026-10-12.json) に保存した。
 
 ## 再現と原因
@@ -182,3 +183,29 @@ cargo +stable test --offline --release -p shodo --lib line::tests
 PRの最終コミットのRust 1.89・Wasmを含む検証はGitHubのCIで確認する。
 追加修正の再現条件・結果を本記録とJSONに保存し、診断プログラム、生ログ、
 隔離ビルド領域、使い捨てworktreeは作業終了時に片付ける。
+
+### 閉じ余白と末尾空白の間にある句読点barrier
+
+`ee6a3e84f9bba54d098f04ce8ade67ab3a8a4a9b` の
+[追加レビュー指摘](https://github.com/fulgur-rs/shodo/pull/289#discussion_r4243744116)を再現した。
+固定LatinとCJKフォント、16px、RTL override内の`VAVAVAVAVAVA`の後に、
+別の通常方向インライン内の`,`（inline-end padding 1px・border 0.5px）、
+外側の通常空白を置く。本文の改行を許可し、Collapse、
+`hanging_punctuation.force_end=true`・`last=true` とすると、
+幅24.3125pxで最終`End`行`13..20`が24.953125pxとなった。
+
+末尾空白の可視範囲を`trailing_start`で求めると、透明なCloseも範囲から除かれる。
+描画側の`trailing().0`は空白位置を境界にするため、空白直前のCloseのbarrierを保持する。
+走査でも同じ境界を使い、描画時に阻止される句読点のぶら下げ・詰めを幅判定で
+許可しないようにした。最終unitがhangableである分岐なので、未追加のそのunitを
+除く既存widthsで`trailing(data, start, i, &widths, sat).0`を求めても同じ境界になる。
+
+`paragraph_end_keeps_closing_edges_before_hanging_whitespace` は、句読点`、`/`,`/`)`、
+Collapse/Preserve、ぶら下げの有無、幅7種類の84ケースで、全行が指定幅以下、
+最終行がEndで全文を覆い、警告がないことを確認する。修正前の失敗を確認した。
+修正後の行走査19テスト、workspace 1,775件、no-default-features 1,237件、
+complex-scriptsのみ1,239件が成功（全体はいずれも0 failed、9 ignored）。
+整形・diff check、Clippy・rustdoc warnings-as-errorsも成功。
+snapshot全46件match、partial=false、更新なし、changed pixels=0。
+静的レビューにCritical / Important / Minor指摘なし。実測性能はこの追加修正後も
+再計測しておらず、上記性能表の対象コミットは変えない。

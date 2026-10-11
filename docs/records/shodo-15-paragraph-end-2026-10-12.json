@@ -1608,5 +1608,115 @@
       "minor": "Natural-width assertion added to detect excess wrapping from double-counted closing edges."
     },
     "performance_note": "Timing and allocation were not remeasured after review followup. Original performance results remain pinned to 87397ff355950407add5adda3ed5da1702add89b."
+  },
+  "closing_barrier_followup": {
+    "reviewed_revision": "ee6a3e84f9bba54d098f04ce8ade67ab3a8a4a9b",
+    "fixed_revision": "20727f77ba96c6d91ae89797e8fc2e31b4d5e6f7",
+    "comment": "https://github.com/fulgur-rs/shodo/pull/289#discussion_r4243744116",
+    "setup": "Fixed Latin and CJK fonts, 16px. RTL override VAVAVAVAVAVA with zero edges, then separate LTR comma inline with padding.inline_end=1px and border.inline_end=0.5px, then outer ordinary space. All text breaks allowed; WhiteSpaceCollapse::Collapse; hanging.force_end and hanging.last enabled.",
+    "baseline_failure": {
+      "available_px": 24.3125,
+      "range": [
+        13,
+        20
+      ],
+      "reason": "End",
+      "inline_size_px": 24.953125
+    },
+    "fix": "Use whitespace::trailing(data,start,i,&widths,sat).0 in the final-hanging-whitespace branch, retaining the same closing-edge barriers as materialization.",
+    "regression": {
+      "test": "line::tests::paragraph_end_keeps_closing_edges_before_hanging_whitespace",
+      "cases": 84,
+      "punctuation": [
+        "、",
+        ",",
+        ")"
+      ],
+      "collapse": [
+        "Collapse",
+        "Preserve"
+      ],
+      "hanging": [
+        false,
+        true
+      ],
+      "widths_px": [
+        24.3125,
+        24.9375,
+        24.953125,
+        28.125,
+        28.625,
+        29.875,
+        48.0
+      ]
+    },
+    "checks": [
+      {
+        "name": "fmt",
+        "command": "cargo +stable fmt --all -- --check",
+        "exit_code": 0,
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "workspace",
+        "command": "cargo +stable test --offline --release --workspace --quiet",
+        "exit_code": 0,
+        "passed": 1775,
+        "failed": 0,
+        "ignored": 9
+      },
+      {
+        "name": "no-default",
+        "command": "cargo +stable test --offline --release -p shodo --no-default-features --quiet",
+        "exit_code": 0,
+        "passed": 1237,
+        "failed": 0,
+        "ignored": 9
+      },
+      {
+        "name": "complex-only",
+        "command": "cargo +stable test --offline --release -p shodo --no-default-features --features complex-scripts --quiet",
+        "exit_code": 0,
+        "passed": 1239,
+        "failed": 0,
+        "ignored": 9
+      },
+      {
+        "name": "clippy",
+        "command": "cargo +stable clippy --offline --workspace --all-targets -- -D warnings",
+        "exit_code": 0,
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "docs",
+        "command": "cargo +stable doc --offline --workspace --no-deps",
+        "exit_code": 0,
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "line_tests": {
+      "passed": 19,
+      "failed": 0,
+      "ignored": 0
+    },
+    "snapshot": {
+      "cases": 46,
+      "passed": true,
+      "partial": false,
+      "updated": false,
+      "changed_pixels": 0
+    },
+    "review": {
+      "critical": 0,
+      "important": 0,
+      "minor": 0
+    },
+    "performance_note": "Not remeasured. Original timing and allocation results remain pinned to 87397ff355950407add5adda3ed5da1702add89b."
   }
 }
