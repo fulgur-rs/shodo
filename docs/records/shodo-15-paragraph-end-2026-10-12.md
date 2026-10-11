@@ -1,7 +1,8 @@
 # SHODO-15: 段落末尾で行頭の再シェープによる幅増加を確認する
 
 2026-10-12。変更前の実装は `68e13e27ed1fec40bc184cd0e08e873c632c02ae`。
-変更後の実装は `87397ff355950407add5adda3ed5da1702add89b` に保存した。
+初回修正の実装・性能測定対象は `87397ff355950407add5adda3ed5da1702add89b`。
+PRレビュー後の追加修正は `85303f0d0dba1ba84606cbfe7532c7a70d01e61c` に保存した。
 測定結果と条件の集計は [JSON](shodo-15-paragraph-end-2026-10-12.json) に保存した。
 
 ## 再現と原因
@@ -51,7 +52,7 @@ quick は修正後に2回実行した。時間計測と allocation 計測は別 
 この通常コーパスの出力一致は、意図的に変化する上記の RTL 再現入力を含まない。
 数値は単一マシンでの測定結果であり、一般的な速度改善・無回帰を保証しない。
 
-## 検証結果
+## 初回修正の検証結果
 
 - 整形、Clippy `--workspace --all-targets -- -D warnings`、rustdoc warnings-as-errors: 成功。
 - `cargo +stable test --offline --release --workspace --quiet`: 1,771 passed、0 failed、9 ignored。
@@ -135,3 +136,49 @@ SHODO_BENCH_CASE=latin-long SHODO_BENCH_OUTPUT="$paragraph_run/long-before-1" \
 `$paragraph_run` の条件・結果・判断を正式な記録に保存してから、今回作成した
 そのディレクトリだけを削除する。この実装作業の生データ、ログ、ビルド、
 使い捨て worktree も要約保存後に片付け、実装はローカルブランチに保持した。
+
+## PR #289 レビュー後の追加修正
+
+レビュー対象は `21d47a62974b2703b83c5a35c77ad455b58140b0`。
+以下の2件を固定Latinフォント16px、RTL `BidiOverride` 内の
+`VAVAVAVAVAVA` と本文の改行許可で再現し、回帰テストの失敗を確認した。
+
+- [末尾空白の指摘](https://github.com/fulgur-rs/shodo/pull/289#discussion_r4243653172):
+  ボックスの外に通常の空白を追加すると、幅28.125pxで `End` 行 `12..19` が
+  28.75pxになる。最後の空白・タブをぶら下げても、可視本文の行頭補正は
+  幅判定に含める。句読点の補正には末尾空白を除いた可視範囲を使い、既存の
+  日本語の句読点と保存空白のぶら下げも維持する。
+- [閉じ余白の指摘](https://github.com/fulgur-rs/shodo/pull/289#discussion_r4243653176):
+  inline-end padding 1px・border 0.5px の閉じボックスの外に U+200B を追加すると、
+  幅19.171875pxで `Regular` 行 `13..18` が20.671875pxになる。候補を選ぶ際に
+  同じ行へ取り込む閉じ要素の実幅も予約し、`Clone` の装飾幅は取り込み後の
+  境界で求める。即時・遅延・emergency・hyphen候補に同じ補正を渡す。
+
+追加した3テストは、末尾空白・タブとCollapse/Preserveの16ケース、
+非ゼロの閉じ余白と入れ子の14ケース、外側U+200BとSlice/Cloneの8ケースを検証する。
+Slice/Clone双方で、自然な1行の実測幅を指定幅にしても1行のままで本文全体を
+含むことを確認し、閉じ余白の二重計上による過剰な折り返しも検出する。
+静的レビューではCritical / Important指摘なし。上記の自然幅の検証はMinor指摘を反映した。
+
+追加修正の検証結果（Rust/Cargo 1.97.1、隔離target、release debug 0・incremental無効）:
+
+- workspace: 1,774 passed、0 failed、9 ignored。
+- no-default-features: 1,236 passed、0 failed、9 ignored。
+- complex-scriptsのみ: 1,238 passed、0 failed、9 ignored。
+- 整形、Clippy全workspace・all-targetsのwarnings-as-errors、rustdoc warnings-as-errors: 成功。
+- snapshot全46件match、partial=false、更新なし、changed pixels=0。
+- 自然幅の検証を追加後、行走査の18テストと整形・diff checkを再確認して成功。
+  再シェープの回数・予算を制限する既存テストも含む。
+
+再現・回帰確認は上記の環境変数で次を実行する。
+
+```bash
+cargo +stable test --offline --release -p shodo --lib line::tests::paragraph_end_checks_
+cargo +stable test --offline --release -p shodo --lib line::tests
+```
+
+追加修正後の時間・allocationは再測定していない。本記録の性能表・digest比較は
+初回修正コミットのみの結果であり、最終修正の速度やallocationを保証しない。
+PRの最終コミットのRust 1.89・Wasmを含む検証はGitHubのCIで確認する。
+追加修正の再現条件・結果を本記録とJSONに保存し、診断プログラム、生ログ、
+隔離ビルド領域、使い捨てworktreeは作業終了時に片付ける。

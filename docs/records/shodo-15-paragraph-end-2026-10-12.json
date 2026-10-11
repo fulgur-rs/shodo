@@ -1502,5 +1502,111 @@
       }
     ],
     "interpretation": "Scale 1 was close in both longer pairs. Scale 64 had an unexplained 2.245x result in run 4; an isolated repeat was 1.022x. This record does not establish general performance non-regression."
+  },
+  "review_followup": {
+    "pull_request": "https://github.com/fulgur-rs/shodo/pull/289",
+    "reviewed_revision": "21d47a62974b2703b83c5a35c77ad455b58140b0",
+    "fixed_revision": "85303f0d0dba1ba84606cbfe7532c7a70d01e61c",
+    "reproductions": [
+      {
+        "comment_id": 4243653172,
+        "test": "line::tests::paragraph_end_checks_visible_width_before_hanging_whitespace",
+        "setup": "Fixed Latin font, 16px, RTL BidiOverride VAVAVAVAVAVA with allowed text breaks, trailing outer ordinary space, WhiteSpaceCollapse::Collapse",
+        "available_px": 28.125,
+        "baseline_failure": "End line 12..19 is 28.75px wide",
+        "cases": 16
+      },
+      {
+        "comment_id": 4243653176,
+        "test": "line::tests::paragraph_end_checks_closing_edges_before_zero_width_space",
+        "setup": "Same RTL text, inline-end padding 1px and border 0.5px, trailing outer U+200B",
+        "available_px": 19.171875,
+        "baseline_failure": "Regular line 13..18 is 20.671875px wide",
+        "cases": 8,
+        "decoration": [
+          "Slice",
+          "Clone"
+        ],
+        "natural_width_assertion": "One unwrapped line must remain one line covering the full text when available equals its measured inline_size."
+      }
+    ],
+    "additional_regression": {
+      "test": "line::tests::paragraph_end_checks_pulled_closing_edge_widths",
+      "cases": 14,
+      "nested_levels": [
+        1,
+        3
+      ],
+      "trailing": "Inner collapsed ordinary space",
+      "padding_inline_end_px": 1,
+      "border_inline_end_px": 0.5
+    },
+    "checks": [
+      {
+        "name": "fmt",
+        "exit_code": 0,
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "workspace",
+        "exit_code": 0,
+        "passed": 1774,
+        "failed": 0,
+        "ignored": 9
+      },
+      {
+        "name": "no-default",
+        "exit_code": 0,
+        "passed": 1236,
+        "failed": 0,
+        "ignored": 9
+      },
+      {
+        "name": "complex-only",
+        "exit_code": 0,
+        "passed": 1238,
+        "failed": 0,
+        "ignored": 9
+      },
+      {
+        "name": "clippy",
+        "exit_code": 0,
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "docs",
+        "exit_code": 0,
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "snapshot": {
+      "cases": 46,
+      "passed": true,
+      "partial": false,
+      "updated": false,
+      "statuses": [
+        "match"
+      ],
+      "changed_pixels": 0
+    },
+    "final_focused_check": {
+      "command": "cargo +stable test --offline --release -p shodo --lib line::tests --quiet",
+      "passed": 18,
+      "failed": 0,
+      "ignored": 0,
+      "note": "After adding the Slice/Clone natural-width assertion; fmt and git diff --check also passed."
+    },
+    "review": {
+      "critical": 0,
+      "important": 0,
+      "minor": "Natural-width assertion added to detect excess wrapping from double-counted closing edges."
+    },
+    "performance_note": "Timing and allocation were not remeasured after review followup. Original performance results remain pinned to 87397ff355950407add5adda3ed5da1702add89b."
   }
 }
