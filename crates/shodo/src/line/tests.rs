@@ -929,3 +929,79 @@ fn paragraph_end_checks_closing_edges_before_zero_width_space() {
         }
     }
 }
+
+#[test]
+fn paragraph_end_keeps_closing_edges_before_hanging_whitespace() {
+    let fonts = final_review_fonts();
+    for (bytes, family) in [
+        (crate::test_support::fonts::LATIN, "Shodo Fixture Latin"),
+        (crate::test_support::fonts::CJK, "Shodo Fixture CJK"),
+    ] {
+        fonts
+            .register_face(
+                bytes.to_vec(),
+                0,
+                crate::font::FontFaceDescriptor {
+                    family: family.into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+    for text in ["、", ",", ")"] {
+        for collapse in [
+            crate::style::WhiteSpaceCollapse::Collapse,
+            crate::style::WhiteSpaceCollapse::Preserve,
+        ] {
+            let mut style = ParagraphStyle::default();
+            style.root.font_families = vec![
+                crate::style::FontFamily::Named("Shodo Fixture Latin".into()),
+                crate::style::FontFamily::Named("Shodo Fixture CJK".into()),
+            ];
+            style.root.font_size = 16.0;
+            style.root.white_space_collapse = collapse;
+            let mut rtl = style.root.clone();
+            rtl.direction = crate::geometry::Direction::Rtl;
+            rtl.unicode_bidi = crate::style::UnicodeBidi::BidiOverride;
+            let mut edges = InlineEdges::default();
+            edges.padding.inline_end = 1.0;
+            edges.border.inline_end = 0.5;
+            let mut b = ParagraphBuilder::new(&style, &Limits::default());
+            b.with_line_break_override(|_| crate::LineBreakOverride::Allow);
+            b.open_inline(NodeId(2), &rtl, InlineEdges::default());
+            b.push_text(TextSource::Generated { node: NodeId(3) }, "VAVAVAVAVAVA");
+            b.close_inline();
+            b.open_inline(NodeId(5), &style.root, edges);
+            b.push_text(TextSource::Generated { node: NodeId(6) }, text);
+            b.close_inline();
+            b.push_text(TextSource::Generated { node: NodeId(4) }, " ");
+            let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+            for force_end in [false, true] {
+                let options = LineOptions {
+                    hanging_punctuation: crate::style::HangingPunctuation {
+                        force_end,
+                        last: force_end,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+                for width in [24.3125, 24.9375, 24.953125, 28.125, 28.625, 29.875, 48.0] {
+                    let mut cx = LayoutContext::new();
+                    let lines = p.break_all(&mut cx, &options, width, &AtomicSizes::EMPTY);
+                    for line in &lines {
+                        assert!(
+                            line.inline_size() <= width,
+                            "{text:?} {collapse:?} force_end={force_end} width={width}: {:?} ({:?}) is {}px wide",
+                            line.text_range(),
+                            line.break_reason(),
+                            line.inline_size()
+                        );
+                    }
+                    assert_eq!(lines.last().unwrap().break_reason(), BreakReason::End);
+                    assert_eq!(lines.last().unwrap().text_range().end, p.text().len());
+                    assert!(cx.take_warnings().is_empty());
+                }
+            }
+        }
+    }
+}

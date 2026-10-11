@@ -274,9 +274,11 @@ pub(super) fn scan(
         let extent =
             if !count_mode && (!hangs || paragraph_end) && !overflowing && extent > available {
                 let summary = if paragraph_end && hangs {
-                    // Materialization excludes trailing spaces before selecting
-                    // the punctuation edge. Use the same visible range here.
-                    let end = super::whitespace::trailing_start(data, start, i + 1);
+                    // The current final unit hangs, so the prefix's first
+                    // hanging space is also the full line's hang_start. Keep
+                    // intervening closing edges in the summary, as prepare
+                    // does during materialization, so they still block hanging.
+                    let (end, _) = super::whitespace::trailing(data, start, i, &widths, sat);
                     let mut cursor = super::spacing_summary::Cursor::default();
                     for at in start..end {
                         super::spacing::push(data, &mut cursor, at);
