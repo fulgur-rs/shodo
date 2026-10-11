@@ -165,11 +165,38 @@ pub(super) fn scan(
         let tracking = spacing.summary(Some(data)).width(sat);
         // Fit excludes eligible trailing space/tab advances (CSS Text 3 §4.1.2).
         let hangs = super::whitespace::fits_hanging(data, i);
-        let suffix = super::decoration::width(data, i + 1, false, sat);
+        // A selected break also pulls adjacent closing units. Reserve their
+        // actual edges now, and measure Clone decoration after them so those
+        // edges are not counted twice. The candidate summary includes their
+        // punctuation-hanging barriers, while the live scan stays unchanged.
+        let mut break_end = i + 1;
+        let mut pulled = LayoutUnit::ZERO;
+        let mut candidate_spacing = None;
+        if !count_mode
+            && matches!(
+                unit.break_after,
+                BreakClass::Allowed | BreakClass::Emergency | BreakClass::Hyphen
+            )
+            && units.get(break_end).is_some()
+            && super::pulls_after_break(data, break_end)
+        {
+            let mut cursor = spacing.clone();
+            while units.get(break_end).is_some() && super::pulls_after_break(data, break_end) {
+                pulled = pulled.add(
+                    unit_width(data, &units[break_end], LayoutUnit::ZERO, atomics, cx, sat),
+                    sat,
+                );
+                super::spacing::push(data, &mut cursor, break_end);
+                break_end += 1;
+            }
+            candidate_spacing = Some(cursor);
+        }
+        let suffix = pulled.add(super::decoration::width(data, break_end, false, sat), sat);
         let ruby_delta =
             crate::ruby::measure::candidate_adjustment(data, start, i + 1, atomics, cx, sat);
         let transparent =
             super::whitespace::transparent(data, i) && !matches!(unit.kind, UnitKind::ForcedBreak);
+        let paragraph_end = i + 1 == units.len();
         let shared_extent = pos
             .add(w, sat)
             .add(tracking, sat)
@@ -183,6 +210,16 @@ pub(super) fn scan(
                 },
                 sat,
             );
+        // A hanging final space or tab must not hide overflow of the visible
+        // content. Its advance and trailing tracking are excluded, while the
+        // line-start reshape below still contributes to the fit width.
+        let shared_extent = if paragraph_end && hangs {
+            shared_extent
+                .sub(hanging.add(w, sat), sat)
+                .sub(tracking.sub(kept_spacing, sat), sat)
+        } else {
+            shared_extent
+        };
         // The line cannot end at a `Prohibited` position, so the only
         // reason to pay for a real edge-window reshape there is to confirm
         // genuine overflow of the current unbreakable run. Skip it while
@@ -208,7 +245,7 @@ pub(super) fn scan(
             !matches!(
                 unit.break_after,
                 BreakClass::Prohibited | BreakClass::Hyphen
-            ) || i + 1 == units.len()
+            ) || paragraph_end
                 || unit.shared_cluster.is_some() && !unit.first_line_cursor
                 || (!hangs && !overflowing && shared_extent > available)
         };
@@ -220,6 +257,7 @@ pub(super) fn scan(
         // from the last one backwards and takes the first that really fits,
         // like a browser that reshapes only the end of the line it chose.
         let defer = !count_mode
+            && !paragraph_end
             && !overflowing
             && last_break.is_some()
             && unit.break_after == BreakClass::Allowed
@@ -233,22 +271,38 @@ pub(super) fn scan(
         let extent = shared_extent.add(edge_delta, sat);
         // Edge adjustments only ever remove width (see `EdgeAdjustment`), so a
         // candidate that already fits cannot start to overflow.
-        let extent = if !count_mode && !hangs && !overflowing && extent > available {
-            let adjustment = super::punctuation::edges(
-                data,
-                spacing.summary(Some(data)),
-                flags,
-                super::punctuation::last_edge(data, i + 1),
-                Some(options),
-                LayoutUnit::ZERO,
-                extent,
-                sat,
-            );
-            extent.sub(adjustment.removed(sat), sat)
-        } else {
-            extent
-        };
-        if !count_mode && !hangs && !overflowing && extent > available {
+        let extent =
+            if !count_mode && (!hangs || paragraph_end) && !overflowing && extent > available {
+                let summary = if paragraph_end && hangs {
+                    // Materialization excludes trailing spaces before selecting
+                    // the punctuation edge. Use the same visible range here.
+                    let end = super::whitespace::trailing_start(data, start, i + 1);
+                    let mut cursor = super::spacing_summary::Cursor::default();
+                    for at in start..end {
+                        super::spacing::push(data, &mut cursor, at);
+                    }
+                    cursor.summary(Some(data))
+                } else {
+                    candidate_spacing
+                        .as_ref()
+                        .unwrap_or(&spacing)
+                        .summary(Some(data))
+                };
+                let adjustment = super::punctuation::edges(
+                    data,
+                    summary,
+                    flags,
+                    super::punctuation::last_edge(data, i + 1),
+                    Some(options),
+                    LayoutUnit::ZERO,
+                    extent,
+                    sat,
+                );
+                extent.sub(adjustment.removed(sat), sat)
+            } else {
+                extent
+            };
+        if !count_mode && (!hangs || paragraph_end) && !overflowing && extent > available {
             if let Some(b) = settle(
                 data,
                 start,
@@ -320,7 +374,10 @@ pub(super) fn scan(
                     hangs,
                     shared_extent,
                     required,
-                    summary: spacing.summary(Some(data)),
+                    summary: candidate_spacing
+                        .as_ref()
+                        .unwrap_or(&spacing)
+                        .summary(Some(data)),
                     last,
                 }),
                 data,
@@ -339,7 +396,15 @@ pub(super) fn scan(
                     break BreakReason::Regular;
                 }
                 if required.sub(
-                    removed(data, &mut spacing, flags, last, options, required, sat),
+                    removed(
+                        data,
+                        candidate_spacing.as_mut().unwrap_or(&mut spacing),
+                        flags,
+                        last,
+                        options,
+                        required,
+                        sat,
+                    ),
                     sat,
                 ) <= available
                 {
@@ -354,12 +419,20 @@ pub(super) fn scan(
                         hangs,
                         shared_extent,
                         required,
-                        summary: spacing.summary(Some(data)),
+                        summary: candidate_spacing
+                            .as_ref()
+                            .unwrap_or(&spacing)
+                            .summary(Some(data)),
                         last,
                     },
                     end: i,
                     pos,
-                    summary: super::spacing::hyphen_summary(data, &spacing, i - 1, sat),
+                    summary: super::spacing::hyphen_summary(
+                        data,
+                        candidate_spacing.as_ref().unwrap_or(&spacing),
+                        i - 1,
+                        sat,
+                    ),
                     hanging,
                     suffix,
                     ruby_delta,
@@ -393,7 +466,15 @@ pub(super) fn scan(
                     break BreakReason::Emergency;
                 }
                 if required.sub(
-                    removed(data, &mut spacing, flags, last, options, required, sat),
+                    removed(
+                        data,
+                        candidate_spacing.as_mut().unwrap_or(&mut spacing),
+                        flags,
+                        last,
+                        options,
+                        required,
+                        sat,
+                    ),
                     sat,
                 ) <= available
                 {

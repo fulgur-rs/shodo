@@ -591,6 +591,29 @@ enum Terminator {
 /// after a cut through the pair loses it: every candidate on that line is
 /// wider once its edges are reshaped than its shared advances say.
 fn closing_units_before(terminator: Terminator, nested: usize, isolate: bool) -> crate::Paragraph {
+    closing_units_with(
+        terminator,
+        nested,
+        isolate,
+        (
+            InlineEdges::default(),
+            crate::style::BoxDecorationBreak::Slice,
+        ),
+        "",
+        crate::style::WhiteSpaceCollapse::Collapse,
+        false,
+    )
+}
+
+fn closing_units_with(
+    terminator: Terminator,
+    nested: usize,
+    isolate: bool,
+    (edges, decoration): (InlineEdges, crate::style::BoxDecorationBreak),
+    trailing: &str,
+    collapse: crate::style::WhiteSpaceCollapse,
+    trailing_inside: bool,
+) -> crate::Paragraph {
     let fonts = final_review_fonts();
     fonts
         .register_face(
@@ -607,7 +630,9 @@ fn closing_units_before(terminator: Terminator, nested: usize, isolate: bool) ->
         "Shodo Fixture Latin".into(),
     )];
     style.root.font_size = 16.0;
+    style.root.white_space_collapse = collapse;
     let mut rtl = style.root.clone();
+    rtl.box_decoration_break = decoration;
     rtl.direction = crate::geometry::Direction::Rtl;
     rtl.unicode_bidi = if isolate {
         crate::style::UnicodeBidi::IsolateOverride
@@ -616,13 +641,19 @@ fn closing_units_before(terminator: Terminator, nested: usize, isolate: bool) ->
     };
     let mut b = ParagraphBuilder::new(&style, &Limits::default());
     b.with_line_break_override(|_| crate::LineBreakOverride::Allow);
-    b.open_inline(NodeId(2), &rtl, Default::default());
+    b.open_inline(NodeId(2), &rtl, edges);
     for n in 0..nested {
-        b.open_inline(NodeId(10 + n as u64), &rtl, Default::default());
+        b.open_inline(NodeId(10 + n as u64), &rtl, edges);
     }
     b.push_text(TextSource::Generated { node: NodeId(3) }, "VAVAVAVAVAVA");
+    if trailing_inside {
+        b.push_text(TextSource::Generated { node: NodeId(6) }, trailing);
+    }
     for _ in 0..=nested {
         b.close_inline();
+    }
+    if !trailing_inside {
+        b.push_text(TextSource::Generated { node: NodeId(6) }, trailing);
     }
     match terminator {
         Terminator::End => &mut b,
@@ -760,6 +791,141 @@ fn paragraph_end_checks_the_reshaped_line_start_width() {
                 "{case}"
             );
             assert!(cx.take_warnings().is_empty(), "{case}");
+        }
+    }
+}
+
+#[test]
+fn paragraph_end_checks_visible_width_before_hanging_whitespace() {
+    for collapse in [
+        crate::style::WhiteSpaceCollapse::Collapse,
+        crate::style::WhiteSpaceCollapse::Preserve,
+    ] {
+        for trailing in [" ", "\t"] {
+            let p = closing_units_with(
+                Terminator::End,
+                0,
+                false,
+                (
+                    InlineEdges::default(),
+                    crate::style::BoxDecorationBreak::Slice,
+                ),
+                trailing,
+                collapse,
+                false,
+            );
+            for width in [28.125, 28.25, 28.625, 28.75] {
+                let mut cx = LayoutContext::new();
+                let lines =
+                    p.break_all(&mut cx, &LineOptions::default(), width, &AtomicSizes::EMPTY);
+                for line in &lines {
+                    assert!(
+                        line.inline_size() <= width,
+                        "{collapse:?} trailing={trailing:?} width={width}: {:?} is {}px wide",
+                        line.text_range(),
+                        line.inline_size()
+                    );
+                }
+                assert_eq!(lines.last().unwrap().break_reason(), BreakReason::End);
+                assert_eq!(lines.last().unwrap().text_range().end, p.text().len());
+                assert!(cx.take_warnings().is_empty());
+            }
+        }
+    }
+}
+
+#[test]
+fn paragraph_end_checks_pulled_closing_edge_widths() {
+    for nested in [0, 2] {
+        let mut edges = InlineEdges::default();
+        edges.padding.inline_end = 1.0;
+        edges.border.inline_end = 0.5;
+        let p = closing_units_with(
+            Terminator::End,
+            nested,
+            false,
+            (edges, crate::style::BoxDecorationBreak::Slice),
+            " ",
+            crate::style::WhiteSpaceCollapse::Collapse,
+            true,
+        );
+        for width in [16.0, 28.125, 28.25, 28.625, 28.75, 30.0, 48.0] {
+            let mut cx = LayoutContext::new();
+            let lines = p.break_all(&mut cx, &LineOptions::default(), width, &AtomicSizes::EMPTY);
+            for line in &lines {
+                assert!(
+                    line.inline_size() <= width,
+                    "nested={nested} width={width}: {:?} ({:?}) is {}px wide",
+                    line.text_range(),
+                    line.break_reason(),
+                    line.inline_size()
+                );
+            }
+            let last = lines.last().unwrap();
+            assert_eq!(last.break_reason(), BreakReason::End);
+            assert_eq!(last.text_range().end, p.text().len());
+            assert_eq!(
+                last.fragments()
+                    .filter(|f| matches!(f, Fragment::InlineBox(_)))
+                    .count(),
+                nested + 1
+            );
+            assert!(cx.take_warnings().is_empty());
+        }
+    }
+}
+
+#[test]
+fn paragraph_end_checks_closing_edges_before_zero_width_space() {
+    for decoration in [
+        crate::style::BoxDecorationBreak::Slice,
+        crate::style::BoxDecorationBreak::Clone,
+    ] {
+        let mut edges = InlineEdges::default();
+        edges.padding.inline_end = 1.0;
+        edges.border.inline_end = 0.5;
+        let p = closing_units_with(
+            Terminator::End,
+            0,
+            false,
+            (edges, decoration),
+            "\u{200b}",
+            crate::style::WhiteSpaceCollapse::Collapse,
+            false,
+        );
+        // A line at its natural width must still fit in one line: reserving
+        // Clone's closing edges twice would force an unnecessary break.
+        let mut cx = LayoutContext::new();
+        let natural = p.break_all(
+            &mut cx,
+            &LineOptions::default(),
+            1000.0,
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(natural.len(), 1);
+        let exact = p.break_all(
+            &mut cx,
+            &LineOptions::default(),
+            natural[0].inline_size(),
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(exact.len(), 1, "{decoration:?}");
+        assert_eq!(exact[0].text_range(), 0..p.text().len());
+        assert!(cx.take_warnings().is_empty());
+        for width in [19.171875, 28.125, 28.625, 29.875] {
+            let mut cx = LayoutContext::new();
+            let lines = p.break_all(&mut cx, &LineOptions::default(), width, &AtomicSizes::EMPTY);
+            for line in &lines {
+                assert!(
+                    line.inline_size() <= width,
+                    "width={width}: {:?} ({:?}) is {}px wide",
+                    line.text_range(),
+                    line.break_reason(),
+                    line.inline_size()
+                );
+            }
+            assert_eq!(lines.last().unwrap().break_reason(), BreakReason::End);
+            assert!(cx.take_warnings().is_empty());
         }
     }
 }
