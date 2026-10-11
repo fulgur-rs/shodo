@@ -296,6 +296,116 @@ fn final_review_prohibited_positions_do_not_reshape_unsafe_edge_windows() {
     }
 }
 
+/// A soft hyphen is a break candidate only with its hyphen, so a scan used to
+/// shape both the hyphenated and the unhyphenated edge at every soft hyphen
+/// it passed, though only the last fitting one can end the line. Wide lines
+/// of densely hyphenated text must shape a few edges per line, not several
+/// per soft hyphen.
+#[test]
+fn soft_hyphens_are_measured_only_near_the_line_end() {
+    let fonts = final_review_fonts();
+    fonts
+        .register_face(
+            crate::test_support::fonts::LATIN.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Shodo Fixture Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut style = ParagraphStyle::default();
+    style.root.font_families = vec![crate::style::FontFamily::Named(
+        "Shodo Fixture Latin".into(),
+    )];
+    style.root.font_size = 16.0;
+    let word = "hy\u{ad}phen\u{ad}ation par\u{ad}a\u{ad}graph mea\u{ad}sure\u{ad}ment";
+    let text = vec![word; 40].join(" ");
+    let layout = |text: &str| {
+        let mut b = ParagraphBuilder::new(&style, &Limits::default());
+        b.push_text(TextSource::Generated { node: NodeId(1) }, text);
+        let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+        p.data
+            .edge_shape_calls
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+        let lines = p.break_all(
+            &mut LayoutContext::new(),
+            &LineOptions::default(),
+            437.0,
+            &AtomicSizes::EMPTY,
+        );
+        let calls = p
+            .data
+            .edge_shape_calls
+            .load(std::sync::atomic::Ordering::Relaxed);
+        (lines, calls)
+    };
+    let (lines, hyphenated) = layout(&text);
+    let (_, plain) = layout(&text.replace('\u{ad}', ""));
+    assert!(lines.len() > 4);
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.text()[l.text_range()].ends_with('\u{ad}')),
+        "the fixture must take at least one hyphen break"
+    );
+    // An eager scan made 2515 calls here against 398 without soft hyphens.
+    assert!(
+        hyphenated < 3 * plain,
+        "{hyphenated} edge-window shape calls with soft hyphens, {plain} without"
+    );
+}
+
+/// A line holding more deferred candidates than the scan retains measures
+/// the oldest ones early. It must still end at the last fitting hyphen, not
+/// at an early one that was measured to bound the retained state.
+#[test]
+fn soft_hyphens_beyond_the_deferred_bound_still_break_late() {
+    let fonts = final_review_fonts();
+    fonts
+        .register_face(
+            crate::test_support::fonts::LATIN.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Shodo Fixture Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut style = ParagraphStyle::default();
+    style.root.font_families = vec![crate::style::FontFamily::Named(
+        "Shodo Fixture Latin".into(),
+    )];
+    style.root.font_size = 16.0;
+    let count = 3 * super::scan::DEFERRED_MAX;
+    let text = "ab\u{ad}".repeat(count);
+    let mut b = ParagraphBuilder::new(&style, &Limits::default());
+    b.push_text(TextSource::Generated { node: NodeId(1) }, &text);
+    let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+    let whole = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        1.0e6,
+        &AtomicSizes::EMPTY,
+    );
+    let width = whole[0].inline_size() * 2.0 / 3.0;
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        width,
+        &AtomicSizes::EMPTY,
+    );
+    let first = &lines[0];
+    let taken = first.text()[first.text_range()].matches('\u{ad}').count();
+    assert!(first.text()[first.text_range()].ends_with('\u{ad}'));
+    assert!(first.inline_size() <= width);
+    // About two thirds of the hyphens fit; the bound is a third of them.
+    assert!(
+        taken > 3 * count / 5,
+        "took {taken} of {count} hyphens at {width}px"
+    );
+}
+
 /// Every allowed break candidate on a line used to reshape the same handful of
 /// edge windows again (a 959-character Latin paragraph made 482 shape calls for
 /// 41 distinct windows). Identical windows must be shaped once per context.
