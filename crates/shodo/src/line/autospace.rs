@@ -696,7 +696,8 @@ mod tests {
             .data
             .unit_spacing
             .iter()
-            .filter_map(|u| u.summary.first)
+            .enumerate()
+            .filter_map(|(index, _)| p.data.spacing_summaries.get(index).first)
             .collect();
         assert_eq!(edges.len(), 6);
         for profile in 0..4096usize {

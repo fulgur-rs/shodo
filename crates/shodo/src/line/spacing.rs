@@ -1,4 +1,5 @@
 //! Typographic character costs shared by scanning and selected placement.
+mod storage;
 use super::spacing_summary::{Cursor, Edge, Kind, Summary};
 use crate::analysis::units::UnitKind;
 use crate::geometry::{LayoutUnit, Saturation};
@@ -7,10 +8,10 @@ use icu_properties::{
     CodePointMapData,
     props::{GeneralCategory, Script},
 };
+pub(crate) use storage::Summaries;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct UnitSpacing {
-    pub(crate) summary: Summary,
     pub(crate) word: LayoutUnit,
     /// Last storage piece of the same source grapheme. Mark-only pieces may
     /// be split into another run when a shaping resource budget is small.
@@ -28,9 +29,10 @@ pub(crate) fn word_separator(ch: char) -> bool {
 pub(crate) fn build(
     data: &ParagraphData,
     sat: &mut Saturation,
-) -> (Vec<UnitSpacing>, Vec<super::autospace::Gap>) {
+) -> (Vec<UnitSpacing>, Summaries, Vec<super::autospace::Gap>) {
     let category = CodePointMapData::<GeneralCategory>::new();
     let script = CodePointMapData::<Script>::new();
+    let mut summaries = Summaries::with_capacity(data.units.len());
     let mut previous_text = None;
     let mut gaps = Vec::new();
     let chinese: Vec<bool> = data
@@ -50,6 +52,7 @@ pub(crate) fn build(
         .map(|(index, unit)| {
             let style = &data.styles[data.items[unit.item as usize].style as usize];
             let tracking = LayoutUnit::from_f32_round(style.letter_spacing, sat).raw();
+            let mut summary = Summary::default();
             let mut value = UnitSpacing {
                 tail: index,
                 gaps: (gaps.len(), gaps.len()),
@@ -58,7 +61,7 @@ pub(crate) fn build(
             if let Some(combine) = unit.combine {
                 let span = &data.combine_spans[combine as usize];
                 if index == span.units.start {
-                    value.summary = Summary::leaf(
+                    summary = Summary::leaf(
                         Edge {
                             tracking,
                             kind: Kind::Atomic,
@@ -70,12 +73,12 @@ pub(crate) fn build(
                     );
                 }
                 previous_text = Some(unit.text.clone());
-                return value;
+                return (value, summary);
             }
             match unit.kind {
                 UnitKind::Cluster { .. } => {
                     if previous_text.as_ref() == Some(&unit.text) {
-                        return value;
+                        return (value, summary);
                     }
                     previous_text = Some(unit.text.clone());
                     let start = data
@@ -97,10 +100,10 @@ pub(crate) fn build(
                             // U+200B stays zero-width and transparent to
                             // tracking, but separates its neighbors for
                             // text-autospace (WPT text-autospace-no-001).
-                            if value.summary.last.is_none() {
-                                value.summary.autospace_before = true;
+                            if summary.last.is_none() {
+                                summary.autospace_before = true;
                             }
-                            value.summary.autospace_after = true;
+                            summary.autospace_after = true;
                             continue;
                         }
                         if matches!(
@@ -156,12 +159,12 @@ pub(crate) fn build(
                             ),
                             punct: (start + character) as u32,
                         };
-                        if let Some(previous) = value.summary.last {
+                        if let Some(previous) = summary.last {
                             let amount = super::autospace::gap(
                                 data,
                                 previous,
                                 edge,
-                                value.summary.autospace_after,
+                                summary.autospace_after,
                             );
                             if amount != 0 {
                                 gaps.push(super::autospace::Gap {
@@ -171,9 +174,7 @@ pub(crate) fn build(
                                 });
                             }
                         }
-                        value.summary = value
-                            .summary
-                            .join(Summary::leaf(edge, Some(data)), Some(data));
+                        summary = summary.join(Summary::leaf(edge, Some(data)), Some(data));
                         if word_separator(ch) {
                             let used = style
                                 .used_word_spacing(data.style_metrics[style_index].space);
@@ -184,7 +185,7 @@ pub(crate) fn build(
                     }
                 }
                 UnitKind::Atomic { .. } => {
-                    value.summary = Summary::leaf(
+                    summary = Summary::leaf(
                         Edge {
                             tracking,
                             kind: Kind::Atomic,
@@ -195,7 +196,7 @@ pub(crate) fn build(
                     )
                 }
                 UnitKind::Tab | UnitKind::ForcedBreak | UnitKind::BlockInInline { .. } => {
-                    value.summary = Summary::leaf(
+                    summary = Summary::leaf(
                         Edge {
                             tracking: 0,
                             kind: Kind::Barrier,
@@ -223,7 +224,7 @@ pub(crate) fn build(
                         ]
                     };
                     if parts.iter().any(|v| *v != 0.0) {
-                        value.summary = Summary::barrier();
+                        summary = Summary::barrier();
                     }
                 }
                 UnitKind::Open { box_index } | UnitKind::Close { box_index } => {
@@ -237,13 +238,17 @@ pub(crate) fn build(
                         // Nonempty inline boundaries are checked physically
                         // by the indexed tree for inter-character spacing.
                         // Record their presence separately for line edges.
-                        value.summary.hang_before = true;
-                        value.summary.hang_after = true;
+                        summary.hang_before = true;
+                        summary.hang_after = true;
                     }
                 }
                 _ => {}
             }
             value.gaps.1 = gaps.len();
+            (value, summary)
+        })
+        .map(|(value, summary)| {
+            summaries.push(summary);
             value
         })
         .collect();
@@ -272,7 +277,7 @@ pub(crate) fn build(
             result[span.units.start].tail = span.units.end - 1;
         }
     }
-    (result, gaps)
+    (result, summaries, gaps)
 }
 
 pub(crate) fn needed(data: &ParagraphData) -> bool {
@@ -283,12 +288,13 @@ pub(crate) fn needed(data: &ParagraphData) -> bool {
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             s.letter_spacing == 0.0 && s.word_spacing == 0.0 && s.word_spacing_percent == 0.0
         })
-        || data.unit_spacing.iter().any(|s| {
+        || data.unit_spacing.iter().enumerate().any(|(index, _)| {
             #[cfg(test)]
             data.spacing_setup_visits
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            s.summary.cost != 0
-                || [s.summary.first, s.summary.last]
+            let summary = data.spacing_summaries.get(index);
+            summary.cost != 0
+                || [summary.first, summary.last]
                     .into_iter()
                     .flatten()
                     .any(|e| {
@@ -303,11 +309,17 @@ pub(crate) fn needed(data: &ParagraphData) -> bool {
 pub(crate) fn last_content(data: &ParagraphData) -> Option<usize> {
     data.unit_spacing
         .iter()
-        .rposition(|s| s.summary.last.is_some_and(|e| e.kind != Kind::Barrier))
+        .enumerate()
+        .rposition(|(index, _)| {
+            data.spacing_summaries
+                .get(index)
+                .last
+                .is_some_and(|e| e.kind != Kind::Barrier)
+        })
 }
 
 pub(super) fn push(data: &ParagraphData, cursor: &mut Cursor, index: usize) {
-    push_summary(data, cursor, index, data.unit_spacing[index].summary);
+    push_summary(data, cursor, index, data.spacing_summaries.get(index));
 }
 
 fn push_summary(data: &ParagraphData, cursor: &mut Cursor, index: usize, summary: Summary) {
@@ -430,8 +442,8 @@ pub(super) fn hyphen_unit_summary(
     index: usize,
     sat: &mut Saturation,
 ) -> Summary {
-    data.unit_spacing[index]
-        .summary
+    data.spacing_summaries
+        .get(index)
         .join(hyphen_leaf(data, index, sat), Some(data))
 }
 
@@ -442,7 +454,7 @@ fn visible_summary(
     sat: &mut Saturation,
 ) -> Summary {
     let unit = &data.units[index];
-    let summary = data.unit_spacing[index].summary;
+    let summary = data.spacing_summaries.get(index);
     if visible_hyphen.is_some_and(|offset| {
         unit.text.contains(&offset) && data.text[offset as usize..].starts_with('\u{ad}')
     }) {
@@ -495,9 +507,8 @@ pub(super) fn apply(
         .overlays
         .iter()
         .find_map(|w| w.hyphen.as_ref().map(|t| t.start));
-    let mut metadata: Vec<_> = data.unit_spacing[start..scan.end]
-        .iter()
-        .map(|u| u.summary)
+    let mut metadata: Vec<_> = (start..scan.end)
+        .map(|index| data.spacing_summaries.get(index))
         .collect();
     for (k, unit) in data.units[start..scan.end].iter().enumerate() {
         let unit_spacing = &data.unit_spacing[start + k];
@@ -839,6 +850,41 @@ mod tests {
         assert!(
             visits <= 10_000,
             "{visits} whole-paragraph spacing setup visits"
+        );
+    }
+}
+
+#[cfg(test)]
+mod memory_tests {
+    use super::*;
+
+    #[test]
+    fn ordinary_text_keeps_spacing_below_64_bytes_per_unit() {
+        let limits = crate::limits::Limits::default();
+        let style = crate::style::ParagraphStyle::default();
+        let fonts = crate::font::FontCollection::with_options(
+            &limits,
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        builder.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            &"abcd".repeat(1024),
+        );
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        assert_eq!(paragraph.data.units.len(), 4096);
+        let bytes = paragraph.data.unit_spacing.capacity() * std::mem::size_of::<UnitSpacing>()
+            + paragraph.data.spacing_summaries.retained_bytes();
+        assert!(
+            bytes <= 64 * paragraph.data.units.len(),
+            "ordinary spacing retains {bytes} bytes for 4096 units"
         );
     }
 }

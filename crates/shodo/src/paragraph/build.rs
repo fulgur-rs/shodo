@@ -788,6 +788,7 @@ fn build_data(
         style_metrics,
         autospace_spaces: Vec::new(),
         unit_spacing: Vec::new(),
+        spacing_summaries: Default::default(),
         punctuation: Vec::new(),
         last_content_unit: None,
         internal_autospace_gaps: Vec::new(),
@@ -860,7 +861,11 @@ fn finalize_data(
     crate::line::autospace::initialize(data, warnings);
     crate::line::reshape::initialize_slices(data, first_line_cuts, cx, warnings, sat);
     data.punctuation = crate::line::punctuation::build(data, sat);
-    (data.unit_spacing, data.internal_autospace_gaps) = crate::line::spacing::build(data, sat);
+    (
+        data.unit_spacing,
+        data.spacing_summaries,
+        data.internal_autospace_gaps,
+    ) = crate::line::spacing::build(data, sat);
     data.last_content_unit = crate::line::spacing::last_content(data);
     data.needs_spacing = crate::line::spacing::needed(data);
     let mut clusters = Vec::new();

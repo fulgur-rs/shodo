@@ -464,7 +464,7 @@ fn build(data: &ParagraphData, atomics: &AtomicSizes, cx: &mut LayoutContext) ->
                 } else {
                     u.level
                 },
-                data.unit_spacing[i].summary,
+                data.spacing_summaries.get(i),
             )
         }),
         Some(data),

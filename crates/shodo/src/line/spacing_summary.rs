@@ -16,7 +16,7 @@ pub(super) enum Kind {
 /// Marks an edge with no punctuation entry (a marker, atomic or barrier).
 const NO_PUNCTUATION: u32 = u32::MAX;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct Edge {
     pub(super) tracking: i32,
     pub(super) kind: Kind,
@@ -73,7 +73,7 @@ pub(super) fn gap(a: Edge, b: Edge) -> i64 {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Summary {
     pub(super) first: Option<Edge>,
     pub(super) last: Option<Edge>,
