@@ -18,7 +18,7 @@ pub(super) fn styles_match(normal: &[InlineStyle], alternate: &[InlineStyle]) ->
     normal.len() == alternate.len()
         && normal.iter().zip(alternate).all(|(a, b)| {
             let mut without_paint = a.clone();
-            without_paint.paint = b.paint.clone();
+            without_paint.paint = b.paint;
             without_paint == *b
                 && inherited_float_bits(a) == inherited_float_bits(b)
                 && a.font_variations

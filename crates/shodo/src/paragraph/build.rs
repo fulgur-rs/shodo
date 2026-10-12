@@ -404,7 +404,7 @@ impl Paragraph {
         let BuildAnalysis {
             normal,
             alternate,
-            alternate_reuses_analysis: _alternate_reuses_analysis,
+            alternate_reuses_analysis,
             source_cuts,
             rubies,
             bases: mut normal_bases,
@@ -420,6 +420,7 @@ impl Paragraph {
             &mut warnings,
             &mut sat,
             &mut normal_bases,
+            None,
         )
         .map_err(|error| normal_bases.translate(error, budget))?;
         budget.paragraph_shaping(data.glyphs.len() as u64)?;
@@ -435,6 +436,16 @@ impl Paragraph {
             }
             alternate.glyph_budget = remaining.max_shaped_glyphs;
             warnings.append(alternate_warnings.expect("first-line analysis has deferred warnings"));
+            // Task 1 proved identical sanitized non-paint style arrays and
+            // excludes scoped budgets. Copy only a clean, fully bounded
+            // shape; otherwise retain the original incremental error path.
+            let reusable_shape = (alternate_reuses_analysis
+                && warnings.checkpoint() == Some(0)
+                && sat.is_clean()
+                && alternate
+                    .glyph_budget
+                    .is_none_or(|max| max >= data.glyphs.len() as u64))
+            .then_some(&data);
             let mut alternate = build_data(
                 alternate,
                 cx,
@@ -442,6 +453,7 @@ impl Paragraph {
                 &mut warnings,
                 &mut sat,
                 &mut alternate_bases,
+                reusable_shape,
             )
             .map_err(|mut error| {
                 if budget.enabled() {
@@ -636,6 +648,7 @@ fn build_data(
     warnings: &mut WarningSink,
     sat: &mut Saturation,
     bases: &mut crate::ruby::base_budget::BaseScopes,
+    reusable_shape: Option<&ParagraphData>,
 ) -> Result<ParagraphData, LimitExceeded> {
     let PreparedBuild {
         style,
@@ -651,73 +664,83 @@ fn build_data(
     } = prepared;
     let mut shape_limits = limits.clone();
     shape_limits.max_shaped_glyphs = glyph_budget;
-    let mut shape_items_input = crate::analysis::itemize::itemize(
-        &processed,
-        &styles,
-        &bidi,
-        &breaks,
-        fonts,
-        style.writing_mode,
-        &combine_spans,
-    );
-    #[cfg(test)]
-    let reference_shape = if bases.enabled()
-        && matches!(
-            crate::shape::combined_width_probe_mode_for_test(),
-            crate::shape::CombinedWidthProbeMode::CloneReference
-                | crate::shape::CombinedWidthProbeMode::FeatureView
-        ) {
-        crate::shape::select_combined_widths(
-            cx,
-            &mut shape_items_input,
+    let (shape_items_input, glyphs, runs, shape_features) = if let Some(normal) = reusable_shape {
+        (
+            normal.shape_items.clone(),
+            normal.glyphs.clone(),
+            normal.runs.clone(),
+            normal.shape_features.clone(),
+        )
+    } else {
+        let mut shape_items_input = crate::analysis::itemize::itemize(
+            &processed,
             &styles,
+            &bidi,
+            &breaks,
             fonts,
             style.writing_mode,
-            &shape_limits,
+            &combine_spans,
         );
-        let shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
-        let (glyphs, runs) = shape_items_with_base_scopes(
-            cx,
-            &shape_items_input,
-            &styles,
-            fonts,
-            style.writing_mode,
-            &shape_limits,
-            warnings,
-            sat,
-            Some(&mut *bases),
-            &shape_features,
-        )?;
-        Some((glyphs, runs, shape_features))
-    } else {
-        None
-    };
-    // Production builds have no reference path; the type comes from the
-    // reuse branch below.
-    #[cfg(not(test))]
-    let reference_shape = None;
-    let (glyphs, runs, shape_features) = if let Some(reference) = reference_shape {
-        reference
-    } else {
-        let mut shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
-        let scoped = if bases.enabled() {
-            Some(&mut *bases)
+        #[cfg(test)]
+        let reference_shape = if bases.enabled()
+            && matches!(
+                crate::shape::combined_width_probe_mode_for_test(),
+                crate::shape::CombinedWidthProbeMode::CloneReference
+                    | crate::shape::CombinedWidthProbeMode::FeatureView
+            ) {
+            crate::shape::select_combined_widths(
+                cx,
+                &mut shape_items_input,
+                &styles,
+                fonts,
+                style.writing_mode,
+                &shape_limits,
+            );
+            let shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
+            let (glyphs, runs) = shape_items_with_base_scopes(
+                cx,
+                &shape_items_input,
+                &styles,
+                fonts,
+                style.writing_mode,
+                &shape_limits,
+                warnings,
+                sat,
+                Some(&mut *bases),
+                &shape_features,
+            )?;
+            Some((glyphs, runs, shape_features))
         } else {
             None
         };
-        let (glyphs, runs) = crate::shape::shape_items_with_combined_width_reuse(
-            cx,
-            &mut shape_items_input,
-            &styles,
-            fonts,
-            style.writing_mode,
-            &shape_limits,
-            warnings,
-            sat,
-            scoped,
-            &mut shape_features,
-        )?;
-        (glyphs, runs, shape_features)
+        // Production builds have no reference path; the type comes from the
+        // reuse branch below.
+        #[cfg(not(test))]
+        let reference_shape = None;
+        let (glyphs, runs, shape_features) = if let Some(reference) = reference_shape {
+            reference
+        } else {
+            let mut shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
+            let scoped = if bases.enabled() {
+                Some(&mut *bases)
+            } else {
+                None
+            };
+            let (glyphs, runs) = crate::shape::shape_items_with_combined_width_reuse(
+                cx,
+                &mut shape_items_input,
+                &styles,
+                fonts,
+                style.writing_mode,
+                &shape_limits,
+                warnings,
+                sat,
+                scoped,
+                &mut shape_features,
+            )?;
+            (glyphs, runs, shape_features)
+        };
+        (shape_items_input, glyphs, runs, shape_features)
     };
     let base_level = u8::from(used_direction == Direction::Rtl);
     let style_metrics = crate::line::font_metrics::resolve_styles_memo(

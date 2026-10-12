@@ -1,4 +1,5 @@
 use super::*;
+use crate::font::{FontFaceDescriptor, FontOptions};
 use crate::node::TextSource;
 
 struct ReferenceGuard(bool);
@@ -105,6 +106,88 @@ fn paint_style() -> ParagraphStyle {
     style
 }
 
+fn fonts() -> FontCollection {
+    let fonts = FontCollection::with_options(
+        &Limits::default(),
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    for (family, bytes) in [
+        ("Latin", crate::test_support::fonts::LATIN),
+        ("CJK", crate::test_support::fonts::CJK),
+        ("Arabic", crate::test_support::fonts::ARABIC),
+    ] {
+        fonts
+            .register_face(
+                bytes.to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: family.into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+    fonts
+}
+
+fn font_paint_style() -> ParagraphStyle {
+    let mut style = paint_style();
+    style.root.font_families = ["Latin", "CJK", "Arabic"]
+        .map(|family| crate::style::FontFamily::Named(family.into()))
+        .to_vec();
+    style.first_line.as_mut().unwrap().font_families = style.root.font_families.clone();
+    style
+}
+
+fn work_reset() {
+    ANALYSIS_PASSES.with(|count| count.set(0));
+    crate::analysis::itemize::MATCH_CALLS.with(|count| count.set(0));
+    crate::shape::HARFRUST_SHAPE_CALLS.with(|count| count.set(0));
+}
+
+fn work_counts() -> (usize, usize, usize) {
+    (
+        ANALYSIS_PASSES.with(std::cell::Cell::get),
+        crate::analysis::itemize::MATCH_CALLS.with(std::cell::Cell::get),
+        crate::shape::HARFRUST_SHAPE_CALLS.with(std::cell::Cell::get),
+    )
+}
+
+#[test]
+fn paint_only_build_does_not_repeat_font_matching_or_shaping() {
+    let fonts = fonts();
+    let mut style = font_paint_style();
+    let build = |style: &ParagraphStyle| {
+        let mut builder = ParagraphBuilder::new(style, &Limits::default());
+        builder.push_text(
+            TextSource::Dom {
+                node: NodeId(1),
+                offset: 0,
+            },
+            "office affinity first line",
+        );
+        work_reset();
+        builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        work_counts()
+    };
+    let first_line = build(&style);
+    style.first_line = None;
+    let normal = build(&style);
+    assert!(
+        normal.1 > 0 && normal.2 > 0,
+        "actual matching and Harfrust work"
+    );
+    assert_eq!(
+        first_line, normal,
+        "paint-only first-line must not repeat analysis, matching or shaping"
+    );
+}
+
 #[test]
 fn paint_only_analysis_uses_one_pass() {
     let style = paint_style();
@@ -206,4 +289,381 @@ fn analysis_fallback_preserves_callbacks_warnings_and_limit_errors() {
             assert_eq!(candidate, reference, "cap={cap}, text={text_cap}");
         }
     }
+}
+
+fn build_probe(
+    builder: ParagraphBuilder,
+    fonts: &FontCollection,
+    reference: bool,
+) -> (Result<Paragraph, LimitExceeded>, (usize, usize, usize)) {
+    let _guard = ReferenceGuard::new(reference);
+    work_reset();
+    let result = builder.build(&mut crate::LayoutContext::new(), fonts);
+    (result, work_counts())
+}
+
+fn line_snapshot(line: &crate::Line) -> String {
+    let glyphs = line
+        .fragments()
+        .map(|fragment| match fragment {
+            crate::Fragment::GlyphRun(run) => format!(
+                "{:?}",
+                (
+                    (
+                        run.style_index(),
+                        run.node(),
+                        run.source(),
+                        run.text_range(),
+                        run.font(),
+                        run.font_size().to_bits(),
+                        run.bidi_level()
+                    ),
+                    (
+                        run.paint_style(),
+                        run.normalized_coords(),
+                        run.variations(),
+                        run.script(),
+                        run.language()
+                    ),
+                    (
+                        run.embolden(),
+                        run.skew().map(f32::to_bits),
+                        run.orientation(),
+                        run.glyph_transform(),
+                        run.metrics(),
+                        run.vertical_metrics()
+                    ),
+                    (
+                        run.inline_start().to_bits(),
+                        run.inline_size().to_bits(),
+                        run.baseline().to_bits()
+                    ),
+                    run.clusters().collect::<Vec<_>>(),
+                    run.glyphs().collect::<Vec<_>>(),
+                    (0..run.glyphs().len())
+                        .map(|i| run.glyph_origin(i).map(|(x, y)| [x.to_bits(), y.to_bits()]))
+                        .collect::<Vec<_>>(),
+                )
+            ),
+            crate::Fragment::RubyAnnotation(_) => "ruby".into(),
+            other => format!("{other:?}"),
+        })
+        .collect::<Vec<_>>();
+    let ruby = line
+        .ruby_annotations()
+        .map(|a| {
+            (
+                a.container(),
+                a.node(),
+                a.level(),
+                a.base_text_range(),
+                a.text_range(),
+                a.visibility(),
+                a.origin(),
+                a.transform(),
+                line_snapshot(a.line()),
+            )
+        })
+        .collect::<Vec<_>>();
+    let token = line.break_token();
+    format!(
+        "{:?}",
+        (
+            (
+                line.text(),
+                line.text_range(),
+                line.offset_mapping(),
+                (token.unit, token.flags),
+                line.break_reason(),
+                line.is_last()
+            ),
+            (
+                line.inline_size().to_bits(),
+                line.block_size().to_bits(),
+                line.block_offset().to_bits(),
+                line.hang_start().to_bits(),
+                line.hang_end().to_bits(),
+                line.metrics(),
+                line.overflow_rect()
+            ),
+            (
+                line.writing_mode(),
+                line.used_direction(),
+                line.displaced_floats(),
+                line.text_combinations().collect::<Vec<_>>()
+            ),
+            glyphs,
+            ruby,
+        )
+    )
+}
+
+fn paragraph_snapshot(
+    result: Result<Paragraph, LimitExceeded>,
+) -> Result<Vec<String>, LimitExceeded> {
+    result.map(|paragraph| {
+        let data_snapshot = |data: &ParagraphData| {
+            format!(
+                "{:?}",
+                (
+                    (&data.text, &data.items, &data.styles, &data.mapping),
+                    (&data.units, &data.boxes, &data.runs, &data.shape_items),
+                    (
+                        &data.glyphs.id,
+                        &data.glyphs.advance,
+                        &data.glyphs.pen,
+                        &data.glyphs.offset_inline,
+                        &data.glyphs.offset_block,
+                        &data.glyphs.cluster,
+                        &data.glyphs.flags
+                    ),
+                    (
+                        &data.clusters,
+                        &data.glyph_clusters,
+                        &data.selectable_clusters,
+                        &data.shaping_barriers
+                    ),
+                )
+            )
+        };
+        let mut out = vec![
+            data_snapshot(&paragraph.data),
+            format!("{:?}", paragraph.warnings()),
+        ];
+        if let Some(first) = &paragraph.data.first_line {
+            out.push(data_snapshot(&first.data));
+            out.push(format!(
+                "{:?}",
+                (&first.normal_cursors, &first.alternate_cursors)
+            ));
+        }
+        let options = crate::style::LineOptions::default();
+        let mut cx = crate::LayoutContext::new();
+        let sizes = paragraph.intrinsic_sizes(&mut cx, &options, &crate::AtomicIntrinsics::EMPTY);
+        out.push(format!(
+            "{:?}",
+            (
+                [sizes.min_content.to_bits(), sizes.max_content.to_bits()],
+                cx.take_warnings()
+            )
+        ));
+        for width in [0.0, 32.0, 240.0, f32::MAX] {
+            let mut token = paragraph.start_token();
+            let mut cx = crate::LayoutContext::new();
+            for _ in 0..1000 {
+                match paragraph.next_line(
+                    &mut cx,
+                    token,
+                    &options,
+                    &crate::LineConstraint::new(width),
+                    &crate::AtomicSizes::EMPTY,
+                ) {
+                    crate::LineResult::Line(line) => {
+                        assert_ne!(line.break_token(), token, "forward progress");
+                        token = line.break_token();
+                        out.push(line_snapshot(&line));
+                    }
+                    crate::LineResult::Done => break,
+                    other => panic!("unexpected {other:?}"),
+                }
+            }
+            out.push(format!("{:?}", cx.take_warnings()));
+        }
+        out
+    })
+}
+
+#[test]
+fn reused_shaping_preserves_first_line_paint_and_full_line_geometry() {
+    let fonts = fonts();
+    for mode in [WritingMode::HorizontalTb, WritingMode::VerticalRl] {
+        for transform in [
+            crate::style::TextTransform::None,
+            crate::style::TextTransform::UppercaseFullWidth,
+        ] {
+            let mut style = font_paint_style();
+            style.writing_mode = mode;
+            style.root.text_transform = transform;
+            style.first_line.as_mut().unwrap().text_transform = transform;
+            let candidate = build_probe(input(&style, &Limits::default()), &fonts, false);
+            let reference = build_probe(input(&style, &Limits::default()), &fonts, true);
+            assert_eq!(candidate.1.0, 1);
+            assert_eq!(reference.1.0, 2);
+            assert_eq!(
+                paragraph_snapshot(candidate.0),
+                paragraph_snapshot(reference.0)
+            );
+        }
+    }
+    let style = font_paint_style();
+    let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+    builder.push_text(
+        TextSource::Generated { node: NodeId(1) },
+        "office first affinity line",
+    );
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    let mut cx = crate::LayoutContext::new();
+    let lines = paragraph.break_all(
+        &mut cx,
+        &Default::default(),
+        45.0,
+        &crate::AtomicSizes::EMPTY,
+    );
+    assert!(lines.len() > 1);
+    for (index, line) in lines.iter().enumerate() {
+        for fragment in line.fragments() {
+            if let crate::Fragment::GlyphRun(run) = fragment {
+                assert_eq!(
+                    run.paint_style().color,
+                    if index == 0 {
+                        [0, 0, 255, 255]
+                    } else {
+                        [0, 0, 0, 255]
+                    }
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn shape_fallback_preserves_warnings_saturation_and_glyph_errors() {
+    let fonts = fonts();
+    let style = font_paint_style();
+    for cap in 0..90 {
+        let limits = Limits {
+            max_shaped_glyphs: Some(cap),
+            ..Limits::default()
+        };
+        let candidate = build_probe(input(&style, &limits), &fonts, false);
+        let reference = build_probe(input(&style, &limits), &fonts, true);
+        assert_eq!(
+            paragraph_snapshot(candidate.0),
+            paragraph_snapshot(reference.0),
+            "glyph cap {cap}"
+        );
+    }
+    for warning_cap in [0, 1, 8] {
+        for numeric in [false, true] {
+            let limits = Limits {
+                max_shaping_run_bytes: Some(1),
+                max_warnings: Some(warning_cap),
+                ..Limits::default()
+            };
+            let mut style = style.clone();
+            if numeric {
+                style.root.font_size_adjust = Some(crate::style::FontSizeAdjust {
+                    metric: crate::style::FontMetricKind::ExHeight,
+                    value: f32::MAX,
+                });
+                style.first_line.as_mut().unwrap().font_size_adjust = style.root.font_size_adjust;
+            }
+            let builder = || {
+                let mut b = ParagraphBuilder::new(&style, &limits);
+                b.push_text(
+                    TextSource::Dom {
+                        node: NodeId(1),
+                        offset: 0,
+                    },
+                    "a\u{301}\u{301} office",
+                );
+                b
+            };
+            let candidate = build_probe(builder(), &fonts, false);
+            let reference = build_probe(builder(), &fonts, true);
+            assert!(!candidate.0.as_ref().unwrap().warnings().is_empty());
+            assert_eq!(candidate.1.1, reference.1.1);
+            assert_eq!(candidate.1.2, reference.1.2);
+            assert_eq!(
+                paragraph_snapshot(candidate.0),
+                paragraph_snapshot(reference.0)
+            );
+        }
+    }
+}
+
+#[test]
+fn inherited_float_bits_and_ruby_use_full_fallback() {
+    let fonts = fonts();
+    let mut style = font_paint_style();
+    style.root.font_variations = vec![crate::style::FontVariation {
+        tag: *b"TEST",
+        value: 0.0,
+    }];
+    style.first_line.as_mut().unwrap().font_variations = vec![crate::style::FontVariation {
+        tag: *b"TEST",
+        value: -0.0,
+    }];
+    let candidate = build_probe(input(&style, &Limits::default()), &fonts, false);
+    let reference = build_probe(input(&style, &Limits::default()), &fonts, true);
+    assert_eq!(candidate.1, reference.1);
+    assert_eq!(candidate.1.0, 2);
+    let first = &candidate
+        .0
+        .as_ref()
+        .unwrap()
+        .data
+        .first_line
+        .as_ref()
+        .unwrap()
+        .data;
+    assert!(first.runs.iter().any(|run| {
+        run.instance
+            .variations
+            .iter()
+            .any(|v| v.value.to_bits() == (-0.0f32).to_bits())
+    }));
+    assert_eq!(
+        paragraph_snapshot(candidate.0),
+        paragraph_snapshot(reference.0)
+    );
+
+    let style = font_paint_style();
+    let limits = Limits::default();
+    let builder = || {
+        use crate::{
+            Ruby, RubyAlign, RubyAnnotation, RubyBase, RubyContent, RubyLevel, RubySpan, RubyStyle,
+            RubyVisibility,
+        };
+        let content = |node, text| {
+            RubyContent::text(
+                TextSource::Dom {
+                    node: NodeId(node),
+                    offset: 0,
+                },
+                text,
+                &style.root,
+                &limits,
+            )
+        };
+        let ruby = Ruby::new(
+            vec![RubyBase {
+                node: NodeId(10),
+                content: content(11, "office"),
+                align: RubyAlign::Center,
+            }],
+            vec![RubyLevel {
+                annotations: vec![RubyAnnotation {
+                    node: NodeId(12),
+                    content: content(13, "first"),
+                    span: RubySpan::All,
+                    visibility: RubyVisibility::Visible,
+                }],
+                style: RubyStyle::default(),
+            }],
+        )
+        .unwrap();
+        let mut b = ParagraphBuilder::new(&style, &limits);
+        b.push_ruby(NodeId(9), &style.root, ruby);
+        b
+    };
+    let candidate = build_probe(builder(), &fonts, false);
+    let reference = build_probe(builder(), &fonts, true);
+    assert_eq!(candidate.1, reference.1);
+    assert_eq!(
+        paragraph_snapshot(candidate.0),
+        paragraph_snapshot(reference.0)
+    );
 }
