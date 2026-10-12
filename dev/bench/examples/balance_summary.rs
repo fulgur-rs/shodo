@@ -1,4 +1,4 @@
-//! Fixed-font Balance retention comparison; all post-scan work remains necessary.
+//! Fixed-font Balance trial comparison with lossless completed output snapshots.
 #[path = "support/completed_height_snapshot.rs"]
 mod snapshot;
 use serde_json::{Value, json};
@@ -81,10 +81,13 @@ impl Case {
     }
     fn builder(&self, l: &Limits) -> ParagraphBuilder {
         let ruby = self.kind.contains("ruby");
+        let cjk = matches!(self.kind, "cjk" | "combined" | "vertical");
         let inline = InlineStyle {
             font_size: 16.,
             font_families: vec![FontFamily::Named(
-                shodo_fixtures::FONTS[usize::from(ruby)].family.into(),
+                shodo_fixtures::FONTS[usize::from(ruby || cjk)]
+                    .family
+                    .into(),
             )],
             word_break: if matches!(self.budget, "edge-zero" | "warn-zero") {
                 WordBreak::BreakAll
@@ -95,6 +98,11 @@ impl Case {
         };
         let style = ParagraphStyle {
             root: inline.clone(),
+            writing_mode: if matches!(self.kind, "combined" | "vertical") {
+                shodo::geometry::WritingMode::VerticalRl
+            } else {
+                shodo::geometry::WritingMode::HorizontalTb
+            },
             first_line: self.kind.contains("first-line").then(|| InlineStyle {
                 font_size: 32.,
                 text_transform: TextTransform::Uppercase,
@@ -110,6 +118,70 @@ impl Case {
         b.with_offset_mapping(true);
         for i in 0..self.repeats {
             let id = 100 + i as u64 * 10;
+            if cjk {
+                b.push_text(
+                    TextSource::Dom {
+                        node: NodeId(id),
+                        offset: 7,
+                    },
+                    "日本語 ",
+                );
+                if self.kind == "combined" {
+                    let combined = InlineStyle {
+                        text_combine_upright: shodo::style::TextCombineUpright::All,
+                        ..inline.clone()
+                    };
+                    b.open_inline(NodeId(id + 1), &combined, Default::default())
+                        .push_text(
+                            TextSource::Dom {
+                                node: NodeId(id + 2),
+                                offset: 11,
+                            },
+                            "12",
+                        )
+                        .close_inline();
+                }
+                b.push_text(
+                    TextSource::Dom {
+                        node: NodeId(id + 3),
+                        offset: 13,
+                    },
+                    " 日本語 ",
+                );
+                continue;
+            }
+            if self.kind == "styled" {
+                let raised = InlineStyle {
+                    font_size: 24.,
+                    vertical_align: shodo::style::VerticalAlign::Super,
+                    letter_spacing: 0.25,
+                    ..inline.clone()
+                };
+                b.push_text(
+                    TextSource::Dom {
+                        node: NodeId(id),
+                        offset: 7,
+                    },
+                    "abc ",
+                )
+                .open_inline(NodeId(id + 1), &raised, Default::default())
+                .push_text(
+                    TextSource::Dom {
+                        node: NodeId(id + 2),
+                        offset: 11,
+                    },
+                    "def ffi ",
+                )
+                .close_inline()
+                .push_text(
+                    TextSource::Dom {
+                        node: NodeId(id + 3),
+                        offset: 13,
+                    },
+                    "ghi jkl ",
+                );
+                continue;
+            }
             if ruby {
                 let reading = InlineStyle {
                     font_size: 8.,
@@ -210,7 +282,7 @@ fn accepted(
     cx: &mut LayoutContext,
     c: &Case,
     o: &LineOptions,
-    plan: &BreakPlan,
+    plan: Option<&BreakPlan>,
     placed: Option<FloatCursor>,
 ) -> Vec<LineResult> {
     p.lines(
@@ -220,7 +292,7 @@ fn accepted(
         |_, offset| {
             let mut con = LineConstraint::new(c.width);
             con.block_offset = offset;
-            con.break_plan = Some(plan);
+            con.break_plan = plan;
             con.floats_placed_through = placed;
             con
         },
@@ -254,7 +326,7 @@ fn run(c: &Case, mode: &str, fonts: &shodo_fixtures::FixtureFonts, inspect: bool
         p.plan_breaks(&mut cx, &o, c.width, &AtomicSizes::EMPTY)
     });
     let plan_warnings = cx.take_warnings();
-    let (lines, layout) = measured(4, || accepted(&p, &mut cx, c, &o, &plan, placed));
+    let (lines, layout) = measured(4, || accepted(&p, &mut cx, c, &o, Some(&plan), placed));
     let layout_warnings = cx.take_warnings();
     assert!(
         matches!(lines.last(), Some(LineResult::Done)),
@@ -292,7 +364,7 @@ fn run(c: &Case, mode: &str, fonts: &shodo_fixtures::FixtureFonts, inspect: bool
     }
     if inspect {
         let mut fresh = LayoutContext::new();
-        let other = accepted(&p, &mut fresh, c, &o, &plan, placed);
+        let other = accepted(&p, &mut fresh, c, &o, Some(&plan), placed);
         assert_eq!(
             json!({"results":snapshot::results(&other),"events":other.iter().map(snapshot::event).collect::<Vec<_>>()}),
             output,
@@ -305,7 +377,16 @@ fn run(c: &Case, mode: &str, fonts: &shodo_fixtures::FixtureFonts, inspect: bool
         );
         if mode == "Start" && c.kind != "float" {
             let mut fresh = LayoutContext::new();
-            let greedy = p.break_all(&mut fresh, &o, c.width, &AtomicSizes::EMPTY);
+            // Compare the same public iterator contract: break_all performs
+            // additional collection-level slice-offset assignment for boxes.
+            let greedy = accepted(&p, &mut fresh, c, &o, None, None);
+            let greedy = greedy
+                .iter()
+                .filter_map(|r| match r {
+                    LineResult::Line(l) => Some(snapshot::line(l)),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
             let actual = lines
                 .iter()
                 .filter_map(|r| {
@@ -316,11 +397,7 @@ fn run(c: &Case, mode: &str, fonts: &shodo_fixtures::FixtureFonts, inspect: bool
                     }
                 })
                 .collect::<Vec<_>>();
-            assert_eq!(
-                greedy.iter().map(snapshot::line).collect::<Vec<_>>(),
-                actual,
-                "direct greedy Start oracle"
-            );
+            assert_eq!(greedy, actual, "unplanned public iterator Start oracle");
         }
         if c.budget == "disabled" && mode != "Start" {
             assert!(!plan_warnings.is_empty());
@@ -365,6 +442,10 @@ fn main() {
         "forced",
         "block",
         "float",
+        "cjk",
+        "combined",
+        "vertical",
+        "styled",
     ] {
         for repeats in [1, 32] {
             for width in [80., 240.] {

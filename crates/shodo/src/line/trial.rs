@@ -224,7 +224,7 @@ fn summarize(input: SummaryInput<'_>) -> Option<TrialSummary> {
         previous = Some(key);
     }
     // Within this guard, fragment coordinates are bounded by origin + total
-    // (< 2^21 px). Font/annotation arithmetic uses a fixed number of bounded
+    // (< 2^22 px, including f32 conversion error). Font/annotation arithmetic uses a fixed number of bounded
     // terms (< 2^16 px). Neither approaches Q26.6's ~2^25 px boundary; no
     // omitted conversion/addition can saturate. Still validate the retained
     // metric conversions locally before accepting the probe.
