@@ -1,6 +1,6 @@
 //! Structural check of font blobs before registration.
 
-use std::fmt;
+use std::{collections::HashSet, fmt};
 
 use crate::limits::{LimitExceeded, LimitKind, Limits};
 
@@ -30,6 +30,11 @@ impl From<LimitExceeded> for FontError {
 
 pub(super) const TRUNCATED: FontError = FontError::Malformed("truncated or out of bounds");
 
+#[cfg(test)]
+std::thread_local! {
+    static FACE_VALIDATION_CALLS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 pub(super) fn offset(base: usize, add: usize) -> Result<usize, FontError> {
     base.checked_add(add).ok_or(TRUNCATED)
 }
@@ -58,9 +63,15 @@ pub(crate) fn check_font(data: &[u8], limits: &Limits) -> Result<u32, FontError>
         if count == 0 {
             return Err(FontError::Malformed("empty font collection"));
         }
+        let mut checked_faces = HashSet::new();
         for i in 0..count as usize {
             let face = read_u32(data, offset(12, 4 * i)?)? as usize;
-            check_face(data, face, limits)?;
+            // TTC indexes may alias the same face directory. Its bytes and
+            // structural work are identical, so validate each offset once
+            // while preserving the collection's logical face count.
+            if checked_faces.insert(face) {
+                check_face(data, face, limits)?;
+            }
         }
         Ok(count)
     } else {
@@ -70,6 +81,8 @@ pub(crate) fn check_font(data: &[u8], limits: &Limits) -> Result<u32, FontError>
 }
 
 fn check_face(data: &[u8], face: usize, limits: &Limits) -> Result<(), FontError> {
+    #[cfg(test)]
+    FACE_VALIDATION_CALLS.with(|calls| calls.set(calls.get() + 1));
     if !matches!(
         data.get(face..offset(face, 4)?),
         Some(b"\0\x01\0\0" | b"OTTO" | b"true" | b"typ1")
@@ -280,6 +293,24 @@ mod tests {
         ttc.extend_from_slice(&face);
         ttc.extend_from_slice(&face);
         assert_eq!(check_font(&ttc, &limits()), Ok(2));
+    }
+
+    #[test]
+    fn repeated_ttc_face_offsets_are_validated_once() {
+        let count = 64u32;
+        let face = build_sfnt(&[(*b"GSUB", amplifying_layout_table(4, 4))]);
+        let face_offset = 12 + count as usize * 4;
+        let mut ttc = b"ttcf".to_vec();
+        ttc.extend_from_slice(&0x0001_0000u32.to_be_bytes());
+        ttc.extend_from_slice(&count.to_be_bytes());
+        for _ in 0..count {
+            ttc.extend_from_slice(&(face_offset as u32).to_be_bytes());
+        }
+        ttc.extend_from_slice(&face);
+
+        FACE_VALIDATION_CALLS.with(|calls| calls.set(0));
+        assert_eq!(check_font(&ttc, &limits()), Ok(count));
+        assert_eq!(FACE_VALIDATION_CALLS.with(|calls| calls.get()), 1);
     }
 
     #[test]
