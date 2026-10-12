@@ -2,6 +2,7 @@
 use super::bidi::BidiAnalysis;
 use super::{ItemKind, whitespace::Processed};
 use crate::font::{FontCluster, FontCollection, FontMatch, FontQuery};
+use crate::limits::{LimitExceeded, LimitKind, Limits};
 use crate::style::{FontFamily, FontStyle, InlineStyle};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -168,6 +169,7 @@ fn after_context(scalars: &[Scalar]) -> String {
     scalars.iter().take(5).map(|s| s.c).collect()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn itemize(
     input: &Processed,
     styles: &[InlineStyle],
@@ -176,7 +178,9 @@ pub(crate) fn itemize(
     fonts: &FontCollection,
     mode: crate::geometry::WritingMode,
     combined: &[super::combine::CombineSpan],
-) -> Vec<ShapeItem> {
+    limits: &Limits,
+    mut base_scopes: Option<&mut crate::ruby::base_budget::BaseScopes>,
+) -> Result<Vec<ShapeItem>, LimitExceeded> {
     let revert_width: Vec<_> = combined
         .iter()
         .map(|span| {
@@ -239,9 +243,10 @@ pub(crate) fn itemize(
     let mut flush = |text: &mut String,
                      scalars: &mut Vec<Scalar>,
                      style_indices: &mut Vec<u32>,
-                     result: &mut Vec<ShapeItem>| {
+                     result: &mut Vec<ShapeItem>|
+     -> Result<(), LimitExceeded> {
         if scalars.is_empty() {
-            return;
+            return Ok(());
         }
         let segment_start = result.len();
         let scalar_scripts = super::scripts::resolve(scalars.iter().map(|s| s.c));
@@ -355,6 +360,14 @@ pub(crate) fn itemize(
                         .extend_from_slice(&scalars[part_start..part_end]);
                     previous.end = end;
                 } else {
+                    Limits::check(
+                        limits.max_items,
+                        LimitKind::Items,
+                        (result.len() as u64).saturating_add(1),
+                    )?;
+                    if let Some(bases) = base_scopes.as_deref_mut() {
+                        bases.shape_item(scalars[part_start].item as usize)?;
+                    }
                     if result.len() > segment_start {
                         // The preceding run is now complete. Intermediate
                         // grapheme suffixes are never used by the shaper.
@@ -386,6 +399,7 @@ pub(crate) fn itemize(
         text.clear();
         scalars.clear();
         style_indices.clear();
+        Ok(())
     };
     let mut close_boundaries = Vec::new();
     let mut active_combine = None;
@@ -404,7 +418,7 @@ pub(crate) fn itemize(
                     if combine != active_combine {
                         // The horizontal composition is a shaping isolate on
                         // both edges. Context must not join neighboring Arabic.
-                        flush(&mut text, &mut scalars, &mut style_indices, &mut result);
+                        flush(&mut text, &mut scalars, &mut style_indices, &mut result)?;
                         active_combine = combine;
                     }
                     let origin_index = input
@@ -484,20 +498,20 @@ pub(crate) fn itemize(
                     false,
                 ));
                 if inline_boundary_breaks_shaping(&styles[item.style as usize], &edges, true) {
-                    flush(&mut text, &mut scalars, &mut style_indices, &mut result);
+                    flush(&mut text, &mut scalars, &mut style_indices, &mut result)?;
                 }
             }
             ItemKind::CloseInline => {
                 if close_boundaries.pop().unwrap_or(false) {
-                    flush(&mut text, &mut scalars, &mut style_indices, &mut result);
+                    flush(&mut text, &mut scalars, &mut style_indices, &mut result)?;
                 }
             }
             ItemKind::OutOfFlow { .. } => {}
-            _ => flush(&mut text, &mut scalars, &mut style_indices, &mut result),
+            _ => flush(&mut text, &mut scalars, &mut style_indices, &mut result)?,
         }
     }
-    flush(&mut text, &mut scalars, &mut style_indices, &mut result);
-    result
+    flush(&mut text, &mut scalars, &mut style_indices, &mut result)?;
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -764,6 +778,23 @@ mod tests {
         let mut builder = ParagraphBuilder::new(style, &limits);
         add(&mut builder);
         builder.build(&mut LayoutContext::new(), &fonts).unwrap()
+    }
+
+    fn build_with_limits(
+        style: &ParagraphStyle,
+        limits: &Limits,
+        add: impl FnOnce(&mut ParagraphBuilder),
+    ) -> Result<Paragraph, crate::limits::LimitExceeded> {
+        let fonts = FontCollection::with_options(
+            limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        let mut builder = ParagraphBuilder::new(style, limits);
+        add(&mut builder);
+        builder.build(&mut LayoutContext::new(), &fonts)
     }
 
     #[test]
@@ -1183,6 +1214,84 @@ mod tests {
             .map(|item| item.scalars[0].offset..item.end)
             .collect();
         assert_eq!(ranges, vec![0..1, 1..3, 3..4]);
+    }
+
+    #[test]
+    fn shape_item_limit_stops_before_copying_the_overflowing_run() {
+        use crate::limits::{LimitExceeded, LimitKind};
+
+        let limits = Limits {
+            max_items: Some(2),
+            ..Limits::default()
+        };
+        let style = ParagraphStyle {
+            writing_mode: WritingMode::VerticalRl,
+            ..Default::default()
+        };
+        super::SCALAR_CLONES.with(|clones| clones.set(0));
+
+        let error = match build_with_limits(&style, &limits, |builder| {
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, "a§b");
+        }) {
+            Err(error) => error,
+            Ok(_) => panic!("itemization should reject the third shape item"),
+        };
+
+        assert_eq!(
+            error,
+            LimitExceeded {
+                kind: LimitKind::Items,
+                limit: 2,
+                actual: 3,
+            }
+        );
+        super::SCALAR_CLONES.with(|clones| assert_eq!(clones.get(), 2));
+    }
+
+    #[test]
+    fn shape_item_limit_allows_text_that_coalesces_into_one_run() {
+        let limits = Limits {
+            max_items: Some(2),
+            ..Limits::default()
+        };
+        let paragraph = build_with_limits(&ParagraphStyle::default(), &limits, |builder| {
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, "a§b");
+        })
+        .expect("horizontal text should coalesce into one shape item");
+
+        assert_eq!(paragraph.data.shape_items.len(), 1);
+    }
+
+    #[test]
+    fn shape_item_limit_covers_the_retained_first_line_set() {
+        use crate::limits::{LimitExceeded, LimitKind};
+
+        let limits = Limits {
+            max_items: Some(5),
+            ..Limits::default()
+        };
+        let mut style = ParagraphStyle {
+            writing_mode: WritingMode::VerticalRl,
+            ..Default::default()
+        };
+        style.first_line = Some(style.root.clone());
+        super::SCALAR_CLONES.with(|clones| clones.set(0));
+
+        let error = match build_with_limits(&style, &limits, |builder| {
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, "a§b");
+        }) {
+            Err(error) => error,
+            Ok(_) => panic!("normal and first-line runs share the shaping-item cap"),
+        };
+
+        assert_eq!(
+            error,
+            LimitExceeded {
+                kind: LimitKind::Items,
+                limit: 5,
+                actual: 6,
+            }
+        );
     }
 
     #[test]

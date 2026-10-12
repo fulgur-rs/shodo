@@ -12,7 +12,7 @@ pub struct Limits {
     /// Raw and processed UTF-8 bytes at build time (16 MiB). Independent of
     /// the glyph budget: ASCII may reach `max_shaped_glyphs` first.
     pub max_text_bytes: Option<u64>,
-    /// Raw and processed items at build time (2^20).
+    /// Raw and processed items, and retained itemized shaping runs, capped at build time (2^20).
     pub max_items: Option<u64>,
     /// Interned inline styles per builder (2^16).
     pub max_styles: Option<u64>,

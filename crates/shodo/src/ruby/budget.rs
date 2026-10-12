@@ -5,6 +5,7 @@ use crate::limits::{LimitExceeded, LimitKind, Limits};
 pub(super) struct Cost {
     text: u64,
     items: u64,
+    shape_items: u64,
     styles: u64,
     style_bytes: u64,
     glyphs: u64,
@@ -35,6 +36,14 @@ impl Cost {
         };
         *value = value.saturating_add(amount);
     }
+
+    pub(super) fn add_shape_items(&mut self, amount: u64) {
+        self.shape_items = self.shape_items.saturating_add(amount);
+    }
+
+    pub(super) fn shape_items(self) -> u64 {
+        self.shape_items
+    }
 }
 
 struct Scope {
@@ -49,6 +58,13 @@ impl Scope {
             .get(kind)
             .saturating_sub(self.start.get(kind))
             .saturating_add(self.initial.get(kind))
+    }
+
+    fn used_shape_items(&self, spent: Cost) -> u64 {
+        spent
+            .shape_items
+            .saturating_sub(self.start.shape_items)
+            .saturating_add(self.initial.shape_items)
     }
 }
 
@@ -118,6 +134,7 @@ impl RubyBudget {
         ] {
             used.add(kind, scope.used(self.spent, kind));
         }
+        used.add_shape_items(scope.used_shape_items(self.spent));
         used
     }
 
@@ -141,10 +158,37 @@ impl RubyBudget {
         remaining
     }
 
+    /// Remaining retained shaping runs, sharing the item cap across nested
+    /// paragraphs and first-line datasets without mixing them with input items.
+    pub(crate) fn remaining_shape_items(&self, original: &Limits) -> Option<u64> {
+        let mut remaining = original.max_items;
+        for scope in &self.scopes {
+            if let Some(cap) = scope.limits.max_items {
+                let available = cap.saturating_sub(scope.used_shape_items(self.spent));
+                remaining = Some(remaining.map_or(available, |current| current.min(available)));
+            }
+        }
+        remaining
+    }
+
     pub(crate) fn translate(&self, mut error: LimitExceeded) -> LimitExceeded {
         for scope in self.scopes.iter().rev() {
             if let Some(cap) = limit(&scope.limits, error.kind) {
                 let used = scope.used(self.spent, error.kind);
+                if cap.saturating_sub(used) == error.limit {
+                    error.limit = cap;
+                    error.actual = error.actual.saturating_add(used);
+                    break;
+                }
+            }
+        }
+        error
+    }
+
+    pub(crate) fn translate_shape_items(&self, mut error: LimitExceeded) -> LimitExceeded {
+        for scope in self.scopes.iter().rev() {
+            if let Some(cap) = scope.limits.max_items {
+                let used = scope.used_shape_items(self.spent);
                 if cap.saturating_sub(used) == error.limit {
                     error.limit = cap;
                     error.actual = error.actual.saturating_add(used);
@@ -172,6 +216,21 @@ impl RubyBudget {
         }
         self.check(kind, amount)?;
         self.spent.add(kind, amount);
+        Ok(())
+    }
+
+    pub(crate) fn charge_shape_items(&mut self, amount: u64) -> Result<(), LimitExceeded> {
+        if !self.enabled {
+            return Ok(());
+        }
+        for scope in self.scopes.iter().rev() {
+            Limits::check(
+                scope.limits.max_items,
+                LimitKind::Items,
+                scope.used_shape_items(self.spent).saturating_add(amount),
+            )?;
+        }
+        self.spent.add_shape_items(amount);
         Ok(())
     }
     pub(crate) fn paragraph_analysis(

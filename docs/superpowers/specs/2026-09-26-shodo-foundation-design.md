@@ -341,7 +341,7 @@ line.displaced_floats()                      // 報告済み（配置・保留�
 
 - 失敗の種類を分ける:
   - 内容の欠落（フォント・グリフがない、未知の lang）: フォールバックか .notdef で組み、warning に記録。失敗しない。
-  - 資源の過剰（上限超過）: 入力の量に由来する上限（テキスト長、item 数、スタイル数、入れ子の深さ、shaping 結果の glyph 数、フォントの登録数と blob 合計、フォントの lookup / subtable 数）は、確保の前に照合し、builder の build とフォント登録が `Err(LimitExceeded { kind, limit, actual })` を返す。黙って切り詰めない（fail-closed）。[C1-B2]
+  - 資源の過剰（上限超過）: 入力の量に由来する上限（テキスト長、raw/processed item 数と itemize 後の shaping run 数、スタイル数、入れ子の深さ、shaping 結果の glyph 数、フォントの登録数と blob 合計、フォントの lookup / subtable 数）は、確保の前に照合し、builder の build とフォント登録が `Err(LimitExceeded { kind, limit, actual })` を返す。黙って切り詰めない（fail-closed）。[C1-B2]
   - 計算の劣化（shaping や行組みの計算量を抑えるための打ち切り）: 資源を消費し続けることはなく、結果の精度だけが落ちるもの。内容の欠落と同じ区分で扱い、失敗せずに warning に記録する。[C1-B1]
     - shaping の出力量: harfrust の MultipleSubst は 1 glyph から最大 65,535 glyph を出力でき、入力長の上限だけでは出力量を抑えられない（1 回の shaping の実効上限は harfrust の buffer の上限 `max(入力 glyph 数 × 256, 65536)`。max_shaping_run_bytes の既定値はこの式から見積もる）。[F5-m1]そこで build は、shaping 結果の glyph 数の累積（first-line 集合を含む）を Limits（max_shaped_glyphs）と、Paragraph に追加で確保する前に照合し、超過したら `Err(LimitExceeded)` を返す（入力量の上限と同じ fail-closed の経路）。行端の overlay にも出力 glyph 数の予算を設け、超過した場合は予算内に収まる元の shaping 結果を使う（劣化、warning）。[C2-m1]
     - 分割できない単位: 1 つの書記素クラスタ（基底文字と大量の結合文字など）が max_shaping_run_bytes を超える場合は、コードポイント境界で強制的に分割して shaping する（その部分の字形が不正確になりうる。warning）。文書全体を拒否はしない。[C2-m3]
