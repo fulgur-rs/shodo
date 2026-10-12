@@ -2,7 +2,7 @@ use super::*;
 use crate::style::FontStyle;
 
 /// Repository-owned synthetic font, deliberately independent of installed fonts.
-pub(super) fn test_font(family: &str, chars: &[char], width: u16) -> Vec<u8> {
+pub(crate) fn test_font(family: &str, chars: &[char], width: u16) -> Vec<u8> {
     test_font_with_typographic_name(family, None, chars, width)
 }
 
