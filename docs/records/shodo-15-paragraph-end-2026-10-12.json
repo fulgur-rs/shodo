@@ -1899,5 +1899,152 @@
       "note": "Final static review; execution results recorded separately."
     },
     "performance_note": "Not remeasured after review fixes. Original timings and allocations remain pinned to 87397ff355950407add5adda3ed5da1702add89b."
+  },
+  "hanging_tail_followup": {
+    "fixed_revision": "f41c82fa5af8eb65c4996dcf37fd499c2a3670be",
+    "review_comment": 4243894694,
+    "reproduction": {
+      "font": "fixed CJK 16px",
+      "input": "ああ、 ",
+      "direction": "LTR",
+      "inline_end_edges_px": 0,
+      "hanging_force_end": true,
+      "wide_available_px": 1000,
+      "wide_range": [
+        0,
+        10
+      ],
+      "wide_materialized_width_px": 32,
+      "retry_available_px": 32,
+      "old_fresh_range": [
+        0,
+        3
+      ],
+      "old_cached_range": [
+        0,
+        3
+      ],
+      "old_width_px": 16
+    },
+    "changes": [
+      "Retain punctuation summaries before trailing whitespace rather than rebuilding full prefixes.",
+      "Retain ordinary and Preserve-blocked boundaries; switch at padding/border edges, retaining barriers before whitespace.",
+      "Reuse obstruction lookahead throughout each transparent tail and invalidate on a new hanging unit or nontransparent unit.",
+      "Use the retained visible summary at transparent prefixes in both scan and retry thresholds, including intermediate closing controls."
+    ],
+    "regression_tests": [
+      {
+        "name": "paragraph_end_excludes_controls_after_hanging_whitespace",
+        "cases": 48,
+        "input": "ああ、",
+        "trailing": [
+          " ",
+          "\t"
+        ],
+        "collapse": [
+          "Collapse",
+          "Preserve"
+        ],
+        "nested": [
+          0,
+          1,
+          2
+        ],
+        "word_spacing_percent": [
+          0,
+          -100
+        ],
+        "unicode_bidi": [
+          "Normal",
+          "Isolate"
+        ],
+        "checks": "At width32: whole paragraph, End, width32, fresh/retry agreement. Space retries must use the index without rescanning. Tabs may rescan."
+      },
+      {
+        "name": "hanging_tail_retains_preserved_space_before_outer_closing_edges",
+        "cases": 2,
+        "outer_end_padding_px": [
+          0,
+          1.5
+        ],
+        "inner": "Preserve, Isolate",
+        "outer": "Collapse, Isolate",
+        "checks": "Each prefix retained last unit and spacing width agree with the existing materialization trailing boundary; final punctuation adjustments agree under the same constraints."
+      }
+    ],
+    "checks": [
+      {
+        "name": "fmt",
+        "command": "cargo +stable fmt --all -- --check",
+        "exit_code": 0,
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "workspace",
+        "command": "cargo +stable test --offline --release --workspace --quiet",
+        "exit_code": 0,
+        "passed": 1780,
+        "failed": 0,
+        "ignored": 9
+      },
+      {
+        "name": "no-default",
+        "command": "cargo +stable test --offline --release -p shodo --no-default-features --quiet",
+        "exit_code": 0,
+        "passed": 1242,
+        "failed": 0,
+        "ignored": 9
+      },
+      {
+        "name": "complex-only",
+        "command": "cargo +stable test --offline --release -p shodo --no-default-features --features complex-scripts --quiet",
+        "exit_code": 0,
+        "passed": 1244,
+        "failed": 0,
+        "ignored": 9
+      },
+      {
+        "name": "clippy",
+        "command": "cargo +stable clippy --offline --workspace --all-targets -- -D warnings",
+        "exit_code": 0,
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "docs",
+        "command": "cargo +stable doc --offline --workspace --no-deps",
+        "exit_code": 0,
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "line_tests": {
+      "passed": 24,
+      "failed": 0,
+      "ignored": 0
+    },
+    "line_module_tests": {
+      "passed": 188,
+      "failed": 0,
+      "ignored": 0
+    },
+    "snapshot": {
+      "cases": 46,
+      "passed": true,
+      "partial": false,
+      "updated": false,
+      "changed_pixels": 0
+    },
+    "review": {
+      "critical": 0,
+      "important": 0,
+      "minor": 0,
+      "note": "Static review of final obstruction memo and boundary snapshots; execution results recorded separately."
+    },
+    "performance_note": "No new timing/allocation measurements after review fixes. The retained summaries and obstruction memo avoid introducing repeated prefix/suffix scans; original measured results remain pinned to 87397ff355950407add5adda3ed5da1702add89b."
   }
 }

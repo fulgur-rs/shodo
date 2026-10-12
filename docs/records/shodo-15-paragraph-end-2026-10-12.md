@@ -4,7 +4,8 @@
 初回修正の実装・性能測定対象は `87397ff355950407add5adda3ed5da1702add89b`。
 PRレビュー後の追加修正は `85303f0d0dba1ba84606cbfe7532c7a70d01e61c` に保存した。
 閉じ余白の句読点barrierを保持する追加修正は `20727f77ba96c6d91ae89797e8fc2e31b4d5e6f7`。
-キャッシュ再試行とハイフン幅の最終修正は `90fb5671782a9a5118a7e3c9118596f90becd6e9`。
+キャッシュ再試行とハイフン幅の追加修正は `90fb5671782a9a5118a7e3c9118596f90becd6e9`。
+末尾空白後の透明要素に対する最終修正は `f41c82fa5af8eb65c4996dcf37fd499c2a3670be`。
 測定結果と条件の集計は [JSON](shodo-15-paragraph-end-2026-10-12.json) に保存した。
 
 ## 再現と原因
@@ -261,3 +262,50 @@ cargo +stable test --offline --release -p shodo --lib line::
 最終修正後の時間・allocationは再測定していない。初回修正の性能測定対象は変更せず、
 最終コミットのRust 1.89・WasmはPR CIで確認する。再現条件と結果は本記録およびJSONに
 保存したため、一時の診断プログラム・ログ・隔離target・worktreeは作業終了時に片付ける。
+
+### 末尾空白後の閉じ要素による過剰な折り返し
+
+`f65f111c249e4bb6c627daa918723c6b67843ff1` の
+[追加レビュー指摘](https://github.com/fulgur-rs/shodo/pull/289#discussion_r4243894694)を再現した。
+固定CJK 16px、LTRのゼロ余白インライン内に「ああ、 」を置き、
+`hanging_punctuation.force_end=true`とする。幅1000pxでは全文`0..10`の実幅32pxなのに、
+幅32pxのfresh走査とcache retryは先頭の「あ」`0..3`・16pxだけを返す。
+「あ、 」には前の改行候補がないため、この過剰な折り返しは起きなかった。
+正式な回帰テストで修正前の失敗を確認した。
+
+空白後にClose/PDI/PDFが続くと最終unitはhangableではないが、描画の可視範囲は
+空白前までとなる。複数の閉じ要素では、物理段落末尾より前にも同じ判定が必要となる。
+走査とcacheのthreshold評価で、実際の末尾空白境界にある句読点summaryを使う。
+空白のadvanceがゼロでも境界を保持し、途中に新しい可視本文があれば保持状態を破棄する。
+
+空白前のsummaryを保持して使い回すため、各閉じ要素からprefixを再構築しない。
+通常時と、padding/borderによってPreserveの空白が保持される場合の2境界を保持する。
+これによりPreserveとCollapseが混在しても、空白前の閉じbarrierを残せる。
+後続の余白の先読みは同じ透明な尾部で1回だけ求め、新しい空白・非透明unitで破棄する。
+逐次のprefix/suffix再走査を追加しない。実測の時間・allocationは再測定していない。
+
+`paragraph_end_excludes_controls_after_hanging_whitespace`は、Collapse/Preserve、空白/タブ、
+入れ子0/1/2、通常の空白幅/word-spacing -100%、Normal/Isolateの48ケースで、幅32pxに
+全文が1行で収まり、fresh/retryの範囲・幅・改行理由が一致することを検証する。
+空白retryは再走査しないことを確認する（タブは既存方針どおり再走査してよい）。
+入れ子の制御文字とゼロ幅空白も、途中の修正案の不足を再現して補強した。
+`hanging_tail_retains_preserved_space_before_outer_closing_edges`は、内側Preserve/外側Collapse、
+双方Isolate、外側padding 0/1.5pxで、各prefixの境界・spacing幅が描画の既存trailing境界と
+一致し、最終の句読点補正も同じ幅条件で描画準備の結果と一致することを検証する。
+
+最終修正の検証結果（前記と同じRust/Cargo 1.97.1、隔離target、release debug 0）:
+
+- 行モジュール188件（行走査24件を含む）成功。
+- workspace: 1,780 passed、0 failed、9 ignored。
+- no-default-features: 1,242 passed、0 failed、9 ignored。
+- complex-scriptsのみ: 1,244 passed、0 failed、9 ignored。
+- fmt、diff check、Clippy全workspace/all-targets、rustdoc warnings-as-errors: 成功。
+- snapshot全46件match、partial=false、更新なし、changed pixels=0。
+- 最終レビューにCritical / Important / Minor指摘なし。
+
+```bash
+cargo +stable test --offline --release -p shodo --lib line::
+```
+
+最終コミットのRust 1.89・WasmはPR CIで確認する。再現条件・判断・検証結果を保存したため、
+一時の診断プログラム、ログ、隔離target、worktreeは作業終了時に片付ける。
