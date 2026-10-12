@@ -520,6 +520,21 @@ impl FontCollection {
         }
     }
 
+    /// Check descriptor presence without copying its owned family and ranges.
+    fn has_face_descriptor(&self, id: FontId) -> bool {
+        if id.layer == self.layer.id {
+            self.state()
+                .descriptors
+                .get(id.index as usize)
+                .is_some_and(Option::is_some)
+        } else {
+            self.layer
+                .parent
+                .as_ref()
+                .is_some_and(|parent| parent.has_face_descriptor(id))
+        }
+    }
+
     /// Intrinsic OpenType family name for a face in this layer or its shared layer.
     ///
     /// The typographic family name is preferred when present, matching the
