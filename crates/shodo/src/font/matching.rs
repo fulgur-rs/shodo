@@ -945,7 +945,7 @@ impl FontCollection {
             .collect();
         // Emit property axes even when the intrinsic default equals the
         // request: a CSS descriptor may clamp that request to another value.
-        let axis_style = if self.face_descriptor(selected.id).is_some() {
+        let axis_style = if self.has_face_descriptor(selected.id) {
             selected.descriptor.style
         } else {
             query.style

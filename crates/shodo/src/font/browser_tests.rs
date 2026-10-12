@@ -239,6 +239,98 @@ fn css_face_registration_preserves_ranges_and_selected_face() {
 }
 
 #[test]
+fn descriptor_presence_obeys_layer_visibility_and_new_registrations() {
+    let shared = no_system();
+    let root_face = add_face(&shared, "Root", (400., 400.), &['a']);
+    let raw_face = shared.register(test_font("Raw", &['a'], 600)).unwrap();
+    let doc = FontCollection::for_document(&shared, &Limits::default());
+    let sibling = FontCollection::for_document(&shared, &Limits::default());
+    let doc_face = add_face(&doc, "Document", (400., 400.), &['a']);
+    let foreign = no_system();
+    let foreign_face = add_face(&foreign, "Foreign", (400., 400.), &['a']);
+    let invalid = FontId {
+        index: u32::MAX,
+        ..root_face
+    };
+    for (fonts, id, present) in [
+        (&shared, shared.primary_font(), false),
+        (&shared, root_face, true),
+        (&doc, root_face, true),
+        (&sibling, root_face, true),
+        (&shared, raw_face, false),
+        (&doc, raw_face, false),
+        (&doc, doc_face, true),
+        (&shared, doc_face, false),
+        (&sibling, doc_face, false),
+        (&doc, foreign_face, false),
+        (&doc, invalid, false),
+    ] {
+        assert_eq!(fonts.has_face_descriptor(id), present);
+        assert_eq!(fonts.face_descriptor(id).is_some(), present);
+    }
+    let later = add_face(&shared, "Later", (400., 400.), &['a']);
+    assert!(doc.has_face_descriptor(later));
+    assert_eq!(doc.face_descriptor(later).unwrap().family, "Later");
+    assert_eq!(
+        doc.match_cluster(&query(&["Root"], 400.), "a").unwrap().id,
+        root_face
+    );
+    let replacement = add_face(&doc, "Root", (400., 400.), &['a']);
+    assert_eq!(
+        doc.match_cluster(&query(&["Root"], 400.), "a").unwrap().id,
+        replacement
+    );
+    assert_eq!(
+        sibling
+            .match_cluster(&query(&["Root"], 400.), "a")
+            .unwrap()
+            .id,
+        root_face
+    );
+}
+
+#[test]
+fn slant_selection_distinguishes_css_descriptors_from_intrinsic_faces() {
+    for cap in [0, 1] {
+        let shared = FontCollection::with_options(
+            &Limits::default(),
+            FontOptions {
+                system_fonts: false,
+                match_cache_entries: cap,
+                ..Default::default()
+            },
+        );
+        let bytes = font_with_axes(&[(*b"slnt", [-20, 0, 0])]);
+        let raw = shared.register(bytes.clone()).unwrap();
+        let mut desc = descriptor("Web");
+        desc.style = FontStyle::Oblique(10.);
+        let css = shared.register_face(bytes, 0, desc).unwrap();
+        let doc = FontCollection::for_document(&shared, &Limits::default());
+        for fonts in [&shared, &doc] {
+            for (family, id, expected) in [("Axes", raw, -15.), ("Web", css, -10.)] {
+                let mut q = query(&[family], 400.);
+                q.style = FontStyle::Oblique(15.);
+                // Language changes force match-cache misses while preserving
+                // the prepared family/property key on each CSS lookup.
+                for lang in ["en", "fr", "en", "fr"] {
+                    q.language = Some(lang.into());
+                    let found = fonts.match_cluster(&q, "a").unwrap();
+                    assert_eq!(found.id, id);
+                    assert_eq!(
+                        found.variations,
+                        vec![crate::style::FontVariation {
+                            tag: *b"slnt",
+                            value: expected
+                        }]
+                    );
+                    assert_eq!(found.skew, None);
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn invalid_css_descriptors_and_face_indices_are_transactional() {
     let fonts = FontCollection::new(&Limits::default());
     let bytes = test_font("Internal", &['a'], 600);
