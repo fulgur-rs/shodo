@@ -10,6 +10,20 @@ impl ReferenceGuard {
     }
 }
 
+struct IntrinsicReferenceGuard(bool);
+
+impl IntrinsicReferenceGuard {
+    fn new(reference: bool) -> Self {
+        Self(crate::line::intrinsic::FORCE_TWO_PASSES.with(|flag| flag.replace(reference)))
+    }
+}
+
+impl Drop for IntrinsicReferenceGuard {
+    fn drop(&mut self) {
+        crate::line::intrinsic::FORCE_TWO_PASSES.with(|flag| flag.set(self.0));
+    }
+}
+
 impl Drop for ReferenceGuard {
     fn drop(&mut self) {
         paint_reuse::FORCE_REFERENCE.with(|flag| flag.set(self.0));
@@ -603,6 +617,499 @@ fn reused_shaping_preserves_first_line_paint_and_full_line_geometry() {
         (paragraph_snapshot(paragraph), cx.take_warnings())
     };
     assert_eq!(warm(false), warm(true));
+}
+
+#[test]
+fn first_line_paint_reuses_one_intrinsic_measure_pass() {
+    let fonts = fonts();
+    let style = font_paint_style();
+    let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+    builder.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        "123 456 789 987 654\n321 10 0 ".repeat(80).as_str(),
+    );
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+
+    let measure = |force_reference| {
+        let _guard = IntrinsicReferenceGuard::new(force_reference);
+        crate::line::intrinsic::MEASURE_PASSES.with(|passes| passes.set(0));
+        crate::line::intrinsic::INTRINSIC_UNIT_VISITS.with(|visits| visits.set(0));
+        let mut cx = crate::LayoutContext::new();
+        let sizes = paragraph.intrinsic_sizes(
+            &mut cx,
+            &crate::style::LineOptions::default(),
+            &crate::AtomicIntrinsics::EMPTY,
+        );
+        (
+            [sizes.min_content.to_bits(), sizes.max_content.to_bits()],
+            cx.take_warnings(),
+            crate::line::intrinsic::MEASURE_PASSES.with(std::cell::Cell::get),
+            crate::line::intrinsic::INTRINSIC_UNIT_VISITS.with(std::cell::Cell::get),
+        )
+    };
+    let optimized = measure(false);
+    let reference = measure(true);
+    assert_eq!(optimized.0, reference.0);
+    assert_eq!(optimized.1, reference.1);
+    assert_eq!(optimized.2, 1, "paint-only geometry needs one full walk");
+    assert_eq!(reference.2, 2, "reference path retains both walks");
+    assert_eq!(
+        optimized.3,
+        paragraph.data.units.len(),
+        "cached eligibility avoids a second intrinsic unit traversal"
+    );
+    assert_eq!(
+        reference.3,
+        paragraph.data.units.len() * 2,
+        "reference path visits each dataset once per measurement"
+    );
+}
+
+#[test]
+fn first_line_paint_with_unsafe_edges_keeps_reference_walks() {
+    let fonts = fonts();
+    let style = font_paint_style();
+    let limits = Limits {
+        max_reshape_window_bytes: Some(0),
+        max_warnings: Some(1),
+        ..Limits::default()
+    };
+    let mut builder = ParagraphBuilder::new(&style, &limits);
+    builder.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        "office affinity first line waffle official",
+    );
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    assert!(
+        paragraph
+            .data
+            .units
+            .iter()
+            .any(|unit| { unit.unsafe_to_break || unit.unsafe_to_concat })
+    );
+    let measure = |force_reference| {
+        let _guard = IntrinsicReferenceGuard::new(force_reference);
+        crate::line::intrinsic::MEASURE_PASSES.with(|passes| passes.set(0));
+        let mut cx = crate::LayoutContext::new();
+        let sizes = paragraph.intrinsic_sizes(
+            &mut cx,
+            &crate::style::LineOptions::default(),
+            &crate::AtomicIntrinsics::EMPTY,
+        );
+        (
+            [sizes.min_content.to_bits(), sizes.max_content.to_bits()],
+            cx.take_warnings(),
+            crate::line::intrinsic::MEASURE_PASSES.with(std::cell::Cell::get),
+        )
+    };
+    let optimized = measure(false);
+    let reference = measure(true);
+    assert_eq!(optimized.0, reference.0);
+    assert_eq!(optimized.1, reference.1);
+    assert_eq!(optimized.2, 2, "unsafe shaping edges retain both walks");
+    assert_eq!(reference.2, 2, "reference path retains both walks");
+}
+
+#[test]
+fn first_line_paint_with_tracking_saturation_keeps_warning_suppression() {
+    let fonts = fonts();
+    let mut style = font_paint_style();
+    style.root.letter_spacing = 1_000_000.0;
+    style.first_line.as_mut().unwrap().letter_spacing = 1_000_000.0;
+    let limits = Limits {
+        max_warnings: Some(1),
+        ..Limits::default()
+    };
+    let mut builder = ParagraphBuilder::new(&style, &limits);
+    builder.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        "1234567890".repeat(8).as_str(),
+    );
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    let measure = |force_reference| {
+        let _guard = IntrinsicReferenceGuard::new(force_reference);
+        crate::line::intrinsic::MEASURE_PASSES.with(|passes| passes.set(0));
+        let mut cx = crate::LayoutContext::new();
+        let sizes = paragraph.intrinsic_sizes(
+            &mut cx,
+            &crate::style::LineOptions::default(),
+            &crate::AtomicIntrinsics::EMPTY,
+        );
+        (
+            [sizes.min_content.to_bits(), sizes.max_content.to_bits()],
+            cx.take_warnings(),
+            crate::line::intrinsic::MEASURE_PASSES.with(std::cell::Cell::get),
+        )
+    };
+    let optimized = measure(false);
+    let reference = measure(true);
+    assert_eq!(optimized.0, reference.0);
+    assert_eq!(optimized.1, reference.1);
+    assert_eq!(optimized.2, 2, "tracking saturation keeps both walks");
+    assert_eq!(reference.2, 2, "reference path retains both walks");
+}
+
+#[test]
+fn first_line_paint_with_negative_advance_keeps_warning_suppression() {
+    let fonts = fonts();
+    let style = font_paint_style();
+    let limits = Limits {
+        max_warnings: Some(1),
+        ..Limits::default()
+    };
+    let mut builder = ParagraphBuilder::new(&style, &limits);
+    builder.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        "1",
+    );
+    let mut paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    let data = std::sync::Arc::get_mut(&mut paragraph.data).unwrap();
+    for advance in &mut data.glyphs.advance {
+        *advance = crate::geometry::LayoutUnit::from_raw(-2);
+    }
+    let first = data.first_line.as_mut().unwrap();
+    let alternate = std::sync::Arc::get_mut(&mut first.data).unwrap();
+    for advance in &mut alternate.glyphs.advance {
+        *advance = crate::geometry::LayoutUnit::from_raw(-2);
+    }
+    // This test mutates the built paragraph to exercise an unsafe geometry
+    // that normal callers cannot mutate after publication. Refresh the
+    // construction-time eligibility cache to model what the builder sees.
+    let intrinsic_single_pass_safe = {
+        let first = data.first_line.as_ref().unwrap();
+        crate::line::intrinsic::single_pass_safe(data, first, &crate::style::LineOptions::default())
+    };
+    assert!(!intrinsic_single_pass_safe);
+    data.first_line.as_mut().unwrap().intrinsic_single_pass_safe = intrinsic_single_pass_safe;
+
+    let measure = |force_reference| {
+        let _guard = IntrinsicReferenceGuard::new(force_reference);
+        crate::line::intrinsic::MEASURE_PASSES.with(|passes| passes.set(0));
+        let mut cx = crate::LayoutContext::new();
+        let sizes = paragraph.intrinsic_sizes(
+            &mut cx,
+            &crate::style::LineOptions::default(),
+            &crate::AtomicIntrinsics::EMPTY,
+        );
+        (
+            [sizes.min_content.to_bits(), sizes.max_content.to_bits()],
+            cx.take_warnings(),
+            crate::line::intrinsic::MEASURE_PASSES.with(std::cell::Cell::get),
+        )
+    };
+    let optimized = measure(false);
+    let reference = measure(true);
+    assert_eq!(optimized.0, reference.0);
+    assert_eq!(optimized.1, reference.1);
+    assert_eq!(optimized.2, 2, "negative advances keep both warning walks");
+    assert_eq!(reference.2, 2, "reference path retains both walks");
+}
+
+#[test]
+fn first_line_paint_with_hanging_indent_after_forced_break_keeps_reference_walks() {
+    let fonts = fonts();
+    let style = font_paint_style();
+    let limits = Limits {
+        max_warnings: Some(1),
+        ..Limits::default()
+    };
+    let mut builder = ParagraphBuilder::new(&style, &limits);
+    builder.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        "123\n456",
+    );
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    let options = crate::style::LineOptions {
+        text_indent: crate::style::TextIndent {
+            length: -1.0e7,
+            hanging: true,
+            each_line: false,
+        },
+        ..Default::default()
+    };
+    let measure = |force_reference| {
+        let _guard = IntrinsicReferenceGuard::new(force_reference);
+        crate::line::intrinsic::MEASURE_PASSES.with(|passes| passes.set(0));
+        let mut cx = crate::LayoutContext::new();
+        let sizes = paragraph.intrinsic_sizes(&mut cx, &options, &crate::AtomicIntrinsics::EMPTY);
+        (
+            [sizes.min_content.to_bits(), sizes.max_content.to_bits()],
+            cx.take_warnings(),
+            crate::line::intrinsic::MEASURE_PASSES.with(std::cell::Cell::get),
+        )
+    };
+    let optimized = measure(false);
+    let reference = measure(true);
+    assert_eq!(optimized.0, reference.0);
+    assert_eq!(optimized.1, reference.1);
+    assert_eq!(optimized.2, 2, "hanging indent keeps both warning walks");
+    assert_eq!(reference.2, 2, "reference path retains both walks");
+}
+
+#[test]
+fn first_line_size_with_intermediate_glyph_saturation_keeps_reference_walks() {
+    let fonts = fonts();
+    let mut style = font_paint_style();
+    style.first_line.as_mut().unwrap().font_size = 22.0;
+    let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+    builder.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        "1",
+    );
+    let mut paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+
+    fn set_saturating_glyph_sequence(data: &mut crate::paragraph::ParagraphData) {
+        use crate::analysis::units::UnitKind;
+        let UnitKind::Cluster { run, space, .. } = data.units[0].kind else {
+            panic!("expected one shaped cluster");
+        };
+        data.units[0].kind = UnitKind::Cluster {
+            run,
+            glyphs: 0..3,
+            space,
+        };
+        data.glyphs.advance = [i32::MAX, 64, -64]
+            .into_iter()
+            .map(crate::geometry::LayoutUnit::from_raw)
+            .collect();
+    }
+
+    let data = std::sync::Arc::get_mut(&mut paragraph.data).unwrap();
+    set_saturating_glyph_sequence(data);
+    let first = data.first_line.as_mut().unwrap();
+    set_saturating_glyph_sequence(std::sync::Arc::get_mut(&mut first.data).unwrap());
+
+    let measure = |force_reference| {
+        let _guard = IntrinsicReferenceGuard::new(force_reference);
+        crate::line::intrinsic::MEASURE_PASSES.with(|passes| passes.set(0));
+        let mut cx = crate::LayoutContext::new();
+        let sizes = paragraph.intrinsic_sizes(
+            &mut cx,
+            &crate::style::LineOptions::default(),
+            &crate::AtomicIntrinsics::EMPTY,
+        );
+        (
+            [sizes.min_content.to_bits(), sizes.max_content.to_bits()],
+            cx.take_warnings(),
+            crate::line::intrinsic::MEASURE_PASSES.with(std::cell::Cell::get),
+        )
+    };
+    let optimized = measure(false);
+    let reference = measure(true);
+    assert_eq!(optimized.0, reference.0);
+    assert_eq!(optimized.1, reference.1);
+    assert_eq!(
+        optimized.2, 2,
+        "intermediate saturation keeps reference walks"
+    );
+    assert_eq!(reference.2, 2, "reference path retains both walks");
+}
+
+#[test]
+fn first_line_font_size_change_measures_simple_text_in_one_pass() {
+    let fonts = fonts();
+    let mut style = font_paint_style();
+    style.first_line.as_mut().unwrap().font_size = 22.0;
+    let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+    let text = "1 22 333\n444 55 6 ".repeat(80);
+    builder.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        text.trim_end(),
+    );
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    let measure = || {
+        crate::line::intrinsic::MEASURE_PASSES.with(|passes| passes.set(0));
+        let mut cx = crate::LayoutContext::new();
+        let sizes = paragraph.intrinsic_sizes(
+            &mut cx,
+            &crate::style::LineOptions::default(),
+            &crate::AtomicIntrinsics::EMPTY,
+        );
+        (
+            [sizes.min_content.to_bits(), sizes.max_content.to_bits()],
+            cx.take_warnings(),
+            crate::line::intrinsic::MEASURE_PASSES.with(std::cell::Cell::get),
+        )
+    };
+    let optimized = measure();
+    let reference = {
+        let _guard = IntrinsicReferenceGuard::new(true);
+        measure()
+    };
+    assert_eq!(optimized.0, reference.0);
+    assert_eq!(optimized.1, reference.1);
+    assert_eq!(optimized.2, 1, "simple size changes share one unit walk");
+    assert_eq!(reference.2, 2, "reference path retains both walks");
+}
+
+#[test]
+fn first_line_font_size_change_with_letter_spacing_keeps_reference_walks() {
+    let fonts = fonts();
+    let mut style = font_paint_style();
+    style.root.letter_spacing = 1.0;
+    style.first_line.as_mut().unwrap().letter_spacing = 1.0;
+    style.first_line.as_mut().unwrap().font_size = 22.0;
+    let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+    builder.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        "1 22 333\n444 55 6",
+    );
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    let measure = || {
+        crate::line::intrinsic::MEASURE_PASSES.with(|passes| passes.set(0));
+        let mut cx = crate::LayoutContext::new();
+        let sizes = paragraph.intrinsic_sizes(
+            &mut cx,
+            &crate::style::LineOptions::default(),
+            &crate::AtomicIntrinsics::EMPTY,
+        );
+        (
+            [sizes.min_content.to_bits(), sizes.max_content.to_bits()],
+            cx.take_warnings(),
+            crate::line::intrinsic::MEASURE_PASSES.with(std::cell::Cell::get),
+        )
+    };
+    let optimized = measure();
+    let reference = {
+        let _guard = IntrinsicReferenceGuard::new(true);
+        measure()
+    };
+    assert_eq!(optimized.0, reference.0);
+    assert_eq!(optimized.1, reference.1);
+    assert_eq!(optimized.2, 2, "tracking requires the reference walks");
+    assert_eq!(reference.2, 2, "reference path retains both walks");
+}
+
+#[test]
+fn first_line_font_size_change_with_ligatures_keeps_reference_walks() {
+    let fonts = fonts();
+    let mut style = font_paint_style();
+    style.first_line.as_mut().unwrap().font_size = 22.0;
+    let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+    let text = "office affinity first line waffle official ".repeat(80);
+    builder.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        text.trim_end(),
+    );
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    crate::line::intrinsic::MEASURE_PASSES.with(|passes| passes.set(0));
+    let mut optimized_cx = crate::LayoutContext::new();
+    let sizes = paragraph.intrinsic_sizes(
+        &mut optimized_cx,
+        &crate::style::LineOptions::default(),
+        &crate::AtomicIntrinsics::EMPTY,
+    );
+    let optimized = (
+        [sizes.min_content.to_bits(), sizes.max_content.to_bits()],
+        optimized_cx.take_warnings(),
+        crate::line::intrinsic::MEASURE_PASSES.with(std::cell::Cell::get),
+    );
+    let reference = {
+        let _guard = IntrinsicReferenceGuard::new(true);
+        crate::line::intrinsic::MEASURE_PASSES.with(|passes| passes.set(0));
+        let mut cx = crate::LayoutContext::new();
+        let sizes = paragraph.intrinsic_sizes(
+            &mut cx,
+            &crate::style::LineOptions::default(),
+            &crate::AtomicIntrinsics::EMPTY,
+        );
+        (
+            [sizes.min_content.to_bits(), sizes.max_content.to_bits()],
+            cx.take_warnings(),
+            crate::line::intrinsic::MEASURE_PASSES.with(std::cell::Cell::get),
+        )
+    };
+    assert_eq!(optimized.0, reference.0);
+    assert_eq!(optimized.1, reference.1);
+    assert_eq!(optimized.2, 2, "edge reshaping keeps both reference walks");
+    assert_eq!(reference.2, 2, "reference path retains both walks");
+}
+
+#[test]
+fn first_line_nonfinite_indent_keeps_warning_and_suppression_order() {
+    let fonts = fonts();
+    let style = font_paint_style();
+    let limits = Limits {
+        max_warnings: Some(1),
+        ..Limits::default()
+    };
+    let mut builder = ParagraphBuilder::new(&style, &limits);
+    builder.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        "a short plain paragraph",
+    );
+    let paragraph = builder
+        .build(&mut crate::LayoutContext::new(), &fonts)
+        .unwrap();
+    let mut options = crate::style::LineOptions::default();
+    options.text_indent.length = f32::NAN;
+    let measure = || {
+        crate::line::intrinsic::MEASURE_PASSES.with(|passes| passes.set(0));
+        let mut cx = crate::LayoutContext::new();
+        let sizes = paragraph.intrinsic_sizes(&mut cx, &options, &crate::AtomicIntrinsics::EMPTY);
+        (
+            [sizes.min_content.to_bits(), sizes.max_content.to_bits()],
+            cx.take_warnings(),
+            crate::line::intrinsic::MEASURE_PASSES.with(std::cell::Cell::get),
+        )
+    };
+    let optimized = measure();
+    let reference = {
+        let _guard = IntrinsicReferenceGuard::new(true);
+        measure()
+    };
+    assert_eq!(optimized.0, reference.0);
+    assert_eq!(optimized.1, reference.1);
+    assert_eq!(optimized.1.len(), 2);
+    assert_eq!(optimized.2, 2, "invalid indent keeps both warning passes");
 }
 
 #[test]

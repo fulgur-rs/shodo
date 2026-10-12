@@ -534,6 +534,8 @@ impl Paragraph {
             alternate.source_spans = Vec::new();
             data.first_line = Some(FirstLineData {
                 data: Arc::new(alternate),
+                intrinsic_geometry_reused: alternate_reuses_analysis,
+                intrinsic_single_pass_safe: false,
                 alternate_cursors: normal_cursors
                     .iter()
                     .enumerate()
@@ -559,6 +561,17 @@ impl Paragraph {
                 &first.normal_cursors,
                 &mut bases,
             )?;
+        }
+        let intrinsic_single_pass_safe = data.first_line.as_ref().is_some_and(|first| {
+            first.intrinsic_geometry_reused
+                && crate::line::intrinsic::single_pass_safe(
+                    &data,
+                    first,
+                    &crate::style::LineOptions::default(),
+                )
+        });
+        if let Some(first) = &mut data.first_line {
+            first.intrinsic_single_pass_safe = intrinsic_single_pass_safe;
         }
         warnings.record_saturation(&sat);
         data.warnings = warnings.take();

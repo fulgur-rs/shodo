@@ -57,6 +57,10 @@ impl FloatCursor {
 
 pub(crate) struct FirstLineData {
     pub(crate) data: Arc<ParagraphData>,
+    /// The alternate has identical non-paint styles and therefore intrinsic geometry.
+    pub(crate) intrinsic_geometry_reused: bool,
+    /// Whether its immutable unit data can use the one-walk intrinsic geometry path.
+    pub(crate) intrinsic_single_pass_safe: bool,
     /// Exact alternate-unit cursors in the normal set; absent cuts are prohibited.
     pub(crate) normal_cursors: Vec<Option<u32>>,
     pub(crate) alternate_cursors: Vec<(u32, u32)>,

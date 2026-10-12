@@ -1,0 +1,114 @@
+{
+  "schema": "shodo-17-first-line-intrinsic-v1",
+  "date": "2026-10-12",
+  "baseline_commit": "654c789290215b52f1e71a39357cc64f94182001",
+  "candidate_commit": "b5404e95b461403e60eab8671d85ec2607bb1470",
+  "machine": {
+    "os": "Linux x86_64",
+    "kernel": "7.2.5-3-omarchy",
+    "cpu": "AMD Ryzen 5 5600G with Radeon Graphics",
+    "logical_cpus": 12,
+    "cpu_affinity": null
+  },
+  "toolchain": "rustc 1.97.1 (8bab26f4f 2026-07-14); LLVM 22.1.6",
+  "profile": "release",
+  "benchmark": {
+    "source": "dev/bench/examples/first_line_intrinsic_scale.rs",
+    "source_sha256": "0c9eaebec374e93edb6ca9213f44ac5a9b887efc4d7b57d6855ad8c2f1775e76",
+    "command": "cargo +stable run --release -p shodo-bench --example first_line_intrinsic_scale -- 4000 9",
+    "word_count": 4000,
+    "samples_per_case": 9,
+    "warmup_rounds": 3,
+    "case_order": "rotates each round",
+    "timed_region": "Paragraph::intrinsic_sizes only; paragraph and context construction excluded",
+    "runner": "kache test-runner",
+    "baseline_binary_sha256": "3781643b0c8d79c75f0bce2cbd695a763a7a20362f5aa3243c2a1d00f6247bfe",
+    "candidate_binary_sha256": "0b7d6bab7d942d76d495de24d53f8acdbff4ea7c8427b07f8e76ffb3f30908b3"
+  },
+  "cases": [
+    {
+      "name": "none",
+      "median_ns": {"baseline": 11436232, "candidate": 11625720},
+      "candidate_over_baseline": 1.0166,
+      "baseline_samples_ns": [11336773, 11411646, 11424777, 11430435, 11436232, 11480583, 11788808, 12268710, 12347356],
+      "candidate_samples_ns": [11500140, 11554129, 11577108, 11621389, 11625720, 11644369, 12059037, 12091026, 15659740],
+      "output": "IntrinsicSizes { min_content: 60.6875, max_content: 167250.48 }[]"
+    },
+    {
+      "name": "same",
+      "median_ns": {"baseline": 23176846, "candidate": 23680706},
+      "candidate_over_baseline": 1.0217,
+      "baseline_samples_ns": [23018578, 23036738, 23044211, 23157220, 23176846, 23186345, 23450079, 24220116, 24513603],
+      "candidate_samples_ns": [22619066, 23005377, 23399162, 23641034, 23680706, 24110879, 24179117, 24274526, 28434616],
+      "output": "IntrinsicSizes { min_content: 60.6875, max_content: 167250.48 }[]"
+    },
+    {
+      "name": "paint",
+      "median_ns": {"baseline": 23375904, "candidate": 23868379},
+      "candidate_over_baseline": 1.0211,
+      "baseline_samples_ns": [23039950, 23103300, 23127117, 23266457, 23375904, 23399301, 24082104, 24143776, 24554533],
+      "candidate_samples_ns": [22954112, 22966963, 23461883, 23819767, 23868379, 23923905, 27131454, 27667581, 27869363],
+      "output": "IntrinsicSizes { min_content: 60.6875, max_content: 167250.48 }[]"
+    },
+    {
+      "name": "none-simple",
+      "median_ns": {"baseline": 938294, "candidate": 913638},
+      "candidate_over_baseline": 0.9737,
+      "baseline_samples_ns": [922160, 927048, 929423, 933474, 938294, 939411, 949119, 973425, 1275993],
+      "candidate_samples_ns": [900647, 901625, 905117, 906794, 913638, 914966, 916921, 927259, 1388023],
+      "output": "IntrinsicSizes { min_content: 36.625, max_content: 94448.97 }[]"
+    },
+    {
+      "name": "paint-simple",
+      "median_ns": {"baseline": 1980237, "candidate": 279868},
+      "candidate_over_baseline": 0.1413,
+      "speedup": 7.08,
+      "baseline_samples_ns": [1968224, 1969760, 1976046, 1978002, 1980237, 2001958, 2005800, 2065237, 2301103],
+      "candidate_samples_ns": [270718, 273652, 275118, 275188, 279868, 281404, 290833, 291602, 303335],
+      "output": "IntrinsicSizes { min_content: 36.625, max_content: 94448.97 }[]"
+    },
+    {
+      "name": "none-geometry",
+      "median_ns": {"baseline": 929633, "candidate": 915244},
+      "candidate_over_baseline": 0.9845,
+      "baseline_samples_ns": [914057, 915175, 929074, 929214, 929633, 933475, 957571, 1006393, 1008977],
+      "candidate_samples_ns": [900857, 904839, 910915, 915036, 915244, 917759, 923976, 934033, 969165],
+      "output": "IntrinsicSizes { min_content: 36.625, max_content: 94448.97 }[]"
+    },
+    {
+      "name": "paint-geometry",
+      "median_ns": {"baseline": 1982752, "candidate": 1054585},
+      "candidate_over_baseline": 0.5319,
+      "speedup": 1.88,
+      "baseline_samples_ns": [1965151, 1977094, 1979399, 1981006, 1982752, 1983101, 1990085, 2001051, 2081581],
+      "candidate_samples_ns": [1047530, 1050813, 1051372, 1051791, 1054585, 1070649, 1119960, 1580446, 1692687],
+      "output": "IntrinsicSizes { min_content: 36.625, max_content: 94448.97 }[]"
+    },
+    {
+      "name": "size-simple",
+      "median_ns": {"baseline": 1975697, "candidate": 281683},
+      "candidate_over_baseline": 0.1426,
+      "speedup": 7.01,
+      "baseline_samples_ns": [1968503, 1972484, 1972763, 1975068, 1975697, 1979259, 1989037, 1994416, 2000003],
+      "candidate_samples_ns": [265759, 273582, 273861, 276585, 281683, 283919, 287900, 326175, 516920],
+      "output": "IntrinsicSizes { min_content: 36.625, max_content: 129783.34 }[]"
+    },
+    {
+      "name": "size-ligature",
+      "median_ns": {"baseline": 23187951, "candidate": 23352855},
+      "candidate_over_baseline": 1.0071,
+      "baseline_samples_ns": [23111192, 23124742, 23127116, 23177824, 23187951, 23398673, 23441418, 23495966, 24218789],
+      "candidate_samples_ns": [22773982, 23091985, 23212537, 23315418, 23352855, 23441767, 23985787, 24780620, 29605004],
+      "output": "IntrinsicSizes { min_content: 60.6875, max_content: 229931.4 }[]"
+    }
+  ],
+  "verification": {
+    "cargo_test_workspace": "passed; shodo lib: 863 passed, 8 ignored; all workspace tests and doctests passed",
+    "cargo_test_workspace_accesskit": "passed; shodo lib: 865 passed, 8 ignored; all workspace tests and doctests passed",
+    "clippy_workspace_all_targets_deny_warnings": "passed",
+    "clippy_workspace_all_targets_accesskit_deny_warnings": "passed",
+    "cargo_fmt_all_check": "passed",
+    "git_diff_check": "passed"
+  },
+  "scope_note": "Local timing observation without CPU affinity. The eligibility scan is cached during paragraph construction, whose cost is outside the timed region. Runtime eligibility still checks options and warning state. Ruby, structures, nonzero spacing, unsafe shaping edges, negative advances, potentially saturating widths, and non-default indents retain the established fallback."
+}
