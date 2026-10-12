@@ -139,8 +139,8 @@ pub(super) fn resolve_with_warning(
                 let delta = metric_font
                     .vvar()
                     .ok()
-                    .and_then(|v| v.advance_height_delta(g, metric_instance.coords()).ok())
-                    .map_or(0.0, |d| d.to_f32());
+                    .and_then(|v| v.advance_delta(g, metric_instance.coords()))
+                    .map_or(0.0, |d| d.to_i32() as f32);
                 Some(nominal + delta)
             }),
         };
@@ -206,7 +206,10 @@ pub(super) fn resolve_with_warning(
     });
     // Default coordinates may be cleared while Harfrust retains its heap
     // capacity. Inspect the face's axis count, not the resulting slice length.
-    let inline_coords = font.fvar().ok().is_none_or(|fvar| fvar.axis_count() <= 11);
+    let inline_coords = metric_font
+        .fvar()
+        .ok()
+        .is_none_or(|fvar| fvar.axis_count() <= 11);
     (instance, result, size, warning, inline_coords)
 }
 fn set_variation(
@@ -494,7 +497,7 @@ mod tests {
             varied
                 .vvar()
                 .unwrap()
-                .advance_height_delta(glyph, instance.coords())
+                .advance_delta(glyph, instance.coords())
                 .unwrap()
                 .to_f32(),
             100.0

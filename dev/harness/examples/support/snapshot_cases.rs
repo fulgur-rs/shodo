@@ -81,7 +81,7 @@ pub fn case_ids() -> Vec<String> {
         .collect()
 }
 pub fn conditions() -> Value {
-    json!({"canvas":[512,1024],"scale":1,"origin":[10,10],"background":[255,255,255,255],"renderer":"skrifa-0.44.0/tiny-skia-0.12.0/unhinted", "fonts":FONTS.iter().map(|f|json!({"id":f.id,"sha256":f.sha256,"face":f.face_index})).collect::<Vec<_>>()})
+    json!({"canvas":[512,1024],"scale":1,"origin":[10,10],"background":[255,255,255,255],"renderer":"skrifa-0.48.0/tiny-skia-0.12.0/unhinted", "fonts":FONTS.iter().map(|f|json!({"id":f.id,"sha256":f.sha256,"face":f.face_index})).collect::<Vec<_>>()})
 }
 fn fixed_font(run: shodo::GlyphRunView<'_>) -> Result<&'static str, String> {
     let data = run.font_data().ok_or("accepted glyph has no font bytes")?;

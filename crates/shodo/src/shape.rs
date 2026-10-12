@@ -81,12 +81,12 @@ fn cff_vertical_origin_delta(
         + tsb
         + vvar
             .as_ref()
-            .and_then(|v| v.tsb_delta(glyph, coords).ok())
-            .map_or(0.0, |delta| delta.to_f32())
+            .and_then(|v| v.tsb_delta(glyph, coords))
+            .map_or(0.0, |delta| delta.to_i32() as f32)
         + vvar
             .as_ref()
-            .and_then(|v| v.v_org_delta(glyph, coords).ok())
-            .map_or(0.0, |delta| delta.to_f32());
+            .and_then(|v| v.v_origin_y_delta(glyph, coords))
+            .map_or(0.0, |delta| delta.to_i32() as f32);
     let ascent = font
         .os2()
         .ok()
@@ -100,7 +100,7 @@ fn cff_vertical_origin_delta(
     let ascent_delta = font
         .mvar()
         .ok()
-        .and_then(|mvar| mvar.metric_delta(skrifa::Tag::new(b"hasc"), coords).ok())
+        .and_then(|mvar| mvar.metric_delta(skrifa::Tag::new(b"hasc"), coords))
         .map_or(0.0, |delta| delta.to_f32());
     Some(origin - ascent - ascent_delta)
 }

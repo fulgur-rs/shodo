@@ -589,7 +589,7 @@
       10,
       10
     ],
-    "renderer": "skrifa-0.44.0/tiny-skia-0.12.0/unhinted",
+    "renderer": "skrifa-0.48.0/tiny-skia-0.12.0/unhinted",
     "scale": 1
   },
   "provenance": "Explicit agent-generated fixed-output expectations; review/commit through PR, no claim of separate human approval or browser conformance.",
