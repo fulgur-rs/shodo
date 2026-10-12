@@ -1718,5 +1718,186 @@
       "minor": 0
     },
     "performance_note": "Not remeasured. Original timing and allocation results remain pinned to 87397ff355950407add5adda3ed5da1702add89b."
+  },
+  "retry_followup": {
+    "fixed_revision": "90fb5671782a9a5118a7e3c9118596f90becd6e9",
+    "review_comments": [
+      4243804519,
+      4243804526,
+      4243804531
+    ],
+    "reproductions": [
+      {
+        "path": "cached pulled closing edges",
+        "available_px": 19.171875,
+        "old_range": [
+          13,
+          18
+        ],
+        "old_width_px": 20.671875,
+        "reproduced": true
+      },
+      {
+        "path": "hyphen before bidi and inline closing controls",
+        "input": ",VA VA­",
+        "font": "fixed Latin 16px",
+        "direction": "RTL IsolateOverride",
+        "atomic_inline_size_px": 2000,
+        "hanging_force_end": true,
+        "available_px": 46.859375,
+        "wide_range": [
+          0,
+          20
+        ],
+        "old_fresh_range": [
+          0,
+          10
+        ],
+        "reproduced": true
+      },
+      {
+        "path": "cached hyphen end with no overflowing plain-body threshold",
+        "available_px": 46.84375,
+        "old_cached_range": [
+          0,
+          14
+        ],
+        "fresh_range": [
+          0,
+          7
+        ],
+        "hyphen_width_px": 46.859375,
+        "direction": "RTL BidiOverride",
+        "reproduced": true
+      },
+      {
+        "path": "cached physical paragraph end with hanging space",
+        "reproduced": false,
+        "note": "Regression scenarios matched before the fix; align the final-unit predicate with fresh scan, without claiming a demonstrated failure. Tab retries are excluded from this cache."
+      }
+    ],
+    "changes": [
+      "Share pulled closing advances, post-pull Clone decoration and punctuation barriers between scan and cache index.",
+      "Share visible-prefix punctuation summary for hanging final whitespace.",
+      "Insert visible hyphen before pulled bidi/inline closing units in scan and retry summaries. Intrinsic sizing retains its original i+1 boundary.",
+      "Validate retained end hyphen required width against available minus indent even if no plain-body threshold overflows; otherwise select an earlier fitting candidate."
+    ],
+    "regression_tests": [
+      {
+        "name": "paragraph_end_retries_check_hanging_space_width",
+        "collapse": [
+          "Collapse",
+          "Preserve"
+        ],
+        "widths_px": [
+          28.125,
+          28.25,
+          28.625,
+          28.75
+        ],
+        "checks": "Each continuation token: cached retry equals fresh range, width, reason and token; no fresh rescan."
+      },
+      {
+        "name": "paragraph_end_retries_check_pulled_closing_edges",
+        "decoration": [
+          "Slice",
+          "Clone"
+        ],
+        "widths_px": [
+          19.171875,
+          28.125,
+          28.625,
+          29.875
+        ],
+        "checks": "Each continuation token: cached retry equals fresh result, fits, and uses the retry index."
+      },
+      {
+        "name": "hyphen_before_closing_controls_fits_at_its_materialized_width",
+        "bidi": [
+          "BidiOverride",
+          "IsolateOverride"
+        ],
+        "retry_width_offsets_px": [
+          0.015625,
+          0,
+          -0.015625,
+          -0.015625
+        ],
+        "checks": "Visible soft hyphen, exact natural width, and decreasing/repeated same-context retries match fresh results without rescanning."
+      }
+    ],
+    "checks": [
+      {
+        "name": "fmt",
+        "command": "cargo +stable fmt --all -- --check",
+        "exit_code": 0,
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "workspace",
+        "command": "cargo +stable test --offline --release --workspace --quiet",
+        "exit_code": 0,
+        "passed": 1778,
+        "failed": 0,
+        "ignored": 9
+      },
+      {
+        "name": "no-default",
+        "command": "cargo +stable test --offline --release -p shodo --no-default-features --quiet",
+        "exit_code": 0,
+        "passed": 1240,
+        "failed": 0,
+        "ignored": 9
+      },
+      {
+        "name": "complex-only",
+        "command": "cargo +stable test --offline --release -p shodo --no-default-features --features complex-scripts --quiet",
+        "exit_code": 0,
+        "passed": 1242,
+        "failed": 0,
+        "ignored": 9
+      },
+      {
+        "name": "clippy",
+        "command": "cargo +stable clippy --offline --workspace --all-targets -- -D warnings",
+        "exit_code": 0,
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "docs",
+        "command": "cargo +stable doc --offline --workspace --no-deps",
+        "exit_code": 0,
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "line_tests": {
+      "passed": 22,
+      "failed": 0,
+      "ignored": 0
+    },
+    "line_module_tests": {
+      "passed": 186,
+      "failed": 0,
+      "ignored": 0
+    },
+    "snapshot": {
+      "cases": 46,
+      "passed": true,
+      "partial": false,
+      "updated": false,
+      "changed_pixels": 0
+    },
+    "review": {
+      "critical": 0,
+      "important": 0,
+      "note": "Final static review; execution results recorded separately."
+    },
+    "performance_note": "Not remeasured after review fixes. Original timings and allocations remain pinned to 87397ff355950407add5adda3ed5da1702add89b."
   }
 }

@@ -3,7 +3,8 @@
 2026-10-12。変更前の実装は `68e13e27ed1fec40bc184cd0e08e873c632c02ae`。
 初回修正の実装・性能測定対象は `87397ff355950407add5adda3ed5da1702add89b`。
 PRレビュー後の追加修正は `85303f0d0dba1ba84606cbfe7532c7a70d01e61c` に保存した。
-閉じ余白の句読点barrierを保持する最終修正は `20727f77ba96c6d91ae89797e8fc2e31b4d5e6f7`。
+閉じ余白の句読点barrierを保持する追加修正は `20727f77ba96c6d91ae89797e8fc2e31b4d5e6f7`。
+キャッシュ再試行とハイフン幅の最終修正は `90fb5671782a9a5118a7e3c9118596f90becd6e9`。
 測定結果と条件の集計は [JSON](shodo-15-paragraph-end-2026-10-12.json) に保存した。
 
 ## 再現と原因
@@ -209,3 +210,54 @@ complex-scriptsのみ1,239件が成功（全体はいずれも0 failed、9 ignor
 snapshot全46件match、partial=false、更新なし、changed pixels=0。
 静的レビューにCritical / Important / Minor指摘なし。実測性能はこの追加修正後も
 再計測しておらず、上記性能表の対象コミットは変えない。
+
+### キャッシュ再試行とハイフン挿入順の整合
+
+`bd097629b36fd4f938e3ec238e9e496d6d7204e0` の追加レビューを確認した。
+[キャッシュの閉じ余白](https://github.com/fulgur-rs/shodo/pull/289#discussion_r4243804526)
+では、幅19.171875pxへの再試行が行`13..18`・20.671875pxとなる失敗を再現した。
+走査とキャッシュの候補評価で、取り込むClose/Bidiの実幅、取り込み後のClone装飾幅、
+句読点barrierの計算を共有し、通常・emergency・hyphen候補へ同じ補正を渡す。
+
+[ハイフン挿入順](https://github.com/fulgur-rs/shodo/pull/289#discussion_r4243804531)
+は、固定Latin 16pxのRTL IsolateOverride内に`,VA VA\u{ad}`、ゼロ幅の閉じ要素、
+幅2000pxのatomicを続け、`hanging_punctuation.force_end=true`で再現した。
+幅1000pxで選ぶハイフン行の実幅46.859375pxをそのまま指定すると、修正前の通常走査は
+行`0..20`ではなく`0..10`を選び、収まるハイフン候補を捨てた。
+可視ハイフンをClose/Bidiの前へ挿入してから候補のsummaryを求め、描画順と一致させる。
+既存のintrinsic sizing呼び出しは元と同じ`i+1`の範囲を維持する。
+
+さらに、通常本文のthresholdが超過しなくても、可視ハイフンの挿入で超過する境界を
+再現した。自然幅46.859375pxの1/64px手前（46.84375px）では、修正前のキャッシュが
+`0..14`・46.859375pxを返し、通常走査は`0..7`・18.375pxを選んだ（BidiOverride）。
+保持した終端を再利用する際もハイフン候補の必要幅を`available - indent`と比較し、
+超過時は既存の候補選択へ合流する。改行後に取り込む閉じ要素と、収まる候補がない場合の
+既存のフォールバックは維持する。境界幅のテストは修正前に失敗することを確認した。
+
+[末尾空白のキャッシュ指摘](https://github.com/fulgur-rs/shodo/pull/289#discussion_r4243804519)
+については、調べた入力で修正前のfreshとcacheの差を再現できなかった。
+段落末尾のhangable unitも検証する条件を通常走査と揃え、可視本文の句読点summaryを
+共有した。キャッシュはタブを含む走査を保持しないため、タブ再試行の失敗とは扱わない。
+
+追加した3テストは、Collapse/Preserveの末尾空白とSlice/Cloneの閉じ余白について、
+各継続tokenで広い行からの再試行とfreshの範囲・幅・改行理由・tokenが一致し、
+キャッシュを再走査しないことを確認する。ハイフンはBidiOverride/IsolateOverride双方で、
+同一contextを自然幅+1/64px、自然幅、自然幅-1/64px、同じ幅の順に再試行して検証する。
+
+最終修正のローカル検証（前記と同じRust/Cargo 1.97.1、隔離target、release debug 0）:
+
+- 行モジュール全186件（行走査22件を含む）成功。
+- workspace: 1,778 passed、0 failed、9 ignored。
+- no-default-features: 1,240 passed、0 failed、9 ignored。
+- complex-scriptsのみ: 1,242 passed、0 failed、9 ignored。
+- fmt、diff check、Clippy全workspace/all-targets、rustdoc warnings-as-errors: 成功。
+- snapshot全46件match、partial=false、更新なし、changed pixels=0。
+- 最終の読み取り専用レビューにCritical / Important指摘なし。
+
+```bash
+cargo +stable test --offline --release -p shodo --lib line::
+```
+
+最終修正後の時間・allocationは再測定していない。初回修正の性能測定対象は変更せず、
+最終コミットのRust 1.89・WasmはPR CIで確認する。再現条件と結果は本記録およびJSONに
+保存したため、一時の診断プログラム・ログ・隔離target・worktreeは作業終了時に片付ける。
