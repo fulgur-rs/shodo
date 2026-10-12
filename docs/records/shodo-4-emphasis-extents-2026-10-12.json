@@ -1,0 +1,3378 @@
+{
+  "baseline": "9e12da277bc5a241783c253d29552d92a42a7553",
+  "timing": [
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 11014307840000,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        8321564,
+        8584460,
+        8483674,
+        8041906,
+        8349363
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 0,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 11014307840000,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        8492404,
+        8446028,
+        8610372,
+        8482697,
+        8458321
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 0,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 11014307840000,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        8964903,
+        8387917,
+        8396438,
+        8344823,
+        8953239
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 1,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 11014307840000,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        8021862,
+        8055037,
+        8013201,
+        8092614,
+        8067749
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 1,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 11014307840000,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        8045120,
+        8077038,
+        8050428,
+        8020185,
+        8032548
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 2,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 11014307840000,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        8506933,
+        8419697,
+        8445050,
+        8414318,
+        8489541
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 2,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 11014307840000,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        8495827,
+        8264781,
+        8251021,
+        8273931,
+        8284267
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 3,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 11014307840000,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        8090728,
+        8157011,
+        8085909,
+        8078156,
+        8080810
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 3,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 11014307840000,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        8059717,
+        8114964,
+        8031919,
+        7998254,
+        8013759
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 4,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 11014307840000,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        8289576,
+        8201711,
+        8201851,
+        8186974,
+        8188930
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 4,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 11014307840000,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        8318841,
+        8341749,
+        8324918,
+        8444561,
+        8310180
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 5,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 11014307840000,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        8093103,
+        8046517,
+        8016832,
+        8028776,
+        8048473
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 5,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 11014307840000,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        8032129,
+        8057622,
+        8006147,
+        8006425,
+        7995181
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 6,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 11014307840000,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        8223014,
+        8263523,
+        8195984,
+        8188441,
+        8193749
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 6,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 1101430784000,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        34266668,
+        34285526,
+        34390153,
+        34365707,
+        34628741
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 0,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 1101430784000,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        37288284,
+        37413725,
+        37415332,
+        37303789,
+        37370142
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 0,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 1101430784000,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        37299390,
+        37932600,
+        37078401,
+        37272430,
+        37212293
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 1,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 1101430784000,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        34562529,
+        34505116,
+        34394343,
+        34427310,
+        34729039
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 1,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 1101430784000,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        34158478,
+        34320657,
+        34185368,
+        34292440,
+        34247670
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 2,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 1101430784000,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        37473931,
+        37375870,
+        37334731,
+        37277808,
+        37325930
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 2,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 1101430784000,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        37532810,
+        37766370,
+        37430977,
+        37451581,
+        37675992
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 3,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 1101430784000,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        37281021,
+        34697538,
+        34290554,
+        34615960,
+        34485421
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 3,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 1101430784000,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        34799092,
+        34785264,
+        34504000,
+        34574332,
+        34447146
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 4,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 1101430784000,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        37700088,
+        37416728,
+        37732635,
+        37351284,
+        37439288
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 4,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 1101430784000,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        37486713,
+        37559141,
+        37284024,
+        37822805,
+        37220954
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 5,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 1101430784000,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        34540179,
+        34606601,
+        34402376,
+        34438764,
+        34613935
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 5,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 1101430784000,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        34117479,
+        34011315,
+        34044562,
+        34393575,
+        34109937
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 6,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "marked",
+      "consumed": 1101430784000,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        37858426,
+        38179013,
+        38215890,
+        38087795,
+        38045470
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 6,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 10994319360000,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        4795320,
+        4960224,
+        4941575,
+        4783307,
+        4726453
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 0,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 10994319360000,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        4775415,
+        4746359,
+        4784983,
+        4751109,
+        4758023
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 0,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 10994319360000,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        4667365,
+        4686432,
+        4989209,
+        4955544,
+        4641453
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 1,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 10994319360000,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        5208871,
+        5545661,
+        4983342,
+        4989069,
+        4985507
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 1,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 10994319360000,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        5070159,
+        4774367,
+        4775345,
+        4772412,
+        4782259
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 2,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 10994319360000,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        4704453,
+        4706199,
+        4709621,
+        4662825,
+        4668483
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 2,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 10994319360000,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        4664711,
+        4689227,
+        4659962,
+        4661847,
+        4639707
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 3,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 10994319360000,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        4839532,
+        5024061,
+        4938712,
+        4769547,
+        4764449
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 3,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 10994319360000,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        4798603,
+        4782609,
+        4804052,
+        4766615,
+        4765427
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 4,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 10994319360000,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        4689716,
+        5047878,
+        4670718,
+        4658635,
+        4692230
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 4,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 10994319360000,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        4680635,
+        4675956,
+        4661428,
+        4697887,
+        4653187
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 5,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 10994319360000,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        4796717,
+        4779396,
+        4761306,
+        4771015,
+        4780164
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 5,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 10994319360000,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        4853082,
+        4820604,
+        4799511,
+        4775764,
+        4817391
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 6,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 10994319360000,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        4750341,
+        4793924,
+        4724289,
+        4731343,
+        4733019
+      ],
+      "iterations": 2000,
+      "runs": 8,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 6,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 1099431936000,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        17940912,
+        17981422,
+        17952856,
+        18057134,
+        17973460
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 0,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 1099431936000,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        18387848,
+        18515244,
+        18429056,
+        18405797,
+        18405658
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 0,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 1099431936000,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        18447635,
+        18339095,
+        18537734,
+        18374856,
+        18659962
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 1,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 1099431936000,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        18151354,
+        18108329,
+        17848996,
+        17982958,
+        18297050
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 1,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 1099431936000,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        18628462,
+        18170003,
+        18117549,
+        18178104,
+        18196054
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 2,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 1099431936000,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        18667715,
+        18480112,
+        18577057,
+        18521879,
+        18672115
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 2,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 1099431936000,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        18385333,
+        18249136,
+        18520482,
+        18849031,
+        18434015
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 3,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 1099431936000,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        18120413,
+        18163577,
+        18391409,
+        18182853,
+        18408312
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 3,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 1099431936000,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        18156103,
+        18118457,
+        18255352,
+        18137105,
+        18480042
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 4,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 1099431936000,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        18750271,
+        18990746,
+        18707735,
+        19114720,
+        18736023
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 4,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 1099431936000,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        18400839,
+        18846657,
+        18263384,
+        18275327,
+        19066109
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 5,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 1099431936000,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        18182853,
+        17904313,
+        17825179,
+        17863315,
+        17886153
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 5,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 1099431936000,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        18262337,
+        18028217,
+        18262756,
+        18020604,
+        18073477
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "baseline",
+      "pair": 6,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "case": "control",
+      "consumed": 1099431936000,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        18422211,
+        18314580,
+        18417461,
+        18382050,
+        18337210
+      ],
+      "iterations": 200,
+      "runs": 512,
+      "samples": 5,
+      "warmup": 20,
+      "revision": "fix",
+      "pair": 6,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    }
+  ],
+  "allocation": [
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 57760,
+          "calls": 410,
+          "deallocated_bytes": 57760,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2360,
+          "start_live_bytes": 504720
+        },
+        {
+          "allocated_bytes": 57760,
+          "calls": 410,
+          "deallocated_bytes": 57760,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2360,
+          "start_live_bytes": 504720
+        },
+        {
+          "allocated_bytes": 57760,
+          "calls": 410,
+          "deallocated_bytes": 57760,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2360,
+          "start_live_bytes": 504720
+        }
+      ],
+      "case": "marked",
+      "consumed": 33042923520,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        44701,
+        43443,
+        43373
+      ],
+      "iterations": 10,
+      "runs": 8,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "baseline",
+      "pair": 0,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 55200,
+          "calls": 390,
+          "deallocated_bytes": 55200,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 504720
+        },
+        {
+          "allocated_bytes": 55200,
+          "calls": 390,
+          "deallocated_bytes": 55200,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 504720
+        },
+        {
+          "allocated_bytes": 55200,
+          "calls": 390,
+          "deallocated_bytes": 55200,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 504720
+        }
+      ],
+      "case": "marked",
+      "consumed": 33042923520,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        45539,
+        44840,
+        44841
+      ],
+      "iterations": 10,
+      "runs": 8,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "fix",
+      "pair": 0,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 55200,
+          "calls": 390,
+          "deallocated_bytes": 55200,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 504720
+        },
+        {
+          "allocated_bytes": 55200,
+          "calls": 390,
+          "deallocated_bytes": 55200,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 504720
+        },
+        {
+          "allocated_bytes": 55200,
+          "calls": 390,
+          "deallocated_bytes": 55200,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 504720
+        }
+      ],
+      "case": "marked",
+      "consumed": 33042923520,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        45958,
+        44421,
+        44281
+      ],
+      "iterations": 10,
+      "runs": 8,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "fix",
+      "pair": 1,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 57760,
+          "calls": 410,
+          "deallocated_bytes": 57760,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2360,
+          "start_live_bytes": 504720
+        },
+        {
+          "allocated_bytes": 57760,
+          "calls": 410,
+          "deallocated_bytes": 57760,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2360,
+          "start_live_bytes": 504720
+        },
+        {
+          "allocated_bytes": 57760,
+          "calls": 410,
+          "deallocated_bytes": 57760,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2360,
+          "start_live_bytes": 504720
+        }
+      ],
+      "case": "marked",
+      "consumed": 33042923520,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        44351,
+        43723,
+        43233
+      ],
+      "iterations": 10,
+      "runs": 8,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "baseline",
+      "pair": 1,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 57760,
+          "calls": 410,
+          "deallocated_bytes": 57760,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2360,
+          "start_live_bytes": 504720
+        },
+        {
+          "allocated_bytes": 57760,
+          "calls": 410,
+          "deallocated_bytes": 57760,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2360,
+          "start_live_bytes": 504720
+        },
+        {
+          "allocated_bytes": 57760,
+          "calls": 410,
+          "deallocated_bytes": 57760,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2360,
+          "start_live_bytes": 504720
+        }
+      ],
+      "case": "marked",
+      "consumed": 33042923520,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        44700,
+        55876,
+        43723
+      ],
+      "iterations": 10,
+      "runs": 8,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "baseline",
+      "pair": 2,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 55200,
+          "calls": 390,
+          "deallocated_bytes": 55200,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 504720
+        },
+        {
+          "allocated_bytes": 55200,
+          "calls": 390,
+          "deallocated_bytes": 55200,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 504720
+        },
+        {
+          "allocated_bytes": 55200,
+          "calls": 390,
+          "deallocated_bytes": 55200,
+          "live_bytes": 504720,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 504720
+        }
+      ],
+      "case": "marked",
+      "consumed": 33042923520,
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "elapsed_ns": [
+        45259,
+        44701,
+        44631
+      ],
+      "iterations": 10,
+      "runs": 8,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "fix",
+      "pair": 2,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 3871840,
+          "calls": 10850,
+          "deallocated_bytes": 3871840,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 147008,
+          "start_live_bytes": 4167660
+        },
+        {
+          "allocated_bytes": 3871840,
+          "calls": 10850,
+          "deallocated_bytes": 3871840,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 147008,
+          "start_live_bytes": 4167660
+        },
+        {
+          "allocated_bytes": 3871840,
+          "calls": 10850,
+          "deallocated_bytes": 3871840,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 147008,
+          "start_live_bytes": 4167660
+        }
+      ],
+      "case": "marked",
+      "consumed": 33042923520,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        2025284,
+        1830697,
+        1829719
+      ],
+      "iterations": 10,
+      "runs": 512,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "baseline",
+      "pair": 0,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 3708000,
+          "calls": 10830,
+          "deallocated_bytes": 3708000,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4167660
+        },
+        {
+          "allocated_bytes": 3708000,
+          "calls": 10830,
+          "deallocated_bytes": 3708000,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4167660
+        },
+        {
+          "allocated_bytes": 3708000,
+          "calls": 10830,
+          "deallocated_bytes": 3708000,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4167660
+        }
+      ],
+      "case": "marked",
+      "consumed": 33042923520,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        1942587,
+        1942309,
+        1958582
+      ],
+      "iterations": 10,
+      "runs": 512,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "fix",
+      "pair": 0,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 3708000,
+          "calls": 10830,
+          "deallocated_bytes": 3708000,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4167660
+        },
+        {
+          "allocated_bytes": 3708000,
+          "calls": 10830,
+          "deallocated_bytes": 3708000,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4167660
+        },
+        {
+          "allocated_bytes": 3708000,
+          "calls": 10830,
+          "deallocated_bytes": 3708000,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4167660
+        }
+      ],
+      "case": "marked",
+      "consumed": 33042923520,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        1932670,
+        1942727,
+        1944403
+      ],
+      "iterations": 10,
+      "runs": 512,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "fix",
+      "pair": 1,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 3871840,
+          "calls": 10850,
+          "deallocated_bytes": 3871840,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 147008,
+          "start_live_bytes": 4167660
+        },
+        {
+          "allocated_bytes": 3871840,
+          "calls": 10850,
+          "deallocated_bytes": 3871840,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 147008,
+          "start_live_bytes": 4167660
+        },
+        {
+          "allocated_bytes": 3871840,
+          "calls": 10850,
+          "deallocated_bytes": 3871840,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 147008,
+          "start_live_bytes": 4167660
+        }
+      ],
+      "case": "marked",
+      "consumed": 33042923520,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        1804993,
+        1960748,
+        1782573
+      ],
+      "iterations": 10,
+      "runs": 512,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "baseline",
+      "pair": 1,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 3871840,
+          "calls": 10850,
+          "deallocated_bytes": 3871840,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 147008,
+          "start_live_bytes": 4167660
+        },
+        {
+          "allocated_bytes": 3871840,
+          "calls": 10850,
+          "deallocated_bytes": 3871840,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 147008,
+          "start_live_bytes": 4167660
+        },
+        {
+          "allocated_bytes": 3871840,
+          "calls": 10850,
+          "deallocated_bytes": 3871840,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 147008,
+          "start_live_bytes": 4167660
+        }
+      ],
+      "case": "marked",
+      "consumed": 33042923520,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        1812956,
+        1806740,
+        1802828
+      ],
+      "iterations": 10,
+      "runs": 512,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "baseline",
+      "pair": 2,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 3708000,
+          "calls": 10830,
+          "deallocated_bytes": 3708000,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4167660
+        },
+        {
+          "allocated_bytes": 3708000,
+          "calls": 10830,
+          "deallocated_bytes": 3708000,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4167660
+        },
+        {
+          "allocated_bytes": 3708000,
+          "calls": 10830,
+          "deallocated_bytes": 3708000,
+          "live_bytes": 4167660,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4167660
+        }
+      ],
+      "case": "marked",
+      "consumed": 33042923520,
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "elapsed_ns": [
+        1987079,
+        1975135,
+        2010337
+      ],
+      "iterations": 10,
+      "runs": 512,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "fix",
+      "pair": 2,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        },
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        },
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        }
+      ],
+      "case": "control",
+      "consumed": 32982958080,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        27239,
+        26750,
+        26681
+      ],
+      "iterations": 10,
+      "runs": 8,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "baseline",
+      "pair": 0,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        },
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        },
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        }
+      ],
+      "case": "control",
+      "consumed": 32982958080,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        26681,
+        26122,
+        26122
+      ],
+      "iterations": 10,
+      "runs": 8,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "fix",
+      "pair": 0,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        },
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        },
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        }
+      ],
+      "case": "control",
+      "consumed": 32982958080,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        27589,
+        26192,
+        26261
+      ],
+      "iterations": 10,
+      "runs": 8,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "fix",
+      "pair": 1,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        },
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        },
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        }
+      ],
+      "case": "control",
+      "consumed": 32982958080,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        28077,
+        27169,
+        26751
+      ],
+      "iterations": 10,
+      "runs": 8,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "baseline",
+      "pair": 1,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        },
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        },
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        }
+      ],
+      "case": "control",
+      "consumed": 32982958080,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        27169,
+        26681,
+        26681
+      ],
+      "iterations": 10,
+      "runs": 8,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "baseline",
+      "pair": 2,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        },
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        },
+        {
+          "allocated_bytes": 40240,
+          "calls": 240,
+          "deallocated_bytes": 40240,
+          "live_bytes": 503026,
+          "net_bytes": 0,
+          "peak_extra_bytes": 2296,
+          "start_live_bytes": 503026
+        }
+      ],
+      "case": "control",
+      "consumed": 32982958080,
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "elapsed_ns": [
+        27239,
+        26681,
+        27100
+      ],
+      "iterations": 10,
+      "runs": 8,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "fix",
+      "pair": 2,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        },
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        },
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        }
+      ],
+      "case": "control",
+      "consumed": 32982958080,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        1455562,
+        1479797,
+        1384879
+      ],
+      "iterations": 10,
+      "runs": 512,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "baseline",
+      "pair": 0,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        },
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        },
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        }
+      ],
+      "case": "control",
+      "consumed": 32982958080,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        970840,
+        967557,
+        968185
+      ],
+      "iterations": 10,
+      "runs": 512,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "fix",
+      "pair": 0,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        },
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        },
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        }
+      ],
+      "case": "control",
+      "consumed": 32982958080,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        958268,
+        953169,
+        1000873
+      ],
+      "iterations": 10,
+      "runs": 512,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "fix",
+      "pair": 1,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        },
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        },
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        }
+      ],
+      "case": "control",
+      "consumed": 32982958080,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        935429,
+        930400,
+        937454
+      ],
+      "iterations": 10,
+      "runs": 512,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "baseline",
+      "pair": 1,
+      "order": [
+        "fix",
+        "baseline"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        },
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        },
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        }
+      ],
+      "case": "control",
+      "consumed": 32982958080,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        959875,
+        977406,
+        956940
+      ],
+      "iterations": 10,
+      "runs": 512,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "baseline",
+      "pair": 2,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    },
+    {
+      "allocations": [
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        },
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        },
+        {
+          "allocated_bytes": 2743600,
+          "calls": 5520,
+          "deallocated_bytes": 2743600,
+          "live_bytes": 4059370,
+          "net_bytes": 0,
+          "peak_extra_bytes": 142912,
+          "start_live_bytes": 4059370
+        }
+      ],
+      "case": "control",
+      "consumed": 32982958080,
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "elapsed_ns": [
+        963087,
+        979571,
+        957360
+      ],
+      "iterations": 10,
+      "runs": 512,
+      "samples": 3,
+      "warmup": 2,
+      "revision": "fix",
+      "pair": 2,
+      "order": [
+        "baseline",
+        "fix"
+      ]
+    }
+  ],
+  "binaries": {
+    "baseline-time": "a2e32f83f005ecd1db7bc74c73cb0c90e64b2210ad12a0f6601b8a0b361b8c60",
+    "baseline-alloc": "8c9920630c88e8f39c025f5bb7708465c62f59be587ae07dde88992374e89484",
+    "fix-time": "b29ce4b861bffea35e9854d3f82f739f8e37eb173fd4777b6b609ef55925342a",
+    "fix-alloc": "d5f6da4d1c18d78cf36caa92be287741045a3671c2a9128a1ba3a04c18c24238"
+  },
+  "conditions": {
+    "cpu": "AMD Ryzen 5 5600G",
+    "affinity": 0,
+    "governor": "performance",
+    "release_debug": 0,
+    "release_incremental": false,
+    "rust": "1.97.1",
+    "iterations_small": 2000,
+    "iterations_long": 200,
+    "timing_warmup": 20,
+    "timing_samples_per_process": 5,
+    "timing_pairs": 7,
+    "allocation_iterations": 10,
+    "allocation_warmup": 2,
+    "allocation_samples_per_process": 3,
+    "allocation_pairs": 3
+  },
+  "summary": [
+    {
+      "case": "marked",
+      "runs": 8,
+      "baseline": {
+        "ns_per_line_median": 4025.214,
+        "ns_per_line_min": 3997.5905,
+        "ns_per_line_max": 4292.23,
+        "allocation_per_line": {
+          "allocated_bytes": 5776.0,
+          "deallocated_bytes": 5776.0,
+          "peak_extra_bytes": 2360,
+          "calls": 41.0
+        }
+      },
+      "fix": {
+        "ns_per_line_median": 4170.8745,
+        "ns_per_line_min": 4093.487,
+        "ns_per_line_max": 4482.4515,
+        "allocation_per_line": {
+          "allocated_bytes": 5520.0,
+          "deallocated_bytes": 5520.0,
+          "peak_extra_bytes": 2296,
+          "calls": 39.0
+        }
+      },
+      "digest": "f724e295914d01e30b786ea531307072d94a3352b599bc8672ce484ea4ecc36b",
+      "time_ratio": 1.0361870201186818
+    },
+    {
+      "case": "marked",
+      "runs": 512,
+      "baseline": {
+        "ns_per_line_median": 172136.55,
+        "ns_per_line_min": 170056.575,
+        "ns_per_line_max": 186405.105,
+        "allocation_per_line": {
+          "allocated_bytes": 387184.0,
+          "deallocated_bytes": 387184.0,
+          "peak_extra_bytes": 147008,
+          "calls": 1085.0
+        }
+      },
+      "fix": {
+        "ns_per_line_median": 187154.885,
+        "ns_per_line_min": 185392.005,
+        "ns_per_line_max": 191079.45,
+        "allocation_per_line": {
+          "allocated_bytes": 370800.0,
+          "deallocated_bytes": 370800.0,
+          "peak_extra_bytes": 142912,
+          "calls": 1083.0
+        }
+      },
+      "digest": "a5c301c42ab931e5fc8901a8f0cff1bf13017481ae8ff62b0d94a08a630946af",
+      "time_ratio": 1.0872466364639004
+    },
+    {
+      "case": "control",
+      "runs": 8,
+      "baseline": {
+        "ns_per_line_median": 2398.3585,
+        "ns_per_line_min": 2363.2265,
+        "ns_per_line_max": 2772.8305,
+        "allocation_per_line": {
+          "allocated_bytes": 4024.0,
+          "deallocated_bytes": 4024.0,
+          "peak_extra_bytes": 2296,
+          "calls": 24.0
+        }
+      },
+      "fix": {
+        "ns_per_line_median": 2346.115,
+        "ns_per_line_min": 2319.8535,
+        "ns_per_line_max": 2523.939,
+        "allocation_per_line": {
+          "allocated_bytes": 4024.0,
+          "deallocated_bytes": 4024.0,
+          "peak_extra_bytes": 2296,
+          "calls": 24.0
+        }
+      },
+      "digest": "49ec7c944276ce1a60d1464ddf42669f3feaac75115e8fabaacee1b4845b9850",
+      "time_ratio": 0.9782169763194285
+    },
+    {
+      "case": "control",
+      "runs": 512,
+      "baseline": {
+        "ns_per_line_median": 90602.065,
+        "ns_per_line_min": 89125.895,
+        "ns_per_line_max": 93142.31,
+        "allocation_per_line": {
+          "allocated_bytes": 274360.0,
+          "deallocated_bytes": 274360.0,
+          "peak_extra_bytes": 142912,
+          "calls": 552.0
+        }
+      },
+      "fix": {
+        "ns_per_line_median": 92238.175,
+        "ns_per_line_min": 91245.68,
+        "ns_per_line_max": 95573.6,
+        "allocation_per_line": {
+          "allocated_bytes": 274360.0,
+          "deallocated_bytes": 274360.0,
+          "peak_extra_bytes": 142912,
+          "calls": 552.0
+        }
+      },
+      "digest": "46a8fc5e2600e459652a48ec1a256af90362cca8873577edebcbd0b1ae6bb010",
+      "time_ratio": 1.0180581976801522
+    }
+  ],
+  "measurement_script": "import hashlib, json, statistics, subprocess, sys\nfrom pathlib import Path\np = Path(sys.argv[1])\nresults = {\"baseline\": \"9e12da277bc5a241783c253d29552d92a42a7553\", \"timing\": [], \"allocation\": [], \"binaries\": {}, \"conditions\": {\"cpu\": \"AMD Ryzen 5 5600G\", \"affinity\": 0, \"governor\": \"performance\", \"release_debug\": 0, \"release_incremental\": False, \"rust\": \"1.97.1\", \"iterations_small\": 2000, \"iterations_long\": 200, \"timing_warmup\": 20, \"timing_samples_per_process\": 5, \"timing_pairs\": 7, \"allocation_iterations\": 10, \"allocation_warmup\": 2, \"allocation_samples_per_process\": 3, \"allocation_pairs\": 3}}\nfor rev in [\"baseline\", \"fix\"]:\n    for mode in [\"time\", \"alloc\"]:\n        binary = p / (rev + \"-\" + mode)\n        results[\"binaries\"][binary.name] = hashlib.sha256(binary.read_bytes()).hexdigest()\nfor mode, pairs in [(\"time\", 7), (\"alloc\", 3)]:\n    for case in [\"marked\", \"control\"]:\n        for runs in [8, 512]:\n            for pair in range(pairs):\n                order = [\"baseline\", \"fix\"] if pair % 2 == 0 else [\"fix\", \"baseline\"]\n                for revision in order:\n                    iters = (2000 if runs == 8 else 200) if mode == \"time\" else 10\n                    warmup, samples = (20, 5) if mode == \"time\" else (2, 3)\n                    command = [\"taskset\", \"-c\", \"0\", str(p / (revision + \"-\" + mode)), case, str(runs), str(iters), str(warmup), str(samples)]\n                    row = json.loads(subprocess.check_output(command))\n                    row.update(revision=revision, pair=pair, order=order)\n                    results[\"timing\" if mode == \"time\" else \"allocation\"].append(row)\n            print(mode, case, runs, \"finished\", flush=True)\nsummary = []\nfor case in [\"marked\", \"control\"]:\n    for runs in [8, 512]:\n        row = {\"case\":case,\"runs\":runs}\n        digest = set()\n        for revision in [\"baseline\", \"fix\"]:\n            timings = [float(ns) / r[\"iterations\"] for r in results[\"timing\"] if r[\"case\"]==case and r[\"runs\"]==runs and r[\"revision\"]==revision for ns in r[\"elapsed_ns\"]]\n            ar = [r for r in results[\"allocation\"] if r[\"case\"]==case and r[\"runs\"]==runs and r[\"revision\"]==revision]\n            counts = [c for r in ar for c in r[\"allocations\"]]\n            assert len(timings)==35 and len(counts)==9\n            assert all(c==counts[0] for c in counts)\n            assert counts[0][\"net_bytes\"]==0\n            alloc = {k:v/10 for k,v in counts[0].items() if k in [\"allocated_bytes\",\"alloc_calls\",\"deallocated_bytes\"]}\n            alloc[\"peak_extra_bytes\"] = counts[0][\"peak_extra_bytes\"]\n            row[revision] = {\"ns_per_line_median\":statistics.median(timings), \"ns_per_line_min\":min(timings),\"ns_per_line_max\":max(timings), \"allocation_per_line\":alloc}\n            digest.update(r[\"digest\"] for r in results[\"timing\"]+results[\"allocation\"] if r[\"case\"]==case and r[\"runs\"]==runs and r[\"revision\"]==revision)\n        assert len(digest)==1\n        row[\"digest\"] = next(iter(digest))\n        row[\"time_ratio\"] = row[\"fix\"][\"ns_per_line_median\"]/row[\"baseline\"][\"ns_per_line_median\"]\n        summary.append(row)\nresults[\"summary\"] = summary\nresults[\"measurement_script\"] = Path(__file__).read_text()\n(p / \"measurements.json\").write_text(json.dumps(results,indent=2)+\"\\n\")\nprint(json.dumps(summary,indent=2))\n",
+  "measured_implementation": "38a93c7b83bc17a718936b5ac5830ff16808fec6",
+  "summary_postprocessing": "calls/line was appended from raw allocation calls divided by iterations; original measurement script preserves all raw counters.",
+  "source_sha256": {
+    "crates/shodo/src/line/metrics.rs": "2c3ec819f6c0076449b3b52e9574724b93bc59499fd369b355e9a99d8704ce2f",
+    "crates/shodo/src/line/metrics_extents_tests.rs": "13e8a0e3b35201320f53971ccb0c3f797597e0408debd3a987ff25a754ca999d",
+    "dev/bench/examples/emphasis_extents.rs": "33651436649693c4e430f88ff3eddd8d50e3da94dcead5acf313aaf2a573c657",
+    "dev/bench/examples/emphasis_geometry.rs": "fb2dcd636d1540a42d83b1a1ae9fbf342033e04fd43da726b211443ab64c26c4",
+    "dev/bench/examples/support/emphasis_input.rs": "80469b0809731812f549aed2b5e8094aec34bfc4c111afd00f3ecc386dbc8144",
+    "dev/bench/examples/support/emphasis_geometry_input.rs": "51dae921cdf8d904ea019b9b21740a5dd36c223a2d77c86baafb2dbb4fd0ed9b"
+  },
+  "geometry_comparison": {
+    "cases": 48,
+    "bytes": 441978,
+    "baseline_sha256": "e132bf6b66e9f10840b1d64116dc5576d6096d7320b561c56af9de83b5389b56",
+    "fix_sha256": "e132bf6b66e9f10840b1d64116dc5576d6096d7320b561c56af9de83b5389b56",
+    "case_digests": [
+      {
+        "mode": "HorizontalTb",
+        "marked": false,
+        "grouped": false,
+        "combined": false,
+        "ruby": false,
+        "sha256": "f8eae96e78464673d842e647931c5dd3b9823c4c98bf9e2b012a08a782532f94"
+      },
+      {
+        "mode": "HorizontalTb",
+        "marked": false,
+        "grouped": false,
+        "combined": false,
+        "ruby": true,
+        "sha256": "d3a7e4164bf51cffee78cf49d826233968be31f34c8cbc3034e27d30ec5fe0a9"
+      },
+      {
+        "mode": "HorizontalTb",
+        "marked": false,
+        "grouped": false,
+        "combined": true,
+        "ruby": false,
+        "sha256": "2345972323500c3ed2b761a139cd554b527f6e88244fd217faa3bbc271028e8c"
+      },
+      {
+        "mode": "HorizontalTb",
+        "marked": false,
+        "grouped": false,
+        "combined": true,
+        "ruby": true,
+        "sha256": "feeb1f8b231ce4ad8494a6c08f2c4281c6eebdcd5cd25d7bb713abf301e4bfec"
+      },
+      {
+        "mode": "HorizontalTb",
+        "marked": false,
+        "grouped": true,
+        "combined": false,
+        "ruby": false,
+        "sha256": "dbe726b43df756ed39643fea6e2c1c9d96fdb03dbb8f5147fac31efc1781acaa"
+      },
+      {
+        "mode": "HorizontalTb",
+        "marked": false,
+        "grouped": true,
+        "combined": false,
+        "ruby": true,
+        "sha256": "cc29efa39c12c9294bb3a4c1a7a1f6f9d86fa9b82d98c85e7e0f6618eb6be614"
+      },
+      {
+        "mode": "HorizontalTb",
+        "marked": false,
+        "grouped": true,
+        "combined": true,
+        "ruby": false,
+        "sha256": "75cb5b8cc27436fa6c723fe30cee1f040329c63be4a31b818ae63eebb710d1f5"
+      },
+      {
+        "mode": "HorizontalTb",
+        "marked": false,
+        "grouped": true,
+        "combined": true,
+        "ruby": true,
+        "sha256": "3ae82f5d1848c9a1d37c2b921f84aafc1fcf8c2e046ce14d5b10420daab3336e"
+      },
+      {
+        "mode": "HorizontalTb",
+        "marked": true,
+        "grouped": false,
+        "combined": false,
+        "ruby": false,
+        "sha256": "883142b7f2525f56db636dbde0033a579b736a03843bbf06d35ef1b2e7c40a94"
+      },
+      {
+        "mode": "HorizontalTb",
+        "marked": true,
+        "grouped": false,
+        "combined": false,
+        "ruby": true,
+        "sha256": "feb696f5865b24ac510d701013e3460130168b3abd164e2294a15b76196e2088"
+      },
+      {
+        "mode": "HorizontalTb",
+        "marked": true,
+        "grouped": false,
+        "combined": true,
+        "ruby": false,
+        "sha256": "33518ddd72704fe9dbeab64a0427435dd77e45fd4d8705270abf9cca9392a127"
+      },
+      {
+        "mode": "HorizontalTb",
+        "marked": true,
+        "grouped": false,
+        "combined": true,
+        "ruby": true,
+        "sha256": "ad19eb576360fe2a12e4a22175dd3d135e180355ee61c966d6a0369f7b9cb012"
+      },
+      {
+        "mode": "HorizontalTb",
+        "marked": true,
+        "grouped": true,
+        "combined": false,
+        "ruby": false,
+        "sha256": "d5477fc112de667e15223093f3b641711748a75d37544543930f51bcefdf8f11"
+      },
+      {
+        "mode": "HorizontalTb",
+        "marked": true,
+        "grouped": true,
+        "combined": false,
+        "ruby": true,
+        "sha256": "cd503a38d12218df6972d3aaf39c41080a445f9ef9139245cc6edddcd79d0d33"
+      },
+      {
+        "mode": "HorizontalTb",
+        "marked": true,
+        "grouped": true,
+        "combined": true,
+        "ruby": false,
+        "sha256": "d002c3ea734892b39617aa67e7adfd3b0f1af89834978e396c316f6a6d68f9bf"
+      },
+      {
+        "mode": "HorizontalTb",
+        "marked": true,
+        "grouped": true,
+        "combined": true,
+        "ruby": true,
+        "sha256": "e617bc7871eed41bd9de6857d1ead388edab11c9026fc490bc99a79fe054ab67"
+      },
+      {
+        "mode": "VerticalRl",
+        "marked": false,
+        "grouped": false,
+        "combined": false,
+        "ruby": false,
+        "sha256": "acc19ffe88a8f52ad6b70048889f01ec71f077c04ade5eb3b576b0266e7fc8e6"
+      },
+      {
+        "mode": "VerticalRl",
+        "marked": false,
+        "grouped": false,
+        "combined": false,
+        "ruby": true,
+        "sha256": "296c537d955064802ada52ea58570257ceb6e217fccb640eccc01f241bf1596d"
+      },
+      {
+        "mode": "VerticalRl",
+        "marked": false,
+        "grouped": false,
+        "combined": true,
+        "ruby": false,
+        "sha256": "beaa958a058d017935e23e0246dc397b69a6d6971d6bd59e34ab213e814840c5"
+      },
+      {
+        "mode": "VerticalRl",
+        "marked": false,
+        "grouped": false,
+        "combined": true,
+        "ruby": true,
+        "sha256": "6375c497215bcb9d5f9322333b14fc3d3160219ee0d6cef35363edb881be6312"
+      },
+      {
+        "mode": "VerticalRl",
+        "marked": false,
+        "grouped": true,
+        "combined": false,
+        "ruby": false,
+        "sha256": "3ffbbf9c268d965e970d10f994c25fb0552f28b8bb603ccb238a63f6e58a0b9c"
+      },
+      {
+        "mode": "VerticalRl",
+        "marked": false,
+        "grouped": true,
+        "combined": false,
+        "ruby": true,
+        "sha256": "82adaba35a38a949e4aa824eda6c75f2fc106afe5247e73dccebd14aa7fbaeb2"
+      },
+      {
+        "mode": "VerticalRl",
+        "marked": false,
+        "grouped": true,
+        "combined": true,
+        "ruby": false,
+        "sha256": "cea96b01152672f585dd709f08b2ba7a7444c5d57aa68affd3d662795ec0b78d"
+      },
+      {
+        "mode": "VerticalRl",
+        "marked": false,
+        "grouped": true,
+        "combined": true,
+        "ruby": true,
+        "sha256": "59bed88968538583aad72d9b4ca54e893b0687fbcecd449942d53cc927fc8a03"
+      },
+      {
+        "mode": "VerticalRl",
+        "marked": true,
+        "grouped": false,
+        "combined": false,
+        "ruby": false,
+        "sha256": "cbc16c92341e8bfefa0e4c8b7a983cd63a9e2ad0b71ea0df5537f61abb8f7c88"
+      },
+      {
+        "mode": "VerticalRl",
+        "marked": true,
+        "grouped": false,
+        "combined": false,
+        "ruby": true,
+        "sha256": "babb2d109216cf3641c0ea75ddfe643a95a1e6c31b0ae6d65409d17aba46b3ea"
+      },
+      {
+        "mode": "VerticalRl",
+        "marked": true,
+        "grouped": false,
+        "combined": true,
+        "ruby": false,
+        "sha256": "9c893e623d1aba19cf8cff165a087600267feb3fff9d909f4b5e9ad67b85ba4f"
+      },
+      {
+        "mode": "VerticalRl",
+        "marked": true,
+        "grouped": false,
+        "combined": true,
+        "ruby": true,
+        "sha256": "9df72391ce00af99210e169e16c144ee01fe21ae7d7a7282a2ebc98b71e41255"
+      },
+      {
+        "mode": "VerticalRl",
+        "marked": true,
+        "grouped": true,
+        "combined": false,
+        "ruby": false,
+        "sha256": "46a15abdb7118c6eb624e4557869c80b268bb669e68f3505e83be34c367a73b8"
+      },
+      {
+        "mode": "VerticalRl",
+        "marked": true,
+        "grouped": true,
+        "combined": false,
+        "ruby": true,
+        "sha256": "35ffa2157f7ccb2e16d57ba894b5c255b86f16f2290fda823956f57fe7c4c459"
+      },
+      {
+        "mode": "VerticalRl",
+        "marked": true,
+        "grouped": true,
+        "combined": true,
+        "ruby": false,
+        "sha256": "512c391719193d908bd6a09619ae90a42c4e825f70554cbb5b59d4498de9e921"
+      },
+      {
+        "mode": "VerticalRl",
+        "marked": true,
+        "grouped": true,
+        "combined": true,
+        "ruby": true,
+        "sha256": "9d6655a06c87029d81551dfeb62428136d54aadcf81369313a0def4a505ce8f3"
+      },
+      {
+        "mode": "VerticalLr",
+        "marked": false,
+        "grouped": false,
+        "combined": false,
+        "ruby": false,
+        "sha256": "674a7f86d7f1a0ddf2a239c1997933bcf0deb3860255de51ddc87ae18e2cbd51"
+      },
+      {
+        "mode": "VerticalLr",
+        "marked": false,
+        "grouped": false,
+        "combined": false,
+        "ruby": true,
+        "sha256": "4e74eaaeea1c152bbd490314982a6fae8d9bb7de05151cddde51c8cad6a842c0"
+      },
+      {
+        "mode": "VerticalLr",
+        "marked": false,
+        "grouped": false,
+        "combined": true,
+        "ruby": false,
+        "sha256": "f8827d1605d00693fe949986389926e617ad74dd7c753c33e0a1f3a1afb55d8c"
+      },
+      {
+        "mode": "VerticalLr",
+        "marked": false,
+        "grouped": false,
+        "combined": true,
+        "ruby": true,
+        "sha256": "4581fdff7a8436043b9f8585444f94dd24cbde5915802a7294879f12e353772f"
+      },
+      {
+        "mode": "VerticalLr",
+        "marked": false,
+        "grouped": true,
+        "combined": false,
+        "ruby": false,
+        "sha256": "c2596dd70ae7c8919a3eb90b992ba993772c5526d29d3b81bba3867ce1d016cb"
+      },
+      {
+        "mode": "VerticalLr",
+        "marked": false,
+        "grouped": true,
+        "combined": false,
+        "ruby": true,
+        "sha256": "f5f5aa1d3b412c73c7e3fa74535a6a88ab2bfdffa9baac477cbc1b321a95a79f"
+      },
+      {
+        "mode": "VerticalLr",
+        "marked": false,
+        "grouped": true,
+        "combined": true,
+        "ruby": false,
+        "sha256": "dc58e452673244b7f092747a47fb00174a6815e109ad7df93d80ae92bbc04332"
+      },
+      {
+        "mode": "VerticalLr",
+        "marked": false,
+        "grouped": true,
+        "combined": true,
+        "ruby": true,
+        "sha256": "b41acde022409c74033e3381cb957cdd35a2f3ece7f30875c6d254df1cfea142"
+      },
+      {
+        "mode": "VerticalLr",
+        "marked": true,
+        "grouped": false,
+        "combined": false,
+        "ruby": false,
+        "sha256": "0c23d35ed91e617ebd61f8385c81dae02a9956b47497c0b46c4c7abb1116e740"
+      },
+      {
+        "mode": "VerticalLr",
+        "marked": true,
+        "grouped": false,
+        "combined": false,
+        "ruby": true,
+        "sha256": "ac5e0e35586ea644f3133d634246891df618eb72b8797df8c64afa8040d85b6b"
+      },
+      {
+        "mode": "VerticalLr",
+        "marked": true,
+        "grouped": false,
+        "combined": true,
+        "ruby": false,
+        "sha256": "9eced3c9053eedf8204523d30970360d5a79c5209df7b903d9dc224241a9fc64"
+      },
+      {
+        "mode": "VerticalLr",
+        "marked": true,
+        "grouped": false,
+        "combined": true,
+        "ruby": true,
+        "sha256": "8dd88af0ddef37138b5d633832cd50ceb60d36ae41990abd47dd9e8e3ea090dd"
+      },
+      {
+        "mode": "VerticalLr",
+        "marked": true,
+        "grouped": true,
+        "combined": false,
+        "ruby": false,
+        "sha256": "d22db071c5e4d1d0aa5dacbea1b7c12efb430aafd31078773f2913a557275948"
+      },
+      {
+        "mode": "VerticalLr",
+        "marked": true,
+        "grouped": true,
+        "combined": false,
+        "ruby": true,
+        "sha256": "906d93571300b84f494670265c6e5307ca67e3a85c4172e164959b5e37dcc5cc"
+      },
+      {
+        "mode": "VerticalLr",
+        "marked": true,
+        "grouped": true,
+        "combined": true,
+        "ruby": false,
+        "sha256": "166e0f37eeba8b49d4bf12f5e2c17bb4c907fd4018656a6244333ccdf5036d0a"
+      },
+      {
+        "mode": "VerticalLr",
+        "marked": true,
+        "grouped": true,
+        "combined": true,
+        "ruby": true,
+        "sha256": "fc0f1a8b3262ff4f1dc0929bc8cd136b5f128af6f6ef49996e0f5b7894660b62"
+      }
+    ]
+  },
+  "verification": {
+    "workspace-tests.log": {
+      "suites": 105,
+      "passed": 1787,
+      "failed": 0,
+      "ignored": 9
+    },
+    "baseline-tests.log": {
+      "suites": 35,
+      "passed": 1253,
+      "failed": 0,
+      "ignored": 9
+    },
+    "release-allocation.log": {
+      "suites": 1,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    "green-allocation.log": {
+      "suites": 1,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  "mutation_verification": {
+    "mutation-conversions.log": "\nrunning 1 test\ntest line::metrics::extents_tests::discarded_shift_conversions_preserve_overflow_nonfinite_counts_and_warning_order ... FAILED\n\nfailures:\n\n---- line::metrics::extents_tests::discarded_shift_conversions_preserve_overflow_nonfinite_counts_and_warning_order stdout ----\n\nthread 'line::metrics::extents_tests::discarded_shift_conversions_preserve_overflow_nonfinite_counts_and_warning_order' (1959380) panicked at crates/shodo/src/line/metrics_extents_tests.rs:154:5:\nassertion `left == right` failed: discarding shifts must still convert every value\n  left: Saturation { saturated: 5, non_finite: 2 }\n right: Saturation { saturated: 11, non_finite: 2 }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    line::metrics::extents_tests::discarded_shift_conversions_preserve_overflow_nonfinite_counts_and_warning_order\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 842 filtered out; finished in 0.00s\n\n   Compiling shodo v0.0.26 (~/Work/oss/shodo/.worktrees/shodo-4/crates/shodo)\n    Finished `test` profile [optimized + debuginfo] target(s) in 11.59s\n     Running unittests src/lib.rs (~/tmp/shodo-4-emphasis-extents-BRXbOb6F/build/debug/deps/shodo-e661561586a72eac)\nerror: test failed, to rerun pass `-p shodo --lib`\n",
+    "mutation-combination.log": "\nrunning 1 test\ntest line::metrics::extents_tests::discarded_shift_conversions_preserve_overflow_nonfinite_counts_and_warning_order ... FAILED\n\nfailures:\n\n---- line::metrics::extents_tests::discarded_shift_conversions_preserve_overflow_nonfinite_counts_and_warning_order stdout ----\n\nthread 'line::metrics::extents_tests::discarded_shift_conversions_preserve_overflow_nonfinite_counts_and_warning_order' (1961151) panicked at crates/shodo/src/line/metrics_extents_tests.rs:154:5:\nassertion `left == right` failed: discarding shifts must still convert every value\n  left: Saturation { saturated: 11, non_finite: 2 }\n right: Saturation { saturated: 14, non_finite: 2 }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    line::metrics::extents_tests::discarded_shift_conversions_preserve_overflow_nonfinite_counts_and_warning_order\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 842 filtered out; finished in 0.00s\n\n   Compiling shodo v0.0.26 (~/Work/oss/shodo/.worktrees/shodo-4/crates/shodo)\n    Finished `test` profile [optimized + debuginfo] target(s) in 10.22s\n     Running unittests src/lib.rs (~/tmp/shodo-4-emphasis-extents-BRXbOb6F/build/debug/deps/shodo-e661561586a72eac)\nerror: test failed, to rerun pass `-p shodo --lib`\n",
+    "red-allocation.log": "   Compiling shodo v0.0.26 (~/Work/oss/shodo/.worktrees/shodo-4/crates/shodo)\n   Compiling shodo-fixtures v0.0.0 (~/Work/oss/shodo/.worktrees/shodo-4/dev/fixtures)\n   Compiling shodo-bench v0.0.0 (~/Work/oss/shodo/.worktrees/shodo-4/dev/bench)\n    Finished `test` profile [optimized + debuginfo] target(s) in 1.56s\n     Running tests/emphasis_extents_allocations.rs (~/tmp/shodo-4-emphasis-extents-BRXbOb6F/build/debug/deps/emphasis_extents_allocations-d253c3d92f7bff81)\n\nrunning 1 test\ntest auxiliary_emphasis_metrics_avoid_discarded_per_fragment_vectors ... FAILED\n\nfailures:\n\n---- auxiliary_emphasis_metrics_avoid_discarded_per_fragment_vectors stdout ----\n\nthread 'auxiliary_emphasis_metrics_avoid_discarded_per_fragment_vectors' (1955651) panicked at dev/bench/tests/emphasis_extents_allocations.rs:22:5:\nauxiliary extents allocated AllocationCounts { calls: 1085, allocated_bytes: 387184, deallocated_bytes: 387184, start_live_bytes: 993711, live_bytes: 993711, peak_extra_bytes: 147008, net_bytes: 0 }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    auxiliary_emphasis_metrics_avoid_discarded_per_fragment_vectors\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\nerror: test failed, to rerun pass `-p shodo-bench --test emphasis_extents_allocations`\n"
+  }
+}
