@@ -185,7 +185,13 @@ finalizers and source/cursor mapping remain in use.
 
 The final runtime commit passed 1,805 workspace tests, with zero failures and
 nine ignored tests. Both ordinary and accesskit Clippy checks pass with
-warnings denied. Independent review and exact-head CI results are pending.
+warnings denied. Independent whole-branch review of `81a2bbd` returned ready
+to merge, with no Critical/Important/Minor findings and no declined judgments.
+The only subsequent changes record that outcome and normalize the diagnostic
+command's machine-local home prefix to `~/`; measurement values and runtime
+sources are unchanged. CI for the final commit is verified by the executor
+before merge, with its status retained on
+[PR #301](https://github.com/fulgur-rs/shodo/pull/301).
 
 ## Rulings and their costs
 

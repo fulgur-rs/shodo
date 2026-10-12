@@ -88238,8 +88238,9 @@
       "baseline": "0c596dee17a7655624d36e36b84f1137b7ec84d6b0249efaca32bcf729d37d9c",
       "candidate": "a6370973d883c4c48d595b4404fa71c11daeeeb612d9093258b337f4e294c2d1"
     },
-    "perf_attempt": "\n Performance counter stats for 'taskset -c 2 /home/mitz/tmp/shodo-16-first-line-analysis/candidate-probe 10 timing':\n\n        3223786001      cycles:u                                                              \n        9001179729      instructions:u                                                        \n        1476859020      branches:u                                                            \n           2303676      branch-misses:u                                                       \n\n       0.828243250 seconds time elapsed\n\n       0.756550000 seconds user\n       0.068959000 seconds sys\n\n\n",
-    "summary_validation": "All 147 timed samples per revision/case match the complete matrix oracle public summary; probe binaries were not independently subjected to the complete recursive geometry oracle."
+    "perf_attempt": "\n Performance counter stats for 'taskset -c 2 ~/tmp/shodo-16-first-line-analysis/candidate-probe 10 timing':\n\n        3223786001      cycles:u                                                              \n        9001179729      instructions:u                                                        \n        1476859020      branches:u                                                            \n           2303676      branch-misses:u                                                       \n\n       0.828243250 seconds time elapsed\n\n       0.756550000 seconds user\n       0.068959000 seconds sys\n\n\n",
+    "summary_validation": "All 147 timed samples per revision/case match the complete matrix oracle public summary; probe binaries were not independently subjected to the complete recursive geometry oracle.",
+    "perf_path_normalization": "Only the machine-local home prefix in the perf command is represented as ~/; numerical counters and times are unchanged."
   },
   "work_proofs": {
     "analysis_passes": {
@@ -88268,5 +88269,16 @@
       "before_guard": "incorrect success",
       "after_guard": "exact reference failure"
     }
+  },
+  "final_review": {
+    "head": "81a2bbd53fd59341e3b235166f09c98875f4755b",
+    "model": "gpt-6-astra",
+    "ready_to_merge": true,
+    "critical": [],
+    "important": [],
+    "minor": [],
+    "declined_to_judge": [],
+    "verification": "runtime unchanged after measured b00fccf; 24 recursive oracle equality and all phase medians recalculated from saved data; no test/performance rerun in reviewer",
+    "followup": "Only review-outcome documentation and diagnostic home-path normalization; final commit CI verified before merge on PR301."
   }
 }
