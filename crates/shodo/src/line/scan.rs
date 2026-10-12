@@ -8,6 +8,38 @@ use crate::output::BreakReason;
 use crate::paragraph::{AtomicSizes, ParagraphData};
 use crate::style::TabSize;
 
+/// The suffix and spacing of a candidate include the closing units that will
+/// be pulled onto its line. The live scan/index cursor stays at the text cut.
+pub(super) fn candidate_end<'a>(
+    data: &'a ParagraphData,
+    mut end: usize,
+    spacing: &super::spacing_summary::Cursor<'a>,
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> (
+    usize,
+    LayoutUnit,
+    Option<super::spacing_summary::Cursor<'a>>,
+) {
+    let mut pulled = LayoutUnit::ZERO;
+    let mut candidate_spacing = None;
+    if data.units.get(end).is_some() && super::pulls_after_break(data, end) {
+        let mut cursor = spacing.clone();
+        while data.units.get(end).is_some() && super::pulls_after_break(data, end) {
+            pulled = pulled.add(
+                unit_width(data, &data.units[end], LayoutUnit::ZERO, atomics, cx, sat),
+                sat,
+            );
+            super::spacing::push(data, &mut cursor, end);
+            end += 1;
+        }
+        candidate_spacing = Some(cursor);
+    }
+    let suffix = pulled.add(super::decoration::width(data, end, false, sat), sat);
+    (end, suffix, candidate_spacing)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn scan(
     data: &ParagraphData,
@@ -34,6 +66,7 @@ pub(super) fn scan(
     let mut overflowing = false;
     let mut hanging = LayoutUnit::ZERO;
     let mut spacing = super::spacing_summary::Cursor::default();
+    let mut hanging_tail = super::punctuation::HangingTail::default();
     let mut kept_spacing = LayoutUnit::ZERO;
     let mut i = start;
     let mut graphemes_seen = 0usize;
@@ -161,15 +194,35 @@ pub(super) fn scan(
             sat,
         )
         .add(data.unit_spacing[i].word, sat);
-        super::spacing::push(data, &mut spacing, i);
-        let tracking = spacing.summary(Some(data)).width(sat);
         // Fit excludes eligible trailing space/tab advances (CSS Text 3 §4.1.2).
         let hangs = super::whitespace::fits_hanging(data, i);
-        let suffix = super::decoration::width(data, i + 1, false, sat);
-        let ruby_delta =
-            crate::ruby::measure::candidate_adjustment(data, start, i + 1, atomics, cx, sat);
         let transparent =
             super::whitespace::transparent(data, i) && !matches!(unit.kind, UnitKind::ForcedBreak);
+        if !count_mode {
+            hanging_tail.observe(data, i, &spacing, hangs, transparent);
+        }
+        super::spacing::push(data, &mut spacing, i);
+        let tracking = spacing.summary(Some(data)).width(sat);
+        // A selected break also pulls adjacent closing units. Reserve their
+        // actual edges now, and measure Clone decoration after them so those
+        // edges are not counted twice. The candidate summary includes their
+        // punctuation-hanging barriers, while the live scan stays unchanged.
+        let (break_end, suffix, mut candidate_spacing) = if !count_mode
+            && matches!(
+                unit.break_after,
+                BreakClass::Allowed | BreakClass::Emergency | BreakClass::Hyphen
+            ) {
+            candidate_end(data, i + 1, &spacing, atomics, cx, sat)
+        } else {
+            (
+                i + 1,
+                super::decoration::width(data, i + 1, false, sat),
+                None,
+            )
+        };
+        let ruby_delta =
+            crate::ruby::measure::candidate_adjustment(data, start, i + 1, atomics, cx, sat);
+        let paragraph_end = i + 1 == units.len();
         let shared_extent = pos
             .add(w, sat)
             .add(tracking, sat)
@@ -183,6 +236,16 @@ pub(super) fn scan(
                 },
                 sat,
             );
+        // A hanging final space or tab must not hide overflow of the visible
+        // content. Its advance and trailing tracking are excluded, while the
+        // line-start reshape below still contributes to the fit width.
+        let shared_extent = if paragraph_end && hangs {
+            shared_extent
+                .sub(hanging.add(w, sat), sat)
+                .sub(tracking.sub(kept_spacing, sat), sat)
+        } else {
+            shared_extent
+        };
         // The line cannot end at a `Prohibited` position, so the only
         // reason to pay for a real edge-window reshape there is to confirm
         // genuine overflow of the current unbreakable run. Skip it while
@@ -199,13 +262,17 @@ pub(super) fn scan(
         // discretionary hyphen position is the same for its unhyphenated
         // edge: the line can end there only with the hyphen, which is
         // measured separately, so the plain edge only confirms overflow.
+        // The paragraph end must include the line-start reshape even when
+        // its final glyph or closing controls prohibit a break. Measure it
+        // once here rather than probing every prohibited position.
         let need_edge = if count_mode {
             limited_cut
         } else {
             !matches!(
                 unit.break_after,
                 BreakClass::Prohibited | BreakClass::Hyphen
-            ) || unit.shared_cluster.is_some() && !unit.first_line_cursor
+            ) || paragraph_end
+                || unit.shared_cluster.is_some() && !unit.first_line_cursor
                 || (!hangs && !overflowing && shared_extent > available)
         };
         // Once a fitting break is known, an `Allowed` opportunity whose shared
@@ -216,6 +283,7 @@ pub(super) fn scan(
         // from the last one backwards and takes the first that really fits,
         // like a browser that reshapes only the end of the line it chose.
         let defer = !count_mode
+            && !paragraph_end
             && !overflowing
             && last_break.is_some()
             && unit.break_after == BreakClass::Allowed
@@ -229,22 +297,29 @@ pub(super) fn scan(
         let extent = shared_extent.add(edge_delta, sat);
         // Edge adjustments only ever remove width (see `EdgeAdjustment`), so a
         // candidate that already fits cannot start to overflow.
-        let extent = if !count_mode && !hangs && !overflowing && extent > available {
-            let adjustment = super::punctuation::edges(
-                data,
-                spacing.summary(Some(data)),
-                flags,
-                super::punctuation::last_edge(data, i + 1),
-                Some(options),
-                LayoutUnit::ZERO,
-                extent,
-                sat,
-            );
-            extent.sub(adjustment.removed(sat), sat)
-        } else {
-            extent
-        };
-        if !count_mode && !hangs && !overflowing && extent > available {
+        let extent =
+            if !count_mode && (!hangs || paragraph_end) && !overflowing && extent > available {
+                let summary = hanging_tail.summary(data, i + 1).unwrap_or_else(|| {
+                    candidate_spacing
+                        .as_ref()
+                        .unwrap_or(&spacing)
+                        .summary(Some(data))
+                });
+                let adjustment = super::punctuation::edges(
+                    data,
+                    summary,
+                    flags,
+                    super::punctuation::last_edge(data, i + 1),
+                    Some(options),
+                    LayoutUnit::ZERO,
+                    extent,
+                    sat,
+                );
+                extent.sub(adjustment.removed(sat), sat)
+            } else {
+                extent
+            };
+        if !count_mode && (!hangs || paragraph_end) && !overflowing && extent > available {
             if let Some(b) = settle(
                 data,
                 start,
@@ -316,7 +391,10 @@ pub(super) fn scan(
                     hangs,
                     shared_extent,
                     required,
-                    summary: spacing.summary(Some(data)),
+                    summary: candidate_spacing
+                        .as_ref()
+                        .unwrap_or(&spacing)
+                        .summary(Some(data)),
                     last,
                 }),
                 data,
@@ -335,7 +413,15 @@ pub(super) fn scan(
                     break BreakReason::Regular;
                 }
                 if required.sub(
-                    removed(data, &mut spacing, flags, last, options, required, sat),
+                    removed(
+                        data,
+                        candidate_spacing.as_mut().unwrap_or(&mut spacing),
+                        flags,
+                        last,
+                        options,
+                        required,
+                        sat,
+                    ),
                     sat,
                 ) <= available
                 {
@@ -350,12 +436,15 @@ pub(super) fn scan(
                         hangs,
                         shared_extent,
                         required,
-                        summary: spacing.summary(Some(data)),
+                        summary: candidate_spacing
+                            .as_ref()
+                            .unwrap_or(&spacing)
+                            .summary(Some(data)),
                         last,
                     },
                     end: i,
                     pos,
-                    summary: super::spacing::hyphen_summary(data, &spacing, i - 1, sat),
+                    summary: super::spacing::hyphen_summary(data, &spacing, i - 1, break_end, sat),
                     hanging,
                     suffix,
                     ruby_delta,
@@ -389,7 +478,15 @@ pub(super) fn scan(
                     break BreakReason::Emergency;
                 }
                 if required.sub(
-                    removed(data, &mut spacing, flags, last, options, required, sat),
+                    removed(
+                        data,
+                        candidate_spacing.as_mut().unwrap_or(&mut spacing),
+                        flags,
+                        last,
+                        options,
+                        required,
+                        sat,
+                    ),
                     sat,
                 ) <= available
                 {
