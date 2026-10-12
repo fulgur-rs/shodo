@@ -1,0 +1,5280 @@
+{
+  "baseline": "cffab0f62a05b79e27966cf8d4b66fcc804a5142",
+  "platform": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+  "cpu": "AMD Ryzen 5 5600G with Radeon Graphics",
+  "cpu_affinity": "0",
+  "governor": "performance",
+  "source_sha256": {
+    "crates/shodo/src/output/line.rs": "f1420d268204ed638e1a3c255dae932b83eddcc50a4e1cde6d508a9426700bcb",
+    "crates/shodo/src/line/reshape.rs": "67f96778ad42615a0f56003114f5d7b4705e0af2e23df08426a6ad8380e86176",
+    "dev/bench/examples/block_shift_materialization.rs": "c795c5a60450428bf3ebdce5ba09469f53a98d46ef625cd9a0199236e2fa1890",
+    "dev/bench/examples/support/block_shift_input.rs": "4346b7791f240adad5abcb05bb4c58375ee9dc5aed454a79537e409dee053c19",
+    "dev/bench/examples/support/geometry_snapshot.rs": "8872d3e6cff7795fe51ee0d8edb1baaaaa2a313275e08afe6d6e55d59d9397e8"
+  },
+  "profile": {
+    "release_debug": 0,
+    "release_incremental": false,
+    "timing_allocator_counting": false
+  },
+  "summaries": [
+    {
+      "case": "plain",
+      "runs": 8,
+      "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+      "fragments": 16,
+      "baseline": {
+        "median_ns_per_line": 2321.812,
+        "min_ns_per_line": 2301.557,
+        "max_ns_per_line": 2387.5005,
+        "timing_samples": 35,
+        "allocation_samples": 9,
+        "calls_per_line": 25.0,
+        "allocated_bytes_per_line": 4088.0,
+        "peak_extra_bytes": 2360
+      },
+      "fix": {
+        "median_ns_per_line": 2403.9145,
+        "min_ns_per_line": 2368.433,
+        "max_ns_per_line": 2474.108,
+        "timing_samples": 35,
+        "allocation_samples": 9,
+        "calls_per_line": 24.0,
+        "allocated_bytes_per_line": 4024.0,
+        "peak_extra_bytes": 2296
+      },
+      "time_ratio": 1.0353613901556198
+    },
+    {
+      "case": "plain",
+      "runs": 512,
+      "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+      "fragments": 1024,
+      "baseline": {
+        "median_ns_per_line": 90457.6,
+        "min_ns_per_line": 89363.835,
+        "max_ns_per_line": 96742.925,
+        "timing_samples": 35,
+        "allocation_samples": 9,
+        "calls_per_line": 553.0,
+        "allocated_bytes_per_line": 278456.0,
+        "peak_extra_bytes": 147008
+      },
+      "fix": {
+        "median_ns_per_line": 92476.81,
+        "min_ns_per_line": 89151.5,
+        "max_ns_per_line": 107518.56,
+        "timing_samples": 35,
+        "allocation_samples": 9,
+        "calls_per_line": 552.0,
+        "allocated_bytes_per_line": 274360.0,
+        "peak_extra_bytes": 142912
+      },
+      "time_ratio": 1.022322170829206
+    },
+    {
+      "case": "reshape",
+      "runs": 8,
+      "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+      "fragments": 17,
+      "baseline": {
+        "median_ns_per_line": 3807.3735,
+        "min_ns_per_line": 3745.037,
+        "max_ns_per_line": 3907.042,
+        "timing_samples": 35,
+        "allocation_samples": 9,
+        "calls_per_line": 81.0,
+        "allocated_bytes_per_line": 15303.0,
+        "peak_extra_bytes": 5868
+      },
+      "fix": {
+        "median_ns_per_line": 3695.203,
+        "min_ns_per_line": 3642.121,
+        "max_ns_per_line": 3895.902,
+        "timing_samples": 35,
+        "allocation_samples": 9,
+        "calls_per_line": 76.0,
+        "allocated_bytes_per_line": 14995.0,
+        "peak_extra_bytes": 5672
+      },
+      "time_ratio": 0.9705386140865875
+    },
+    {
+      "case": "reshape",
+      "runs": 512,
+      "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+      "fragments": 1025,
+      "baseline": {
+        "median_ns_per_line": 117284.595,
+        "min_ns_per_line": 115037.34,
+        "max_ns_per_line": 121865.36,
+        "timing_samples": 35,
+        "allocation_samples": 9,
+        "calls_per_line": 1635.0,
+        "allocated_bytes_per_line": 906567.0,
+        "peak_extra_bytes": 316332
+      },
+      "fix": {
+        "median_ns_per_line": 115102.295,
+        "min_ns_per_line": 113574.095,
+        "max_ns_per_line": 118437.03,
+        "timing_samples": 35,
+        "allocation_samples": 9,
+        "calls_per_line": 1624.0,
+        "allocated_bytes_per_line": 886099.0,
+        "peak_extra_bytes": 304040
+      },
+      "time_ratio": 0.9813931232827294
+    }
+  ],
+  "raw": [
+    {
+      "kind": "allocation",
+      "pair": 0,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          {
+            "allocated_bytes": 40880,
+            "calls": 250,
+            "deallocated_bytes": 40880,
+            "live_bytes": 501644,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2360,
+            "start_live_bytes": 501644
+          },
+          {
+            "allocated_bytes": 40880,
+            "calls": 250,
+            "deallocated_bytes": 40880,
+            "live_bytes": 501900,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2360,
+            "start_live_bytes": 501900
+          },
+          {
+            "allocated_bytes": 40880,
+            "calls": 250,
+            "deallocated_bytes": 40880,
+            "live_bytes": 501900,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2360,
+            "start_live_bytes": 501900
+          }
+        ],
+        "case": "plain",
+        "consumed": 33320140800,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          82416,
+          42046,
+          42466
+        ],
+        "fragments": 16,
+        "iterations": 10,
+        "runs": 8,
+        "samples": 3,
+        "text_bytes": 8,
+        "warmup": 2,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 0,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          {
+            "allocated_bytes": 40240,
+            "calls": 240,
+            "deallocated_bytes": 40240,
+            "live_bytes": 501644,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2296,
+            "start_live_bytes": 501644
+          },
+          {
+            "allocated_bytes": 40240,
+            "calls": 240,
+            "deallocated_bytes": 40240,
+            "live_bytes": 501900,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2296,
+            "start_live_bytes": 501900
+          },
+          {
+            "allocated_bytes": 40240,
+            "calls": 240,
+            "deallocated_bytes": 40240,
+            "live_bytes": 501900,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2296,
+            "start_live_bytes": 501900
+          }
+        ],
+        "case": "plain",
+        "consumed": 33320140800,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          39602,
+          37786,
+          37577
+        ],
+        "fragments": 16,
+        "iterations": 10,
+        "runs": 8,
+        "samples": 3,
+        "text_bytes": 8,
+        "warmup": 2,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 1,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          {
+            "allocated_bytes": 40240,
+            "calls": 240,
+            "deallocated_bytes": 40240,
+            "live_bytes": 501644,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2296,
+            "start_live_bytes": 501644
+          },
+          {
+            "allocated_bytes": 40240,
+            "calls": 240,
+            "deallocated_bytes": 40240,
+            "live_bytes": 501900,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2296,
+            "start_live_bytes": 501900
+          },
+          {
+            "allocated_bytes": 40240,
+            "calls": 240,
+            "deallocated_bytes": 40240,
+            "live_bytes": 501900,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2296,
+            "start_live_bytes": 501900
+          }
+        ],
+        "case": "plain",
+        "consumed": 33320140800,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          53222,
+          93662,
+          43514
+        ],
+        "fragments": 16,
+        "iterations": 10,
+        "runs": 8,
+        "samples": 3,
+        "text_bytes": 8,
+        "warmup": 2,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 1,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          {
+            "allocated_bytes": 40880,
+            "calls": 250,
+            "deallocated_bytes": 40880,
+            "live_bytes": 501644,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2360,
+            "start_live_bytes": 501644
+          },
+          {
+            "allocated_bytes": 40880,
+            "calls": 250,
+            "deallocated_bytes": 40880,
+            "live_bytes": 501900,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2360,
+            "start_live_bytes": 501900
+          },
+          {
+            "allocated_bytes": 40880,
+            "calls": 250,
+            "deallocated_bytes": 40880,
+            "live_bytes": 501900,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2360,
+            "start_live_bytes": 501900
+          }
+        ],
+        "case": "plain",
+        "consumed": 33320140800,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          43164,
+          42395,
+          41977
+        ],
+        "fragments": 16,
+        "iterations": 10,
+        "runs": 8,
+        "samples": 3,
+        "text_bytes": 8,
+        "warmup": 2,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 2,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          {
+            "allocated_bytes": 40880,
+            "calls": 250,
+            "deallocated_bytes": 40880,
+            "live_bytes": 501644,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2360,
+            "start_live_bytes": 501644
+          },
+          {
+            "allocated_bytes": 40880,
+            "calls": 250,
+            "deallocated_bytes": 40880,
+            "live_bytes": 501900,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2360,
+            "start_live_bytes": 501900
+          },
+          {
+            "allocated_bytes": 40880,
+            "calls": 250,
+            "deallocated_bytes": 40880,
+            "live_bytes": 501900,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2360,
+            "start_live_bytes": 501900
+          }
+        ],
+        "case": "plain",
+        "consumed": 33320140800,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          48123,
+          45818,
+          44281
+        ],
+        "fragments": 16,
+        "iterations": 10,
+        "runs": 8,
+        "samples": 3,
+        "text_bytes": 8,
+        "warmup": 2,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 2,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          {
+            "allocated_bytes": 40240,
+            "calls": 240,
+            "deallocated_bytes": 40240,
+            "live_bytes": 501644,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2296,
+            "start_live_bytes": 501644
+          },
+          {
+            "allocated_bytes": 40240,
+            "calls": 240,
+            "deallocated_bytes": 40240,
+            "live_bytes": 501900,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2296,
+            "start_live_bytes": 501900
+          },
+          {
+            "allocated_bytes": 40240,
+            "calls": 240,
+            "deallocated_bytes": 40240,
+            "live_bytes": 501900,
+            "net_bytes": 0,
+            "peak_extra_bytes": 2296,
+            "start_live_bytes": 501900
+          }
+        ],
+        "case": "plain",
+        "consumed": 33320140800,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          44212,
+          1719786,
+          39043
+        ],
+        "fragments": 16,
+        "iterations": 10,
+        "runs": 8,
+        "samples": 3,
+        "text_bytes": 8,
+        "warmup": 2,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 0,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          {
+            "allocated_bytes": 2784560,
+            "calls": 5530,
+            "deallocated_bytes": 2784560,
+            "live_bytes": 4023716,
+            "net_bytes": 0,
+            "peak_extra_bytes": 147008,
+            "start_live_bytes": 4023716
+          },
+          {
+            "allocated_bytes": 2784560,
+            "calls": 5530,
+            "deallocated_bytes": 2784560,
+            "live_bytes": 4023972,
+            "net_bytes": 0,
+            "peak_extra_bytes": 147008,
+            "start_live_bytes": 4023972
+          },
+          {
+            "allocated_bytes": 2784560,
+            "calls": 5530,
+            "deallocated_bytes": 2784560,
+            "live_bytes": 4023972,
+            "net_bytes": 0,
+            "peak_extra_bytes": 147008,
+            "start_live_bytes": 4023972
+          }
+        ],
+        "case": "plain",
+        "consumed": 34830090240,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          1733755,
+          1523593,
+          1554813
+        ],
+        "fragments": 1024,
+        "iterations": 10,
+        "runs": 512,
+        "samples": 3,
+        "text_bytes": 512,
+        "warmup": 2,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 0,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          {
+            "allocated_bytes": 2743600,
+            "calls": 5520,
+            "deallocated_bytes": 2743600,
+            "live_bytes": 4023716,
+            "net_bytes": 0,
+            "peak_extra_bytes": 142912,
+            "start_live_bytes": 4023716
+          },
+          {
+            "allocated_bytes": 2743600,
+            "calls": 5520,
+            "deallocated_bytes": 2743600,
+            "live_bytes": 4023972,
+            "net_bytes": 0,
+            "peak_extra_bytes": 142912,
+            "start_live_bytes": 4023972
+          },
+          {
+            "allocated_bytes": 2743600,
+            "calls": 5520,
+            "deallocated_bytes": 2743600,
+            "live_bytes": 4023972,
+            "net_bytes": 0,
+            "peak_extra_bytes": 142912,
+            "start_live_bytes": 4023972
+          }
+        ],
+        "case": "plain",
+        "consumed": 34830090240,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          2485005,
+          2256961,
+          1485597
+        ],
+        "fragments": 1024,
+        "iterations": 10,
+        "runs": 512,
+        "samples": 3,
+        "text_bytes": 512,
+        "warmup": 2,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 1,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          {
+            "allocated_bytes": 2743600,
+            "calls": 5520,
+            "deallocated_bytes": 2743600,
+            "live_bytes": 4023716,
+            "net_bytes": 0,
+            "peak_extra_bytes": 142912,
+            "start_live_bytes": 4023716
+          },
+          {
+            "allocated_bytes": 2743600,
+            "calls": 5520,
+            "deallocated_bytes": 2743600,
+            "live_bytes": 4023972,
+            "net_bytes": 0,
+            "peak_extra_bytes": 142912,
+            "start_live_bytes": 4023972
+          },
+          {
+            "allocated_bytes": 2743600,
+            "calls": 5520,
+            "deallocated_bytes": 2743600,
+            "live_bytes": 4023972,
+            "net_bytes": 0,
+            "peak_extra_bytes": 142912,
+            "start_live_bytes": 4023972
+          }
+        ],
+        "case": "plain",
+        "consumed": 34830090240,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          3319300,
+          5007167,
+          1611737
+        ],
+        "fragments": 1024,
+        "iterations": 10,
+        "runs": 512,
+        "samples": 3,
+        "text_bytes": 512,
+        "warmup": 2,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 1,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          {
+            "allocated_bytes": 2784560,
+            "calls": 5530,
+            "deallocated_bytes": 2784560,
+            "live_bytes": 4023716,
+            "net_bytes": 0,
+            "peak_extra_bytes": 147008,
+            "start_live_bytes": 4023716
+          },
+          {
+            "allocated_bytes": 2784560,
+            "calls": 5530,
+            "deallocated_bytes": 2784560,
+            "live_bytes": 4023972,
+            "net_bytes": 0,
+            "peak_extra_bytes": 147008,
+            "start_live_bytes": 4023972
+          },
+          {
+            "allocated_bytes": 2784560,
+            "calls": 5530,
+            "deallocated_bytes": 2784560,
+            "live_bytes": 4023972,
+            "net_bytes": 0,
+            "peak_extra_bytes": 147008,
+            "start_live_bytes": 4023972
+          }
+        ],
+        "case": "plain",
+        "consumed": 34830090240,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          1601050,
+          1558515,
+          1564382
+        ],
+        "fragments": 1024,
+        "iterations": 10,
+        "runs": 512,
+        "samples": 3,
+        "text_bytes": 512,
+        "warmup": 2,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 2,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          {
+            "allocated_bytes": 2784560,
+            "calls": 5530,
+            "deallocated_bytes": 2784560,
+            "live_bytes": 4023716,
+            "net_bytes": 0,
+            "peak_extra_bytes": 147008,
+            "start_live_bytes": 4023716
+          },
+          {
+            "allocated_bytes": 2784560,
+            "calls": 5530,
+            "deallocated_bytes": 2784560,
+            "live_bytes": 4023972,
+            "net_bytes": 0,
+            "peak_extra_bytes": 147008,
+            "start_live_bytes": 4023972
+          },
+          {
+            "allocated_bytes": 2784560,
+            "calls": 5530,
+            "deallocated_bytes": 2784560,
+            "live_bytes": 4023972,
+            "net_bytes": 0,
+            "peak_extra_bytes": 147008,
+            "start_live_bytes": 4023972
+          }
+        ],
+        "case": "plain",
+        "consumed": 34830090240,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          1520030,
+          1483013,
+          1453050
+        ],
+        "fragments": 1024,
+        "iterations": 10,
+        "runs": 512,
+        "samples": 3,
+        "text_bytes": 512,
+        "warmup": 2,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 2,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          {
+            "allocated_bytes": 2743600,
+            "calls": 5520,
+            "deallocated_bytes": 2743600,
+            "live_bytes": 4023716,
+            "net_bytes": 0,
+            "peak_extra_bytes": 142912,
+            "start_live_bytes": 4023716
+          },
+          {
+            "allocated_bytes": 2743600,
+            "calls": 5520,
+            "deallocated_bytes": 2743600,
+            "live_bytes": 4023972,
+            "net_bytes": 0,
+            "peak_extra_bytes": 142912,
+            "start_live_bytes": 4023972
+          },
+          {
+            "allocated_bytes": 2743600,
+            "calls": 5520,
+            "deallocated_bytes": 2743600,
+            "live_bytes": 4023972,
+            "net_bytes": 0,
+            "peak_extra_bytes": 142912,
+            "start_live_bytes": 4023972
+          }
+        ],
+        "case": "plain",
+        "consumed": 34830090240,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          1631153,
+          1548876,
+          1521427
+        ],
+        "fragments": 1024,
+        "iterations": 10,
+        "runs": 512,
+        "samples": 3,
+        "text_bytes": 512,
+        "warmup": 2,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 0,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          {
+            "allocated_bytes": 153030,
+            "calls": 810,
+            "deallocated_bytes": 153030,
+            "live_bytes": 518519,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5868,
+            "start_live_bytes": 518519
+          },
+          {
+            "allocated_bytes": 153030,
+            "calls": 810,
+            "deallocated_bytes": 153030,
+            "live_bytes": 518775,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5868,
+            "start_live_bytes": 518775
+          },
+          {
+            "allocated_bytes": 153030,
+            "calls": 810,
+            "deallocated_bytes": 153030,
+            "live_bytes": 518775,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5868,
+            "start_live_bytes": 518775
+          }
+        ],
+        "case": "reshape",
+        "consumed": 33434173440,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          75711,
+          69216,
+          68518
+        ],
+        "fragments": 17,
+        "iterations": 10,
+        "runs": 8,
+        "samples": 3,
+        "text_bytes": 21,
+        "warmup": 2,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 0,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          {
+            "allocated_bytes": 149950,
+            "calls": 760,
+            "deallocated_bytes": 149950,
+            "live_bytes": 518519,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5672,
+            "start_live_bytes": 518519
+          },
+          {
+            "allocated_bytes": 149950,
+            "calls": 760,
+            "deallocated_bytes": 149950,
+            "live_bytes": 518775,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5672,
+            "start_live_bytes": 518775
+          },
+          {
+            "allocated_bytes": 149950,
+            "calls": 760,
+            "deallocated_bytes": 149950,
+            "live_bytes": 518775,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5672,
+            "start_live_bytes": 518775
+          }
+        ],
+        "case": "reshape",
+        "consumed": 33434173440,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          73407,
+          110075,
+          70543
+        ],
+        "fragments": 17,
+        "iterations": 10,
+        "runs": 8,
+        "samples": 3,
+        "text_bytes": 21,
+        "warmup": 2,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 1,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          {
+            "allocated_bytes": 149950,
+            "calls": 760,
+            "deallocated_bytes": 149950,
+            "live_bytes": 518519,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5672,
+            "start_live_bytes": 518519
+          },
+          {
+            "allocated_bytes": 149950,
+            "calls": 760,
+            "deallocated_bytes": 149950,
+            "live_bytes": 518775,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5672,
+            "start_live_bytes": 518775
+          },
+          {
+            "allocated_bytes": 149950,
+            "calls": 760,
+            "deallocated_bytes": 149950,
+            "live_bytes": 518775,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5672,
+            "start_live_bytes": 518775
+          }
+        ],
+        "case": "reshape",
+        "consumed": 33434173440,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          77807,
+          74035,
+          73756
+        ],
+        "fragments": 17,
+        "iterations": 10,
+        "runs": 8,
+        "samples": 3,
+        "text_bytes": 21,
+        "warmup": 2,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 1,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          {
+            "allocated_bytes": 153030,
+            "calls": 810,
+            "deallocated_bytes": 153030,
+            "live_bytes": 518519,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5868,
+            "start_live_bytes": 518519
+          },
+          {
+            "allocated_bytes": 153030,
+            "calls": 810,
+            "deallocated_bytes": 153030,
+            "live_bytes": 518775,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5868,
+            "start_live_bytes": 518775
+          },
+          {
+            "allocated_bytes": 153030,
+            "calls": 810,
+            "deallocated_bytes": 153030,
+            "live_bytes": 518775,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5868,
+            "start_live_bytes": 518775
+          }
+        ],
+        "case": "reshape",
+        "consumed": 33434173440,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          71381,
+          63908,
+          70054
+        ],
+        "fragments": 17,
+        "iterations": 10,
+        "runs": 8,
+        "samples": 3,
+        "text_bytes": 21,
+        "warmup": 2,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 2,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          {
+            "allocated_bytes": 153030,
+            "calls": 810,
+            "deallocated_bytes": 153030,
+            "live_bytes": 518519,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5868,
+            "start_live_bytes": 518519
+          },
+          {
+            "allocated_bytes": 153030,
+            "calls": 810,
+            "deallocated_bytes": 153030,
+            "live_bytes": 518775,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5868,
+            "start_live_bytes": 518775
+          },
+          {
+            "allocated_bytes": 153030,
+            "calls": 810,
+            "deallocated_bytes": 153030,
+            "live_bytes": 518775,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5868,
+            "start_live_bytes": 518775
+          }
+        ],
+        "case": "reshape",
+        "consumed": 33434173440,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          1741019,
+          78924,
+          71591
+        ],
+        "fragments": 17,
+        "iterations": 10,
+        "runs": 8,
+        "samples": 3,
+        "text_bytes": 21,
+        "warmup": 2,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 2,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          {
+            "allocated_bytes": 149950,
+            "calls": 760,
+            "deallocated_bytes": 149950,
+            "live_bytes": 518519,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5672,
+            "start_live_bytes": 518519
+          },
+          {
+            "allocated_bytes": 149950,
+            "calls": 760,
+            "deallocated_bytes": 149950,
+            "live_bytes": 518775,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5672,
+            "start_live_bytes": 518775
+          },
+          {
+            "allocated_bytes": 149950,
+            "calls": 760,
+            "deallocated_bytes": 149950,
+            "live_bytes": 518775,
+            "net_bytes": 0,
+            "peak_extra_bytes": 5672,
+            "start_live_bytes": 518775
+          }
+        ],
+        "case": "reshape",
+        "consumed": 33434173440,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          72429,
+          70054,
+          70193
+        ],
+        "fragments": 17,
+        "iterations": 10,
+        "runs": 8,
+        "samples": 3,
+        "text_bytes": 21,
+        "warmup": 2,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 0,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          {
+            "allocated_bytes": 9065670,
+            "calls": 16350,
+            "deallocated_bytes": 9065670,
+            "live_bytes": 4145275,
+            "net_bytes": 0,
+            "peak_extra_bytes": 316332,
+            "start_live_bytes": 4145275
+          },
+          {
+            "allocated_bytes": 9065670,
+            "calls": 16350,
+            "deallocated_bytes": 9065670,
+            "live_bytes": 4145531,
+            "net_bytes": 0,
+            "peak_extra_bytes": 316332,
+            "start_live_bytes": 4145531
+          },
+          {
+            "allocated_bytes": 9065670,
+            "calls": 16350,
+            "deallocated_bytes": 9065670,
+            "live_bytes": 4145531,
+            "net_bytes": 0,
+            "peak_extra_bytes": 316332,
+            "start_live_bytes": 4145531
+          }
+        ],
+        "case": "reshape",
+        "consumed": 34831872000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          2170354,
+          2049104,
+          2144931
+        ],
+        "fragments": 1025,
+        "iterations": 10,
+        "runs": 512,
+        "samples": 3,
+        "text_bytes": 525,
+        "warmup": 2,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 0,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          {
+            "allocated_bytes": 8860990,
+            "calls": 16240,
+            "deallocated_bytes": 8860990,
+            "live_bytes": 4145275,
+            "net_bytes": 0,
+            "peak_extra_bytes": 304040,
+            "start_live_bytes": 4145275
+          },
+          {
+            "allocated_bytes": 8860990,
+            "calls": 16240,
+            "deallocated_bytes": 8860990,
+            "live_bytes": 4145531,
+            "net_bytes": 0,
+            "peak_extra_bytes": 304040,
+            "start_live_bytes": 4145531
+          },
+          {
+            "allocated_bytes": 8860990,
+            "calls": 16240,
+            "deallocated_bytes": 8860990,
+            "live_bytes": 4145531,
+            "net_bytes": 0,
+            "peak_extra_bytes": 304040,
+            "start_live_bytes": 4145531
+          }
+        ],
+        "case": "reshape",
+        "consumed": 34831872000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          3895658,
+          2272886,
+          2250676
+        ],
+        "fragments": 1025,
+        "iterations": 10,
+        "runs": 512,
+        "samples": 3,
+        "text_bytes": 525,
+        "warmup": 2,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 1,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          {
+            "allocated_bytes": 8860990,
+            "calls": 16240,
+            "deallocated_bytes": 8860990,
+            "live_bytes": 4145275,
+            "net_bytes": 0,
+            "peak_extra_bytes": 304040,
+            "start_live_bytes": 4145275
+          },
+          {
+            "allocated_bytes": 8860990,
+            "calls": 16240,
+            "deallocated_bytes": 8860990,
+            "live_bytes": 4145531,
+            "net_bytes": 0,
+            "peak_extra_bytes": 304040,
+            "start_live_bytes": 4145531
+          },
+          {
+            "allocated_bytes": 8860990,
+            "calls": 16240,
+            "deallocated_bytes": 8860990,
+            "live_bytes": 4145531,
+            "net_bytes": 0,
+            "peak_extra_bytes": 304040,
+            "start_live_bytes": 4145531
+          }
+        ],
+        "case": "reshape",
+        "consumed": 34831872000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          2095760,
+          1896563,
+          1921987
+        ],
+        "fragments": 1025,
+        "iterations": 10,
+        "runs": 512,
+        "samples": 3,
+        "text_bytes": 525,
+        "warmup": 2,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 1,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          {
+            "allocated_bytes": 9065670,
+            "calls": 16350,
+            "deallocated_bytes": 9065670,
+            "live_bytes": 4145275,
+            "net_bytes": 0,
+            "peak_extra_bytes": 316332,
+            "start_live_bytes": 4145275
+          },
+          {
+            "allocated_bytes": 9065670,
+            "calls": 16350,
+            "deallocated_bytes": 9065670,
+            "live_bytes": 4145531,
+            "net_bytes": 0,
+            "peak_extra_bytes": 316332,
+            "start_live_bytes": 4145531
+          },
+          {
+            "allocated_bytes": 9065670,
+            "calls": 16350,
+            "deallocated_bytes": 9065670,
+            "live_bytes": 4145531,
+            "net_bytes": 0,
+            "peak_extra_bytes": 316332,
+            "start_live_bytes": 4145531
+          }
+        ],
+        "case": "reshape",
+        "consumed": 34831872000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          2368294,
+          2396720,
+          2226509
+        ],
+        "fragments": 1025,
+        "iterations": 10,
+        "runs": 512,
+        "samples": 3,
+        "text_bytes": 525,
+        "warmup": 2,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 2,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          {
+            "allocated_bytes": 9065670,
+            "calls": 16350,
+            "deallocated_bytes": 9065670,
+            "live_bytes": 4145275,
+            "net_bytes": 0,
+            "peak_extra_bytes": 316332,
+            "start_live_bytes": 4145275
+          },
+          {
+            "allocated_bytes": 9065670,
+            "calls": 16350,
+            "deallocated_bytes": 9065670,
+            "live_bytes": 4145531,
+            "net_bytes": 0,
+            "peak_extra_bytes": 316332,
+            "start_live_bytes": 4145531
+          },
+          {
+            "allocated_bytes": 9065670,
+            "calls": 16350,
+            "deallocated_bytes": 9065670,
+            "live_bytes": 4145531,
+            "net_bytes": 0,
+            "peak_extra_bytes": 316332,
+            "start_live_bytes": 4145531
+          }
+        ],
+        "case": "reshape",
+        "consumed": 34831872000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          2079906,
+          2152474,
+          2054482
+        ],
+        "fragments": 1025,
+        "iterations": 10,
+        "runs": 512,
+        "samples": 3,
+        "text_bytes": 525,
+        "warmup": 2,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "allocation",
+      "pair": 2,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          {
+            "allocated_bytes": 8860990,
+            "calls": 16240,
+            "deallocated_bytes": 8860990,
+            "live_bytes": 4145275,
+            "net_bytes": 0,
+            "peak_extra_bytes": 304040,
+            "start_live_bytes": 4145275
+          },
+          {
+            "allocated_bytes": 8860990,
+            "calls": 16240,
+            "deallocated_bytes": 8860990,
+            "live_bytes": 4145531,
+            "net_bytes": 0,
+            "peak_extra_bytes": 304040,
+            "start_live_bytes": 4145531
+          },
+          {
+            "allocated_bytes": 8860990,
+            "calls": 16240,
+            "deallocated_bytes": 8860990,
+            "live_bytes": 4145531,
+            "net_bytes": 0,
+            "peak_extra_bytes": 304040,
+            "start_live_bytes": 4145531
+          }
+        ],
+        "case": "reshape",
+        "consumed": 34831872000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          2068661,
+          1941543,
+          1889719
+        ],
+        "fragments": 1025,
+        "iterations": 10,
+        "runs": 512,
+        "samples": 3,
+        "text_bytes": 525,
+        "warmup": 2,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 0,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 11106713600000,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          4665136,
+          4643624,
+          4656546,
+          4664019,
+          4639363
+        ],
+        "fragments": 16,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 8,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 0,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 11106713600000,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          4807829,
+          4948216,
+          4847780,
+          4801473,
+          4786386
+        ],
+        "fragments": 16,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 8,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 1,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 11106713600000,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          4736866,
+          4784780,
+          4791625,
+          4773395,
+          4754607
+        ],
+        "fragments": 16,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 8,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 1,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 11106713600000,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          4677429,
+          4649561,
+          4634405,
+          4775001,
+          4603114
+        ],
+        "fragments": 16,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 8,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 2,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 11106713600000,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          4676730,
+          4639084,
+          4648792,
+          4649351,
+          4626093
+        ],
+        "fragments": 16,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 8,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 2,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 11106713600000,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          4809017,
+          4843590,
+          4795047,
+          4879908,
+          4811600
+        ],
+        "fragments": 16,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 8,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 3,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 11106713600000,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          4840376,
+          4829620,
+          4825080,
+          4858257,
+          4823195
+        ],
+        "fragments": 16,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 8,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 3,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 11106713600000,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          4624346,
+          4635941,
+          4639503,
+          4645091,
+          4609191
+        ],
+        "fragments": 16,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 8,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 4,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 11106713600000,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          4659758,
+          4675264,
+          4639503,
+          4623788,
+          4616035
+        ],
+        "fragments": 16,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 8,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 4,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 11106713600000,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          4812020,
+          4806082,
+          4794698,
+          4790717,
+          4810203
+        ],
+        "fragments": 16,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 8,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 5,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 11106713600000,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          4832623,
+          4818445,
+          4796235,
+          4791764,
+          4777516
+        ],
+        "fragments": 16,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 8,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 5,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 11106713600000,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          4650190,
+          4686788,
+          4615267,
+          4637897,
+          4628188
+        ],
+        "fragments": 16,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 8,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 6,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 11106713600000,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          4643624,
+          4651098,
+          4637688,
+          4695659,
+          4646069
+        ],
+        "fragments": 16,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 8,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 6,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 11106713600000,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          4841354,
+          4807060,
+          4818236,
+          4805035,
+          4803848
+        ],
+        "fragments": 16,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 8,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 0,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 1161003008000,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          18080974,
+          18134894,
+          18151027,
+          18016297,
+          17892882
+        ],
+        "fragments": 1024,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 512,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 0,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 1161003008000,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          18256353,
+          18155567,
+          18290019,
+          18528469,
+          18701334
+        ],
+        "fragments": 1024,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 512,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 1,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 1161003008000,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          18395903,
+          18574077,
+          18497247,
+          18478739,
+          18450940
+        ],
+        "fragments": 1024,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 512,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 1,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 1161003008000,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          17978720,
+          18042978,
+          18153262,
+          17881427,
+          18030685
+        ],
+        "fragments": 1024,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 512,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 2,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 1161003008000,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          18243013,
+          18180711,
+          18243502,
+          18128747,
+          18194331
+        ],
+        "fragments": 1024,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 512,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 2,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 1161003008000,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          18642455,
+          18799326,
+          18580991,
+          18602014,
+          18589792
+        ],
+        "fragments": 1024,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 512,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 3,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 1161003008000,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          18496969,
+          18139084,
+          17959095,
+          18424818,
+          21503712
+        ],
+        "fragments": 1024,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 512,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 3,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 1161003008000,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          18104720,
+          18041651,
+          18119178,
+          17975368,
+          18193772
+        ],
+        "fragments": 1024,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 512,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 4,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 1161003008000,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          17963425,
+          17872767,
+          17927105,
+          18028869,
+          17913136
+        ],
+        "fragments": 1024,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 512,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 4,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 1161003008000,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          17865642,
+          17897212,
+          17845038,
+          17859775,
+          17830300
+        ],
+        "fragments": 1024,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 512,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 5,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 1161003008000,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          19648009,
+          19776383,
+          19715549,
+          19770726,
+          19958259
+        ],
+        "fragments": 1024,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 512,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 5,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 1161003008000,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          19256040,
+          19133672,
+          19348585,
+          19264421,
+          19237461
+        ],
+        "fragments": 1024,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 512,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 6,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 1161003008000,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          18044444,
+          17959025,
+          18096339,
+          18091520,
+          17962447
+        ],
+        "fragments": 1024,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 512,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 6,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "plain",
+        "consumed": 1161003008000,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          18495362,
+          18492777,
+          18484047,
+          18419580,
+          18518690
+        ],
+        "fragments": 1024,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 512,
+        "warmup": 20,
+        "width": 1000000.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 0,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 11144724480000,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          7657702,
+          7567183,
+          7667271,
+          7604549,
+          7578707
+        ],
+        "fragments": 17,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 21,
+        "warmup": 20,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 0,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 11144724480000,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          7407099,
+          7359186,
+          7389009,
+          7335020,
+          7392851
+        ],
+        "fragments": 17,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 21,
+        "warmup": 20,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 1,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 11144724480000,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          7501459,
+          7497897,
+          7415899,
+          7417017,
+          7415829
+        ],
+        "fragments": 17,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 21,
+        "warmup": 20,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 1,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 11144724480000,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          7706243,
+          7625713,
+          7664406,
+          7597705,
+          7672997
+        ],
+        "fragments": 17,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 21,
+        "warmup": 20,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 2,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 11144724480000,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          7537849,
+          7601896,
+          7523530,
+          7654978,
+          7669016
+        ],
+        "fragments": 17,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 21,
+        "warmup": 20,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 2,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 11144724480000,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          7662660,
+          7585203,
+          7709805,
+          7791804,
+          7665175
+        ],
+        "fragments": 17,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 21,
+        "warmup": 20,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 3,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 11144724480000,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          7452986,
+          7390406,
+          7320980,
+          7336695,
+          7284242
+        ],
+        "fragments": 17,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 21,
+        "warmup": 20,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 3,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 11144724480000,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          7814084,
+          7674045,
+          7669645,
+          7679493,
+          7708689
+        ],
+        "fragments": 17,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 21,
+        "warmup": 20,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 4,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 11144724480000,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          7628018,
+          7606925,
+          7518152,
+          7535613,
+          7586251
+        ],
+        "fragments": 17,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 21,
+        "warmup": 20,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 4,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 11144724480000,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          7412058,
+          7306523,
+          7324123,
+          7378951,
+          7321469
+        ],
+        "fragments": 17,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 21,
+        "warmup": 20,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 5,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 11144724480000,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          7397670,
+          7388520,
+          7460809,
+          7375808,
+          7468981
+        ],
+        "fragments": 17,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 21,
+        "warmup": 20,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 5,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 11144724480000,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          7585761,
+          7687316,
+          7660286,
+          7612303,
+          7604549
+        ],
+        "fragments": 17,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 21,
+        "warmup": 20,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 6,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 11144724480000,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          7639402,
+          7515428,
+          7560128,
+          7490074,
+          7614747
+        ],
+        "fragments": 17,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 21,
+        "warmup": 20,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 6,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 11144724480000,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          7383282,
+          7377066,
+          7318536,
+          7330828,
+          7359954
+        ],
+        "fragments": 17,
+        "iterations": 2000,
+        "runs": 8,
+        "samples": 5,
+        "text_bytes": 21,
+        "warmup": 20,
+        "width": 60.875
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 0,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 1161062400000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          23649620,
+          23498057,
+          23456919,
+          23466138,
+          23511328
+        ],
+        "fragments": 1025,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 525,
+        "warmup": 20,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 0,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 1161062400000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          23049584,
+          23121874,
+          22935598,
+          23019552,
+          23050981
+        ],
+        "fragments": 1025,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 525,
+        "warmup": 20,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 1,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 1161062400000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          22912759,
+          22902282,
+          22714819,
+          23047210,
+          23020459
+        ],
+        "fragments": 1025,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 525,
+        "warmup": 20,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 1,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 1161062400000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          23425209,
+          23491771,
+          23439807,
+          23674485,
+          23785817
+        ],
+        "fragments": 1025,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 525,
+        "warmup": 20,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 2,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 1161062400000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          23565387,
+          23357809,
+          23106997,
+          23452170,
+          24073857
+        ],
+        "fragments": 1025,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 525,
+        "warmup": 20,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 2,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 1161062400000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          23340487,
+          23194512,
+          23142757,
+          23406980,
+          23302701
+        ],
+        "fragments": 1025,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 525,
+        "warmup": 20,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 3,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 1161062400000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          23157495,
+          22777260,
+          22733468,
+          22888313,
+          22905215
+        ],
+        "fragments": 1025,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 525,
+        "warmup": 20,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 3,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 1161062400000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          23495193,
+          23884229,
+          23268966,
+          23007468,
+          23876965
+        ],
+        "fragments": 1025,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 525,
+        "warmup": 20,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 4,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 1161062400000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          23380649,
+          23415711,
+          24373072,
+          23445953,
+          23388680
+        ],
+        "fragments": 1025,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 525,
+        "warmup": 20,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 4,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 1161062400000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          22995594,
+          23228387,
+          23433032,
+          22926798,
+          23687406
+        ],
+        "fragments": 1025,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 525,
+        "warmup": 20,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 5,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 1161062400000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          22775584,
+          22793604,
+          23049445,
+          22974501,
+          23013335
+        ],
+        "fragments": 1025,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 525,
+        "warmup": 20,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 5,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 1161062400000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          23095892,
+          23560568,
+          23505181,
+          23422136,
+          23336018
+        ],
+        "fragments": 1025,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 525,
+        "warmup": 20,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 6,
+      "revision": "baseline",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 1161062400000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          23161545,
+          24133225,
+          23440575,
+          23420948,
+          23490305
+        ],
+        "fragments": 1025,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 525,
+        "warmup": 20,
+        "width": 2888.0
+      }
+    },
+    {
+      "kind": "timing",
+      "pair": 6,
+      "revision": "fix",
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "case": "reshape",
+        "consumed": 1161062400000,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          23379182,
+          23042949,
+          23009214,
+          22999366,
+          23368006
+        ],
+        "fragments": 1025,
+        "iterations": 200,
+        "runs": 512,
+        "samples": 5,
+        "text_bytes": 525,
+        "warmup": 20,
+        "width": 2888.0
+      }
+    }
+  ],
+  "exploratory_timing": {
+    "note": "Collected while this task's workspace/release builds were active; retained to disclose noise and motivate the idle rerun.",
+    "raw": [
+      {
+        "kind": "timing",
+        "pair": 0,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 8,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 11106713600000,
+          "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+          "elapsed_ns": [
+            7756114,
+            27064123,
+            7812339,
+            8270310,
+            7947279
+          ],
+          "fragments": 16,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 8,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 0,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 8,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 11106713600000,
+          "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+          "elapsed_ns": [
+            9512988,
+            8744766,
+            9203297,
+            8595158,
+            8536559
+          ],
+          "fragments": 16,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 8,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 1,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 8,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 11106713600000,
+          "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+          "elapsed_ns": [
+            8565754,
+            9010734,
+            8226519,
+            8364881,
+            8816707
+          ],
+          "fragments": 16,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 8,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 1,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 8,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 11106713600000,
+          "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+          "elapsed_ns": [
+            8062592,
+            8872791,
+            7836017,
+            8813983,
+            7937641
+          ],
+          "fragments": 16,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 8,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 2,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 8,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 11106713600000,
+          "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+          "elapsed_ns": [
+            8031652,
+            8685887,
+            12733527,
+            12661377,
+            10832773
+          ],
+          "fragments": 16,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 8,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 2,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 8,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 11106713600000,
+          "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+          "elapsed_ns": [
+            10174696,
+            12569322,
+            11397468,
+            7991631,
+            16946908
+          ],
+          "fragments": 16,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 8,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 3,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 8,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 11106713600000,
+          "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+          "elapsed_ns": [
+            8242163,
+            8447996,
+            13450692,
+            12147321,
+            8513719
+          ],
+          "fragments": 16,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 8,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 3,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 8,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 11106713600000,
+          "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+          "elapsed_ns": [
+            8549970,
+            8938515,
+            8067901,
+            9962718,
+            13629076
+          ],
+          "fragments": 16,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 8,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 4,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 8,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 11106713600000,
+          "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+          "elapsed_ns": [
+            8843736,
+            14466025,
+            15617904,
+            14683381,
+            7587230
+          ],
+          "fragments": 16,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 8,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 4,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 8,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 11106713600000,
+          "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+          "elapsed_ns": [
+            11316448,
+            8318294,
+            8486061,
+            9279776,
+            8370328
+          ],
+          "fragments": 16,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 8,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 5,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 8,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 11106713600000,
+          "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+          "elapsed_ns": [
+            8463641,
+            8655784,
+            8068809,
+            8403714,
+            8117211
+          ],
+          "fragments": 16,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 8,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 5,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 8,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 11106713600000,
+          "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+          "elapsed_ns": [
+            11330487,
+            11420028,
+            7608532,
+            7854385,
+            5359533
+          ],
+          "fragments": 16,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 8,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 6,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 8,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 11106713600000,
+          "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+          "elapsed_ns": [
+            17060965,
+            17052863,
+            8398406,
+            8691893,
+            8684141
+          ],
+          "fragments": 16,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 8,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 6,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 8,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 11106713600000,
+          "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+          "elapsed_ns": [
+            8697970,
+            11142535,
+            8769631,
+            8730937,
+            7794738
+          ],
+          "fragments": 16,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 8,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 0,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 512,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 1161003008000,
+          "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+          "elapsed_ns": [
+            30405493,
+            30544205,
+            30651277,
+            29389603,
+            29548360
+          ],
+          "fragments": 1024,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 512,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 0,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 512,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 1161003008000,
+          "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+          "elapsed_ns": [
+            57001587,
+            27563163,
+            27770252,
+            26747098,
+            27150660
+          ],
+          "fragments": 1024,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 512,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 1,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 512,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 1161003008000,
+          "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+          "elapsed_ns": [
+            29653476,
+            43141185,
+            80826871,
+            54854211,
+            51469747
+          ],
+          "fragments": 1024,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 512,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 1,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 512,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 1161003008000,
+          "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+          "elapsed_ns": [
+            29851415,
+            29224489,
+            30114310,
+            30661614,
+            29359150
+          ],
+          "fragments": 1024,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 512,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 2,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 512,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 1161003008000,
+          "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+          "elapsed_ns": [
+            48090242,
+            45308537,
+            59594152,
+            51178843,
+            53698631
+          ],
+          "fragments": 1024,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 512,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 2,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 512,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 1161003008000,
+          "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+          "elapsed_ns": [
+            30430009,
+            47383972,
+            29871461,
+            34965445,
+            39687854
+          ],
+          "fragments": 1024,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 512,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 3,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 512,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 1161003008000,
+          "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+          "elapsed_ns": [
+            79725840,
+            43157878,
+            47823713,
+            42854264,
+            28463462
+          ],
+          "fragments": 1024,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 512,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 3,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 512,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 1161003008000,
+          "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+          "elapsed_ns": [
+            38538838,
+            34031760,
+            32216566,
+            33080615,
+            38951761
+          ],
+          "fragments": 1024,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 512,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 4,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 512,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 1161003008000,
+          "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+          "elapsed_ns": [
+            28339347,
+            34455229,
+            29233569,
+            28268176,
+            28947275
+          ],
+          "fragments": 1024,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 512,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 4,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 512,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 1161003008000,
+          "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+          "elapsed_ns": [
+            32360028,
+            35481387,
+            26084272,
+            32676983,
+            29533691
+          ],
+          "fragments": 1024,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 512,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 5,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 512,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 1161003008000,
+          "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+          "elapsed_ns": [
+            62961714,
+            56600888,
+            64647766,
+            31639440,
+            31005738
+          ],
+          "fragments": 1024,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 512,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 5,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 512,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 1161003008000,
+          "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+          "elapsed_ns": [
+            28291783,
+            30308549,
+            28957823,
+            29247189,
+            30120667
+          ],
+          "fragments": 1024,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 512,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 6,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 512,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 1161003008000,
+          "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+          "elapsed_ns": [
+            30918991,
+            30085185,
+            30196518,
+            29649634,
+            29915882
+          ],
+          "fragments": 1024,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 512,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 6,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 512,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "plain",
+          "consumed": 1161003008000,
+          "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+          "elapsed_ns": [
+            38434352,
+            42641377,
+            35578401,
+            60072867,
+            41894318
+          ],
+          "fragments": 1024,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 512,
+          "warmup": 20,
+          "width": 1000000.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 0,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 9,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 11144724480000,
+          "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+          "elapsed_ns": [
+            19701584,
+            17859918,
+            18176664,
+            10145920,
+            16689531
+          ],
+          "fragments": 17,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 21,
+          "warmup": 20,
+          "width": 60.875
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 0,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 9,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 11144724480000,
+          "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+          "elapsed_ns": [
+            15332029,
+            10391844,
+            12999914,
+            13312888,
+            21194375
+          ],
+          "fragments": 17,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 21,
+          "warmup": 20,
+          "width": 60.875
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 1,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 9,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 11144724480000,
+          "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+          "elapsed_ns": [
+            20639179,
+            13840425,
+            14013012,
+            13683275,
+            12565481
+          ],
+          "fragments": 17,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 21,
+          "warmup": 20,
+          "width": 60.875
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 1,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 9,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 11144724480000,
+          "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+          "elapsed_ns": [
+            32785242,
+            14838996,
+            13367297,
+            10471257,
+            13652823
+          ],
+          "fragments": 17,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 21,
+          "warmup": 20,
+          "width": 60.875
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 2,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 9,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 11144724480000,
+          "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+          "elapsed_ns": [
+            13342433,
+            13807948,
+            14406447,
+            20004081,
+            26848582
+          ],
+          "fragments": 17,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 21,
+          "warmup": 20,
+          "width": 60.875
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 2,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 9,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 11144724480000,
+          "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+          "elapsed_ns": [
+            17096795,
+            24959213,
+            30214538,
+            13273008,
+            9408570
+          ],
+          "fragments": 17,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 21,
+          "warmup": 20,
+          "width": 60.875
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 3,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 9,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 11144724480000,
+          "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+          "elapsed_ns": [
+            13713029,
+            12793943,
+            12776551,
+            12426419,
+            20227235
+          ],
+          "fragments": 17,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 21,
+          "warmup": 20,
+          "width": 60.875
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 3,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 9,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 11144724480000,
+          "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+          "elapsed_ns": [
+            13565447,
+            18679126,
+            37936708,
+            14041997,
+            9755000
+          ],
+          "fragments": 17,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 21,
+          "warmup": 20,
+          "width": 60.875
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 4,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 9,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 11144724480000,
+          "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+          "elapsed_ns": [
+            13130943,
+            13562444,
+            13182279,
+            13322807,
+            13227399
+          ],
+          "fragments": 17,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 21,
+          "warmup": 20,
+          "width": 60.875
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 4,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 9,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 11144724480000,
+          "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+          "elapsed_ns": [
+            13396912,
+            13564679,
+            15426879,
+            18659291,
+            12892982
+          ],
+          "fragments": 17,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 21,
+          "warmup": 20,
+          "width": 60.875
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 5,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 9,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 11144724480000,
+          "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+          "elapsed_ns": [
+            26842924,
+            27973990,
+            26186734,
+            26091605,
+            13116206
+          ],
+          "fragments": 17,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 21,
+          "warmup": 20,
+          "width": 60.875
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 5,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 9,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 11144724480000,
+          "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+          "elapsed_ns": [
+            26621797,
+            26018269,
+            12558636,
+            12852402,
+            12867769
+          ],
+          "fragments": 17,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 21,
+          "warmup": 20,
+          "width": 60.875
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 6,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 9,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 11144724480000,
+          "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+          "elapsed_ns": [
+            13273078,
+            13522702,
+            13744320,
+            14753715,
+            13487431
+          ],
+          "fragments": 17,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 21,
+          "warmup": 20,
+          "width": 60.875
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 6,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 9,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 11144724480000,
+          "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+          "elapsed_ns": [
+            15908877,
+            13907337,
+            13784690,
+            15076048,
+            13858934
+          ],
+          "fragments": 17,
+          "iterations": 2000,
+          "runs": 8,
+          "samples": 5,
+          "text_bytes": 21,
+          "warmup": 20,
+          "width": 60.875
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 0,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 513,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 1161062400000,
+          "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+          "elapsed_ns": [
+            48921463,
+            56869790,
+            38427297,
+            37873847,
+            95952648
+          ],
+          "fragments": 1025,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 525,
+          "warmup": 20,
+          "width": 2888.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 0,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 513,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 1161062400000,
+          "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+          "elapsed_ns": [
+            37198310,
+            38384901,
+            40350052,
+            40897145,
+            37010637
+          ],
+          "fragments": 1025,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 525,
+          "warmup": 20,
+          "width": 2888.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 1,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 513,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 1161062400000,
+          "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+          "elapsed_ns": [
+            39933637,
+            37508280,
+            36883868,
+            39359444,
+            40232084
+          ],
+          "fragments": 1025,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 525,
+          "warmup": 20,
+          "width": 2888.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 1,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 513,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 1161062400000,
+          "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+          "elapsed_ns": [
+            49798573,
+            40568944,
+            36549592,
+            53702751,
+            47310844
+          ],
+          "fragments": 1025,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 525,
+          "warmup": 20,
+          "width": 2888.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 2,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 513,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 1161062400000,
+          "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+          "elapsed_ns": [
+            83663683,
+            41614381,
+            57318193,
+            57997503,
+            55122066
+          ],
+          "fragments": 1025,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 525,
+          "warmup": 20,
+          "width": 2888.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 2,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 513,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 1161062400000,
+          "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+          "elapsed_ns": [
+            40082058,
+            62455340,
+            52751676,
+            68783898,
+            68765320
+          ],
+          "fragments": 1025,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 525,
+          "warmup": 20,
+          "width": 2888.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 3,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 513,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 1161062400000,
+          "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+          "elapsed_ns": [
+            40812912,
+            40027788,
+            42502176,
+            42404254,
+            39757838
+          ],
+          "fragments": 1025,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 525,
+          "warmup": 20,
+          "width": 2888.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 3,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 513,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 1161062400000,
+          "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+          "elapsed_ns": [
+            39596077,
+            40159096,
+            39846820,
+            44470120,
+            40389234
+          ],
+          "fragments": 1025,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 525,
+          "warmup": 20,
+          "width": 2888.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 4,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 513,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 1161062400000,
+          "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+          "elapsed_ns": [
+            86310868,
+            37593421,
+            52250610,
+            41278566,
+            39186020
+          ],
+          "fragments": 1025,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 525,
+          "warmup": 20,
+          "width": 2888.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 4,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 513,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 1161062400000,
+          "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+          "elapsed_ns": [
+            39149631,
+            39559200,
+            39857925,
+            39704617,
+            38624469
+          ],
+          "fragments": 1025,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 525,
+          "warmup": 20,
+          "width": 2888.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 5,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 513,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 1161062400000,
+          "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+          "elapsed_ns": [
+            23238449,
+            23099738,
+            23142901,
+            22912065,
+            22900471
+          ],
+          "fragments": 1025,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 525,
+          "warmup": 20,
+          "width": 2888.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 5,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 513,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 1161062400000,
+          "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+          "elapsed_ns": [
+            37093682,
+            41543697,
+            79841432,
+            38472556,
+            38586263
+          ],
+          "fragments": 1025,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 525,
+          "warmup": 20,
+          "width": 2888.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 6,
+        "revision": "baseline",
+        "output": {
+          "accepted_runs": 513,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 1161062400000,
+          "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+          "elapsed_ns": [
+            40592203,
+            43305250,
+            46147860,
+            57537994,
+            44609181
+          ],
+          "fragments": 1025,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 525,
+          "warmup": 20,
+          "width": 2888.0
+        }
+      },
+      {
+        "kind": "timing",
+        "pair": 6,
+        "revision": "fix",
+        "output": {
+          "accepted_runs": 513,
+          "allocations": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "case": "reshape",
+          "consumed": 1161062400000,
+          "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+          "elapsed_ns": [
+            62671929,
+            43263344,
+            53667689,
+            39809872,
+            37657608
+          ],
+          "fragments": 1025,
+          "iterations": 200,
+          "runs": 512,
+          "samples": 5,
+          "text_bytes": 525,
+          "warmup": 20,
+          "width": 2888.0
+        }
+      }
+    ],
+    "summaries": [
+      {
+        "case": "plain",
+        "runs": 8,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "fragments": 16,
+        "baseline": {
+          "median_ns_per_line": 2321.812,
+          "min_ns_per_line": 2301.557,
+          "max_ns_per_line": 2387.5005,
+          "timing_samples": 35,
+          "allocation_samples": 9,
+          "calls_per_line": 25.0,
+          "allocated_bytes_per_line": 4088.0,
+          "peak_extra_bytes": 2360
+        },
+        "fix": {
+          "median_ns_per_line": 2403.9145,
+          "min_ns_per_line": 2368.433,
+          "max_ns_per_line": 2474.108,
+          "timing_samples": 35,
+          "allocation_samples": 9,
+          "calls_per_line": 24.0,
+          "allocated_bytes_per_line": 4024.0,
+          "peak_extra_bytes": 2296
+        },
+        "time_ratio": 1.0353613901556198
+      },
+      {
+        "case": "plain",
+        "runs": 512,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "fragments": 1024,
+        "baseline": {
+          "median_ns_per_line": 90457.6,
+          "min_ns_per_line": 89363.835,
+          "max_ns_per_line": 96742.925,
+          "timing_samples": 35,
+          "allocation_samples": 9,
+          "calls_per_line": 553.0,
+          "allocated_bytes_per_line": 278456.0,
+          "peak_extra_bytes": 147008
+        },
+        "fix": {
+          "median_ns_per_line": 92476.81,
+          "min_ns_per_line": 89151.5,
+          "max_ns_per_line": 107518.56,
+          "timing_samples": 35,
+          "allocation_samples": 9,
+          "calls_per_line": 552.0,
+          "allocated_bytes_per_line": 274360.0,
+          "peak_extra_bytes": 142912
+        },
+        "time_ratio": 1.022322170829206
+      },
+      {
+        "case": "reshape",
+        "runs": 8,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "fragments": 17,
+        "baseline": {
+          "median_ns_per_line": 3807.3735,
+          "min_ns_per_line": 3745.037,
+          "max_ns_per_line": 3907.042,
+          "timing_samples": 35,
+          "allocation_samples": 9,
+          "calls_per_line": 81.0,
+          "allocated_bytes_per_line": 15303.0,
+          "peak_extra_bytes": 5868
+        },
+        "fix": {
+          "median_ns_per_line": 3695.203,
+          "min_ns_per_line": 3642.121,
+          "max_ns_per_line": 3895.902,
+          "timing_samples": 35,
+          "allocation_samples": 9,
+          "calls_per_line": 76.0,
+          "allocated_bytes_per_line": 14995.0,
+          "peak_extra_bytes": 5672
+        },
+        "time_ratio": 0.9705386140865875
+      },
+      {
+        "case": "reshape",
+        "runs": 512,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "fragments": 1025,
+        "baseline": {
+          "median_ns_per_line": 117284.595,
+          "min_ns_per_line": 115037.34,
+          "max_ns_per_line": 121865.36,
+          "timing_samples": 35,
+          "allocation_samples": 9,
+          "calls_per_line": 1635.0,
+          "allocated_bytes_per_line": 906567.0,
+          "peak_extra_bytes": 316332
+        },
+        "fix": {
+          "median_ns_per_line": 115102.295,
+          "min_ns_per_line": 113574.095,
+          "max_ns_per_line": 118437.03,
+          "timing_samples": 35,
+          "allocation_samples": 9,
+          "calls_per_line": 1624.0,
+          "allocated_bytes_per_line": 886099.0,
+          "peak_extra_bytes": 304040
+        },
+        "time_ratio": 0.9813931232827294
+      }
+    ]
+  },
+  "idle_timing_loadavg_start": "2.61 5.56 3.93 1/2654 1936163",
+  "idle_timing_loadavg_end": "2.48 5.48 3.91 1/2661 1936263",
+  "copy_diagnostic": [
+    {
+      "case": "plain",
+      "runs": 8,
+      "trace": [
+        "BLOCK_SHIFT_NEW slots=16 bytes=64",
+        "BLOCK_SHIFT_NEW slots=16 bytes=64"
+      ],
+      "output": {
+        "accepted_runs": 8,
+        "allocations": [
+          null
+        ],
+        "case": "plain",
+        "consumed": 1110671360,
+        "digest": "d3b7252772e829f210c441d75c242cf9b5f40b00107be83482f8790a88495a1c",
+        "elapsed_ns": [
+          10826
+        ],
+        "fragments": 16,
+        "iterations": 1,
+        "runs": 8,
+        "samples": 1,
+        "text_bytes": 8,
+        "warmup": 0,
+        "width": 1000000.0
+      }
+    },
+    {
+      "case": "plain",
+      "runs": 512,
+      "trace": [
+        "BLOCK_SHIFT_NEW slots=1024 bytes=4096",
+        "BLOCK_SHIFT_NEW slots=1024 bytes=4096"
+      ],
+      "output": {
+        "accepted_runs": 512,
+        "allocations": [
+          null
+        ],
+        "case": "plain",
+        "consumed": 1161003008,
+        "digest": "29b06010195de5dbbc81870e7bf5522989e3de7b81c4aaff01651f0035539834",
+        "elapsed_ns": [
+          128584
+        ],
+        "fragments": 1024,
+        "iterations": 1,
+        "runs": 512,
+        "samples": 1,
+        "text_bytes": 512,
+        "warmup": 0,
+        "width": 1000000.0
+      }
+    },
+    {
+      "case": "reshape",
+      "runs": 8,
+      "trace": [
+        "BLOCK_SHIFT_NEW slots=17 bytes=68",
+        "BLOCK_SHIFT_NEW slots=17 bytes=68",
+        "BLOCK_SHIFT_COPY slots=17 bytes=68 capacity_bytes=128",
+        "BLOCK_SHIFT_NEW slots=17 bytes=68",
+        "BLOCK_SHIFT_COPY slots=17 bytes=68 capacity_bytes=128"
+      ],
+      "output": {
+        "accepted_runs": 9,
+        "allocations": [
+          null
+        ],
+        "case": "reshape",
+        "consumed": 1114472448,
+        "digest": "598d39aaa3809bbe9bf8795c04133ddeca67fbb305797ec01e459a97ef0a6916",
+        "elapsed_ns": [
+          16273
+        ],
+        "fragments": 17,
+        "iterations": 1,
+        "runs": 8,
+        "samples": 1,
+        "text_bytes": 21,
+        "warmup": 0,
+        "width": 60.875
+      }
+    },
+    {
+      "case": "reshape",
+      "runs": 512,
+      "trace": [
+        "BLOCK_SHIFT_NEW slots=1025 bytes=4100",
+        "BLOCK_SHIFT_NEW slots=1025 bytes=4100",
+        "BLOCK_SHIFT_COPY slots=1025 bytes=4100 capacity_bytes=8192",
+        "BLOCK_SHIFT_NEW slots=1025 bytes=4100",
+        "BLOCK_SHIFT_COPY slots=1025 bytes=4100 capacity_bytes=8192"
+      ],
+      "output": {
+        "accepted_runs": 513,
+        "allocations": [
+          null
+        ],
+        "case": "reshape",
+        "consumed": 1161062400,
+        "digest": "f85c1acbefbd73b65e90f7ff7ea2649ce37e79c618e5cd236eecaed42d584251",
+        "elapsed_ns": [
+          153099
+        ],
+        "fragments": 1025,
+        "iterations": 1,
+        "runs": 512,
+        "samples": 1,
+        "text_bytes": 525,
+        "warmup": 0,
+        "width": 2888.0
+      }
+    }
+  ],
+  "copy_diagnostic_patch": "diff --git i/crates/shodo/src/line/reshape.rs w/crates/shodo/src/line/reshape.rs\nindex 774c438..13893ae 100644\n--- i/crates/shodo/src/line/reshape.rs\n+++ w/crates/shodo/src/line/reshape.rs\n@@ -637,6 +637,8 @@ pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturati\n         }\n     }\n     line.fragments = records;\n+    assert!(shifts.iter().all(|shift| *shift == LayoutUnit::ZERO));\n+    eprintln!(\"BLOCK_SHIFT_COPY slots={} bytes={} capacity_bytes={}\", shifts.len(), shifts.len() * std::mem::size_of::<LayoutUnit>(), shifts.capacity() * std::mem::size_of::<LayoutUnit>());\n     line.block_shifts = shifts;\n     line.overlay_clusters = overlay_clusters.into_boxed_slice();\n     line.overlay_runs = overlay_runs.into_boxed_slice();\ndiff --git i/crates/shodo/src/output/line.rs w/crates/shodo/src/output/line.rs\nindex 7eed7db..23d370b 100644\n--- i/crates/shodo/src/output/line.rs\n+++ w/crates/shodo/src/output/line.rs\n@@ -398,6 +398,7 @@ impl Line {\n         let hanging_start = scan.punctuation_edges.hang_start;\n         let mut ruby_caret_gaps = scan.ruby_caret_gaps;\n         ruby_caret_gaps.sort_by_key(|gap| gap.text.start);\n+        eprintln!(\"BLOCK_SHIFT_NEW slots={} bytes={}\", records.len(), records.len() * std::mem::size_of::<LayoutUnit>());\n         Line {\n             #[cfg(test)]\n             _clone_probe: super::clone_probe::CloneProbe,\n",
+  "differential": [
+    {
+      "window_bytes": null,
+      "baseline": {
+        "cases": 256,
+        "lines": 11234,
+        "output_sha256": "046c8292a5b61ccfc9333e8035cbf121a3618b99da4228a847a8271d198709b1",
+        "warnings_sha256": "728a13b0e37ddfd314021ade9c91d4bf5c3bb94df1aad4eaf8876189eac4356c"
+      },
+      "fix": {
+        "cases": 256,
+        "lines": 11234,
+        "output_sha256": "046c8292a5b61ccfc9333e8035cbf121a3618b99da4228a847a8271d198709b1",
+        "warnings_sha256": "728a13b0e37ddfd314021ade9c91d4bf5c3bb94df1aad4eaf8876189eac4356c"
+      }
+    },
+    {
+      "window_bytes": "0",
+      "baseline": {
+        "cases": 256,
+        "lines": 10440,
+        "output_sha256": "70f5307e32ae0b430845a76dde9ac5ea2ca7cb558a7ae28a33e6699ffa34816c",
+        "warnings_sha256": "4fd6ebbb10dbeaad78fed99a3a553ae5aadcb628ef6345abbbfd5be5cfb2be22"
+      },
+      "fix": {
+        "cases": 256,
+        "lines": 10440,
+        "output_sha256": "70f5307e32ae0b430845a76dde9ac5ea2ca7cb558a7ae28a33e6699ffa34816c",
+        "warnings_sha256": "4fd6ebbb10dbeaad78fed99a3a553ae5aadcb628ef6345abbbfd5be5cfb2be22"
+      }
+    }
+  ],
+  "binary_sha256": {
+    "baseline-time": "4d8f50ce842c32b343c72a8bbddf73e7548b322e9d190a8521ba7aeec4d0be06",
+    "fix-time": "de598d103fbf9be023c3478aa2760750eff4349e0e1dfa37dd76d5eff631f5a9",
+    "baseline-alloc": "53792be20477899ad0eac8c8fde6946a25b2ca210741a101eea2da529d3368a0",
+    "fix-alloc": "2d348fa22a01b2fb61e8806e72c3f0dd2bdefc39e53810bf8574006a94b00e4e",
+    "baseline-diff": "3ae7c3203b34986eb7ec992bc67676ce06946c5527578fc3bffe5654c59dc287",
+    "fix-diff": "3f8909f2ab909d2f185c567bf6cf6f5ec617769c60614a54d2894caa452454e7"
+  },
+  "fix": "6dc5bb6d93c315dacd620dcff17cba3b17f0fc20",
+  "toolchain": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6\n",
+  "ambient_build_flags": {
+    "RUSTFLAGS": null,
+    "CARGO_ENCODED_RUSTFLAGS": null,
+    "CARGO_PROFILE_RELEASE_OPT_LEVEL": null,
+    "CARGO_BUILD_TARGET": null
+  },
+  "fixture_sha256": "7aa5c6687e9a8b72f71ea5abaded28d771ecb54c66a8a9ac49268537b2f94d25",
+  "baseline_production_sha256": {
+    "crates/shodo/src/output/line.rs": "df299b6eb5ba21a5a7feb2b2752fdae2447ac511c84c138d318f4e290adcdd8c",
+    "crates/shodo/src/line/reshape.rs": "4f6d22f1076d8391b68227b167a2b982ad909c051caa9b78afd822cfa5795ae9"
+  },
+  "validation": {
+    "baseline-tests": {
+      "passed": 1251,
+      "failed": 0,
+      "ignored": 9
+    },
+    "workspace-tests": {
+      "passed": 1785,
+      "failed": 0,
+      "ignored": 9
+    },
+    "correctness_tests": 2,
+    "allocation_regression_debug": "pass",
+    "allocation_regression_release": "pass",
+    "fmt": "pass",
+    "diff_check": "pass",
+    "workspace_all_targets_clippy": "pass",
+    "new_allocation_targets_clippy": "pass",
+    "red_allocation": {
+      "plain_bytes": 278456,
+      "budget": 276000,
+      "failed_for_expected_budget": true
+    }
+  },
+  "scope": {
+    "timing": "accepted first-line materialization with warm context, existing paragraph, drop each result; no allocator counting; no parallel task builds in final series",
+    "allocation": "separate CountingAllocator build; 10 accepted lines dropped within scope; 3 samples/process and 3 alternating pairs; peak_extra_bytes is allocator-visible extra requested bytes, not RSS",
+    "copy_diagnostic": "separate instrumented baseline; traces count logical zero/copy LayoutUnit slots and final scratch capacity, not machine memcpy or allocator realloc copies",
+    "retained_memory": "final metrics and paragraph state unchanged; all allocation scopes end with net_bytes=0"
+  }
+}
