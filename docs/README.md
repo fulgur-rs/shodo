@@ -63,6 +63,7 @@ raikiri examples read at build time live in `dev/raikiri/inputs/`.
 | SHODO-1 retained unit-spacing memory and before/after timing | [Spacing memory record](records/shodo-1-spacing-memory-2026-10-11.md) |
 | SHODO-15 paragraph-end reshape width and regression checks | [Paragraph-end width record](records/shodo-15-paragraph-end-2026-10-12.md) |
 | SHODO-2 descriptor presence allocations and fixed-font matching | [Descriptor presence record](records/shodo-2-descriptor-2026-10-12.md) |
+| SHODO-3 accepted-line temporary shifts, allocations, peaks, and timing | [Block-shift materialization record](records/shodo-3-block-shifts-2026-10-12.md) |
 | Frozen raikiri S4 residual fields, all109 document classification and caller gaps | [raikiri style diagnostics](records/raikiri-style-diagnostics.md) |
 | Representative caller wiring of hanging-punctuation none/first | [raikiri hanging-punctuation](records/raikiri-hanging-punctuation.md) |
 | Representative caller ownership split of flow/paint CSS | [raikiri style handoff](records/raikiri-style-handoff.md) |

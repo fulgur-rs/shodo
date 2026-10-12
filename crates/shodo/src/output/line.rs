@@ -453,7 +453,9 @@ impl Line {
             ),
             block_offset,
             displaced: Vec::new(),
-            block_shifts: vec![LayoutUnit::ZERO; records.len()],
+            // Materialization applies edge overlays before measure_metrics
+            // creates the final per-fragment shifts. No initial zeros are used.
+            block_shifts: Vec::new(),
             fragments: records,
             empty: false,
             positions: None,
