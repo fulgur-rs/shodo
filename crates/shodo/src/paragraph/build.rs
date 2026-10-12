@@ -412,6 +412,10 @@ impl Paragraph {
             alternate_warnings,
             mut warnings,
         } = analysis;
+        // When RubyBudget is disabled, a first-line build still retains a
+        // second set of shaping items. Keep those runs under the same cap.
+        let mut local_shape_items = 0u64;
+        let normal_item_limits = shape_item_limits(&normal.limits, budget, local_shape_items);
         let mut sat = Saturation::default();
         let mut data = build_data(
             normal,
@@ -420,14 +424,31 @@ impl Paragraph {
             &mut warnings,
             &mut sat,
             &mut normal_bases,
+            &normal_item_limits,
             None,
         )
-        .map_err(|error| normal_bases.translate(error, budget))?;
+        .map_err(|error| {
+            if budget.enabled() {
+                if error.kind == LimitKind::Items {
+                    normal_bases.translate_shape_items(error, budget)
+                } else {
+                    normal_bases.translate(error, budget)
+                }
+            } else {
+                translate_local_shape_item_error(error, &normal_item_limits, local_shape_items)
+            }
+        })?;
+        account_shape_items(
+            data.shape_items.len() as u64,
+            budget,
+            &mut local_shape_items,
+            &normal_bases,
+        )?;
         budget.paragraph_shaping(data.glyphs.len() as u64)?;
         let limits = data.limits.clone();
         let mut bases = if let Some(mut alternate) = alternate {
             let mut alternate_bases = alternate_bases.expect("first-line analysis has base scopes");
-            alternate_bases.merge_shaped_glyphs_from(&normal_bases)?;
+            alternate_bases.merge_shaping_from(&normal_bases)?;
             let mut remaining = budget.remaining(&limits);
             if !budget.enabled() {
                 remaining.max_shaped_glyphs = limits
@@ -451,6 +472,8 @@ impl Paragraph {
                 && (alternate.glyph_budget.is_none()
                     || !data.shape_items.iter().any(|item| item.width_feature.is_some())))
             .then_some(&data);
+            let alternate_item_limits =
+                shape_item_limits(&alternate.limits, budget, local_shape_items);
             let mut alternate = build_data(
                 alternate,
                 cx,
@@ -458,12 +481,22 @@ impl Paragraph {
                 &mut warnings,
                 &mut sat,
                 &mut alternate_bases,
+                &alternate_item_limits,
                 reusable_shape,
             )
             .map_err(|mut error| {
                 if budget.enabled() {
-                    return alternate_bases.translate(error, budget);
+                    return if error.kind == LimitKind::Items {
+                        alternate_bases.translate_shape_items(error, budget)
+                    } else {
+                        alternate_bases.translate(error, budget)
+                    };
                 }
+                error = translate_local_shape_item_error(
+                    error,
+                    &alternate_item_limits,
+                    local_shape_items,
+                );
                 if error.kind == LimitKind::ShapedGlyphs
                     && let Some(limit) = limits.max_shaped_glyphs
                 {
@@ -472,6 +505,12 @@ impl Paragraph {
                 }
                 error
             })?;
+            account_shape_items(
+                alternate.shape_items.len() as u64,
+                budget,
+                &mut local_shape_items,
+                &alternate_bases,
+            )?;
             budget.paragraph_shaping(alternate.glyphs.len() as u64)?;
             let cuts = first_line_cuts(&data, &alternate);
             finalize_data(&mut data, Some(&cuts), cx, &mut warnings, &mut sat);
@@ -658,6 +697,52 @@ fn analyze_data(
     }
 }
 
+fn shape_item_limits(
+    limits: &Limits,
+    budget: &crate::ruby::prepare::RubyBudget,
+    local_used: u64,
+) -> Limits {
+    let mut result = limits.clone();
+    result.max_items = if budget.enabled() {
+        budget.remaining_shape_items(limits)
+    } else {
+        limits
+            .max_items
+            .map(|limit| limit.saturating_sub(local_used))
+    };
+    result
+}
+
+fn translate_local_shape_item_error(
+    mut error: LimitExceeded,
+    item_limits: &Limits,
+    local_used: u64,
+) -> LimitExceeded {
+    if error.kind == LimitKind::Items
+        && let Some(remaining) = item_limits.max_items
+    {
+        error.limit = local_used.saturating_add(remaining);
+        error.actual = error.actual.saturating_add(local_used);
+    }
+    error
+}
+
+fn account_shape_items(
+    amount: u64,
+    budget: &mut crate::ruby::prepare::RubyBudget,
+    local_used: &mut u64,
+    bases: &crate::ruby::base_budget::BaseScopes,
+) -> Result<(), LimitExceeded> {
+    if budget.enabled() {
+        budget
+            .charge_shape_items(amount)
+            .map_err(|error| bases.translate_shape_items(error, budget))
+    } else {
+        *local_used = local_used.saturating_add(amount);
+        Ok(())
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_data(
     prepared: PreparedBuild,
@@ -666,6 +751,7 @@ fn build_data(
     warnings: &mut WarningSink,
     sat: &mut Saturation,
     bases: &mut crate::ruby::base_budget::BaseScopes,
+    shape_item_limits: &Limits,
     reusable_shape: Option<&ParagraphData>,
 ) -> Result<ParagraphData, LimitExceeded> {
     let PreparedBuild {
@@ -683,6 +769,18 @@ fn build_data(
     let mut shape_limits = limits.clone();
     shape_limits.max_shaped_glyphs = glyph_budget;
     let (shape_items_input, glyphs, runs, shape_features) = if let Some(normal) = reusable_shape {
+        Limits::check(
+            shape_item_limits.max_items,
+            LimitKind::Items,
+            normal.shape_items.len() as u64,
+        )?;
+        for item in &normal.shape_items {
+            let scalar = item
+                .scalars
+                .first()
+                .expect("a shaping item always retains at least one scalar");
+            bases.shape_item(scalar.item as usize)?;
+        }
         (
             normal.shape_items.clone(),
             normal.glyphs.clone(),
@@ -698,7 +796,13 @@ fn build_data(
             fonts,
             style.writing_mode,
             &combine_spans,
-        );
+            shape_item_limits,
+            if bases.enabled() {
+                Some(&mut *bases)
+            } else {
+                None
+            },
+        )?;
         #[cfg(test)]
         let reference_shape = if bases.enabled()
             && matches!(

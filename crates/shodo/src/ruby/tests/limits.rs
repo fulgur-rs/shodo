@@ -209,6 +209,152 @@ fn annotation_only_first_line_change_prepares_both_sets() {
 }
 
 #[test]
+fn annotation_shaping_runs_share_the_parent_item_limit() {
+    use crate::geometry::WritingMode;
+    use crate::limits::{LimitExceeded, LimitKind};
+
+    let limits = Limits {
+        max_items: Some(300),
+        ..Limits::default()
+    };
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    let annotation_text = "a§b".repeat(100);
+    let annotation = |node| RubyAnnotation {
+        node: NodeId(node),
+        content: RubyContent::text(
+            TextSource::Dom {
+                node: NodeId(node),
+                offset: 0,
+            },
+            &annotation_text,
+            &InlineStyle::default(),
+            &limits,
+        ),
+        span: RubySpan::Auto,
+        visibility: RubyVisibility::Visible,
+    };
+    let ruby = Ruby::new(
+        vec![RubyBase {
+            node: NodeId(10),
+            content: RubyContent::text(
+                TextSource::Dom {
+                    node: NodeId(10),
+                    offset: 0,
+                },
+                "日",
+                &InlineStyle::default(),
+                &limits,
+            ),
+            align: RubyAlign::default(),
+        }],
+        vec![RubyLevel {
+            annotations: vec![annotation(20), annotation(21)],
+            style: RubyStyle::default(),
+        }],
+    )
+    .unwrap();
+    let style = ParagraphStyle {
+        writing_mode: WritingMode::VerticalRl,
+        ..Default::default()
+    };
+    let mut builder = ParagraphBuilder::new(&style, &limits);
+    builder.push_ruby(NodeId(8), &style.root, ruby);
+
+    let error = builder
+        .build(&mut LayoutContext::new(), &fonts)
+        .expect_err("separate annotation itemizations share the parent's shaping-run cap");
+
+    assert_eq!(
+        error,
+        LimitExceeded {
+            kind: LimitKind::Items,
+            limit: 300,
+            actual: 301,
+        }
+    );
+}
+
+#[test]
+fn imported_base_shaping_runs_use_the_base_snapshot_item_limit() {
+    use crate::geometry::WritingMode;
+    use crate::limits::{LimitExceeded, LimitKind};
+
+    let parent_limits = Limits {
+        max_items: Some(20),
+        ..Limits::default()
+    };
+    let base_limits = Limits {
+        max_items: Some(7),
+        ..Limits::default()
+    };
+    let fonts = FontCollection::with_options(
+        &parent_limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    let ruby = Ruby::new(
+        vec![RubyBase {
+            node: NodeId(10),
+            content: RubyContent::text(
+                TextSource::Dom {
+                    node: NodeId(10),
+                    offset: 0,
+                },
+                "a§b§a§b§a",
+                &InlineStyle::default(),
+                &base_limits,
+            ),
+            align: RubyAlign::default(),
+        }],
+        vec![RubyLevel {
+            annotations: vec![RubyAnnotation {
+                node: NodeId(20),
+                content: RubyContent::text(
+                    TextSource::Dom {
+                        node: NodeId(20),
+                        offset: 0,
+                    },
+                    "x",
+                    &InlineStyle::default(),
+                    &parent_limits,
+                ),
+                span: RubySpan::Auto,
+                visibility: RubyVisibility::Visible,
+            }],
+            style: RubyStyle::default(),
+        }],
+    )
+    .unwrap();
+    let style = ParagraphStyle {
+        writing_mode: WritingMode::VerticalRl,
+        ..Default::default()
+    };
+    let mut builder = ParagraphBuilder::new(&style, &parent_limits);
+    builder.push_ruby(NodeId(8), &style.root, ruby);
+
+    let error = builder
+        .build(&mut LayoutContext::new(), &fonts)
+        .expect_err("an imported base keeps its own shaping-run cap");
+
+    assert_eq!(
+        error,
+        LimitExceeded {
+            kind: LimitKind::Items,
+            limit: 7,
+            actual: 8,
+        }
+    );
+}
+
+#[test]
 fn annotation_forced_breaks_preserve_noncollapsible_spaces() {
     let fonts = FontCollection::with_options(
         &Limits::default(),

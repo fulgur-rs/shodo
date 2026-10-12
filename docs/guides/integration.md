@@ -160,6 +160,11 @@ struct literal must add the new field; `..Limits::default()` remains supported.
 
 ## Shaping data and budgets
 
+`Limits::max_items` also bounds the itemized shaping runs retained across normal,
+first-line, and nested Ruby paragraph data. This prevents vertical orientation
+and other shaping boundaries from creating unbounded `ShapeItem` allocations
+before shaping limits are applied; exceeding the cap returns `LimitKind::Items`.
+
 A `GlyphRunView` exposes the actual font ID and retained `FontData`, effective size,
 normalized variation coordinates, resolved variations, script, language, and
 synthetic `embolden`/`skew` requests. Render the returned glyph IDs against that

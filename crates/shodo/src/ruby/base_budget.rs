@@ -198,7 +198,7 @@ impl BaseScopes {
     }
 
     /// Add normal-pass shaping work to an alternate pass prepared in advance.
-    pub(crate) fn merge_shaped_glyphs_from(&mut self, normal: &Self) -> Result<(), LimitExceeded> {
+    pub(crate) fn merge_shaping_from(&mut self, normal: &Self) -> Result<(), LimitExceeded> {
         debug_assert_eq!(self.scopes.len(), normal.scopes.len());
         for (alternate, normal) in self.scopes.iter().zip(&normal.scopes) {
             Limits::check(
@@ -209,12 +209,47 @@ impl BaseScopes {
                     .get(LimitKind::ShapedGlyphs)
                     .saturating_add(normal.spent.get(LimitKind::ShapedGlyphs)),
             )?;
+            Limits::check(
+                alternate.limits.max_items,
+                LimitKind::Items,
+                alternate
+                    .spent
+                    .shape_items()
+                    .saturating_add(normal.spent.shape_items()),
+            )?;
         }
         for (alternate, normal) in self.scopes.iter_mut().zip(&normal.scopes) {
             alternate.spent.add(
                 LimitKind::ShapedGlyphs,
                 normal.spent.get(LimitKind::ShapedGlyphs),
             );
+            alternate.spent.add_shape_items(normal.spent.shape_items());
+        }
+        Ok(())
+    }
+
+    pub(crate) fn shape_item(&mut self, item: usize) -> Result<(), LimitExceeded> {
+        if self.scopes.is_empty() {
+            return Ok(());
+        }
+        let mut cursor = self.items.get(item).copied().flatten();
+        while let Some(i) = cursor {
+            let scope = &self.scopes[i];
+            if let Err(error) = Limits::check(
+                scope.limits.max_items,
+                LimitKind::Items,
+                scope.spent.shape_items().saturating_add(1),
+            ) {
+                self.failure = Some(error);
+                return Err(error);
+            }
+            cursor = scope.parent;
+        }
+        let mut cursor = self.items.get(item).copied().flatten();
+        while let Some(i) = cursor {
+            let scope = &mut self.scopes[i];
+            scope.spent.add_shape_items(1);
+            cursor = scope.parent;
         }
         Ok(())
     }
@@ -430,6 +465,18 @@ impl BaseScopes {
             error
         } else {
             budget.translate(error)
+        }
+    }
+
+    pub(crate) fn translate_shape_items(
+        &self,
+        error: LimitExceeded,
+        budget: &RubyBudget,
+    ) -> LimitExceeded {
+        if self.failure == Some(error) {
+            error
+        } else {
+            budget.translate_shape_items(error)
         }
     }
 
