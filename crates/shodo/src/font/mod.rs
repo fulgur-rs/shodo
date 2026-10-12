@@ -760,4 +760,6 @@ mod tests {
 #[cfg(test)]
 mod browser_tests;
 #[cfg(test)]
+pub(crate) use browser_tests::test_font as test_font_bytes;
+#[cfg(test)]
 mod cache_tests;

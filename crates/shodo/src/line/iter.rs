@@ -140,8 +140,8 @@ impl Paragraph {
         lines
     }
 
-    // Balance needs count and mapped ends, while all post-scan effects remain
-    // necessary. Drop each owned Line instead of retaining trial geometry.
+    // Balance consumes copied ends; only proven effect-equivalent prepared
+    // scans can skip completed geometry. All other lines finalize in full.
     pub(super) fn break_ends(
         &self,
         cx: &mut LayoutContext,
@@ -149,8 +149,8 @@ impl Paragraph {
         width: f32,
         atomics: &AtomicSizes,
     ) -> Vec<u32> {
-        self.fixed_width_lines(cx, options, width, None, atomics, Retention::LastLine)
-            .map(|line| line.break_token().unit)
+        self.fixed_width_trials(cx, options, width, atomics)
+            .map(|line| line.token.unit)
             .collect()
     }
 

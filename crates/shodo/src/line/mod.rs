@@ -363,6 +363,7 @@ impl Paragraph {
     ) -> F::Output {
         let data = &*self.data;
         let start = token.unit as usize;
+        let summary_scope = annotation_align.is_none() && normal_cursors.is_none();
         if start == data.units.len() {
             cx.completed = None;
             return F::from_full(LineResult::Done);
@@ -423,8 +424,7 @@ impl Paragraph {
             })
         });
         let eligible = planned_end_override.is_none()
-            && annotation_align.is_none()
-            && normal_cursors.is_none()
+            && summary_scope
             && constraint.break_plan.is_none()
             && constraint.max_graphemes.is_none()
             && data.warnings.is_empty()
@@ -547,6 +547,24 @@ impl Paragraph {
             .add(indent, &mut sat)
             .add(alignment.shift, &mut sat)
             .sub(scan.punctuation_edges.hang_start, &mut sat);
+        if F::SUMMARY
+            && sat.is_clean()
+            && warning_checkpoint.is_some()
+            && cx.warnings.checkpoint() == warning_checkpoint
+            && constraint.max_block_size.is_none()
+            && positions.is_none()
+            && glyph_spacing.is_none()
+            && displaced.is_empty()
+            && summary_scope
+            && let Some(result) = F::summarize(trial::SummaryInput {
+                data,
+                token,
+                scan: &scan,
+                origin,
+            })
+        {
+            return result;
+        }
         let ruby_measure = scan.ruby.take();
         let mut line = Line::new(
             self,
