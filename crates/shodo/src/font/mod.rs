@@ -395,7 +395,7 @@ impl FontCollection {
         Limits::check(
             limits.max_faces_per_layer,
             LimitKind::FacesPerLayer,
-            (state.faces.len() - state.native_faces.len()) as u64 + u64::from(faces),
+            state.faces.len() as u64 + u64::from(faces),
         )?;
         let bytes = state.blob_bytes + data.len() as u64;
         Limits::check(
@@ -478,11 +478,9 @@ impl FontCollection {
         Limits::check(
             limits.max_faces_per_layer,
             LimitKind::FacesPerLayer,
-            (state.faces.len() - state.native_faces.len()) as u64 + 1,
+            state.faces.len() as u64 + 1,
         )?;
-        let additional = if state.faces.iter().enumerate().any(|(index, face)| {
-            !state.native_faces.contains(&index) && face.data.id() == blob.id()
-        }) {
+        let additional = if state.faces.iter().any(|face| face.data.id() == blob.id()) {
             0
         } else {
             blob.len() as u64

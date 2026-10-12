@@ -191,6 +191,7 @@ fn reloaded_platform_face_keeps_identity_and_blob() {
         )
         .unwrap();
     let blob = fonts.state().faces[1].data.id();
+    let blob_len = fonts.state().faces[1].data.len() as u64;
     for _ in 0..3 {
         let next = fonts
             .best_match(
@@ -204,40 +205,86 @@ fn reloaded_platform_face_keeps_identity_and_blob() {
         assert_eq!(fonts.state().faces.len(), 2);
         assert_eq!(fonts.state().faces[1].data.id(), blob);
     }
-    assert_eq!(fonts.state().blob_bytes, 0);
+    assert_eq!(fonts.state().blob_bytes, blob_len);
 }
 #[test]
-fn platform_retention_does_not_consume_registration_limits() {
-    for limits in [
-        crate::limits::Limits {
-            max_faces_per_layer: Some(1),
+fn native_faces_respect_cumulative_face_budget() {
+    let fonts = FontCollection::with_options(
+        &Limits {
+            max_faces_per_layer: Some(2), // built-in stub plus one native face
             ..Default::default()
         },
-        crate::limits::Limits {
-            max_layer_blob_bytes: Some(0),
+        super::super::FontOptions {
+            system_fonts: false,
             ..Default::default()
         },
-    ] {
-        let fonts = FontCollection::new(&limits);
-        for _ in 0..257 {
-            assert!(
-                fonts
-                    .best_match(
-                        vec![reloaded(SourceId::new())],
-                        &FontQuery::default(),
-                        &mut FontCluster::new("a"),
-                        true
-                    )
-                    .is_some()
-            );
-        }
-        assert_eq!(fonts.state().faces.len(), 258);
-        assert_eq!(fonts.state().blob_bytes, 0);
-    }
+    );
+    assert!(
+        fonts
+            .best_match(
+                vec![reloaded(SourceId::new())],
+                &FontQuery::default(),
+                &mut FontCluster::new("a"),
+                true
+            )
+            .is_some()
+    );
+    assert!(
+        fonts
+            .best_match(
+                vec![reloaded(SourceId::new())],
+                &FontQuery::default(),
+                &mut FontCluster::new("a"),
+                true
+            )
+            .is_none()
+    );
+    assert_eq!(fonts.state().faces.len(), 2);
+    assert_eq!(fonts.state().native_faces.len(), 1);
+    assert_eq!(fonts.state().retained_sources.len(), 1);
 }
 
 #[test]
-fn explicit_face_cap_is_unchanged_after_native_queries() {
+fn native_blobs_respect_cumulative_layer_blob_budget() {
+    let first = reloaded(SourceId::new());
+    let first_len = first.data.data.len() as u64;
+    let fonts = FontCollection::with_options(
+        &Limits {
+            max_layer_blob_bytes: Some(first_len),
+            ..Default::default()
+        },
+        super::super::FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    assert!(
+        fonts
+            .best_match(
+                vec![first],
+                &FontQuery::default(),
+                &mut FontCluster::new("a"),
+                true
+            )
+            .is_some()
+    );
+    assert!(
+        fonts
+            .best_match(
+                vec![reloaded(SourceId::new())],
+                &FontQuery::default(),
+                &mut FontCluster::new("a"),
+                true
+            )
+            .is_none()
+    );
+    assert_eq!(fonts.state().faces.len(), 2);
+    assert_eq!(fonts.state().blob_bytes, first_len);
+    assert_eq!(fonts.state().retained_sources.len(), 1);
+}
+
+#[test]
+fn native_and_explicit_faces_share_layer_face_budget() {
     let limits = Limits {
         max_faces_per_layer: Some(2),
         ..Default::default()
@@ -258,18 +305,16 @@ fn explicit_face_cap_is_unchanged_after_native_queries() {
         )
         .unwrap();
     let bytes = super::super::browser_tests::test_font("Registered", &['a'], 500);
-    fonts.register(bytes.clone()).unwrap();
-    assert!(
-        matches!(fonts.register_face(bytes, 0, FontFaceDescriptor { family: "Explicit".into(), ..Default::default() }),
-        Err(super::super::FontError::Limit(err)) if err.kind == LimitKind::FacesPerLayer)
-    );
+    assert!(matches!(fonts.register(bytes),
+        Err(super::super::FontError::Limit(err)) if err.kind == LimitKind::FacesPerLayer));
+    assert_eq!(fonts.state().faces.len(), 2);
 }
 
 #[test]
 fn explicit_local_aliases_charge_a_native_blob_once() {
     let bytes = super::super::browser_tests::test_font("Native", &['a'], 600);
     let limits = Limits {
-        max_faces_per_layer: Some(4),
+        max_faces_per_layer: Some(8),
         max_layer_blob_bytes: Some(bytes.len() as u64),
         ..Default::default()
     };
@@ -288,7 +333,7 @@ fn explicit_local_aliases_charge_a_native_blob_once() {
             true,
         )
         .unwrap();
-    assert_eq!(fonts.state().blob_bytes, 0);
+    assert_eq!(fonts.state().blob_bytes, bytes.len() as u64);
     for family in ["First", "Second"] {
         fonts
             .register_sources(
@@ -308,7 +353,7 @@ fn explicit_local_aliases_charge_a_native_blob_once() {
 }
 
 #[test]
-fn native_blob_reuse_cannot_bypass_explicit_registration_budget() {
+fn native_face_is_not_retained_when_its_blob_exceeds_layer_budget() {
     let fonts = FontCollection::with_options(
         &Limits {
             max_layer_blob_bytes: Some(0),
@@ -319,22 +364,21 @@ fn native_blob_reuse_cannot_bypass_explicit_registration_budget() {
             ..Default::default()
         },
     );
-    fonts
-        .best_match(
-            vec![reloaded(SourceId::new())],
-            &FontQuery::default(),
-            &mut FontCluster::new("a"),
-            true,
-        )
-        .unwrap();
     let before = fonts.generation();
     assert!(
-        matches!(fonts.register_sources(FontFaceDescriptor { family: "Explicit".into(), ..Default::default() },
-        vec![super::super::FontSource::Local("Native-Regular".into())]),
-        Err(super::super::FontError::Limit(err)) if err.kind == LimitKind::LayerBlobBytes)
+        fonts
+            .best_match(
+                vec![reloaded(SourceId::new())],
+                &FontQuery::default(),
+                &mut FontCluster::new("a"),
+                true,
+            )
+            .is_none()
     );
     assert_eq!(fonts.generation(), before);
-    assert_eq!(fonts.state().faces.len(), 2);
+    assert_eq!(fonts.state().faces.len(), 1);
+    assert_eq!(fonts.state().blob_bytes, 0);
+    assert!(fonts.state().retained_sources.is_empty());
 }
 
 #[test]

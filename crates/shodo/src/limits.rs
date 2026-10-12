@@ -67,12 +67,11 @@ pub struct Limits {
     /// Expanded coverage/class glyph visits, GDEF mark sets, and AAT cache
     /// items per face (2^23).
     pub max_font_cache_items: Option<u64>,
-    /// Explicitly registered faces in a font layer (256), including the shared
-    /// built-in stub. Lazily materialized platform faces are exempt.
+    /// Retained faces in a font layer (256), including the shared built-in
+    /// stub and lazily materialized platform faces.
     pub max_faces_per_layer: Option<u64>,
-    /// Total registered font-blob bytes retained per layer (256 MiB).
-    /// Native-only blobs are exempt; explicit registration of a native blob
-    /// charges it once per layer, including CSS `local()` sources.
+    /// Total font-blob bytes retained per layer (256 MiB). Shared blob storage
+    /// is charged once, including platform fonts and CSS `local()` sources.
     pub max_layer_blob_bytes: Option<u64>,
     /// Shared harfrust ShaperData cache entries per layer (64).
     pub max_shaper_cache_entries: Option<u64>,
