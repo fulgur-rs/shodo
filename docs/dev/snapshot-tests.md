@@ -1,7 +1,7 @@
 # Fixed glyph snapshots
 
 The snapshot harness renders accepted shodo glyph IDs, retained font data,
-variation coordinates, positions and baselines with Skrifa 0.44.0 and Tiny-Skia
+variation coordinates, positions and baselines with Skrifa 0.48.0 and Tiny-Skia
 0.12.0. It does not shape the text again. Rendering dependencies belong to the
 unpublished fixture crate, not the main library.
 

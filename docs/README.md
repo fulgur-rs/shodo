@@ -67,6 +67,7 @@ raikiri examples read at build time live in `dev/raikiri/inputs/`.
 | SHODO-4 auxiliary emphasis extents, numeric effects, and memory/CPU tradeoff | [Emphasis extents record](records/shodo-4-emphasis-extents-2026-10-12.md) |
 | SHODO-5 match-cache eviction policies and rejected hit/retention tradeoff | [Match-cache evaluation](records/shodo-5-match-cache-2026-10-12.md) |
 | SHODO-6 guarded Balance trial summaries, fallback coverage and stage tradeoffs | [Balance trial summary evaluation](records/shodo-6-balance-trial-summary-2026-10-12.md) |
+| SHODO-13 Skrifa API compatibility, fixed snapshots and raikiri update order | [Skrifa upgrade record](records/shodo-13-skrifa-upgrade-2026-10-12.md) |
 | SHODO-16 guarded first-line analysis/shaping reuse, exact limits and build costs | [First-line reuse evaluation](records/shodo-16-first-line-reuse-2026-10-12.md) |
 | SHODO-17 first-line intrinsic single-pass calculation and fallback scope | [First-line intrinsic record](records/shodo-17-first-line-intrinsic-2026-10-12.md) |
 | Frozen raikiri S4 residual fields, all109 document classification and caller gaps | [raikiri style diagnostics](records/raikiri-style-diagnostics.md) |

@@ -718,18 +718,16 @@ fn ligature_carets(
                 } else {
                     match v.device().ok()? {
                         DeviceOrVariationIndex::VariationIndex(v) => {
-                            let delta = gdef
-                                .item_var_store()?
-                                .ok()?
-                                .compute_delta(
-                                    DeltaSetIndex {
-                                        outer: v.delta_set_outer_index(),
-                                        inner: v.delta_set_inner_index(),
-                                    },
-                                    run.normalized_coords(),
-                                )
-                                .ok()?;
-                            base + delta as f32 * scale
+                            let delta = gdef.item_var_store()?.ok()?.compute_delta(
+                                DeltaSetIndex {
+                                    outer: v.delta_set_outer_index(),
+                                    inner: v.delta_set_inner_index(),
+                                },
+                                run.normalized_coords(),
+                            )?;
+                            // Keep the previous whole-design-unit rounding;
+                            // read-fonts now returns the fractional delta too.
+                            base + delta.to_i32() as f32 * scale
                         }
                         DeviceOrVariationIndex::Device(v) => {
                             let ppem = run.font_size().round() as u16;

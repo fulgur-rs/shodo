@@ -14,7 +14,7 @@ homepage = "https://fulgur.dev/"
 # avoid the drift this section replaces (e.g. skrifa "0.44" vs "=0.44.0").
 [workspace.dependencies]
 fontique = { version = "0.11", default-features = false, features = ["std"] }
-skrifa = "0.44"
+skrifa = "0.48"
 harfrust = "0.12"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

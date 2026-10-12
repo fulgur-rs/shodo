@@ -322,7 +322,7 @@ fn horizontal_metrics_from_font(
     let delta = |tag: &[u8; 4]| {
         font.mvar()
             .ok()
-            .and_then(|m| m.metric_delta(Tag::new(tag), coords).ok())
+            .and_then(|m| m.metric_delta(Tag::new(tag), coords))
             .map_or(0.0, |d| d.to_f32())
     };
     FontMetrics {
@@ -361,7 +361,7 @@ fn vertical_metrics_from_font(
     let delta = |tag: &[u8; 4]| {
         font.mvar()
             .ok()
-            .and_then(|m| m.metric_delta(Tag::new(tag), coords).ok())
+            .and_then(|m| m.metric_delta(Tag::new(tag), coords))
             .map_or(0., |d| d.to_f32())
     };
     Some(VerticalFontMetrics {
