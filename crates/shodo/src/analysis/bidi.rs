@@ -5,6 +5,7 @@ use crate::style::{InlineStyle, ParagraphStyle, TextOrientation, UnicodeBidi};
 use std::{borrow::Cow, ops::Range};
 use unicode_bidi::{BidiClass, BidiInfo, Level, bidi_class};
 
+#[derive(Clone)]
 pub(crate) struct BidiParagraph {
     pub(crate) text: Range<u32>,
     pub(crate) base_level: u8,
@@ -13,6 +14,7 @@ pub(crate) struct BidiParagraph {
     pub(crate) inline_level: u8,
 }
 
+#[derive(Clone)]
 pub(crate) struct BidiAnalysis {
     pub(crate) levels: Vec<u8>,
     pub(crate) paragraphs: Vec<BidiParagraph>,

@@ -61,6 +61,7 @@ pub(crate) struct BreakOpportunity {
     pub(crate) min_content: bool,
 }
 
+#[derive(Clone)]
 pub(crate) struct BreakAnalysis {
     pub(crate) graphemes: Vec<u32>,
     /// Actual character starts after transparent bidi controls. Break cuts

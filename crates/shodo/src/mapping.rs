@@ -221,6 +221,7 @@ impl RangeIndex {
 
 /// A scalar transform, or a coalesced byte-preserving sequence. Expanded
 /// spans also cover one-to-many scalar changes with equal UTF-8 byte lengths.
+#[derive(Clone)]
 pub(crate) struct TransformSpan {
     pub(crate) old: Range<u32>,
     pub(crate) new: Range<u32>,

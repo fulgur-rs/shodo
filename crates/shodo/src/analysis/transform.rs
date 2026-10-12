@@ -10,6 +10,7 @@ use icu_locale_core::{LanguageIdentifier, Locale};
 use icu_normalizer::ComposingNormalizer;
 use std::borrow::Cow;
 
+#[derive(Clone)]
 pub(crate) struct WidthOrigin {
     pub(crate) text: std::ops::Range<u32>,
     pub(crate) before_width: String,
