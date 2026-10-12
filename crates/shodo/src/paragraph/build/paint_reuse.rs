@@ -5,6 +5,7 @@ use crate::style::{FontStyle, InlineStyle, LineHeight};
 #[cfg(test)]
 std::thread_local! {
     pub(super) static FORCE_REFERENCE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    pub(super) static STYLE_COMPARISON_CLONES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 pub(super) fn enabled() -> bool {
@@ -17,10 +18,16 @@ pub(super) fn enabled() -> bool {
 pub(super) fn styles_match(normal: &[InlineStyle], alternate: &[InlineStyle]) -> bool {
     normal.len() == alternate.len()
         && normal.iter().zip(alternate).all(|(a, b)| {
+            // Reject inherited numeric differences before cloning owned
+            // family/feature payloads on the shape-changing fallback path.
+            if inherited_float_bits(a) != inherited_float_bits(b) {
+                return false;
+            }
+            #[cfg(test)]
+            STYLE_COMPARISON_CLONES.with(|count| count.set(count.get() + 1));
             let mut without_paint = a.clone();
             without_paint.paint = b.paint;
             without_paint == *b
-                && inherited_float_bits(a) == inherited_float_bits(b)
                 && a.font_variations
                     .iter()
                     .zip(&b.font_variations)

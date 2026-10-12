@@ -210,6 +210,29 @@ fn paint_only_analysis_uses_one_pass() {
 }
 
 #[test]
+fn changed_inherited_float_rejects_without_cloning_style_payloads() {
+    let mut style = paint_style();
+    style.first_line.as_mut().unwrap().font_size = 22.0;
+    let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+    builder.push_text(
+        TextSource::Dom {
+            node: NodeId(1),
+            offset: 0,
+        },
+        "office affinity first line",
+    );
+    paint_reuse::STYLE_COMPARISON_CLONES.with(|count| count.set(0));
+    ANALYSIS_PASSES.with(|count| count.set(0));
+    builder.analyze().unwrap();
+    assert_eq!(ANALYSIS_PASSES.with(std::cell::Cell::get), 2);
+    assert_eq!(
+        paint_reuse::STYLE_COMPARISON_CLONES.with(std::cell::Cell::get),
+        0,
+        "an inherited float mismatch must reject before the owned style clone"
+    );
+}
+
+#[test]
 fn reused_analysis_matches_reference_for_identical_transforms_and_style_maps() {
     for transformed in [false, true] {
         for mode in [WritingMode::HorizontalTb, WritingMode::VerticalRl] {
