@@ -17,6 +17,7 @@ use crate::style::{InlineStyle, UnicodeBidi, WhiteSpaceCollapse};
 const OBJECT_REPLACEMENT: char = '\u{FFFC}';
 const PARAGRAPH_SEPARATOR: char = '\u{2029}';
 
+#[derive(Clone)]
 pub(crate) struct Processed {
     pub(crate) text: String,
     pub(crate) items: Vec<Item>,

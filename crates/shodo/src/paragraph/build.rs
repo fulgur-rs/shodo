@@ -2,11 +2,22 @@
 
 use super::*;
 
+mod paint_reuse;
+
+#[cfg(test)]
+std::thread_local! {
+    static ANALYSIS_PASSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+mod paint_reuse_tests;
+
 /// Context-free work that can be completed before a shaping context is
 /// available.
 pub(crate) struct BuildAnalysis {
     normal: PreparedBuild,
     alternate: Option<PreparedBuild>,
+    alternate_reuses_analysis: bool,
     source_cuts: Option<Vec<std::ops::RangeInclusive<u32>>>,
     rubies: Vec<crate::ruby::builder::RubyInput>,
     bases: crate::ruby::base_budget::BaseScopes,
@@ -193,6 +204,7 @@ impl Paragraph {
         let source_cuts = alternate_styles
             .as_ref()
             .map(|_| crate::analysis::breaks::source_cursor_ranges(&processed));
+        let input_items = processed.items.len() as u64;
         let mut processed = transform_with_base_scopes(
             processed,
             &styles,
@@ -229,6 +241,7 @@ impl Paragraph {
         )?;
 
         let mut alternate_warnings = None;
+        let mut alternate_reuses_analysis = false;
         let (alternate, alternate_bases) = if let Some(mut alternate_styles) = alternate_styles {
             let mut deferred_warnings = WarningSink::new(warnings.remaining_limit());
             for s in &mut alternate_styles {
@@ -272,61 +285,92 @@ impl Paragraph {
             let flags = shared_flags
                 .as_deref()
                 .expect("alternate pass prepares shared whitespace flags");
-            let alternate = crate::analysis::whitespace::process_with_base_scopes_and_flags(
-                crate::analysis::whitespace::ProcessInput {
-                    raw_text: &text,
-                    raw: &items,
-                    styles: &normal.styles,
-                    with_mapping: offset_mapping,
-                    limits: &input_limits,
-                    annotation: ruby_annotation,
-                },
-                flags,
-                &mut alternate_bases,
-            )
-            .and_then(|processed| {
-                transform_with_base_scopes(
-                    processed,
-                    &alternate_styles,
-                    &remaining,
-                    &mut deferred_warnings,
-                    style.writing_mode,
-                    if alternate_bases.enabled() {
-                        Some(&mut alternate_bases)
-                    } else {
-                        None
+            // The original pass can exceed an intermediate whitespace item
+            // cap even if a shrinking transform retains fewer items. Bound
+            // both stages before skipping their incremental limit checks.
+            alternate_reuses_analysis = paint_reuse::enabled()
+                && !budget.enabled()
+                && !alternate_bases.enabled()
+                && line_break_override.is_none()
+                && warnings.checkpoint() == Some(0)
+                && deferred_warnings.checkpoint() == Some(0)
+                && paint_reuse::styles_match(&normal.styles, &alternate_styles)
+                && remaining
+                    .max_text_bytes
+                    .is_none_or(|max| max >= normal.processed.text.len() as u64)
+                && remaining
+                    .max_items
+                    .is_none_or(|max| max >= input_items.max(normal.processed.items.len() as u64));
+            let alternate = if alternate_reuses_analysis {
+                PreparedBuild {
+                    style: alternate_style,
+                    limits: limits.clone(),
+                    glyph_budget: remaining.max_shaped_glyphs,
+                    processed: normal.processed.clone(),
+                    styles: alternate_styles,
+                    id,
+                    combine_spans: normal.combine_spans.clone(),
+                    breaks: normal.breaks.clone(),
+                    bidi: normal.bidi.clone(),
+                    used_direction: normal.used_direction,
+                }
+            } else {
+                let alternate = crate::analysis::whitespace::process_with_base_scopes_and_flags(
+                    crate::analysis::whitespace::ProcessInput {
+                        raw_text: &text,
+                        raw: &items,
+                        styles: &normal.styles,
+                        with_mapping: offset_mapping,
+                        limits: &input_limits,
+                        annotation: ruby_annotation,
                     },
+                    flags,
+                    &mut alternate_bases,
                 )
-            })
-            .map_err(|mut error| {
-                if budget.enabled() {
-                    return alternate_bases.translate(error, budget);
-                }
-                if error.kind == LimitKind::TextBytes
-                    && let Some(limit) = limits.max_text_bytes
-                {
-                    error.actual += normal.processed.text.len() as u64;
-                    error.limit = limit;
-                }
-                if error.kind == LimitKind::Items
-                    && let Some(limit) = limits.max_items
-                {
-                    error.actual += normal.processed.items.len() as u64;
-                    error.limit = limit;
-                }
-                error
-            })?;
-            let alternate = analyze_data(
-                alternate_style,
-                limits.clone(),
-                remaining.max_shaped_glyphs,
-                alternate,
-                alternate_styles,
-                id,
-                &mut deferred_warnings,
-                false,
-                line_break_override.as_deref(),
-            );
+                .and_then(|processed| {
+                    transform_with_base_scopes(
+                        processed,
+                        &alternate_styles,
+                        &remaining,
+                        &mut deferred_warnings,
+                        style.writing_mode,
+                        if alternate_bases.enabled() {
+                            Some(&mut alternate_bases)
+                        } else {
+                            None
+                        },
+                    )
+                })
+                .map_err(|mut error| {
+                    if budget.enabled() {
+                        return alternate_bases.translate(error, budget);
+                    }
+                    if error.kind == LimitKind::TextBytes
+                        && let Some(limit) = limits.max_text_bytes
+                    {
+                        error.actual += normal.processed.text.len() as u64;
+                        error.limit = limit;
+                    }
+                    if error.kind == LimitKind::Items
+                        && let Some(limit) = limits.max_items
+                    {
+                        error.actual += normal.processed.items.len() as u64;
+                        error.limit = limit;
+                    }
+                    error
+                })?;
+                analyze_data(
+                    alternate_style,
+                    limits.clone(),
+                    remaining.max_shaped_glyphs,
+                    alternate,
+                    alternate_styles,
+                    id,
+                    &mut deferred_warnings,
+                    false,
+                    line_break_override.as_deref(),
+                )
+            };
             budget.paragraph_analysis(
                 alternate.processed.text.len() as u64,
                 alternate.processed.items.len() as u64,
@@ -341,6 +385,7 @@ impl Paragraph {
         Ok(BuildAnalysis {
             normal,
             alternate,
+            alternate_reuses_analysis,
             source_cuts,
             rubies,
             bases,
@@ -359,6 +404,7 @@ impl Paragraph {
         let BuildAnalysis {
             normal,
             alternate,
+            alternate_reuses_analysis,
             source_cuts,
             rubies,
             bases: mut normal_bases,
@@ -374,6 +420,7 @@ impl Paragraph {
             &mut warnings,
             &mut sat,
             &mut normal_bases,
+            None,
         )
         .map_err(|error| normal_bases.translate(error, budget))?;
         budget.paragraph_shaping(data.glyphs.len() as u64)?;
@@ -389,6 +436,21 @@ impl Paragraph {
             }
             alternate.glyph_budget = remaining.max_shaped_glyphs;
             warnings.append(alternate_warnings.expect("first-line analysis has deferred warnings"));
+            // Task 1 proved identical sanitized non-paint style arrays and
+            // excludes scoped budgets. Copy only a clean, fully bounded
+            // shape; otherwise retain the original incremental error path.
+            let reusable_shape = (alternate_reuses_analysis
+                && warnings.checkpoint() == Some(0)
+                && sat.is_clean()
+                && alternate
+                    .glyph_budget
+                    .is_none_or(|max| max >= data.glyphs.len() as u64)
+                // An unselected width trial can contain more glyphs than
+                // the retained selection. A tighter alternate cap can make
+                // that trial fail and change selection/error behavior.
+                && (alternate.glyph_budget.is_none()
+                    || !data.shape_items.iter().any(|item| item.width_feature.is_some())))
+            .then_some(&data);
             let mut alternate = build_data(
                 alternate,
                 cx,
@@ -396,6 +458,7 @@ impl Paragraph {
                 &mut warnings,
                 &mut sat,
                 &mut alternate_bases,
+                reusable_shape,
             )
             .map_err(|mut error| {
                 if budget.enabled() {
@@ -517,6 +580,8 @@ fn analyze_data(
     report_combine_rejections: bool,
     line_break_override: Option<&crate::analysis::breaks::OverrideCallback>,
 ) -> PreparedBuild {
+    #[cfg(test)]
+    ANALYSIS_PASSES.with(|count| count.set(count.get() + 1));
     let (combine_spans, combine_rejected) = crate::analysis::combine::prepare_with_rejections(
         &processed.text,
         &processed.items,
@@ -588,6 +653,7 @@ fn build_data(
     warnings: &mut WarningSink,
     sat: &mut Saturation,
     bases: &mut crate::ruby::base_budget::BaseScopes,
+    reusable_shape: Option<&ParagraphData>,
 ) -> Result<ParagraphData, LimitExceeded> {
     let PreparedBuild {
         style,
@@ -603,73 +669,83 @@ fn build_data(
     } = prepared;
     let mut shape_limits = limits.clone();
     shape_limits.max_shaped_glyphs = glyph_budget;
-    let mut shape_items_input = crate::analysis::itemize::itemize(
-        &processed,
-        &styles,
-        &bidi,
-        &breaks,
-        fonts,
-        style.writing_mode,
-        &combine_spans,
-    );
-    #[cfg(test)]
-    let reference_shape = if bases.enabled()
-        && matches!(
-            crate::shape::combined_width_probe_mode_for_test(),
-            crate::shape::CombinedWidthProbeMode::CloneReference
-                | crate::shape::CombinedWidthProbeMode::FeatureView
-        ) {
-        crate::shape::select_combined_widths(
-            cx,
-            &mut shape_items_input,
+    let (shape_items_input, glyphs, runs, shape_features) = if let Some(normal) = reusable_shape {
+        (
+            normal.shape_items.clone(),
+            normal.glyphs.clone(),
+            normal.runs.clone(),
+            normal.shape_features.clone(),
+        )
+    } else {
+        let mut shape_items_input = crate::analysis::itemize::itemize(
+            &processed,
             &styles,
+            &bidi,
+            &breaks,
             fonts,
             style.writing_mode,
-            &shape_limits,
+            &combine_spans,
         );
-        let shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
-        let (glyphs, runs) = shape_items_with_base_scopes(
-            cx,
-            &shape_items_input,
-            &styles,
-            fonts,
-            style.writing_mode,
-            &shape_limits,
-            warnings,
-            sat,
-            Some(&mut *bases),
-            &shape_features,
-        )?;
-        Some((glyphs, runs, shape_features))
-    } else {
-        None
-    };
-    // Production builds have no reference path; the type comes from the
-    // reuse branch below.
-    #[cfg(not(test))]
-    let reference_shape = None;
-    let (glyphs, runs, shape_features) = if let Some(reference) = reference_shape {
-        reference
-    } else {
-        let mut shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
-        let scoped = if bases.enabled() {
-            Some(&mut *bases)
+        #[cfg(test)]
+        let reference_shape = if bases.enabled()
+            && matches!(
+                crate::shape::combined_width_probe_mode_for_test(),
+                crate::shape::CombinedWidthProbeMode::CloneReference
+                    | crate::shape::CombinedWidthProbeMode::FeatureView
+            ) {
+            crate::shape::select_combined_widths(
+                cx,
+                &mut shape_items_input,
+                &styles,
+                fonts,
+                style.writing_mode,
+                &shape_limits,
+            );
+            let shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
+            let (glyphs, runs) = shape_items_with_base_scopes(
+                cx,
+                &shape_items_input,
+                &styles,
+                fonts,
+                style.writing_mode,
+                &shape_limits,
+                warnings,
+                sat,
+                Some(&mut *bases),
+                &shape_features,
+            )?;
+            Some((glyphs, runs, shape_features))
         } else {
             None
         };
-        let (glyphs, runs) = crate::shape::shape_items_with_combined_width_reuse(
-            cx,
-            &mut shape_items_input,
-            &styles,
-            fonts,
-            style.writing_mode,
-            &shape_limits,
-            warnings,
-            sat,
-            scoped,
-            &mut shape_features,
-        )?;
-        (glyphs, runs, shape_features)
+        // Production builds have no reference path; the type comes from the
+        // reuse branch below.
+        #[cfg(not(test))]
+        let reference_shape = None;
+        let (glyphs, runs, shape_features) = if let Some(reference) = reference_shape {
+            reference
+        } else {
+            let mut shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
+            let scoped = if bases.enabled() {
+                Some(&mut *bases)
+            } else {
+                None
+            };
+            let (glyphs, runs) = crate::shape::shape_items_with_combined_width_reuse(
+                cx,
+                &mut shape_items_input,
+                &styles,
+                fonts,
+                style.writing_mode,
+                &shape_limits,
+                warnings,
+                sat,
+                scoped,
+                &mut shape_features,
+            )?;
+            (glyphs, runs, shape_features)
+        };
+        (shape_items_input, glyphs, runs, shape_features)
     };
     let base_level = u8::from(used_direction == Direction::Rtl);
     let style_metrics = crate::line::font_metrics::resolve_styles_memo(

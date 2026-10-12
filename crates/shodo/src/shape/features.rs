@@ -6,8 +6,10 @@ use std::{collections::HashMap, sync::Arc};
 type Key = (u32, bool, Option<[u8; 4]>);
 
 /// Paragraph-owned feature arrays shared by trials, retained runs, and line-edge reshapes.
+#[derive(Clone)]
 pub(crate) struct FeatureSets(HashMap<Key, FeatureSet>);
 
+#[derive(Clone)]
 struct FeatureSet {
     features: Arc<[harfrust::Feature]>,
     retained: bool,
