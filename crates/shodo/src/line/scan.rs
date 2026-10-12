@@ -66,6 +66,7 @@ pub(super) fn scan(
     let mut overflowing = false;
     let mut hanging = LayoutUnit::ZERO;
     let mut spacing = super::spacing_summary::Cursor::default();
+    let mut hanging_tail = super::punctuation::HangingTail::default();
     let mut kept_spacing = LayoutUnit::ZERO;
     let mut i = start;
     let mut graphemes_seen = 0usize;
@@ -193,10 +194,15 @@ pub(super) fn scan(
             sat,
         )
         .add(data.unit_spacing[i].word, sat);
-        super::spacing::push(data, &mut spacing, i);
-        let tracking = spacing.summary(Some(data)).width(sat);
         // Fit excludes eligible trailing space/tab advances (CSS Text 3 §4.1.2).
         let hangs = super::whitespace::fits_hanging(data, i);
+        let transparent =
+            super::whitespace::transparent(data, i) && !matches!(unit.kind, UnitKind::ForcedBreak);
+        if !count_mode {
+            hanging_tail.observe(data, i, &spacing, hangs, transparent);
+        }
+        super::spacing::push(data, &mut spacing, i);
+        let tracking = spacing.summary(Some(data)).width(sat);
         // A selected break also pulls adjacent closing units. Reserve their
         // actual edges now, and measure Clone decoration after them so those
         // edges are not counted twice. The candidate summary includes their
@@ -216,8 +222,6 @@ pub(super) fn scan(
         };
         let ruby_delta =
             crate::ruby::measure::candidate_adjustment(data, start, i + 1, atomics, cx, sat);
-        let transparent =
-            super::whitespace::transparent(data, i) && !matches!(unit.kind, UnitKind::ForcedBreak);
         let paragraph_end = i + 1 == units.len();
         let shared_extent = pos
             .add(w, sat)
@@ -295,14 +299,12 @@ pub(super) fn scan(
         // candidate that already fits cannot start to overflow.
         let extent =
             if !count_mode && (!hangs || paragraph_end) && !overflowing && extent > available {
-                let summary = if paragraph_end && hangs {
-                    super::punctuation::before_hanging_space(data, start, i, &widths, sat)
-                } else {
+                let summary = hanging_tail.summary(data, i + 1).unwrap_or_else(|| {
                     candidate_spacing
                         .as_ref()
                         .unwrap_or(&spacing)
                         .summary(Some(data))
-                };
+                });
                 let adjustment = super::punctuation::edges(
                     data,
                     summary,

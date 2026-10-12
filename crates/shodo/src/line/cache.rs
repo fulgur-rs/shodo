@@ -232,6 +232,7 @@ impl PartialLine {
         let mut max = LayoutUnit::ZERO;
         let mut hanging = LayoutUnit::ZERO;
         let mut spacing = super::spacing_summary::Cursor::default();
+        let mut hanging_tail = super::punctuation::HangingTail::default();
         let mut tracking = vec![LayoutUnit::ZERO];
         let mut kept_spacing = LayoutUnit::ZERO;
         for (k, (u, w)) in units.iter().zip(&natural_widths).enumerate() {
@@ -239,7 +240,12 @@ impl PartialLine {
             {
                 cx.cache_prepare_visits += 1;
             }
-            super::spacing::push(data, &mut spacing, start + k);
+            let at = start + k;
+            let hangs = super::whitespace::fits_hanging(data, at);
+            let transparent = super::whitespace::transparent(data, at)
+                && !matches!(u.kind, UnitKind::ForcedBreak);
+            hanging_tail.observe(data, at, &spacing, hangs, transparent);
+            super::spacing::push(data, &mut spacing, at);
             let spacing_width = spacing.summary(Some(data)).width(sat);
             tracking.push(spacing_width);
             if let UnitKind::Float { node, ordinal } = u.kind {
@@ -259,7 +265,6 @@ impl PartialLine {
                 ),
                 sat,
             );
-            let at = start + k;
             let (break_end, suffix, mut candidate_spacing) = if matches!(
                 u.break_after,
                 BreakClass::Allowed | BreakClass::Emergency | BreakClass::Hyphen
@@ -268,10 +273,7 @@ impl PartialLine {
             } else {
                 (at + 1, decoration::width(data, at + 1, false, sat), None)
             };
-            let hangs = super::whitespace::fits_hanging(data, at);
             let paragraph_end = at + 1 == data.units.len();
-            let transparent = super::whitespace::transparent(data, start + k)
-                && !matches!(u.kind, UnitKind::ForcedBreak);
             if k > 0 && (!hangs || paragraph_end) && !matches!(u.kind, UnitKind::ForcedBreak) {
                 let extent = next
                     .add(spacing_width, sat)
@@ -292,20 +294,12 @@ impl PartialLine {
                 } else {
                     extent
                 };
-                let summary = if paragraph_end && hangs {
-                    super::punctuation::before_hanging_space(
-                        data,
-                        start,
-                        at,
-                        &natural_widths[..k],
-                        sat,
-                    )
-                } else {
+                let summary = hanging_tail.summary(data, at + 1).unwrap_or_else(|| {
                     candidate_spacing
                         .as_ref()
                         .unwrap_or(&spacing)
                         .summary(Some(data))
-                };
+                });
                 let adjustment = super::punctuation::edges(
                     data,
                     summary,

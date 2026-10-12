@@ -617,22 +617,65 @@ pub(super) fn edges(
     value
 }
 
-/// Visible spacing before a final hanging space not yet added to `widths`.
-/// Unlike trailing_start, the materialization boundary keeps closing-edge
-/// barriers between the visible text and that space.
-pub(super) fn before_hanging_space(
-    data: &ParagraphData,
-    start: usize,
-    at: usize,
-    widths: &[LayoutUnit],
-    sat: &mut Saturation,
-) -> super::spacing_summary::Summary {
-    let (end, _) = super::whitespace::trailing(data, start, at, widths, sat);
-    let mut cursor = super::spacing_summary::Cursor::default();
-    for i in start..end {
-        super::spacing::push(data, &mut cursor, i);
+/// Keep visible tail boundaries with and without an edge blocking preserved
+/// whitespace. Both include earlier closing-edge barriers and work for zero
+/// advances, without rebuilding prefixes at every closer.
+#[derive(Default)]
+pub(super) struct HangingTail {
+    visible: Option<super::spacing_summary::Summary>,
+    blocked_visible: Option<super::spacing_summary::Summary>,
+    obstruction: Option<bool>,
+}
+
+impl HangingTail {
+    /// Observe the unit before adding it to the live spacing cursor.
+    pub(super) fn observe<'a>(
+        &mut self,
+        data: &'a ParagraphData,
+        at: usize,
+        spacing: &super::spacing_summary::Cursor<'a>,
+        hangs: bool,
+        transparent: bool,
+    ) {
+        if hangs {
+            self.obstruction = None;
+            self.visible
+                .get_or_insert_with(|| spacing.summary(Some(data)));
+            if super::whitespace::preserved(data, at) {
+                self.blocked_visible = None;
+            } else {
+                self.blocked_visible
+                    .get_or_insert_with(|| spacing.summary(Some(data)));
+            }
+        } else if !transparent {
+            self.obstruction = None;
+            self.visible = None;
+            self.blocked_visible = None;
+        } else if let crate::analysis::units::UnitKind::Close { box_index } = data.units[at].kind {
+            let edges = data.boxes[box_index as usize].edges;
+            if edges.padding.inline_end != 0.0 || edges.border.inline_end != 0.0 {
+                self.visible = self.blocked_visible;
+            }
+        }
     }
-    cursor.summary(Some(data))
+
+    pub(super) fn summary(
+        &mut self,
+        data: &ParagraphData,
+        end: usize,
+    ) -> Option<super::spacing_summary::Summary> {
+        // Reuse the lookahead throughout one transparent tail. Scanning the
+        // remaining suffix at each PDF/PDI would otherwise be quadratic.
+        if self.visible.is_some()
+            && *self
+                .obstruction
+                .get_or_insert_with(|| super::whitespace::obstructed(data, end))
+        {
+            self.blocked_visible
+        } else {
+            self.visible
+        }
+    }
 }
 
 /// Width that punctuation trimming and hanging take off the edges of the

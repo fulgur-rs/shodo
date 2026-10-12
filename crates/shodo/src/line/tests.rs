@@ -1122,6 +1122,204 @@ fn paragraph_end_retries_check_pulled_closing_edges() {
 }
 
 #[test]
+fn paragraph_end_excludes_controls_after_hanging_whitespace() {
+    let fonts = final_review_fonts();
+    fonts
+        .register_face(
+            crate::test_support::fonts::CJK.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    for collapse in [
+        crate::style::WhiteSpaceCollapse::Collapse,
+        crate::style::WhiteSpaceCollapse::Preserve,
+    ] {
+        for trailing in [" ", "\t"] {
+            for nested in [0, 1, 2] {
+                for zero_space in [false, true] {
+                    for isolate in [false, true] {
+                        let mut style = ParagraphStyle::default();
+                        style.root.font_families =
+                            vec![crate::style::FontFamily::Named("Shodo Fixture CJK".into())];
+                        style.root.font_size = 16.0;
+                        style.root.white_space_collapse = collapse;
+                        if zero_space {
+                            style.root.word_spacing_percent = -100.0;
+                        }
+                        let mut inline = style.root.clone();
+                        if isolate {
+                            inline.unicode_bidi = crate::style::UnicodeBidi::Isolate;
+                        }
+                        let mut b = ParagraphBuilder::new(&style, &Limits::default());
+                        for n in 0..=nested {
+                            b.open_inline(NodeId(10 + n), &inline, InlineEdges::default());
+                        }
+                        b.push_text(TextSource::Generated { node: NodeId(3) }, "ああ、");
+                        b.push_text(TextSource::Generated { node: NodeId(4) }, trailing);
+                        for _ in 0..=nested {
+                            b.close_inline();
+                        }
+                        let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+                        let options = LineOptions {
+                            hanging_punctuation: crate::style::HangingPunctuation {
+                                force_end: true,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        };
+                        let mut cx = LayoutContext::new();
+                        let crate::LineResult::Line(wide) = p.next_line(
+                            &mut cx,
+                            p.start_token(),
+                            &options,
+                            &crate::LineConstraint::new(1000.0),
+                            &AtomicSizes::EMPTY,
+                        ) else {
+                            panic!("wide punctuation line");
+                        };
+                        let crate::LineResult::Line(fresh) = p.next_line(
+                            &mut LayoutContext::new(),
+                            p.start_token(),
+                            &options,
+                            &crate::LineConstraint::new(32.0),
+                            &AtomicSizes::EMPTY,
+                        ) else {
+                            panic!("fresh punctuation line");
+                        };
+                        assert_eq!(
+                            fresh.text_range(),
+                            wide.text_range(),
+                            "{collapse:?} {trailing:?} nested={nested} zero_space={zero_space} isolate={isolate}"
+                        );
+                        assert_eq!(fresh.break_reason(), BreakReason::End);
+                        assert_eq!(fresh.inline_size(), 32.0);
+                        let scans = cx.cache_visits;
+                        let crate::LineResult::Line(retry) = p.next_line(
+                            &mut cx,
+                            p.start_token(),
+                            &options,
+                            &crate::LineConstraint::new(32.0),
+                            &AtomicSizes::EMPTY,
+                        ) else {
+                            panic!("cached punctuation line");
+                        };
+                        assert_eq!(retry.text_range(), fresh.text_range());
+                        assert_eq!(retry.inline_size(), fresh.inline_size());
+                        assert_eq!(retry.break_reason(), fresh.break_reason());
+                        if trailing == " " {
+                            assert_eq!(cx.cache_visits, scans);
+                            assert!(cx.cache_prepare_visits > 0);
+                        }
+                        assert!(cx.take_warnings().is_empty());
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn hanging_tail_retains_preserved_space_before_outer_closing_edges() {
+    let fonts = final_review_fonts();
+    fonts
+        .register_face(
+            crate::test_support::fonts::CJK.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut style = ParagraphStyle::default();
+    style.root.font_families = vec![crate::style::FontFamily::Named("Shodo Fixture CJK".into())];
+    style.root.font_size = 16.0;
+    let mut preserved = style.root.clone();
+    preserved.white_space_collapse = crate::style::WhiteSpaceCollapse::Preserve;
+    preserved.unicode_bidi = crate::style::UnicodeBidi::Isolate;
+    let mut outer = style.root.clone();
+    outer.unicode_bidi = crate::style::UnicodeBidi::Isolate;
+    for end_edge in [0.0, 1.5] {
+        let mut edges = InlineEdges::default();
+        edges.padding.inline_end = end_edge;
+        let mut b = ParagraphBuilder::new(&style, &Limits::default());
+        b.open_inline(NodeId(2), &outer, edges);
+        b.open_inline(NodeId(3), &preserved, InlineEdges::default());
+        b.push_text(TextSource::Generated { node: NodeId(4) }, "ああ、 ");
+        b.close_inline();
+        b.push_text(TextSource::Generated { node: NodeId(5) }, " ");
+        b.close_inline();
+        let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+        let options = LineOptions {
+            hanging_punctuation: crate::style::HangingPunctuation {
+                force_end: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut sat = crate::geometry::Saturation::default();
+        let wide = super::scan::scan(
+            &p.data,
+            0,
+            crate::geometry::LayoutUnit::from_f32_round(1000.0, &mut sat),
+            crate::geometry::LayoutUnit::ZERO,
+            crate::geometry::LayoutUnit::ZERO,
+            p.start_token().flags,
+            &options,
+            &AtomicSizes::EMPTY,
+            None,
+            None,
+            &mut LayoutContext::new(),
+            &mut sat,
+        );
+        let mut cursor = super::spacing_summary::Cursor::default();
+        let mut tail = super::punctuation::HangingTail::default();
+        for at in 0..p.data.units.len() {
+            tail.observe(
+                &p.data,
+                at,
+                &cursor,
+                super::whitespace::fits_hanging(&p.data, at),
+                super::whitespace::transparent(&p.data, at),
+            );
+            super::spacing::push(&p.data, &mut cursor, at);
+            let selected = tail
+                .summary(&p.data, at + 1)
+                .unwrap_or_else(|| cursor.summary(Some(&p.data)));
+            // Compare each retained boundary with the existing boundary used
+            // by materialization, including the controls before a later edge.
+            let (visible_end, _) =
+                super::whitespace::trailing(&p.data, 0, at + 1, &wide.widths[..at + 1], &mut sat);
+            let mut visible = super::spacing_summary::Cursor::default();
+            for i in 0..visible_end {
+                super::spacing::push(&p.data, &mut visible, i);
+            }
+            let expected = visible.summary(Some(&p.data));
+            assert_eq!(selected.last.map(|e| e.unit), expected.last.map(|e| e.unit));
+            assert_eq!(selected.width(&mut sat), expected.width(&mut sat));
+        }
+        let edges = super::punctuation::edges(
+            &p.data,
+            tail.summary(&p.data, p.data.units.len())
+                .unwrap_or_else(|| cursor.summary(Some(&p.data))),
+            p.start_token().flags,
+            true,
+            Some(&options),
+            crate::geometry::LayoutUnit::from_f32_round(1000.0, &mut sat),
+            wide.content
+                .add(wide.punctuation_edges.removed(&mut sat), &mut sat),
+            &mut sat,
+        );
+        assert_eq!(edges.hang_end, wide.punctuation_edges.hang_end);
+        assert_eq!(edges.end_trim, wide.punctuation_edges.end_trim);
+    }
+}
+
+#[test]
 fn hyphen_before_closing_controls_fits_at_its_materialized_width() {
     let fonts = final_review_fonts();
     fonts
