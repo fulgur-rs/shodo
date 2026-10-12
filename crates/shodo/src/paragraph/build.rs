@@ -444,7 +444,12 @@ impl Paragraph {
                 && sat.is_clean()
                 && alternate
                     .glyph_budget
-                    .is_none_or(|max| max >= data.glyphs.len() as u64))
+                    .is_none_or(|max| max >= data.glyphs.len() as u64)
+                // An unselected width trial can contain more glyphs than
+                // the retained selection. A tighter alternate cap can make
+                // that trial fail and change selection/error behavior.
+                && (alternate.glyph_budget.is_none()
+                    || !data.shape_items.iter().any(|item| item.width_feature.is_some())))
             .then_some(&data);
             let mut alternate = build_data(
                 alternate,

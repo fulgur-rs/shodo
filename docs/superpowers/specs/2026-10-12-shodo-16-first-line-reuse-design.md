@@ -43,6 +43,9 @@ complete alternate path. No claim of accelerating that class is permitted.
   warnings or saturation, the remaining shaped-glyph cap covers the complete
   copied store, and both data sets still have bit-identical non-paint styles.
   Otherwise use full alternate itemization/shaping with the reusable analysis.
+  A selected automatic combined-width feature with a finite glyph cap also
+  uses full alternate shaping: unselected trials can contain more glyphs than
+  the retained selection and fail under the smaller alternate budget.
 - No finalization is skipped. Preserve the order of saturation/warning effects,
   source cuts, ligature cursor slices, normal/alternate mappings, decoration,
   first-line paint, floats, blocks, atomics, vertical/composed geometry and

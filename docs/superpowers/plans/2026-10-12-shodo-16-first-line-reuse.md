@@ -27,6 +27,7 @@
 3. Warning suppression can make a dirty pass look clean; zero/one caps and numeric saturation must use fallback. Tasks 1/2 compare ordered effects.
 4. Cross-node ligatures, transforms, RTL and vertical/composed data must preserve first-line cursor remapping and paint. Tasks 1/2 compare these classes.
 5. Callback invocation and Ruby aggregate accounting are observable even when styles match. Tasks 1/2 retain and prove fallback.
+6. Automatic combined-width trials can contain more glyphs than selected output. Task 3's real GSUB regression pins exact finite-cap errors; selected automatic width features use full shaping under a finite alternate glyph cap, with unlimited-cap reuse still proved.
 
 ## Task 1: Reuse paint-only context-free analysis
 

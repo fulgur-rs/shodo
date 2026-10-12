@@ -526,6 +526,60 @@ fn reused_shaping_preserves_first_line_paint_and_full_line_geometry() {
             }
         }
     }
+    // Identical shaping with separate paint owners must retain a ligature
+    // crossing their source/box boundary, including first-line cursor cuts.
+    let split = || {
+        let mut b = ParagraphBuilder::new(&style, &Limits::default());
+        let mut child = style.root.clone();
+        child.paint.color = [0, 128, 0, 255];
+        let mut first = child.clone();
+        first.paint.color = [255, 0, 0, 255];
+        b.push_text(
+            TextSource::Dom {
+                node: NodeId(40),
+                offset: 0,
+            },
+            "of",
+        )
+        .open_inline_with_first_line(NodeId(41), &child, &first, Default::default())
+        .push_text(
+            TextSource::Dom {
+                node: NodeId(42),
+                offset: 2,
+            },
+            "fice affinity first line",
+        )
+        .close_inline();
+        b
+    };
+    let candidate = build_probe(split(), &fonts, false);
+    let reference = build_probe(split(), &fonts, true);
+    assert_eq!(candidate.1.0, 1);
+    assert!(candidate.0.as_ref().unwrap().data.glyphs.len() < "office affinity first line".len());
+    assert_eq!(
+        paragraph_snapshot(candidate.0),
+        paragraph_snapshot(reference.0)
+    );
+
+    // Reusing a warm scratch context must not inherit a different font or
+    // edge result from the preceding build.
+    let warm = |reference| {
+        let _guard = ReferenceGuard::new(reference);
+        let mut cx = crate::LayoutContext::new();
+        let seed = input(&style, &Limits::default())
+            .build(&mut cx, &fonts)
+            .unwrap();
+        seed.break_all(
+            &mut cx,
+            &Default::default(),
+            32.0,
+            &crate::AtomicSizes::EMPTY,
+        );
+        cx.take_warnings();
+        let paragraph = split().build(&mut cx, &fonts);
+        (paragraph_snapshot(paragraph), cx.take_warnings())
+    };
+    assert_eq!(warm(false), warm(true));
 }
 
 #[test]
@@ -546,6 +600,23 @@ fn shape_fallback_preserves_warnings_saturation_and_glyph_errors() {
         );
     }
     for warning_cap in [0, 1, 8] {
+        let limits = Limits {
+            max_warnings: Some(warning_cap),
+            ..Limits::default()
+        };
+        let mut malformed = style.clone();
+        malformed.first_line.as_mut().unwrap().paint.underline =
+            Some(crate::style::TextDecoration {
+                offset: Some(f32::NAN),
+                thickness: Some(f32::INFINITY),
+                ..Default::default()
+            });
+        let candidate = build_probe(input(&malformed, &limits), &fonts, false);
+        let reference = build_probe(input(&malformed, &limits), &fonts, true);
+        assert_eq!(
+            paragraph_snapshot(candidate.0),
+            paragraph_snapshot(reference.0)
+        );
         for numeric in [false, true] {
             let limits = Limits {
                 max_shaping_run_bytes: Some(1),
@@ -662,6 +733,140 @@ fn inherited_float_bits_and_ruby_use_full_fallback() {
     let candidate = build_probe(builder(), &fonts, false);
     let reference = build_probe(builder(), &fonts, true);
     assert_eq!(candidate.1, reference.1);
+    assert_eq!(
+        paragraph_snapshot(candidate.0),
+        paragraph_snapshot(reference.0)
+    );
+}
+
+#[test]
+fn combined_width_trial_limits_preserve_reference_failure() {
+    use skrifa::MetadataProvider;
+    let bytes = crate::test_support::fonts::LATIN;
+    let font = skrifa::FontRef::from_index(bytes, 0).unwrap();
+    let glyph = |c| font.charmap().map(c).unwrap().to_u32() as u16;
+    let (a, w, z) = (glyph('a'), glyph('W'), glyph('Z'));
+    // ccmp expands each 'a' to [a,W]; hwid contracts that pair to Z.
+    // Plain trial: 4 glyphs. Selected narrow output: 2 glyphs.
+    let mut gsub = Vec::new();
+    let put = |out: &mut Vec<u8>, values: &[u16]| {
+        for value in values {
+            out.extend(value.to_be_bytes());
+        }
+    };
+    put(&mut gsub, &[1, 0, 10, 32, 58, 1]);
+    gsub.extend(b"latn");
+    put(&mut gsub, &[8, 4, 0, 0, 0xffff, 2, 0, 1, 2]);
+    gsub.extend(b"ccmp");
+    put(&mut gsub, &[14]);
+    gsub.extend(b"hwid");
+    put(&mut gsub, &[20, 0, 1, 0, 0, 1, 1]);
+    put(&mut gsub, &[2, 6, 34]);
+    put(&mut gsub, &[2, 0, 1, 8, 1, 14, 1, 8, 2, a, w, 1, 1, a]);
+    put(
+        &mut gsub,
+        &[4, 0, 1, 8, 1, 18, 1, 8, 1, 4, z, 2, w, 1, 1, a],
+    );
+    let mut tables = Vec::new();
+    for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
+        let at = 12 + n * 16;
+        let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
+        let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
+        let tag: [u8; 4] = bytes[at..at + 4].try_into().unwrap();
+        if tag != *b"GSUB" {
+            tables.push((tag, bytes[offset..offset + len].to_vec()));
+        }
+    }
+    tables.push((*b"GSUB", gsub));
+    tables.sort_by_key(|(tag, _)| *tag);
+    let fonts = FontCollection::with_options(
+        &Limits::default(),
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            crate::font::sfnt::build_sfnt(&tables),
+            0,
+            FontFaceDescriptor {
+                family: "Trial".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut style = paint_style();
+    style.writing_mode = WritingMode::VerticalRl;
+    style.root.font_families = vec![crate::style::FontFamily::Named("Trial".into())];
+    style.root.text_combine_upright = crate::style::TextCombineUpright::All;
+    style.first_line.as_mut().unwrap().font_families = style.root.font_families.clone();
+    let builder = |limits: &Limits| {
+        let mut b = ParagraphBuilder::new(&style, limits);
+        b.push_text(
+            TextSource::Dom {
+                node: NodeId(1),
+                offset: 0,
+            },
+            "aa",
+        );
+        b
+    };
+    let ordinary = build_probe(builder(&Limits::default()), &fonts, true)
+        .0
+        .unwrap();
+    assert_eq!(
+        ordinary.data.glyphs.len(),
+        2,
+        "fixture must select contracted width output"
+    );
+    assert!(
+        ordinary
+            .data
+            .shape_items
+            .iter()
+            .all(|item| item.width_feature == Some(*b"hwid"))
+    );
+    let limits = Limits {
+        max_shaped_glyphs: Some(4),
+        ..Limits::default()
+    };
+    let candidate = build_probe(builder(&limits), &fonts, false);
+    let reference = build_probe(builder(&limits), &fonts, true);
+    assert_eq!(
+        reference.0.as_ref().err(),
+        Some(&LimitExceeded {
+            kind: LimitKind::ShapedGlyphs,
+            limit: 4,
+            actual: 6
+        })
+    );
+    assert_eq!(
+        candidate.0.as_ref().err(),
+        reference.0.as_ref().err(),
+        "retained glyph count cannot bound unselected trials"
+    );
+    for cap in 0..12 {
+        let limits = Limits {
+            max_shaped_glyphs: Some(cap),
+            ..Limits::default()
+        };
+        let candidate = build_probe(builder(&limits), &fonts, false);
+        let reference = build_probe(builder(&limits), &fonts, true);
+        assert_eq!(
+            paragraph_snapshot(candidate.0),
+            paragraph_snapshot(reference.0),
+            "combined cap {cap}"
+        );
+    }
+    let unlimited = Limits {
+        max_shaped_glyphs: None,
+        ..Limits::default()
+    };
+    let candidate = build_probe(builder(&unlimited), &fonts, false);
+    let reference = build_probe(builder(&unlimited), &fonts, true);
+    assert_eq!(candidate.1.2, 2);
+    assert_eq!(reference.1.2, 4);
     assert_eq!(
         paragraph_snapshot(candidate.0),
         paragraph_snapshot(reference.0)
