@@ -1,4 +1,5 @@
 use super::cache::Retention;
+use super::trial::{Trial, TrialResult, TrialSummary};
 use crate::line::fragments::RecordKind;
 use crate::style::{BoxDecorationBreak, LineOptions};
 use crate::{AtomicSizes, BreakToken, LayoutContext, Line, LineConstraint, LineResult, Paragraph};
@@ -186,6 +187,58 @@ impl Paragraph {
         .filter_map(|r| match r {
             LineResult::Line(l) => Some(l),
             _ => None,
+        })
+    }
+
+    pub(super) fn fixed_width_trials<'p, 'cx>(
+        &'p self,
+        cx: &'cx mut LayoutContext,
+        options: &LineOptions,
+        width: f32,
+        atomics: &'p AtomicSizes,
+    ) -> impl Iterator<Item = TrialSummary> + 'cx
+    where
+        'p: 'cx,
+    {
+        let mut token = self.start_token();
+        let options = *options;
+        let mut offset = 0.;
+        let mut cursor = None;
+        let mut done = false;
+        std::iter::from_fn(move || {
+            if done {
+                return None;
+            }
+            loop {
+                let mut constraint = LineConstraint::new(width);
+                constraint.block_offset = offset;
+                constraint.floats_placed_through = cursor;
+                match self.next_line_finalized::<Trial>(
+                    cx,
+                    token,
+                    &options,
+                    &constraint,
+                    atomics,
+                    Retention::LastLine,
+                ) {
+                    TrialResult::Line(summary) => {
+                        token = summary.token;
+                        offset = add_block_offset(cx, offset, summary.block_size);
+                        return Some(summary);
+                    }
+                    TrialResult::FloatEncountered { float_cursor, .. } => {
+                        cursor = Some(float_cursor)
+                    }
+                    TrialResult::BlockInInline { token_after, .. } => token = token_after,
+                    TrialResult::BlockSizeExceeded { .. } => {
+                        unreachable!("fixed-width trials have no block size limit")
+                    }
+                    TrialResult::Done | TrialResult::InvalidToken => {
+                        done = true;
+                        return None;
+                    }
+                }
+            }
         })
     }
 
@@ -395,18 +448,7 @@ impl<'p, F: FnMut(Option<&LineResult>, f32) -> LineConstraint<'p>, const KEEP_PR
                 }
                 LineResult::Line(l) => {
                     self.token = l.break_token();
-                    let mut sat = crate::geometry::Saturation::default();
-                    self.offset =
-                        crate::geometry::LayoutUnit::from_f32_round(self.offset, &mut sat)
-                            .add(
-                                crate::geometry::LayoutUnit::from_f32_round(
-                                    l.block_size(),
-                                    &mut sat,
-                                ),
-                                &mut sat,
-                            )
-                            .to_f32();
-                    self.cx.warnings.record_saturation(&sat);
+                    self.offset = add_block_offset(self.cx, self.offset, l.block_size());
                     self.previous = KEEP_PREVIOUS_LINE.then(|| LineResult::Line(l.clone()));
                 }
                 LineResult::BlockInInline { node, token_after } => {
@@ -424,4 +466,16 @@ impl<'p, F: FnMut(Option<&LineResult>, f32) -> LineConstraint<'p>, const KEEP_PR
             return Some(result);
         }
     }
+}
+
+fn add_block_offset(cx: &mut LayoutContext, offset: f32, height: f32) -> f32 {
+    let mut sat = crate::geometry::Saturation::default();
+    let result = crate::geometry::LayoutUnit::from_f32_round(offset, &mut sat)
+        .add(
+            crate::geometry::LayoutUnit::from_f32_round(height, &mut sat),
+            &mut sat,
+        )
+        .to_f32();
+    cx.warnings.record_saturation(&sat);
+    result
 }

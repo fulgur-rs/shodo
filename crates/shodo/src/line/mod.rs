@@ -21,6 +21,7 @@ pub(crate) mod reshape;
 mod scan;
 pub(crate) mod spacing;
 pub(crate) mod spacing_summary;
+mod trial;
 mod whitespace;
 pub(crate) mod windows;
 
@@ -229,6 +230,18 @@ impl Paragraph {
         atomics: &AtomicSizes,
         retention: cache::Retention,
     ) -> LineResult {
+        self.next_line_finalized::<trial::Full>(cx, token, options, constraint, atomics, retention)
+    }
+
+    fn next_line_finalized<F: trial::Finalizer>(
+        &self,
+        cx: &mut LayoutContext,
+        token: BreakToken,
+        options: &LineOptions,
+        constraint: &LineConstraint<'_>,
+        atomics: &AtomicSizes,
+        retention: cache::Retention,
+    ) -> F::Output {
         let data = &*self.data;
         cx.warnings.set_max(data.limits.max_warnings);
         if cx
@@ -239,7 +252,7 @@ impl Paragraph {
             cx.completed = None;
         }
         if token.para != data.id || token.unit as usize > data.units.len() {
-            return LineResult::InvalidToken;
+            return F::from_full(LineResult::InvalidToken);
         }
         if token.flags & BreakToken::FIRST_LINE != 0
             && let Some(first) = &data.first_line
@@ -289,22 +302,22 @@ impl Paragraph {
                 LineResult::Line(line) => {
                     let Some(unit) = first.normal_cursors[line.break_token.unit as usize] else {
                         // Unavailable resource-limited cuts are excluded at build.
-                        return LineResult::InvalidToken;
+                        return F::from_full(LineResult::InvalidToken);
                     };
                     line.break_token.unit = unit;
                 }
                 LineResult::FloatEncountered { line_start, .. } => *line_start = token,
                 LineResult::BlockInInline { token_after, .. } => {
                     let Some(unit) = first.normal_cursors[token_after.unit as usize] else {
-                        return LineResult::InvalidToken;
+                        return F::from_full(LineResult::InvalidToken);
                     };
                     token_after.unit = unit;
                 }
                 _ => {}
             }
-            return result;
+            return F::from_full(result);
         }
-        self.next_line_in_set(
+        self.next_line_in_set_finalized::<F>(
             cx, token, options, constraint, atomics, None, None, None, retention,
         )
     }
@@ -322,11 +335,37 @@ impl Paragraph {
         normal_cursors: Option<&[Option<u32>]>,
         retention: cache::Retention,
     ) -> LineResult {
+        self.next_line_in_set_finalized::<trial::Full>(
+            cx,
+            token,
+            options,
+            constraint,
+            atomics,
+            planned_end_override,
+            annotation_align,
+            normal_cursors,
+            retention,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn next_line_in_set_finalized<F: trial::Finalizer>(
+        &self,
+        cx: &mut LayoutContext,
+        token: BreakToken,
+        options: &LineOptions,
+        constraint: &LineConstraint<'_>,
+        atomics: &AtomicSizes,
+        planned_end_override: Option<usize>,
+        annotation_align: Option<crate::ruby::align::AnnotationAlign<'_>>,
+        normal_cursors: Option<&[Option<u32>]>,
+        retention: cache::Retention,
+    ) -> F::Output {
         let data = &*self.data;
         let start = token.unit as usize;
         if start == data.units.len() {
             cx.completed = None;
-            return LineResult::Done;
+            return F::from_full(LineResult::Done);
         }
         if let UnitKind::BlockInInline { node } = data.units[start].kind {
             cx.completed = None;
@@ -335,7 +374,7 @@ impl Paragraph {
                 unit: token.unit + 1,
                 flags: BreakToken::AFTER_FORCED,
             };
-            return LineResult::BlockInInline { node, token_after };
+            return F::from_full(LineResult::BlockInInline { node, token_after });
         }
         cx.begin_reshape_operation();
         let warning_checkpoint = cx.warnings.checkpoint();
@@ -401,11 +440,11 @@ impl Paragraph {
             let needed = entry.line.block_size();
             if constraint.max_block_size.is_some_and(|max| needed > max) {
                 cx.completed = Some(entry);
-                return LineResult::BlockSizeExceeded {
+                return F::from_full(LineResult::BlockSizeExceeded {
                     needed_block_size: needed,
-                };
+                });
             }
-            return LineResult::Line(entry.line);
+            return F::from_full(LineResult::Line(entry.line));
         }
         let mut scan = if let Some(end) = planned_end {
             // An annotation lane (always planned) never hangs, like the ruby
@@ -441,12 +480,12 @@ impl Paragraph {
                 Ok(scan) => scan,
                 Err((node, ordinal, position)) => {
                     cx.warnings.record_saturation(&sat);
-                    return LineResult::FloatEncountered {
+                    return F::from_full(LineResult::FloatEncountered {
                         node,
                         line_start: token,
                         inline_position: position.to_f32(),
                         float_cursor: FloatCursor(ordinal),
-                    };
+                    });
                 }
             }
         };
@@ -468,12 +507,12 @@ impl Paragraph {
                     .is_none_or(|c| ordinal > c.0)
             {
                 cx.warnings.record_saturation(&sat);
-                return LineResult::FloatEncountered {
+                return F::from_full(LineResult::FloatEncountered {
                     node,
                     line_start: token,
                     inline_position: float_pos.to_f32(),
                     float_cursor: FloatCursor(ordinal),
-                };
+                });
             }
             float_pos = float_pos.add(*w, &mut sat);
         }
@@ -546,9 +585,9 @@ impl Paragraph {
             {
                 cx.completed = completed::CompletedLine::retain(key, line);
             }
-            return LineResult::BlockSizeExceeded { needed_block_size };
+            return F::from_full(LineResult::BlockSizeExceeded { needed_block_size });
         }
-        LineResult::Line(line)
+        F::from_full(LineResult::Line(line))
     }
 
     /// Format the prepared lane's selected dataset and immutable unit range.
