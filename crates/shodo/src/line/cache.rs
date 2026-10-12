@@ -232,6 +232,7 @@ impl PartialLine {
         let mut max = LayoutUnit::ZERO;
         let mut hanging = LayoutUnit::ZERO;
         let mut spacing = super::spacing_summary::Cursor::default();
+        let mut hanging_tail = super::punctuation::HangingTail::default();
         let mut tracking = vec![LayoutUnit::ZERO];
         let mut kept_spacing = LayoutUnit::ZERO;
         for (k, (u, w)) in units.iter().zip(&natural_widths).enumerate() {
@@ -239,7 +240,12 @@ impl PartialLine {
             {
                 cx.cache_prepare_visits += 1;
             }
-            super::spacing::push(data, &mut spacing, start + k);
+            let at = start + k;
+            let hangs = super::whitespace::fits_hanging(data, at);
+            let transparent = super::whitespace::transparent(data, at)
+                && !matches!(u.kind, UnitKind::ForcedBreak);
+            hanging_tail.observe(data, at, &spacing, hangs, transparent);
+            super::spacing::push(data, &mut spacing, at);
             let spacing_width = spacing.summary(Some(data)).width(sat);
             tracking.push(spacing_width);
             if let UnitKind::Float { node, ordinal } = u.kind {
@@ -259,13 +265,16 @@ impl PartialLine {
                 ),
                 sat,
             );
-            let suffix = decoration::width(data, start + k + 1, false, sat);
-            let transparent = super::whitespace::transparent(data, start + k)
-                && !matches!(u.kind, UnitKind::ForcedBreak);
-            if k > 0
-                && !super::whitespace::fits_hanging(data, start + k)
-                && !matches!(u.kind, UnitKind::ForcedBreak)
-            {
+            let (break_end, suffix, mut candidate_spacing) = if matches!(
+                u.break_after,
+                BreakClass::Allowed | BreakClass::Emergency | BreakClass::Hyphen
+            ) {
+                super::scan::candidate_end(data, at + 1, &spacing, atomics, cx, sat)
+            } else {
+                (at + 1, decoration::width(data, at + 1, false, sat), None)
+            };
+            let paragraph_end = at + 1 == data.units.len();
+            if k > 0 && (!hangs || paragraph_end) && !matches!(u.kind, UnitKind::ForcedBreak) {
                 let extent = next
                     .add(spacing_width, sat)
                     .add(delta, sat)
@@ -278,9 +287,22 @@ impl PartialLine {
                         },
                         sat,
                     );
+                let extent = if paragraph_end && hangs {
+                    extent
+                        .sub(hanging.add(*w, sat), sat)
+                        .sub(spacing_width.sub(kept_spacing, sat), sat)
+                } else {
+                    extent
+                };
+                let summary = hanging_tail.summary(data, at + 1).unwrap_or_else(|| {
+                    candidate_spacing
+                        .as_ref()
+                        .unwrap_or(&spacing)
+                        .summary(Some(data))
+                });
                 let adjustment = super::punctuation::edges(
                     data,
-                    spacing.summary(Some(data)),
+                    summary,
                     token.flags,
                     super::punctuation::last_edge(data, start + k + 1),
                     Some(options),
@@ -315,7 +337,8 @@ impl PartialLine {
             let natural = required.add(indent, sat);
             if u.break_after == BreakClass::Hyphen {
                 if let Some(windows) = hyphen::line(data, start, start + k + 1, cx, sat) {
-                    let summary = super::spacing::hyphen_summary(data, &spacing, start + k, sat);
+                    let summary =
+                        super::spacing::hyphen_summary(data, &spacing, at, break_end, sat);
                     let required = next
                         .add(summary.width(sat), sat)
                         .sub(hanging, sat)
@@ -351,7 +374,7 @@ impl PartialLine {
                     required.sub(
                         super::punctuation::removed(
                             data,
-                            &mut spacing,
+                            candidate_spacing.as_mut().unwrap_or(&mut spacing),
                             token.flags,
                             last,
                             options,
@@ -367,7 +390,7 @@ impl PartialLine {
                     required.sub(
                         super::punctuation::removed(
                             data,
-                            &mut spacing,
+                            candidate_spacing.as_mut().unwrap_or(&mut spacing),
                             token.flags,
                             last,
                             options,
@@ -421,11 +444,13 @@ impl PartialLine {
             self.threshold_cursor += 1;
         }
         let bad = self.threshold_cursor;
-        let Some(&(i, _)) = self.thresholds.get(bad) else {
+        let i = if let Some(&(i, _)) = self.thresholds.get(bad) {
+            i
+        } else {
             let hyphen = (self.scan.reason == crate::output::BreakReason::Regular)
-                .then(|| self.hyphens.candidates.last().map(|c| c.0))
+                .then(|| self.hyphens.candidates.last().copied())
                 .flatten()
-                .filter(|end| {
+                .filter(|(end, _)| {
                     (*end..self.scan.end).all(|at| {
                         matches!(
                             self.data.units[at].kind,
@@ -433,7 +458,15 @@ impl PartialLine {
                         )
                     })
                 });
-            return (self.scan.end, hyphen);
+            let Some((end, required)) = hyphen else {
+                return (self.scan.end, None);
+            };
+            if required <= limit {
+                return (self.scan.end, Some(end));
+            }
+            // The body can fit while the inserted hyphen does not. Select
+            // another candidate before pulling the closing units back in.
+            end
         };
         let normal = self.breaks.select(i, limit);
         let emergency = self.emergencies.select(i, limit);

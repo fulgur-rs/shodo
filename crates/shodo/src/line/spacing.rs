@@ -396,15 +396,22 @@ pub(super) fn hyphen_summary<'a>(
     data: &'a ParagraphData,
     cursor: &Cursor<'a>,
     index: usize,
+    end: usize,
     sat: &mut Saturation,
 ) -> Summary {
     let mut cursor = cursor.clone();
+    let after = index + 1;
     let index = super::hyphen::source_unit(data, 0, index + 1).unwrap_or(index);
     cursor.push(
         data.units[index].level,
         hyphen_leaf(data, index, sat),
         Some(data),
     );
+    // The visible hyphen belongs inside its bidi/inline boundaries. Append
+    // the pulled closing units only after inserting it, as materialization does.
+    for at in after..end {
+        push(data, &mut cursor, at);
+    }
     cursor.summary(Some(data))
 }
 

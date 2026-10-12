@@ -580,6 +580,7 @@ fn ordinary_text_stays_under_the_edge_reshape_budget() {
 
 #[derive(Clone, Copy, Debug)]
 enum Terminator {
+    End,
     Forced,
     BlockInInline,
 }
@@ -590,6 +591,29 @@ enum Terminator {
 /// after a cut through the pair loses it: every candidate on that line is
 /// wider once its edges are reshaped than its shared advances say.
 fn closing_units_before(terminator: Terminator, nested: usize, isolate: bool) -> crate::Paragraph {
+    closing_units_with(
+        terminator,
+        nested,
+        isolate,
+        (
+            InlineEdges::default(),
+            crate::style::BoxDecorationBreak::Slice,
+        ),
+        "",
+        crate::style::WhiteSpaceCollapse::Collapse,
+        false,
+    )
+}
+
+fn closing_units_with(
+    terminator: Terminator,
+    nested: usize,
+    isolate: bool,
+    (edges, decoration): (InlineEdges, crate::style::BoxDecorationBreak),
+    trailing: &str,
+    collapse: crate::style::WhiteSpaceCollapse,
+    trailing_inside: bool,
+) -> crate::Paragraph {
     let fonts = final_review_fonts();
     fonts
         .register_face(
@@ -606,7 +630,9 @@ fn closing_units_before(terminator: Terminator, nested: usize, isolate: bool) ->
         "Shodo Fixture Latin".into(),
     )];
     style.root.font_size = 16.0;
+    style.root.white_space_collapse = collapse;
     let mut rtl = style.root.clone();
+    rtl.box_decoration_break = decoration;
     rtl.direction = crate::geometry::Direction::Rtl;
     rtl.unicode_bidi = if isolate {
         crate::style::UnicodeBidi::IsolateOverride
@@ -615,19 +641,28 @@ fn closing_units_before(terminator: Terminator, nested: usize, isolate: bool) ->
     };
     let mut b = ParagraphBuilder::new(&style, &Limits::default());
     b.with_line_break_override(|_| crate::LineBreakOverride::Allow);
-    b.open_inline(NodeId(2), &rtl, Default::default());
+    b.open_inline(NodeId(2), &rtl, edges);
     for n in 0..nested {
-        b.open_inline(NodeId(10 + n as u64), &rtl, Default::default());
+        b.open_inline(NodeId(10 + n as u64), &rtl, edges);
     }
     b.push_text(TextSource::Generated { node: NodeId(3) }, "VAVAVAVAVAVA");
+    if trailing_inside {
+        b.push_text(TextSource::Generated { node: NodeId(6) }, trailing);
+    }
     for _ in 0..=nested {
         b.close_inline();
     }
+    if !trailing_inside {
+        b.push_text(TextSource::Generated { node: NodeId(6) }, trailing);
+    }
     match terminator {
+        Terminator::End => &mut b,
         Terminator::Forced => b.push_forced_break(NodeId(4)),
         Terminator::BlockInInline => b.push_block_in_inline(NodeId(4)),
     };
-    b.push_text(TextSource::Generated { node: NodeId(5) }, "x");
+    if !matches!(terminator, Terminator::End) {
+        b.push_text(TextSource::Generated { node: NodeId(5) }, "x");
+    }
     b.build(&mut LayoutContext::new(), &fonts).unwrap()
 }
 
@@ -667,6 +702,7 @@ fn deferred_break_before_closing_units_is_checked_at_the_line_end() {
                 assert_eq!(
                     terminal.break_reason(),
                     match terminator {
+                        Terminator::End => unreachable!(),
                         Terminator::Forced => BreakReason::Forced,
                         Terminator::BlockInInline => BreakReason::BlockInInline,
                     },
@@ -700,5 +736,698 @@ fn deferred_break_before_closing_units_is_checked_at_the_line_end() {
                 assert_eq!(boxes(last), 0, "{case}");
             }
         }
+    }
+}
+
+/// The paragraph end must include the line-start reshape delta even when
+/// its last units prohibit a break. Closing bidi controls and inline boxes
+/// stay with the final text rather than hiding the overflowing last line.
+#[test]
+fn paragraph_end_checks_the_reshaped_line_start_width() {
+    for (nested, isolate) in [(0, false), (2, false), (0, true), (2, true)] {
+        let p = closing_units_before(Terminator::End, nested, isolate);
+        for width in [28.125, 28.25, 28.625, 28.75] {
+            let mut cx = LayoutContext::new();
+            let lines = p.break_all(&mut cx, &LineOptions::default(), width, &AtomicSizes::EMPTY);
+            let case = format!("nested={nested} isolate={isolate} at {width}px");
+            for line in &lines {
+                assert!(
+                    line.inline_size() <= width,
+                    "{case}: line {:?} is {}px wide",
+                    line.text_range(),
+                    line.inline_size()
+                );
+            }
+            let (last, before) = lines.split_last().unwrap();
+            assert_eq!(last.break_reason(), BreakReason::End, "{case}");
+            assert_eq!(last.text_range().end, p.text().len(), "{case}");
+            assert!(
+                p.text()[last.text_range()]
+                    .trim_end_matches(['\u{202c}', '\u{2069}'])
+                    .ends_with('A'),
+                "{case}"
+            );
+            assert!(
+                before
+                    .iter()
+                    .all(|line| line.break_reason() == BreakReason::Regular),
+                "{case}"
+            );
+            let closers = |text: &str| {
+                text.chars()
+                    .filter(|c| matches!(c, '\u{202c}' | '\u{2069}'))
+                    .count()
+            };
+            assert_eq!(
+                closers(&p.text()[last.text_range()]),
+                (nested + 1) * (1 + isolate as usize),
+                "{case}"
+            );
+            assert_eq!(
+                last.fragments()
+                    .filter(|f| matches!(f, Fragment::InlineBox(_)))
+                    .count(),
+                nested + 1,
+                "{case}"
+            );
+            assert!(cx.take_warnings().is_empty(), "{case}");
+        }
+    }
+}
+
+#[test]
+fn paragraph_end_checks_visible_width_before_hanging_whitespace() {
+    for collapse in [
+        crate::style::WhiteSpaceCollapse::Collapse,
+        crate::style::WhiteSpaceCollapse::Preserve,
+    ] {
+        for trailing in [" ", "\t"] {
+            let p = closing_units_with(
+                Terminator::End,
+                0,
+                false,
+                (
+                    InlineEdges::default(),
+                    crate::style::BoxDecorationBreak::Slice,
+                ),
+                trailing,
+                collapse,
+                false,
+            );
+            for width in [28.125, 28.25, 28.625, 28.75] {
+                let mut cx = LayoutContext::new();
+                let lines =
+                    p.break_all(&mut cx, &LineOptions::default(), width, &AtomicSizes::EMPTY);
+                for line in &lines {
+                    assert!(
+                        line.inline_size() <= width,
+                        "{collapse:?} trailing={trailing:?} width={width}: {:?} is {}px wide",
+                        line.text_range(),
+                        line.inline_size()
+                    );
+                }
+                assert_eq!(lines.last().unwrap().break_reason(), BreakReason::End);
+                assert_eq!(lines.last().unwrap().text_range().end, p.text().len());
+                assert!(cx.take_warnings().is_empty());
+            }
+        }
+    }
+}
+
+#[test]
+fn paragraph_end_checks_pulled_closing_edge_widths() {
+    for nested in [0, 2] {
+        let mut edges = InlineEdges::default();
+        edges.padding.inline_end = 1.0;
+        edges.border.inline_end = 0.5;
+        let p = closing_units_with(
+            Terminator::End,
+            nested,
+            false,
+            (edges, crate::style::BoxDecorationBreak::Slice),
+            " ",
+            crate::style::WhiteSpaceCollapse::Collapse,
+            true,
+        );
+        for width in [16.0, 28.125, 28.25, 28.625, 28.75, 30.0, 48.0] {
+            let mut cx = LayoutContext::new();
+            let lines = p.break_all(&mut cx, &LineOptions::default(), width, &AtomicSizes::EMPTY);
+            for line in &lines {
+                assert!(
+                    line.inline_size() <= width,
+                    "nested={nested} width={width}: {:?} ({:?}) is {}px wide",
+                    line.text_range(),
+                    line.break_reason(),
+                    line.inline_size()
+                );
+            }
+            let last = lines.last().unwrap();
+            assert_eq!(last.break_reason(), BreakReason::End);
+            assert_eq!(last.text_range().end, p.text().len());
+            assert_eq!(
+                last.fragments()
+                    .filter(|f| matches!(f, Fragment::InlineBox(_)))
+                    .count(),
+                nested + 1
+            );
+            assert!(cx.take_warnings().is_empty());
+        }
+    }
+}
+
+#[test]
+fn paragraph_end_checks_closing_edges_before_zero_width_space() {
+    for decoration in [
+        crate::style::BoxDecorationBreak::Slice,
+        crate::style::BoxDecorationBreak::Clone,
+    ] {
+        let mut edges = InlineEdges::default();
+        edges.padding.inline_end = 1.0;
+        edges.border.inline_end = 0.5;
+        let p = closing_units_with(
+            Terminator::End,
+            0,
+            false,
+            (edges, decoration),
+            "\u{200b}",
+            crate::style::WhiteSpaceCollapse::Collapse,
+            false,
+        );
+        // A line at its natural width must still fit in one line: reserving
+        // Clone's closing edges twice would force an unnecessary break.
+        let mut cx = LayoutContext::new();
+        let natural = p.break_all(
+            &mut cx,
+            &LineOptions::default(),
+            1000.0,
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(natural.len(), 1);
+        let exact = p.break_all(
+            &mut cx,
+            &LineOptions::default(),
+            natural[0].inline_size(),
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(exact.len(), 1, "{decoration:?}");
+        assert_eq!(exact[0].text_range(), 0..p.text().len());
+        assert!(cx.take_warnings().is_empty());
+        for width in [19.171875, 28.125, 28.625, 29.875] {
+            let mut cx = LayoutContext::new();
+            let lines = p.break_all(&mut cx, &LineOptions::default(), width, &AtomicSizes::EMPTY);
+            for line in &lines {
+                assert!(
+                    line.inline_size() <= width,
+                    "width={width}: {:?} ({:?}) is {}px wide",
+                    line.text_range(),
+                    line.break_reason(),
+                    line.inline_size()
+                );
+            }
+            assert_eq!(lines.last().unwrap().break_reason(), BreakReason::End);
+            assert!(cx.take_warnings().is_empty());
+        }
+    }
+}
+
+#[test]
+fn paragraph_end_keeps_closing_edges_before_hanging_whitespace() {
+    let fonts = final_review_fonts();
+    for (bytes, family) in [
+        (crate::test_support::fonts::LATIN, "Shodo Fixture Latin"),
+        (crate::test_support::fonts::CJK, "Shodo Fixture CJK"),
+    ] {
+        fonts
+            .register_face(
+                bytes.to_vec(),
+                0,
+                crate::font::FontFaceDescriptor {
+                    family: family.into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+    for text in ["、", ",", ")"] {
+        for collapse in [
+            crate::style::WhiteSpaceCollapse::Collapse,
+            crate::style::WhiteSpaceCollapse::Preserve,
+        ] {
+            let mut style = ParagraphStyle::default();
+            style.root.font_families = vec![
+                crate::style::FontFamily::Named("Shodo Fixture Latin".into()),
+                crate::style::FontFamily::Named("Shodo Fixture CJK".into()),
+            ];
+            style.root.font_size = 16.0;
+            style.root.white_space_collapse = collapse;
+            let mut rtl = style.root.clone();
+            rtl.direction = crate::geometry::Direction::Rtl;
+            rtl.unicode_bidi = crate::style::UnicodeBidi::BidiOverride;
+            let mut edges = InlineEdges::default();
+            edges.padding.inline_end = 1.0;
+            edges.border.inline_end = 0.5;
+            let mut b = ParagraphBuilder::new(&style, &Limits::default());
+            b.with_line_break_override(|_| crate::LineBreakOverride::Allow);
+            b.open_inline(NodeId(2), &rtl, InlineEdges::default());
+            b.push_text(TextSource::Generated { node: NodeId(3) }, "VAVAVAVAVAVA");
+            b.close_inline();
+            b.open_inline(NodeId(5), &style.root, edges);
+            b.push_text(TextSource::Generated { node: NodeId(6) }, text);
+            b.close_inline();
+            b.push_text(TextSource::Generated { node: NodeId(4) }, " ");
+            let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+            for force_end in [false, true] {
+                let options = LineOptions {
+                    hanging_punctuation: crate::style::HangingPunctuation {
+                        force_end,
+                        last: force_end,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+                for width in [24.3125, 24.9375, 24.953125, 28.125, 28.625, 29.875, 48.0] {
+                    let mut cx = LayoutContext::new();
+                    let lines = p.break_all(&mut cx, &options, width, &AtomicSizes::EMPTY);
+                    for line in &lines {
+                        assert!(
+                            line.inline_size() <= width,
+                            "{text:?} {collapse:?} force_end={force_end} width={width}: {:?} ({:?}) is {}px wide",
+                            line.text_range(),
+                            line.break_reason(),
+                            line.inline_size()
+                        );
+                    }
+                    assert_eq!(lines.last().unwrap().break_reason(), BreakReason::End);
+                    assert_eq!(lines.last().unwrap().text_range().end, p.text().len());
+                    assert!(cx.take_warnings().is_empty());
+                }
+            }
+        }
+    }
+}
+
+fn assert_narrow_retries_match_fresh(p: &crate::Paragraph, width: f32) {
+    let options = LineOptions::default();
+    let mut token = p.start_token();
+    loop {
+        let crate::LineResult::Line(fresh) = p.next_line(
+            &mut LayoutContext::new(),
+            token,
+            &options,
+            &crate::LineConstraint::new(width),
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("fresh line at {width}px");
+        };
+        let mut cx = LayoutContext::new();
+        assert!(matches!(
+            p.next_line(
+                &mut cx,
+                token,
+                &options,
+                &crate::LineConstraint::new(1000.0),
+                &AtomicSizes::EMPTY,
+            ),
+            crate::LineResult::Line(_)
+        ));
+        assert!(cx.partial.is_some());
+        let scans = cx.cache_visits;
+        let crate::LineResult::Line(retry) = p.next_line(
+            &mut cx,
+            token,
+            &options,
+            &crate::LineConstraint::new(width),
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("cached retry at {width}px");
+        };
+        assert!(
+            retry.inline_size() <= width,
+            "{width}px: {:?} is {}px",
+            retry.text_range(),
+            retry.inline_size()
+        );
+        assert_eq!(retry.text_range(), fresh.text_range(), "{width}px");
+        assert_eq!(retry.inline_size(), fresh.inline_size(), "{width}px");
+        assert_eq!(retry.break_reason(), fresh.break_reason(), "{width}px");
+        assert_eq!(retry.break_token(), fresh.break_token());
+        assert_eq!(cx.cache_visits, scans, "retry must reuse its scan");
+        assert!(cx.cache_prepare_visits > 0);
+        assert!(cx.take_warnings().is_empty());
+        if fresh.break_reason() == BreakReason::End {
+            break;
+        }
+        token = fresh.break_token();
+    }
+}
+
+#[test]
+fn paragraph_end_retries_check_hanging_space_width() {
+    let fonts = final_review_fonts();
+    fonts
+        .register_face(
+            crate::test_support::fonts::LATIN.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Shodo Fixture Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    for collapse in [
+        crate::style::WhiteSpaceCollapse::Collapse,
+        crate::style::WhiteSpaceCollapse::Preserve,
+    ] {
+        let mut style = ParagraphStyle::default();
+        style.root.font_families = vec![crate::style::FontFamily::Named(
+            "Shodo Fixture Latin".into(),
+        )];
+        style.root.font_size = 16.0;
+        style.root.white_space_collapse = collapse;
+        let mut b = ParagraphBuilder::new(&style, &Limits::default());
+        b.with_line_break_override(|_| crate::LineBreakOverride::Allow);
+        b.push_text(
+            TextSource::Generated { node: NodeId(1) },
+            "\u{202e}VAVAVAVAVAVA ",
+        );
+        let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+        for width in [28.125, 28.25, 28.625, 28.75] {
+            assert_narrow_retries_match_fresh(&p, width);
+        }
+    }
+}
+
+#[test]
+fn paragraph_end_retries_check_pulled_closing_edges() {
+    for decoration in [
+        crate::style::BoxDecorationBreak::Slice,
+        crate::style::BoxDecorationBreak::Clone,
+    ] {
+        let mut edges = InlineEdges::default();
+        edges.padding.inline_end = 1.0;
+        edges.border.inline_end = 0.5;
+        let p = closing_units_with(
+            Terminator::End,
+            0,
+            false,
+            (edges, decoration),
+            "\u{200b}",
+            crate::style::WhiteSpaceCollapse::Collapse,
+            false,
+        );
+        for width in [19.171875, 28.125, 28.625, 29.875] {
+            assert_narrow_retries_match_fresh(&p, width);
+        }
+    }
+}
+
+#[test]
+fn paragraph_end_excludes_controls_after_hanging_whitespace() {
+    let fonts = final_review_fonts();
+    fonts
+        .register_face(
+            crate::test_support::fonts::CJK.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    for collapse in [
+        crate::style::WhiteSpaceCollapse::Collapse,
+        crate::style::WhiteSpaceCollapse::Preserve,
+    ] {
+        for trailing in [" ", "\t"] {
+            for nested in [0, 1, 2] {
+                for zero_space in [false, true] {
+                    for isolate in [false, true] {
+                        let mut style = ParagraphStyle::default();
+                        style.root.font_families =
+                            vec![crate::style::FontFamily::Named("Shodo Fixture CJK".into())];
+                        style.root.font_size = 16.0;
+                        style.root.white_space_collapse = collapse;
+                        if zero_space {
+                            style.root.word_spacing_percent = -100.0;
+                        }
+                        let mut inline = style.root.clone();
+                        if isolate {
+                            inline.unicode_bidi = crate::style::UnicodeBidi::Isolate;
+                        }
+                        let mut b = ParagraphBuilder::new(&style, &Limits::default());
+                        for n in 0..=nested {
+                            b.open_inline(NodeId(10 + n), &inline, InlineEdges::default());
+                        }
+                        b.push_text(TextSource::Generated { node: NodeId(3) }, "ああ、");
+                        b.push_text(TextSource::Generated { node: NodeId(4) }, trailing);
+                        for _ in 0..=nested {
+                            b.close_inline();
+                        }
+                        let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+                        let options = LineOptions {
+                            hanging_punctuation: crate::style::HangingPunctuation {
+                                force_end: true,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        };
+                        let mut cx = LayoutContext::new();
+                        let crate::LineResult::Line(wide) = p.next_line(
+                            &mut cx,
+                            p.start_token(),
+                            &options,
+                            &crate::LineConstraint::new(1000.0),
+                            &AtomicSizes::EMPTY,
+                        ) else {
+                            panic!("wide punctuation line");
+                        };
+                        let crate::LineResult::Line(fresh) = p.next_line(
+                            &mut LayoutContext::new(),
+                            p.start_token(),
+                            &options,
+                            &crate::LineConstraint::new(32.0),
+                            &AtomicSizes::EMPTY,
+                        ) else {
+                            panic!("fresh punctuation line");
+                        };
+                        assert_eq!(
+                            fresh.text_range(),
+                            wide.text_range(),
+                            "{collapse:?} {trailing:?} nested={nested} zero_space={zero_space} isolate={isolate}"
+                        );
+                        assert_eq!(fresh.break_reason(), BreakReason::End);
+                        assert_eq!(fresh.inline_size(), 32.0);
+                        let scans = cx.cache_visits;
+                        let crate::LineResult::Line(retry) = p.next_line(
+                            &mut cx,
+                            p.start_token(),
+                            &options,
+                            &crate::LineConstraint::new(32.0),
+                            &AtomicSizes::EMPTY,
+                        ) else {
+                            panic!("cached punctuation line");
+                        };
+                        assert_eq!(retry.text_range(), fresh.text_range());
+                        assert_eq!(retry.inline_size(), fresh.inline_size());
+                        assert_eq!(retry.break_reason(), fresh.break_reason());
+                        if trailing == " " {
+                            assert_eq!(cx.cache_visits, scans);
+                            assert!(cx.cache_prepare_visits > 0);
+                        }
+                        assert!(cx.take_warnings().is_empty());
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn hanging_tail_retains_preserved_space_before_outer_closing_edges() {
+    let fonts = final_review_fonts();
+    fonts
+        .register_face(
+            crate::test_support::fonts::CJK.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut style = ParagraphStyle::default();
+    style.root.font_families = vec![crate::style::FontFamily::Named("Shodo Fixture CJK".into())];
+    style.root.font_size = 16.0;
+    let mut preserved = style.root.clone();
+    preserved.white_space_collapse = crate::style::WhiteSpaceCollapse::Preserve;
+    preserved.unicode_bidi = crate::style::UnicodeBidi::Isolate;
+    let mut outer = style.root.clone();
+    outer.unicode_bidi = crate::style::UnicodeBidi::Isolate;
+    for end_edge in [0.0, 1.5] {
+        let mut edges = InlineEdges::default();
+        edges.padding.inline_end = end_edge;
+        let mut b = ParagraphBuilder::new(&style, &Limits::default());
+        b.open_inline(NodeId(2), &outer, edges);
+        b.open_inline(NodeId(3), &preserved, InlineEdges::default());
+        b.push_text(TextSource::Generated { node: NodeId(4) }, "ああ、 ");
+        b.close_inline();
+        b.push_text(TextSource::Generated { node: NodeId(5) }, " ");
+        b.close_inline();
+        let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+        let options = LineOptions {
+            hanging_punctuation: crate::style::HangingPunctuation {
+                force_end: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut sat = crate::geometry::Saturation::default();
+        let wide = super::scan::scan(
+            &p.data,
+            0,
+            crate::geometry::LayoutUnit::from_f32_round(1000.0, &mut sat),
+            crate::geometry::LayoutUnit::ZERO,
+            crate::geometry::LayoutUnit::ZERO,
+            p.start_token().flags,
+            &options,
+            &AtomicSizes::EMPTY,
+            None,
+            None,
+            &mut LayoutContext::new(),
+            &mut sat,
+        );
+        let mut cursor = super::spacing_summary::Cursor::default();
+        let mut tail = super::punctuation::HangingTail::default();
+        for at in 0..p.data.units.len() {
+            tail.observe(
+                &p.data,
+                at,
+                &cursor,
+                super::whitespace::fits_hanging(&p.data, at),
+                super::whitespace::transparent(&p.data, at),
+            );
+            super::spacing::push(&p.data, &mut cursor, at);
+            let selected = tail
+                .summary(&p.data, at + 1)
+                .unwrap_or_else(|| cursor.summary(Some(&p.data)));
+            // Compare each retained boundary with the existing boundary used
+            // by materialization, including the controls before a later edge.
+            let (visible_end, _) =
+                super::whitespace::trailing(&p.data, 0, at + 1, &wide.widths[..at + 1], &mut sat);
+            let mut visible = super::spacing_summary::Cursor::default();
+            for i in 0..visible_end {
+                super::spacing::push(&p.data, &mut visible, i);
+            }
+            let expected = visible.summary(Some(&p.data));
+            assert_eq!(selected.last.map(|e| e.unit), expected.last.map(|e| e.unit));
+            assert_eq!(selected.width(&mut sat), expected.width(&mut sat));
+        }
+        let edges = super::punctuation::edges(
+            &p.data,
+            tail.summary(&p.data, p.data.units.len())
+                .unwrap_or_else(|| cursor.summary(Some(&p.data))),
+            p.start_token().flags,
+            true,
+            Some(&options),
+            crate::geometry::LayoutUnit::from_f32_round(1000.0, &mut sat),
+            wide.content
+                .add(wide.punctuation_edges.removed(&mut sat), &mut sat),
+            &mut sat,
+        );
+        assert_eq!(edges.hang_end, wide.punctuation_edges.hang_end);
+        assert_eq!(edges.end_trim, wide.punctuation_edges.end_trim);
+    }
+}
+
+#[test]
+fn hyphen_before_closing_controls_fits_at_its_materialized_width() {
+    let fonts = final_review_fonts();
+    fonts
+        .register_face(
+            crate::test_support::fonts::LATIN.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Shodo Fixture Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    for isolate in [false, true] {
+        let mut style = ParagraphStyle::default();
+        style.root.font_families = vec![crate::style::FontFamily::Named(
+            "Shodo Fixture Latin".into(),
+        )];
+        style.root.font_size = 16.0;
+        let mut rtl = style.root.clone();
+        rtl.direction = crate::geometry::Direction::Rtl;
+        rtl.unicode_bidi = if isolate {
+            crate::style::UnicodeBidi::IsolateOverride
+        } else {
+            crate::style::UnicodeBidi::BidiOverride
+        };
+        let mut b = ParagraphBuilder::new(&style, &Limits::default());
+        b.open_inline(NodeId(2), &rtl, InlineEdges::default());
+        b.push_text(TextSource::Generated { node: NodeId(3) }, ",VA VA\u{ad}");
+        b.close_inline();
+        b.push_atomic(NodeId(9), &style.root, InlineEdges::default());
+        let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+        let mut atomics = AtomicSizes::new();
+        atomics.insert(
+            NodeId(9),
+            AtomicSize {
+                inline_size: 2000.0,
+                ..Default::default()
+            },
+        );
+        let options = LineOptions {
+            hanging_punctuation: crate::style::HangingPunctuation {
+                force_end: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut cx = LayoutContext::new();
+        let crate::LineResult::Line(wide) = p.next_line(
+            &mut cx,
+            p.start_token(),
+            &options,
+            &crate::LineConstraint::new(1000.0),
+            &atomics,
+        ) else {
+            panic!("wide hyphen line");
+        };
+        assert!(wide.fragments().any(|f| {
+            match f {
+                Fragment::GlyphRun(run) => run
+                    .clusters()
+                    .any(|c| c.source_char == Some('\u{ad}') && c.advance > 0.0),
+                _ => false,
+            }
+        }));
+        let scans = cx.cache_visits;
+        for width in [
+            wide.inline_size() + 1.0 / 64.0,
+            wide.inline_size(),
+            wide.inline_size() - 1.0 / 64.0,
+            wide.inline_size() - 1.0 / 64.0,
+        ] {
+            let crate::LineResult::Line(fresh) = p.next_line(
+                &mut LayoutContext::new(),
+                p.start_token(),
+                &options,
+                &crate::LineConstraint::new(width),
+                &atomics,
+            ) else {
+                panic!("fresh hyphen line");
+            };
+            if width >= wide.inline_size() {
+                assert_eq!(fresh.text_range(), wide.text_range(), "isolate={isolate}");
+                assert_eq!(fresh.inline_size(), wide.inline_size());
+                assert_eq!(fresh.break_reason(), wide.break_reason());
+            } else {
+                assert!(fresh.text_range().end < wide.text_range().end);
+            }
+            let crate::LineResult::Line(retry) = p.next_line(
+                &mut cx,
+                p.start_token(),
+                &options,
+                &crate::LineConstraint::new(width),
+                &atomics,
+            ) else {
+                panic!("cached hyphen line");
+            };
+            assert_eq!(
+                retry.text_range(),
+                fresh.text_range(),
+                "isolate={isolate}, width={width}"
+            );
+            assert_eq!(retry.inline_size(), fresh.inline_size());
+            assert_eq!(retry.break_reason(), fresh.break_reason());
+            assert_eq!(retry.break_token(), fresh.break_token());
+            assert!(retry.inline_size() <= width);
+            assert_eq!(cx.cache_visits, scans);
+        }
+        assert!(cx.cache_prepare_visits > 0);
+        assert!(cx.take_warnings().is_empty());
     }
 }
