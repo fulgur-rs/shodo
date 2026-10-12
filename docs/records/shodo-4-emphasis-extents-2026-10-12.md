@@ -41,7 +41,8 @@ then record shifts. Overflow/nonfinite counts and warning order are preserved.
 
 This is a temporary-memory improvement with a measured CPU cost. Marked
 medians increased 3.6%/8.7%; controls changed -2.2%/+1.8%. Sample ranges overlap,
-but the long marked median increase warrants explicit disclosure. The second
+but all seven long marked process pairs are slower on the implementation;
+the CPU cost should not be dismissed as noise. The second
 cached-profile pass trades recomputation for eliminating per-fragment storage.
 These results do not establish a general speedup or unchanged latency.
 The allocation benefit is adopted with this cost recorded: the long marked
