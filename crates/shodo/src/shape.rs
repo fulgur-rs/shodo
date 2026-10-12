@@ -23,6 +23,7 @@ use std::ops::Range;
 std::thread_local! {
     pub(super) static HARFRUST_SHAPE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(super) static GLYPH_ORDER_ALLOCATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(super) static GLYPH_ORDER_STABLE_SORTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(super) static CFF_ORIGIN_DELTA_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(super) static COMBINED_WIDTH_GROUP_CLONE_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(super) static COMBINED_WIDTH_GROUP_CLONE_SCALARS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -1199,19 +1200,42 @@ fn shape_inputs_with<'a>(
     Ok((store, runs))
 }
 
-/// Allocate a stable permutation only when corrected clusters are out of order.
-/// `None` means the shaper's original glyph order is already logical order.
+/// Return a logical-order permutation only when corrected clusters are out of order.
+/// Descending groups are reversed; mixed sequences use a stable-sort fallback.
 fn glyph_order(infos: &[harfrust::GlyphInfo], leading_end: u32) -> Option<Vec<usize>> {
-    if infos
-        .windows(2)
-        .all(|pair| pair[0].cluster.max(leading_end) <= pair[1].cluster.max(leading_end))
-    {
+    let mut ascending = true;
+    let mut descending = true;
+    for pair in infos.windows(2) {
+        let left = pair[0].cluster.max(leading_end);
+        let right = pair[1].cluster.max(leading_end);
+        ascending &= left <= right;
+        descending &= left >= right;
+    }
+    if ascending {
         return None;
     }
-    let mut order: Vec<_> = (0..infos.len()).collect();
+    let mut order = Vec::with_capacity(infos.len());
     #[cfg(test)]
     GLYPH_ORDER_ALLOCATIONS.with(|count| count.set(count.get() + 1));
-    order.sort_by_key(|&index| infos[index].cluster.max(leading_end));
+    if descending {
+        // Harfrust emits RTL clusters in descending order. Traverse those
+        // groups backwards while retaining each group's glyph order.
+        let mut end = infos.len();
+        while end > 0 {
+            let cluster = infos[end - 1].cluster.max(leading_end);
+            let mut start = end - 1;
+            while start > 0 && infos[start - 1].cluster.max(leading_end) == cluster {
+                start -= 1;
+            }
+            order.extend(start..end);
+            end = start;
+        }
+    } else {
+        order.extend(0..infos.len());
+        #[cfg(test)]
+        GLYPH_ORDER_STABLE_SORTS.with(|count| count.set(count.get() + 1));
+        order.sort_by_key(|&index| infos[index].cluster.max(leading_end));
+    }
     Some(order)
 }
 

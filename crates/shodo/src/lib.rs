@@ -139,6 +139,7 @@ mod output;
 mod paragraph;
 mod sanitize;
 mod shape;
+mod sorted;
 #[cfg(test)]
 mod test_support;
 

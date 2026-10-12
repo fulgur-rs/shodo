@@ -37,10 +37,10 @@ pub(crate) fn initialize_slices(
         // The alternate line may end within a normal-set ligature even if
         // normal CSS forbids a soft break there. These are cursor slices,
         // and retain the normal set's original break class.
-        offsets.extend(cuts.iter().copied());
-        offsets.sort_unstable();
+        offsets = crate::sorted::merge_sorted_unique(&offsets, cuts);
+    } else {
+        offsets.dedup();
     }
-    offsets.dedup();
     let opportunities = &data.breaks.opportunities;
     let mut opportunity_cursor = 0;
     let mut previous_cluster_end = 0;
