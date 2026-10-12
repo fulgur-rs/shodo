@@ -1,7 +1,6 @@
 //! Cluster matching, CSS range ranking, and shared fallback configuration.
 
 use super::{FontCollection, FontData, FontFaceDescriptor, FontId, LayerState, check};
-#[cfg(test)]
 use crate::limits::{LimitKind, Limits};
 use crate::style::{FontFamily, FontStyle, FontSynthesis, FontVariation, GenericFamily};
 use fontique::{FontInfo, SourceId, SourceInfo, SourceKind};
@@ -906,9 +905,31 @@ impl FontCollection {
             } else {
                 let limits = &self.layer.limits;
                 check::check_font(selected.data.data.as_ref(), limits).ok()?;
+                Limits::check(
+                    limits.max_faces_per_layer,
+                    LimitKind::FacesPerLayer,
+                    state.faces.len() as u64 + 1,
+                )
+                .ok()?;
+                let additional = if state
+                    .faces
+                    .iter()
+                    .any(|face| face.data.id() == selected.data.data.id())
+                {
+                    0
+                } else {
+                    selected.data.data.len() as u64
+                };
+                let blob_bytes = state.blob_bytes + additional;
+                Limits::check(
+                    limits.max_layer_blob_bytes,
+                    LimitKind::LayerBlobBytes,
+                    blob_bytes,
+                )
+                .ok()?;
                 let index = state.faces.len();
-                // Native discovery is not a lifetime registration budget.
-                // Keep individual font validation and stable retained IDs.
+                // A materialized platform face uses the same cumulative
+                // layer budgets as an explicitly registered face.
                 u32::try_from(index).ok().filter(|&id| id != u32::MAX)?;
                 // Match future queries against the retained blob, even if a
                 // platform source changed after its family metadata was read.
@@ -917,6 +938,7 @@ impl FontCollection {
                 state.native_faces.insert(index);
                 state.descriptors.push(None);
                 state.index_face(index, true);
+                state.blob_bytes = blob_bytes;
                 index
             };
             state
