@@ -1268,3 +1268,6 @@ mod retention_tests;
 
 #[cfg(test)]
 mod work_tests;
+
+#[cfg(test)]
+mod eviction_tests;
