@@ -150,8 +150,11 @@ warning suppression. They prove CJK fallback and continued Full/Pretty
 materialization. First-line transform/remap, float/block/forced progress,
 infeasible tail warnings and existing geometry/budget suites remain covered.
 Task 2 full crate verification: 1,264 passed, zero failed, nine ignored;
-the focused line suite passed 200 tests. Final workspace/Clippy/CI/review results
-are recorded after their completion.
+the focused line suite passed 200 tests. Final workspace verification passed
+1,796 tests with zero failures and nine ignored. Formatting and workspace
+Clippy with and without accesskit passed with warnings denied. The
+allocation-counting example configuration is checked separately; final
+CI/review results are recorded after their completion.
 
 For timing, check out the baseline and candidate into separate task worktrees
 and copy this PR's `dev/bench/examples/balance_summary.rs` into the baseline.
