@@ -44,6 +44,16 @@ with hash collisions; `local` repeats one key. `thrash` exceeds shared capacity.
 Keys combine CJK characters and 1/32/512 query styles (weight/style/language).
 Large distinct-character cases necessarily include unsupported code points;
 they measure negative caching too. Matched-key counts below make this explicit.
+The parallel probe uses worker readiness → main timer start → worker release
+→ completion barriers, excluding warmup and enclosing every worker duration.
+An assertion checks that aggregate elapsed is at least the longest worker time.
+The initial parallel series started timing after releasing workers and could
+undercount execution; it is invalidated and preserved only for audit in JSON.
+All three parallel cases were rerun with corrected baseline/candidate binaries
+and the same five-pair/15-sample protocol. The table uses corrected parallel
+values and unaffected original serial values. Exploratory parallel timings are
+also invalid; acquisition counters use their own independent timers.
+
 Owner-independent complete font selections have identical SHA-256 values in
 all ten public cases; benchmark loop checksums also agree. Parallel ns/op is
 aggregate elapsed / operations, not individual request latency; raw worker
@@ -57,16 +67,16 @@ elapsed values are retained separately.
 | thrash | 4096 / 8192 / 1 | 1 | 32 | 5717.1 → 1570.3 | 0.2747 |
 | thrash | 8 / 16 / 1 | 1 | 16 | 784.3 → 783.5 | 0.9990 |
 | warm | 256 / 256 / 16 | 1 | 256 | 121.0 → 134.3 | 1.1098 |
-| warm | 256 / 256 / 16 | 4 | 256 | 74.2 → 69.4 | 0.9347 |
+| warm | 256 / 256 / 16 | 4 | 256 | 72.6 → 73.0 | 1.0054 |
 | local | 256 / 1 / 1 | 1 | 1 | 95.2 → 90.5 | 0.9501 |
-| local | 256 / 1 / 1 | 4 | 1 | 38.2 → 29.1 | 0.7633 |
-| warm | 255 / 255 / 15 | 4 | 255 | 78.6 → 69.8 | 0.8879 |
+| local | 256 / 1 / 1 | 4 | 1 | 36.3 → 34.0 | 0.9377 |
+| warm | 255 / 255 / 15 | 4 | 255 | 73.9 → 69.6 | 0.9406 |
 
 The single-thread warm ranges do not overlap: scan 118.9–127.2 ns/op,
 heap 132.1–138.1 ns/op. All five warm process-pair medians are slower with the
-heap, so the increase is not dismissed as noise. Four-thread warm/local ranges
-overlap substantially; their medians show no regression in this series, but do
-not establish a general parallel speedup. Capacity-4096 thrash improves 72.5%,
+heap, so the increase is not dismissed as noise. Corrected four-thread warm/local ranges
+overlap substantially. Capacity-256 warm medians differ by +0.5%; the series
+does not establish a general parallel speedup or a precise zero-regression bound. Capacity-4096 thrash improves 72.5%,
 mostly on negative matches; that is not a representative CJK paragraph speedup.
 
 ## Eviction work, interning and memory
@@ -198,9 +208,11 @@ separate baseline checkout, write `candidate-matching.patch` from JSON and
 apply it with `git apply`. Write `candidate-eviction.rs` and
 `candidate-eviction-tests.rs` to the matching module's `eviction.rs` and
 `eviction_tests.rs`; copy the retained public probe into that checkout. The
-public script in JSON expects saved `baseline-time`, `fix-time`,
+original public script in JSON expects saved `baseline-time`, `fix-time`,
 `baseline-alloc` and `fix-alloc` executables in its argument directory. It
-checks complete selection digests before accepting each case. The interning
+checks complete selection digests before accepting each case. Use the corrected
+probe for parallel runs; the original probe is archived only to reproduce the
+unaffected serial measurements and diagnose the rejected parallel series. The interning
 comparison uses the embedded baseline diagnostic patch/test source; the lock
 script restores source after collecting its own separate diagnostic binaries.
 No diagnostic instrumentation is included in the production patch.

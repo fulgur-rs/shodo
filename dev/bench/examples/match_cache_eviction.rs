@@ -166,6 +166,7 @@ fn main() {
                     }
                     let mut rows = Vec::with_capacity(samples);
                     for _ in 0..samples {
+                        barrier.wait(); // all workers are ready, including after warmup
                         barrier.wait();
                         let start = Instant::now();
                         let digest = matches(fonts, queries, clusters, n);
@@ -177,8 +178,9 @@ fn main() {
                 }));
             }
             for _ in 0..samples {
-                barrier.wait();
+                barrier.wait(); // exclude preparation and warmup from timing
                 let start = Instant::now();
+                barrier.wait();
                 barrier.wait();
                 elapsed.push(start.elapsed().as_nanos());
             }
@@ -189,6 +191,10 @@ fn main() {
         });
         for sample in 0..samples {
             let row: Vec<_> = results.iter().map(|r| r[sample].0).collect();
+            assert!(
+                row.iter().all(|ns| *ns <= elapsed[sample]),
+                "aggregate timer must encompass every worker"
+            );
             for r in &results {
                 assert_eq!(r[sample].1, expected);
             }
