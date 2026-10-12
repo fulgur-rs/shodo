@@ -5,6 +5,201 @@ use crate::style::{LineOptions, ParagraphStyle};
 use crate::{AtomicSize, AtomicSizes, Fragment, LayoutContext, ParagraphBuilder};
 
 #[test]
+fn completed_shifts_place_every_empty_long_and_reshaped_fragment() {
+    use crate::font::{FontFaceDescriptor, FontOptions};
+    use crate::style::{FontFamily, InlineStyle, LineHeight, VerticalAlign};
+    let limits = Limits::unlimited();
+    let fonts = crate::font::FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            crate::test_support::fonts::LATIN.to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let style = ParagraphStyle {
+        root: InlineStyle {
+            font_families: vec![FontFamily::Named("Latin".into())],
+            font_size: 10.0,
+            line_height: LineHeight::Px(12.0),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    for count in [0, 2, 512] {
+        for reshape in [false, true] {
+            if count == 0 && reshape {
+                continue;
+            }
+            let mut b = ParagraphBuilder::new(&style, &limits);
+            if count == 0 {
+                b.open_inline(NodeId(0), &style.root, Default::default());
+                b.close_inline();
+            }
+            for n in 0..count {
+                b.open_inline(
+                    NodeId(2 * n),
+                    &InlineStyle {
+                        vertical_align: VerticalAlign::Length(if n % 2 == 0 { 2.0 } else { -3.0 }),
+                        ..style.root.clone()
+                    },
+                    Default::default(),
+                );
+                b.push_text(
+                    TextSource::Generated {
+                        node: NodeId(2 * n + 1),
+                    },
+                    "a",
+                );
+                b.close_inline();
+            }
+            if reshape {
+                b.push_text(
+                    TextSource::Generated {
+                        node: NodeId(2 * count + 1),
+                    },
+                    "hy\u{ad}phenation",
+                );
+            }
+            let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+            let mut cx = LayoutContext::new();
+            let mut constraint = crate::LineConstraint::new(1_000_000.0);
+            if reshape {
+                let crate::LineResult::Line(full) = p.next_line(
+                    &mut cx,
+                    p.start_token(),
+                    &LineOptions::default(),
+                    &constraint,
+                    &AtomicSizes::EMPTY,
+                ) else {
+                    panic!()
+                };
+                let prefix: f32 = full
+                    .fragments()
+                    .filter_map(|f| match f {
+                        Fragment::GlyphRun(run) if run.node().is_some_and(|n| n.0 < 2 * count) => {
+                            Some(run.inline_size())
+                        }
+                        _ => None,
+                    })
+                    .sum();
+                constraint.available_inline_size = prefix + 16.0;
+            }
+            let crate::LineResult::Line(line) = p.next_line(
+                &mut cx,
+                p.start_token(),
+                &LineOptions::default(),
+                &constraint,
+                &AtomicSizes::EMPTY,
+            ) else {
+                panic!()
+            };
+            assert_eq!(line.block_shifts.len(), line.fragments.len());
+            assert_eq!(line.overlay.is_some(), reshape);
+            assert_eq!(line.block_size(), if count == 0 { 0.0 } else { 17.0 });
+            assert_eq!(line.is_last(), !reshape);
+            let mut seen = 0;
+            for run in line.fragments().filter_map(|f| match f {
+                Fragment::GlyphRun(r) => Some(r),
+                _ => None,
+            }) {
+                let node = run.node().unwrap().0;
+                let shift = if node == 2 * count + 1 {
+                    0.0
+                } else if (node / 2) % 2 == 0 {
+                    -2.0
+                } else {
+                    3.0
+                };
+                assert_eq!(run.baseline(), line.metrics().baseline + shift);
+                let origin = run.glyph_origin(0).unwrap();
+                assert_eq!(
+                    origin.1,
+                    run.baseline() + run.glyphs().get(0).unwrap().block_offset
+                );
+                seen += 1;
+            }
+            assert_eq!(seen, count as usize + usize::from(reshape));
+            assert!(cx.take_warnings().is_empty());
+        }
+    }
+}
+
+#[test]
+fn completed_shift_metrics_preserve_saturation_warning_order() {
+    let style = ParagraphStyle::default();
+    let limits = Limits::default();
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+    let p = b
+        .build(&mut LayoutContext::new(), &final_review_fonts())
+        .unwrap();
+    let mut cx = LayoutContext::new();
+    let constraint = crate::LineConstraint {
+        inline_start_offset: f32::NAN,
+        block_offset: f32::MAX,
+        ..crate::LineConstraint::new(f32::MAX)
+    };
+    let crate::LineResult::Line(line) = p.next_line(
+        &mut cx,
+        p.start_token(),
+        &LineOptions::default(),
+        &constraint,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!()
+    };
+    assert_eq!(line.block_shifts.len(), line.fragments.len());
+    assert!(line.overflow_rect().block_size.is_finite());
+    let warnings = cx.take_warnings();
+    use crate::limits::{Warning, WarningKind};
+    assert_eq!(
+        warnings,
+        [
+            Warning {
+                kind: WarningKind::Saturated,
+                message: "layout length clamped to 1e7 px".into()
+            },
+            Warning {
+                kind: WarningKind::NonFiniteInput,
+                message: "non-finite layout length replaced with 0".into()
+            },
+            Warning {
+                kind: WarningKind::Saturated,
+                message: "layout length clamped to 1e7 px".into()
+            },
+        ]
+    );
+    let crate::LineResult::Line(narrow) = p.next_line(
+        &mut cx,
+        p.start_token(),
+        &LineOptions::default(),
+        &crate::LineConstraint::new(1.0),
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!()
+    };
+    assert_eq!(narrow.block_shifts.len(), narrow.fragments.len());
+    assert!(narrow.inline_size() > 1.0);
+    assert!(narrow.overflow_rect().inline_size.is_finite());
+    assert_eq!(
+        narrow.overflow_rect(),
+        line.overflow_rect(),
+        "offsets are not part of the line-local ink overflow rect"
+    );
+    assert!(cx.take_warnings().is_empty());
+}
+
+#[test]
 fn displacement_visits_only_float_anchors_not_paragraph_suffixes() {
     let mut root = ParagraphStyle::default();
     root.root.font_size = 10.0;

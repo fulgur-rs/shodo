@@ -432,13 +432,13 @@ pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturati
         });
     }
     let mut records = Vec::new();
-    let mut shifts = Vec::new();
     let mut index_map = Vec::new();
-    for (index, record) in line.fragments.iter().enumerate() {
+    // This runs before measure_metrics; rebuilding shifts here would only
+    // copy initial zeros that the final metric solution replaces.
+    for record in &line.fragments {
         index_map.push(records.len() as u32);
         let RecordKind::Glyphs { glyphs, text, .. } = &record.kind else {
             records.push(record.clone());
-            shifts.push(line.block_shifts[index]);
             continue;
         };
         if glyphs.is_empty() {
@@ -462,7 +462,6 @@ pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturati
             }
             if selected.is_empty() {
                 records.push(record.clone());
-                shifts.push(line.block_shifts[index]);
                 continue;
             }
             let mut consumed = LayoutUnit::ZERO;
@@ -504,7 +503,6 @@ pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturati
                     };
                 }
                 records.push(part);
-                shifts.push(line.block_shifts[index]);
                 consumed = consumed.add(advance, sat);
             }
             continue;
@@ -624,7 +622,6 @@ pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturati
         if reversed {
             parts.reverse();
         }
-        shifts.extend(std::iter::repeat_n(line.block_shifts[index], parts.len()));
         records.extend(parts);
     }
     for record in &mut records {
@@ -637,7 +634,6 @@ pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturati
         }
     }
     line.fragments = records;
-    line.block_shifts = shifts;
     line.overlay_clusters = overlay_clusters.into_boxed_slice();
     line.overlay_runs = overlay_runs.into_boxed_slice();
     line.overlay = Some(Box::new(overlay));
