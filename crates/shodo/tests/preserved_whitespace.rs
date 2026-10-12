@@ -308,6 +308,41 @@ fn break_spaces_wraps_between_preserved_spaces_and_keeps_trailing_width() {
 }
 
 #[test]
+fn break_spaces_wraps_after_each_ideographic_space() {
+    let text = "ああ\u{3000}\u{3000}\u{3000}\u{3000}ああ";
+    let p = preserved(text, WhiteSpaceCollapse::BreakSpaces, TextWrapMode::Wrap);
+    let lines = p.break_all(
+        &mut LayoutContext::new(),
+        &LineOptions::default(),
+        30.0,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(
+        lines
+            .iter()
+            .map(|line| (line.text_range(), line.inline_size()))
+            .collect::<Vec<_>>(),
+        [(0..9, 30.0), (9..18, 30.0), (18..24, 20.0)]
+    );
+}
+
+#[test]
+fn break_spaces_keeps_gl_spaces_nonbreaking() {
+    for space in ['\u{00a0}', '\u{2007}', '\u{202f}'] {
+        let text = format!("あ{space}あ");
+        let p = preserved(&text, WhiteSpaceCollapse::BreakSpaces, TextWrapMode::Wrap);
+        let lines = p.break_all(
+            &mut LayoutContext::new(),
+            &LineOptions::default(),
+            10.0,
+            &AtomicSizes::EMPTY,
+        );
+        assert_eq!(lines.len(), 1, "{space:?}");
+        assert_eq!(lines[0].text_range(), 0..text.len(), "{space:?}");
+    }
+}
+
+#[test]
 fn cached_and_planned_preserved_space_lines_match_direct_geometry() {
     let p = preserved("a  b  ", WhiteSpaceCollapse::Preserve, TextWrapMode::Wrap);
     let mut cx = LayoutContext::new();

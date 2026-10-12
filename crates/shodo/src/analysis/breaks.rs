@@ -359,6 +359,7 @@ pub(crate) fn analyze_breaks(
     }
     let ja: LanguageIdentifier = "ja".parse().expect("constant language");
     let lb = CodePointMapData::<props::LineBreak>::new();
+    let gc = CodePointMapData::<props::GeneralCategory>::new();
     // CSS Text 4 word-break:manual resolves SA letters as AL. Substitute AL
     // scalars of the same UTF-8 width so ICU applies all UAX #14 rules while
     // its returned byte offsets still index the original projection.
@@ -366,7 +367,6 @@ pub(crate) fn analyze_breaks(
         .iter()
         .any(|profile| profile.word == 3 && profile.strict != 3)
         .then(|| {
-            let gc = CodePointMapData::<props::GeneralCategory>::new();
             projection
                 .text
                 .chars()
@@ -453,6 +453,17 @@ pub(crate) fn analyze_breaks(
         let last = input.text[item.text.start as usize..o.offset as usize]
             .chars()
             .next_back();
+        let preserved_spaces = matches!(
+            s.white_space_collapse,
+            WhiteSpaceCollapse::Preserve
+                | WhiteSpaceCollapse::PreserveSpaces
+                | WhiteSpaceCollapse::BreakSpaces
+        );
+        let break_spaces_separator = s.white_space_collapse == WhiteSpaceCollapse::BreakSpaces
+            && last.is_some_and(|c| {
+                !matches!(c, '\u{00a0}' | '\u{2007}' | '\u{202f}')
+                    && gc.get(c) == props::GeneralCategory::SpaceSeparator
+            });
         if matches!(item.kind, ItemKind::ForcedBreak)
             || last.is_some_and(|c| {
                 matches!(
@@ -469,14 +480,7 @@ pub(crate) fn analyze_breaks(
         } else if s.line_break == LineBreak::Anywhere {
             // ICU's opportunities include preserved whitespace; do not
             // replace them with the normal nonbreaking-space sequence rule.
-        } else if matches!(last, Some(' ' | '\t'))
-            && matches!(
-                s.white_space_collapse,
-                WhiteSpaceCollapse::Preserve
-                    | WhiteSpaceCollapse::PreserveSpaces
-                    | WhiteSpaceCollapse::BreakSpaces
-            )
-        {
+        } else if preserved_spaces && (matches!(last, Some(' ' | '\t')) || break_spaces_separator) {
             let index = projection
                 .spans
                 .partition_point(|span| span.original.end <= o.offset);
