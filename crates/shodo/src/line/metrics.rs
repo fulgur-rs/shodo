@@ -17,6 +17,11 @@ pub(crate) struct LineMetrics {
     pub(crate) trimmed_trailing: Option<usize>,
 }
 
+pub(crate) struct LineExtents {
+    pub(crate) baseline: LayoutUnit,
+    pub(crate) block_size: LayoutUnit,
+}
+
 pub(crate) fn extents(
     s: &InlineStyle,
     m: FontMetrics,
@@ -546,7 +551,7 @@ pub(crate) fn measure(
     overlay_runs: &[crate::shape::ShapedRun],
     sat: &mut Saturation,
 ) -> LineMetrics {
-    measure_profile(data, units, records, overlay_runs, false, sat)
+    measure_profile::<true>(data, units, records, overlay_runs, false, sat)
 }
 
 pub(crate) fn measure_unannotated(
@@ -555,11 +560,15 @@ pub(crate) fn measure_unannotated(
     records: &[FragmentRecord],
     overlay_runs: &[crate::shape::ShapedRun],
     sat: &mut Saturation,
-) -> LineMetrics {
-    measure_profile(data, units, records, overlay_runs, true, sat)
+) -> LineExtents {
+    let metrics = measure_profile::<false>(data, units, records, overlay_runs, true, sat);
+    LineExtents {
+        baseline: metrics.baseline,
+        block_size: metrics.block_size,
+    }
 }
 
-fn measure_profile(
+fn measure_profile<const KEEP_SHIFTS: bool>(
     data: &ParagraphData,
     units: Range<usize>,
     records: &[FragmentRecord],
@@ -643,11 +652,21 @@ fn measure_profile(
                 above = above.max(-top);
                 below = below.max(bottom);
             }
-            combination_bases.push((index as usize, base, group));
+            if KEEP_SHIFTS {
+                combination_bases.push((index as usize, base, group));
+            }
         }
     }
-    let mut shifts = Vec::with_capacity(records.len());
-    let mut memberships = Vec::with_capacity(records.len());
+    let mut shifts = if KEEP_SHIFTS {
+        Vec::with_capacity(records.len())
+    } else {
+        Vec::new()
+    };
+    let mut memberships = if KEEP_SHIFTS {
+        Vec::with_capacity(records.len())
+    } else {
+        Vec::new()
+    };
     for (i, r) in records.iter().enumerate() {
         match &r.kind {
             RecordKind::Glyphs { .. } | RecordKind::Atomic { .. } => empty = false,
@@ -668,8 +687,10 @@ fn measure_profile(
             RecordKind::Anchor { .. } => {}
         }
         let Some(profile) = resolver.record(data, r, overlay_runs) else {
-            shifts.push(0.0);
-            memberships.push((None, None));
+            if KEEP_SHIFTS {
+                shifts.push(0.0);
+                memberships.push((None, None));
+            }
             continue;
         };
         let RecordProfile {
@@ -703,8 +724,10 @@ fn measure_profile(
             above = above.max(-top);
             below = below.max(bottom);
         }
-        shifts.push(base);
-        memberships.push((group, own_group));
+        if KEEP_SHIFTS {
+            shifts.push(base);
+            memberships.push((group, own_group));
+        }
     }
     if above == f32::NEG_INFINITY {
         above = 0.0;
@@ -745,47 +768,91 @@ fn measure_profile(
             });
         }
     }
-    for (i, (g, own)) in memberships.into_iter().enumerate() {
+    let place_shift = |i, mut value, g: Option<u32>, own: Option<bool>| {
         if let Some(g) = g {
-            shifts[i] += deltas[&g];
+            value += deltas[&g];
         }
         if own.is_some() {
             let (top, bottom, is_bottom) = own_groups[&i];
-            shifts[i] += if is_bottom {
+            value += if is_bottom {
                 height - above - bottom
             } else {
                 -above - top
             };
         }
+        value
+    };
+    for (i, (g, own)) in memberships.into_iter().enumerate() {
+        shifts[i] = place_shift(i, shifts[i], g, own);
     }
     let block_size = LayoutUnit::from_f32_ceil(if empty { 0.0 } else { height }, sat);
     let over_baseline = LayoutUnit::from_f32_round(above, sat);
     // The over side is the physical right in vertical-lr, opposite block-start.
     // Reflect the line-relative solution into logical block coordinates once.
     let reverse_over = data.style.writing_mode == crate::geometry::WritingMode::VerticalLr;
-    let combination_shifts = combination_bases
-        .into_iter()
-        .map(|(index, base, group)| {
-            let displacement = base + group.map_or(0.0, |g| deltas[&g]);
-            (
-                index,
-                LayoutUnit::from_f32_round(
-                    if reverse_over {
-                        -displacement
-                    } else {
-                        displacement
-                    },
-                    sat,
-                ),
-            )
-        })
-        .collect();
+    let combination_shifts = if KEEP_SHIFTS {
+        combination_bases
+            .into_iter()
+            .map(|(index, base, group)| {
+                let displacement = base + group.map_or(0.0, |g| deltas[&g]);
+                (
+                    index,
+                    LayoutUnit::from_f32_round(
+                        if reverse_over {
+                            -displacement
+                        } else {
+                            displacement
+                        },
+                        sat,
+                    ),
+                )
+            })
+            .collect()
+    } else {
+        // Discard storage, not numeric effects: the full path converts
+        // combinations before the baseline reflection and record shifts.
+        if !data.combine_spans.is_empty() {
+            for (offset, u) in data.units[units.clone()].iter().enumerate() {
+                if let Some(index) = u.combine
+                    && data.combine_spans[index as usize].units.start == units.start + offset
+                {
+                    let profile = resolver
+                        .combination(data, u)
+                        .expect("combined unit has a span");
+                    let displacement = profile.shift + profile.group.map_or(0.0, |g| deltas[&g]);
+                    let _ = LayoutUnit::from_f32_round(
+                        if reverse_over {
+                            -displacement
+                        } else {
+                            displacement
+                        },
+                        sat,
+                    );
+                }
+            }
+        }
+        crate::hashing::FastMap::default()
+    };
+    let baseline = if reverse_over {
+        block_size.sub(over_baseline, sat)
+    } else {
+        over_baseline
+    };
+    if !KEEP_SHIFTS {
+        // Revisit cached profiles instead of retaining per-record shift and
+        // membership vectors. Keep each discarded conversion and its order
+        // so Saturation and the caller's warnings match the full-output path.
+        for (i, record) in records.iter().enumerate() {
+            let value = resolver
+                .record(data, record, overlay_runs)
+                .map_or(0.0, |profile| {
+                    place_shift(i, profile.shift, profile.group, profile.own_group)
+                });
+            let _ = LayoutUnit::from_f32_round(if reverse_over { -value } else { value }, sat);
+        }
+    }
     LineMetrics {
-        baseline: if reverse_over {
-            block_size.sub(over_baseline, sat)
-        } else {
-            over_baseline
-        },
+        baseline,
         block_size,
         shifts: shifts
             .into_iter()
@@ -797,6 +864,10 @@ fn measure_profile(
         trimmed_trailing: quirk.map(|q| q.trailing),
     }
 }
+
+#[cfg(test)]
+#[path = "metrics_extents_tests.rs"]
+mod extents_tests;
 
 #[cfg(test)]
 mod tests {
