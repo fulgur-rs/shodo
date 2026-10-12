@@ -68,6 +68,7 @@ raikiri examples read at build time live in `dev/raikiri/inputs/`.
 | SHODO-5 match-cache eviction policies and rejected hit/retention tradeoff | [Match-cache evaluation](records/shodo-5-match-cache-2026-10-12.md) |
 | SHODO-6 guarded Balance trial summaries, fallback coverage and stage tradeoffs | [Balance trial summary evaluation](records/shodo-6-balance-trial-summary-2026-10-12.md) |
 | SHODO-16 guarded first-line analysis/shaping reuse, exact limits and build costs | [First-line reuse evaluation](records/shodo-16-first-line-reuse-2026-10-12.md) |
+| SHODO-17 first-line intrinsic single-pass calculation and fallback scope | [First-line intrinsic record](records/shodo-17-first-line-intrinsic-2026-10-12.md) |
 | Frozen raikiri S4 residual fields, all109 document classification and caller gaps | [raikiri style diagnostics](records/raikiri-style-diagnostics.md) |
 | Representative caller wiring of hanging-punctuation none/first | [raikiri hanging-punctuation](records/raikiri-hanging-punctuation.md) |
 | Representative caller ownership split of flow/paint CSS | [raikiri style handoff](records/raikiri-style-handoff.md) |
