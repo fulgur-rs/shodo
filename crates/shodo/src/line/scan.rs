@@ -8,6 +8,38 @@ use crate::output::BreakReason;
 use crate::paragraph::{AtomicSizes, ParagraphData};
 use crate::style::TabSize;
 
+/// The suffix and spacing of a candidate include the closing units that will
+/// be pulled onto its line. The live scan/index cursor stays at the text cut.
+pub(super) fn candidate_end<'a>(
+    data: &'a ParagraphData,
+    mut end: usize,
+    spacing: &super::spacing_summary::Cursor<'a>,
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> (
+    usize,
+    LayoutUnit,
+    Option<super::spacing_summary::Cursor<'a>>,
+) {
+    let mut pulled = LayoutUnit::ZERO;
+    let mut candidate_spacing = None;
+    if data.units.get(end).is_some() && super::pulls_after_break(data, end) {
+        let mut cursor = spacing.clone();
+        while data.units.get(end).is_some() && super::pulls_after_break(data, end) {
+            pulled = pulled.add(
+                unit_width(data, &data.units[end], LayoutUnit::ZERO, atomics, cx, sat),
+                sat,
+            );
+            super::spacing::push(data, &mut cursor, end);
+            end += 1;
+        }
+        candidate_spacing = Some(cursor);
+    }
+    let suffix = pulled.add(super::decoration::width(data, end, false, sat), sat);
+    (end, suffix, candidate_spacing)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn scan(
     data: &ParagraphData,
@@ -169,29 +201,19 @@ pub(super) fn scan(
         // actual edges now, and measure Clone decoration after them so those
         // edges are not counted twice. The candidate summary includes their
         // punctuation-hanging barriers, while the live scan stays unchanged.
-        let mut break_end = i + 1;
-        let mut pulled = LayoutUnit::ZERO;
-        let mut candidate_spacing = None;
-        if !count_mode
+        let (break_end, suffix, mut candidate_spacing) = if !count_mode
             && matches!(
                 unit.break_after,
                 BreakClass::Allowed | BreakClass::Emergency | BreakClass::Hyphen
+            ) {
+            candidate_end(data, i + 1, &spacing, atomics, cx, sat)
+        } else {
+            (
+                i + 1,
+                super::decoration::width(data, i + 1, false, sat),
+                None,
             )
-            && units.get(break_end).is_some()
-            && super::pulls_after_break(data, break_end)
-        {
-            let mut cursor = spacing.clone();
-            while units.get(break_end).is_some() && super::pulls_after_break(data, break_end) {
-                pulled = pulled.add(
-                    unit_width(data, &units[break_end], LayoutUnit::ZERO, atomics, cx, sat),
-                    sat,
-                );
-                super::spacing::push(data, &mut cursor, break_end);
-                break_end += 1;
-            }
-            candidate_spacing = Some(cursor);
-        }
-        let suffix = pulled.add(super::decoration::width(data, break_end, false, sat), sat);
+        };
         let ruby_delta =
             crate::ruby::measure::candidate_adjustment(data, start, i + 1, atomics, cx, sat);
         let transparent =
@@ -274,16 +296,7 @@ pub(super) fn scan(
         let extent =
             if !count_mode && (!hangs || paragraph_end) && !overflowing && extent > available {
                 let summary = if paragraph_end && hangs {
-                    // The current final unit hangs, so the prefix's first
-                    // hanging space is also the full line's hang_start. Keep
-                    // intervening closing edges in the summary, as prepare
-                    // does during materialization, so they still block hanging.
-                    let (end, _) = super::whitespace::trailing(data, start, i, &widths, sat);
-                    let mut cursor = super::spacing_summary::Cursor::default();
-                    for at in start..end {
-                        super::spacing::push(data, &mut cursor, at);
-                    }
-                    cursor.summary(Some(data))
+                    super::punctuation::before_hanging_space(data, start, i, &widths, sat)
                 } else {
                     candidate_spacing
                         .as_ref()
@@ -429,12 +442,7 @@ pub(super) fn scan(
                     },
                     end: i,
                     pos,
-                    summary: super::spacing::hyphen_summary(
-                        data,
-                        candidate_spacing.as_ref().unwrap_or(&spacing),
-                        i - 1,
-                        sat,
-                    ),
+                    summary: super::spacing::hyphen_summary(data, &spacing, i - 1, break_end, sat),
                     hanging,
                     suffix,
                     ruby_delta,

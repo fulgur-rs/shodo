@@ -326,7 +326,8 @@ impl Paragraph {
                     continue;
                 }
                 let tracking = if hyphen.is_some() {
-                    super::spacing::hyphen_summary(data, &word_spacing, i, &mut sat).width(&mut sat)
+                    super::spacing::hyphen_summary(data, &word_spacing, i, i + 1, &mut sat)
+                        .width(&mut sat)
                 } else {
                     kept_word_spacing
                 };

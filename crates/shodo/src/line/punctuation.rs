@@ -617,6 +617,24 @@ pub(super) fn edges(
     value
 }
 
+/// Visible spacing before a final hanging space not yet added to `widths`.
+/// Unlike trailing_start, the materialization boundary keeps closing-edge
+/// barriers between the visible text and that space.
+pub(super) fn before_hanging_space(
+    data: &ParagraphData,
+    start: usize,
+    at: usize,
+    widths: &[LayoutUnit],
+    sat: &mut Saturation,
+) -> super::spacing_summary::Summary {
+    let (end, _) = super::whitespace::trailing(data, start, at, widths, sat);
+    let mut cursor = super::spacing_summary::Cursor::default();
+    for i in start..end {
+        super::spacing::push(data, &mut cursor, i);
+    }
+    cursor.summary(Some(data))
+}
+
 /// Width that punctuation trimming and hanging take off the edges of the
 /// line summarized by `spacing`, whose natural width is `natural`.
 pub(super) fn removed<'a>(

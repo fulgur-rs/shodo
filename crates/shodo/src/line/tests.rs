@@ -1005,3 +1005,231 @@ fn paragraph_end_keeps_closing_edges_before_hanging_whitespace() {
         }
     }
 }
+
+fn assert_narrow_retries_match_fresh(p: &crate::Paragraph, width: f32) {
+    let options = LineOptions::default();
+    let mut token = p.start_token();
+    loop {
+        let crate::LineResult::Line(fresh) = p.next_line(
+            &mut LayoutContext::new(),
+            token,
+            &options,
+            &crate::LineConstraint::new(width),
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("fresh line at {width}px");
+        };
+        let mut cx = LayoutContext::new();
+        assert!(matches!(
+            p.next_line(
+                &mut cx,
+                token,
+                &options,
+                &crate::LineConstraint::new(1000.0),
+                &AtomicSizes::EMPTY,
+            ),
+            crate::LineResult::Line(_)
+        ));
+        assert!(cx.partial.is_some());
+        let scans = cx.cache_visits;
+        let crate::LineResult::Line(retry) = p.next_line(
+            &mut cx,
+            token,
+            &options,
+            &crate::LineConstraint::new(width),
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("cached retry at {width}px");
+        };
+        assert!(
+            retry.inline_size() <= width,
+            "{width}px: {:?} is {}px",
+            retry.text_range(),
+            retry.inline_size()
+        );
+        assert_eq!(retry.text_range(), fresh.text_range(), "{width}px");
+        assert_eq!(retry.inline_size(), fresh.inline_size(), "{width}px");
+        assert_eq!(retry.break_reason(), fresh.break_reason(), "{width}px");
+        assert_eq!(retry.break_token(), fresh.break_token());
+        assert_eq!(cx.cache_visits, scans, "retry must reuse its scan");
+        assert!(cx.cache_prepare_visits > 0);
+        assert!(cx.take_warnings().is_empty());
+        if fresh.break_reason() == BreakReason::End {
+            break;
+        }
+        token = fresh.break_token();
+    }
+}
+
+#[test]
+fn paragraph_end_retries_check_hanging_space_width() {
+    let fonts = final_review_fonts();
+    fonts
+        .register_face(
+            crate::test_support::fonts::LATIN.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Shodo Fixture Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    for collapse in [
+        crate::style::WhiteSpaceCollapse::Collapse,
+        crate::style::WhiteSpaceCollapse::Preserve,
+    ] {
+        let mut style = ParagraphStyle::default();
+        style.root.font_families = vec![crate::style::FontFamily::Named(
+            "Shodo Fixture Latin".into(),
+        )];
+        style.root.font_size = 16.0;
+        style.root.white_space_collapse = collapse;
+        let mut b = ParagraphBuilder::new(&style, &Limits::default());
+        b.with_line_break_override(|_| crate::LineBreakOverride::Allow);
+        b.push_text(
+            TextSource::Generated { node: NodeId(1) },
+            "\u{202e}VAVAVAVAVAVA ",
+        );
+        let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+        for width in [28.125, 28.25, 28.625, 28.75] {
+            assert_narrow_retries_match_fresh(&p, width);
+        }
+    }
+}
+
+#[test]
+fn paragraph_end_retries_check_pulled_closing_edges() {
+    for decoration in [
+        crate::style::BoxDecorationBreak::Slice,
+        crate::style::BoxDecorationBreak::Clone,
+    ] {
+        let mut edges = InlineEdges::default();
+        edges.padding.inline_end = 1.0;
+        edges.border.inline_end = 0.5;
+        let p = closing_units_with(
+            Terminator::End,
+            0,
+            false,
+            (edges, decoration),
+            "\u{200b}",
+            crate::style::WhiteSpaceCollapse::Collapse,
+            false,
+        );
+        for width in [19.171875, 28.125, 28.625, 29.875] {
+            assert_narrow_retries_match_fresh(&p, width);
+        }
+    }
+}
+
+#[test]
+fn hyphen_before_closing_controls_fits_at_its_materialized_width() {
+    let fonts = final_review_fonts();
+    fonts
+        .register_face(
+            crate::test_support::fonts::LATIN.to_vec(),
+            0,
+            crate::font::FontFaceDescriptor {
+                family: "Shodo Fixture Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    for isolate in [false, true] {
+        let mut style = ParagraphStyle::default();
+        style.root.font_families = vec![crate::style::FontFamily::Named(
+            "Shodo Fixture Latin".into(),
+        )];
+        style.root.font_size = 16.0;
+        let mut rtl = style.root.clone();
+        rtl.direction = crate::geometry::Direction::Rtl;
+        rtl.unicode_bidi = if isolate {
+            crate::style::UnicodeBidi::IsolateOverride
+        } else {
+            crate::style::UnicodeBidi::BidiOverride
+        };
+        let mut b = ParagraphBuilder::new(&style, &Limits::default());
+        b.open_inline(NodeId(2), &rtl, InlineEdges::default());
+        b.push_text(TextSource::Generated { node: NodeId(3) }, ",VA VA\u{ad}");
+        b.close_inline();
+        b.push_atomic(NodeId(9), &style.root, InlineEdges::default());
+        let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+        let mut atomics = AtomicSizes::new();
+        atomics.insert(
+            NodeId(9),
+            AtomicSize {
+                inline_size: 2000.0,
+                ..Default::default()
+            },
+        );
+        let options = LineOptions {
+            hanging_punctuation: crate::style::HangingPunctuation {
+                force_end: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut cx = LayoutContext::new();
+        let crate::LineResult::Line(wide) = p.next_line(
+            &mut cx,
+            p.start_token(),
+            &options,
+            &crate::LineConstraint::new(1000.0),
+            &atomics,
+        ) else {
+            panic!("wide hyphen line");
+        };
+        assert!(wide.fragments().any(|f| {
+            match f {
+                Fragment::GlyphRun(run) => run
+                    .clusters()
+                    .any(|c| c.source_char == Some('\u{ad}') && c.advance > 0.0),
+                _ => false,
+            }
+        }));
+        let scans = cx.cache_visits;
+        for width in [
+            wide.inline_size() + 1.0 / 64.0,
+            wide.inline_size(),
+            wide.inline_size() - 1.0 / 64.0,
+            wide.inline_size() - 1.0 / 64.0,
+        ] {
+            let crate::LineResult::Line(fresh) = p.next_line(
+                &mut LayoutContext::new(),
+                p.start_token(),
+                &options,
+                &crate::LineConstraint::new(width),
+                &atomics,
+            ) else {
+                panic!("fresh hyphen line");
+            };
+            if width >= wide.inline_size() {
+                assert_eq!(fresh.text_range(), wide.text_range(), "isolate={isolate}");
+                assert_eq!(fresh.inline_size(), wide.inline_size());
+                assert_eq!(fresh.break_reason(), wide.break_reason());
+            } else {
+                assert!(fresh.text_range().end < wide.text_range().end);
+            }
+            let crate::LineResult::Line(retry) = p.next_line(
+                &mut cx,
+                p.start_token(),
+                &options,
+                &crate::LineConstraint::new(width),
+                &atomics,
+            ) else {
+                panic!("cached hyphen line");
+            };
+            assert_eq!(
+                retry.text_range(),
+                fresh.text_range(),
+                "isolate={isolate}, width={width}"
+            );
+            assert_eq!(retry.inline_size(), fresh.inline_size());
+            assert_eq!(retry.break_reason(), fresh.break_reason());
+            assert_eq!(retry.break_token(), fresh.break_token());
+            assert!(retry.inline_size() <= width);
+            assert_eq!(cx.cache_visits, scans);
+        }
+        assert!(cx.cache_prepare_visits > 0);
+        assert!(cx.take_warnings().is_empty());
+    }
+}
