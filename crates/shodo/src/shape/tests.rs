@@ -113,6 +113,36 @@ fn glyph_order_uses_corrected_clusters_and_preserves_ties() {
     }
 }
 
+#[test]
+fn descending_glyph_clusters_reverse_groups_without_stable_sorting() {
+    for (clusters, leading_end, expected) in [
+        (&[8, 4, 4, 0, 0][..], 0, &[3, 4, 1, 2, 0][..]),
+        // The correction merges the last three glyphs into one tie group.
+        (&[8, 6, 2, 1][..], 4, &[2, 3, 1, 0][..]),
+    ] {
+        let infos: Vec<_> = clusters
+            .iter()
+            .map(|&cluster| {
+                let mut info = harfrust::GlyphInfo::default();
+                info.cluster = cluster;
+                info
+            })
+            .collect();
+        GLYPH_ORDER_STABLE_SORTS.with(|count| count.set(0));
+
+        assert_eq!(
+            glyph_order(&infos, leading_end).as_deref(),
+            Some(expected),
+            "clusters={clusters:?}, leading_end={leading_end}"
+        );
+        assert_eq!(
+            GLYPH_ORDER_STABLE_SORTS.with(std::cell::Cell::get),
+            0,
+            "descending cluster groups should not use the stable-sort fallback"
+        );
+    }
+}
+
 #[derive(Clone, Copy)]
 struct WidthProbeCase {
     name: &'static str,

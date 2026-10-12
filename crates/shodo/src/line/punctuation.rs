@@ -251,6 +251,14 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
             result[index].advance = result[index].advance.add(data.glyphs.advance[g], sat);
         }
     }
+    if !result.iter().any(|p| {
+        matches!(
+            p.class,
+            PunctuationClass::Opening | PunctuationClass::Closing | PunctuationClass::Middle
+        )
+    }) {
+        return result;
+    }
     let mut shaping = 0;
     let mut geometry: Vec<FontGeometry<'_>> = Vec::new();
     for run in &data.runs {

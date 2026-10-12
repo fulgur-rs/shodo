@@ -317,13 +317,7 @@ pub(crate) fn analyze_breaks(
             (projection.upstream(at), start)
         })
         .unzip();
-    let mut caret_cuts: Vec<_> = graphemes
-        .iter()
-        .chain(&typographic_starts)
-        .copied()
-        .collect();
-    caret_cuts.sort_unstable();
-    caret_cuts.dedup();
+    let mut caret_cuts = crate::sorted::merge_sorted_unique(&graphemes, &typographic_starts);
     caret_cuts.retain(|cut| {
         let index = input.indivisible.partition_point(|r| r.end <= *cut);
         !input

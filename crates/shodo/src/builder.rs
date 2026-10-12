@@ -126,7 +126,7 @@ pub struct ParagraphBuilder {
     /// Explicit alternatives, keyed by the normal/alternate pair's index.
     /// Sparse storage adds no alternate style allocations to legacy inputs.
     pub(crate) first_line_styles: HashMap<u32, InlineStyle>,
-    style_index: HashMap<u64, Vec<u32>>,
+    style_index: crate::hashing::FastMap<u64, Vec<u32>>,
     /// Data and keys already retained by this builder, excluding ruby inputs.
     pub(crate) style_bytes: u64,
     /// Index of the most recently interned or reused style.
@@ -163,7 +163,7 @@ impl ParagraphBuilder {
             items: Vec::new(),
             styles: Vec::new(),
             first_line_styles: HashMap::new(),
-            style_index: HashMap::new(),
+            style_index: crate::hashing::FastMap::default(),
             style_bytes: 0,
             last_interned: 0,
             stack: Vec::new(),

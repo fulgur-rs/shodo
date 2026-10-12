@@ -20,6 +20,49 @@ std::thread_local! {
 }
 
 #[test]
+fn ordinary_text_skips_punctuation_font_metric_preparation() {
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            crate::test_support::fonts::LATIN.to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let style = ParagraphStyle {
+        root: InlineStyle {
+            font_families: vec![FontFamily::Named("Latin".into())],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let builder = crate::RichText::with_limits(&style, &limits).push("ordinary text", &style.root);
+    METRIC_PROBES.with(|count| count.set(0));
+
+    let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+
+    assert!(!paragraph.data.runs.is_empty());
+    assert!(
+        paragraph
+            .data
+            .punctuation
+            .iter()
+            .all(|p| p.class == P::Other)
+    );
+    assert_eq!(METRIC_PROBES.with(std::cell::Cell::get), 0);
+}
+
+#[test]
 fn repeated_punctuation_reuses_metrics_across_language_runs_and_keeps_sizes_distinct() {
     let limits = Limits::default();
     let fonts = FontCollection::with_options(
