@@ -46,6 +46,8 @@ jobs:
             exit 1
           fi
       - run: cargo test --workspace
+      - run: cargo test -p shodo-bench --example match_eviction_algorithms
+      - run: cargo run -p shodo-bench --example match_cache_eviction -- warm 256 256 4 1024 1 2 16
       - name: Check line cache with debug assertions disabled
         run: cargo test --release -p shodo --lib line::cache::tests
       - run: cargo test --workspace --features shodo-harness/accesskit
