@@ -138,8 +138,11 @@ impl Summary {
                             // that no unit edge has an ideograph class or a
                             // punctuation blank that a pair could use, and
                             // that there are no autospace spaces, so the
-                            // boundary term is zero.
-                            if d.needs_spacing {
+                            // boundary term is zero. That holds only for edges
+                            // of `d` itself: intrinsic sizing carries a cursor
+                            // from the first-line dataset into the normal one,
+                            // so a paragraph with a first line keeps the term.
+                            if d.needs_spacing || d.first_line.is_some() {
                                 boundary(d, a, b)
                             } else {
                                 debug_assert_eq!(boundary(d, a, b), 0);

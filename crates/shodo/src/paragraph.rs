@@ -107,7 +107,9 @@ pub(crate) struct ParagraphData {
     pub(crate) internal_autospace_gaps: Vec<crate::line::autospace::Gap>,
     /// Whether any unit boundary can carry letter or word spacing,
     /// punctuation spacing or autospace. When it cannot, every boundary
-    /// term of a spacing summary join is zero and joins skip computing it.
+    /// term of a spacing summary join is zero and joins skip computing it
+    /// (unless the paragraph has a first-line dataset, whose edges can reach
+    /// a join with this data).
     /// It stays `true` while the summaries themselves are being built.
     pub(crate) needs_spacing: bool,
     pub(crate) spacing_tree: crate::line::autospace::Tree,
