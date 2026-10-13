@@ -87,10 +87,11 @@ Normal tests and `--check` run offline; they never modify expected data. Maintai
 regeneration needs Python and the exact FontTools version in tools/requirements.txt:
 
 ```sh
-python3 -m venv /tmp/shodo-fonttools
-/tmp/shodo-fonttools/bin/python -m pip install -r tools/requirements.txt
-/tmp/shodo-fonttools/bin/python -m unittest discover -s tools -v
-/tmp/shodo-fonttools/bin/python tools/fixtures/regenerate.py --rebuild
+mkdir -p "$HOME/tmp"
+python3 -m venv "$HOME/tmp/shodo-fonttools"
+"$HOME/tmp/shodo-fonttools/bin/python" -m pip install -r tools/requirements.txt
+TMPDIR="$HOME/tmp" "$HOME/tmp/shodo-fonttools/bin/python" -m unittest discover -s tools -v
+"$HOME/tmp/shodo-fonttools/bin/python" tools/fixtures/regenerate.py --rebuild
 ```
 
 `--rebuild` downloads only the pinned sources, verifies each original checksum,
@@ -99,6 +100,25 @@ the generated checksums to match. It never replaces checked-in fonts or the mani
 To avoid downloads, pass `--sources-dir /path/to/originals` with `latin.ttf`, `cjk.otf`
 `arabic.ttf`, `emoji-color.ttf` and `emoji-mono.ttf` downloaded from the manifest URLs. Inputs must still match the
 recorded hashes. Subset ordering is canonical and original timestamps are preserved.
+
+Each original source has a 32MiB byte ceiling and a 60-second transfer deadline,
+including connection setup, headers, redirect chains, body and chunk framing.
+The same limits apply to local `--sources-dir` files. An isolated Python worker
+reads bounded chunks; the parent kills and reaps it on timeout or interruption.
+Remote source URLs and every redirect must use HTTP or HTTPS; FTP and other
+schemes are rejected before opening their protocol handlers. Offline originals
+remain supported through `--sources-dir`. Redirects retain urllib's validation
+and loop limits, while their unused response
+bodies are closed without draining. Incomplete, excessive or timed-out sources
+fail before hashing/subsetting and before any asset publication. The five pinned
+originals fit within this ceiling; the 768KiB limit remains the separate total
+budget for generated subsets.
+
+The deadline accounts for process startup time, but OS process creation and
+termination/waiting may add latency; it is not a hard real-time wall-clock
+guarantee ([Python subprocess documentation](https://docs.python.org/3.12/library/subprocess.html)).
+`--check` remains offline and does not start source workers. Source fetching adds
+no Python dependency beyond the standard library.
 
 For an intentional corpus/coverage/font update:
 

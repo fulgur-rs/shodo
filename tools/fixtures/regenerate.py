@@ -6,11 +6,133 @@ import io
 import json
 import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
-from urllib.request import urlopen
+import time
+from urllib.parse import urlsplit
+from urllib.request import HTTPRedirectHandler, build_opener
 
 FONTTOOLS_VERSION = '4.61.1'
 FONT_BUDGET = 768 * 1024
+SOURCE_MAX_BYTES = 32 * 1024 * 1024
+SOURCE_TRANSFER_SECONDS = 60
+SOURCE_CHUNK_BYTES = 64 * 1024
+
+# A fixed worker program, with all source data passed as argv, never shell/code.
+# Import this same module without invoking its maintainer CLI.
+_SOURCE_WORKER = '''
+import importlib.util
+import sys
+spec = importlib.util.spec_from_file_location('_fixture_source', sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+try:
+    module._copy_source(sys.argv[2], sys.argv[3] == 'remote', int(sys.argv[4]), sys.stdout.buffer)
+except module._SourceTooLarge:
+    sys.exit(2)
+except Exception:
+    sys.exit(1)
+'''
+
+
+class _SourceTooLarge(ValueError):
+    pass
+
+
+class _ClosedRedirectBody:
+    def __init__(self, response):
+        self.response = response
+
+    def read(self, *args):
+        return b''
+
+    def __getattr__(self, name):
+        return getattr(self.response, name)
+
+
+class _RedirectWithoutBody(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _require_http_source(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    def http_error_302(self, req, fp, code, msg, headers):
+        # urllib drains redirect bodies with an unbounded read(). This request
+        # will use a new connection, so discard/close that body and retain the
+        # standard redirect URL, credential, method and loop validation.
+        fp.close()
+        return super().http_error_302(req, _ClosedRedirectBody(fp), code, msg, headers)
+
+    http_error_301 = http_error_303 = http_error_307 = http_error_308 = http_error_302
+
+
+def _require_http_source(location):
+    # FTP welcome/control replies can accumulate before a bounded body reader
+    # runs. Keep remote sources and every redirect on HTTP(S); offline originals
+    # remain available through --sources-dir.
+    if urlsplit(location).scheme not in ('http', 'https'):
+        raise ValueError('remote font sources require HTTP or HTTPS')
+
+
+def _copy_bounded(stream, output, max_bytes):
+    total = 0
+    while True:
+        chunk = stream.read(min(SOURCE_CHUNK_BYTES, max_bytes - total + 1))
+        if not chunk:
+            return total
+        total += len(chunk)
+        if total > max_bytes:
+            raise _SourceTooLarge('font source exceeds byte ceiling')
+        output.write(chunk)
+
+
+def _copy_source(location, remote, max_bytes, output):
+    if remote:
+        _require_http_source(location)
+        opener = build_opener(_RedirectWithoutBody())
+        with opener.open(location, timeout=SOURCE_TRANSFER_SECONDS) as response:
+            copied = _copy_bounded(response, output, max_bytes)
+            # HTTPResponse.read(n) can silently return EOF on a truncated
+            # Content-Length body, unlike the former read(). Preserve rejection
+            # before hashing. Chunked responses use their framing instead.
+            if response.headers.get('Transfer-Encoding', '').lower() != 'chunked':
+                try:
+                    expected = int(response.headers.get('Content-Length'))
+                except (TypeError, ValueError):
+                    expected = None
+                if expected is not None and expected >= 0 and copied != expected:
+                    raise ValueError('incomplete font source response')
+    else:
+        with Path(location).open('rb') as source:
+            _copy_bounded(source, output, max_bytes)
+
+
+def _read_source(location, remote=False):
+    # Per-socket timeouts cannot bound DNS/open, slow-drip headers, or a single
+    # read's chunk metadata/trailers. Supervise the whole source operation in a
+    # disposable process; only a successful, bounded payload reaches hashing.
+    deadline = time.monotonic() + SOURCE_TRANSFER_SECONDS
+    command = [sys.executable, '-B', '-c', _SOURCE_WORKER, str(Path(__file__).resolve()),
+               str(location), 'remote' if remote else 'local', str(SOURCE_MAX_BYTES)]
+    with subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                          stderr=subprocess.DEVNULL) as worker:
+        try:
+            data, _ = worker.communicate(timeout=max(0, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired as error:
+            raise ValueError('font source transfer deadline exceeded') from error
+        finally:
+            # Also recover the worker after KeyboardInterrupt/unexpected errors.
+            # Process creation and OS kill/wait cannot be a real-time guarantee.
+            if worker.poll() is None:
+                worker.kill()
+            worker.wait()
+        if time.monotonic() > deadline:
+            raise ValueError('font source transfer deadline exceeded')
+        if worker.returncode == 2 or len(data) > SOURCE_MAX_BYTES:
+            raise ValueError(f'font source exceeds {SOURCE_MAX_BYTES} bytes')
+        if worker.returncode != 0:
+            raise ValueError('font source read failed')
+        return data
 
 
 def digest(data):
@@ -95,9 +217,9 @@ def rebuild(root, sources_dir=None, update=False):
     # Stage every source and result before touching any checked-in file.
     for entry in manifest['fonts']:
         if sources_dir is None:
-            data = urlopen(entry['source_url'], timeout=60).read()
+            data = _read_source(entry['source_url'], remote=True)
         else:
-            data = (sources_dir / entry['source_file']).read_bytes()
+            data = _read_source(sources_dir / entry['source_file'])
         validate_source(data, entry['source_sha256'])
         cases = json.loads((root / entry.get('corpus', 'assets/cases.json')).read_text(encoding='utf-8'))
         result = subset_font(data, entry, cases)
