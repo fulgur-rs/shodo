@@ -2,6 +2,7 @@
 
 use super::*;
 
+mod analysis_budget;
 mod paint_reuse;
 
 #[cfg(test)]
@@ -11,6 +12,9 @@ std::thread_local! {
 
 #[cfg(test)]
 mod paint_reuse_tests;
+
+#[cfg(test)]
+mod analysis_budget_tests;
 
 /// Context-free work that can be completed before a shaping context is
 /// available.
@@ -37,6 +41,7 @@ struct PreparedBuild {
     breaks: crate::analysis::breaks::BreakAnalysis,
     bidi: crate::analysis::bidi::BidiAnalysis,
     used_direction: Direction,
+    analysis_budget: analysis_budget::Budget,
 }
 
 impl ParagraphAnalysis {
@@ -180,6 +185,10 @@ impl Paragraph {
         let mut input_limits = run_limits.clone();
         input_limits.max_text_bytes = limits.max_text_bytes;
         bases.start_pass(false)?;
+        let mut analysis_budget = analysis_budget::Budget::new(&run_limits);
+        analysis_budget
+            .raw(&text, &items, &mut bases)
+            .map_err(|error| bases.translate(error, budget))?;
         // First-line styles cannot change white-space-collapse, so both raw
         // passes use the same flags. Keep only this pure input shared; each
         // pass still owns its Processor, output, and base-budget state.
@@ -201,10 +210,18 @@ impl Paragraph {
             None => crate::analysis::whitespace::process_with_base_scopes(input, &mut bases),
         }
         .map_err(|error| bases.translate(error, budget))?;
-        let source_cuts = alternate_styles
-            .as_ref()
-            .map(|_| crate::analysis::breaks::source_cursor_ranges(&processed));
+        let source_cuts = if alternate_styles.is_some() {
+            analysis_budget
+                .source_cuts(&processed, &mut bases)
+                .map_err(|error| bases.translate(error, budget))?;
+            Some(crate::analysis::breaks::source_cursor_ranges(&processed))
+        } else {
+            None
+        };
         let input_items = processed.items.len() as u64;
+        analysis_budget
+            .transform(&processed, &styles, style.writing_mode, &mut bases)
+            .map_err(|error| bases.translate(error, budget))?;
         let mut processed = transform_with_base_scopes(
             processed,
             &styles,
@@ -221,6 +238,15 @@ impl Paragraph {
         if alternate_styles.is_none() {
             processed.source_spans = Vec::new();
         }
+        analysis_budget
+            .analysis(
+                &processed,
+                &styles,
+                &style,
+                alternate_styles.is_some(),
+                &mut bases,
+            )
+            .map_err(|error| bases.translate(error, budget))?;
         let normal = analyze_data(
             style.clone(),
             limits.clone(),
@@ -231,7 +257,9 @@ impl Paragraph {
             &mut warnings,
             true,
             line_break_override.as_deref(),
+            analysis_budget,
         );
+        budget.charge(LimitKind::AnalysisBytes, normal.analysis_budget.used)?;
         budget.charge(
             LimitKind::MappingBytes,
             normal.processed.mapping_budget.used,
@@ -282,6 +310,9 @@ impl Paragraph {
                 remaining.max_mapping_bytes = limits
                     .max_mapping_bytes
                     .map(|max| max.saturating_sub(normal.processed.mapping_budget.used));
+                remaining.max_analysis_bytes = limits
+                    .max_analysis_bytes
+                    .map(|max| max.saturating_sub(normal.analysis_budget.used));
             }
             // Bound source processing independently, then enforce the aggregate
             // retained-output budget on every alternate append.
@@ -311,6 +342,9 @@ impl Paragraph {
             alternate_reuses_analysis &= remaining
                 .max_mapping_bytes
                 .is_none_or(|max| max >= normal.processed.mapping_budget.used);
+            alternate_reuses_analysis &= remaining
+                .max_analysis_bytes
+                .is_none_or(|max| max >= normal.analysis_budget.replay_bytes());
             let alternate = if alternate_reuses_analysis {
                 // Reserve the same producer/index allowances as replaying the
                 // normal dataset, before its deep Processed clone.
@@ -319,6 +353,7 @@ impl Paragraph {
                     LimitKind::MappingBytes,
                     normal.processed.mapping_budget.used,
                 )?;
+                let analysis_budget = normal.analysis_budget.replay(&remaining)?;
                 PreparedBuild {
                     style: alternate_style,
                     limits: limits.clone(),
@@ -330,35 +365,68 @@ impl Paragraph {
                     breaks: normal.breaks.clone(),
                     bidi: normal.bidi.clone(),
                     used_direction: normal.used_direction,
+                    analysis_budget,
                 }
             } else {
-                let alternate = crate::analysis::whitespace::process_with_base_scopes_and_flags(
-                    crate::analysis::whitespace::ProcessInput {
-                        raw_text: &text,
-                        raw: &items,
-                        styles: &normal.styles,
-                        with_mapping: offset_mapping,
-                        limits: &input_limits,
-                        annotation: ruby_annotation,
-                    },
-                    flags,
-                    &mut alternate_bases,
-                )
-                .and_then(|processed| {
-                    transform_with_base_scopes(
-                        processed,
-                        &alternate_styles,
-                        &remaining,
-                        &mut deferred_warnings,
-                        style.writing_mode,
-                        if alternate_bases.enabled() {
-                            Some(&mut alternate_bases)
-                        } else {
-                            None
-                        },
-                    )
-                })
-                .map_err(|mut error| {
+                let mut analysis_budget = analysis_budget::Budget::new(&remaining);
+                let result = analysis_budget
+                    .raw(&text, &items, &mut alternate_bases)
+                    .and_then(|()| {
+                        crate::analysis::whitespace::process_with_base_scopes_and_flags(
+                            crate::analysis::whitespace::ProcessInput {
+                                raw_text: &text,
+                                raw: &items,
+                                styles: &normal.styles,
+                                with_mapping: offset_mapping,
+                                limits: &input_limits,
+                                annotation: ruby_annotation,
+                            },
+                            flags,
+                            &mut alternate_bases,
+                        )
+                    })
+                    .and_then(|processed| {
+                        analysis_budget.transform(
+                            &processed,
+                            &alternate_styles,
+                            style.writing_mode,
+                            &mut alternate_bases,
+                        )?;
+                        transform_with_base_scopes(
+                            processed,
+                            &alternate_styles,
+                            &remaining,
+                            &mut deferred_warnings,
+                            style.writing_mode,
+                            if alternate_bases.enabled() {
+                                Some(&mut alternate_bases)
+                            } else {
+                                None
+                            },
+                        )
+                    })
+                    .and_then(|alternate| {
+                        analysis_budget.analysis(
+                            &alternate,
+                            &alternate_styles,
+                            &alternate_style,
+                            true,
+                            &mut alternate_bases,
+                        )?;
+                        Ok(analyze_data(
+                            alternate_style,
+                            limits.clone(),
+                            remaining.max_shaped_glyphs,
+                            alternate,
+                            alternate_styles,
+                            id,
+                            &mut deferred_warnings,
+                            false,
+                            line_break_override.as_deref(),
+                            analysis_budget,
+                        ))
+                    });
+                result.map_err(|mut error| {
                     if budget.enabled() {
                         return alternate_bases.translate(error, budget);
                     }
@@ -382,20 +450,16 @@ impl Paragraph {
                             .saturating_add(normal.processed.mapping_budget.used);
                         error.limit = limit;
                     }
+                    if error.kind == LimitKind::AnalysisBytes
+                        && let Some(limit) = limits.max_analysis_bytes
+                    {
+                        error.actual = error.actual.saturating_add(normal.analysis_budget.used);
+                        error.limit = limit;
+                    }
                     error
-                })?;
-                analyze_data(
-                    alternate_style,
-                    limits.clone(),
-                    remaining.max_shaped_glyphs,
-                    alternate,
-                    alternate_styles,
-                    id,
-                    &mut deferred_warnings,
-                    false,
-                    line_break_override.as_deref(),
-                )
+                })?
             };
+            budget.charge(LimitKind::AnalysisBytes, alternate.analysis_budget.used)?;
             budget.charge(
                 LimitKind::MappingBytes,
                 alternate.processed.mapping_budget.used,
@@ -660,6 +724,7 @@ fn analyze_data(
     warnings: &mut WarningSink,
     report_combine_rejections: bool,
     line_break_override: Option<&crate::analysis::breaks::OverrideCallback>,
+    analysis_budget: analysis_budget::Budget,
 ) -> PreparedBuild {
     #[cfg(test)]
     ANALYSIS_PASSES.with(|count| count.set(count.get() + 1));
@@ -723,6 +788,7 @@ fn analyze_data(
         breaks,
         bidi,
         used_direction,
+        analysis_budget,
     }
 }
 
@@ -794,6 +860,7 @@ fn build_data(
         breaks,
         bidi,
         used_direction,
+        analysis_budget: _,
     } = prepared;
     let mut shape_limits = limits.clone();
     shape_limits.max_shaped_glyphs = glyph_budget;

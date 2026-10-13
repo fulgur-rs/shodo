@@ -319,6 +319,40 @@ impl BaseScopes {
         self.charge(self.current, LimitKind::MappingBytes, bytes)
     }
 
+    /// Preflight raw-byte flags before whitespace creates the processed owner
+    /// table. The caller walks before_raw/after_raw without recording items.
+    pub(crate) fn analysis_raw(&mut self, bytes: u64) -> Result<(), LimitExceeded> {
+        self.charge(self.current, LimitKind::AnalysisBytes, bytes)
+    }
+
+    /// Like retained style slots, these whole-table allowances use the scope's
+    /// imported indices (which already include its descendants' styles).
+    pub(crate) fn analysis_styles(
+        &mut self,
+        styles: &[crate::style::InlineStyle],
+        bytes: impl Fn(&crate::style::InlineStyle) -> u64,
+    ) -> Result<(), LimitExceeded> {
+        for scope in &mut self.scopes {
+            let added = scope.style_indices.iter().fold(0u64, |sum, &i| {
+                sum.saturating_add(bytes(&styles[i as usize]))
+            });
+            let actual = scope
+                .spent
+                .get(LimitKind::AnalysisBytes)
+                .saturating_add(added);
+            if let Err(error) = Limits::check(
+                scope.limits.max_analysis_bytes,
+                LimitKind::AnalysisBytes,
+                actual,
+            ) {
+                self.failure = Some(error);
+                return Err(error);
+            }
+            scope.spent.add(LimitKind::AnalysisBytes, added);
+        }
+        Ok(())
+    }
+
     /// Whether charging `charges` (item index, glyph count) in order would
     /// stay within every owning scope chain, without touching `spent` or
     /// `failure`. Charges are non-negative and saturating addition is

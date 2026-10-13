@@ -13,6 +13,17 @@ use icu_segmenter::{GraphemeClusterSegmenter, LineSegmenter};
 use std::collections::BTreeSet;
 use std::ops::Range;
 
+/// A projection can create at most one span and authored-control offset per
+/// scalar. Keep private producer representation sizes next to the producer.
+pub(crate) const PROJECTION_SCALAR_BYTES: u64 =
+    (std::mem::size_of::<ProjectionSpan>() + std::mem::size_of::<u32>()) as u64;
+pub(crate) const PROFILE_BYTES: u64 = std::mem::size_of::<Profile>() as u64;
+
+#[cfg(test)]
+std::thread_local! {
+    pub(crate) static SOURCE_CUT_PASSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// A soft line-break opportunity after CSS and Unicode line-break analysis.
 /// Mandatory breaks are not passed to a caller override.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -220,6 +231,8 @@ impl Projection {
 /// A transform can consume a combining scalar beyond such a marker; only
 /// these source cuts may switch from the alternate to the normal text set.
 pub(crate) fn source_cursor_ranges(input: &Processed) -> Vec<std::ops::RangeInclusive<u32>> {
+    #[cfg(test)]
+    SOURCE_CUT_PASSES.with(|n| n.set(n.get() + 1));
     let projection = Projection::new(input);
     GraphemeClusterSegmenter::new()
         .segment_str(&projection.text)
