@@ -78,3 +78,24 @@ sandbox で失敗した 8 件は次のとおり。production の変更や fixtur
 - `font::source::tests::local_aliases_share_document_blob_after_source_cache_eviction`
 - `font::source::tests::selected_native_verification_limit_stops_before_data_fallback`
 - `font::source::tests::unavailable_or_renamed_native_candidate_uses_the_next_exact_name`
+
+## 最終版の独立 A/B
+
+実装 `585387e` と SHODO-36 compact 基盤 `c26aa6f` を、同じ固定 fixture/lock/Rust 1.97.1/release opt-level 3、CPU 2、warmup 3、独立 3 process × 21 samples で交互に測定した。時間と allocator instrumentation は別 executable。構築は範囲外、出力の収集・破棄は範囲内。
+
+| workload / operation | 36のみ ms | 35追加 ms | 比 | allocation calls 36→35 |
+| --- | ---: | ---: | ---: | ---: |
+| Arabic-long/8 固定反復 | 1.9117 | 1.5888 | 0.8311 | 8,536→6,352 |
+| Arabic-long/64 固定反復 | 71.6011 | 31.2010 | 0.4358 | 283,205→113,818 |
+| Arabic-long/64 3幅循環 | 195.2361 | 87.2750 | 0.4470 | 848,333→353,803 |
+| Latin-long/64 固定反復 | 21.4617 | 13.8325 | 0.6445 | 124,853→69,921 |
+| 多数短段落/64 | 1.4586 | 1.4654 | 1.0046 | 9,799→9,991 |
+| Latin-short/1 | 0.0164 | 0.0149 | 0.9116 | 104→92 |
+
+多数短段落では owner ごとの compact cache 初期化が 192 allocation calls / 130,304 requested bytes を追加した。時間差は小さいが、allocation 改善とは扱わない。最後の context の live requested bytes 差は 2,164 bytes。長文では gross allocation と保持 bytes が減った。幅変更初回の tradeoff と併せて、全 workload に同じ効果を主張しない。
+
+旧基準 `c892cae` と最終 35+36 の warm Arabic-long/64 一回だけを Callgrind で取得すると Ir は 930,062,939→388,065,804（約58.3%減）。これは命令参照数であり実時間ではない。時間の表は36→35だけの比較、Irは旧基準→35+36の比較なので混同しない。
+
+独立レビューは必須修正なし。813ケースの各public/manual/internal経路の全出力・警告が基準と完全一致し、837,421,847 bytes正規化SHA-256は `d22e6d8a0201bfe2ee40201eba58ef6e5704cedc45929d99e8637c83bc8c0616`。別driverで6 workloads ×3幅×4 cycleのglyph/source mapping digest・矩形bits・警告も一致した。元のedge_cache_eviction内部/manual自己比較は基準でもblock offset差で失敗するので、同経路を変更前後で直接比較する一時driverを使い、元fixture/期待値は変更していない。
+
+[全samples・allocation・profile要約・再現source/manifest/lock](shodo-35-measurements-2026-10-14.json)を保存した。JSON driver_source / snapshot_source / width_validation_source / profile_sourceを~/tmpの一時crateへ置き、manifestのCHECKOUTを該当revisionのcheckoutへ置換してoffline buildする。時間版を保存した後、allocation-counting版を別保存してCPU2で交互に実行する。CPU frequency scaling/boostと固定fixture/standaloneの限界を保持する。最終HEADの全workspace・feature・MSRV・Wasmの証明はPR CIを確認してからmergeする。
