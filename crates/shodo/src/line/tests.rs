@@ -810,11 +810,22 @@ fn long_arabic_relayout_reuses_width_measurements_after_glyph_retention_fills() 
     let first = break_all_arabic(&paragraph, 420.0, &mut warm);
     let cold_calls = calls() - before;
     assert!(cold_calls > 100, "fixture must exercise a long edge scan");
+    let first_hits = warm.edge_shapes.measurement_hits;
+    let first_misses = warm.edge_shapes.measurement_misses;
     let before = calls();
     let second = break_all_arabic(&paragraph, 420.0, &mut warm);
     let warm_calls = calls() - before;
     assert_eq!(first, second);
-    eprintln!("cache {:?}", warm.edge_shapes);
+    let hits = warm.edge_shapes.measurement_hits - first_hits;
+    let misses = warm.edge_shapes.measurement_misses - first_misses;
+    assert!(
+        hits > 100 * misses,
+        "warm scalar hits={hits} misses={misses}"
+    );
+    eprintln!(
+        "fixed warm hits={hits} misses={misses} cache={:?}",
+        warm.edge_shapes
+    );
     assert!(
         warm_calls < cold_calls / 3,
         "warm layout reshaped {warm_calls} windows after {cold_calls} cold calls"

@@ -287,3 +287,55 @@ fn compact_measurements_preserve_arithmetic_saturation() {
     );
     assert_eq!(replayed, recorded);
 }
+
+#[test]
+fn zero_delta_edge_measurements_without_a_charge_budget_are_reused() {
+    let limits = Limits {
+        max_reshape_window_bytes: None,
+        ..Limits::default()
+    };
+    let mut p = paragraph("ببب", true, &limits);
+    let data = Arc::get_mut(&mut p.data).unwrap();
+    data.units.last_mut().unwrap().unsafe_to_break = true;
+    let mut cx = LayoutContext::new();
+    assert_eq!(
+        candidate(
+            data,
+            0,
+            data.units.len(),
+            &mut cx,
+            &mut Saturation::default()
+        ),
+        (LayoutUnit::ZERO, true)
+    );
+    assert!(
+        data.edge_shape_calls
+            .load(std::sync::atomic::Ordering::Relaxed)
+            > 0,
+        "fixture must perform an edge reshape before checking retention"
+    );
+    assert!(
+        cx.edge_shapes.measurement((0, data.units.len())).is_some(),
+        "zero delta can still require expensive edge shaping"
+    );
+    cx.edge_shapes.entries.clear();
+    cx.edge_shapes.cost = cx.edge_shapes.measurement_storage_cost();
+    let before = data
+        .edge_shape_calls
+        .load(std::sync::atomic::Ordering::Relaxed);
+    assert_eq!(
+        candidate(
+            data,
+            0,
+            data.units.len(),
+            &mut cx,
+            &mut Saturation::default()
+        ),
+        (LayoutUnit::ZERO, true)
+    );
+    assert_eq!(
+        data.edge_shape_calls
+            .load(std::sync::atomic::Ordering::Relaxed),
+        before
+    );
+}

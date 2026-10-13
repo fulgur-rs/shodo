@@ -438,3 +438,43 @@ fn distinct_measurement_effects_remain_bounded_and_do_not_alias() {
     assert_eq!(cache.measurement_effects.capacity(), 0);
     assert_eq!(cache.effect_indices.capacity(), 0);
 }
+
+#[test]
+fn shared_effects_distinguish_limits_outcomes_saturation_and_suppression() {
+    let mut cache = EdgeShapeCache::default();
+    let mut records = Vec::new();
+    for (index, (limit, within, saturated, suppressed)) in [
+        (100, true, 0, false),
+        (101, true, 0, false),
+        (100, false, 0, false),
+        (100, true, 1, false),
+        (100, true, 0, true),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut cx = LayoutContext::new();
+        if suppressed {
+            cx.warnings.set_max(Some(0));
+            cx.warnings.push(WarningKind::Unsupported, "suppressed");
+        }
+        let mut sat = Saturation::default();
+        let recording = super::super::replay::begin(&mut cx, &sat);
+        super::super::replay::record_charge(&mut cx, 1, limit, within);
+        sat.saturated = saturated;
+        let effects = super::super::replay::finish(&mut cx, recording, &sat).unwrap();
+        cache.remember_measurement(CandidateMeasurement {
+            key: (index, index + 1),
+            delta: LayoutUnit::ZERO,
+            valid: true,
+            effects,
+        });
+        records.push(effects);
+    }
+    for (index, expected) in records.into_iter().enumerate() {
+        assert_eq!(
+            cache.measurement((index, index + 1)).unwrap().effects,
+            expected
+        );
+    }
+}

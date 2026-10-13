@@ -248,9 +248,9 @@ pub(crate) struct EdgeShapeCache {
     measurement_effects: Vec<super::replay::Effects>,
     effect_indices: crate::hashing::FastMap<super::replay::Effects, u16>,
     #[cfg(test)]
-    measurement_hits: usize,
+    pub(crate) measurement_hits: usize,
     #[cfg(test)]
-    measurement_misses: usize,
+    pub(crate) measurement_misses: usize,
 }
 
 impl std::fmt::Debug for EdgeShapeCache {
@@ -979,10 +979,13 @@ pub(super) fn candidate(
         .iter()
         .fold(LayoutUnit::ZERO, |p, w| p.add(w.delta(end, sat), sat));
     let covered = covers_partial_edges(data, start, end, windows.iter().map(|w| &w.text));
+    // No charges (an unlimited reshape budget) and zero delta do not prove
+    // that measuring did no work. Preserve both edge and suffix measurements.
+    let measured_edges = !windows.is_empty() || covered && has_partial_remainder(data, start, end);
     drop(windows);
     let valid = covered && remaining_valid(data, start, end, cx, sat);
     if let Some(effects) = super::replay::finish(cx, recording, sat)
-        && !(effects.is_empty() && delta == LayoutUnit::ZERO && valid)
+        && !(effects.is_empty() && !measured_edges && delta == LayoutUnit::ZERO && valid)
     {
         cx.edge_shapes.remember_measurement(CandidateMeasurement {
             key: (start, end),
@@ -994,6 +997,10 @@ pub(super) fn candidate(
     (delta, valid)
 }
 
+fn has_partial_remainder(data: &ParagraphData, start: usize, end: usize) -> bool {
+    last(data, start, end).is_some_and(|at| group(data, at).end > end)
+}
+
 fn remaining_valid(
     data: &ParagraphData,
     start: usize,
@@ -1001,8 +1008,7 @@ fn remaining_valid(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> bool {
-    let remainder = last(data, start, end).is_some_and(|at| group(data, at).end > end);
-    !remainder || {
+    !has_partial_remainder(data, start, end) || {
         let windows = measure_edit::<MeasuredWindow>(data, end, data.units.len(), None, cx, sat);
         covers_partial_edges(data, end, data.units.len(), windows.iter().map(|w| &w.text))
     }
