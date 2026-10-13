@@ -4,6 +4,8 @@ mod annotations;
 mod ellipsis;
 mod glyphs;
 mod line;
+#[cfg(test)]
+mod outline_tests;
 mod owned_bytes;
 #[cfg(test)]
 pub(crate) mod owner_probe;

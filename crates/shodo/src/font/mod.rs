@@ -47,6 +47,7 @@ mod color;
 mod descriptor;
 mod matching;
 mod metrics;
+pub(crate) mod outline;
 mod shapers;
 mod source;
 mod web_font;
@@ -190,6 +191,7 @@ struct Layer {
     state: Mutex<LayerState>,
     match_cache_entries: usize,
     caches: RwLock<LayerCaches>,
+    outline_bounds: Mutex<outline::Cache>,
     parent: Option<FontCollection>,
 }
 
@@ -351,6 +353,7 @@ impl FontCollection {
                 generation: AtomicU64::new(0),
                 match_cache_entries: options.match_cache_entries,
                 caches: RwLock::new(LayerCaches::default()),
+                outline_bounds: Mutex::new(outline::Cache::default()),
                 state: Mutex::new(LayerState {
                     family_faces: Default::default(),
                     face_slots: Default::default(),
