@@ -145,6 +145,41 @@ fn long_grapheme_coverage_is_shared_across_queries_and_first_line() {
     }
 }
 
+#[test]
+fn local_aliases_with_the_same_ranges_share_long_cluster_coverage() {
+    for cap in [0, 64] {
+        let root = fonts(cap);
+        let chars: Vec<_> = std::iter::once('a').chain(marks().chars()).collect();
+        root.register(super::super::browser_tests::test_font(
+            "Native", &chars, 600,
+        ))
+        .unwrap();
+        let doc = FontCollection::for_document(&root, &Limits::default());
+        let mut last = None;
+        for _ in 0..256 {
+            last = Some(
+                doc.register_sources(
+                    FontFaceDescriptor {
+                        family: "Alias".into(),
+                        unicode_ranges: vec![(0, 0x10ffff)],
+                        ..Default::default()
+                    },
+                    vec![crate::font::FontSource::Local("Native Regular".into())],
+                )
+                .unwrap(),
+            );
+        }
+        let query = FontQuery {
+            families: vec![FontFamily::Named("Alias".into())],
+            ..Default::default()
+        };
+        let text = format!("a{}", marks().repeat(256));
+        reset_work();
+        assert_eq!(doc.match_cluster(&query, &text).map(|m| m.id), last);
+        assert_eq!(CMAP_PROBES.with(Cell::get), 17, "cap={cap}");
+    }
+}
+
 fn temporary(data: FontData, ranges: Vec<(u32, u32)>) -> Candidate {
     let info = face_info(&data).unwrap();
     Candidate {
@@ -154,11 +189,11 @@ fn temporary(data: FontData, ranges: Vec<(u32, u32)>) -> Candidate {
             index: u32::MAX,
         },
         data,
-        descriptor: FontFaceDescriptor {
+        descriptor: super::super::RegisteredDescriptor::new(FontFaceDescriptor {
             family: "Web".into(),
             unicode_ranges: ranges,
             ..Default::default()
-        },
+        }),
         info,
         color: false,
     }

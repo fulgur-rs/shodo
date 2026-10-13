@@ -43,6 +43,31 @@ names and downloaded font data in order. WOFF/WOFF2 decoding is also exposed as
 `decode_web_font`. URL fetching belongs to the caller. See the executable and
 file-based examples in the `shodo::font` module documentation.
 
+CSS descriptor registration checks `max_font_descriptor_bytes` (64 KiB per
+face) and `max_layer_descriptor_bytes` (8 MiB per layer) before validating
+ranges, copying/indexing metadata, or trying sources. The logical allowance is
+twice the family UTF-8 length plus 16 bytes per declared range: original family
+and its lookup key, original range pairs and their maximum coverage-index /
+sorting payload. Raw ranges are counted before any union normalization, so
+duplicates do not bypass admission. Fixed headers and allocator overhead are
+excluded; caller-owned spare capacity is compacted before storage. These are
+logical payload budgets, not process RSS limits.
+
+Registered CSS descriptors are immutable and shared internally. Coverage uses
+a private sorted interval union and binary search; the public descriptor getter
+still returns the original range order and duplicates. Empty ranges still
+cover all scalars. Prepared-cache misses, disabled caches, and long-grapheme
+coverage keys do not copy or hash the range payload. A source list prepares
+the descriptor once and shares it across attempts. Equivalent alias coverage
+shares memoized results; precomputed hashes are verified against interval values
+so collisions cannot change coverage. Only a successful
+registration consumes the layer allowance, checked again under the publication
+lock; failures preserve faces and generation. Existing shared-layer descriptors
+remain visible without being readmitted against a document's smaller cap.
+`None` and `Limits::unlimited()` disable these limits for trusted input.
+Complete `Limits` struct literals need the new fields; default-update literals
+remain supported.
+
 Source registration checks the entire declared list before attempting it:
 `max_font_sources` defaults to 64, and `max_font_source_name_bytes` to 64 KiB of
 total local-name UTF-8 bytes. A limit violation returns `FontError::Limit`

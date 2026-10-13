@@ -427,7 +427,7 @@ struct Candidate {
     /// File sources use their paths below, never lazy SourceId/slot order.
     order_key: (u64, u32),
     data: FontData,
-    descriptor: FontFaceDescriptor,
+    descriptor: super::RegisteredDescriptor,
     info: FontInfo,
     color: bool,
 }
@@ -1104,7 +1104,7 @@ fn registered_candidate(
     })
 }
 
-fn intrinsic_descriptor(info: &FontInfo, family: String) -> FontFaceDescriptor {
+fn intrinsic_descriptor(info: &FontInfo, family: String) -> super::RegisteredDescriptor {
     let weight = info.weight().value();
     let width = info.width().percentage();
     let mut descriptor = FontFaceDescriptor {
@@ -1125,7 +1125,7 @@ fn intrinsic_descriptor(info: &FontInfo, family: String) -> FontFaceDescriptor {
             _ => {}
         }
     }
-    descriptor
+    super::RegisteredDescriptor::new(descriptor)
 }
 fn ignored(ch: char) -> bool {
     icu_properties::CodePointSetData::new::<icu_properties::props::DefaultIgnorableCodePoint>()
@@ -1155,16 +1155,11 @@ fn covers_chars(
 ) -> bool {
     let map = font.charmap();
     chars.all(|ch| {
-        let ranges = &candidate.descriptor.unicode_ranges;
-        (ranges.is_empty()
-            || ranges
-                .iter()
-                .any(|&(min, max)| (min..=max).contains(&(ch as u32))))
-            && {
-                #[cfg(test)]
-                work_tests::record_cmap(_cluster_bytes);
-                map.map(ch).is_some_and(|id| id.to_u32() != 0)
-            }
+        candidate.descriptor.covers(ch) && {
+            #[cfg(test)]
+            work_tests::record_cmap(_cluster_bytes);
+            map.map(ch).is_some_and(|id| id.to_u32() != 0)
+        }
     })
 }
 fn is_color(font: &FontRef<'_>) -> bool {

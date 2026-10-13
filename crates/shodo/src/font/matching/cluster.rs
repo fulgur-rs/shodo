@@ -1,12 +1,27 @@
 //! Scratch state shared only while selecting faces for one actual grapheme.
 use std::cell::OnceCell;
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 
 use super::{Candidate, FontPresentation, MAX_CACHE_KEY_BYTES, covers, covers_chars, ignored};
 use skrifa::FontRef;
 
-type CoverageKey = (u64, u32, Vec<(u32, u32)>);
+type CoverageKey = (u64, u32, Option<Coverage>);
 const MAX_COVERAGE_ENTRIES: usize = 512;
+
+struct Coverage(crate::font::RegisteredDescriptor);
+
+impl PartialEq for Coverage {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.same_coverage(&other.0)
+    }
+}
+impl Eq for Coverage {}
+impl Hash for Coverage {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.coverage_hash().hash(state);
+    }
+}
 
 pub(crate) struct FontCluster<'a> {
     text: &'a str,
@@ -77,7 +92,12 @@ impl<'a> FontCluster<'a> {
         let key = (
             candidate.data.data.id(),
             candidate.data.index,
-            candidate.descriptor.unicode_ranges.clone(),
+            // Unrestricted native/CSS faces share the empty-range key across
+            // temporary candidate reconstruction. Restricted CSS descriptors
+            // use shared union values and a precomputed hash, preserving
+            // coverage reuse across aliases without cloning/hashing ranges.
+            (!candidate.descriptor.unicode_ranges.is_empty())
+                .then(|| Coverage(candidate.descriptor.clone())),
         );
         if let Some(&result) = self.coverage.get(&key) {
             return result;
@@ -121,7 +141,7 @@ mod tests {
                     index: u32::MAX,
                 },
                 data,
-                descriptor: FontFaceDescriptor::default(),
+                descriptor: crate::font::RegisteredDescriptor::new(FontFaceDescriptor::default()),
                 info,
                 color: false,
             };

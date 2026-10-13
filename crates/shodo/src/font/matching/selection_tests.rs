@@ -61,13 +61,13 @@ impl Face {
         Candidate {
             order_key: (self.order_key, 0),
             id: FontId { layer: 0, index: 0 },
-            descriptor: FontFaceDescriptor {
+            descriptor: super::super::RegisteredDescriptor::new(FontFaceDescriptor {
                 family: "Web".into(),
                 weight: self.weight,
                 width: self.width,
                 style: self.style,
                 unicode_ranges: Vec::new(),
-            },
+            }),
             info: self.info.clone(),
             data: self.data.clone(),
             color: self.color,

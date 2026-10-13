@@ -131,15 +131,7 @@ fn candidate_bytes(candidate: &Candidate) -> usize {
         .unwrap_or(usize::MAX);
     candidate
         .descriptor
-        .family
-        .capacity()
-        .saturating_add(
-            candidate
-                .descriptor
-                .unicode_ranges
-                .capacity()
-                .saturating_mul(size_of::<(u32, u32)>()),
-        )
+        .cache_bytes()
         .saturating_add(axes.saturating_mul(size_of::<fontique::AxisInfo>()))
 }
 

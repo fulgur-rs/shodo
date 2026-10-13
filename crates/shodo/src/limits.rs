@@ -60,6 +60,12 @@ pub struct Limits {
     pub max_warnings: Option<u64>,
     /// Bytes per registered font blob (32 MiB), checked before retention.
     pub max_font_blob_bytes: Option<u64>,
+    /// Logical CSS descriptor payload and coverage-index allowances per face
+    /// (64 KiB), checked before validation, copying and source attempts.
+    pub max_font_descriptor_bytes: Option<u64>,
+    /// Total admitted CSS descriptor payload/index allowances per font layer
+    /// (8 MiB). Shared application and document layers have separate budgets.
+    pub max_layer_descriptor_bytes: Option<u64>,
     /// Faces in one registered font collection (64).
     pub max_ttc_faces: Option<u64>,
     /// Variation axes in a registered font's fvar table (64).
@@ -113,6 +119,8 @@ impl Default for Limits {
             max_pretty_window_lines: Some(4),
             max_warnings: Some(1024),
             max_font_blob_bytes: Some(32 * MIB),
+            max_font_descriptor_bytes: Some(64 * 1024),
+            max_layer_descriptor_bytes: Some(8 * MIB),
             max_ttc_faces: Some(64),
             max_font_axes: Some(64),
             max_layout_lookups: Some(4096),
@@ -148,6 +156,8 @@ impl Limits {
             max_pretty_window_lines: None,
             max_warnings: None,
             max_font_blob_bytes: None,
+            max_font_descriptor_bytes: None,
+            max_layer_descriptor_bytes: None,
             max_ttc_faces: None,
             max_font_axes: None,
             max_layout_lookups: None,
@@ -192,6 +202,8 @@ pub enum LimitKind {
     ShapedGlyphs,
     RubyCutWork,
     FontBlobBytes,
+    FontDescriptorBytes,
+    LayerDescriptorBytes,
     TtcFaces,
     FontAxes,
     LayoutLookups,

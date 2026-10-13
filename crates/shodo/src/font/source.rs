@@ -31,6 +31,7 @@ impl FontCollection {
     /// fall through; a resource limit immediately fails closed. Only the
     /// first successful source changes registered faces or generation.
     /// Source count and total local-name bytes are checked before attempts.
+    /// CSS descriptor payload is admitted and prepared once before attempts.
     /// Local names share a bounded root-owned index of the installed catalog.
     /// Recreate the shared collection to discover changed or newly available
     /// installed files. After lookup starts, root additions must fit the index
@@ -56,7 +57,7 @@ impl FontCollection {
             LimitKind::FontSourceNameBytes,
             name_bytes,
         )?;
-        descriptor.validate()?;
+        let descriptor = self.prepare_descriptor(descriptor)?;
         let mut verification = LookupWork::default();
         let mut last_error = FontError::Malformed("no usable font source");
         for source in sources {
@@ -70,8 +71,14 @@ impl FontCollection {
                     self.register_source_blob(data.data, data.index, descriptor.clone(), source)
                 }
                 FontSource::Data(bytes, index) => {
-                    super::decode_web_font(&bytes, &self.layer.limits)
-                        .and_then(|bytes| self.register_face(bytes, index, descriptor.clone()))
+                    super::decode_web_font(&bytes, &self.layer.limits).and_then(|bytes| {
+                        self.register_source_blob(
+                            super::Blob::from(bytes),
+                            index,
+                            descriptor.clone(),
+                            None,
+                        )
+                    })
                 }
             };
             match result {
