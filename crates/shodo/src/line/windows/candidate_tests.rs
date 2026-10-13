@@ -208,3 +208,134 @@ fn candidate_measurements_release_shared_glyph_handles() {
     );
     assert_eq!(windows[0].delta(1, &mut Saturation::default()), expected.0);
 }
+
+#[test]
+fn compact_measurements_replay_without_glyphs_and_fall_back_at_budget_boundaries() {
+    use std::sync::atomic::Ordering;
+    for (text, arabic) in [("ffi", false), ("ببب", true)] {
+        let p = paragraph(text, arabic, &Limits::default());
+        let data = &p.data;
+        let mut cached = LayoutContext::new();
+        let mut recorded_sat = Saturation::default();
+        let expected = candidate(data, 0, 1, &mut cached, &mut recorded_sat);
+        assert!(cached.edge_shapes.measurement((0, 1)).is_some());
+        // Draw snapshots may have been refused or released independently.
+        cached.edge_shapes.entries.clear();
+        cached.edge_shapes.cost = cached.edge_shapes.measurement_storage_cost();
+        let before = data.edge_shape_calls.load(Ordering::Relaxed);
+        cached.edge_reshape_spent = 0;
+        let mut replayed_sat = Saturation::default();
+        assert_eq!(
+            candidate(data, 0, 1, &mut cached, &mut replayed_sat),
+            expected
+        );
+        assert_eq!(replayed_sat, recorded_sat);
+        assert_eq!(data.edge_shape_calls.load(Ordering::Relaxed), before);
+        let limit = data.limits.max_reshape_window_bytes.unwrap() * EDGE_RESHAPE_LINE_WINDOWS;
+        for (spent, suppress) in [(limit - 1, false), (limit + 1, false), (0, true)] {
+            let mut fresh = LayoutContext::new();
+            cached.edge_reshape_spent = spent;
+            fresh.edge_reshape_spent = spent;
+            cached.warnings = WarningSink::new(None);
+            fresh.warnings = WarningSink::new(None);
+            if suppress {
+                for cx in [&mut cached, &mut fresh] {
+                    cx.warnings.set_max(Some(0));
+                    cx.warnings.push(WarningKind::Unsupported, "suppressed");
+                }
+            }
+            let mut cached_sat = Saturation {
+                saturated: 7,
+                non_finite: 3,
+            };
+            let mut fresh_sat = cached_sat;
+            let actual = candidate(data, 0, 1, &mut cached, &mut cached_sat);
+            let expected = owned_candidate(data, 0, 1, &mut fresh, &mut fresh_sat);
+            assert_eq!(actual, expected, "{text}, {spent}, {suppress}");
+            assert_eq!(cached_sat, fresh_sat);
+            assert_eq!(cached.edge_reshape_spent, fresh.edge_reshape_spent);
+            assert_eq!(cached.warnings.take(), fresh.warnings.take());
+        }
+    }
+}
+
+#[test]
+fn compact_measurements_preserve_arithmetic_saturation() {
+    let mut p = paragraph("AVA", false, &Limits::default());
+    let data = Arc::get_mut(&mut p.data).unwrap();
+    for advance in &mut data.glyphs.advance {
+        *advance = LayoutUnit::from_raw(i32::MAX);
+    }
+    for unit in &mut data.units {
+        unit.unsafe_to_break = true;
+    }
+    let mut cached = LayoutContext::new();
+    let mut recorded = Saturation::default();
+    let expected = candidate(data, 0, data.units.len(), &mut cached, &mut recorded);
+    assert!(!recorded.is_clean(), "fixture must saturate arithmetic");
+    assert!(
+        cached
+            .edge_shapes
+            .measurement((0, data.units.len()))
+            .is_some()
+    );
+    cached.edge_reshape_spent = 0;
+    let mut replayed = Saturation::default();
+    assert_eq!(
+        candidate(data, 0, data.units.len(), &mut cached, &mut replayed),
+        expected
+    );
+    assert_eq!(replayed, recorded);
+}
+
+#[test]
+fn zero_delta_edge_measurements_without_a_charge_budget_are_reused() {
+    let limits = Limits {
+        max_reshape_window_bytes: None,
+        ..Limits::default()
+    };
+    let mut p = paragraph("ببب", true, &limits);
+    let data = Arc::get_mut(&mut p.data).unwrap();
+    data.units.last_mut().unwrap().unsafe_to_break = true;
+    let mut cx = LayoutContext::new();
+    assert_eq!(
+        candidate(
+            data,
+            0,
+            data.units.len(),
+            &mut cx,
+            &mut Saturation::default()
+        ),
+        (LayoutUnit::ZERO, true)
+    );
+    assert!(
+        data.edge_shape_calls
+            .load(std::sync::atomic::Ordering::Relaxed)
+            > 0,
+        "fixture must perform an edge reshape before checking retention"
+    );
+    assert!(
+        cx.edge_shapes.measurement((0, data.units.len())).is_some(),
+        "zero delta can still require expensive edge shaping"
+    );
+    cx.edge_shapes.entries.clear();
+    cx.edge_shapes.cost = cx.edge_shapes.measurement_storage_cost();
+    let before = data
+        .edge_shape_calls
+        .load(std::sync::atomic::Ordering::Relaxed);
+    assert_eq!(
+        candidate(
+            data,
+            0,
+            data.units.len(),
+            &mut cx,
+            &mut Saturation::default()
+        ),
+        (LayoutUnit::ZERO, true)
+    );
+    assert_eq!(
+        data.edge_shape_calls
+            .load(std::sync::atomic::Ordering::Relaxed),
+        before
+    );
+}

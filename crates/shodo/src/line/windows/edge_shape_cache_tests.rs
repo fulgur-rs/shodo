@@ -51,7 +51,9 @@ fn full_cache_preserves_resident_windows() {
 fn rejected_cache_snapshot_keeps_owned_vectors_without_clone() {
     let mut cache = EdgeShapeCache::default();
     for i in 0..EDGE_SHAPE_CACHE_ENTRIES {
-        assert!(cache.insert((i, i + 1, None), &window(0)));
+        if !cache.insert((i, i + 1, None), &window(0)) {
+            break;
+        }
     }
     let owned = Arc::try_unwrap(window(8)).unwrap();
     let pointer = owned.0.id.as_ptr();
@@ -336,4 +338,143 @@ fn cached_miss_returns_original_owned_vectors() {
     let (output, _) = handle.into_owned();
     assert_eq!(output.id.as_ptr(), pointer);
     assert_eq!(output.id.capacity(), 64);
+}
+
+#[test]
+fn candidate_measurements_and_glyphs_share_one_bounded_retention_budget() {
+    let mut cx = LayoutContext::new();
+    let sat = Saturation::default();
+    let recording = super::super::replay::begin(&mut cx, &sat);
+    let effects = super::super::replay::finish(&mut cx, recording, &sat).unwrap();
+    let mut cache = EdgeShapeCache::default();
+    for i in 0..20_000 {
+        cache.remember_measurement(CandidateMeasurement {
+            key: (i, i + 1),
+            delta: LayoutUnit::ZERO,
+            valid: true,
+            effects,
+        });
+        cache.insert((i, i + 1, None), &window(8));
+        let glyph_cost: usize = cache
+            .entries
+            .values()
+            .map(|w| window_storage_cost(w, false))
+            .sum();
+        assert_eq!(cache.cost, glyph_cost + cache.measurement_storage_cost());
+        assert!(cache.cost <= EDGE_SHAPE_CACHE_COST);
+    }
+    assert!(cache.measurement((0, 1)).is_some());
+    assert!(cache.get(&(0, 1, None)).is_some());
+    assert!(cache.measurement((19_999, 20_000)).is_none());
+    cache.clear();
+    assert_eq!(
+        (
+            cache.cost,
+            cache.measurements.capacity(),
+            cache.entries.capacity()
+        ),
+        (0, 0, 0)
+    );
+}
+
+#[test]
+fn repeated_effects_allow_thousands_of_width_measurements_after_glyphs_fill() {
+    let mut cx = LayoutContext::new();
+    let sat = Saturation::default();
+    let recording = super::super::replay::begin(&mut cx, &sat);
+    super::super::replay::record_charge(&mut cx, 12, 1024, true);
+    let effects = super::super::replay::finish(&mut cx, recording, &sat).unwrap();
+    let mut cache = EdgeShapeCache::default();
+    for i in 0..6000 {
+        cache.remember_measurement(CandidateMeasurement {
+            key: (i, i + 1),
+            delta: LayoutUnit::ZERO,
+            valid: true,
+            effects,
+        });
+        cache.insert((i, i + 1, None), &window(8));
+    }
+    assert!(
+        cache.measurement((5999, 6000)).is_some(),
+        "repeated charge/saturation records must not crowd out later widths"
+    );
+    assert!(cache.cost <= EDGE_SHAPE_CACHE_COST);
+}
+
+#[test]
+fn distinct_measurement_effects_remain_bounded_and_do_not_alias() {
+    let mut cx = LayoutContext::new();
+    let sat = Saturation::default();
+    let recording = super::super::replay::begin(&mut cx, &sat);
+    super::super::replay::record_charge(&mut cx, 1, u64::MAX, true);
+    let base = super::super::replay::finish(&mut cx, recording, &sat).unwrap();
+    let mut cache = EdgeShapeCache::default();
+    for i in 1..10_000 {
+        let effects = base.times(i as u64);
+        cache.remember_measurement(CandidateMeasurement {
+            key: (i, i + 1),
+            delta: LayoutUnit::ZERO,
+            valid: true,
+            effects,
+        });
+        if let Some(hit) = cache.measurement((i, i + 1)) {
+            assert_eq!(hit.effects, effects);
+        }
+        assert!(cache.measurement_storage_cost() <= EDGE_MEASUREMENT_CACHE_COST);
+        assert!(cache.cost <= EDGE_SHAPE_CACHE_COST);
+    }
+    assert_eq!(cache.measurement((1, 2)).unwrap().effects, base);
+    assert!(cache.measurement((9999, 10_000)).is_none());
+    if let Some(out_of_range) = (u32::MAX as usize).checked_add(1) {
+        cache.remember_measurement(CandidateMeasurement {
+            key: (out_of_range, out_of_range),
+            delta: LayoutUnit::ZERO,
+            valid: true,
+            effects: base,
+        });
+        assert!(cache.measurement((out_of_range, out_of_range)).is_none());
+    }
+    cache.clear();
+    assert_eq!(cache.measurement_effects.capacity(), 0);
+    assert_eq!(cache.effect_indices.capacity(), 0);
+}
+
+#[test]
+fn shared_effects_distinguish_limits_outcomes_saturation_and_suppression() {
+    let mut cache = EdgeShapeCache::default();
+    let mut records = Vec::new();
+    for (index, (limit, within, saturated, suppressed)) in [
+        (100, true, 0, false),
+        (101, true, 0, false),
+        (100, false, 0, false),
+        (100, true, 1, false),
+        (100, true, 0, true),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut cx = LayoutContext::new();
+        if suppressed {
+            cx.warnings.set_max(Some(0));
+            cx.warnings.push(WarningKind::Unsupported, "suppressed");
+        }
+        let mut sat = Saturation::default();
+        let recording = super::super::replay::begin(&mut cx, &sat);
+        super::super::replay::record_charge(&mut cx, 1, limit, within);
+        sat.saturated = saturated;
+        let effects = super::super::replay::finish(&mut cx, recording, &sat).unwrap();
+        cache.remember_measurement(CandidateMeasurement {
+            key: (index, index + 1),
+            delta: LayoutUnit::ZERO,
+            valid: true,
+            effects,
+        });
+        records.push(effects);
+    }
+    for (index, expected) in records.into_iter().enumerate() {
+        assert_eq!(
+            cache.measurement((index, index + 1)).unwrap().effects,
+            expected
+        );
+    }
 }

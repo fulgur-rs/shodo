@@ -24,7 +24,7 @@ use crate::LayoutContext;
 use crate::geometry::Saturation;
 
 /// Aggregate of the reshape budget charges of one recorded measurement.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct Charges {
     bytes: u64,
     min_limit: u64,
@@ -85,7 +85,7 @@ impl Charges {
 }
 
 /// Side effects of one measurement that left no warning.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct Effects {
     charges: Charges,
     sat: Saturation,
