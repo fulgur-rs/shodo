@@ -11,6 +11,10 @@ mod node {
     pub use shodo::node::NodeId;
 }
 
+mod limits {
+    pub use shodo::limits::{LimitExceeded, LimitKind, Limits};
+}
+
 // Include the checked-in implementation so this executable can construct
 // synthetic mappings without widening Shodo's public or crate-private API.
 #[allow(dead_code)]
@@ -350,18 +354,20 @@ impl CachedCandidate {
     }
 
     fn push_unit(&mut self, unit: MappingUnit) {
-        self.mapping.push_unit(unit);
+        self.mapping.try_push_unit(unit, |_| Ok(())).unwrap();
         self.invalidate_all();
     }
 
     fn push_generated(&mut self, range: Range<u32>, node: node::NodeId) {
-        self.mapping.push_generated(range.clone(), node);
+        self.mapping
+            .try_push_generated(range.clone(), node, |_| Ok(()))
+            .unwrap();
         append_generated_mirror(&mut self.generated, range, node);
         self.indexes.text.take();
     }
 
     fn remap_text(&mut self, spans: &[TransformSpan]) {
-        self.mapping.remap_text(spans);
+        self.mapping.remap_text(spans, |_, _| Ok(())).unwrap();
         self.generated = compact_generated(self.generated.drain(..).map(|(range, node)| {
             (
                 TransformSpan::map_position(spans, range.start)
@@ -399,7 +405,9 @@ fn append_generated(
     range: Range<u32>,
     node: node::NodeId,
 ) {
-    mapping.push_generated(range.clone(), node);
+    mapping
+        .try_push_generated(range.clone(), node, |_| Ok(()))
+        .unwrap();
     append_generated_mirror(generated, range, node);
 }
 
@@ -437,12 +445,17 @@ fn workload(records: usize) -> ProbeData {
             MappingKind::Collapsed => (3, 0),
             MappingKind::Expanded => (2, 3),
         };
-        mapping.push_unit(MappingUnit {
-            kind,
-            node,
-            dom: dom_start..dom_start + dom_len,
-            text: text_offset..text_offset + text_len,
-        });
+        mapping
+            .try_push_unit(
+                MappingUnit {
+                    kind,
+                    node,
+                    dom: dom_start..dom_start + dom_len,
+                    text: text_offset..text_offset + text_len,
+                },
+                |_| Ok(()),
+            )
+            .unwrap();
         text_offset += text_len;
         if ordinal % 5 == 4 {
             let generated_node = node::NodeId(10_000 + (ordinal % 8) as u64);
@@ -468,12 +481,17 @@ fn overlap_workload() -> ProbeData {
         (MappingKind::Identity, 8, 0..2, 3..5),
         (MappingKind::Expanded, 7, 8..10, 6..8),
     ] {
-        mapping.push_unit(MappingUnit {
-            kind,
-            node: node::NodeId(node),
-            dom,
-            text,
-        });
+        mapping
+            .try_push_unit(
+                MappingUnit {
+                    kind,
+                    node: node::NodeId(node),
+                    dom,
+                    text,
+                },
+                |_| Ok(()),
+            )
+            .unwrap();
     }
     for (range, node) in [(1..4, 90), (1..3, 91), (2..2, 92), (5..7, 90)] {
         append_generated(&mut mapping, &mut generated, range, node::NodeId(node));

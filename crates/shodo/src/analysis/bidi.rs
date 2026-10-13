@@ -273,6 +273,7 @@ mod tests {
     #[test]
     fn upright_and_combined_text_preserve_utf8_offsets_and_surrounding_text() {
         let input = Processed {
+            mapping_budget: crate::mapping::MappingBudget::new(&Limits::default()),
             text: "אבaé水😀/bö火😁גד".into(),
             items: [(0..4, 0), (4..14, 1), (14..29, 0)]
                 .into_iter()

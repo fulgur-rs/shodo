@@ -12,6 +12,10 @@ pub struct Limits {
     /// Raw and processed UTF-8 bytes at build time (16 MiB). Independent of
     /// the glyph budget: ASCII may reach `max_shaped_glyphs` first.
     pub max_text_bytes: Option<u64>,
+    /// Admitted transform/offset-mapping payload and private index allowances
+    /// across normal, first-line and nested analysis (64 MiB). Includes producer
+    /// records that are later retired; excludes allocator overhead and capacity.
+    pub max_mapping_bytes: Option<u64>,
     /// Raw and processed items, and retained itemized shaping runs, capped at build time (2^20).
     pub max_items: Option<u64>,
     /// Interned inline styles per builder (2^16).
@@ -95,6 +99,7 @@ impl Default for Limits {
         const MIB: u64 = 1024 * 1024;
         Self {
             max_text_bytes: Some(16 * MIB),
+            max_mapping_bytes: Some(64 * MIB),
             max_items: Some(1 << 20),
             max_styles: Some(1 << 16),
             max_style_bytes: Some(64 * MIB),
@@ -129,6 +134,7 @@ impl Limits {
     pub fn unlimited() -> Self {
         Self {
             max_text_bytes: None,
+            max_mapping_bytes: None,
             max_items: None,
             max_styles: None,
             max_style_bytes: None,
@@ -177,6 +183,7 @@ impl Limits {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum LimitKind {
+    MappingBytes,
     TextBytes,
     Items,
     Styles,

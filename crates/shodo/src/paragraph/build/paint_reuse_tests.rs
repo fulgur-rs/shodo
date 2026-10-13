@@ -120,6 +120,42 @@ fn paint_style() -> ParagraphStyle {
     style
 }
 
+#[test]
+fn mapping_budget_matches_replay_at_clone_admission_boundaries() {
+    for transform in [
+        crate::style::TextTransform::Uppercase,
+        crate::style::TextTransform::FullWidth,
+    ] {
+        let mut style = paint_style();
+        style.root.text_transform = transform;
+        style.first_line.as_mut().unwrap().text_transform = transform;
+        style.root.text_combine_upright = crate::style::TextCombineUpright::All;
+        style.first_line.as_mut().unwrap().text_combine_upright =
+            crate::style::TextCombineUpright::All;
+        let unlimited = Limits {
+            max_mapping_bytes: None,
+            ..Default::default()
+        };
+        let analysis = input(&style, &unlimited).analyze().unwrap();
+        assert!(analysis.state.alternate_reuses_analysis);
+        let one = analysis.state.normal.processed.mapping_budget.used;
+        let both = one * 2;
+        for cap in [0, 1, one - 1, one, one + 1, both - 1, both, both + 1] {
+            let limits = Limits {
+                max_mapping_bytes: Some(cap),
+                ..Default::default()
+            };
+            let candidate = analysis_snapshot(input(&style, &limits).analyze());
+            let reference = {
+                let _guard = ReferenceGuard::new(true);
+                analysis_snapshot(input(&style, &limits).analyze())
+            };
+            assert_eq!(candidate, reference, "transform={transform:?}, cap={cap}");
+            assert_eq!(candidate.is_ok(), cap >= both);
+        }
+    }
+}
+
 fn fonts() -> FontCollection {
     let fonts = FontCollection::with_options(
         &Limits::default(),
