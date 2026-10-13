@@ -288,36 +288,48 @@ impl Line {
                             LocationRef::new(run.normalized_coords()),
                         )
                     });
-                    for (index, glyph) in run.glyphs().enumerate() {
-                        if let Some(b) = metrics
-                            .as_ref()
-                            .and_then(|m| m.bounds(GlyphId::new(glyph.id)))
-                        {
-                            let skew = run.skew().unwrap_or(0.0).to_radians().tan();
-                            let (mut left, mut right) = (
-                                b.x_min + (skew * b.y_min).min(skew * b.y_max),
-                                b.x_max + (skew * b.y_min).max(skew * b.y_max),
-                            );
-                            if self.data.base_level % 2 == 1 {
-                                let natural = run.natural_advance(index);
-                                (left, right) = (natural - right, natural - left);
+                    // A defensive missing-font fallback can query the catalog.
+                    // Resolve it once before holding the outline cache guard.
+                    let fallback_metrics = metrics.is_none().then(|| run.metrics());
+                    run.data().fonts.with_outline_bounds(
+                        run.font(),
+                        run.font_size(),
+                        run.normalized_coords(),
+                        |cache| {
+                            for (index, glyph) in run.glyphs().enumerate() {
+                                if let Some(b) = metrics.as_ref().and_then(|m| {
+                                    cache.get_or_compute(glyph.id, || {
+                                        #[cfg(test)]
+                                        super::outline_tests::record_bounds();
+                                        m.bounds(GlyphId::new(glyph.id))
+                                    })
+                                }) {
+                                    let skew = run.skew().unwrap_or(0.0).to_radians().tan();
+                                    let (mut left, mut right) = (
+                                        b.x_min + (skew * b.y_min).min(skew * b.y_max),
+                                        b.x_max + (skew * b.y_min).max(skew * b.y_max),
+                                    );
+                                    if self.data.base_level % 2 == 1 {
+                                        let natural = run.natural_advance(index);
+                                        (left, right) = (natural - right, natural - left);
+                                    }
+                                    include(LogicalRect {
+                                        inline_start: glyph.inline_position + left,
+                                        inline_size: right - left,
+                                        block_start: run.baseline() + glyph.block_offset - b.y_max,
+                                        block_size: b.y_max - b.y_min,
+                                    });
+                                } else if let Some(m) = fallback_metrics {
+                                    include(LogicalRect {
+                                        inline_start: glyph.inline_position,
+                                        inline_size: run.natural_advance(index),
+                                        block_start: run.baseline() + glyph.block_offset - m.ascent,
+                                        block_size: m.ascent + m.descent,
+                                    });
+                                }
                             }
-                            include(LogicalRect {
-                                inline_start: glyph.inline_position + left,
-                                inline_size: right - left,
-                                block_start: run.baseline() + glyph.block_offset - b.y_max,
-                                block_size: b.y_max - b.y_min,
-                            });
-                        } else if metrics.is_none() {
-                            let m = run.metrics();
-                            include(LogicalRect {
-                                inline_start: glyph.inline_position,
-                                inline_size: run.natural_advance(index),
-                                block_start: run.baseline() + glyph.block_offset - m.ascent,
-                                block_size: m.ascent + m.descent,
-                            });
-                        }
-                    }
+                        },
+                    );
                 }
                 Fragment::Atomic(a) => include(a.border_rect),
                 Fragment::InlineBox(b) => include(b.rect),
