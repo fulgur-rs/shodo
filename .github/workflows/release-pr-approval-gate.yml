@@ -83,7 +83,7 @@ jobs:
             | jq -s --arg sha "$HEAD_SHA" --arg repo "$REPO" '
                 add | [ .[] | select(
                   .head.sha == $sha and .head.repo.full_name == $repo
-                  and (.head.ref | startswith("release-plz-"))
+                  and ((.head.ref // "") | startswith("release-plz-"))
                 ) | {number, author: .user.login} ]')
 
           if [ "$(jq 'length' <<< "$releases")" -eq 0 ]; then
