@@ -33,6 +33,10 @@ mod input_tests;
 mod constructor_limit_tests;
 
 #[cfg(test)]
+#[path = "tests/warning_import.rs"]
+mod warning_import_tests;
+
+#[cfg(test)]
 #[path = "tests/preflight.rs"]
 mod preflight_tests;
 

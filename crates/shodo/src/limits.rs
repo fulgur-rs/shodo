@@ -278,6 +278,12 @@ pub(crate) struct WarningSink {
     suppressed: bool,
 }
 
+#[cfg(test)]
+thread_local! {
+    pub(crate) static BORROWED_WARNING_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static BORROWED_WARNING_CLONES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 impl WarningSink {
     pub(crate) fn new(max: Option<u64>) -> Self {
         Self {
@@ -308,6 +314,27 @@ impl WarningSink {
 
     pub(crate) fn push(&mut self, kind: WarningKind, message: impl Into<String>) {
         self.push_lazy(kind, || message.into());
+    }
+
+    /// Import snapshot records, cloning only messages admitted by this sink.
+    /// A source `Suppressed` record is ordinary input; only this sink's own
+    /// suppression state stops imports, preserving the previous push contract.
+    pub(crate) fn extend_from_slice(&mut self, warnings: &[Warning]) {
+        if self.suppressed {
+            return;
+        }
+        for warning in warnings {
+            #[cfg(test)]
+            BORROWED_WARNING_VISITS.with(|count| count.set(count.get() + 1));
+            self.push_lazy(warning.kind, || {
+                #[cfg(test)]
+                BORROWED_WARNING_CLONES.with(|count| count.set(count.get() + 1));
+                warning.message.clone()
+            });
+            if self.suppressed {
+                break;
+            }
+        }
     }
 
     /// Push a dynamically formatted message without building it when the sink
@@ -490,3 +517,7 @@ mod tests {
         assert_eq!(lazy.remaining_limit(), eager.remaining_limit());
     }
 }
+
+#[cfg(test)]
+#[path = "limits/warning_import_tests.rs"]
+mod warning_import_tests;
