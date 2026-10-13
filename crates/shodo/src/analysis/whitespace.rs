@@ -10,7 +10,9 @@ use super::{Item, ItemKind};
 use crate::builder::RawItem;
 use crate::geometry::Direction;
 use crate::limits::{LimitExceeded, LimitKind, Limits};
-use crate::mapping::{MappingKind, MappingUnit, OffsetMapping};
+use crate::mapping::{
+    MappingBudget, MappingKind, MappingUnit, OffsetMapping, TRANSFORM_SPAN_BYTES,
+};
 use crate::node::{NodeId, TextSource};
 use crate::style::{InlineStyle, UnicodeBidi, WhiteSpaceCollapse};
 
@@ -19,6 +21,7 @@ const PARAGRAPH_SEPARATOR: char = '\u{2029}';
 
 #[derive(Clone)]
 pub(crate) struct Processed {
+    pub(crate) mapping_budget: MappingBudget,
     pub(crate) text: String,
     pub(crate) items: Vec<Item>,
     pub(crate) mapping: Option<OffsetMapping>,
@@ -161,6 +164,7 @@ fn process_in_context_with_flags(
             ),
         ),
         mapping: with_mapping.then(OffsetMapping::default),
+        mapping_budget: MappingBudget::new(limits),
         // Collapsible spaces at the start of the paragraph are removed.
         after_space: true,
         open: Vec::new(),
@@ -265,13 +269,20 @@ fn process_in_context_with_flags(
             bases.after_raw(item);
         }
     }
-    Ok(Processed {
-        width_origins: Vec::new(),
-        source_spans: vec![crate::mapping::TransformSpan {
+    let source_spans = if p.out.is_empty() {
+        Vec::new()
+    } else {
+        p.mapping_budget.charge(TRANSFORM_SPAN_BYTES)?;
+        vec![crate::mapping::TransformSpan {
             old: 0..p.out.len() as u32,
             new: 0..p.out.len() as u32,
             kind: MappingKind::Identity,
-        }],
+        }]
+    };
+    Ok(Processed {
+        mapping_budget: p.mapping_budget,
+        width_origins: Vec::new(),
+        source_spans,
         text: p.out,
         items: p.items,
         mapping: p.mapping,
@@ -280,6 +291,7 @@ fn process_in_context_with_flags(
 }
 
 struct Processor<'a> {
+    mapping_budget: MappingBudget,
     bases: Option<&'a mut crate::ruby::base_budget::BaseScopes>,
     annotation: bool,
     out: String,
@@ -374,7 +386,14 @@ impl Processor<'_> {
         self.append(c)?;
         let text = start..self.pos();
         if let Some(m) = &mut self.mapping {
-            m.push_generated(text.clone(), node);
+            let budget = &mut self.mapping_budget;
+            let bases = &mut self.bases;
+            m.try_push_generated(text.clone(), node, |bytes| {
+                budget.charge_with(bytes, |bytes| match bases {
+                    Some(bases) => bases.mapping_record(bytes),
+                    None => Ok(()),
+                })
+            })?;
         }
         self.push_item(Item {
             kind,
@@ -393,21 +412,35 @@ impl Processor<'_> {
         dom: Option<u32>,
         len: u32,
         text: std::ops::Range<u32>,
-    ) {
-        let Some(m) = &mut self.mapping else { return };
+    ) -> Result<(), LimitExceeded> {
+        let Some(m) = &mut self.mapping else {
+            return Ok(());
+        };
+        let budget = &mut self.mapping_budget;
+        let bases = &mut self.bases;
+        let mut charge = |bytes| {
+            budget.charge_with(bytes, |bytes| match bases {
+                Some(bases) => bases.mapping_record(bytes),
+                None => Ok(()),
+            })
+        };
         match dom {
             // `dom` is a caller-supplied offset, not covered by any
             // resource limit; saturate instead of overflowing so no input
             // can panic.
-            Some(dom) => m.push_unit(MappingUnit {
-                kind,
-                node,
-                dom: dom..dom.saturating_add(len),
-                text,
-            }),
-            None if !text.is_empty() => m.push_generated(text, node),
+            Some(dom) => m.try_push_unit(
+                MappingUnit {
+                    kind,
+                    node,
+                    dom: dom..dom.saturating_add(len),
+                    text,
+                },
+                &mut charge,
+            )?,
+            None if !text.is_empty() => m.try_push_generated(text, node, &mut charge)?,
             None => {}
         }
+        Ok(())
     }
 
     fn text(
@@ -436,7 +469,7 @@ impl Processor<'_> {
             let len = raw_c.len_utf8() as u32;
             if flags[i] & REMOVE != 0 {
                 let at = self.pos();
-                self.map(MappingKind::Collapsed, node, dom, len, at..at);
+                self.map(MappingKind::Collapsed, node, dom, len, at..at)?;
                 continue;
             }
             let c = if raw_c == '\r' || convert_to_space && matches!(raw_c, '\t' | '\n') {
@@ -462,7 +495,7 @@ impl Processor<'_> {
                 self.check_item()?;
                 let start = self.pos();
                 self.append(c)?;
-                self.map(MappingKind::Identity, node, dom, len, start..self.pos());
+                self.map(MappingKind::Identity, node, dom, len, start..self.pos())?;
                 self.push_item(Item {
                     kind: kind.clone(),
                     text: start..self.pos(),
@@ -479,7 +512,7 @@ impl Processor<'_> {
             let collapsible = annotation_break || collapse_spaces && matches!(c, ' ' | '\t' | '\n');
             if collapsible && self.after_space {
                 let at = self.pos();
-                self.map(MappingKind::Collapsed, node, dom, len, at..at);
+                self.map(MappingKind::Collapsed, node, dom, len, at..at)?;
                 continue;
             }
             if segment.is_none() {
@@ -499,7 +532,7 @@ impl Processor<'_> {
                 dom,
                 len,
                 start..self.pos(),
-            );
+            )?;
             if !ignorable(c) {
                 self.after_space = collapsible;
             }

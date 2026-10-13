@@ -7,7 +7,60 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 use std::sync::OnceLock;
 
+use crate::limits::{LimitExceeded, LimitKind, Limits};
 use crate::node::NodeId;
+
+/// Logical producer payload plus reservations for private query indexes.
+/// Records retired during processing remain charged. Capacity/allocator
+/// overhead is excluded, as with the resolved-style payload budget.
+#[derive(Clone)]
+pub(crate) struct MappingBudget {
+    limit: Option<u64>,
+    pub(crate) used: u64,
+}
+
+impl MappingBudget {
+    pub(crate) fn new(limits: &Limits) -> Self {
+        Self {
+            limit: limits.max_mapping_bytes,
+            used: 0,
+        }
+    }
+
+    pub(crate) fn check(&self, amount: u64) -> Result<(), LimitExceeded> {
+        let actual = self.used.saturating_add(amount);
+        if let Some(limit) = self.limit
+            && actual > limit
+        {
+            return Err(LimitExceeded {
+                kind: LimitKind::MappingBytes,
+                limit,
+                actual,
+            });
+        }
+        Ok(())
+    }
+
+    pub(crate) fn set_limits(&mut self, limits: &Limits) -> Result<(), LimitExceeded> {
+        self.limit = limits.max_mapping_bytes;
+        self.check(0)
+    }
+
+    pub(crate) fn charge(&mut self, amount: u64) -> Result<(), LimitExceeded> {
+        self.charge_with(amount, |_| Ok(()))
+    }
+
+    pub(crate) fn charge_with(
+        &mut self,
+        amount: u64,
+        mut check_owner: impl FnMut(u64) -> Result<(), LimitExceeded>,
+    ) -> Result<(), LimitExceeded> {
+        self.check(amount)?;
+        check_owner(amount)?;
+        self.used = self.used.saturating_add(amount);
+        Ok(())
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MappingKind {
@@ -96,6 +149,22 @@ struct RangeIndex {
     ranges: Vec<IndexedRange>,
     ends: Vec<(u32, usize)>,
 }
+
+// Reserve the original record, both DOM/text range and end arrays, source
+// grouping scratch and logical BTreeMap entries. Charging entries per unit
+// conservatively covers both repeated and distinct source nodes. Query
+// construction stays lazy and infallible after producer admission.
+const INDEX_RANGE_BYTES: u64 =
+    (std::mem::size_of::<IndexedRange>() + std::mem::size_of::<(u32, usize)>()) as u64;
+const UNIT_BYTES: u64 = (std::mem::size_of::<MappingUnit>()
+    + std::mem::size_of::<(Range<u32>, usize)>()
+    + std::mem::size_of::<(NodeId, Vec<(Range<u32>, usize)>)>()
+    + std::mem::size_of::<(NodeId, RangeIndex)>()) as u64
+    + 2 * INDEX_RANGE_BYTES;
+const GENERATED_BYTES: u64 = std::mem::size_of::<(Range<u32>, NodeId)>() as u64 + INDEX_RANGE_BYTES;
+
+pub(crate) const TRANSFORM_SPAN_BYTES: u64 = std::mem::size_of::<TransformSpan>() as u64;
+pub(crate) const INDIVISIBLE_BYTES: u64 = std::mem::size_of::<Range<u32>>() as u64;
 
 impl RangeIndex {
     fn new(records: impl IntoIterator<Item = (Range<u32>, usize)>) -> Self {
@@ -333,13 +402,19 @@ impl OffsetMapping {
         candidates
     }
 
-    pub(crate) fn remap_text(&mut self, spans: &[TransformSpan]) {
+    pub(crate) fn remap_text(
+        &mut self,
+        spans: &[TransformSpan],
+        mut charge: impl FnMut(u64, u32) -> Result<(), LimitExceeded>,
+    ) -> Result<(), LimitExceeded> {
         self.index.take();
         let units = std::mem::take(&mut self.units);
         let generated = std::mem::take(&mut self.generated);
         for unit in units {
             if unit.kind != MappingKind::Identity {
-                self.push_unit(MappingUnit {
+                // Transfer an already admitted record; no new logical record
+                // or index allowance is needed for this unchanged unit.
+                self.append_unit(MappingUnit {
                     text: TransformSpan::map_position(spans, unit.text.start)
                         ..TransformSpan::map_position(spans, unit.text.end),
                     ..unit
@@ -358,25 +433,57 @@ impl OffsetMapping {
                 } else {
                     span.new.clone()
                 };
-                self.push_unit(MappingUnit {
-                    kind: span.kind,
-                    node: unit.node,
-                    dom: unit.dom.start.saturating_add(begin - unit.text.start)
-                        ..unit.dom.start.saturating_add(end - unit.text.start),
-                    text: new_text,
-                });
+                if begin == unit.text.start && end == unit.text.end {
+                    // One-for-one replacement carries the original record's
+                    // full index reservation; splitting requires new admission.
+                    self.append_unit(MappingUnit {
+                        kind: span.kind,
+                        text: new_text,
+                        ..unit
+                    });
+                    break;
+                }
+                self.try_push_unit(
+                    MappingUnit {
+                        kind: span.kind,
+                        node: unit.node,
+                        dom: unit.dom.start.saturating_add(begin - unit.text.start)
+                            ..unit.dom.start.saturating_add(end - unit.text.start),
+                        text: new_text,
+                    },
+                    |bytes| charge(bytes, begin),
+                )?;
             }
         }
         for (range, node) in generated {
-            self.push_generated(
+            self.append_generated(
                 TransformSpan::map_position(spans, range.start)
                     ..TransformSpan::map_position(spans, range.end),
                 node,
             );
         }
+        Ok(())
     }
 
-    pub(crate) fn push_unit(&mut self, unit: MappingUnit) {
+    pub(crate) fn try_push_unit(
+        &mut self,
+        unit: MappingUnit,
+        mut charge: impl FnMut(u64) -> Result<(), LimitExceeded>,
+    ) -> Result<(), LimitExceeded> {
+        if !self.units.last().is_some_and(|last| {
+            last.kind == unit.kind
+                && unit.kind != MappingKind::Expanded
+                && last.node == unit.node
+                && last.dom.end == unit.dom.start
+                && last.text.end == unit.text.start
+        }) {
+            charge(UNIT_BYTES)?;
+        }
+        self.append_unit(unit);
+        Ok(())
+    }
+
+    fn append_unit(&mut self, unit: MappingUnit) {
         self.index.take();
         if let Some(last) = self.units.last_mut()
             && last.kind == unit.kind
@@ -392,7 +499,24 @@ impl OffsetMapping {
         self.units.push(unit);
     }
 
-    pub(crate) fn push_generated(&mut self, text: Range<u32>, node: NodeId) {
+    pub(crate) fn try_push_generated(
+        &mut self,
+        text: Range<u32>,
+        node: NodeId,
+        mut charge: impl FnMut(u64) -> Result<(), LimitExceeded>,
+    ) -> Result<(), LimitExceeded> {
+        if !self
+            .generated
+            .last()
+            .is_some_and(|(last, last_node)| *last_node == node && last.end == text.start)
+        {
+            charge(GENERATED_BYTES)?;
+        }
+        self.append_generated(text, node);
+        Ok(())
+    }
+
+    fn append_generated(&mut self, text: Range<u32>, node: NodeId) {
         self.index.take();
         if let Some((last, last_node)) = self.generated.last_mut()
             && *last_node == node
@@ -402,6 +526,16 @@ impl OffsetMapping {
             return;
         }
         self.generated.push((text, node));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn push_unit(&mut self, unit: MappingUnit) {
+        self.try_push_unit(unit, |_| Ok(())).unwrap();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn push_generated(&mut self, text: Range<u32>, node: NodeId) {
+        self.try_push_generated(text, node, |_| Ok(())).unwrap();
     }
 
     pub fn units(&self) -> &[MappingUnit] {
@@ -545,6 +679,93 @@ pub(crate) mod tests {
             dom,
             text,
         }
+    }
+
+    #[test]
+    fn unit_admission_reserves_indexes_and_rejects_before_mutating_arrays() {
+        let mut budget = MappingBudget::new(&Limits {
+            max_mapping_bytes: Some(UNIT_BYTES),
+            ..Default::default()
+        });
+        let mut mapping = OffsetMapping::default();
+        mapping
+            .try_push_unit(unit(MappingKind::Expanded, 0..2, 0..2), |bytes| {
+                budget.charge(bytes)
+            })
+            .unwrap();
+        assert_eq!(budget.used, UNIT_BYTES);
+        mapping.dom_to_text(NodeId(1), 1);
+        let capacity = mapping.units.capacity();
+        let index = mapping.index.get().unwrap() as *const MappingIndex;
+        let error = mapping
+            .try_push_unit(unit(MappingKind::Expanded, 2..4, 2..4), |bytes| {
+                budget.charge(bytes)
+            })
+            .unwrap_err();
+        assert_eq!(error.kind, LimitKind::MappingBytes);
+        assert_eq!(error.limit, UNIT_BYTES);
+        assert_eq!(error.actual, 2 * UNIT_BYTES);
+        assert_eq!(budget.used, UNIT_BYTES);
+        assert_eq!(mapping.units.len(), 1);
+        assert_eq!(mapping.units.capacity(), capacity);
+        assert_eq!(mapping.index.get().unwrap() as *const MappingIndex, index);
+        let copy = mapping.clone();
+        assert!(copy.index.get().is_none());
+        assert_eq!(
+            copy.dom_to_text(NodeId(1), 1),
+            mapping.dom_to_text(NodeId(1), 1)
+        );
+        assert_eq!(
+            copy.text_to_dom(1, Affinity::Downstream),
+            mapping.text_to_dom(1, Affinity::Downstream)
+        );
+        for data in [&mapping, &copy] {
+            let index = data.index.get().unwrap();
+            let range_payload = |ranges: &RangeIndex| {
+                ranges.ranges.len() as u64 * std::mem::size_of::<IndexedRange>() as u64
+                    + ranges.ends.len() as u64 * std::mem::size_of::<(u32, usize)>() as u64
+            };
+            let payload = std::mem::size_of::<MappingUnit>() as u64
+                + range_payload(&index.text)
+                + range_payload(&index.generated)
+                + index.dom.values().map(range_payload).sum::<u64>()
+                + index.dom.len() as u64 * std::mem::size_of::<(NodeId, RangeIndex)>() as u64;
+            assert!(
+                payload <= UNIT_BYTES,
+                "reserved {UNIT_BYTES}, retained {payload}"
+            );
+        }
+    }
+
+    #[test]
+    fn coalesced_units_and_generated_ranges_do_not_pay_for_nonexistent_records() {
+        let mut budget = MappingBudget::new(&Limits {
+            max_mapping_bytes: Some(UNIT_BYTES + GENERATED_BYTES),
+            ..Default::default()
+        });
+        let mut mapping = OffsetMapping::default();
+        for i in 0..32 {
+            mapping
+                .try_push_unit(unit(MappingKind::Identity, i..i + 1, i..i + 1), |bytes| {
+                    budget.charge(bytes)
+                })
+                .unwrap();
+        }
+        for i in 32..64 {
+            mapping
+                .try_push_generated(i..i + 1, NodeId(2), |bytes| budget.charge(bytes))
+                .unwrap();
+        }
+        assert_eq!(budget.used, UNIT_BYTES + GENERATED_BYTES);
+        assert_eq!(mapping.units.len(), 1);
+        assert_eq!(mapping.generated.len(), 1);
+        let capacity = mapping.generated.capacity();
+        let error = mapping
+            .try_push_generated(64..65, NodeId(3), |bytes| budget.charge(bytes))
+            .unwrap_err();
+        assert_eq!(error.kind, LimitKind::MappingBytes);
+        assert_eq!(mapping.generated.len(), 1);
+        assert_eq!(mapping.generated.capacity(), capacity);
     }
 
     #[test]
@@ -850,11 +1071,15 @@ pub(crate) mod tests {
             })
         );
         let before = m.clone();
-        m.remap_text(&[TransformSpan {
-            old: 0..3,
-            new: 0..6,
-            kind: MappingKind::Expanded,
-        }]);
+        m.remap_text(
+            &[TransformSpan {
+                old: 0..3,
+                new: 0..6,
+                kind: MappingKind::Expanded,
+            }],
+            |_, _| Ok(()),
+        )
+        .unwrap();
         assert_eq!(m.dom_to_text(NodeId(2), 0), Some((0, Affinity::Downstream)));
         assert_eq!(
             m.text_to_dom(1, Affinity::Downstream),

@@ -8,6 +8,7 @@ pub(super) struct Cost {
     shape_items: u64,
     styles: u64,
     style_bytes: u64,
+    mapping_bytes: u64,
     glyphs: u64,
     cut_work: u64,
 }
@@ -19,6 +20,7 @@ impl Cost {
             LimitKind::Items => self.items,
             LimitKind::Styles => self.styles,
             LimitKind::StyleBytes => self.style_bytes,
+            LimitKind::MappingBytes => self.mapping_bytes,
             LimitKind::ShapedGlyphs => self.glyphs,
             LimitKind::RubyCutWork => self.cut_work,
             _ => 0,
@@ -30,6 +32,7 @@ impl Cost {
             LimitKind::Items => &mut self.items,
             LimitKind::Styles => &mut self.styles,
             LimitKind::StyleBytes => &mut self.style_bytes,
+            LimitKind::MappingBytes => &mut self.mapping_bytes,
             LimitKind::ShapedGlyphs => &mut self.glyphs,
             LimitKind::RubyCutWork => &mut self.cut_work,
             _ => return,
@@ -81,6 +84,7 @@ pub(super) fn limit(limits: &Limits, kind: LimitKind) -> Option<u64> {
         LimitKind::Items => limits.max_items,
         LimitKind::Styles => limits.max_styles,
         LimitKind::StyleBytes => limits.max_style_bytes,
+        LimitKind::MappingBytes => limits.max_mapping_bytes,
         LimitKind::ShapedGlyphs => limits.max_shaped_glyphs,
         LimitKind::RubyCutWork => limits.max_ruby_cut_work,
         _ => None,
@@ -129,6 +133,7 @@ impl RubyBudget {
             LimitKind::Items,
             LimitKind::Styles,
             LimitKind::StyleBytes,
+            LimitKind::MappingBytes,
             LimitKind::ShapedGlyphs,
             LimitKind::RubyCutWork,
         ] {
@@ -145,6 +150,7 @@ impl RubyBudget {
             (LimitKind::Items, &mut remaining.max_items),
             (LimitKind::Styles, &mut remaining.max_styles),
             (LimitKind::StyleBytes, &mut remaining.max_style_bytes),
+            (LimitKind::MappingBytes, &mut remaining.max_mapping_bytes),
             (LimitKind::ShapedGlyphs, &mut remaining.max_shaped_glyphs),
             (LimitKind::RubyCutWork, &mut remaining.max_ruby_cut_work),
         ] {

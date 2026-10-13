@@ -3,7 +3,9 @@ use super::transform_context::*;
 use super::whitespace::Processed;
 use crate::analysis::ItemKind;
 use crate::limits::{LimitExceeded, LimitKind, Limits, WarningKind, WarningSink};
-use crate::mapping::{MappingKind, TransformSpan};
+use crate::mapping::{
+    INDIVISIBLE_BYTES, MappingBudget, MappingKind, TRANSFORM_SPAN_BYTES, TransformSpan,
+};
 use crate::style::{CaseTransform, InlineStyle, TextTransform, WordSpaceTransform};
 use icu_casemap::CaseMapper;
 use icu_locale_core::{LanguageIdentifier, Locale};
@@ -14,6 +16,12 @@ use std::borrow::Cow;
 pub(crate) struct WidthOrigin {
     pub(crate) text: std::ops::Range<u32>,
     pub(crate) before_width: String,
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static WIDTH_ORIGIN_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TRANSFORM_RECORDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 pub(crate) fn transform(
@@ -49,6 +57,7 @@ fn transform_inner(
     mode: crate::geometry::WritingMode,
     mut bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
 ) -> Result<Processed, LimitExceeded> {
+    input.mapping_budget.set_limits(limits)?;
     let omissions = super::combine::omissions(&input, styles, mode);
     if styles
         .iter()
@@ -239,6 +248,7 @@ fn transform_inner(
                 }
             }
             let mut before_width = None;
+            let mut width_mark = None;
             let mut kana_buf = [0; 4];
             let mut width_buf = [0; 4];
             if matches!(item.kind, ItemKind::Text) {
@@ -247,9 +257,14 @@ fn transform_inner(
                 }
                 if width {
                     if style.text_combine_upright == crate::style::TextCombineUpright::All {
-                        before_width = Some(mapped.to_string());
+                        let original = std::mem::replace(&mut mapped, Cow::Borrowed(""));
+                        mapped = map_chars(&original, &mut width_buf, full_width);
+                        // Preserve the scalar's existing Cow until its owned
+                        // origin record has been admitted.
+                        before_width = Some(original);
+                    } else {
+                        mapped = map_chars(&mapped, &mut width_buf, full_width);
                     }
-                    mapped = map_chars(&mapped, &mut width_buf, full_width);
                 }
             }
             if matches!(item.kind, ItemKind::Text)
@@ -262,16 +277,14 @@ fn transform_inner(
                 let sequence = format!("{mapped}{}", full_width(mark));
                 let composed = ComposingNormalizer::new_nfc().normalize(&sequence);
                 if composed.chars().count() == 1 {
-                    if let Some(original) = &mut before_width {
-                        original.push(mark);
-                    }
+                    width_mark = Some(mark);
                     mapped = composed.into_owned().into();
                     consumed_mark = Some(mark_at);
                 }
             }
             let width_changed = before_width
                 .as_deref()
-                .is_some_and(|before| before != mapped.as_ref());
+                .is_some_and(|before| width_mark.is_some() || before != mapped.as_ref());
             if matches!(item.kind, ItemKind::Text) && !omit && c == '\u{200b}' {
                 mapped = match style.word_space_transform {
                     WordSpaceTransform::None => mapped,
@@ -287,18 +300,6 @@ fn transform_inner(
                 bases.item(index, LimitKind::TextBytes, mapped.len() as u64)?;
             }
             let start_new = output.len() as u32;
-            output.push_str(&mapped);
-            // Width reversion applies only to text-transform's width change;
-            // a later word-space substitution must not be reverted to ZWSP.
-            if let Some(before_width) = before_width
-                && width_changed
-                && !mapped.is_empty()
-            {
-                width_origins.push(WidthOrigin {
-                    text: start_new..output.len() as u32,
-                    before_width,
-                });
-            }
             let kind = if mapped.is_empty() {
                 MappingKind::Collapsed
             } else if mapped.len() == c.len_utf8() && mapped.chars().count() == 1 {
@@ -306,6 +307,56 @@ fn transform_inner(
             } else {
                 MappingKind::Expanded
             };
+            let coalesces = spans.last().is_some_and(|last| {
+                kind == MappingKind::Identity
+                    && last.kind == kind
+                    && last.old.end == at as u32
+                    && last.new.end == start_new
+            });
+            if !coalesces {
+                charge_metadata(
+                    &mut input.mapping_budget,
+                    &mut bases,
+                    index,
+                    TRANSFORM_SPAN_BYTES
+                        + if kind == MappingKind::Expanded {
+                            INDIVISIBLE_BYTES
+                        } else {
+                            0
+                        },
+                )?;
+            }
+            if let Some(before) = &before_width
+                && width_changed
+                && !mapped.is_empty()
+            {
+                charge_metadata(
+                    &mut input.mapping_budget,
+                    &mut bases,
+                    index,
+                    std::mem::size_of::<WidthOrigin>() as u64
+                        + before.len() as u64
+                        + width_mark.map_or(0, |mark| mark.len_utf8() as u64),
+                )?;
+            }
+            output.push_str(&mapped);
+            // Width reversion applies only to text-transform's width change;
+            // a later word-space substitution must not be reverted to ZWSP.
+            if let Some(before_width) = before_width
+                && width_changed
+                && !mapped.is_empty()
+            {
+                #[cfg(test)]
+                WIDTH_ORIGIN_COPIES.with(|copies| copies.set(copies.get() + 1));
+                let mut before_width = before_width.into_owned();
+                if let Some(mark) = width_mark {
+                    before_width.push(mark);
+                }
+                width_origins.push(WidthOrigin {
+                    text: start_new..output.len() as u32,
+                    before_width,
+                });
+            }
             let span = TransformSpan {
                 old: at as u32..end as u32,
                 new: start_new..output.len() as u32,
@@ -320,9 +371,19 @@ fn transform_inner(
                 last.old.end = span.old.end;
                 last.new.end = span.new.end;
             } else {
+                #[cfg(test)]
+                TRANSFORM_RECORDS.with(|records| records.set(records.get() + 1));
                 spans.push(span);
             }
         }
+    }
+    if let Some(mapping) = &mut input.mapping {
+        let items = &input.items;
+        let budget = &mut input.mapping_budget;
+        mapping.remap_text(&spans, |bytes, old| {
+            let item = items.partition_point(|item| item.text.end <= old);
+            charge_metadata(budget, &mut bases, item, bytes)
+        })?;
     }
     for item in &mut input.items {
         item.text = TransformSpan::map_position(&spans, item.text.start)
@@ -330,9 +391,6 @@ fn transform_inner(
         if matches!(item.kind, ItemKind::ForcedBreak) && item.text.is_empty() {
             item.kind = ItemKind::BidiControl;
         }
-    }
-    if let Some(mapping) = &mut input.mapping {
-        mapping.remap_text(&spans);
     }
     input.indivisible = spans
         .iter()
@@ -343,6 +401,18 @@ fn transform_inner(
     input.source_spans = spans;
     input.width_origins = width_origins;
     Ok(input)
+}
+
+fn charge_metadata(
+    budget: &mut MappingBudget,
+    bases: &mut Option<&mut crate::ruby::base_budget::BaseScopes>,
+    item: usize,
+    bytes: u64,
+) -> Result<(), LimitExceeded> {
+    budget.charge_with(bytes, |bytes| match bases {
+        Some(bases) => bases.item(item, LimitKind::MappingBytes, bytes),
+        None => Ok(()),
+    })
 }
 
 // Width/kana maps preserve scalar count. A single scalar fits in the caller's
@@ -503,6 +573,7 @@ mod work_tests {
 
     fn input(text: &str) -> Processed {
         Processed {
+            mapping_budget: MappingBudget::new(&Limits::default()),
             text: text.into(),
             items: vec![Item {
                 kind: ItemKind::Text,
@@ -516,6 +587,79 @@ mod work_tests {
             source_spans: Vec::new(),
             width_origins: Vec::new(),
         }
+    }
+
+    #[test]
+    fn width_origins_and_scalar_spans_stop_before_the_rejected_allocation() {
+        let style = InlineStyle {
+            text_transform: TextTransform::FullWidth,
+            text_combine_upright: crate::style::TextCombineUpright::All,
+            ..Default::default()
+        };
+        let scalar_bytes = TRANSFORM_SPAN_BYTES
+            + INDIVISIBLE_BYTES
+            + std::mem::size_of::<WidthOrigin>() as u64
+            + 1;
+        for (limit, expected_copies, expected_records) in [(0, 0, 0), (scalar_bytes, 1, 1)] {
+            WIDTH_ORIGIN_COPIES.with(|copies| copies.set(0));
+            TRANSFORM_RECORDS.with(|records| records.set(0));
+            let error = transform(
+                input("aa"),
+                std::slice::from_ref(&style),
+                &Limits {
+                    max_mapping_bytes: Some(limit),
+                    ..Default::default()
+                },
+                &mut WarningSink::default(),
+                WritingMode::HorizontalTb,
+            )
+            .err()
+            .unwrap();
+            assert_eq!(error.kind, LimitKind::MappingBytes);
+            assert_eq!(error.limit, limit);
+            assert_eq!(
+                WIDTH_ORIGIN_COPIES.with(std::cell::Cell::get),
+                expected_copies
+            );
+            assert_eq!(
+                TRANSFORM_RECORDS.with(std::cell::Cell::get),
+                expected_records
+            );
+        }
+        let processed = transform(
+            input("aa"),
+            std::slice::from_ref(&style),
+            &Limits {
+                max_mapping_bytes: Some(2 * scalar_bytes),
+                ..Default::default()
+            },
+            &mut WarningSink::default(),
+            WritingMode::HorizontalTb,
+        )
+        .unwrap();
+        assert_eq!(processed.text, "ａａ");
+        assert_eq!(processed.mapping_budget.used, 2 * scalar_bytes);
+        assert_eq!(processed.width_origins.len(), 2);
+        assert_eq!(processed.indivisible.len(), 2);
+        // The consumed mark keeps a collapsed span and contributes to the
+        // original string, without creating an empty width-origin record.
+        let kana_bytes =
+            2 * TRANSFORM_SPAN_BYTES + std::mem::size_of::<WidthOrigin>() as u64 + "ｶﾞ".len() as u64;
+        let kana = transform(
+            input("ｶﾞ"),
+            std::slice::from_ref(&style),
+            &Limits {
+                max_mapping_bytes: Some(kana_bytes),
+                ..Default::default()
+            },
+            &mut WarningSink::default(),
+            WritingMode::HorizontalTb,
+        )
+        .unwrap();
+        assert_eq!(kana.text, "ガ");
+        assert_eq!(kana.mapping_budget.used, kana_bytes);
+        assert_eq!(kana.width_origins.len(), 1);
+        assert_eq!(kana.width_origins[0].before_width, "ｶﾞ");
     }
 
     #[test]

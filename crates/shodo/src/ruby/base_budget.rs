@@ -315,6 +315,10 @@ impl BaseScopes {
         self.charge(self.items.get(item).copied().flatten(), kind, amount)
     }
 
+    pub(crate) fn mapping_record(&mut self, bytes: u64) -> Result<(), LimitExceeded> {
+        self.charge(self.current, LimitKind::MappingBytes, bytes)
+    }
+
     /// Whether charging `charges` (item index, glyph count) in order would
     /// stay within every owning scope chain, without touching `spent` or
     /// `failure`. Charges are non-negative and saturating addition is

@@ -232,6 +232,10 @@ impl Paragraph {
             true,
             line_break_override.as_deref(),
         );
+        budget.charge(
+            LimitKind::MappingBytes,
+            normal.processed.mapping_budget.used,
+        )?;
         budget.paragraph_analysis(
             normal.processed.text.len() as u64,
             normal.processed.items.len() as u64,
@@ -275,6 +279,9 @@ impl Paragraph {
                 remaining.max_items = limits
                     .max_items
                     .map(|max| max.saturating_sub(normal.processed.items.len() as u64));
+                remaining.max_mapping_bytes = limits
+                    .max_mapping_bytes
+                    .map(|max| max.saturating_sub(normal.processed.mapping_budget.used));
             }
             // Bound source processing independently, then enforce the aggregate
             // retained-output budget on every alternate append.
@@ -301,7 +308,17 @@ impl Paragraph {
                 && remaining
                     .max_items
                     .is_none_or(|max| max >= input_items.max(normal.processed.items.len() as u64));
+            alternate_reuses_analysis &= remaining
+                .max_mapping_bytes
+                .is_none_or(|max| max >= normal.processed.mapping_budget.used);
             let alternate = if alternate_reuses_analysis {
+                // Reserve the same producer/index allowances as replaying the
+                // normal dataset, before its deep Processed clone.
+                Limits::check(
+                    remaining.max_mapping_bytes,
+                    LimitKind::MappingBytes,
+                    normal.processed.mapping_budget.used,
+                )?;
                 PreparedBuild {
                     style: alternate_style,
                     limits: limits.clone(),
@@ -357,6 +374,14 @@ impl Paragraph {
                         error.actual += normal.processed.items.len() as u64;
                         error.limit = limit;
                     }
+                    if error.kind == LimitKind::MappingBytes
+                        && let Some(limit) = limits.max_mapping_bytes
+                    {
+                        error.actual = error
+                            .actual
+                            .saturating_add(normal.processed.mapping_budget.used);
+                        error.limit = limit;
+                    }
                     error
                 })?;
                 analyze_data(
@@ -371,6 +396,10 @@ impl Paragraph {
                     line_break_override.as_deref(),
                 )
             };
+            budget.charge(
+                LimitKind::MappingBytes,
+                alternate.processed.mapping_budget.used,
+            )?;
             budget.paragraph_analysis(
                 alternate.processed.text.len() as u64,
                 alternate.processed.items.len() as u64,

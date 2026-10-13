@@ -186,6 +186,27 @@ and stops further builder input. `None` disables this budget, as does
 font/paint behavior are preserved. Code that enumerates every field in a `Limits`
 struct literal must add the new field; `..Limits::default()` remains supported.
 
+`Limits::max_mapping_bytes` defaults to 64 MiB of admitted logical transform and
+offset-mapping data per build. Checks precede new transform spans, indivisible
+ranges, width-origin records/owned strings, and DOM/generated mapping records.
+Each mapping record also reserves its private DOM/text/generated range and end
+indexes, logical grouping entries, and construction scratch; public offset
+queries can remain lazy and infallible. Coalesced records pay once, and a
+one-for-one remap carries the original record's reservation.
+
+Normal, first-line (including analysis reuse), and nested ruby datasets share
+the admission budget. Imported bases also retain their own occurrence-local
+caps, including generated isolate controls and remap splits. Producer records
+retired during analysis remain charged; first-line reuse reserves the normal
+pass's producer allowances before cloning. The count excludes allocator
+overhead, spare capacity, fixed container headers, and bounded scalar scratch,
+so it is not a process RSS limit. Public `OffsetMapping` clones retain the same
+bounded dataset; caller-owned clones do not share a build's aggregate quota.
+Exceeding the cap returns `LimitKind::MappingBytes` from analysis/build without
+truncating text, dropping mapping, or merging expanded scalar boundaries.
+Transform provenance is bounded even with `with_offset_mapping(false)`.
+`None` and `Limits::unlimited()` disable this budget for trusted input.
+
 ## Shaping data and budgets
 
 `Limits::max_items` also bounds the itemized shaping runs retained across normal,
@@ -214,8 +235,8 @@ block boundaries discontinue it. `Line::text()` and `Line::offset_mapping()` exp
 the chosen set, so slice that text with `Line::text_range()` rather than slicing
 `Paragraph::text()` for a transformed first line.
 
-Main and first-line processed text, items, styles, and glyphs share each build
-budget. Default shaping runs are bounded by 64 KiB and paragraph glyph output by
+Main and first-line processed text, items, styles, mapping data, and glyphs share
+each build budget. Default shaping runs are bounded by 64 KiB and paragraph glyph output by
 2^22; checks precede copying into retained glyph storage. A giant grapheme or tiny
 run budget warns and makes scalar-level shaping progress while preserving the
 original grapheme as an indivisible layout unit. A run's pen is bounded to ±2^30
