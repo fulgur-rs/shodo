@@ -9,11 +9,12 @@ use std::{collections::HashMap, sync::Arc};
 
 pub(super) struct GlyphWindow<'a, 'font> {
     pub(super) shaping_input: u32,
-    pub(super) shaped: &'a harfrust::GlyphBuffer,
+    pub(super) shaped: &'a harfrust::Buffer,
+    pub(super) shaper: &'a harfrust::ShaperFont<'font, 'font>,
     pub(super) original: &'a ShapeItem,
     pub(super) scalars: &'a [Scalar],
     pub(super) font: FontId,
-    pub(super) instance: &'a harfrust::ShaperInstance,
+    pub(super) instance: &'a skrifa::instance::Location,
     pub(super) run_instance: &'a Arc<RunInstance>,
     pub(super) font_size: f32,
     pub(super) scale: f32,
@@ -38,6 +39,7 @@ impl GlyphWindow<'_, '_> {
         let Self {
             shaping_input,
             shaped,
+            shaper,
             original,
             scalars,
             font,
@@ -201,6 +203,7 @@ impl GlyphWindow<'_, '_> {
                                                     font,
                                                     info.glyph_id,
                                                     instance.coords(),
+                                                    shaper.glyph_v_origin(info.glyph_id.into()).1,
                                                 )
                                             },
                                         )

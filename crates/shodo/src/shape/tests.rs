@@ -2662,13 +2662,13 @@ fn expanded_single_cluster_pen_splits_without_new_breaks() {
     tables.push((*b"GSUB", gsub));
     tables.sort_by_key(|(tag, _)| *tag);
     let bytes = crate::font::sfnt::build_sfnt(&tables);
-    let font = harfrust::FontRef::from_index(&bytes, 0).unwrap();
-    let direct_data = harfrust::ShaperData::new(&font);
-    let shaper = direct_data.shaper(&font).build();
-    let mut buffer = harfrust::UnicodeBuffer::new();
+    let font = harfrust::Font::new(bytes.to_vec(), 0).unwrap();
+    let shaper = harfrust::ShaperFont::new(&font);
+    let mut buffer = harfrust::Buffer::new();
     buffer.push_str("a");
     buffer.guess_segment_properties();
-    let shaped = shaper.shape(buffer, harfrust::ShapeOptions::default());
+    harfrust::shape(&shaper, &mut buffer, harfrust::ShapeOptions::default()).unwrap();
+    let shaped = buffer;
     assert_eq!(shaped.len(), 32, "direct test substitution must expand");
     let limits = Limits::default();
     let fonts = FontCollection::with_options(
@@ -2726,15 +2726,16 @@ fn expanded_single_cluster_pen_splits_without_new_breaks() {
         for item in &mut items {
             item.level = u8::from(rtl);
         }
-        let mut buffer = harfrust::UnicodeBuffer::new();
+        let mut buffer = harfrust::Buffer::new();
         buffer.push_str("a");
-        buffer.set_script(harfrust::script::LATIN);
+        buffer.set_script(Some(harfrust::Script::LATIN));
         buffer.set_direction(if rtl {
             harfrust::Direction::RightToLeft
         } else {
             harfrust::Direction::LeftToRight
         });
-        let expected = shaper.shape(buffer, harfrust::ShapeOptions::default());
+        harfrust::shape(&shaper, &mut buffer, harfrust::ShapeOptions::default()).unwrap();
+        let expected = buffer;
         let mut warnings = crate::limits::WarningSink::default();
         let mut sat = Saturation::default();
         let (glyphs, runs) = shape_items(

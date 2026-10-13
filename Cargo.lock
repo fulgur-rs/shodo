@@ -674,6 +674,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "harfrust"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86aa776d6d32b072119e1f1650f4db843ff4382a4aaa6a2c9c4e35703cd377cb"
+dependencies = [
+ "bitflags",
+ "bytemuck",
+ "read-fonts 0.45.0",
+ "smallvec",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1166,7 +1178,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22d2ff88bd3f7d68d1d9b09c7e6209f9a8e8c05088295140a2bcf2e9b17038c5"
 dependencies = [
  "fontique",
- "harfrust",
+ "harfrust 0.12.0",
  "hashbrown 0.17.1",
  "icu_normalizer",
  "icu_properties",
@@ -1750,7 +1762,7 @@ checksum = "d76194319284cb186078905c396bbaabfd5f022af66b4d462d657c29330c40aa"
 dependencies = [
  "foldhash",
  "fontique",
- "harfrust",
+ "harfrust 0.12.0",
  "icu_casemap",
  "icu_locale_core",
  "icu_normalizer",
@@ -1771,7 +1783,7 @@ dependencies = [
  "flate2",
  "foldhash",
  "fontique",
- "harfrust",
+ "harfrust 0.14.0",
  "icu_casemap",
  "icu_locale_core",
  "icu_normalizer",
@@ -1800,7 +1812,7 @@ name = "shodo-fixtures"
 version = "0.0.0"
 dependencies = [
  "fontique",
- "harfrust",
+ "harfrust 0.14.0",
  "serde",
  "serde_json",
  "sha2",
@@ -1814,7 +1826,7 @@ version = "0.0.0"
 dependencies = [
  "accesskit_consumer",
  "fontique",
- "harfrust",
+ "harfrust 0.14.0",
  "serde",
  "serde_json",
  "sha2",

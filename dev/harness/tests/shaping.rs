@@ -70,10 +70,9 @@ fn direct(
     rtl: bool,
     features: &[harfrust::Feature],
 ) -> Vec<(u32, u32, i32, i32, i32)> {
-    let font = harfrust::FontRef::from_index(FONTS[face].bytes, 0).unwrap();
-    let data = harfrust::ShaperData::new(&font);
-    let shaper = data.shaper(&font).build();
-    let mut b = harfrust::UnicodeBuffer::new();
+    let font = harfrust::Font::new(FONTS[face].bytes.to_vec(), 0).unwrap();
+    let shaper = harfrust::ShaperFont::new(&font);
+    let mut b = harfrust::Buffer::new();
     b.push_str(text);
     b.set_direction(if rtl {
         harfrust::Direction::RightToLeft
@@ -81,7 +80,13 @@ fn direct(
         harfrust::Direction::LeftToRight
     });
     b.guess_segment_properties();
-    let g = shaper.shape(b, harfrust::ShapeOptions::default().features(features));
+    harfrust::shape(
+        &shaper,
+        &mut b,
+        harfrust::ShapeOptions::default().features(features),
+    )
+    .unwrap();
+    let g = b;
     g.glyph_infos()
         .iter()
         .zip(g.glyph_positions())
@@ -804,15 +809,20 @@ fn language_feature_precedence_matches_direct_shaper() {
             ..Default::default()
         };
         let p = build("fi", style, Direction::Ltr, &fonts.collection, None);
-        let font = harfrust::FontRef::from_index(FONTS[0].bytes, 0).unwrap();
-        let data = harfrust::ShaperData::new(&font);
-        let shaper = data.shaper(&font).build();
-        let mut b = harfrust::UnicodeBuffer::new();
+        let font = harfrust::Font::new(FONTS[0].bytes.to_vec(), 0).unwrap();
+        let shaper = harfrust::ShaperFont::new(&font);
+        let mut b = harfrust::Buffer::new();
         b.push_str("fi");
-        b.set_language(language.parse().unwrap());
+        b.set_language(Some(language.parse().unwrap()));
         b.guess_segment_properties();
         let features = [harfrust::Feature::new(harfrust::Tag::new(b"liga"), 0, ..)];
-        let shaped = shaper.shape(b, harfrust::ShapeOptions::default().features(&features));
+        harfrust::shape(
+            &shaper,
+            &mut b,
+            harfrust::ShapeOptions::default().features(&features),
+        )
+        .unwrap();
+        let shaped = b;
         assert_eq!(
             glyphs(&p).iter().map(|g| g.id).collect::<Vec<_>>(),
             shaped

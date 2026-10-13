@@ -59,12 +59,13 @@ use crate::geometry::{LayoutUnit, Saturation, WritingMode};
 use crate::limits::{LimitExceeded, LimitKind, Limits};
 use skrifa::{MetadataProvider, raw::TableProvider};
 
-// Harfrust's vertical-origin fallback only reads glyf bounds. For a CFF face
-// without VORG, OpenType instead requires the CFF outline top plus vmtx TSB.
+// HarfRust centers CFF ink when VORG is absent. Preserve the OpenType origin
+// from the CFF outline top plus vmtx TSB by replacing that fallback origin.
 fn cff_vertical_origin_delta(
     font: &skrifa::FontRef<'_>,
     glyph_id: u32,
     coords: &[skrifa::instance::NormalizedCoord],
+    fallback_origin: i32,
 ) -> Option<f32> {
     #[cfg(test)]
     CFF_ORIGIN_DELTA_CALLS.with(|calls| calls.set(calls.get() + 1));
@@ -87,22 +88,7 @@ fn cff_vertical_origin_delta(
             .as_ref()
             .and_then(|v| v.v_origin_y_delta(glyph, coords))
             .map_or(0.0, |delta| delta.to_i32() as f32);
-    let ascent = font
-        .os2()
-        .ok()
-        .map(|os2| f32::from(os2.s_typo_ascender()))
-        .or_else(|| {
-            font.hhea()
-                .ok()
-                .map(|hhea| f32::from(hhea.ascender().to_i16()))
-        })
-        .unwrap_or(0.0);
-    let ascent_delta = font
-        .mvar()
-        .ok()
-        .and_then(|mvar| mvar.metric_delta(skrifa::Tag::new(b"hasc"), coords))
-        .map_or(0.0, |delta| delta.to_f32());
-    Some(origin - ascent - ascent_delta)
+    Some(origin - fallback_origin as f32)
 }
 
 /// A run is closed before its pen position would exceed this value, so
@@ -950,21 +936,21 @@ fn shape_inputs_with<'a>(
         };
         // Face, shaper, vertical-origin source and language do not change
         // between budget windows of one input; prepare them once per input.
-        let font = font_data.as_ref().map(|data| {
-            harfrust::FontRef::from_index(data.data.as_ref(), data.index).expect("registered face")
-        });
         let shared = original.font.as_ref().map(|found| {
             fonts
                 .shaper_data(found.id)
                 .expect("registered shaping data")
         });
-        let shaper = shared
+        let font = shared
             .as_ref()
-            .zip(font.as_ref())
             .zip(resolved.as_deref())
-            .map(|((shared, font), (instance, _, _))| {
-                shared.shaper(font).instance(Some(instance)).build()
+            .map(|(shared, (instance, _, _))| {
+                shared
+                    .instance_builder()
+                    .normalized_coords(instance.coords().iter().copied())
+                    .build()
             });
+        let shaper = font.as_ref().map(harfrust::ShaperFont::new);
         let cff_without_vorg = font_data
             .as_ref()
             .filter(|_| original.orientation == orientation::RunOrientation::Upright)
@@ -1076,7 +1062,7 @@ fn shape_inputs_with<'a>(
             let mut buffer = cx.scratch.take().unwrap_or_default();
             buffer.clear();
             for scalar in scalars {
-                buffer.add(scalar.c, scalar.offset);
+                buffer.push(scalar.c as u32, scalar.offset);
             }
             // Inner window edges take up to five neighbouring scalars inline;
             // only the input's outer edges use the item context.
@@ -1099,12 +1085,12 @@ fn shape_inputs_with<'a>(
             } else {
                 harfrust::Direction::LeftToRight
             });
-            buffer.set_script(
+            buffer.set_script(Some(
                 harfrust::Script::from_iso15924_tag(harfrust::Tag::new(&original.script))
-                    .unwrap_or(harfrust::script::UNKNOWN),
-            );
+                    .unwrap_or(harfrust::Script::UNKNOWN),
+            ));
             if let Some(language) = &language {
-                buffer.set_language(language.clone());
+                buffer.set_language(Some(language.clone()));
             }
             // Keep controls in the shaping input for joining/substitutions, but
             // remove their residual glyphs: even a zero-width space can have ink.
@@ -1115,15 +1101,16 @@ fn shape_inputs_with<'a>(
             }
             buffer.set_flags(flags);
             let features = &run_instance.features;
-            let plan = cx
-                .plans
-                .get(found.id, shaper, &buffer, Some(instance), features);
-            let shaped = shaper.shape(
-                buffer,
+            let plan = cx.plans.get(found.id, shaper, &buffer, features);
+            harfrust::shape(
+                shaper,
+                &mut buffer,
                 harfrust::ShapeOptions::default()
                     .features(features)
                     .plan(Some(&plan)),
-            );
+            )
+            .expect("matching shaping plan and buffer properties");
+            let mut shaped = buffer;
             #[cfg(test)]
             HARFRUST_SHAPE_CALLS.with(|calls| calls.set(calls.get() + 1));
             Limits::check(
@@ -1163,6 +1150,7 @@ fn shape_inputs_with<'a>(
             let window = window::GlyphWindow {
                 shaping_input,
                 shaped: &shaped,
+                shaper,
                 original,
                 scalars,
                 font: found.id,
@@ -1193,7 +1181,8 @@ fn shape_inputs_with<'a>(
                     .next_power_of_two()
                     .saturating_mul(128),
             );
-            cx.scratch = Some(shaped.clear());
+            shaped.clear();
+            cx.scratch = Some(shaped);
             cx.bound_shaping_scratch(limits);
         }
     }

@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 struct Entry {
     index: u32,
-    data: Arc<harfrust::ShaperData>,
+    data: Arc<harfrust::Font>,
     used: AtomicU64,
 }
 
@@ -18,7 +18,7 @@ pub(super) struct ShaperCache {
 }
 
 impl ShaperCache {
-    pub(super) fn get(&self, index: u32) -> Option<Arc<harfrust::ShaperData>> {
+    pub(super) fn get(&self, index: u32) -> Option<Arc<harfrust::Font>> {
         let entry = self.slots.get(*self.index.get(&index)?)?;
         #[cfg(test)]
         super::SHAPER_SEARCH_COMPARISONS.with(|count| count.set(count.get() + 1));
@@ -29,7 +29,7 @@ impl ShaperCache {
 
     // The caller holds the cache writer and rechecks after constructing a
     // missing handle, so each font index has at most one retained entry.
-    pub(super) fn insert(&mut self, index: u32, data: Arc<harfrust::ShaperData>, cap: u64) {
+    pub(super) fn insert(&mut self, index: u32, data: Arc<harfrust::Font>, cap: u64) {
         if cap == 0 {
             return;
         }
@@ -69,7 +69,7 @@ impl ShaperCache {
     }
 
     #[cfg(test)]
-    pub(super) fn iter(&self) -> impl Iterator<Item = (&u32, &Arc<harfrust::ShaperData>)> {
+    pub(super) fn iter(&self) -> impl Iterator<Item = (&u32, &Arc<harfrust::Font>)> {
         self.slots.iter().map(|entry| (&entry.index, &entry.data))
     }
 }

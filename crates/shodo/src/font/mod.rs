@@ -622,10 +622,15 @@ impl FontCollection {
         }
     }
 
-    /// Shared, entry-count-bounded shaping data for a registered face.
-    /// Returned handles remain usable after LRU eviction. Zero disables
-    /// retention without disabling shaping.
-    pub fn shaper_data(&self, id: FontId) -> Option<Arc<harfrust::ShaperData>> {
+    /// Shared, entry-count-bounded HarfRust font for a registered face.
+    /// The font owns a shared reference to the registered bytes. Returned
+    /// handles remain usable after LRU eviction or collection drop. Zero
+    /// disables retention without disabling shaping.
+    ///
+    /// With HarfRust 0.14 this returns `Arc<harfrust::Font>`. Prepare it with
+    /// `harfrust::ShaperFont::new`, or use `Font::instance_builder` to select
+    /// variation coordinates before shaping.
+    pub fn shaper_data(&self, id: FontId) -> Option<Arc<harfrust::Font>> {
         if id.layer != self.layer.id {
             return self.layer.parent.as_ref()?.shaper_data(id);
         }
@@ -635,8 +640,8 @@ impl FontCollection {
         // Clone the face under the catalog lock, then build without either
         // lock. Concurrent misses can build redundantly but retain one handle.
         let data = self.state().faces.get(id.index as usize)?.clone();
-        let font = harfrust::FontRef::from_index(data.data.as_ref(), data.index).ok()?;
-        let shaper = Arc::new(harfrust::ShaperData::new(&font));
+        let source: Arc<dyn AsRef<[u8]> + Send + Sync> = Arc::new(data.data.clone());
+        let shaper = Arc::new(harfrust::Font::new(source, data.index)?);
         let cap = self
             .layer
             .limits

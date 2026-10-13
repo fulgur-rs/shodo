@@ -85,7 +85,9 @@ fn intrinsic_reshape_budget_is_independent_of_previous_operation() {
 #[test]
 fn intrinsic_first_line_passes_share_one_reshape_budget() {
     let limits = Limits {
-        max_reshape_window_bytes: Some(16),
+        // HarfRust 0.14's additional unsafe-to-concat boundaries require
+        // more edge work. One pass must fit while the two-pass total does not.
+        max_reshape_window_bytes: Some(32),
         ..Default::default()
     };
     let text = format!("{} ", LATIN_SPACING).repeat(32);
