@@ -135,3 +135,21 @@ AMD Ryzen 5 5600G の CPU 2 に固定。独立 3 process × 21 sample、warmup 3
 
 一時 build/log は `~/tmp/shodo-34-target` と `~/tmp/shodo-34-checks`。
 最終結果を本記録へ移した後、親 task が他課題の成果物と区別して片付ける。
+
+## 最終版の独立比較
+
+最終実装 `5094548`（fallback metrics の guard 前 precompute を含む）を基準 `c892cae` と交互比較した。Rust 1.97.1、release opt-level 3、同じ fixture/lock/complex-scripts、system fonts無効、CPU2固定、warmup3、独立3process×21samples。paragraph/line構築は時間外、全既存行の矩形収集と破棄は時間内。テストが終わり、他のtask buildはCPU2/8を避けた最終値であり、上の暫定SMT負荷下測定値を置換する。
+
+| workload / operation | 基準 ms | 修正 ms | 比 |
+| --- | ---: | ---: | ---: |
+| Japanese-short/1 overflow | 0.0803 | 0.0045 | 0.0556 |
+| Japanese-long/8 overflow | 7.6618 | 0.3953 | 0.0516 |
+| Japanese-long/64 overflow | 61.7240 | 3.1491 | 0.0510 |
+| Japanese-short/1 layout | 0.0231 | 0.0232 | 1.0031 |
+| Japanese-long/64 layout | 15.1277 | 15.2031 | 1.0050 |
+
+overflowで約94〜95%短縮、layout時間の小差は改善として扱わない。allocatorのwarm overflowは両版とも矩形Vec1 allocation（short48、long/8 2560、/64 20480 requested bytes）、net保持0。初回warming後のlive requested bytes差は全scaleで1976bytes。最大保持条件とowner解放は別の回帰テストで確認した。RSSや全ページ性能を示す値ではない。
+
+最終codeに対する813ケースの各public/manual/internal経路の出力・警告は基準版と完全一致した。正規化837,421,847bytesのSHA-256は `d22e6d8a0201bfe2ee40201eba58ef6e5704cedc45929d99e8637c83bc8c0616`。元edge_cache_evictionのinternal/manual自己比較は基準でもblock-offset差で失敗するため、同経路を変更前後で直接比較する一時driverを使用し、fixture/期待値は更新していない。
+
+独立レビューで必須修正なし。[全samples・allocator・再現source/manifest/lock](shodo-34-measurements-2026-10-14.json)を正式保存した。JSONdriver_source / snapshot_sourceを~/tmpの一時crateへ置き、manifestのCHECKOUTを各revisionのcheckoutへ置換しoffline release buildする。時間版を保存してからallocation-counting版を別保存し、CPU2で交互に3process実行する。最終HEADの全workspace・feature・MSRV・WasmはPR CIで確認してからmergeする。
