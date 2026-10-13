@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.29](https://github.com/fulgur-rs/shodo/compare/v0.0.28...v0.0.29) - 2026-10-13
+
+### Fixed
+
+- *(ruby)* avoid cloning suppressed snapshot warnings (SHODO-29)
+- *(ruby)* bound structural validation before allocation (SHODO-28)
+
+### Other
+
+- Merge pull request #314 from fulgur-rs/fix/shodo-28-ruby-validation-budget
+
 ## [0.0.28](https://github.com/fulgur-rs/shodo/compare/v0.0.27...v0.0.28) - 2026-10-13
 
 ### Fixed
