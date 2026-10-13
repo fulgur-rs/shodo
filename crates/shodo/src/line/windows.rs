@@ -15,13 +15,107 @@ pub(super) struct Window {
 }
 impl Window {
     pub(super) fn delta(&self, through: usize, sat: &mut Saturation) -> LayoutUnit {
-        self.changes
-            .iter()
-            .filter(|(i, _, _)| *i < through)
-            .fold(LayoutUnit::ZERO, |p, (_, old, new)| {
-                p.add(new.sub(*old, sat), sat)
-            })
+        changes_delta(&self.changes, through, sat)
     }
+}
+
+/// Width and coverage results need no glyph ownership after measurement.
+struct MeasuredWindow {
+    glyphs: Range<u32>,
+    text: Range<u32>,
+    glyph_count: usize,
+    changes: Vec<(usize, LayoutUnit, LayoutUnit)>,
+}
+
+impl MeasuredWindow {
+    fn delta(&self, through: usize, sat: &mut Saturation) -> LayoutUnit {
+        changes_delta(&self.changes, through, sat)
+    }
+}
+
+/// Specialize the same validation and arithmetic for compact measurements and
+/// final owned overlays, without an intermediate vector of glyph handles.
+trait WindowOutput {
+    fn from_shape(
+        glyphs: Range<u32>,
+        text: Range<u32>,
+        shaped: WindowHandle,
+        changes: Vec<(usize, LayoutUnit, LayoutUnit)>,
+        replacement: Option<&crate::shape::Replacement>,
+    ) -> Self;
+    fn glyphs(&self) -> &Range<u32>;
+    fn glyph_count(&self) -> usize;
+}
+
+impl WindowOutput for Window {
+    fn from_shape(
+        glyphs: Range<u32>,
+        text: Range<u32>,
+        shaped: WindowHandle,
+        changes: Vec<(usize, LayoutUnit, LayoutUnit)>,
+        replacement: Option<&crate::shape::Replacement>,
+    ) -> Self {
+        let hyphen = replacement
+            .filter(|r| text.start <= r.text.start && r.text.end <= text.end)
+            .map(|r| r.text.clone());
+        let (store, runs) = shaped.into_owned();
+        Self {
+            overlay: EdgeOverlay {
+                glyphs,
+                text,
+                store,
+                runs,
+                hyphen,
+            },
+            changes,
+        }
+    }
+
+    fn glyphs(&self) -> &Range<u32> {
+        &self.overlay.glyphs
+    }
+
+    fn glyph_count(&self) -> usize {
+        self.overlay.store.len()
+    }
+}
+
+impl WindowOutput for MeasuredWindow {
+    fn from_shape(
+        glyphs: Range<u32>,
+        text: Range<u32>,
+        shaped: WindowHandle,
+        changes: Vec<(usize, LayoutUnit, LayoutUnit)>,
+        _replacement: Option<&crate::shape::Replacement>,
+    ) -> Self {
+        Self {
+            glyphs,
+            text,
+            glyph_count: shaped.0.len(),
+            changes,
+        }
+    }
+
+    fn glyphs(&self) -> &Range<u32> {
+        &self.glyphs
+    }
+
+    fn glyph_count(&self) -> usize {
+        self.glyph_count
+    }
+}
+
+fn changes_delta(
+    changes: &[(usize, LayoutUnit, LayoutUnit)],
+    through: usize,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    changes
+        .iter()
+        .filter(|(i, _, _)| *i < through)
+        .fold(LayoutUnit::ZERO, |p, (_, old, new)| {
+            p.add(new.sub(*old, sat), sat)
+        })
 }
 
 pub(super) fn hyphen(
@@ -35,11 +129,13 @@ pub(super) fn hyphen(
     if !remaining_valid(data, start, end, cx, sat) {
         return None;
     }
-    let windows = measure_edit(data, start, end, Some(replacement), cx, sat);
+    let windows = measure_edit::<Window>(data, start, end, Some(replacement), cx, sat);
     let generated = windows.iter().any(|w| {
         w.overlay.text.start <= replacement.text.start && replacement.text.end <= w.overlay.text.end
     });
-    if !generated || !covers_partial_edges(data, start, end, &windows) {
+    if !generated
+        || !covers_partial_edges(data, start, end, windows.iter().map(|w| &w.overlay.text))
+    {
         return None;
     }
     Some(windows)
@@ -448,7 +544,7 @@ fn window_budget_warning(cx: &mut LayoutContext) {
 
 /// Re-shape to original safe boundaries, then check new concatenation flags.
 /// A right-hand probe detects a changed join without submitting raw markers.
-fn materialize(
+fn materialize<T: WindowOutput>(
     data: &ParagraphData,
     line: &Range<usize>,
     mut range: Range<usize>,
@@ -456,7 +552,7 @@ fn materialize(
     sat: &mut Saturation,
     budget: Option<u64>,
     replacement: Option<&crate::shape::Replacement>,
-) -> Option<Window> {
+) -> Option<T> {
     if !expand_original(data, line, &mut range) {
         window_budget_warning(cx);
         return None;
@@ -549,22 +645,13 @@ fn materialize(
         let UnitKind::Cluster { glyphs: end, .. } = &data.units[range.end - 1].kind else {
             unreachable!()
         };
-        let (store, runs) = shaped.into_owned();
-        return Some(Window {
-            overlay: EdgeOverlay {
-                glyphs: begin.start..end.end,
-                text: data.units[range.start].text.start..data.units[range.end - 1].text.end,
-                store,
-                runs,
-                hyphen: replacement
-                    .filter(|r| {
-                        data.units[range.start].text.start <= r.text.start
-                            && r.text.end <= data.units[range.end - 1].text.end
-                    })
-                    .map(|r| r.text.clone()),
-            },
+        return Some(T::from_shape(
+            begin.start..end.end,
+            data.units[range.start].text.start..data.units[range.end - 1].text.end,
+            shaped,
             changes,
-        });
+            replacement,
+        ));
     }
 }
 
@@ -578,14 +665,14 @@ pub(super) fn measure(
     measure_edit(data, start, end, None, cx, sat)
 }
 
-fn measure_edit(
+fn measure_edit<T: WindowOutput>(
     data: &ParagraphData,
     start: usize,
     end: usize,
     replacement: Option<&crate::shape::Replacement>,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
-) -> Vec<Window> {
+) -> Vec<T> {
     let line = start..end;
     let (Some(first_at), Some(last_at)) = (first(data, start, end), last(data, start, end)) else {
         return Vec::new();
@@ -633,24 +720,21 @@ fn measure_edit(
         ranges[0].end = ranges[0].end.max(ranges[1].end);
         ranges.pop();
     }
-    let mut windows: Vec<Window> = Vec::new();
+    let mut windows: Vec<T> = Vec::new();
     for range in ranges {
-        let retained = windows
-            .iter()
-            .map(|w| w.overlay.store.len() as u64)
-            .sum::<u64>();
+        let retained = windows.iter().map(|w| w.glyph_count() as u64).sum::<u64>();
         let budget = data
             .limits
             .max_shaped_glyphs
             .map(|max| max.saturating_sub(retained));
-        if let Some(window) = materialize(data, &line, range, cx, sat, budget, replacement) {
+        if let Some(window) = materialize::<T>(data, &line, range, cx, sat, budget, replacement) {
             if let Some(previous) = windows.last()
-                && previous.overlay.glyphs.end > window.overlay.glyphs.start
+                && previous.glyphs().end > window.glyphs().start
             {
                 // Revalidation may grow two formerly disjoint windows together.
                 let merged = first_at..last_at + 1;
                 windows.clear();
-                if let Some(window) = materialize(
+                if let Some(window) = materialize::<T>(
                     data,
                     &line,
                     merged,
@@ -676,16 +760,16 @@ pub(super) fn delta(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> LayoutUnit {
-    measure(data, start, end, cx, sat)
+    measure_edit::<MeasuredWindow>(data, start, end, None, cx, sat)
         .iter()
         .fold(LayoutUnit::ZERO, |p, w| p.add(w.delta(end, sat), sat))
 }
 
-fn covers_partial_edges(
+fn covers_partial_edges<'a>(
     data: &ParagraphData,
     start: usize,
     end: usize,
-    windows: &[Window],
+    windows: impl Iterator<Item = &'a Range<u32>> + Clone,
 ) -> bool {
     [first(data, start, end), last(data, start, end)]
         .into_iter()
@@ -693,9 +777,9 @@ fn covers_partial_edges(
         .all(|at| {
             let range = clipped_group(data, at, &(start..end));
             !partial(data, &range)
-                || windows.iter().any(|window| {
-                    window.overlay.text.start <= data.units[range.start].text.start
-                        && window.overlay.text.end >= data.units[range.end - 1].text.end
+                || windows.clone().any(|text| {
+                    text.start <= data.units[range.start].text.start
+                        && text.end >= data.units[range.end - 1].text.end
                 })
         })
 }
@@ -710,9 +794,11 @@ pub(super) fn candidate(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> (LayoutUnit, bool) {
-    let windows = measure(data, start, end, cx, sat);
-    let delta = cost(&windows, end, sat);
-    let covered = covers_partial_edges(data, start, end, &windows);
+    let windows = measure_edit::<MeasuredWindow>(data, start, end, None, cx, sat);
+    let delta = windows
+        .iter()
+        .fold(LayoutUnit::ZERO, |p, w| p.add(w.delta(end, sat), sat));
+    let covered = covers_partial_edges(data, start, end, windows.iter().map(|w| &w.text));
     drop(windows);
     let valid = covered && remaining_valid(data, start, end, cx, sat);
     (delta, valid)
@@ -727,8 +813,8 @@ fn remaining_valid(
 ) -> bool {
     let remainder = last(data, start, end).is_some_and(|at| group(data, at).end > end);
     !remainder || {
-        let windows = measure(data, end, data.units.len(), cx, sat);
-        covers_partial_edges(data, end, data.units.len(), &windows)
+        let windows = measure_edit::<MeasuredWindow>(data, end, data.units.len(), None, cx, sat);
+        covers_partial_edges(data, end, data.units.len(), windows.iter().map(|w| &w.text))
     }
 }
 
@@ -737,3 +823,6 @@ mod tests;
 
 #[cfg(test)]
 mod edge_shape_cache_tests;
+
+#[cfg(test)]
+mod candidate_tests;
