@@ -778,6 +778,93 @@ fn ordinary_text_stays_under_the_edge_reshape_budget() {
     );
 }
 
+/// A long paragraph used to fill the glyph cache near its beginning, forcing
+/// every later candidate through shaping again on every repeated layout.
+#[test]
+fn long_arabic_relayout_reuses_width_measurements_after_glyph_retention_fills() {
+    let mut style = ParagraphStyle::default();
+    style.root.font_families = vec![crate::style::FontFamily::Named(
+        "Shodo Fixture Arabic".into(),
+    )];
+    style.root.font_size = 16.0;
+    style.root.lang = Some("ar".into());
+    style.direction = crate::geometry::Direction::Rtl;
+    let text = vec![
+        "مرحبا بالعالم. الكتابة العربية جميلة، وتتصل الحروف في الكلمات.";
+        12 * 64
+    ]
+    .join(" ");
+    let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+    builder.push_text(TextSource::Generated { node: NodeId(1) }, &text);
+    let paragraph = builder
+        .build(&mut LayoutContext::new(), &arabic_fonts())
+        .unwrap();
+    let calls = || {
+        paragraph
+            .data
+            .edge_shape_calls
+            .load(std::sync::atomic::Ordering::Relaxed)
+    };
+    let mut warm = LayoutContext::new();
+    let before = calls();
+    let first = break_all_arabic(&paragraph, 420.0, &mut warm);
+    let cold_calls = calls() - before;
+    assert!(cold_calls > 100, "fixture must exercise a long edge scan");
+    let before = calls();
+    let second = break_all_arabic(&paragraph, 420.0, &mut warm);
+    let warm_calls = calls() - before;
+    assert_eq!(first, second);
+    eprintln!("cache {:?}", warm.edge_shapes);
+    assert!(
+        warm_calls < cold_calls / 3,
+        "warm layout reshaped {warm_calls} windows after {cold_calls} cold calls"
+    );
+    for width in [240.0, 480.0, 320.0] {
+        let before = calls();
+        let changed = break_all_arabic(&paragraph, width, &mut warm);
+        let changed_calls = calls() - before;
+        let before = calls();
+        let fresh = break_all_arabic(&paragraph, width, &mut LayoutContext::new());
+        let fresh_calls = calls() - before;
+        assert_eq!(changed, fresh, "changed width {width}");
+        let before = calls();
+        let repeated = break_all_arabic(&paragraph, width, &mut warm);
+        let repeated_calls = calls() - before;
+        assert_eq!(repeated, fresh, "repeated width {width}");
+        assert!(
+            repeated_calls <= changed_calls,
+            "repeat at {width}: {repeated_calls} vs changed {changed_calls}"
+        );
+        eprintln!(
+            "Arabic/64 width={width} cold={fresh_calls} changed={changed_calls} repeated={repeated_calls} cache={:?}",
+            warm.edge_shapes
+        );
+    }
+    eprintln!("Arabic/64 fixed cold={cold_calls} warm={warm_calls}");
+}
+
+#[test]
+fn edge_measurements_follow_the_owner_across_many_short_paragraphs() {
+    use std::sync::atomic::Ordering;
+    let mut cx = LayoutContext::new();
+    for index in 0..24 {
+        let paragraph = arabic_paragraph(Limits::default(), 1 + index % 3);
+        let width = 120.0 + 10.0 * index as f32;
+        let first = break_all_arabic(&paragraph, width, &mut cx);
+        let fresh = break_all_arabic(&paragraph, width, &mut LayoutContext::new());
+        assert_eq!(first, fresh, "paragraph {index}");
+        let before = paragraph.data.edge_shape_calls.load(Ordering::Relaxed);
+        assert_eq!(break_all_arabic(&paragraph, width, &mut cx), fresh);
+        assert_eq!(
+            paragraph.data.edge_shape_calls.load(Ordering::Relaxed),
+            before,
+            "paragraph {index} should retain all short windows"
+        );
+    }
+    cx.shrink_to(usize::MAX);
+    assert_eq!(cx.edge_shapes.len(), 0);
+}
+
 #[derive(Clone, Copy, Debug)]
 enum Terminator {
     End,

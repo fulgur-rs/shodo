@@ -51,7 +51,9 @@ fn full_cache_preserves_resident_windows() {
 fn rejected_cache_snapshot_keeps_owned_vectors_without_clone() {
     let mut cache = EdgeShapeCache::default();
     for i in 0..EDGE_SHAPE_CACHE_ENTRIES {
-        assert!(cache.insert((i, i + 1, None), &window(0)));
+        if !cache.insert((i, i + 1, None), &window(0)) {
+            break;
+        }
     }
     let owned = Arc::try_unwrap(window(8)).unwrap();
     let pointer = owned.0.id.as_ptr();
@@ -336,4 +338,41 @@ fn cached_miss_returns_original_owned_vectors() {
     let (output, _) = handle.into_owned();
     assert_eq!(output.id.as_ptr(), pointer);
     assert_eq!(output.id.capacity(), 64);
+}
+
+#[test]
+fn candidate_measurements_and_glyphs_share_one_bounded_retention_budget() {
+    let mut cx = LayoutContext::new();
+    let sat = Saturation::default();
+    let recording = super::super::replay::begin(&mut cx, &sat);
+    let effects = super::super::replay::finish(&mut cx, recording, &sat).unwrap();
+    let mut cache = EdgeShapeCache::default();
+    for i in 0..20_000 {
+        cache.remember_measurement(CandidateMeasurement {
+            key: (i, i + 1),
+            delta: LayoutUnit::ZERO,
+            valid: true,
+            effects,
+        });
+        cache.insert((i, i + 1, None), &window(8));
+        let glyph_cost: usize = cache
+            .entries
+            .values()
+            .map(|w| window_storage_cost(w, false))
+            .sum();
+        assert_eq!(cache.cost, glyph_cost + cache.measurement_storage_cost());
+        assert!(cache.cost <= EDGE_SHAPE_CACHE_COST);
+    }
+    assert!(cache.measurement((0, 1)).is_some());
+    assert!(cache.get(&(0, 1, None)).is_some());
+    assert!(cache.measurement((19_999, 20_000)).is_none());
+    cache.clear();
+    assert_eq!(
+        (
+            cache.cost,
+            cache.measurements.capacity(),
+            cache.entries.capacity()
+        ),
+        (0, 0, 0)
+    );
 }

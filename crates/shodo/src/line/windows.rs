@@ -184,20 +184,46 @@ fn partial(data: &ParagraphData, range: &Range<usize>) -> bool {
 /// total counts retained vector capacity and a metadata allowance. Oversized
 /// results are not cached. Once full, preserve resident results rather than
 /// repeatedly discarding the entire cache during a long candidate scan.
+/// A quarter of the byte budget is reserved for compact candidate width/validity
+/// records. They replay the full measurement's budget and saturation effects
+/// through `replay`, including the partial-cluster suffix check. They own no
+/// drawing glyphs, so later candidates still fit after glyph admission stops.
 #[derive(Default)]
 pub(crate) struct EdgeShapeCache {
     owner: Option<(u64, usize)>,
     entries: crate::hashing::FastMap<(usize, usize, Option<u64>), ShapedWindow>,
     cost: usize,
+    measurements: Vec<CandidateMeasurement>,
+    #[cfg(test)]
+    measurement_hits: usize,
+    #[cfg(test)]
+    measurement_misses: usize,
 }
 
 impl std::fmt::Debug for EdgeShapeCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EdgeShapeCache")
+        let mut debug = f.debug_struct("EdgeShapeCache");
+        debug
             .field("entries", &self.entries.len())
             .field("cost", &self.cost)
-            .finish()
+            .field("measurements", &self.measurements.len());
+        #[cfg(test)]
+        debug
+            .field("measurement_hits", &self.measurement_hits)
+            .field("measurement_misses", &self.measurement_misses);
+        debug.finish()
     }
+}
+
+/// Inline records avoid a glyph store, run instances, and a hash-table slot
+/// allowance for every candidate. Keys stay sorted; an ordinary line scan
+/// appends new starts and inserts only among the latest start's endpoints.
+#[derive(Clone, Copy)]
+struct CandidateMeasurement {
+    key: (usize, usize),
+    delta: LayoutUnit,
+    valid: bool,
+    effects: super::replay::Effects,
 }
 
 type OwnedShapedWindow = (crate::shape::GlyphStore, Vec<crate::shape::ShapedRun>);
@@ -254,6 +280,10 @@ const EDGE_SHAPE_CACHE_ENTRIES: usize = 2048;
 /// Accounted retained bytes, including a conservative metadata allowance.
 /// This bounds cache storage, rather than process RSS or allocator overhead.
 const EDGE_SHAPE_CACHE_COST: usize = 1 << 20;
+// Reserve a quarter for compact width/validity measurements, so drawing snapshots
+// cannot prevent later candidates from being remembered in a long paragraph.
+const EDGE_MEASUREMENT_CACHE_COST: usize = EDGE_SHAPE_CACHE_COST / 4;
+const EDGE_MEASUREMENT_GROWTH: usize = 64;
 /// A single window costing more than this is shaped every time instead.
 const EDGE_SHAPE_ENTRY_COST_MAX: usize = 1 << 10;
 
@@ -331,6 +361,12 @@ impl EdgeShapeCache {
     pub(crate) fn clear(&mut self) {
         self.entries = Default::default();
         self.cost = 0;
+        self.measurements = Vec::new();
+        #[cfg(test)]
+        {
+            self.measurement_hits = 0;
+            self.measurement_misses = 0;
+        }
         self.owner = None;
     }
 
@@ -340,9 +376,51 @@ impl EdgeShapeCache {
 
     fn can_insert(&self, key: &(usize, usize, Option<u64>), cost: usize) -> bool {
         let previous = self.entries.get(key);
-        let retained = self.cost - previous.map_or(0, |w| window_storage_cost(w, false));
+        let retained = self.cost
+            - self.measurement_storage_cost()
+            - previous.map_or(0, |w| window_storage_cost(w, false));
         (previous.is_some() || self.entries.len() < EDGE_SHAPE_CACHE_ENTRIES)
-            && cost <= EDGE_SHAPE_CACHE_COST - retained
+            && cost <= EDGE_SHAPE_CACHE_COST - EDGE_MEASUREMENT_CACHE_COST - retained
+    }
+
+    fn measurement_storage_cost(&self) -> usize {
+        self.measurements.capacity() * std::mem::size_of::<CandidateMeasurement>()
+    }
+
+    fn measurement(&self, key: (usize, usize)) -> Option<CandidateMeasurement> {
+        self.measurements
+            .binary_search_by_key(&key, |m| m.key)
+            .ok()
+            .map(|i| self.measurements[i])
+    }
+
+    fn remember_measurement(&mut self, measurement: CandidateMeasurement) {
+        let index = match self
+            .measurements
+            .binary_search_by_key(&measurement.key, |m| m.key)
+        {
+            Ok(index) => {
+                self.measurements[index] = measurement;
+                return;
+            }
+            Err(index) => index,
+        };
+        if self.measurements.len() == self.measurements.capacity() {
+            let capacity = self.measurements.capacity() + EDGE_MEASUREMENT_GROWTH;
+            if capacity * std::mem::size_of::<CandidateMeasurement>() > EDGE_MEASUREMENT_CACHE_COST
+            {
+                return;
+            }
+            let mut grown = Vec::with_capacity(capacity);
+            let bytes = grown.capacity() * std::mem::size_of::<CandidateMeasurement>();
+            if bytes > EDGE_MEASUREMENT_CACHE_COST {
+                return;
+            }
+            grown.extend_from_slice(&self.measurements);
+            self.cost += bytes - self.measurement_storage_cost();
+            self.measurements = grown;
+        }
+        self.measurements.insert(index, measurement);
     }
 
     /// Returns whether the window was retained.
@@ -745,6 +823,21 @@ pub(super) fn candidate(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> (LayoutUnit, bool) {
+    cx.edge_shapes.begin(data);
+    if let Some(hit) = cx.edge_shapes.measurement((start, end))
+        && super::replay::replay(cx, &hit.effects, sat)
+    {
+        #[cfg(test)]
+        {
+            cx.edge_shapes.measurement_hits += 1;
+        }
+        return (hit.delta, hit.valid);
+    }
+    #[cfg(test)]
+    {
+        cx.edge_shapes.measurement_misses += 1;
+    }
+    let recording = super::replay::begin(cx, sat);
     let windows = measure_edit(data, start, end, None, cx, sat);
     let delta = windows
         .iter()
@@ -752,6 +845,16 @@ pub(super) fn candidate(
     let covered = covers_partial_edges(data, start, end, windows.iter().map(|w| &w.text));
     drop(windows);
     let valid = covered && remaining_valid(data, start, end, cx, sat);
+    if let Some(effects) = super::replay::finish(cx, recording, sat)
+        && !(effects.is_empty() && delta == LayoutUnit::ZERO && valid)
+    {
+        cx.edge_shapes.remember_measurement(CandidateMeasurement {
+            key: (start, end),
+            delta,
+            valid,
+            effects,
+        });
+    }
     (delta, valid)
 }
 
