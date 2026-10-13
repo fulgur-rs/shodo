@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.28](https://github.com/fulgur-rs/shodo/compare/v0.0.27...v0.0.28) - 2026-10-13
+
+### Fixed
+
+- *(font)* admit and share CSS descriptor metadata
+- *(analysis)* bound transform and offset mapping metadata
+- *(font)* bound shared CSS local name resolution
+
+### Other
+
+- Bound paragraph analysis payload and scratch admission
+- *(deps)* upgrade harfrust to 0.14
+
 ## [0.0.27](https://github.com/fulgur-rs/shodo/compare/v0.0.26...v0.0.27) - 2026-10-12
 
 ### Fixed
