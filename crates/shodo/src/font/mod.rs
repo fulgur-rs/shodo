@@ -208,6 +208,7 @@ struct LayerState {
     source_cache: fontique::SourceCache,
     retained_sources: std::collections::HashMap<fontique::SourceId, Blob<u8>>,
     system_loaded: bool,
+    local_names: source::LocalNames,
     options: FontOptions,
     generics: std::collections::HashMap<crate::style::GenericFamily, Vec<String>>,
     fallbacks: Vec<matching::FallbackEntry>,
@@ -363,6 +364,7 @@ impl FontCollection {
                     source_cache: fontique::SourceCache::default(),
                     retained_sources: Default::default(),
                     system_loaded: false,
+                    local_names: Default::default(),
                     options,
                     generics: Default::default(),
                     fallbacks: Vec::new(),
@@ -387,7 +389,8 @@ impl FontCollection {
     }
 
     /// Checks and registers a font file or collection. Returns the id of its
-    /// first face. On error nothing is stored.
+    /// first face. On error nothing is stored. Once local lookup has started,
+    /// root additions must also fit the installed-name index budgets.
     pub fn register(&self, data: Vec<u8>) -> Result<FontId, FontError> {
         let limits = &self.layer.limits;
         let faces = check::check_font(&data, limits)?;
@@ -403,9 +406,11 @@ impl FontCollection {
             LimitKind::LayerBlobBytes,
             bytes,
         )?;
-        state.blob_bytes = bytes;
         let first = state.faces.len() as u32;
         let blob = Blob::from(data);
+        let local_names = state
+            .local_names
+            .prepare_registration(&state, &blob, 0, faces, limits)?;
         let registered = state.native.register_fonts(blob.clone(), None);
         let mut infos = vec![None; faces as usize];
         for (_, family) in registered {
@@ -425,6 +430,15 @@ impl FontCollection {
             let slot = state.faces.len() - 1;
             state.index_face(slot, true);
         }
+        if let Some(prepared) = local_names {
+            let LayerState {
+                local_names,
+                face_infos,
+                ..
+            } = &mut *state;
+            local_names.commit_registration(prepared, &face_infos[first as usize..]);
+        }
+        state.blob_bytes = bytes;
         self.layer.generation.fetch_add(1, Ordering::SeqCst);
         Ok(FontId {
             layer: self.layer.id,

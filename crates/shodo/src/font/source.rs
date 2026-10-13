@@ -1,7 +1,21 @@
 //! Ordered CSS font sources and exact local name resolution.
 
 use super::{FontCollection, FontData, FontError, FontFaceDescriptor, FontId};
-use skrifa::{FontRef, MetadataProvider, string::StringId};
+use crate::limits::{LimitKind, Limits};
+use skrifa::{FontRef, string::StringId};
+
+mod index;
+pub(super) use index::LocalNames;
+
+#[cfg(test)]
+std::thread_local! {
+    static LOCAL_NAME_FACE_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static LOCAL_CATALOG_LOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static LOCAL_INDEX_BLOBS: std::cell::RefCell<Vec<peniko::WeakBlob<u8>>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+mod tests;
 
 /// Sources in CSS `src` order. URL fetching belongs to the caller; Data
 /// supplies downloaded sfnt/TTC or WOFF/WOFF2 bytes and a selected face.
@@ -15,18 +29,42 @@ pub enum FontSource {
 impl FontCollection {
     /// Tries sources in order. Unavailable local names and malformed fonts
     /// fall through; a resource limit immediately fails closed. Only the
-    /// first successful source changes the layer's state or generation.
+    /// first successful source changes registered faces or generation.
+    /// Source count and total local-name bytes are checked before attempts.
+    /// Local names share a bounded root-owned index of the installed catalog.
+    /// Recreate the shared collection to discover changed or newly available
+    /// installed files. After lookup starts, root additions must fit the index
+    /// budgets before publication, preserving previously indexed names.
     pub fn register_sources(
         &self,
         descriptor: FontFaceDescriptor,
         sources: Vec<FontSource>,
     ) -> Result<FontId, FontError> {
+        Limits::check(
+            self.layer.limits.max_font_sources,
+            LimitKind::FontSources,
+            sources.len() as u64,
+        )?;
+        let name_bytes = sources.iter().fold(0u64, |bytes, source| {
+            bytes.saturating_add(match source {
+                FontSource::Local(name) => name.len() as u64,
+                FontSource::Data(..) => 0,
+            })
+        });
+        Limits::check(
+            self.layer.limits.max_font_source_name_bytes,
+            LimitKind::FontSourceNameBytes,
+            name_bytes,
+        )?;
         descriptor.validate()?;
+        let mut verification = LookupWork::default();
         let mut last_error = FontError::Malformed("no usable font source");
         for source in sources {
             let result = match source {
                 FontSource::Local(name) => {
-                    let Some((data, source)) = self.local_font(&name) else {
+                    let normalized = name.to_lowercase();
+                    let Some((data, source)) = self.local_font(&normalized, &mut verification)?
+                    else {
                         continue;
                     };
                     self.register_source_blob(data.data, data.index, descriptor.clone(), source)
@@ -45,59 +83,72 @@ impl FontCollection {
         Err(last_error)
     }
 
-    fn local_font(&self, name: &str) -> Option<(FontData, Option<fontique::SourceId>)> {
+    fn local_font(
+        &self,
+        name: &str,
+        verification: &mut LookupWork,
+    ) -> Result<Option<(FontData, Option<fontique::SourceId>)>, FontError> {
         // Document CSS faces aren't installed faces; local() resolves only
         // against the shared application/platform layer.
         let root = self.root();
         let mut state = root.state();
-        if let Some(data) = state
-            .faces
-            .iter()
-            .zip(&state.descriptors)
-            .find_map(|(data, desc)| {
-                (desc.is_none() && has_local_name(data, name)).then(|| data.clone())
-            })
-        {
-            return Some((data, None));
-        }
-        root.ensure_system(&mut state);
-        let names: Vec<_> = state.native.family_names().map(str::to_owned).collect();
-        let mut result = None;
-        'families: for family_name in names {
-            let Some(family) = state.native.family_by_name(&family_name) else {
-                continue;
-            };
-            for info in family.fonts() {
-                let Some(blob) = state
-                    .retained_sources
-                    .get(&info.source().id())
-                    .cloned()
-                    .or_else(|| info.load(Some(&mut state.source_cache)))
-                else {
-                    continue;
-                };
-                let data = FontData::new(blob, info.index());
-                if has_local_name(&data, name) {
-                    result = Some((data, Some(info.source().id())));
-                    break 'families;
-                }
-            }
-        }
-        let age = state.options.source_cache_max_age;
-        state.source_cache.prune(age, true);
+        // The catalog lock serializes initial construction and incremental
+        // registration. The state is restored on every Result outcome.
+        let mut names = std::mem::take(&mut state.local_names);
+        let result = names.lookup(root, &mut state, name, verification, &self.layer.limits);
+        state.local_names = names;
         result
     }
 }
 
-fn has_local_name(data: &FontData, requested: &str) -> bool {
+#[derive(Clone, Default)]
+struct LookupWork(u64);
+
+impl LookupWork {
+    fn charge(&mut self, amount: u64, limits: &Limits) -> Result<(), FontError> {
+        let actual = self.0.saturating_add(amount);
+        Limits::check(
+            limits.max_local_font_lookup_work,
+            LimitKind::LocalFontLookupWork,
+            actual,
+        )?;
+        self.0 = actual;
+        Ok(())
+    }
+}
+
+fn has_local_name(
+    data: &FontData,
+    requested: &str,
+    work: &mut LookupWork,
+    limits: &Limits,
+) -> Result<bool, FontError> {
+    use skrifa::raw::TableProvider;
+    work.charge(1, limits)?;
+    #[cfg(test)]
+    LOCAL_NAME_FACE_READS.with(|calls| calls.set(calls.get() + 1));
     let Ok(font) = FontRef::from_index(data.data.as_ref(), data.index) else {
-        return false;
+        return Ok(false);
     };
-    let requested = requested.to_lowercase();
-    [StringId::FULL_NAME, StringId::POSTSCRIPT_NAME]
-        .into_iter()
-        .any(|id| {
-            font.localized_strings(id)
-                .any(|name| name.to_string().to_lowercase() == requested)
-        })
+    let Ok(table) = font.name() else {
+        return Ok(false);
+    };
+    work.charge(table.name_record().len() as u64 * 2, limits)?;
+    for id in [StringId::FULL_NAME, StringId::POSTSCRIPT_NAME] {
+        for record in table
+            .name_record()
+            .iter()
+            .filter(|record| record.name_id() == id)
+        {
+            work.charge(u64::from(record.length()), limits)?;
+            if skrifa::string::LocalizedString::new(&table, record)
+                .to_string()
+                .to_lowercase()
+                == requested
+            {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
 }

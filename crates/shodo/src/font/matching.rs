@@ -931,6 +931,16 @@ impl FontCollection {
                 // A materialized platform face uses the same cumulative
                 // layer budgets as an explicitly registered face.
                 u32::try_from(index).ok().filter(|&id| id != u32::MAX)?;
+                let local_names = state
+                    .local_names
+                    .prepare_registration(
+                        &state,
+                        &selected.data.data,
+                        selected.data.index,
+                        1,
+                        limits,
+                    )
+                    .ok()?;
                 // Match future queries against the retained blob, even if a
                 // platform source changed after its family metadata was read.
                 state.face_infos.push(face_info(&selected.data));
@@ -938,6 +948,14 @@ impl FontCollection {
                 state.native_faces.insert(index);
                 state.descriptors.push(None);
                 state.index_face(index, true);
+                if let Some(prepared) = local_names {
+                    let LayerState {
+                        local_names,
+                        face_infos,
+                        ..
+                    } = &mut *state;
+                    local_names.commit_registration(prepared, &face_infos[index..]);
+                }
                 state.blob_bytes = blob_bytes;
                 index
             };
