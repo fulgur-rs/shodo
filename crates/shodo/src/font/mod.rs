@@ -55,6 +55,7 @@ mod structure;
 pub use ch::ChLength;
 pub use color::ColorGlyphFormats;
 pub use descriptor::FontFaceDescriptor;
+use descriptor::RegisteredDescriptor;
 pub(crate) use matching::FontCluster;
 pub use matching::{FontMatch, FontPresentation, FontQuery};
 pub use metrics::{FontUnit, VerticalFontMetrics};
@@ -203,7 +204,8 @@ struct LayerState {
     face_infos: Vec<Option<fontique::FontInfo>>,
     /// Caller-registered blob bytes; native-only retention is exempt.
     blob_bytes: u64,
-    descriptors: Vec<Option<FontFaceDescriptor>>,
+    descriptors: Vec<Option<RegisteredDescriptor>>,
+    descriptor_bytes: u64,
     native: fontique::Collection,
     source_cache: fontique::SourceCache,
     retained_sources: std::collections::HashMap<fontique::SourceId, Blob<u8>>,
@@ -361,6 +363,7 @@ impl FontCollection {
                     }),
                     faces,
                     blob_bytes: 0,
+                    descriptor_bytes: 0,
                     source_cache: fontique::SourceCache::default(),
                     retained_sources: Default::default(),
                     system_loaded: false,
@@ -449,6 +452,8 @@ impl FontCollection {
     /// Registers one selected sfnt/TTC face with CSS descriptors. The whole
     /// blob is checked and budgeted, but only the selected face is retained.
     /// An invalid descriptor, index or font leaves the layer unchanged.
+    /// Descriptor payload/index allowances are checked before range validation
+    /// and copied metadata; successful faces share the layer descriptor budget.
     pub fn register_face(
         &self,
         data: Vec<u8>,
@@ -464,18 +469,47 @@ impl FontCollection {
         index: u32,
         descriptor: FontFaceDescriptor,
     ) -> Result<FontId, FontError> {
+        let descriptor = self.prepare_descriptor(descriptor)?;
         self.register_source_blob(blob, index, descriptor, None)
     }
 
-    pub(super) fn register_source_blob(
+    fn check_descriptor_bytes(&self, retained: u64, additional: u64) -> Result<(), FontError> {
+        let limits = &self.layer.limits;
+        Limits::check(
+            limits.max_font_descriptor_bytes,
+            LimitKind::FontDescriptorBytes,
+            additional,
+        )?;
+        Limits::check(
+            limits.max_layer_descriptor_bytes,
+            LimitKind::LayerDescriptorBytes,
+            retained.saturating_add(additional),
+        )?;
+        Ok(())
+    }
+
+    fn prepare_descriptor(
+        &self,
+        descriptor: FontFaceDescriptor,
+    ) -> Result<RegisteredDescriptor, FontError> {
+        // O(1) size checks precede range/family validation and index allocation.
+        self.check_descriptor_bytes(self.state().descriptor_bytes, descriptor.admitted_bytes())?;
+        descriptor.validate()?;
+        Ok(RegisteredDescriptor::new(descriptor))
+    }
+
+    fn register_source_blob(
         &self,
         blob: Blob<u8>,
         index: u32,
-        descriptor: FontFaceDescriptor,
+        descriptor: RegisteredDescriptor,
         source: Option<fontique::SourceId>,
     ) -> Result<FontId, FontError> {
-        descriptor.validate()?;
         let mut state = self.state();
+        // Recheck under the publication lock: another registration can have
+        // consumed the layer allowance since descriptor preparation.
+        let descriptor_bytes = state.descriptor_bytes.saturating_add(descriptor.bytes());
+        self.check_descriptor_bytes(state.descriptor_bytes, descriptor.bytes())?;
         let blob = source
             .and_then(|id| state.retained_sources.get(&id).cloned())
             .unwrap_or(blob);
@@ -518,6 +552,7 @@ impl FontCollection {
         let slot = state.faces.len() - 1;
         state.index_face(slot, native_identity);
         state.blob_bytes = bytes;
+        state.descriptor_bytes = descriptor_bytes;
         self.layer.generation.fetch_add(1, Ordering::SeqCst);
         Ok(id)
     }
@@ -526,7 +561,11 @@ impl FontCollection {
     /// faces visible through this document layer.
     pub fn face_descriptor(&self, id: FontId) -> Option<FontFaceDescriptor> {
         if id.layer == self.layer.id {
-            self.state().descriptors.get(id.index as usize)?.clone()
+            self.state()
+                .descriptors
+                .get(id.index as usize)?
+                .as_ref()
+                .map(|descriptor| (**descriptor).clone())
         } else {
             self.layer.parent.as_ref()?.face_descriptor(id)
         }

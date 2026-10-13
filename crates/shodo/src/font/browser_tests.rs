@@ -1435,12 +1435,17 @@ fn local_aliases_share_reloaded_source_bytes_within_layer() {
         .register_source_blob(
             Blob::from(bytes.clone()),
             0,
-            descriptor("One"),
+            doc.prepare_descriptor(descriptor("One")).unwrap(),
             Some(source),
         )
         .unwrap();
     let second = doc
-        .register_source_blob(Blob::from(bytes), 0, descriptor("Two"), Some(source))
+        .register_source_blob(
+            Blob::from(bytes),
+            0,
+            doc.prepare_descriptor(descriptor("Two")).unwrap(),
+            Some(source),
+        )
         .unwrap();
     assert_ne!(first, second);
     assert_eq!(
