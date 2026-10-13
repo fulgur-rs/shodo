@@ -258,38 +258,36 @@ impl FontCollection {
         if font.charmap().map(ch).is_none() {
             return missing;
         }
-        let Ok(shape_font) = harfrust::FontRef::from_index(data.data.as_ref(), data.index) else {
-            return missing;
-        };
         let Some(shaper_data) = self.shaper_data(found.id) else {
             return missing;
         };
-        let instance = harfrust::ShaperInstance::from_variations(
-            &shape_font,
-            found.variations.iter().map(|v| harfrust::Variation {
-                tag: harfrust::Tag::new(&v.tag),
-                value: v.value,
-            }),
-        );
-        let shaper = shaper_data
-            .shaper(&shape_font)
-            .instance(Some(&instance))
+        let instance = shaper_data
+            .instance_builder()
+            .variations(
+                found
+                    .variations
+                    .iter()
+                    .map(|v| (harfrust::Tag::new(&v.tag), v.value)),
+            )
             .build();
+        let shaper = harfrust::ShaperFont::new(&instance);
         let upem = shaper.units_per_em();
         if upem == 0 {
             return missing;
         }
-        let mut buffer = harfrust::UnicodeBuffer::new();
+        let mut buffer = harfrust::Buffer::new();
         buffer.push_str(ch.encode_utf8(&mut encoded));
         buffer.set_direction(harfrust::Direction::LeftToRight);
-        buffer.set_script(
+        buffer.set_script(Some(
             harfrust::Script::from_iso15924_tag(harfrust::Tag::new(&query.script))
-                .unwrap_or(harfrust::script::UNKNOWN),
-        );
+                .unwrap_or(harfrust::Script::UNKNOWN),
+        ));
         if let Some(language) = query.language.as_ref().and_then(|l| l.parse().ok()) {
-            buffer.set_language(language);
+            buffer.set_language(Some(language));
         }
-        let shaped = shaper.shape(buffer, harfrust::ShapeOptions::default());
+        harfrust::shape(&shaper, &mut buffer, harfrust::ShapeOptions::default())
+            .expect("configured metric shaping properties");
+        let shaped = buffer;
         if shaped.glyph_positions().is_empty() {
             return missing;
         }

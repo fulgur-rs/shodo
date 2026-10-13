@@ -861,17 +861,19 @@ mod tests {
             })
             .flat_map(|r| r.glyphs())
             .collect::<Vec<_>>();
-        let font = harfrust::FontRef::from_index(crate::test_support::fonts::LATIN, 0).unwrap();
-        let d = harfrust::ShaperData::new(&font);
-        let shaper = d.shaper(&font).build();
-        let mut buffer = harfrust::UnicodeBuffer::new();
+        let font = harfrust::Font::new(crate::test_support::fonts::LATIN.to_vec(), 0).unwrap();
+        let shaper = harfrust::ShaperFont::new(&font);
+        let mut buffer = harfrust::Buffer::new();
         buffer.push_str("AV x");
         buffer.guess_segment_properties();
         let features = [harfrust::Feature::new(harfrust::Tag::new(b"kern"), 0, ..)];
-        let shaped = shaper.shape(
-            buffer,
+        harfrust::shape(
+            &shaper,
+            &mut buffer,
             harfrust::ShapeOptions::default().features(&features),
-        );
+        )
+        .unwrap();
+        let shaped = buffer;
         assert_eq!(actual.len(), shaped.len());
         let mut pen = 0.0;
         for ((g, info), pos) in actual

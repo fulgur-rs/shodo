@@ -36,7 +36,7 @@ pub(crate) fn resolve(
     style: &InlineStyle,
     script: [u8; 4],
     warnings: &mut WarningSink,
-) -> (harfrust::ShaperInstance, Arc<RunInstance>, f32) {
+) -> (skrifa::instance::Location, Arc<RunInstance>, f32) {
     let (shaper, instance, size, warning, _) =
         resolve_with_warning(bytes, index, found, style, script);
     if let Some(warning) = warning {
@@ -75,7 +75,7 @@ pub(super) fn resolve_with_warning(
     style: &InlineStyle,
     script: [u8; 4],
 ) -> (
-    harfrust::ShaperInstance,
+    skrifa::instance::Location,
     Arc<RunInstance>,
     f32,
     Option<ResolutionWarning>,
@@ -84,7 +84,6 @@ pub(super) fn resolve_with_warning(
     #[cfg(test)]
     INSTANCE_BUILDS.with(|count| count.set(count.get() + 1));
     let mut warning = None;
-    let font = harfrust::FontRef::from_index(bytes, index).expect("registered face");
     #[cfg(test)]
     crate::font::record_metric_font_ref_open();
     let metric_font = FontRef::from_index(bytes, index).expect("registered metric face");
@@ -110,13 +109,7 @@ pub(super) fn resolve_with_warning(
     if let Some(adjust) = style.font_size_adjust {
         #[cfg(test)]
         COORDINATE_INSTANCE_BUILDS.with(|count| count.set(count.get() + 1));
-        let metric_instance = harfrust::ShaperInstance::from_variations(
-            &font,
-            variations.iter().map(|v| harfrust::Variation {
-                tag: harfrust::Tag::new(&v.tag),
-                value: v.value,
-            }),
-        );
+        let metric_instance = normalized_location(&metric_font, &variations);
         let location = LocationRef::new(metric_instance.coords());
         let m = metric_font.metrics(Size::unscaled(), location);
         let metric = match adjust.metric {
@@ -174,13 +167,7 @@ pub(super) fn resolve_with_warning(
     // inserted only without explicit opsz, so precedence is already final.
     #[cfg(test)]
     COORDINATE_INSTANCE_BUILDS.with(|count| count.set(count.get() + 1));
-    let instance = harfrust::ShaperInstance::from_variations(
-        &font,
-        variations.iter().map(|v| harfrust::Variation {
-            tag: harfrust::Tag::new(&v.tag),
-            value: v.value,
-        }),
-    );
+    let instance = normalized_location(&metric_font, &variations);
     // Expose the clamped design coordinates as well as normalized coordinates.
     for variation in &mut variations {
         if let Some(axis) = metric_font
@@ -204,13 +191,32 @@ pub(super) fn resolve_with_warning(
         // consumers only need the resolved coordinates and size.
         features: Arc::default(),
     });
-    // Default coordinates may be cleared while Harfrust retains its heap
-    // capacity. Inspect the face's axis count, not the resulting slice length.
+    // Skrifa stores up to eight coordinates inline. Larger locations are
+    // excluded from preparation caches whose coordinate storage is uncharged.
     let inline_coords = metric_font
         .fvar()
         .ok()
-        .is_none_or(|fvar| fvar.axis_count() <= 11);
+        .is_none_or(|fvar| fvar.axis_count() <= 8);
     (instance, result, size, warning, inline_coords)
+}
+fn normalized_location(
+    font: &FontRef<'_>,
+    variations: &[FontVariation],
+) -> skrifa::instance::Location {
+    let location = font.axes().location(
+        variations
+            .iter()
+            .map(|v| (harfrust::Tag::new(&v.tag), v.value)),
+    );
+    if location
+        .coords()
+        .iter()
+        .all(|&coord| coord == NormalizedCoord::ZERO)
+    {
+        skrifa::instance::Location::default()
+    } else {
+        location
+    }
 }
 fn set_variation(
     variations: &mut Vec<FontVariation>,

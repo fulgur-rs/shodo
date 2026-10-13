@@ -29,7 +29,7 @@ fn collections() -> (FontCollection, FontCollection, FontQuery, FontId) {
     (shared, document, query, id)
 }
 
-fn warm(fonts: &FontCollection, query: &FontQuery, id: FontId) -> Arc<harfrust::ShaperData> {
+fn warm(fonts: &FontCollection, query: &FontQuery, id: FontId) -> Arc<harfrust::Font> {
     assert_eq!(fonts.match_cluster(query, "a").unwrap().id, id);
     assert!(fonts.match_cluster(query, "z").is_none());
     for unit in [fonts.resolve_ch(query, 10.), fonts.resolve_ic(query, 10.)] {
@@ -51,7 +51,7 @@ fn assert_warm_hits_before_release(
     fonts: &FontCollection,
     query: &FontQuery,
     id: FontId,
-    shaper: &Arc<harfrust::ShaperData>,
+    shaper: &Arc<harfrust::Font>,
     release: impl FnOnce(),
 ) {
     let barrier = Arc::new(Barrier::new(5));

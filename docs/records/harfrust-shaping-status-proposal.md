@@ -1,5 +1,28 @@
 # Draft: expose shaping completion status in harfrust
 
+Update (2026-10-13): Shodo now uses HarfRust 0.14.0, whose public
+`Buffer::allocation_successful()` reports failure of internal buffer, operation,
+or nesting limits. `shape()` returns `ShapeError` for invalid API usage; resource
+limit failures use the buffer query. The proposal below describes 0.12.0 and is
+retained as historical context. This dependency update does not add a new
+interruption policy to Shodo. HarfRust 0.14 still has no caller-selected glyph
+ceiling, and its internal ceiling remains `max(256 * input_len, 65_536)`.
+SHODO-23 is deferred by user decision; this update does not resolve that finding.
+
+Migration checks: HarfRust 0.14 centers CFF ink when VORG is absent, so Shodo's
+existing outline-top-plus-vmtx correction now subtracts the actual shaping
+origin. Both `shape::tests::missing_vorg` cases retain their expected positions.
+The fixed-font, 120-word Latin fixture in
+`line::tests::edge_window_shapes_are_reused_across_candidates_and_relayouts`
+now needs 114 distinct edge shapes on its first 200px layout. HarfRust 0.14
+marks unsuccessful pair-positioning matches unsafe to concatenate; the earlier
+test's fewer-than-60 assumption no longer holds. The test checks one shape per
+cache entry and zero additional calls on an identical second layout instead.
+These counts describe this fixture, not a general performance guarantee.
+The first-line intrinsic budget-sharing fixture likewise uses a 32-byte window
+cap instead of 16: the single pass fits, while two passes still exhaust their
+shared operation budget. The production budget policy is unchanged.
+
 This is an unsent design note, not an upstream issue or a claim that a particular
 font triggered a shaping failure. It records the integration limitation observed
 in the locally inspected harfrust 0.12.0 source used by shodo.

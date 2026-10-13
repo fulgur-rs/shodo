@@ -8,7 +8,7 @@ use crate::limits::{Warning, WarningSink};
 pub struct LayoutContext {
     pub(crate) warnings: WarningSink,
     pub(crate) plans: crate::shape::cache::PlanCache,
-    pub(crate) scratch: Option<harfrust::UnicodeBuffer>,
+    pub(crate) scratch: Option<harfrust::Buffer>,
     pub(crate) scratch_bytes: usize,
     // A context is moved between threads, never concurrently shared.
     _not_sync: std::marker::PhantomData<std::cell::Cell<()>>,

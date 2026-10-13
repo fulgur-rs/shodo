@@ -112,16 +112,16 @@ fn public_font_and_layout_consumers_use_the_same_fixture_set() {
 fn arabic_subset_preserves_contextual_substitution_and_mark_placement() {
     let fixtures = load_fonts(&Limits::default()).unwrap();
     let data = fixtures.collection.font_data(fixtures.ids[2]).unwrap();
-    let font = harfrust::FontRef::from_index(data.data.as_ref(), data.index).unwrap();
     let shared = fixtures.collection.shaper_data(fixtures.ids[2]).unwrap();
-    let shaper = shared.shaper(&font).build();
-    let mut buffer = harfrust::UnicodeBuffer::new();
+    let shaper = harfrust::ShaperFont::new(&shared);
+    let mut buffer = harfrust::Buffer::new();
     let text = "السَّلَامُ";
     buffer.push_str(text);
     buffer.set_direction(harfrust::Direction::RightToLeft);
-    buffer.set_script(harfrust::script::ARABIC);
-    buffer.set_language("ar".parse().unwrap());
-    let shaped = shaper.shape(buffer, harfrust::ShapeOptions::default());
+    buffer.set_script(Some(harfrust::Script::ARABIC));
+    buffer.set_language(Some("ar".parse().unwrap()));
+    harfrust::shape(&shaper, &mut buffer, harfrust::ShapeOptions::default()).unwrap();
+    let shaped = buffer;
     assert!(!shaped.glyph_infos().is_empty());
     assert!(shaped.glyph_infos().iter().all(|g| g.glyph_id != 0));
     let nominal: HashSet<_> = skrifa::FontRef::from_index(data.data.as_ref(), data.index)

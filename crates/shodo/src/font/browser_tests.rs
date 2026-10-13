@@ -1153,14 +1153,14 @@ fn unit_cache_tracks_script_language_fallback_and_generic_changes() {
     assert_eq!(fonts.resolve_ic(&generic, 16.).id, Some(zh));
 }
 
-fn shaper_test_advance(data: &peniko::FontData, shared: &harfrust::ShaperData) -> i32 {
-    let font = harfrust::FontRef::from_index(data.data.as_ref(), data.index).unwrap();
-    let shaper = shared.shaper(&font).build();
-    let mut buffer = harfrust::UnicodeBuffer::new();
+fn shaper_test_advance(shared: &harfrust::Font) -> i32 {
+    let shaper = harfrust::ShaperFont::new(shared);
+    let mut buffer = harfrust::Buffer::new();
     buffer.push_str("a");
-    buffer.set_script(harfrust::script::LATIN);
+    buffer.set_script(Some(harfrust::Script::LATIN));
     buffer.set_direction(harfrust::Direction::LeftToRight);
-    let shaped = shaper.shape(buffer, harfrust::ShapeOptions::default());
+    harfrust::shape(&shaper, &mut buffer, harfrust::ShapeOptions::default()).unwrap();
+    let shaped = buffer;
     assert_eq!(shaped.glyph_infos().len(), 1);
     assert_eq!(shaped.glyph_infos()[0].glyph_id, 1);
     assert_eq!(shaped.glyph_infos()[0].cluster, 0);
@@ -1179,14 +1179,13 @@ fn recent_shaper_hit_inspects_one_actual_entry() {
         ids.push(id);
     }
     let id = ids[31];
-    let data = fonts.font_data(id).unwrap();
     let last = fonts.shaper_data(id).unwrap();
     assert_eq!(fonts.caches().shapers.len(), 32);
     SHAPER_SEARCH_COMPARISONS.with(|count| count.set(0));
     let hit = fonts.shaper_data(id).unwrap();
     let inspected = SHAPER_SEARCH_COMPARISONS.with(|count| count.get());
     assert!(Arc::ptr_eq(&last, &hit));
-    assert_eq!(shaper_test_advance(&data, &hit), 531);
+    assert_eq!(shaper_test_advance(&hit), 531);
     assert_eq!(
         inspected, 1,
         "an MRU hit must inspect one actual shaper entry"
@@ -1209,7 +1208,6 @@ fn shaper_hit_promotes_lru_and_retained_handles_survive_layer_drop() {
     let b = fonts.register(test_font("B", &['a'], 600)).unwrap();
     let c = fonts.register(test_font("C", &['a'], 700)).unwrap();
     let d = fonts.register(test_font("D", &['a'], 800)).unwrap();
-    let data = fonts.font_data(a).unwrap();
     let first = fonts.shaper_data(a).unwrap();
     let victim = Arc::downgrade(&fonts.shaper_data(b).unwrap());
     assert!(victim.upgrade().is_some());
@@ -1227,9 +1225,9 @@ fn shaper_hit_promotes_lru_and_retained_handles_survive_layer_drop() {
     );
     fonts.shaper_data(d).unwrap();
     assert_eq!(Arc::strong_count(&first), 1);
-    assert_eq!(shaper_test_advance(&data, &first), 500);
+    assert_eq!(shaper_test_advance(&first), 500);
     drop(fonts);
-    assert_eq!(shaper_test_advance(&data, &first), 500);
+    assert_eq!(shaper_test_advance(&first), 500);
 }
 
 #[test]
@@ -1244,14 +1242,8 @@ fn shaper_cache_qualifies_shared_and_document_indices_and_zero_retention() {
     assert!(Arc::ptr_eq(&original, &doc.shaper_data(shared_id).unwrap()));
     let own_handle = doc.shaper_data(own).unwrap();
     assert!(!Arc::ptr_eq(&original, &own_handle));
-    assert_eq!(
-        shaper_test_advance(&doc.font_data(own).unwrap(), &own_handle),
-        900
-    );
-    assert_eq!(
-        shaper_test_advance(&doc.font_data(shared_id).unwrap(), &original),
-        500
-    );
+    assert_eq!(shaper_test_advance(&own_handle), 900);
+    assert_eq!(shaper_test_advance(&original), 500);
     let zero = FontCollection::with_options(
         &Limits {
             max_shaper_cache_entries: Some(0),
@@ -1267,7 +1259,7 @@ fn shaper_cache_qualifies_shared_and_document_indices_and_zero_retention() {
     let b = zero.shaper_data(id).unwrap();
     assert!(!Arc::ptr_eq(&a, &b));
     assert!(zero.caches().shapers.is_empty());
-    assert_eq!(shaper_test_advance(&zero.font_data(id).unwrap(), &a), 550);
+    assert_eq!(shaper_test_advance(&a), 550);
 }
 
 #[test]
@@ -1326,7 +1318,7 @@ fn weak_layer_handles_observe_release_without_retaining_document_fonts() {
 #[test]
 fn shaper_data_and_handles_are_send_sync() {
     fn check<T: Send + Sync>() {}
-    check::<harfrust::ShaperData>();
+    check::<harfrust::Font>();
     check::<WeakFontLayer>();
 }
 

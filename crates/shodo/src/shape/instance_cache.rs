@@ -13,7 +13,7 @@ std::thread_local! {
 
 const ENTRIES: usize = 8;
 const BYTES: usize = 16 * 1024;
-type Resolved = (harfrust::ShaperInstance, Arc<RunInstance>, f32);
+type Resolved = (skrifa::instance::Location, Arc<RunInstance>, f32);
 
 #[derive(Clone, Copy)]
 pub(super) struct Key<'items, 'styles> {
@@ -314,7 +314,7 @@ mod tests {
 
     fn prepared(style: &InlineStyle) -> Resolved {
         (
-            harfrust::ShaperInstance::default(),
+            skrifa::instance::Location::default(),
             Arc::new(RunInstance {
                 language: style.lang.clone(),
                 ..Default::default()

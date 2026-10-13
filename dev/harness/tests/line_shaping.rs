@@ -32,15 +32,13 @@ fn lines(p: &Paragraph, width: f32) -> Vec<Line> {
     )
 }
 fn direct_width(text: &str) -> f32 {
-    let font = harfrust::FontRef::from_index(FONTS[0].bytes, 0).unwrap();
-    let data = harfrust::ShaperData::new(&font);
-    let shaper = data.shaper(&font).build();
-    let mut b = harfrust::UnicodeBuffer::new();
+    let font = harfrust::Font::new(FONTS[0].bytes.to_vec(), 0).unwrap();
+    let shaper = harfrust::ShaperFont::new(&font);
+    let mut b = harfrust::Buffer::new();
     b.push_str(text);
     b.guess_segment_properties();
-    shaper
-        .shape(b, Default::default())
-        .glyph_positions()
+    harfrust::shape(&shaper, &mut b, Default::default()).unwrap();
+    b.glyph_positions()
         .iter()
         .map(|p| p.x_advance as f32 * 16.0 / shaper.units_per_em() as f32)
         .sum()
@@ -991,23 +989,23 @@ fn rtl_ligature_slices_preserve_graphemes_joining_and_mark_attachments() {
         actual.iter().map(|l| l.text_range()).collect::<Vec<_>>(),
         vec![0..4, 4..6]
     );
-    let font = harfrust::FontRef::from_index(FONTS[2].bytes, 0).unwrap();
-    let data = harfrust::ShaperData::new(&font);
-    let shaper = data.shaper(&font).build();
+    let font = harfrust::Font::new(FONTS[2].bytes.to_vec(), 0).unwrap();
+    let shaper = harfrust::ShaperFont::new(&font);
     let scale = 16.0 / shaper.units_per_em() as f32;
     for (line, text, source, before, after) in
         [(&actual[0], "لَ", 0, "", "ا"), (&actual[1], "ا", 4, "لَ", "")]
     {
-        let mut b = harfrust::UnicodeBuffer::new();
+        let mut b = harfrust::Buffer::new();
         for (offset, c) in text.char_indices() {
-            b.add(c, source + offset as u32);
+            b.push(c as u32, source + offset as u32);
         }
         b.set_pre_context(before);
         b.set_post_context(after);
         b.set_direction(harfrust::Direction::RightToLeft);
-        b.set_language(harfrust::Language::new("ar").unwrap());
+        b.set_language(Some(harfrust::Language::new("ar").unwrap()));
         b.guess_segment_properties();
-        let expected = shaper.shape(b, Default::default());
+        harfrust::shape(&shaper, &mut b, Default::default()).unwrap();
+        let expected = b;
         let glyphs: Vec<_> = line
             .fragments()
             .filter_map(|f| match f {

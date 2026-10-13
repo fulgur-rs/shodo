@@ -73,7 +73,7 @@ pub struct Limits {
     /// Total font-blob bytes retained per layer (256 MiB). Shared blob storage
     /// is charged once, including platform fonts and CSS `local()` sources.
     pub max_layer_blob_bytes: Option<u64>,
-    /// Shared harfrust ShaperData cache entries per layer (64).
+    /// Shared HarfRust Font cache entries per layer (64).
     pub max_shaper_cache_entries: Option<u64>,
 }
 

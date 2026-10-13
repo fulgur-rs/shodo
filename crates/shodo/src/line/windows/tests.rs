@@ -118,12 +118,17 @@ fn mixed_width_kana_whole_cluster_uses_each_source_box_for_autospace() {
     let metrics = font.glyph_metrics(Size::new(20.0), LocationRef::default());
     let water = font.charmap().map('水').unwrap();
     let natural = metrics.advance_width(water).unwrap();
-    let hf = harfrust::FontRef::from_index(&bytes, 0).unwrap();
-    let hd = harfrust::ShaperData::new(&hf);
-    let mut buffer = harfrust::UnicodeBuffer::new();
+    let hf = harfrust::Font::new(bytes.to_vec(), 0).unwrap();
+    let mut buffer = harfrust::Buffer::new();
     buffer.push_str("カｶ");
     buffer.guess_segment_properties();
-    let direct = hd.shaper(&hf).build().shape(buffer, Default::default());
+    harfrust::shape(
+        &harfrust::ShaperFont::new(&hf),
+        &mut buffer,
+        Default::default(),
+    )
+    .unwrap();
+    let direct = buffer;
     assert_eq!(
         direct.len(),
         1,
@@ -262,14 +267,16 @@ fn generated_hyphen_and_opposite_partial_edge_share_one_glyph_budget() {
         AtomicSizes, Fragment, LayoutContext, LineConstraint, LineResult, ParagraphBuilder,
     };
     let expanded = expanded_hyphen_font(9);
-    let font = harfrust::FontRef::from_index(&expanded, 0).unwrap();
-    let direct = harfrust::ShaperData::new(&font);
-    let shaper = direct.shaper(&font).build();
-    let mut buffer = harfrust::UnicodeBuffer::new();
+    let font = harfrust::Font::new(expanded.to_vec(), 0).unwrap();
+    let shaper = harfrust::ShaperFont::new(&font);
+    let mut buffer = harfrust::Buffer::new();
     buffer.push_str("-");
     buffer.guess_segment_properties();
     assert_eq!(
-        shaper.shape(buffer, Default::default()).len(),
+        {
+            harfrust::shape(&shaper, &mut buffer, Default::default()).unwrap();
+            buffer.len()
+        },
         9,
         "real generated GSUB expansion"
     );
@@ -447,9 +454,8 @@ fn unshapeable_interior_slice_is_skipped_without_duplicate_glyphs() {
         ("fii", 'W'),
         ("ii", 'f'),
     ]);
-    let font = harfrust::FontRef::from_index(&bytes, 0).unwrap();
-    let data = harfrust::ShaperData::new(&font);
-    let shaper = data.shaper(&font).build();
+    let font = harfrust::Font::new(bytes.to_vec(), 0).unwrap();
+    let shaper = harfrust::ShaperFont::new(&font);
     for (text, expected) in [
         ("ffii", 1),
         ("f", 1),
@@ -460,11 +466,14 @@ fn unshapeable_interior_slice_is_skipped_without_duplicate_glyphs() {
         ("i", 1),
         ("fi", 2),
     ] {
-        let mut buffer = harfrust::UnicodeBuffer::new();
+        let mut buffer = harfrust::Buffer::new();
         buffer.push_str(text);
         buffer.guess_segment_properties();
         assert_eq!(
-            shaper.shape(buffer, Default::default()).len(),
+            {
+                harfrust::shape(&shaper, &mut buffer, Default::default()).unwrap();
+                buffer.len()
+            },
             expected,
             "direct oracle {text}"
         );
@@ -580,20 +589,19 @@ fn unshapeable_ligature_remainder_retains_whole_source() {
     let i = font.charmap().map('i').unwrap().to_u32() as u16;
     let w = font.charmap().map('W').unwrap().to_u32() as u16;
     // Every initial prefix fits one glyph; the remainder fi needs two.
-    let font = harfrust::FontRef::from_index(&bytes, 0).unwrap();
-    let direct = harfrust::ShaperData::new(&font);
-    let shaper = direct.shaper(&font).build();
+    let font = harfrust::Font::new(bytes.to_vec(), 0).unwrap();
+    let shaper = harfrust::ShaperFont::new(&font);
     for (text, ids) in [
         ("ffi", vec![f as u32]),
         ("ff", vec![w as u32]),
         ("fi", vec![f as u32, i as u32]),
     ] {
-        let mut buffer = harfrust::UnicodeBuffer::new();
+        let mut buffer = harfrust::Buffer::new();
         buffer.push_str(text);
         buffer.guess_segment_properties();
+        harfrust::shape(&shaper, &mut buffer, Default::default()).unwrap();
         assert_eq!(
-            shaper
-                .shape(buffer, Default::default())
+            buffer
                 .glyph_infos()
                 .iter()
                 .map(|g| g.glyph_id)

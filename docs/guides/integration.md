@@ -226,7 +226,15 @@ accounted scratch/partial-line buffers, preferring scratch when it fits. It does
 not measure separately shared paragraph/font allocations. Shaping also releases
 scratch exceeding the current run budget's conservative storage bound. See the
 [measurement record](../records/shaping-measurements.md) and
-[unsent harfrust status proposal](../records/harfrust-shaping-status-proposal.md).
+[historical harfrust status proposal](../records/harfrust-shaping-status-proposal.md).
+
+Shodo uses HarfRust 0.14. `FontCollection::shaper_data(id)` returns an
+`Arc<harfrust::Font>` containing shared font bytes and layout caches. This replaces
+the earlier `Arc<harfrust::ShaperData>` return type. For direct shaping, construct
+`harfrust::ShaperFont::new(&font)` and pass a mutable `harfrust::Buffer` to
+`harfrust::shape`. Select variations with `font.instance_builder()` before
+constructing the shaping font. Retained handles remain usable after eviction or
+collection drop; the font bytes are shared rather than copied.
 
 ## Horizontal output and hit testing
 

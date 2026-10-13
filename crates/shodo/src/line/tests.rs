@@ -645,9 +645,14 @@ fn edge_window_shapes_are_reused_across_candidates_and_relayouts() {
     let second = p.break_all(&mut cx, &LineOptions::default(), 200.0, &AtomicSizes::EMPTY);
     assert_eq!(summary(&first), summary(&second));
     assert_eq!(calls(&p), first_calls, "re-layout reshaped cached windows");
-    assert!(
-        first_calls * 2 < words,
-        "{first_calls} edge-window shape calls for {words} words"
+    // HarfRust 0.14 also marks unsuccessful pair-positioning matches unsafe
+    // to concatenate, so more distinct windows are needed than in 0.12.
+    // Check the cache invariant directly instead of assuming a window count.
+    assert!(first_calls > 0, "fixture did not exercise edge shaping");
+    assert_eq!(
+        first_calls,
+        cx.edge_shapes.len(),
+        "a distinct edge window was shaped more than once"
     );
 }
 
