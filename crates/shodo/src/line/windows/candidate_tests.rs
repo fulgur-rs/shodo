@@ -45,12 +45,19 @@ fn warmed_candidates_and_deltas_do_not_clone_glyph_stores() {
             assert!(group(data, 0).end > end, "exercise partial ligature suffix");
         }
         let mut cx = LayoutContext::new();
+        data.edge_shape_calls
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+        crate::shape::cache_clone_probe::reset();
         let expected = candidate(data, 0, end, &mut cx, &mut Saturation::default());
         assert!(expected.1);
         assert!(cx.edge_shapes.len() > 0, "exercise cache hits");
         let shape_calls = data
             .edge_shape_calls
             .load(std::sync::atomic::Ordering::Relaxed);
+        assert!(
+            crate::shape::cache_clone_probe::count() <= shape_calls,
+            "cache misses may clone once for retention; evaluation must not clone"
+        );
         cx.edge_reshape_spent = 0;
         crate::shape::cache_clone_probe::reset();
         let actual = candidate(data, 0, end, &mut cx, &mut Saturation::default());
@@ -150,4 +157,54 @@ fn borrowed_candidates_preserve_owned_measurement_effects() {
             }
         }
     }
+}
+
+#[test]
+fn borrowed_candidates_preserve_new_saturations_from_uncached_shapes() {
+    let mut p = paragraph("ببب", true, &Limits::default());
+    let data = Arc::get_mut(&mut p.data).unwrap();
+    // Reshape the existing normal-width source with a size that saturates the
+    // generated advances, without changing its original edge flags or widths.
+    for style in &mut data.styles {
+        style.font_size = 1e20;
+    }
+    let mut owned_cx = LayoutContext::new();
+    let mut borrowed_cx = LayoutContext::new();
+    let mut owned_sat = Saturation::default();
+    let mut borrowed_sat = Saturation::default();
+    let expected = owned_candidate(data, 0, 2, &mut owned_cx, &mut owned_sat);
+    let actual = candidate(data, 0, 2, &mut borrowed_cx, &mut borrowed_sat);
+    assert!(owned_sat.saturated > 0, "exercise lossy shaping arithmetic");
+    assert_eq!(actual, expected);
+    assert_eq!(borrowed_sat, owned_sat);
+    assert_eq!(borrowed_cx.edge_reshape_spent, owned_cx.edge_reshape_spent);
+    assert_eq!(borrowed_cx.warnings.take(), owned_cx.warnings.take());
+    assert_eq!(
+        borrowed_cx.edge_shapes.len(),
+        0,
+        "unclean shapes are not cached"
+    );
+}
+
+#[test]
+fn candidate_measurements_release_shared_glyph_handles() {
+    let p = paragraph("ffi", false, &Limits::default());
+    let mut cx = LayoutContext::new();
+    let expected = candidate(&p.data, 0, 1, &mut cx, &mut Saturation::default());
+    assert!(expected.1);
+    let windows: Vec<MeasuredWindow> =
+        measure_edit(&p.data, 0, 1, None, &mut cx, &mut Saturation::default());
+    assert!(!windows.is_empty(), "retain a measured partial edge");
+    let retained: Vec<_> = cx
+        .edge_shapes
+        .entries
+        .values()
+        .map(Arc::downgrade)
+        .collect();
+    cx.edge_shapes.clear();
+    assert!(
+        retained.iter().all(|weak| weak.upgrade().is_none()),
+        "width/coverage results must not keep cached glyph allocations alive"
+    );
+    assert_eq!(windows[0].delta(1, &mut Saturation::default()), expected.0);
 }
