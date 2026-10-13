@@ -75,6 +75,19 @@ pub struct Limits {
     pub max_layer_blob_bytes: Option<u64>,
     /// Shared HarfRust Font cache entries per layer (64).
     pub max_shaper_cache_entries: Option<u64>,
+    /// Declared sources per CSS font registration (64), checked before attempts.
+    pub max_font_sources: Option<u64>,
+    /// Total UTF-8 bytes of declared local source names per registration (64 KiB).
+    pub max_font_source_name_bytes: Option<u64>,
+    /// Accounted shared local-name index bytes (8 MiB), including conservative
+    /// metadata and construction scratch allowances. Document layers use their
+    /// root's limit; loaded platform blobs are not retained by the index.
+    pub max_local_font_index_bytes: Option<u64>,
+    /// Shared local-name index construction work (2^24): family names, faces,
+    /// source loads, name records and encoded name bytes. Also bounds selected
+    /// platform face name verification per source-registration operation.
+    /// Index construction uses the root's limit; verification uses the caller's.
+    pub max_local_font_lookup_work: Option<u64>,
 }
 
 impl Default for Limits {
@@ -103,6 +116,10 @@ impl Default for Limits {
             max_faces_per_layer: Some(256),
             max_layer_blob_bytes: Some(256 * MIB),
             max_shaper_cache_entries: Some(64),
+            max_font_sources: Some(64),
+            max_font_source_name_bytes: Some(64 * 1024),
+            max_local_font_index_bytes: Some(8 * MIB),
+            max_local_font_lookup_work: Some(1 << 24),
         }
     }
 }
@@ -133,6 +150,10 @@ impl Limits {
             max_faces_per_layer: None,
             max_layer_blob_bytes: None,
             max_shaper_cache_entries: None,
+            max_font_sources: None,
+            max_font_source_name_bytes: None,
+            max_local_font_index_bytes: None,
+            max_local_font_lookup_work: None,
         }
     }
 
@@ -171,6 +192,10 @@ pub enum LimitKind {
     FontCacheItems,
     FacesPerLayer,
     LayerBlobBytes,
+    FontSources,
+    FontSourceNameBytes,
+    LocalFontIndexBytes,
+    LocalFontLookupWork,
 }
 
 /// A resource limit was exceeded; the operation allocated nothing further.

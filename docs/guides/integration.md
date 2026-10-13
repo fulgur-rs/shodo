@@ -43,6 +43,34 @@ names and downloaded font data in order. WOFF/WOFF2 decoding is also exposed as
 `decode_web_font`. URL fetching belongs to the caller. See the executable and
 file-based examples in the `shodo::font` module documentation.
 
+Source registration checks the entire declared list before attempting it:
+`max_font_sources` defaults to 64, and `max_font_source_name_bytes` to 64 KiB of
+total local-name UTF-8 bytes. A limit violation returns `FontError::Limit`
+without registering an earlier source or falling through to later data.
+
+Local names use all localized full/PostScript strings with Unicode string
+lowercasing. A root-owned index shares names across clones and document layers;
+different missing names neither reparse the
+catalog nor load or touch its source blobs. Construction uses the root's
+`max_local_font_index_bytes` (8 MiB of accounted metadata/construction storage)
+and `max_local_font_lookup_work` (2^24 family/face/load/record/encoded-byte work
+units). Index failure is retained: unknown names return the same limit error
+without restarting, while already indexed names remain usable. These are
+logical budgets, not process RSS limits; transient platform mappings are not
+retained by the index. Selected path-backed names are verified against the
+loaded bytes, using the caller's lookup-work cap per registration operation.
+
+Installed names are a catalog snapshot, including files unavailable during
+initial construction. Recreate the shared collection to discover replaced or
+newly available installed files, or to raise exhausted index budgets. Root
+`register` additions do not rebuild the native catalog. Once lookup has started,
+new registered and materialized root faces must also fit the name-index budgets
+before publication: registration returns a limit error without changing faces,
+blob accounting, generation, or previously indexed names; matching skips a face
+that cannot be admitted. Before the first lookup, name indexing remains lazy.
+Document CSS faces do not become installed local sources. `None` disables each
+budget, and `Limits::unlimited()` is available for trusted input.
+
 `Limits::max_faces_per_layer` and `max_layer_blob_bytes` bound all retained
 fonts in a layer, including explicit registrations, CSS `local()` sources, and
 faces loaded lazily from the platform catalog. The shared built-in stub counts
