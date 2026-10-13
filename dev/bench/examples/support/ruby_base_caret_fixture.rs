@@ -117,7 +117,12 @@ fn finish(builder: ParagraphBuilder, fonts: &FontCollection) -> (Vec<Line>, Stri
 
 pub fn nested(depth: usize, base_chars: usize, hide_top: bool) -> Vec<Line> {
     assert!(depth > 0);
-    let limits = Limits::default();
+    // HarfRust 0.14 marks more pairs unsafe to concatenate. Keep preparation
+    // within budget so this fixture measures caret ownership, not fallback.
+    let limits = Limits {
+        max_reshape_window_bytes: Some(8192),
+        ..Default::default()
+    };
     let fonts = fonts(&limits);
     let style = paragraph_style();
     let paragraph_style = ParagraphStyle {

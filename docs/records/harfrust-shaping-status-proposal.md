@@ -23,6 +23,18 @@ The first-line intrinsic budget-sharing fixture likewise uses a 32-byte window
 cap instead of 16: the single pass fits, while two passes still exhaust their
 shared operation budget. The production budget policy is unchanged.
 
+The allocation-counting `ruby_base_caret_range` fixture now gives preparation
+an 8192-byte reshape window cap instead of the 4096-byte default. Its hidden,
+four-level, 256-character base otherwise reaches the operation budget before
+caret ownership is measured. The warning-free preparation and original caret
+allocation assertions remain. Direct shaping of the pinned Latin font with
+`PRODUCE_UNSAFE_TO_CONCAT`, default features, and 256 repeated `A`, `B`, or `C`
+characters produces identical glyph IDs, clusters, advances, and offsets in
+0.12 and 0.14. For `B`, the unsafe-to-concat count increases from 1 to 256.
+Disabling kerning changes `C` advances, so the fixture preserves its features
+and increases only its explicit preparation budget. With production defaults,
+some long inputs can now reach the existing reshape fallback sooner.
+
 This is an unsent design note, not an upstream issue or a claim that a particular
 font triggered a shaping failure. It records the integration limitation observed
 in the locally inspected harfrust 0.12.0 source used by shodo.
