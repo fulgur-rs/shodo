@@ -82,6 +82,10 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -r tools/requirements.txt
+      - name: Install verified release tool for changelog check
+        run: bash tools/release/install-release-plz.sh
+      - name: Check default release changelog generation
+        run: python tools/release/check_release_plz.py "$(command -v release-plz)"
       - run: python -m unittest discover -s tools -v
       - run: python tools/fixtures/regenerate.py --check
 

@@ -4,8 +4,10 @@ set -euo pipefail
 # Keep the release tool at the version selected by the reviewed v0.5 action.
 # Digest from the official release-plz-v0.3.172 GitHub release asset metadata.
 # Updating either value requires reviewing and verifying the new archive.
+# GNU matches the former cargo-binstall target on Ubuntu and passes the
+# default changelog smoke check; the musl build fails that template parser.
 release_plz_version=0.3.172
-release_plz_sha256=db58a4668ce9ef0b6431e96a665715745e9a5d7f0b0b28a610034d94de3970df
+release_plz_sha256=84b7013d164e1fc780b31dc9ef190977830599d6cb5ce81c993f6fcbd3cdc1aa
 
 : "${RUNNER_TEMP:?GitHub runner temporary directory required}"
 : "${GITHUB_PATH:?GitHub path output file required}"
@@ -19,7 +21,7 @@ trap 'rm -rf -- "$install_dir"' EXIT
 archive="$install_dir/release-plz.tar.gz"
 curl --fail --location --proto '=https' --proto-redir '=https' --tlsv1.2 \
     --retry 3 --connect-timeout 30 --max-time 120 --output "$archive" \
-    "https://github.com/release-plz/release-plz/releases/download/release-plz-v${release_plz_version}/release-plz-x86_64-unknown-linux-musl.tar.gz"
+    "https://github.com/release-plz/release-plz/releases/download/release-plz-v${release_plz_version}/release-plz-x86_64-unknown-linux-gnu.tar.gz"
 printf '%s  %s\n' "$release_plz_sha256" "$archive" | sha256sum --check
 tar -xzf "$archive" -C "$install_dir" release-plz
 reported_version=$("$install_dir/release-plz" --version)

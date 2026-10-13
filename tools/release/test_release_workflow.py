@@ -16,9 +16,9 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / '.github/workflows/release-plz.yml'
 INSTALLER = Path(__file__).with_name('install-release-plz.sh')
 VERSION = '0.3.172'
-ARCHIVE_SHA256 = 'db58a4668ce9ef0b6431e96a665715745e9a5d7f0b0b28a610034d94de3970df'
+ARCHIVE_SHA256 = '84b7013d164e1fc780b31dc9ef190977830599d6cb5ce81c993f6fcbd3cdc1aa'
 SOURCE_URL = ('https://github.com/release-plz/release-plz/releases/download/'
-              f'release-plz-v{VERSION}/release-plz-x86_64-unknown-linux-musl.tar.gz')
+              f'release-plz-v{VERSION}/release-plz-x86_64-unknown-linux-gnu.tar.gz')
 
 
 def action_steps(job):
