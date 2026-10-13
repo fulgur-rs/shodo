@@ -62,3 +62,21 @@ pub(crate) enum ItemKind {
 mod scripts;
 
 pub(crate) mod language;
+
+#[cfg(test)]
+pub(crate) fn reset_analysis_producers() {
+    whitespace_context::reset_flag_generations();
+    transform_context::CONTEXT_CALLS.with(|n| n.set(0));
+    breaks::SOURCE_CUT_PASSES.with(|n| n.set(0));
+    combine::PREPARE_PASSES.with(|n| n.set(0));
+}
+
+#[cfg(test)]
+pub(crate) fn analysis_producers() -> (usize, usize, usize, usize) {
+    (
+        whitespace_context::flag_generations(),
+        transform_context::CONTEXT_CALLS.with(std::cell::Cell::get),
+        breaks::SOURCE_CUT_PASSES.with(std::cell::Cell::get),
+        combine::PREPARE_PASSES.with(std::cell::Cell::get),
+    )
+}

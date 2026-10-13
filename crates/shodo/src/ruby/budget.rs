@@ -9,6 +9,7 @@ pub(super) struct Cost {
     styles: u64,
     style_bytes: u64,
     mapping_bytes: u64,
+    analysis_bytes: u64,
     glyphs: u64,
     cut_work: u64,
 }
@@ -21,6 +22,7 @@ impl Cost {
             LimitKind::Styles => self.styles,
             LimitKind::StyleBytes => self.style_bytes,
             LimitKind::MappingBytes => self.mapping_bytes,
+            LimitKind::AnalysisBytes => self.analysis_bytes,
             LimitKind::ShapedGlyphs => self.glyphs,
             LimitKind::RubyCutWork => self.cut_work,
             _ => 0,
@@ -33,6 +35,7 @@ impl Cost {
             LimitKind::Styles => &mut self.styles,
             LimitKind::StyleBytes => &mut self.style_bytes,
             LimitKind::MappingBytes => &mut self.mapping_bytes,
+            LimitKind::AnalysisBytes => &mut self.analysis_bytes,
             LimitKind::ShapedGlyphs => &mut self.glyphs,
             LimitKind::RubyCutWork => &mut self.cut_work,
             _ => return,
@@ -85,6 +88,7 @@ pub(super) fn limit(limits: &Limits, kind: LimitKind) -> Option<u64> {
         LimitKind::Styles => limits.max_styles,
         LimitKind::StyleBytes => limits.max_style_bytes,
         LimitKind::MappingBytes => limits.max_mapping_bytes,
+        LimitKind::AnalysisBytes => limits.max_analysis_bytes,
         LimitKind::ShapedGlyphs => limits.max_shaped_glyphs,
         LimitKind::RubyCutWork => limits.max_ruby_cut_work,
         _ => None,
@@ -134,6 +138,7 @@ impl RubyBudget {
             LimitKind::Styles,
             LimitKind::StyleBytes,
             LimitKind::MappingBytes,
+            LimitKind::AnalysisBytes,
             LimitKind::ShapedGlyphs,
             LimitKind::RubyCutWork,
         ] {
@@ -151,6 +156,7 @@ impl RubyBudget {
             (LimitKind::Styles, &mut remaining.max_styles),
             (LimitKind::StyleBytes, &mut remaining.max_style_bytes),
             (LimitKind::MappingBytes, &mut remaining.max_mapping_bytes),
+            (LimitKind::AnalysisBytes, &mut remaining.max_analysis_bytes),
             (LimitKind::ShapedGlyphs, &mut remaining.max_shaped_glyphs),
             (LimitKind::RubyCutWork, &mut remaining.max_ruby_cut_work),
         ] {

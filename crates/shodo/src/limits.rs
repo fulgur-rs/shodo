@@ -16,6 +16,12 @@ pub struct Limits {
     /// across normal, first-line and nested analysis (64 MiB). Includes producer
     /// records that are later retired; excludes allocator overhead and capacity.
     pub max_mapping_bytes: Option<u64>,
+    /// Admitted analysis payload and conservative dependency/scratch allowances
+    /// across normal, first-line and nested paragraphs (128 MiB). Reservations
+    /// are cumulative, including retired scratch and replay-equivalent clones;
+    /// excludes allocator overhead, spare capacity and bounded temporaries.
+    /// This is an admission budget, not a process RSS limit.
+    pub max_analysis_bytes: Option<u64>,
     /// Raw and processed items, and retained itemized shaping runs, capped at build time (2^20).
     pub max_items: Option<u64>,
     /// Interned inline styles per builder (2^16).
@@ -106,6 +112,7 @@ impl Default for Limits {
         Self {
             max_text_bytes: Some(16 * MIB),
             max_mapping_bytes: Some(64 * MIB),
+            max_analysis_bytes: Some(128 * MIB),
             max_items: Some(1 << 20),
             max_styles: Some(1 << 16),
             max_style_bytes: Some(64 * MIB),
@@ -143,6 +150,7 @@ impl Limits {
         Self {
             max_text_bytes: None,
             max_mapping_bytes: None,
+            max_analysis_bytes: None,
             max_items: None,
             max_styles: None,
             max_style_bytes: None,
@@ -194,6 +202,7 @@ impl Limits {
 #[non_exhaustive]
 pub enum LimitKind {
     MappingBytes,
+    AnalysisBytes,
     TextBytes,
     Items,
     Styles,

@@ -234,6 +234,36 @@ Transform provenance is bounded even with `with_offset_mapping(false)`.
 
 ## Shaping data and budgets
 
+`Limits::max_analysis_bytes` defaults to 128 MiB of cumulative admission
+allowances per build. Before each analysis phase, it reserves logical payload
+and conservative variable scratch: raw whitespace flags, transform case/word
+context and text-combine omissions, first-line source projection/cuts, grapheme
+and typographic tables, caret merge capacity, break opportunities/profiles,
+projection, bidi byte levels/paragraphs, and dependency scratch. Later TCY bidi
+and per-scalar geometry scratch, and first-line cursor/cut tables, receive
+allowances during analysis too. Reservations use processed UTF-8 bytes and
+scalar counts; a long combining grapheme or authored controls cannot evade them.
+
+Normal, first-line and nested ruby analysis share the cap. Imported bases keep
+their occurrence-local and ancestor caps. A paint-only clone reserves the same
+phase allowances as reference replay before copying; shared pre-transform
+source cuts are charged once. Retired phase scratch is not refunded. Sequential
+dependency operations within a phase share its scratch allowance; this does
+not count total allocator traffic or bound CPU time. The ICU auto allowance is
+audited against the baked 2.3.0 codepoint models (27 hidden units); the bidi
+allowance against unicode-bidi 0.3.18. Dependency/model updates must re-audit
+those assumptions.
+
+This budget excludes allocator overhead/spare capacity, fixed container
+headers, bounded stacks/model temporaries, and caller-owned independent
+analyses. Existing text, style, mapping, item and glyph budgets still apply;
+shaping output and per-glyph paint data use the glyph budget. It is not a
+process RSS limit. Exceeding it returns `LimitKind::AnalysisBytes` from
+`analyze`/`build` before the rejected phase starts, without truncating text,
+discarding controls, or changing Unicode/caret boundaries. `None` and
+`Limits::unlimited()` disable it for trusted input. An exhaustive `Limits`
+literal must include `max_analysis_bytes`; struct-update syntax stays supported.
+
 `Limits::max_items` also bounds the itemized shaping runs retained across normal,
 first-line, and nested Ruby paragraph data. This prevents vertical orientation
 and other shaping boundaries from creating unbounded `ShapeItem` allocations
