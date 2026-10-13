@@ -193,7 +193,9 @@ pub(crate) struct EdgeShapeCache {
     owner: Option<(u64, usize)>,
     entries: crate::hashing::FastMap<(usize, usize, Option<u64>), ShapedWindow>,
     cost: usize,
-    measurements: Vec<CandidateMeasurement>,
+    measurements: Vec<RetainedMeasurement>,
+    measurement_effects: Vec<super::replay::Effects>,
+    effect_indices: crate::hashing::FastMap<super::replay::Effects, u16>,
     #[cfg(test)]
     measurement_hits: usize,
     #[cfg(test)]
@@ -206,7 +208,8 @@ impl std::fmt::Debug for EdgeShapeCache {
         debug
             .field("entries", &self.entries.len())
             .field("cost", &self.cost)
-            .field("measurements", &self.measurements.len());
+            .field("measurements", &self.measurements.len())
+            .field("effect_records", &self.measurement_effects.len());
         #[cfg(test)]
         debug
             .field("measurement_hits", &self.measurement_hits)
@@ -224,6 +227,16 @@ struct CandidateMeasurement {
     delta: LayoutUnit,
     valid: bool,
     effects: super::replay::Effects,
+}
+
+#[derive(Clone, Copy)]
+struct RetainedMeasurement {
+    // The paragraph's source/unit indices are ordinarily u32. Out-of-range
+    // queries bypass optional retention instead of truncating their keys.
+    key: (u32, u32),
+    delta: LayoutUnit,
+    effects: u16,
+    valid: bool,
 }
 
 type OwnedShapedWindow = (crate::shape::GlyphStore, Vec<crate::shape::ShapedRun>);
@@ -344,6 +357,19 @@ fn window_storage_cost(window: &OwnedShapedWindow, snapshot: bool) -> usize {
     cost
 }
 
+fn effect_index_cost() -> usize {
+    // Four slots plus control bytes per full Effects key cover table slack,
+    // as in drawing snapshot accounting. The indexed Effects vector is
+    // counted separately by actual capacity.
+    4 * std::mem::size_of::<(super::replay::Effects, u16)>() + 4 * std::mem::size_of::<usize>()
+}
+
+fn measurement_cost(entry_capacity: usize, effect_capacity: usize, effect_count: usize) -> usize {
+    entry_capacity * std::mem::size_of::<RetainedMeasurement>()
+        + effect_capacity * std::mem::size_of::<super::replay::Effects>()
+        + effect_count * effect_index_cost()
+}
+
 impl EdgeShapeCache {
     fn begin(&mut self, data: &ParagraphData) {
         let owner = (data.id, data as *const ParagraphData as usize);
@@ -362,6 +388,8 @@ impl EdgeShapeCache {
         self.entries = Default::default();
         self.cost = 0;
         self.measurements = Vec::new();
+        self.measurement_effects = Vec::new();
+        self.effect_indices = Default::default();
         #[cfg(test)]
         {
             self.measurement_hits = 0;
@@ -384,43 +412,102 @@ impl EdgeShapeCache {
     }
 
     fn measurement_storage_cost(&self) -> usize {
-        self.measurements.capacity() * std::mem::size_of::<CandidateMeasurement>()
+        measurement_cost(
+            self.measurements.capacity(),
+            self.measurement_effects.capacity(),
+            self.effect_indices.len(),
+        )
     }
 
     fn measurement(&self, key: (usize, usize)) -> Option<CandidateMeasurement> {
+        let compact = (u32::try_from(key.0).ok()?, u32::try_from(key.1).ok()?);
         self.measurements
-            .binary_search_by_key(&key, |m| m.key)
+            .binary_search_by_key(&compact, |m| m.key)
             .ok()
-            .map(|i| self.measurements[i])
+            .map(|i| {
+                let hit = self.measurements[i];
+                CandidateMeasurement {
+                    key,
+                    delta: hit.delta,
+                    valid: hit.valid,
+                    effects: self.measurement_effects[usize::from(hit.effects)],
+                }
+            })
     }
 
     fn remember_measurement(&mut self, measurement: CandidateMeasurement) {
-        let index = match self
-            .measurements
-            .binary_search_by_key(&measurement.key, |m| m.key)
-        {
-            Ok(index) => {
-                self.measurements[index] = measurement;
-                return;
-            }
-            Err(index) => index,
+        let (Ok(start), Ok(end)) = (
+            u32::try_from(measurement.key.0),
+            u32::try_from(measurement.key.1),
+        ) else {
+            return;
         };
-        if self.measurements.len() == self.measurements.capacity() {
-            let capacity = self.measurements.capacity() + EDGE_MEASUREMENT_GROWTH;
-            if capacity * std::mem::size_of::<CandidateMeasurement>() > EDGE_MEASUREMENT_CACHE_COST
-            {
-                return;
-            }
-            let mut grown = Vec::with_capacity(capacity);
-            let bytes = grown.capacity() * std::mem::size_of::<CandidateMeasurement>();
-            if bytes > EDGE_MEASUREMENT_CACHE_COST {
-                return;
-            }
+        let key = (start, end);
+        let found = self.measurements.binary_search_by_key(&key, |m| m.key);
+        let existing_effect = self.effect_indices.get(&measurement.effects).copied();
+        let Ok(new_effect_index) = u16::try_from(self.measurement_effects.len()) else {
+            return;
+        };
+        let grow_entries =
+            found.is_err() && self.measurements.len() == self.measurements.capacity();
+        let grow_effects = existing_effect.is_none()
+            && self.measurement_effects.len() == self.measurement_effects.capacity();
+        let entry_capacity = self.measurements.capacity()
+            + if grow_entries {
+                EDGE_MEASUREMENT_GROWTH
+            } else {
+                0
+            };
+        let effect_capacity =
+            self.measurement_effects.capacity() + if grow_effects { 16 } else { 0 };
+        let effect_count = self.effect_indices.len() + usize::from(existing_effect.is_none());
+        // Refuse without allocating when either side cannot fit. Actual
+        // capacities are checked again before retaining new buffers.
+        if measurement_cost(entry_capacity, effect_capacity, effect_count)
+            > EDGE_MEASUREMENT_CACHE_COST
+        {
+            return;
+        }
+        let entries = grow_entries.then(|| Vec::with_capacity(entry_capacity));
+        let effects = grow_effects.then(|| Vec::with_capacity(effect_capacity));
+        let planned_cost = measurement_cost(
+            entries
+                .as_ref()
+                .map_or(self.measurements.capacity(), Vec::capacity),
+            effects
+                .as_ref()
+                .map_or(self.measurement_effects.capacity(), Vec::capacity),
+            effect_count,
+        );
+        if planned_cost > EDGE_MEASUREMENT_CACHE_COST {
+            return;
+        }
+        let before = self.measurement_storage_cost();
+        if let Some(mut grown) = entries {
             grown.extend_from_slice(&self.measurements);
-            self.cost += bytes - self.measurement_storage_cost();
             self.measurements = grown;
         }
-        self.measurements.insert(index, measurement);
+        if let Some(mut grown) = effects {
+            grown.extend_from_slice(&self.measurement_effects);
+            self.measurement_effects = grown;
+        }
+        let effect_index = existing_effect.unwrap_or_else(|| {
+            self.measurement_effects.push(measurement.effects);
+            self.effect_indices
+                .insert(measurement.effects, new_effect_index);
+            new_effect_index
+        });
+        let retained = RetainedMeasurement {
+            key,
+            delta: measurement.delta,
+            valid: measurement.valid,
+            effects: effect_index,
+        };
+        match found {
+            Ok(index) => self.measurements[index] = retained,
+            Err(index) => self.measurements.insert(index, retained),
+        }
+        self.cost += self.measurement_storage_cost() - before;
     }
 
     /// Returns whether the window was retained.

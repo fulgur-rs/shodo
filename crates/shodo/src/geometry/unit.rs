@@ -5,7 +5,7 @@
 //! the caller can report them as a single warning.
 
 /// Counters for lossy conversions and saturating arithmetic.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub(crate) struct Saturation {
     pub(crate) saturated: u32,
     pub(crate) non_finite: u32,
