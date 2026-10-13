@@ -29,6 +29,10 @@ pub use input::*;
 mod input_tests;
 
 #[cfg(test)]
+#[path = "tests/constructor_limits.rs"]
+mod constructor_limit_tests;
+
+#[cfg(test)]
 #[path = "tests/preflight.rs"]
 mod preflight_tests;
 
