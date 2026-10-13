@@ -49,3 +49,15 @@ clone 回数の削減は上記の実コード試験で確認する。時間・�
 最終 `c26aa6f` では通常 workspace 全 suite が 1,916 テスト成功、失敗 0、ignored 9。借用・寿命・副作用同等性を含む edge windows 27 テストを accesskit 有効・既定 feature なし・complex-scripts のみでそれぞれ成功させた。通常/accesskit の workspace 全 target の Clippy（`-D warnings`）と fmt も成功した。固定画像 snapshot の期待値は更新していない。
 
 今回新規に作成した専用 `~/tmp/shodo-36-target` は最終レビューと CI で再検証する可能性があるため保持し、統合後に親作業で削除する。その他の一時コード・性能ログはこの実装作業では作成していない。テスト自身が作る一時ディレクトリは正常終了時に解放される。実装 worktree はレビュー・後続 SHODO-35 の統合用に保持する。
+
+## 最終版の独立比較
+
+独立レビューは `c892cae..273f769` で必須修正なし。最終 compact specialization に対する 813 ケースの public/manual/internal 出力・警告は基準版と完全一致した。正規化 837,421,847 bytes の SHA-256 は `d22e6d8a0201bfe2ee40201eba58ef6e5704cedc45929d99e8637c83bc8c0616`。入力は既存 `edge_cache_eviction` の全 corpus と rich cases、cold/warm・width-cycle・owner-switch/locality、variation・SHY・各 budget を含む。元ドライバーの internal/manual 自己比較は基準版でも block-offset 差で失敗するため、一時ドライバーは各経路を変更前後で直接比較した。元ファイルと fixture は更新していない。
+
+時間は独立 3 process × 21 samples、CPU 2 固定、warmup 3、構築を除外して出力収集・破棄を含めた。別タスクの checks は CPU 2 と SMT sibling 8 を避けた。Arabic-long/8 は 2.0775 → 1.9848 ms、/64 は 75.4685 → 73.5772 ms。width cycle・短段落の時間比は約 0.993〜1.007 と小さく、単一条件の微小な差を一般的な速度改善とは扱わない。
+
+非 instrumented の時間と、別ビルドの allocation counting を分けた。全 6 条件で allocation calls と requested bytes が減った。コピー量は同一 named fixture の実 GlyphStore clone 回数（ffi 候補 2 → 0、Arabic/delta も warm 0）として定義し、allocator の gross bytes と混同しない。cold cache の snapshot と採用 overlay の所有化は引き続き必要。
+
+[全 timing samples・allocator・driver/lock/機械条件](shodo-36-measurements-2026-10-14.json) を保存した。CPU scaling/boost、背景負荷、固定 fixture と standalone の限界を含めて読む。再現時は JSON の driver_source を一時 crate の src/main.rs、probe_manifest_template の CHECKOUT を実 checkout path に置換した Cargo.toml、probe_lock を Cargo.lock に保存し、offline release build する。時間版を保存してから allocation-counting 版を別に保存し、各条件を CPU 2 上で交互に 3 process 実行する。一時 crate は ~/tmp 下に作る。最終全体・feature・MSRV/Wasm は PR の exact HEAD CI で確認してから merge する。
+
+別の width_validation driver では Arabic/8・64、Latin/64、多数短段落/64、justification/64、mixed scripts/8 のそれぞれ 3 幅を 4 cycle 実行し、全 glyph/source mapping digest・矩形 bit 列・警告が基準版と一致した。正規化 SHA-256 は `5d895bae16ca7bc62aec8c3826b79b03e9733b3ee59b283cbfb02e6ea5393ba7`。snapshot_source と width_validation_source を JSON に保存し、一時比較ドライバー自体も再現できるようにした。
