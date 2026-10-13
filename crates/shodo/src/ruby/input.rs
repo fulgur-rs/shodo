@@ -3,7 +3,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use crate::builder::{ParagraphBuilder, RawItem};
-use crate::limits::{LimitExceeded, Limits, Warning};
+use crate::limits::{LimitExceeded, LimitKind, Limits, Warning};
 use crate::node::{NodeId, TextSource};
 use crate::style::{InlineStyle, ParagraphStyle};
 
@@ -113,9 +113,11 @@ pub struct Ruby {
     pub(crate) columns: usize,
 }
 
-/// A structural span error in one annotation level.
+/// A constructor resource-limit or structural span error.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RubyError {
+    /// Structural metadata exceeded `Limits::max_items` before span validation.
+    Limit(LimitExceeded),
     InvalidSpan {
         level: usize,
         annotation: usize,
@@ -131,17 +133,69 @@ pub enum RubyError {
 
 impl std::fmt::Display for RubyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Self::Limit(error) = self {
+            return error.fmt(f);
+        }
         write!(f, "invalid ruby pairing: {self:?}")
     }
 }
 impl std::error::Error for RubyError {}
 
+impl From<LimitExceeded> for RubyError {
+    fn from(error: LimitExceeded) -> Self {
+        Self::Limit(error)
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static VALIDATED_ANNOTATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(super) static SPAN_TABLES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 impl Ruby {
-    /// Validate nonempty, bounded, nonoverlapping spans without expanding columns.
+    /// Validate spans using default resource limits, without expanding columns.
+    /// Use [`Self::with_limits`] to choose an explicit structural metadata budget.
     pub fn new(bases: Vec<RubyBase>, levels: Vec<RubyLevel>) -> Result<Self, RubyError> {
+        Self::with_limits(bases, levels, &Limits::default())
+    }
+
+    /// Validate nonempty, bounded, nonoverlapping spans with explicit limits.
+    ///
+    /// Before examining annotations or allocating/sorting span tables, check
+    /// [`Limits::max_items`] against one container, every base and level, and
+    /// every annotation occurrence. The first excessive count returns
+    /// [`RubyError::Limit`], even if a span is also invalid. Hidden/collapsed
+    /// annotations and shared content count separately.
+    ///
+    /// This per-constructor admission bounds validation scratch and sorting;
+    /// it does not account for caller-owned vector capacity or content payload.
+    /// Dropping rejected owned inputs still visits their records. The parent
+    /// independently checks projected anonymous boxes and aggregate resources
+    /// when the ruby is appended. `max_items: None` disables this constructor
+    /// budget and should only be used for trusted input.
+    pub fn with_limits(
+        bases: Vec<RubyBase>,
+        levels: Vec<RubyLevel>,
+        limits: &Limits,
+    ) -> Result<Self, RubyError> {
+        // Bound the outer walk before inspecting per-level vector lengths;
+        // then admit all raw metadata before touching any annotation element.
+        // This is a lower bound on normalized metadata, whose anonymous columns
+        // and aggregate parent cost are checked independently by normalize.
+        let mut items = 1u64
+            .saturating_add(bases.len() as u64)
+            .saturating_add(levels.len() as u64);
+        Limits::check(limits.max_items, LimitKind::Items, items)?;
+        for level in &levels {
+            items = items.saturating_add(level.annotations.len() as u64);
+            Limits::check(limits.max_items, LimitKind::Items, items)?;
+        }
         let mut columns = bases.len();
         for level in &levels {
             for (i, annotation) in level.annotations.iter().enumerate() {
+                #[cfg(test)]
+                VALIDATED_ANNOTATIONS.with(|count| count.set(count.get() + 1));
                 match annotation.span {
                     RubySpan::Auto => columns = columns.max(i + 1),
                     RubySpan::All => columns = columns.max(1),
@@ -150,6 +204,8 @@ impl Ruby {
             }
         }
         for (level_index, level) in levels.iter().enumerate() {
+            #[cfg(test)]
+            SPAN_TABLES.with(|count| count.set(count.get() + 1));
             let mut spans = Vec::with_capacity(level.annotations.len());
             for (i, annotation) in level.annotations.iter().enumerate() {
                 let span = span(&annotation.span, i, columns);

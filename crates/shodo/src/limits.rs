@@ -22,7 +22,9 @@ pub struct Limits {
     /// excludes allocator overhead, spare capacity and bounded temporaries.
     /// This is an admission budget, not a process RSS limit.
     pub max_analysis_bytes: Option<u64>,
-    /// Raw and processed items, and retained itemized shaping runs, capped at build time (2^20).
+    /// Raw and processed items, and retained itemized shaping runs (2^20).
+    /// Also bounds each ruby constructor's container/base/level/annotation
+    /// metadata before validation; parent build/import checks remain aggregate.
     pub max_items: Option<u64>,
     /// Interned inline styles per builder (2^16).
     pub max_styles: Option<u64>,

@@ -189,6 +189,22 @@ export a reading's child AccessibleLayout separately with its own adapter/root.
 
 ## Limits and browser comparison policies
 
+`Ruby::new` uses default Limits. `Ruby::with_limits(bases, levels, &limits)`
+checks `max_items` before annotation inspection or span-table allocation/sort:
+one container, every base, every level and every annotation occurrence count.
+Shared content, Hidden/Collapse and merge policies do not discount records.
+This constructor budget bounds validation metadata, independently of the
+parent's later projected anonymous boxes and aggregate limits. Caller-owned
+vector capacity and content payload are outside this constructor budget;
+dropping rejected input still visits its owned records. `max_items: None` or
+`Limits::unlimited()` allows larger trusted input.
+
+Over-budget construction returns `RubyError::Limit(LimitExceeded)` before any
+span error; `actual` is the first excessive structural count. Code exhaustively
+matching `RubyError` must handle this new variant. Span errors and annotation
+order remain unchanged for admitted input. When raising a parent's item cap,
+use `Ruby::with_limits` with the intended constructor cap too.
+
 All retained text, items, styles, shaped glyphs and first-line alternatives count
 against the parent's aggregate Limits, including nested or reused snapshots.
 Each imported base also keeps its snapshot limits for retained text, items,
