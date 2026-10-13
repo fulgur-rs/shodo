@@ -36,8 +36,13 @@ jobs:
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          # Match release-plz's associated-PR response. Its first prefix match
+          # can drive publication, so every release candidate in that response
+          # must have canonical head provenance. Ordinary fork PRs are harmless.
           is_release=$(gh api "repos/$REPO/commits/$SHA/pulls" \
-            --jq '[.[] | select(.head.ref | startswith("release-plz-"))] | length > 0')
+            | jq --arg repo "$REPO" '
+                [ .[] | select((.head.ref // "") | startswith("release-plz-")) ]
+                | length > 0 and all(.[]; .head.repo.full_name == $repo)')
           echo "is_release=$is_release" >> "$GITHUB_OUTPUT"
 
   release:
