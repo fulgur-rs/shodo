@@ -351,9 +351,7 @@ fn import(b: &mut ParagraphBuilder, input: &ContentInput) -> Vec<u32> {
     if b.error.is_some() {
         return Vec::new();
     }
-    for warning in &input.warnings {
-        b.warnings.push(warning.kind, warning.message.clone());
-    }
+    b.warnings.extend_from_slice(&input.warnings);
     let mut styles = Vec::with_capacity(input.styles.len());
     let has_first_line = input.style.first_line.is_some() || !input.first_line_styles.is_empty();
     for (i, style) in input.styles.iter().enumerate() {

@@ -650,9 +650,7 @@ impl ParagraphBuilder {
         builder.rubies = input.rubies.clone();
         builder.ruby_cost = input.ruby_cost;
         builder.ruby_annotation = true;
-        for warning in &input.warnings {
-            builder.warnings.push(warning.kind, warning.message.clone());
-        }
+        builder.warnings.extend_from_slice(&input.warnings);
         crate::ruby::prepare::annotation_breaks(&mut builder)?;
         let normal = crate::ruby::builder::isolated(&builder.style.root);
         let first = builder
