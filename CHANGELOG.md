@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.27](https://github.com/fulgur-rs/shodo/compare/v0.0.26...v0.0.27) - 2026-10-12
+
+### Fixed
+
+- bound shaping item allocations
+- wrap break-spaces after Unicode space separators
+- preserve combined-width trial glyph limits
+- retain visible punctuation boundaries across hanging tails
+- align cached retries and hyphen widths with materialization
+- *(spacing)* keep boundary terms for paragraphs with a first line
+- retain closing-edge barriers before trailing whitespace
+- account for hanging whitespace and pulled closing edges
+- check reshaped width at paragraph end (SHODO-15)
+
+### Other
+
+- Avoid revalidating aliased TTC face offsets
+- Fix cumulative native font retention budgets
+- upgrade skrifa to 0.48 (SHODO-13)
+- upgrade skrifa to 0.48 with compatible font metrics
+- reduce spacing bookkeeping overhead
+- fuse first-line intrinsic scans
+- reject mismatched first-line floats before cloning
+- reuse paint-only first-line shaping
+- reuse paint-only first-line analysis
+- record Balance summary coverage and stage tradeoffs (SHODO-6)
+- summarize guarded Balance trial lines (SHODO-6)
+- add typed Balance trial formatting driver (SHODO-6)
+- evaluate match-cache eviction policies (SHODO-5)
+- avoid discarded emphasis metric storage (SHODO-4)
+- *(line)* defer block shifts until final metrics (SHODO-3)
+- *(font)* borrow descriptor presence for selected matches
+- Merge branch 'main' into claude/perf-plane-issues-yl441p
+- *(spacing)* skip boundary spacing terms when a paragraph needs none
+- Merge remote-tracking branch 'origin/main' into perf/shodo-1-spacing
+- *(spacing)* compact retained unit summaries for SHODO-1
+
 ## [0.0.26](https://github.com/fulgur-rs/shodo/compare/v0.0.25...v0.0.26) - 2026-10-11
 
 ### Fixed
