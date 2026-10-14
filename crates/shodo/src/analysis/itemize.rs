@@ -237,7 +237,7 @@ pub(crate) fn itemize(
     let mut text = String::new();
     let mut scalars = Vec::new();
     let mut style_indices = Vec::new();
-    let mut compatible_styles = HashMap::new();
+    let mut compatible_styles = crate::hashing::FastMap::default();
     // Input styles may split flushes, but source offsets remain ordered across them.
     let mut grapheme_cursor = 0;
     let mut flush = |text: &mut String,
@@ -258,7 +258,7 @@ pub(crate) fn itemize(
             let cluster = &text
                 [offsets[scalar_start]..offsets.get(scalar_end).copied().unwrap_or(text.len())];
             let mut prepared = FontCluster::new(cluster);
-            let mut matched = HashMap::new();
+            let mut matched = crate::hashing::FastMap::default();
             let grapheme_offset = scalars[scalar_start].offset;
             // Paragraph grapheme cuts sit before transparent markers (isolate
             // controls of ruby bases and isolating inlines, out-of-flow

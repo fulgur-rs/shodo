@@ -992,7 +992,7 @@ fn shape_inputs_with<'a>(
             });
         // Origin deltas depend on this input's face and variation coordinates,
         // so the cache never outlives the input.
-        let mut cff_origin_deltas = std::collections::HashMap::new();
+        let mut cff_origin_deltas = crate::hashing::FastMap::default();
         let language: Option<harfrust::Language> = style.lang.as_ref().and_then(|l| l.parse().ok());
         // Authored bidi controls start no paragraph grapheme but are always
         // their own shaping cluster (itemize/graphemes.rs), so a budget window
