@@ -2,12 +2,12 @@
 //! Annotation ink may overflow available leading without increasing advance.
 use super::measure::{RubyFragmentMeasure, RubyMeasure};
 use crate::geometry::{LayoutUnit, Saturation, WritingMode};
+use crate::hashing::FastMap;
 use crate::line::fragments::{FragmentRecord, GlyphSource, RecordKind};
 use crate::paragraph::ParagraphData;
 use crate::shape::ShapedRun;
-use crate::style::{LineHeight, TextOrientation};
+use crate::style::LineHeight;
 use crate::{RubyAlign, RubyPosition};
-use std::collections::HashMap;
 use std::ops::Range;
 
 #[path = "geometry_index.rs"]
@@ -41,8 +41,8 @@ pub(crate) struct Frame<'a> {
     baseline: LayoutUnit,
     shifts: &'a [LayoutUnit],
     pub(crate) block_size: LayoutUnit,
-    boxes: HashMap<u32, usize>,
-    parents: HashMap<u32, Option<u32>>,
+    boxes: FastMap<u32, usize>,
+    parents: FastMap<u32, Option<u32>>,
 }
 impl<'a> Frame<'a> {
     pub(crate) fn new(
@@ -62,10 +62,19 @@ impl<'a> Frame<'a> {
                 _ => None,
             })
             .collect();
-        let parents = data.units[units]
-            .iter()
-            .map(|u| (u.item, u.parent_box))
-            .collect();
+        let units = &data.units[units];
+        // Same single up-front reservation as collecting every unit.
+        let mut parents = FastMap::with_capacity_and_hasher(units.len(), Default::default());
+        let mut previous = None;
+        for u in units {
+            let parent = (u.item, u.parent_box);
+            // Consecutive clusters of one item repeat the same parent. Keep
+            // last-write semantics when either component changes.
+            if previous != Some(parent) {
+                parents.insert(u.item, u.parent_box);
+                previous = Some(parent);
+            }
+        }
         Self {
             data,
             records,
@@ -136,10 +145,7 @@ pub(crate) fn font_extents(
 ) -> (LayoutUnit, LayoutUnit) {
     let s = &data.styles[style as usize];
     let m = data.style_metrics[style as usize];
-    let upright = matches!(
-        data.style.writing_mode,
-        WritingMode::VerticalRl | WritingMode::VerticalLr
-    ) && s.text_orientation != TextOrientation::Sideways;
+    let upright = data.style.writing_mode.is_upright(s.text_orientation);
     let (a, d) = if upright {
         m.vertical_metrics
             .map_or((s.font_size / 2.0, s.font_size / 2.0), |m| {
@@ -317,10 +323,8 @@ pub(crate) fn record_primary_extents(
     let half = metrics.size / 2.0;
     let (a, d) = match run.orientation {
         crate::shape::orientation::RunOrientation::Combined => (half, half),
-        crate::shape::orientation::RunOrientation::Upright => metrics
-            .vertical_metrics
-            .map_or((half, half), |v| (v.ascent, v.descent)),
-        _ => (metrics.metrics.ascent, metrics.metrics.descent),
+        crate::shape::orientation::RunOrientation::Upright => metrics.ascent_descent(true),
+        _ => metrics.ascent_descent(false),
     };
     Some(fixed_extents(data, a, d, sat))
 }
@@ -371,11 +375,7 @@ fn line_height(
         LineHeight::Px(v) => v,
         LineHeight::Number(n) => n * s.font_size,
         LineHeight::Normal => {
-            if matches!(
-                data.style.writing_mode,
-                WritingMode::VerticalRl | WritingMode::VerticalLr
-            ) && s.text_orientation != TextOrientation::Sideways
-            {
+            if data.style.writing_mode.is_upright(s.text_orientation) {
                 m.vertical_metrics
                     .map_or(s.font_size, |v| v.ascent + v.descent + v.line_gap)
             } else {

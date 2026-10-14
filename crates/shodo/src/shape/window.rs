@@ -4,8 +4,9 @@ use super::{GlyphStore, RUN_PEN_LIMIT, RunInstance, ShapedRun, cff_vertical_orig
 use crate::analysis::itemize::{Scalar, ShapeItem};
 use crate::font::FontId;
 use crate::geometry::{LayoutUnit, Saturation, WritingMode};
+use crate::hashing::FastMap;
 use crate::limits::WarningSink;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 pub(super) struct GlyphWindow<'a, 'font> {
     pub(super) shaping_input: u32,
@@ -24,7 +25,7 @@ pub(super) struct GlyphWindow<'a, 'font> {
     pub(super) window_end: u32,
     pub(super) window_run_start: usize,
     pub(super) cff_without_vorg: Option<&'a skrifa::FontRef<'font>>,
-    pub(super) cff_origin_deltas: &'a mut HashMap<u32, Option<f32>>,
+    pub(super) cff_origin_deltas: &'a mut FastMap<u32, Option<f32>>,
 }
 
 impl GlyphWindow<'_, '_> {

@@ -24,6 +24,20 @@ impl WritingMode {
     pub fn is_vertical(self) -> bool {
         !matches!(self, Self::HorizontalTb)
     }
+
+    /// `VerticalRl` or `VerticalLr`, excluding the sideways modes.
+    ///
+    /// Only these modes honor `text-orientation`; unlike [`Self::is_vertical`],
+    /// `SidewaysRl` and `SidewaysLr` lay every glyph out sideways.
+    pub(crate) fn is_typographic_vertical(self) -> bool {
+        matches!(self, Self::VerticalRl | Self::VerticalLr)
+    }
+
+    /// Whether text in `orientation` uses the vertical (upright) em box: a
+    /// typographic vertical mode with any `text-orientation` but `sideways`.
+    pub(crate) fn is_upright(self, orientation: crate::style::TextOrientation) -> bool {
+        self.is_typographic_vertical() && orientation != crate::style::TextOrientation::Sideways
+    }
 }
 
 /// CSS `direction`.

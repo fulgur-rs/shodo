@@ -17,7 +17,7 @@ fn boundary_box(data: &ParagraphData, boundary: usize) -> Option<u32> {
     })
 }
 
-fn ancestors(data: &ParagraphData, boundary: usize) -> impl Iterator<Item = u32> + '_ {
+pub(super) fn ancestors(data: &ParagraphData, boundary: usize) -> impl Iterator<Item = u32> + '_ {
     let mut parent = boundary_box(data, boundary);
     std::iter::from_fn(move || {
         let b = parent?;

@@ -226,11 +226,9 @@ impl Paragraph {
                         offset = add_block_offset(cx, offset, summary.block_size);
                         return Some(summary);
                     }
-                    TrialResult::FloatEncountered { float_cursor, .. } => {
-                        cursor = Some(float_cursor)
-                    }
-                    TrialResult::BlockInInline { token_after, .. } => token = token_after,
-                    TrialResult::BlockSizeExceeded { .. } => {
+                    TrialResult::FloatEncountered { float_cursor } => cursor = Some(float_cursor),
+                    TrialResult::BlockInInline { token_after } => token = token_after,
+                    TrialResult::BlockSizeExceeded => {
                         unreachable!("fixed-width trials have no block size limit")
                     }
                     TrialResult::Done | TrialResult::InvalidToken => {

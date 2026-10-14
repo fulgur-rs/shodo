@@ -40,27 +40,7 @@ pub(crate) fn ruby_range_width(
     if units.is_empty() {
         return crate::geometry::LayoutUnit::ZERO;
     }
-    if let Some(width) = range::width(data, units.clone(), atomics, cx, sat) {
-        return width;
-    }
-    #[cfg(test)]
-    {
-        cx.ruby_measure_visits += units.len();
-    }
-    plan::selected_raw(
-        data,
-        units.start,
-        units.end,
-        crate::geometry::LayoutUnit::ZERO,
-        crate::geometry::LayoutUnit::ZERO,
-        0,
-        None,
-        crate::geometry::LayoutUnit::MAX,
-        atomics,
-        cx,
-        sat,
-    )
-    .content
+    range::width(data, units, atomics, cx, sat)
 }
 
 /// A base's own continuation decorations contribute to its width. Cloned
@@ -260,13 +240,7 @@ impl Paragraph {
             cx.completed = None;
             let mut sat = Saturation::default();
             let constraint = crate::sanitize::constraint(*constraint, &mut cx.warnings, &mut sat);
-            let mut options = *options;
-            options.text_indent.length = crate::sanitize::layout_length(
-                options.text_indent.length,
-                false,
-                &mut cx.warnings,
-                &mut sat,
-            );
+            let options = crate::sanitize::line_options(options, &mut cx.warnings, &mut sat);
             cx.warnings.record_saturation(&sat);
             let alternate = Paragraph {
                 data: std::sync::Arc::clone(&first.data),
@@ -393,13 +367,7 @@ impl Paragraph {
             cx,
             &mut sat,
         );
-        let mut options = *options;
-        options.text_indent.length = crate::sanitize::layout_length(
-            options.text_indent.length,
-            false,
-            &mut cx.warnings,
-            &mut sat,
-        );
+        let options = crate::sanitize::line_options(options, &mut cx.warnings, &mut sat);
         let indent = text_indent(&options, token.flags, &mut sat);
         let planned_end = planned_end_override.or_else(|| {
             constraint.break_plan.and_then(|p| {
@@ -578,7 +546,7 @@ impl Paragraph {
         line.positions = positions;
         line.glyph_spacing = glyph_spacing;
         line.displaced = displaced;
-        reshape::apply(&mut line, cx, &mut sat);
+        reshape::apply(&mut line, &mut sat);
         let (root_strut, trimmed_trailing) = line.measure_metrics(&mut sat);
         let annotation_edges = if let Some(measure) = ruby_measure {
             crate::ruby::place::format(data, &measure, &mut line, atomics, cx, &mut sat)
@@ -650,10 +618,9 @@ fn non_negative(
 ) -> LayoutUnit {
     let v = LayoutUnit::from_f32_round(value, sat);
     if v < LayoutUnit::ZERO {
-        cx.warnings.push(
-            WarningKind::NegativeInput,
-            format!("negative {what} replaced with 0"),
-        );
+        cx.warnings.push_lazy(WarningKind::NegativeInput, || {
+            format!("negative {what} replaced with 0")
+        });
         LayoutUnit::ZERO
     } else {
         v

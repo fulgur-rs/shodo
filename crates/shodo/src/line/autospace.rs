@@ -535,8 +535,11 @@ pub(crate) fn exclude_from_boxes(
     sat: &mut Saturation,
 ) {
     use super::fragments::RecordKind;
-    use std::collections::HashMap;
-    let mut deltas = HashMap::<usize, LayoutUnit>::new();
+    // Without gaps no box has a delta, so nothing below would change.
+    if gaps.is_empty() {
+        return;
+    }
+    let mut deltas = crate::hashing::FastMap::<usize, LayoutUnit>::default();
     for gap in gaps {
         let assigned = data.units[gap.assigned as usize]
             .parent_box

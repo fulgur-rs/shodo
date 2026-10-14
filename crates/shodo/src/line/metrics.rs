@@ -163,15 +163,7 @@ fn font_extents(
 }
 
 fn shift(s: &InlineStyle, parent: StyleMetrics, parent_upright: bool, a: f32, d: f32) -> f32 {
-    let (parent_over, parent_under) = if parent_upright {
-        parent
-            .vertical_metrics
-            .map_or((parent.size / 2.0, parent.size / 2.0), |v| {
-                (v.ascent, v.descent)
-            })
-    } else {
-        (parent.metrics.ascent, parent.metrics.descent)
-    };
+    let (parent_over, parent_under) = parent.ascent_descent(parent_upright);
     match s.vertical_align {
         VerticalAlign::Length(v) => -v,
         VerticalAlign::Sub => parent.metrics.subscript_offset,
@@ -204,16 +196,12 @@ fn box_shift(
         let b = &data.boxes[index as usize];
         let s = &data.styles[b.style as usize];
         let parent_style = b.parent.map_or(0, |p| data.boxes[p as usize].style) as usize;
-        let parent_upright = matches!(
-            data.style.writing_mode,
-            crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
-        ) && data.styles[parent_style].text_orientation
-            != crate::style::TextOrientation::Sideways;
+        let parent_upright = data
+            .style
+            .writing_mode
+            .is_upright(data.styles[parent_style].text_orientation);
         let style_metrics = data.style_metrics[b.style as usize];
-        let upright = matches!(
-            data.style.writing_mode,
-            crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
-        ) && s.text_orientation != crate::style::TextOrientation::Sideways;
+        let upright = data.style.writing_mode.is_upright(s.text_orientation);
         let (a, d) = extents(
             s,
             style_metrics.metrics,
@@ -312,14 +300,9 @@ impl ProfileResolver {
         let s = &data.styles[item.style as usize];
         let metrics = data.style_metrics[item.style as usize];
         let parent_style = unit.parent_box.map_or(0, |b| data.boxes[b as usize].style) as usize;
-        let vertical = matches!(
-            data.style.writing_mode,
-            crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
-        );
-        let upright = vertical && s.text_orientation != crate::style::TextOrientation::Sideways;
-        let parent_upright = vertical
-            && data.styles[parent_style].text_orientation
-                != crate::style::TextOrientation::Sideways;
+        let mode = data.style.writing_mode;
+        let upright = mode.is_upright(s.text_orientation);
+        let parent_upright = mode.is_upright(data.styles[parent_style].text_orientation);
         let (a, d) = extents(s, metrics.metrics, metrics.vertical_metrics, upright);
         let center = (metrics.metrics.ascent - metrics.metrics.descent) / 2.0;
         let dominant = match (parent_upright, upright) {
@@ -424,12 +407,7 @@ impl ProfileResolver {
                         data.combine_center_shift(data.items[*item as usize].style)
                     } else if shaped.orientation
                         == crate::shape::orientation::RunOrientation::SidewaysClockwise
-                        && matches!(
-                            data.style.writing_mode,
-                            crate::geometry::WritingMode::VerticalRl
-                                | crate::geometry::WritingMode::VerticalLr
-                        )
-                        && s.text_orientation != crate::style::TextOrientation::Sideways
+                        && data.style.writing_mode.is_upright(s.text_orientation)
                     {
                         // Mixed selects a central baseline even for its
                         // horizontally shaped, clockwise glyphs. Convert the
@@ -444,11 +422,7 @@ impl ProfileResolver {
                 let b = &data.boxes[*box_index as usize];
                 let s = &data.styles[b.style as usize];
                 let style_metrics = data.style_metrics[b.style as usize];
-                let upright = matches!(
-                    data.style.writing_mode,
-                    crate::geometry::WritingMode::VerticalRl
-                        | crate::geometry::WritingMode::VerticalLr
-                ) && s.text_orientation != crate::style::TextOrientation::Sideways;
+                let upright = data.style.writing_mode.is_upright(s.text_orientation);
                 let (a, d) = extents(
                     s,
                     style_metrics.metrics,
@@ -468,12 +442,10 @@ impl ProfileResolver {
                 let s = &data.styles[data.items[item as usize].style as usize];
                 let parent_style = parent_box.map_or(0, |p| data.boxes[p as usize].style) as usize;
                 let parent = data.style_metrics[parent_style];
-                let parent_upright = matches!(
-                    data.style.writing_mode,
-                    crate::geometry::WritingMode::VerticalRl
-                        | crate::geometry::WritingMode::VerticalLr
-                ) && data.styles[parent_style].text_orientation
-                    != crate::style::TextOrientation::Sideways;
+                let parent_upright = data
+                    .style
+                    .writing_mode
+                    .is_upright(data.styles[parent_style].text_orientation);
                 let (base, group) =
                     parent_box.map_or((0.0, None), |b| box_shift(data, b, &mut self.boxes));
                 let height = size.block_size + size.margins.block_start + size.margins.block_end;
@@ -482,11 +454,7 @@ impl ProfileResolver {
                     .baseline
                     .unwrap_or(if central { height / 2.0 } else { height });
                 let dominant_shift = if central {
-                    let (over, under) = parent
-                        .vertical_metrics
-                        .map_or((parent.size / 2.0, parent.size / 2.0), |v| {
-                            (v.ascent, v.descent)
-                        });
+                    let (over, under) = parent.ascent_descent(true);
                     -(over - under) / 2.0
                 } else {
                     0.0
@@ -578,10 +546,7 @@ fn measure_profile<const KEEP_SHIFTS: bool>(
 ) -> LineMetrics {
     let root = &data.styles[0];
     let root_metrics = data.style_metrics[0];
-    let root_upright = matches!(
-        data.style.writing_mode,
-        crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
-    ) && root.text_orientation != crate::style::TextOrientation::Sideways;
+    let root_upright = data.style.writing_mode.is_upright(root.text_orientation);
     let quirk = data
         .style
         .line_height_quirk

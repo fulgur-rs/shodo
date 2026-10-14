@@ -74,6 +74,22 @@ pub(crate) struct StyleMetrics {
     pub(crate) em_ascent: f32,
 }
 
+impl StyleMetrics {
+    /// Unleaded ascent and descent of the primary font: its vertical metrics
+    /// for upright text, falling back to half of `size` on each side, and its
+    /// horizontal metrics otherwise.
+    pub(crate) fn ascent_descent(&self, upright: bool) -> (f32, f32) {
+        if upright {
+            self.vertical_metrics
+                .map_or((self.size / 2.0, self.size / 2.0), |v| {
+                    (v.ascent, v.descent)
+                })
+        } else {
+            (self.metrics.ascent, self.metrics.descent)
+        }
+    }
+}
+
 const PROBE_INSTANCE_CACHE_CAPACITY: usize = 4;
 
 struct ProbeInstanceCacheEntry {

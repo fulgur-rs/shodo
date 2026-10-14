@@ -23,10 +23,8 @@ pub(crate) struct BidiAnalysis {
 /// CSS upright changes the used inline direction, without changing the
 /// computed `direction` that children may inherit into horizontal flows.
 pub(crate) fn used_root_direction(style: &ParagraphStyle, root: &InlineStyle) -> Direction {
-    if matches!(
-        style.writing_mode,
-        WritingMode::VerticalRl | WritingMode::VerticalLr
-    ) && root.text_orientation == TextOrientation::Upright
+    if style.writing_mode.is_typographic_vertical()
+        && root.text_orientation == TextOrientation::Upright
     {
         Direction::Ltr
     } else {
@@ -42,7 +40,7 @@ pub(crate) fn upright_analysis_text(
     mode: WritingMode,
     combined: &[super::combine::CombineSpan],
 ) -> Option<String> {
-    if !matches!(mode, WritingMode::VerticalRl | WritingMode::VerticalLr)
+    if !mode.is_typographic_vertical()
         || (combined.is_empty()
             && !input.items.iter().any(|item| {
                 matches!(item.kind, ItemKind::Text)

@@ -971,20 +971,22 @@ impl Step<'_> {
         if acc.dependents == 0 {
             return;
         }
-        for x in acc.through..self.selected.end {
-            if !super::overhang::is_event(self.data, x) {
-                continue;
-            }
-            let (before, after) =
-                super::overhang::visual_neighbours(self.data, &self.selected, x, cx);
-            for (side, unit) in [before, after].into_iter().enumerate() {
-                let key = neighbour_key(unit.map(|u| u as u32));
-                let side = side as u8;
-                for &(_, _, pos) in acc.neighbours.range((side, key, 0)..=(side, key, u32::MAX)) {
-                    mark(dirty, self.top, pos, Dirty::Neighbour, cx);
+        super::overhang::visual_neighbours(
+            self.data,
+            &self.selected,
+            acc.through..self.selected.end,
+            cx,
+            |before, after, cx| {
+                for (side, unit) in [before, after].into_iter().enumerate() {
+                    let key = neighbour_key(unit.map(|u| u as u32));
+                    let side = side as u8;
+                    for &(_, _, pos) in acc.neighbours.range((side, key, 0)..=(side, key, u32::MAX))
+                    {
+                        mark(dirty, self.top, pos, Dirty::Neighbour, cx);
+                    }
                 }
-            }
-        }
+            },
+        );
     }
 
     /// D6: the ancestors of every dirty position.

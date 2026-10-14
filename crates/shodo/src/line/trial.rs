@@ -1,7 +1,6 @@
 //! Private Balance trial results; unsupported lines retain full finalization.
 use super::Scan;
 use crate::geometry::{LayoutUnit, Saturation};
-use crate::node::NodeId;
 use crate::paragraph::ParagraphData;
 use crate::{BreakToken, FloatCursor, LineResult};
 
@@ -11,25 +10,13 @@ pub(super) struct TrialSummary {
     pub(super) block_size: f32,
 }
 
-// Preserve all non-line information at the formatter boundary. The fixed
-// width driver consumes only progress; other event fields are intentionally
-// retained rather than changing the meaning of a formatting result.
-#[allow(dead_code)]
+// The formatter result as the fixed-width driver consumes it: every event
+// kind is kept, but only the fields that drive its progress.
 pub(super) enum TrialResult {
     Line(TrialSummary),
-    FloatEncountered {
-        node: NodeId,
-        line_start: BreakToken,
-        inline_position: f32,
-        float_cursor: FloatCursor,
-    },
-    BlockInInline {
-        node: NodeId,
-        token_after: BreakToken,
-    },
-    BlockSizeExceeded {
-        needed_block_size: f32,
-    },
+    FloatEncountered { float_cursor: FloatCursor },
+    BlockInInline { token_after: BreakToken },
+    BlockSizeExceeded,
     Done,
     InvalidToken,
 }
@@ -71,23 +58,13 @@ impl Finalizer for Trial {
                 token: line.break_token(),
                 block_size: line.block_size(),
             }),
-            LineResult::FloatEncountered {
-                node,
-                line_start,
-                inline_position,
-                float_cursor,
-            } => TrialResult::FloatEncountered {
-                node,
-                line_start,
-                inline_position,
-                float_cursor,
-            },
-            LineResult::BlockInInline { node, token_after } => {
-                TrialResult::BlockInInline { node, token_after }
+            LineResult::FloatEncountered { float_cursor, .. } => {
+                TrialResult::FloatEncountered { float_cursor }
             }
-            LineResult::BlockSizeExceeded { needed_block_size } => {
-                TrialResult::BlockSizeExceeded { needed_block_size }
+            LineResult::BlockInInline { token_after, .. } => {
+                TrialResult::BlockInInline { token_after }
             }
+            LineResult::BlockSizeExceeded { .. } => TrialResult::BlockSizeExceeded,
             LineResult::Done => TrialResult::Done,
             LineResult::InvalidToken => TrialResult::InvalidToken,
         }

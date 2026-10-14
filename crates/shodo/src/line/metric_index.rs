@@ -22,7 +22,7 @@ use super::metrics::{ProfileResolver, RecordProfile};
 use crate::analysis::units::UnitKind;
 use crate::geometry::{LayoutUnit, Saturation, WritingMode};
 use crate::paragraph::ParagraphData;
-use crate::style::{TextOrientation, VerticalAlign};
+use crate::style::VerticalAlign;
 use crate::{AtomicSizes, LayoutContext};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
@@ -764,10 +764,7 @@ impl MetricIndex {
         }
         let root = &data.styles[0];
         let metrics = data.style_metrics[0];
-        let upright = matches!(
-            data.style.writing_mode,
-            WritingMode::VerticalRl | WritingMode::VerticalLr
-        ) && root.text_orientation != TextOrientation::Sideways;
+        let upright = data.style.writing_mode.is_upright(root.text_orientation);
         let (above, below) =
             super::metrics::extents(root, metrics.metrics, metrics.vertical_metrics, upright);
         let bounds = if self.quirk.is_some() {

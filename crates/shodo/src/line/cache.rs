@@ -235,8 +235,8 @@ impl PartialLine {
             }
             let at = start + k;
             let hangs = super::whitespace::fits_hanging(data, at);
-            let transparent = super::whitespace::transparent(data, at)
-                && !matches!(u.kind, UnitKind::ForcedBreak);
+            let raw_transparent = super::whitespace::transparent(data, at);
+            let transparent = raw_transparent && !matches!(u.kind, UnitKind::ForcedBreak);
             hanging_tail.observe(data, at, &spacing, hangs, transparent);
             super::spacing::push(data, &mut spacing, at);
             let spacing_width = spacing.summary(Some(data)).width(sat);
@@ -307,10 +307,8 @@ impl PartialLine {
                 thresholds.push((start + k, max));
             }
             match u.kind {
-                _ if super::whitespace::fits_hanging(data, start + k) => {
-                    hanging = hanging.add(*w, sat)
-                }
-                _ if super::whitespace::transparent(data, start + k) => {}
+                _ if hangs => hanging = hanging.add(*w, sat),
+                _ if raw_transparent => {}
                 _ => {
                     hanging = LayoutUnit::ZERO;
                     kept_spacing = spacing_width;

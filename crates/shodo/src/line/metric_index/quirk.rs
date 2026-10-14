@@ -12,9 +12,7 @@ use super::super::quirk::{ContentCredit, CreditBox, content_credit};
 use super::scalar::{Bounds, union};
 use crate::LayoutContext;
 use crate::analysis::units::UnitKind;
-use crate::geometry::WritingMode;
 use crate::paragraph::ParagraphData;
-use crate::style::TextOrientation;
 use std::ops::Range;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -95,10 +93,7 @@ pub(super) struct QuirkIndex {
 pub(super) fn root_strut(data: &ParagraphData) -> RecordProfile {
     let root = &data.styles[0];
     let metrics = data.style_metrics[0];
-    let upright = matches!(
-        data.style.writing_mode,
-        WritingMode::VerticalRl | WritingMode::VerticalLr
-    ) && root.text_orientation != TextOrientation::Sideways;
+    let upright = data.style.writing_mode.is_upright(root.text_orientation);
     let (above, below) =
         super::super::metrics::extents(root, metrics.metrics, metrics.vertical_metrics, upright);
     RecordProfile {

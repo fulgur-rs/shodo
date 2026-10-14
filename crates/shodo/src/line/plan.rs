@@ -23,10 +23,12 @@ pub(super) fn matches(
         && p.atomics_generation == atomics.generation()
         && p.atomics_revision == atomics.revision
         && c.inline_start_offset == 0.0
-        && para.data.float_count.checked_sub(1).is_none_or(|last| {
-            c.floats_placed_through
-                .is_some_and(|cursor| cursor.0 >= last)
-        })
+        && (para.data.floats.len() as u32)
+            .checked_sub(1)
+            .is_none_or(|last| {
+                c.floats_placed_through
+                    .is_some_and(|cursor| cursor.0 >= last)
+            })
 }
 
 pub(super) fn hyphen_end(data: &ParagraphData, end: usize) -> Option<usize> {
@@ -202,13 +204,7 @@ impl Paragraph {
         cx.warnings.set_max(self.data.limits.max_warnings);
         let mut sat = Saturation::default();
         let width = crate::sanitize::layout_length(width, true, &mut cx.warnings, &mut sat);
-        let mut options = *options;
-        options.text_indent.length = crate::sanitize::layout_length(
-            options.text_indent.length,
-            false,
-            &mut cx.warnings,
-            &mut sat,
-        );
+        let options = crate::sanitize::line_options(options, &mut cx.warnings, &mut sat);
         let (greedy, mut ends) = if options.text_wrap_style == TextWrapStyle::Balance {
             (Vec::new(), self.break_ends(cx, &options, width, atomics))
         } else {

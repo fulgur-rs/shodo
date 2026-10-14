@@ -133,7 +133,7 @@ impl Budget {
         mode: WritingMode,
         bases: &mut BaseScopes,
     ) -> Result<(), LimitExceeded> {
-        let vertical = vertical(mode);
+        let vertical = mode.is_typographic_vertical();
         let transforms = vertical
             || styles.iter().any(|s| {
                 s.text_transform != TextTransform::None
@@ -183,7 +183,7 @@ impl Budget {
         first_line: bool,
         bases: &mut BaseScopes,
     ) -> Result<(), LimitExceeded> {
-        let vertical = vertical(style.writing_mode);
+        let vertical = style.writing_mode.is_typographic_vertical();
         let internal_bidi = vertical
             && styles
                 .iter()
@@ -279,10 +279,6 @@ impl Budget {
         }
         Ok(())
     }
-}
-
-fn vertical(mode: WritingMode) -> bool {
-    matches!(mode, WritingMode::VerticalRl | WritingMode::VerticalLr)
 }
 
 fn projection(text: &str) -> u64 {

@@ -88,9 +88,9 @@ pub(super) fn obstructed(data: &ParagraphData, end: usize) -> bool {
             _ => break,
         }
     }
-    super::decoration::chain(data, end).iter().any(|b| {
-        let e = data.boxes[*b as usize].edges;
-        super::decoration::cloned(data, *b)
+    super::decoration::ancestors(data, end).any(|b| {
+        let e = data.boxes[b as usize].edges;
+        super::decoration::cloned(data, b)
             && (e.padding.inline_end != 0.0 || e.border.inline_end != 0.0)
     })
 }
