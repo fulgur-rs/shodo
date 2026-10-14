@@ -1,5 +1,4 @@
 use super::Scan;
-use super::punctuation::removed;
 use crate::analysis::units::{BreakClass, Unit, UnitKind};
 use crate::context::LayoutContext;
 use crate::geometry::{LayoutUnit, Saturation};
@@ -10,7 +9,7 @@ use crate::style::TabSize;
 
 /// The suffix and spacing of a candidate include the closing units that will
 /// be pulled onto its line. The live scan/index cursor stays at the text cut.
-pub(super) fn candidate_end<'a>(
+fn candidate_end<'a>(
     data: &'a ParagraphData,
     mut end: usize,
     spacing: &super::spacing_summary::Cursor<'a>,
@@ -40,6 +39,292 @@ pub(super) fn candidate_end<'a>(
     (end, suffix, candidate_spacing)
 }
 
+/// Trailing whitespace that hangs past the end of the line being scanned, and
+/// the spacing kept before it.
+#[derive(Clone, Copy, Default)]
+pub(super) struct Tail {
+    hanging: LayoutUnit,
+    kept_spacing: LayoutUnit,
+}
+
+/// One unit's widths as a line end, shared by the eager scan and the cached
+/// index so both apply the same edge rules. Edge reshape deltas are left out:
+/// the scan measures them only where it must, the index everywhere.
+pub(super) struct CandidateMeasure<'a> {
+    /// Unit index the line would end at.
+    end: usize,
+    /// `end` plus the closing units a break there pulls onto the line.
+    break_end: usize,
+    /// Width of the pulled closing units and the closing decoration.
+    suffix: LayoutUnit,
+    ruby_delta: LayoutUnit,
+    hangs: bool,
+    paragraph_end: bool,
+    last: bool,
+    /// Extent of the visible content through this unit, for overflow.
+    shared_extent: LayoutUnit,
+    /// Width the line needs when it ends here.
+    required: LayoutUnit,
+    /// Spacing through `break_end` when a break pulls closing units.
+    spacing: Option<super::spacing_summary::Cursor<'a>>,
+    /// Spacing width of the live line through this unit.
+    pub(super) tracking: LayoutUnit,
+    /// Line position after this unit.
+    next: LayoutUnit,
+    /// Hanging whitespace through this unit.
+    hanging: LayoutUnit,
+}
+
+impl<'a> CandidateMeasure<'a> {
+    /// Measure unit `at` of advance `w` placed at `pos`, and advance the live
+    /// `spacing` and `tail` past it. `hanging_tail` is `None` when the line
+    /// cannot break here (grapheme counting), which also skips pulling
+    /// closing units.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn new(
+        data: &'a ParagraphData,
+        start: usize,
+        at: usize,
+        pos: LayoutUnit,
+        w: LayoutUnit,
+        spacing: &mut super::spacing_summary::Cursor<'a>,
+        tail: &mut Tail,
+        hanging_tail: Option<&mut super::punctuation::HangingTail>,
+        atomics: &AtomicSizes,
+        cx: &mut LayoutContext,
+        sat: &mut Saturation,
+    ) -> Self {
+        let unit = &data.units[at];
+        let end = at + 1;
+        // Fit excludes eligible trailing space/tab advances (CSS Text 3 §4.1.2).
+        let hangs = super::whitespace::fits_hanging(data, at);
+        // `transparent` excludes forced breaks from the hanging run; the
+        // unmasked value still keeps a forced break's hanging state below.
+        let raw_transparent = super::whitespace::transparent(data, at);
+        let transparent = raw_transparent && !matches!(unit.kind, UnitKind::ForcedBreak);
+        let candidates = hanging_tail.is_some();
+        if let Some(hanging_tail) = hanging_tail {
+            hanging_tail.observe(data, at, spacing, hangs, transparent);
+        }
+        super::spacing::push(data, spacing, at);
+        let tracking = spacing.summary(Some(data)).width(sat);
+        // A selected break also pulls adjacent closing units. Reserve their
+        // actual edges now, and measure Clone decoration after them so those
+        // edges are not counted twice. The candidate summary includes their
+        // punctuation-hanging barriers, while the live spacing stays unchanged.
+        let (break_end, suffix, candidate_spacing) = if candidates
+            && matches!(
+                unit.break_after,
+                BreakClass::Allowed | BreakClass::Emergency | BreakClass::Hyphen
+            ) {
+            candidate_end(data, end, spacing, atomics, cx, sat)
+        } else {
+            (end, super::decoration::width(data, end, false, sat), None)
+        };
+        let ruby_delta =
+            crate::ruby::measure::candidate_adjustment(data, start, end, atomics, cx, sat);
+        let paragraph_end = end == data.units.len();
+        let Tail {
+            hanging,
+            kept_spacing,
+        } = *tail;
+        let shared_extent = pos
+            .add(w, sat)
+            .add(tracking, sat)
+            .add(ruby_delta, sat)
+            .add(suffix, sat)
+            .sub(
+                if transparent {
+                    hanging.add(tracking.sub(kept_spacing, sat), sat)
+                } else {
+                    LayoutUnit::ZERO
+                },
+                sat,
+            );
+        // A hanging final space or tab must not hide overflow of the visible
+        // content. Its advance and trailing tracking are excluded, while the
+        // line-start reshape still contributes to the fit width.
+        let shared_extent = if paragraph_end && hangs {
+            shared_extent
+                .sub(hanging.add(w, sat), sat)
+                .sub(tracking.sub(kept_spacing, sat), sat)
+        } else {
+            shared_extent
+        };
+        match unit.kind {
+            _ if hangs => tail.hanging = tail.hanging.add(w, sat),
+            _ if raw_transparent => {}
+            _ => {
+                tail.hanging = LayoutUnit::ZERO;
+                tail.kept_spacing = tracking;
+            }
+        }
+        if tail.hanging == LayoutUnit::ZERO {
+            tail.kept_spacing = tracking;
+        }
+        let required = pos
+            .add(w, sat)
+            .add(tail.kept_spacing, sat)
+            .add(ruby_delta, sat)
+            .sub(tail.hanging, sat)
+            .add(suffix, sat);
+        Self {
+            end,
+            break_end,
+            suffix,
+            ruby_delta,
+            hangs,
+            paragraph_end,
+            last: super::punctuation::last_edge(data, end),
+            shared_extent,
+            required,
+            spacing: candidate_spacing,
+            tracking,
+            next: pos.add(w, sat),
+            hanging: tail.hanging,
+        }
+    }
+
+    /// The spacing summary of the line ending here.
+    fn summary(
+        &self,
+        data: &'a ParagraphData,
+        live: &super::spacing_summary::Cursor<'a>,
+    ) -> super::spacing_summary::Summary {
+        self.spacing.as_ref().unwrap_or(live).summary(Some(data))
+    }
+
+    /// The candidate's widths, to test or defer its fit.
+    fn pending(
+        &self,
+        data: &'a ParagraphData,
+        live: &super::spacing_summary::Cursor<'a>,
+    ) -> Pending {
+        Pending {
+            end: self.end,
+            hangs: self.hangs,
+            shared_extent: self.shared_extent,
+            required: self.required,
+            summary: self.summary(data, live),
+            last: self.last,
+        }
+    }
+
+    /// Whether overflow of this unit is tested at all: hanging whitespace
+    /// cannot overflow, except at the paragraph end.
+    pub(super) fn tests_overflow(&self) -> bool {
+        !self.hangs || self.paragraph_end
+    }
+
+    /// The extent of the visible content through this unit with its edge
+    /// delta, after punctuation at its edges. A hanging tail exposes the
+    /// punctuation before it.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn overflow_width(
+        &self,
+        data: &'a ParagraphData,
+        live: &super::spacing_summary::Cursor<'a>,
+        hanging_tail: &mut super::punctuation::HangingTail,
+        edge_delta: LayoutUnit,
+        flags: u8,
+        options: &crate::style::LineOptions,
+        sat: &mut Saturation,
+    ) -> LayoutUnit {
+        let summary = hanging_tail
+            .summary(data, self.end)
+            .unwrap_or_else(|| self.summary(data, live));
+        let extent = self.shared_extent.add(edge_delta, sat);
+        fit_width(data, summary, flags, self.last, options, extent, sat)
+    }
+
+    /// Whether this unit overflows once its edge delta is added. Edge
+    /// adjustments only ever remove width (see `EdgeAdjustment`), so a
+    /// candidate that already fits is not adjusted.
+    #[allow(clippy::too_many_arguments)]
+    fn overflows(
+        &self,
+        data: &'a ParagraphData,
+        live: &super::spacing_summary::Cursor<'a>,
+        hanging_tail: &mut super::punctuation::HangingTail,
+        edge_delta: LayoutUnit,
+        flags: u8,
+        options: &crate::style::LineOptions,
+        available: LayoutUnit,
+        sat: &mut Saturation,
+    ) -> bool {
+        self.tests_overflow()
+            && self.shared_extent.add(edge_delta, sat) > available
+            && self.overflow_width(data, live, hanging_tail, edge_delta, flags, options, sat)
+                > available
+    }
+
+    /// The width the line needs to end here, given its edge delta.
+    pub(super) fn required_width(
+        &self,
+        data: &'a ParagraphData,
+        live: &super::spacing_summary::Cursor<'a>,
+        edge_delta: LayoutUnit,
+        flags: u8,
+        options: &crate::style::LineOptions,
+        sat: &mut Saturation,
+    ) -> LayoutUnit {
+        self.pending(data, live)
+            .required_width(data, edge_delta, flags, options, sat)
+    }
+
+    /// The width the line needs to end here with a discretionary hyphen.
+    pub(super) fn hyphen(
+        &self,
+        data: &'a ParagraphData,
+        spacing: &super::spacing_summary::Cursor<'a>,
+        sat: &mut Saturation,
+    ) -> HyphenMeasure {
+        HyphenMeasure {
+            end: self.end,
+            pos: self.next,
+            summary: super::spacing::hyphen_summary(
+                data,
+                spacing,
+                self.end - 1,
+                self.break_end,
+                sat,
+            ),
+            hanging: self.hanging,
+            suffix: self.suffix,
+            ruby_delta: self.ruby_delta,
+        }
+    }
+}
+
+/// The width left of a line of natural width `natural` after punctuation
+/// trimming and hanging at its edges. Every fit test compares this with the
+/// available width.
+#[allow(clippy::too_many_arguments)]
+fn fit_width(
+    data: &ParagraphData,
+    summary: super::spacing_summary::Summary,
+    flags: u8,
+    last: bool,
+    options: &crate::style::LineOptions,
+    natural: LayoutUnit,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    natural.sub(
+        super::punctuation::edges(
+            data,
+            summary,
+            flags,
+            last,
+            Some(options),
+            LayoutUnit::ZERO,
+            natural,
+            sat,
+        )
+        .removed(sat),
+        sat,
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn scan(
     data: &ParagraphData,
@@ -64,10 +349,9 @@ pub(super) fn scan(
     let mut first_hyphen = None;
     let mut last_emergency: Option<usize> = None;
     let mut overflowing = false;
-    let mut hanging = LayoutUnit::ZERO;
+    let mut tail = Tail::default();
     let mut spacing = super::spacing_summary::Cursor::default();
     let mut hanging_tail = super::punctuation::HangingTail::default();
-    let mut kept_spacing = LayoutUnit::ZERO;
     let mut i = start;
     let mut graphemes_seen = 0usize;
     let mut counted_through = units[start].text.start;
@@ -123,6 +407,7 @@ pub(super) fn scan(
                 // hyphenated when that is possible.
                 if let Deferred::Hyphen(hyphen) = &last
                     && hyphen
+                        .hyphen
                         .required(data, start, flags, options, cx, sat)
                         .is_some()
                 {
@@ -188,60 +473,20 @@ pub(super) fn scan(
             sat,
         )
         .add(data.unit_spacing[i].word, sat);
-        // Fit excludes eligible trailing space/tab advances (CSS Text 3 §4.1.2).
-        let hangs = super::whitespace::fits_hanging(data, i);
-        // `transparent` excludes forced breaks from the hanging run; the
-        // unmasked value still keeps a forced break's hanging state below.
-        let raw_transparent = super::whitespace::transparent(data, i);
-        let transparent = raw_transparent && !matches!(unit.kind, UnitKind::ForcedBreak);
-        if !count_mode {
-            hanging_tail.observe(data, i, &spacing, hangs, transparent);
-        }
-        super::spacing::push(data, &mut spacing, i);
-        let tracking = spacing.summary(Some(data)).width(sat);
-        // A selected break also pulls adjacent closing units. Reserve their
-        // actual edges now, and measure Clone decoration after them so those
-        // edges are not counted twice. The candidate summary includes their
-        // punctuation-hanging barriers, while the live scan stays unchanged.
-        let (break_end, suffix, mut candidate_spacing) = if !count_mode
-            && matches!(
-                unit.break_after,
-                BreakClass::Allowed | BreakClass::Emergency | BreakClass::Hyphen
-            ) {
-            candidate_end(data, i + 1, &spacing, atomics, cx, sat)
-        } else {
-            (
-                i + 1,
-                super::decoration::width(data, i + 1, false, sat),
-                None,
-            )
-        };
-        let ruby_delta =
-            crate::ruby::measure::candidate_adjustment(data, start, i + 1, atomics, cx, sat);
-        let paragraph_end = i + 1 == units.len();
-        let shared_extent = pos
-            .add(w, sat)
-            .add(tracking, sat)
-            .add(ruby_delta, sat)
-            .add(suffix, sat)
-            .sub(
-                if transparent {
-                    hanging.add(tracking.sub(kept_spacing, sat), sat)
-                } else {
-                    LayoutUnit::ZERO
-                },
-                sat,
-            );
-        // A hanging final space or tab must not hide overflow of the visible
-        // content. Its advance and trailing tracking are excluded, while the
-        // line-start reshape below still contributes to the fit width.
-        let shared_extent = if paragraph_end && hangs {
-            shared_extent
-                .sub(hanging.add(w, sat), sat)
-                .sub(tracking.sub(kept_spacing, sat), sat)
-        } else {
-            shared_extent
-        };
+        let measure = CandidateMeasure::new(
+            data,
+            start,
+            i,
+            pos,
+            w,
+            &mut spacing,
+            &mut tail,
+            (!count_mode).then_some(&mut hanging_tail),
+            atomics,
+            cx,
+            sat,
+        );
+        let (hangs, paragraph_end) = (measure.hangs, measure.paragraph_end);
         // The line cannot end at a `Prohibited` position, so the only
         // reason to pay for a real edge-window reshape there is to confirm
         // genuine overflow of the current unbreakable run. Skip it while
@@ -269,7 +514,7 @@ pub(super) fn scan(
                 BreakClass::Prohibited | BreakClass::Hyphen
             ) || paragraph_end
                 || unit.shared_cluster.is_some() && !unit.first_line_cursor
-                || (!hangs && !overflowing && shared_extent > available)
+                || (!hangs && !overflowing && measure.shared_extent > available)
         };
         // Once a fitting break is known, an `Allowed` opportunity whose shared
         // advances fit only matters if no later one fits. With kerning fonts
@@ -284,38 +529,25 @@ pub(super) fn scan(
             && last_break.is_some()
             && unit.break_after == BreakClass::Allowed
             && unit.shared_cluster.is_none()
-            && (hangs || shared_extent <= available);
+            && (hangs || measure.shared_extent <= available);
         let (edge_delta, viable) = if need_edge && !defer {
             super::windows::candidate(data, start, i + 1, cx, sat)
         } else {
             (LayoutUnit::ZERO, false)
         };
-        let extent = shared_extent.add(edge_delta, sat);
-        // Edge adjustments only ever remove width (see `EdgeAdjustment`), so a
-        // candidate that already fits cannot start to overflow.
-        let extent =
-            if !count_mode && (!hangs || paragraph_end) && !overflowing && extent > available {
-                let summary = hanging_tail.summary(data, i + 1).unwrap_or_else(|| {
-                    candidate_spacing
-                        .as_ref()
-                        .unwrap_or(&spacing)
-                        .summary(Some(data))
-                });
-                let adjustment = super::punctuation::edges(
-                    data,
-                    summary,
-                    flags,
-                    super::punctuation::last_edge(data, i + 1),
-                    Some(options),
-                    LayoutUnit::ZERO,
-                    extent,
-                    sat,
-                );
-                extent.sub(adjustment.removed(sat), sat)
-            } else {
-                extent
-            };
-        if !count_mode && (!hangs || paragraph_end) && !overflowing && extent > available {
+        if !count_mode
+            && !overflowing
+            && measure.overflows(
+                data,
+                &spacing,
+                &mut hanging_tail,
+                edge_delta,
+                flags,
+                options,
+                available,
+                sat,
+            )
+        {
             if let Some(b) = settle(
                 data,
                 start,
@@ -346,17 +578,6 @@ pub(super) fn scan(
         }
         widths.push(w);
         pos = pos.add(w, sat);
-        match unit.kind {
-            _ if hangs => hanging = hanging.add(w, sat),
-            _ if raw_transparent => {}
-            _ => {
-                hanging = LayoutUnit::ZERO;
-                kept_spacing = tracking;
-            }
-        }
-        if hanging == LayoutUnit::ZERO {
-            kept_spacing = tracking;
-        }
         i += 1;
         if count_mode {
             if limited_cut && viable {
@@ -364,29 +585,10 @@ pub(super) fn scan(
             }
             continue;
         }
-        let required = pos
-            .add(kept_spacing, sat)
-            .add(edge_delta, sat)
-            .add(ruby_delta, sat)
-            .sub(hanging, sat)
-            .add(suffix, sat);
-        // Only break candidates compare `required` against the width, so the
-        // edge adjustment is computed for those alone.
-        let last = super::punctuation::last_edge(data, i);
         match unit.break_after {
             BreakClass::Mandatory => break BreakReason::Forced,
             BreakClass::Allowed if defer => defer_candidate(
-                Deferred::Opportunity(Pending {
-                    end: i,
-                    hangs,
-                    shared_extent,
-                    required,
-                    summary: candidate_spacing
-                        .as_ref()
-                        .unwrap_or(&spacing)
-                        .summary(Some(data)),
-                    last,
-                }),
+                Deferred::Opportunity(measure.pending(data, &spacing)),
                 data,
                 start,
                 &mut pending,
@@ -402,18 +604,8 @@ pub(super) fn scan(
                 if overflowing {
                     break BreakReason::Regular;
                 }
-                if required.sub(
-                    removed(
-                        data,
-                        candidate_spacing.as_mut().unwrap_or(&mut spacing),
-                        flags,
-                        last,
-                        options,
-                        required,
-                        sat,
-                    ),
-                    sat,
-                ) <= available
+                if measure.required_width(data, &spacing, edge_delta, flags, options, sat)
+                    <= available
                 {
                     last_break = Some((i, false));
                     pending.clear();
@@ -421,26 +613,12 @@ pub(super) fn scan(
             }
             BreakClass::Hyphen => {
                 let hyphen = PendingHyphen {
-                    plain: Pending {
-                        end: i,
-                        hangs,
-                        shared_extent,
-                        required,
-                        summary: candidate_spacing
-                            .as_ref()
-                            .unwrap_or(&spacing)
-                            .summary(Some(data)),
-                        last,
-                    },
-                    end: i,
-                    pos,
-                    summary: super::spacing::hyphen_summary(data, &spacing, i - 1, break_end, sat),
-                    hanging,
-                    suffix,
-                    ruby_delta,
+                    plain: measure.pending(data, &spacing),
+                    hyphen: measure.hyphen(data, &spacing, sat),
                 };
                 if overflowing {
                     if hyphen
+                        .hyphen
                         .required(data, start, flags, options, cx, sat)
                         .is_some()
                     {
@@ -467,18 +645,8 @@ pub(super) fn scan(
                 if overflowing {
                     break BreakReason::Emergency;
                 }
-                if required.sub(
-                    removed(
-                        data,
-                        candidate_spacing.as_mut().unwrap_or(&mut spacing),
-                        flags,
-                        last,
-                        options,
-                        required,
-                        sat,
-                    ),
-                    sat,
-                ) <= available
+                if measure.required_width(data, &spacing, edge_delta, flags, options, sat)
+                    <= available
                 {
                     last_emergency = Some(i);
                 }
@@ -577,8 +745,8 @@ fn take_fallback(
     Some(reason)
 }
 
-/// An `Allowed` break opportunity whose edge reshape was deferred, with the
-/// shared-advance measurements the eager path would have combined with it.
+/// A break candidate's widths without its edge reshape, kept while that
+/// reshape is deferred.
 struct Pending {
     /// Unit index the line would end at.
     end: usize,
@@ -604,20 +772,20 @@ impl Pending {
         let extent = self.shared_extent.add(edge_delta, sat);
         !self.hangs
             && extent > available
-            && extent.sub(
-                super::punctuation::edges(
-                    data,
-                    self.summary,
-                    flags,
-                    self.last,
-                    Some(options),
-                    LayoutUnit::ZERO,
-                    extent,
-                    sat,
-                )
-                .removed(sat),
-                sat,
-            ) > available
+            && fit_width(data, self.summary, flags, self.last, options, extent, sat) > available
+    }
+
+    /// The width the line needs to end at `end`, given its edge delta.
+    fn required_width(
+        &self,
+        data: &ParagraphData,
+        edge_delta: LayoutUnit,
+        flags: u8,
+        options: &crate::style::LineOptions,
+        sat: &mut Saturation,
+    ) -> LayoutUnit {
+        let required = self.required.add(edge_delta, sat);
+        fit_width(data, self.summary, flags, self.last, options, required, sat)
     }
 
     /// Whether the line can end at `end`, given the measured edge reshape.
@@ -630,24 +798,9 @@ impl Pending {
         available: LayoutUnit,
         sat: &mut Saturation,
     ) -> bool {
-        if !viable || self.overflows(data, edge_delta, flags, options, available, sat) {
-            return false;
-        }
-        let required = self.required.add(edge_delta, sat);
-        required.sub(
-            super::punctuation::edges(
-                data,
-                self.summary,
-                flags,
-                self.last,
-                Some(options),
-                LayoutUnit::ZERO,
-                required,
-                sat,
-            )
-            .removed(sat),
-            sat,
-        ) <= available
+        viable
+            && !self.overflows(data, edge_delta, flags, options, available, sat)
+            && self.required_width(data, edge_delta, flags, options, sat) <= available
     }
 }
 
@@ -688,6 +841,7 @@ impl Deferred {
                     .then_some((opportunity.end, false))
             }
             Self::Hyphen(hyphen) => {
+                let hyphen = &hyphen.hyphen;
                 let required = hyphen.required(data, start, flags, options, cx, sat)?;
                 if required <= available {
                     return Some((hyphen.end, true));
@@ -774,6 +928,12 @@ struct PendingHyphen {
     /// The same position ending without a hyphen. Its edge is measured only
     /// when the line ends there, where it must still fit.
     plain: Pending,
+    hyphen: HyphenMeasure,
+}
+
+/// The widths of a line ending at a discretionary hyphen, before the
+/// hyphenated edge is shaped.
+pub(super) struct HyphenMeasure {
     end: usize,
     pos: LayoutUnit,
     summary: super::spacing_summary::Summary,
@@ -782,10 +942,10 @@ struct PendingHyphen {
     ruby_delta: LayoutUnit,
 }
 
-impl PendingHyphen {
+impl HyphenMeasure {
     /// The width needed to end the line here with a hyphen, or `None` when
     /// the hyphenated edge cannot be shaped.
-    fn required(
+    pub(super) fn required(
         &self,
         data: &ParagraphData,
         start: usize,
@@ -800,19 +960,17 @@ impl PendingHyphen {
             .add(self.summary.width(sat), sat)
             .sub(self.hanging, sat)
             .add(self.suffix, sat)
-            .add(super::windows::cost(&windows, self.end, sat), sat);
-        let required = required.add(self.ruby_delta, sat);
-        let adjustment = super::punctuation::edges(
+            .add(super::windows::cost(&windows, self.end, sat), sat)
+            .add(self.ruby_delta, sat);
+        Some(fit_width(
             data,
             self.summary,
             flags,
             false,
-            Some(options),
-            LayoutUnit::ZERO,
+            options,
             required,
             sat,
-        );
-        Some(required.sub(adjustment.removed(sat), sat))
+        ))
     }
 }
 

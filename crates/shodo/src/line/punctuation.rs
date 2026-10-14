@@ -688,30 +688,6 @@ impl HangingTail {
     }
 }
 
-/// Width that punctuation trimming and hanging take off the edges of the
-/// line summarized by `spacing`, whose natural width is `natural`.
-pub(super) fn removed<'a>(
-    data: &'a ParagraphData,
-    spacing: &mut super::spacing_summary::Cursor<'a>,
-    flags: u8,
-    last: bool,
-    options: &crate::style::LineOptions,
-    natural: LayoutUnit,
-    sat: &mut Saturation,
-) -> LayoutUnit {
-    edges(
-        data,
-        spacing.summary(Some(data)),
-        flags,
-        last,
-        Some(options),
-        LayoutUnit::ZERO,
-        natural,
-        sat,
-    )
-    .removed(sat)
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(super) fn prepare(
     data: &ParagraphData,
