@@ -919,14 +919,16 @@ fn build_data(
             let (glyphs, runs) = shape_items_with_base_scopes(
                 cx,
                 &shape_items_input,
-                &styles,
-                fonts,
-                style.writing_mode,
-                &shape_limits,
+                &crate::shape::ShapeEnv {
+                    styles: &styles,
+                    fonts,
+                    mode: style.writing_mode,
+                    limits: &shape_limits,
+                    feature_sets: &shape_features,
+                },
                 warnings,
                 sat,
                 Some(&mut *bases),
-                &shape_features,
             )?;
             Some((glyphs, runs, shape_features))
         } else {

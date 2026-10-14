@@ -74,6 +74,64 @@ impl Deref for Cached<'_> {
     }
 }
 
+struct Prepared {
+    resolved: Resolved,
+    warning: Option<ResolutionWarning>,
+    bytes: usize,
+}
+
+enum Lookup {
+    Hit(usize),
+    Retain(Prepared),
+    Owned(Resolved),
+}
+
+/// Both caches replay warnings on hits and admit the same bounded preparation.
+/// Their storage and FIFO eviction policies remain local to each cache.
+fn lookup_or_prepare<'items, 'styles, 'resolved>(
+    key: Key<'_, '_>,
+    features: &Arc<[harfrust::Feature]>,
+    entries: impl Iterator<
+        Item = Option<(
+            Key<'items, 'styles>,
+            &'resolved Resolved,
+            Option<ResolutionWarning>,
+        )>,
+    >,
+    warnings: &mut WarningSink,
+    prepare: impl FnOnce() -> (Resolved, Option<ResolutionWarning>, bool),
+) -> Lookup {
+    let eligible = eligible(key, features);
+    if eligible {
+        for (index, entry) in entries.enumerate() {
+            if let Some((other, resolved, warning)) = entry
+                && key.matches(other)
+                && (Arc::ptr_eq(features, &resolved.1.features)
+                    || **features == *resolved.1.features)
+            {
+                if let Some(warning) = warning {
+                    warning.emit(warnings);
+                }
+                return Lookup::Hit(index);
+            }
+        }
+    }
+    let (resolved, warning, inline_coords) = prepare();
+    if let Some(warning) = warning {
+        warning.emit(warnings);
+    }
+    let bytes = retained_bytes(&resolved);
+    if !eligible || !inline_coords || bytes > BYTES {
+        Lookup::Owned(resolved)
+    } else {
+        Lookup::Retain(Prepared {
+            resolved,
+            warning,
+            bytes,
+        })
+    }
+}
+
 pub(super) struct InstanceCache<'items, 'styles> {
     entries: [Option<Entry<'items, 'styles>>; ENTRIES],
     next: usize,
@@ -96,30 +154,33 @@ impl<'items, 'styles> InstanceCache<'items, 'styles> {
         warnings: &mut WarningSink,
         prepare: impl FnOnce() -> (Resolved, Option<ResolutionWarning>, bool),
     ) -> Cached<'_> {
-        let eligible = eligible(key, features);
-        if eligible
-            && let Some(index) = self.entries.iter().position(|entry| {
-                entry.as_ref().is_some_and(|entry| {
-                    key.matches(entry.key)
-                        && (Arc::ptr_eq(features, &entry.resolved.1.features)
-                            || **features == *entry.resolved.1.features)
-                })
-            })
-        {
-            let entry = self.entries[index].as_ref().expect("located instance");
-            if let Some(warning) = entry.warning {
-                warning.emit(warnings);
+        let prepared = match lookup_or_prepare(
+            key,
+            features,
+            self.entries.iter().map(|entry| {
+                entry
+                    .as_ref()
+                    .map(|entry| (entry.key, &entry.resolved, entry.warning))
+            }),
+            warnings,
+            prepare,
+        ) {
+            Lookup::Hit(index) => {
+                return Cached::Borrowed(
+                    &self.entries[index]
+                        .as_ref()
+                        .expect("located instance")
+                        .resolved,
+                );
             }
-            return Cached::Borrowed(&entry.resolved);
-        }
-        let (resolved, warning, inline_coords) = prepare();
-        if let Some(warning) = warning {
-            warning.emit(warnings);
-        }
-        let bytes = retained_bytes(&resolved);
-        if !eligible || !inline_coords || bytes > BYTES {
-            return Cached::Owned(resolved);
-        }
+            Lookup::Owned(resolved) => return Cached::Owned(resolved),
+            Lookup::Retain(prepared) => prepared,
+        };
+        let Prepared {
+            resolved,
+            warning,
+            bytes,
+        } = prepared;
         // FIFO eviction needs no per-hit mutation or clock. All heap payloads
         // retained by the cache, including shared features, are charged below.
         while self.entries[self.next].is_some() || self.bytes + bytes > BYTES {
@@ -231,31 +292,32 @@ impl WindowInstances {
             style: &styles[style as usize],
             script,
         };
-        let eligible = eligible(key, features);
-        if eligible
-            && let Some(index) = self.entries.iter().position(|entry| {
-                key.matches(Key {
-                    found: &entry.found,
-                    style: &styles[entry.style as usize],
-                    script: entry.script,
-                }) && (Arc::ptr_eq(features, &entry.resolved.1.features)
-                    || **features == *entry.resolved.1.features)
-            })
-        {
-            let entry = &self.entries[index];
-            if let Some(warning) = entry.warning {
-                warning.emit(warnings);
-            }
-            return Cached::Borrowed(&entry.resolved);
-        }
-        let (resolved, warning, inline_coords) = prepare();
-        if let Some(warning) = warning {
-            warning.emit(warnings);
-        }
-        let bytes = retained_bytes(&resolved);
-        if !eligible || !inline_coords || bytes > BYTES {
-            return Cached::Owned(resolved);
-        }
+        let prepared = match lookup_or_prepare(
+            key,
+            features,
+            self.entries.iter().map(|entry| {
+                Some((
+                    Key {
+                        found: &entry.found,
+                        style: &styles[entry.style as usize],
+                        script: entry.script,
+                    },
+                    &entry.resolved,
+                    entry.warning,
+                ))
+            }),
+            warnings,
+            prepare,
+        ) {
+            Lookup::Hit(index) => return Cached::Borrowed(&self.entries[index].resolved),
+            Lookup::Owned(resolved) => return Cached::Owned(resolved),
+            Lookup::Retain(prepared) => prepared,
+        };
+        let Prepared {
+            resolved,
+            warning,
+            bytes,
+        } = prepared;
         // FIFO eviction, as in `InstanceCache`; entries stay in insertion order.
         while self.bytes + bytes > BYTES || self.entries.len() == ENTRIES {
             let evicted = self.entries.remove(0);

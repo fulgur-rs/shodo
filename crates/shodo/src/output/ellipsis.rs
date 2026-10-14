@@ -586,14 +586,16 @@ fn shape_ellipsis(
     let result = crate::shape::shape_items_with_base_scopes(
         cx,
         &items,
-        &data.styles,
-        &data.fonts,
-        data.style.writing_mode,
-        &limits,
+        &crate::shape::ShapeEnv {
+            styles: &data.styles,
+            fonts: &data.fonts,
+            mode: data.style.writing_mode,
+            limits: &limits,
+            feature_sets: &features,
+        },
         &mut warnings,
         sat,
         None,
-        &features,
     );
     cx.warnings = warnings;
     match result {
