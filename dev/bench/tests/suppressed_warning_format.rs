@@ -42,6 +42,10 @@ fn bad_edges() -> InlineEdges {
 }
 
 fn build(limits: &Limits) -> shodo::Paragraph {
+    build_with_edges(limits, bad_edges())
+}
+
+fn build_with_edges(limits: &Limits, edges: InlineEdges) -> shodo::Paragraph {
     let fonts = FontCollection::with_options(
         limits,
         FontOptions {
@@ -55,7 +59,7 @@ fn build(limits: &Limits) -> shodo::Paragraph {
     for i in 0..ITEMS {
         let node = NodeId(i as u64 + 1);
         builder
-            .open_inline(node, &span, bad_edges())
+            .open_inline(node, &span, edges)
             .push_text(TextSource::Generated { node }, "a")
             .close_inline();
     }
@@ -84,17 +88,39 @@ fn suppressed_warnings_keep_exact_output_without_per_drop_strings() {
         "max_warnings=0: {} calls {} bytes live {}",
         zero_counts.calls, zero_counts.allocated_bytes, zero_counts.live_bytes
     );
-    // Baseline before lazy formatting: 30309 calls / 7238992 bytes.
-    // 7 bad floats x 2000 items = 14000 dropped messages avoided.
+    // Same retained geometry and width-index construction as bad_edges after
+    // sanitize. Empty fonts can still warn; both zero-cap outputs keep the
+    // same single marker. Only the invalid float diagnostics differ.
+    let clean_edges = InlineEdges {
+        margin: Sides {
+            inline_end: 1.0e7,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let clean = build_with_edges(&zero, clean_edges);
+    assert_eq!(clean.text(), para.text());
+    assert_eq!(clean.warnings(), para.warnings());
+    let scope = ALLOCATOR.begin().unwrap();
+    black_box(build_with_edges(black_box(&zero), clean_edges));
+    let clean_counts = scope.finish();
+    println!(
+        "sanitized control: {} calls {} bytes live {}",
+        clean_counts.calls, clean_counts.allocated_bytes, clean_counts.live_bytes
+    );
+    // Seven bad floats x 2000 items = 14000 dropped messages avoided.
     assert!(
         zero_counts.calls < 20000,
         "suppressed build still formats per dropped warning: {:?}",
         zero_counts
     );
     assert!(
-        zero_counts.allocated_bytes < 6800000,
-        "suppressed build still allocates per dropped warning: {:?}",
-        zero_counts
+        zero_counts.allocated_bytes <= clean_counts.allocated_bytes + 1024,
+        "suppressed float diagnostics allocate beyond fixed marker overhead: invalid={zero_counts:?}, control={clean_counts:?}"
+    );
+    assert!(
+        zero_counts.calls <= clean_counts.calls + 16,
+        "suppressed float diagnostics allocate per drop: invalid={zero_counts:?}, control={clean_counts:?}"
     );
 
     // Small cap: first 5 messages in order, then the single marker.
