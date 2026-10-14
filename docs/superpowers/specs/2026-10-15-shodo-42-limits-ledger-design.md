@@ -46,7 +46,7 @@ nested/sibling base、同じ残量の root と child、first-line alternate、an
 
 ## 検証記録
 
-共通実行条件: native cargo +stable、`RUSTC_WRAPPER=`、`CARGO_TARGET_DIR=/home/mitz/Work/oss/shodo/target/shodo-42`、`TMPDIR=$HOME/tmp`、kache test runner を環境から外す。テストの一時フォントファイル作成だけ通常権限で実行した。
+共通実行条件: native cargo +stable、`RUSTC_WRAPPER=`、task worktree 内から `CARGO_TARGET_DIR=../../target/shodo-42`、`TMPDIR=$HOME/tmp`、kache test runner を環境から外す。テストの一時フォントファイル作成だけ通常権限で実行した。
 
 - 全 crate default test: lib 1020 pass / 8 ignored、全 integration と doctest 10 pass（最初の全体確認）。
 - レビューの journal/capacity/nested commit 修正後 full lib default: 1026 pass / 8 ignored。
