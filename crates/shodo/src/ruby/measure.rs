@@ -380,6 +380,29 @@ struct Completed<'a> {
     fragments: &'a [RubyFragmentMeasure],
 }
 
+impl<'a> Completed<'a> {
+    /// Completed fragments starting in `range` that also end within it.
+    /// Every indexed fragment starting in `range` counts as a visit.
+    fn contained<'r>(
+        &'r self,
+        range: &'r Range<usize>,
+        _cx: &'r mut LayoutContext,
+    ) -> impl Iterator<Item = &'a RubyFragmentMeasure> + 'r {
+        let fragments = self.fragments;
+        self.index
+            .range((range.start, 0)..(range.end, 0))
+            .map(move |(_, &index)| {
+                #[cfg(test)]
+                {
+                    _cx.ruby_measure_visits += 1;
+                    _cx.ruby_descendant_reads += 1;
+                }
+                &fragments[index]
+            })
+            .filter(move |nested| nested.units.end <= range.end)
+    }
+}
+
 impl Descendants for Completed<'_> {
     fn add_adjustments(
         &self,
@@ -388,16 +411,8 @@ impl Descendants for Completed<'_> {
         _cx: &mut LayoutContext,
         sat: &mut Saturation,
     ) -> LayoutUnit {
-        for (_, &index) in self.index.range((range.start, 0)..(range.end, 0)) {
-            let nested = &self.fragments[index];
-            #[cfg(test)]
-            {
-                _cx.ruby_measure_visits += 1;
-                _cx.ruby_descendant_reads += 1;
-            }
-            if nested.units.end <= range.end {
-                width = width.add(nested.adjustment, sat);
-            }
+        for nested in self.contained(range, _cx) {
+            width = width.add(nested.adjustment, sat);
         }
         width
     }
@@ -408,16 +423,8 @@ impl Descendants for Completed<'_> {
         mut area: super::geometry::Bounds,
         _cx: &mut LayoutContext,
     ) -> super::geometry::Bounds {
-        for (_, &index) in self.index.range((range.start, 0)..(range.end, 0)) {
-            let nested = &self.fragments[index];
-            #[cfg(test)]
-            {
-                _cx.ruby_measure_visits += 1;
-                _cx.ruby_descendant_reads += 1;
-            }
-            if nested.units.end <= range.end {
-                area = area.union(nested.whole_area);
-            }
+        for nested in self.contained(range, _cx) {
+            area = area.union(nested.whole_area);
         }
         area
     }
