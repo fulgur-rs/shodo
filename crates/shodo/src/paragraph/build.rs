@@ -14,6 +14,8 @@ std::thread_local! {
 mod paint_reuse_tests;
 
 #[cfg(test)]
+mod allocation_oracle_tests;
+#[cfg(test)]
 mod analysis_budget_tests;
 
 /// Context-free work that can be completed before a shaping context is

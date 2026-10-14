@@ -114,7 +114,10 @@
 //! [Accessibility output]: https://github.com/fulgur-rs/shodo/blob/adf02f0dda2cb41837f371eef5b70b7389e28eea/docs/guides/accessibility.md
 //! [Float integration]: https://github.com/fulgur-rs/shodo/blob/adf02f0dda2cb41837f371eef5b70b7389e28eea/docs/guides/float-integration-harness.md
 //! [documentation index]: https://github.com/fulgur-rs/shodo/blob/adf02f0dda2cb41837f371eef5b70b7389e28eea/docs/README.md
-#![forbid(unsafe_code)]
+// The published library forbids unsafe code. Unit tests only deny it, so the
+// test-only counting allocator in `test_support::alloc` can opt in locally.
+#![cfg_attr(not(test), forbid(unsafe_code))]
+#![cfg_attr(test, deny(unsafe_code))]
 
 pub mod accessibility;
 pub mod font;
