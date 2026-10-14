@@ -309,10 +309,8 @@ impl<'a> GlyphRunView<'a> {
         let half = metrics.size / 2.0;
         let (ascent, descent) = match self.orientation() {
             crate::GlyphOrientation::Combined => (half, half),
-            crate::GlyphOrientation::Upright => metrics
-                .vertical_metrics
-                .map_or((half, half), |v| (v.ascent, v.descent)),
-            _ => (metrics.metrics.ascent, metrics.metrics.descent),
+            crate::GlyphOrientation::Upright => metrics.ascent_descent(true),
+            _ => metrics.ascent_descent(false),
         };
         Some(crate::EmphasisMark {
             character,

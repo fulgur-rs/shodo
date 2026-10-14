@@ -163,15 +163,7 @@ fn font_extents(
 }
 
 fn shift(s: &InlineStyle, parent: StyleMetrics, parent_upright: bool, a: f32, d: f32) -> f32 {
-    let (parent_over, parent_under) = if parent_upright {
-        parent
-            .vertical_metrics
-            .map_or((parent.size / 2.0, parent.size / 2.0), |v| {
-                (v.ascent, v.descent)
-            })
-    } else {
-        (parent.metrics.ascent, parent.metrics.descent)
-    };
+    let (parent_over, parent_under) = parent.ascent_descent(parent_upright);
     match s.vertical_align {
         VerticalAlign::Length(v) => -v,
         VerticalAlign::Sub => parent.metrics.subscript_offset,
@@ -462,11 +454,7 @@ impl ProfileResolver {
                     .baseline
                     .unwrap_or(if central { height / 2.0 } else { height });
                 let dominant_shift = if central {
-                    let (over, under) = parent
-                        .vertical_metrics
-                        .map_or((parent.size / 2.0, parent.size / 2.0), |v| {
-                            (v.ascent, v.descent)
-                        });
+                    let (over, under) = parent.ascent_descent(true);
                     -(over - under) / 2.0
                 } else {
                     0.0

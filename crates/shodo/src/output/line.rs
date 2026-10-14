@@ -108,14 +108,7 @@ impl Line {
             .style
             .writing_mode
             .is_upright(root_style.text_orientation);
-        let (a, d) = if upright {
-            root.vertical_metrics
-                .map_or((root.size / 2.0, root.size / 2.0), |v| {
-                    (v.ascent, v.descent)
-                })
-        } else {
-            (root.metrics.ascent, root.metrics.descent)
-        };
+        let (a, d) = root.ascent_descent(upright);
         LineMetrics {
             ascent: baseline,
             descent: self.block_size.to_f32() - baseline,
@@ -353,7 +346,6 @@ impl Line {
         #[cfg(test)]
         super::owner_probe::record(&para.data);
         let data = &para.data;
-        let m = data.style_metrics[0].metrics;
         let flags = match scan.reason {
             BreakReason::Forced => BreakToken::AFTER_FORCED,
             _ => 0,
@@ -411,6 +403,11 @@ impl Line {
         let hanging_start = scan.punctuation_edges.hang_start;
         let mut ruby_caret_gaps = scan.ruby_caret_gaps;
         ruby_caret_gaps.sort_by_key(|gap| gap.text.start);
+        let (root_ascent, root_descent) = data.style_metrics[0].ascent_descent(
+            data.style
+                .writing_mode
+                .is_upright(data.styles[0].text_orientation),
+        );
         Line {
             #[cfg(test)]
             _clone_probe: super::clone_probe::CloneProbe,
@@ -434,34 +431,8 @@ impl Line {
             visible_hyphen,
             block_size: LayoutUnit::ZERO,
             baseline: LayoutUnit::ZERO,
-            ascent: LayoutUnit::from_f32_round(
-                if data
-                    .style
-                    .writing_mode
-                    .is_upright(data.styles[0].text_orientation)
-                {
-                    data.style_metrics[0]
-                        .vertical_metrics
-                        .map_or(data.style_metrics[0].size / 2.0, |v| v.ascent)
-                } else {
-                    m.ascent
-                },
-                sat,
-            ),
-            descent: LayoutUnit::from_f32_round(
-                if data
-                    .style
-                    .writing_mode
-                    .is_upright(data.styles[0].text_orientation)
-                {
-                    data.style_metrics[0]
-                        .vertical_metrics
-                        .map_or(data.style_metrics[0].size / 2.0, |v| v.descent)
-                } else {
-                    m.descent
-                },
-                sat,
-            ),
+            ascent: LayoutUnit::from_f32_round(root_ascent, sat),
+            descent: LayoutUnit::from_f32_round(root_descent, sat),
             block_offset,
             displaced: Vec::new(),
             // Materialization applies edge overlays before measure_metrics
