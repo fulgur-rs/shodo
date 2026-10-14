@@ -33,27 +33,46 @@ pub(crate) struct BaseScopes {
 /// Work done by one `can_charge_shaped_glyphs` call: charges inspected, the
 /// deepest owning chain walked, and charge iterations plus scope visits.
 #[derive(Clone, Copy, Debug, Default)]
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg(test)]
 pub(crate) struct PreflightOps {
     pub(crate) charges: usize,
     pub(crate) depth: usize,
     pub(crate) steps: usize,
 }
 
+#[cfg(not(test))]
+#[derive(Default)]
+struct PreflightOps {}
+
+#[cfg(test)]
 impl PreflightOps {
+    fn charge(&mut self) {
+        self.charges += 1;
+        self.steps += 1;
+    }
+
+    fn scope(&mut self) {
+        self.steps += 1;
+        self.depth += 1;
+    }
+
     fn add_walk(&mut self, visited: usize) {
         self.steps += visited;
         self.depth = self.depth.max(visited);
     }
 
-    #[cfg(test)]
     fn record(self) {
         if PREFLIGHT_OPS_ENABLED.with(std::cell::Cell::get) {
             PREFLIGHT_OPS.with(|log| log.borrow_mut().push(self));
         }
     }
+}
 
-    #[cfg(not(test))]
+#[cfg(not(test))]
+impl PreflightOps {
+    fn charge(&mut self) {}
+    fn scope(&mut self) {}
+    fn add_walk(&mut self, _visited: usize) {}
     fn record(self) {}
 }
 
@@ -371,12 +390,12 @@ impl BaseScopes {
             let Some((item, amount)) = charges.next() else {
                 break 'check true;
             };
-            ops.charges += 1;
+            ops.charge();
             let first = self.owner(item);
             let mut total = amount;
             let mut next = None;
             for (item, amount) in charges.by_ref() {
-                ops.charges += 1;
+                ops.charge();
                 let owner = self.owner(item);
                 if owner != first {
                     next = Some((owner, amount));
@@ -384,13 +403,11 @@ impl BaseScopes {
                 }
                 total = total.saturating_add(amount);
             }
-            ops.steps += ops.charges;
             let Some((owner, amount)) = next else {
                 // Single owner: one saturated total against one chain walk.
                 let mut cursor = first;
                 while let Some(i) = cursor {
-                    ops.steps += 1;
-                    ops.depth += 1;
+                    ops.scope();
                     let scope = &self.scopes[i];
                     if Self::exceeds_glyphs(scope, total) {
                         break 'check false;
@@ -405,8 +422,7 @@ impl BaseScopes {
             ops.add_walk(self.accumulate_preflight(first, total));
             ops.add_walk(self.accumulate_preflight(owner, amount));
             for (item, amount) in charges {
-                ops.charges += 1;
-                ops.steps += 1;
+                ops.charge();
                 let owner = self.owner(item);
                 ops.add_walk(self.accumulate_preflight(owner, amount));
             }

@@ -88,6 +88,7 @@ fn measured_tracks(p: &Paragraph) -> (Tracks, usize) {
         &vec![base; f.bases.len()],
         &f.right_columns,
         &vec![unit(2.0); f.lanes.len()],
+        &super::super::geometry::level_sides(data, &data.ruby.containers[f.container]),
         true,
         base,
         [None, None],

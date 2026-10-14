@@ -23,6 +23,38 @@ fn single_pass_options_safe(options: &LineOptions) -> bool {
         && !options.text_indent.each_line
 }
 
+/// Structural parity required by both optimized first-line intrinsic paths.
+/// Each path keeps its own shaping, spacing, and width safety checks.
+fn first_line_parity(normal: &ParagraphData, first: &crate::paragraph::FirstLineData) -> bool {
+    let alternate = &first.data;
+    normal.ruby.containers.is_empty()
+        && alternate.ruby.containers.is_empty()
+        && normal.boxes.is_empty()
+        && alternate.boxes.is_empty()
+        && normal.combine_spans.is_empty()
+        && alternate.combine_spans.is_empty()
+        && normal.floats.is_empty()
+        && alternate.floats.is_empty()
+        && normal.units.len() == alternate.units.len()
+        && first.normal_cursors.len() == alternate.units.len() + 1
+        && normal.text == alternate.text
+}
+
+fn unit_parity(
+    first: &crate::paragraph::FirstLineData,
+    index: usize,
+    normal: &crate::analysis::units::Unit,
+    alternate: &crate::analysis::units::Unit,
+) -> bool {
+    first.normal_cursors[index] == Some(index as u32)
+        && normal.text == alternate.text
+        && normal.break_after == alternate.break_after
+        && !normal.unsafe_to_break
+        && !alternate.unsafe_to_break
+        && !normal.unsafe_to_concat
+        && !alternate.unsafe_to_concat
+}
+
 pub(crate) fn single_pass_safe(
     normal: &ParagraphData,
     first: &crate::paragraph::FirstLineData,
@@ -32,19 +64,9 @@ pub(crate) fn single_pass_safe(
     // Spacing summaries can add terms after the glyph-width pre-bound below;
     // keep them on the two-pass path so saturation and warning counts match.
     if !single_pass_options_safe(options)
-        || !normal.ruby.containers.is_empty()
-        || !alternate.ruby.containers.is_empty()
         || normal.needs_spacing
         || alternate.needs_spacing
-        || normal.units.len() != alternate.units.len()
-        || first.normal_cursors.len() != alternate.units.len() + 1
-        || normal.text != alternate.text
-        || !normal.boxes.is_empty()
-        || !alternate.boxes.is_empty()
-        || !normal.combine_spans.is_empty()
-        || !alternate.combine_spans.is_empty()
-        || !normal.floats.is_empty()
-        || !alternate.floats.is_empty()
+        || !first_line_parity(normal, first)
     {
         return false;
     }
@@ -62,14 +84,8 @@ pub(crate) fn single_pass_safe(
             UnitKind::ForcedBreak => a.break_after == BreakClass::Mandatory,
             _ => false,
         };
-        if first.normal_cursors[index] != Some(index as u32)
+        if !unit_parity(first, index, a, b)
             || a.kind != b.kind
-            || a.text != b.text
-            || a.break_after != b.break_after
-            || a.unsafe_to_break
-            || b.unsafe_to_break
-            || a.unsafe_to_concat
-            || b.unsafe_to_concat
             || !matches!(a.kind, UnitKind::Cluster { .. } | UnitKind::ForcedBreak)
             || !matches!(
                 a.break_after,
@@ -184,17 +200,7 @@ fn simple_first_line_intrinsics(
         || alternate.style.writing_mode != crate::geometry::WritingMode::HorizontalTb
         || normal.style.direction != crate::geometry::Direction::Ltr
         || alternate.style.direction != crate::geometry::Direction::Ltr
-        || !normal.ruby.containers.is_empty()
-        || !alternate.ruby.containers.is_empty()
-        || !normal.boxes.is_empty()
-        || !alternate.boxes.is_empty()
-        || !normal.combine_spans.is_empty()
-        || !alternate.combine_spans.is_empty()
-        || !normal.floats.is_empty()
-        || !alternate.floats.is_empty()
-        || normal.text != alternate.text
-        || normal.units.len() != alternate.units.len()
-        || first.normal_cursors.len() != alternate.units.len() + 1
+        || !first_line_parity(normal, first)
         || first.normal_cursors[alternate.units.len()] != Some(normal.units.len() as u32)
         || normal.text.starts_with(' ')
         || normal.text.ends_with(' ')
@@ -222,16 +228,10 @@ fn simple_first_line_intrinsics(
     {
         #[cfg(test)]
         INTRINSIC_UNIT_VISITS.with(|visits| visits.set(visits.get() + 2));
-        if first.normal_cursors[index] != Some(index as u32)
+        if !unit_parity(first, index, normal_unit, alternate_unit)
             || normal_unit.shared_cluster.is_some()
             || alternate_unit.shared_cluster.is_some()
-            || normal_unit.unsafe_to_break
-            || alternate_unit.unsafe_to_break
-            || normal_unit.unsafe_to_concat
-            || alternate_unit.unsafe_to_concat
-            || normal_unit.text != alternate_unit.text
             || normal_unit.text.start as usize != text_end
-            || normal_unit.break_after != alternate_unit.break_after
             || normal_unit.combine.is_some()
             || alternate_unit.combine.is_some()
             || !simple_intrinsic_spacing_is_zero(normal, index)

@@ -30,8 +30,24 @@ pub(crate) struct FontCluster<'a> {
 }
 
 struct Properties {
-    chars: Vec<char>,
+    chars: ClusterChars,
     auto_color: bool,
+}
+
+const INLINE_CHARS: usize = 16;
+
+/// Most long graphemes repeat a few marks. Keep their distinct scalars inline;
+/// spill in insertion order only when the number of distinct scalars grows.
+struct ClusterChars {
+    inline: [char; INLINE_CHARS],
+    len: usize,
+    overflow: Vec<char>,
+}
+
+impl ClusterChars {
+    fn iter(&self) -> impl Iterator<Item = &char> {
+        self.inline[..self.len].iter().chain(&self.overflow)
+    }
 }
 
 impl<'a> FontCluster<'a> {
@@ -49,8 +65,12 @@ impl<'a> FontCluster<'a> {
 
     fn properties(&self) -> &Properties {
         self.properties.get_or_init(|| {
-            let mut seen = HashSet::new();
-            let mut chars = Vec::new();
+            let mut seen: Option<HashSet<char>> = None;
+            let mut chars = ClusterChars {
+                inline: ['\0'; INLINE_CHARS],
+                len: 0,
+                overflow: Vec::new(),
+            };
             let mut selector = None;
             let mut emoji = false;
             let emoji_property =
@@ -60,8 +80,25 @@ impl<'a> FontCluster<'a> {
                     selector = Some(ch);
                 }
                 emoji |= emoji_property.contains(ch);
-                if !ignored(ch) && seen.insert(ch) {
-                    chars.push(ch);
+                if ignored(ch) {
+                    continue;
+                }
+                if let Some(seen) = &mut seen {
+                    if seen.insert(ch) {
+                        chars.overflow.push(ch);
+                    }
+                } else if !chars.inline[..chars.len].contains(&ch) {
+                    if chars.len < INLINE_CHARS {
+                        chars.inline[chars.len] = ch;
+                        chars.len += 1;
+                    } else {
+                        // Bound linear scans by INLINE_CHARS even for unusual
+                        // clusters with many distinct scalars.
+                        let mut spilled: HashSet<_> = chars.inline.into_iter().collect();
+                        spilled.insert(ch);
+                        seen = Some(spilled);
+                        chars.overflow.push(ch);
+                    }
                 }
             }
             Properties {
@@ -123,6 +160,37 @@ impl<'a> FontCluster<'a> {
 mod tests {
     use super::*;
     use crate::font::{Blob, FontData, FontFaceDescriptor, FontId};
+
+    #[test]
+    fn repeated_long_cluster_properties_need_no_heap_allocation() {
+        let text = format!("a{}", "\u{301}\u{200d}\u{fe0f}".repeat(4096));
+        let cluster = FontCluster::new(&text);
+        let (properties, peak) = crate::test_support::alloc::measure_peak(|| cluster.properties());
+        assert_eq!(
+            properties.chars.iter().copied().collect::<Vec<_>>(),
+            ['a', '\u{301}']
+        );
+        assert!(properties.auto_color);
+        assert_eq!(peak, 0);
+    }
+
+    #[test]
+    fn property_characters_keep_first_occurrence_order_after_many_distinct_marks() {
+        let marks: String = (0x300..0x340).map(|n| char::from_u32(n).unwrap()).collect();
+        let text = format!("a{marks}{marks}\u{fe0f}\u{fe0e}");
+        let cluster = FontCluster::new(&text);
+        let expected: Vec<_> = std::iter::once('a').chain(marks.chars()).collect();
+        assert_eq!(
+            cluster
+                .properties()
+                .chars
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
+            expected
+        );
+        assert!(!cluster.properties().auto_color);
+    }
 
     #[test]
     fn reloaded_unselected_native_faces_keep_cluster_scratch_bounded() {

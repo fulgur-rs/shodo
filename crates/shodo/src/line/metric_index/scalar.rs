@@ -22,6 +22,18 @@ pub(super) fn union(a: Option<Bounds>, b: Option<Bounds>) -> Option<Bounds> {
     }
 }
 
+/// Raw bounds include every profile; only ungrouped profiles size the root.
+pub(super) fn profile_bounds(p: RecordProfile) -> (Option<Bounds>, Option<Bounds>) {
+    let bounds = Bounds {
+        top: p.top,
+        bottom: p.bottom,
+    };
+    (
+        (p.group.is_none() && p.own_group.is_none()).then_some(bounds),
+        Some(bounds),
+    )
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub(super) struct Summary {
     pub(super) normal: Option<Bounds>,
@@ -41,15 +53,10 @@ impl Summary {
         }
     }
     pub(super) fn profile(p: RecordProfile, active: bool) -> Self {
-        let bounds = Some(Bounds {
-            top: p.top,
-            bottom: p.bottom,
-        });
+        let (normal, raw) = profile_bounds(p);
         Self {
-            normal: (p.group.is_none() && p.own_group.is_none())
-                .then_some(bounds)
-                .flatten(),
-            raw: bounds,
+            normal,
+            raw,
             active,
             ..Default::default()
         }
