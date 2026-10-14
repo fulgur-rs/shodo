@@ -275,25 +275,7 @@ impl WindowInstances {
 }
 
 fn retained_bytes(resolved: &Resolved) -> usize {
-    let instance = &resolved.1;
-    let parts = [
-        size_of::<RunInstance>() + 2 * size_of::<usize>(),
-        instance
-            .coords
-            .capacity()
-            .saturating_mul(size_of::<crate::font::NormalizedCoord>()),
-        instance
-            .variations
-            .capacity()
-            .saturating_mul(size_of::<crate::style::FontVariation>()),
-        instance.language.as_ref().map_or(0, String::capacity),
-        instance
-            .features
-            .len()
-            .saturating_mul(size_of::<harfrust::Feature>())
-            .saturating_add(2 * size_of::<usize>()),
-    ];
-    parts.into_iter().fold(0usize, usize::saturating_add)
+    resolved.1.retained_bytes()
 }
 
 #[cfg(test)]

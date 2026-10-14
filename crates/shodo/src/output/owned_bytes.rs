@@ -1,6 +1,6 @@
 //! Requested owned storage; shared paragraph/font/run owners are excluded.
 use super::Line;
-use crate::shape::GlyphStore;
+use crate::shape::{ByteBasis, GlyphStore};
 
 struct Budget {
     remaining: usize,
@@ -17,20 +17,7 @@ impl Budget {
         self.charge(v.len(), std::mem::size_of::<T>())
     }
     fn store(&mut self, g: &GlyphStore) -> Option<()> {
-        self.vec(&g.id)?;
-        self.vec(&g.advance)?;
-        self.vec(&g.pen)?;
-        self.vec(&g.offset_inline)?;
-        self.vec(&g.offset_block)?;
-        self.vec(&g.cluster)?;
-        self.vec(&g.flags)?;
-        if let Some(v) = &g.spacing {
-            self.vec(v)?;
-        }
-        if let Some(v) = &g.leading {
-            self.vec(v)?;
-        }
-        Some(())
+        self.charge(1, g.retained_bytes(ByteBasis::Capacity))
     }
     fn line(&mut self, l: &Line, depth: usize) -> Option<()> {
         // Cache eligibility must not introduce unbounded recursive stack use.
@@ -82,6 +69,22 @@ impl Line {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn glyph_retained_bytes_counts_len_or_capacity_per_basis() {
+        let mut id = Vec::with_capacity(8);
+        id.extend([1u32, 2]);
+        let mut leading = Vec::with_capacity(4);
+        leading.push(crate::geometry::LayoutUnit::ZERO);
+        let store = GlyphStore {
+            id,
+            flags: Vec::with_capacity(3),
+            leading: Some(leading),
+            ..Default::default()
+        };
+        assert_eq!(store.retained_bytes(ByteBasis::Len), 2 * 4 + 4);
+        assert_eq!(store.retained_bytes(ByteBasis::Capacity), 8 * 4 + 3 + 4 * 4);
+    }
+
     #[test]
     fn glyph_capacity_charges_unused_storage_and_both_optional_spacing_vectors() {
         let store = GlyphStore {

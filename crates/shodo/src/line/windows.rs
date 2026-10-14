@@ -373,33 +373,26 @@ fn window_cost(window: &OwnedShapedWindow) -> usize {
 }
 
 fn window_storage_cost(window: &OwnedShapedWindow, snapshot: bool) -> usize {
+    use crate::shape::ByteBasis;
     use std::mem::size_of;
-    fn bytes<T>(vector: &Vec<T>, snapshot: bool) -> usize {
-        let count = if snapshot {
-            vector.len()
-        } else {
-            vector.capacity()
-        };
-        count * size_of::<T>()
-    }
+    let basis = if snapshot {
+        ByteBasis::Len
+    } else {
+        ByteBasis::Capacity
+    };
     let (store, runs) = window;
+    let run_count = match basis {
+        ByteBasis::Len => runs.len(),
+        ByteBasis::Capacity => runs.capacity(),
+    };
     // The Arc owns the tuple and two counters. Allow four table slots per
     // entry plus control bytes to cover spare HashMap capacity as it grows.
     let metadata = size_of::<OwnedShapedWindow>()
         + 2 * size_of::<usize>()
         + 4 * size_of::<((usize, usize, Option<u64>), ShapedWindow)>()
         + 2 * size_of::<usize>();
-    let mut cost = metadata
-        + bytes(&store.id, snapshot)
-        + bytes(&store.advance, snapshot)
-        + bytes(&store.pen, snapshot)
-        + bytes(&store.offset_inline, snapshot)
-        + bytes(&store.offset_block, snapshot)
-        + bytes(&store.cluster, snapshot)
-        + bytes(&store.flags, snapshot)
-        + store.spacing.as_ref().map_or(0, |v| bytes(v, snapshot))
-        + store.leading.as_ref().map_or(0, |v| bytes(v, snapshot))
-        + bytes(runs, snapshot);
+    let mut cost =
+        metadata + store.retained_bytes(basis) + run_count * size_of::<crate::shape::ShapedRun>();
     // Edge shaping resolves fresh instances. Their Arcs keep coordinates,
     // variations, language and features alive as well as the run scalars.
     // Count preparation once per consecutive input, preserving the conservative
@@ -413,13 +406,7 @@ fn window_storage_cost(window: &OwnedShapedWindow, snapshot: bool) -> usize {
         }
         let instance = &run.instance;
         previous = Some((instance, run.shaping_input));
-        cost += size_of::<crate::shape::RunInstance>()
-            + 2 * size_of::<usize>()
-            + bytes(&instance.coords, false)
-            + bytes(&instance.variations, false)
-            + instance.language.as_ref().map_or(0, String::capacity)
-            + std::mem::size_of_val(instance.features.as_ref())
-            + 2 * size_of::<usize>();
+        cost += instance.retained_bytes();
     }
     cost
 }

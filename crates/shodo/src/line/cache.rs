@@ -157,16 +157,9 @@ impl PartialLine {
             .overlays
             .iter()
             .map(|overlay| {
-                let store = &overlay.store;
-                (store.id.capacity() + store.cluster.capacity()) * std::mem::size_of::<u32>()
-                    + (store.advance.capacity()
-                        + store.pen.capacity()
-                        + store.offset_inline.capacity()
-                        + store.offset_block.capacity()
-                        + store.spacing.as_ref().map_or(0, Vec::capacity)
-                        + store.leading.as_ref().map_or(0, Vec::capacity))
-                        * std::mem::size_of::<LayoutUnit>()
-                    + store.flags.capacity() * std::mem::size_of::<u8>()
+                overlay
+                    .store
+                    .retained_bytes(crate::shape::ByteBasis::Capacity)
                     + overlay.runs.capacity() * std::mem::size_of::<crate::shape::ShapedRun>()
             })
             .sum();
