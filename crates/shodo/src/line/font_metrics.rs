@@ -1,7 +1,10 @@
 //! Font metrics resolved once from the same instance used for shaping.
 use crate::font::{FontCollection, FontId, FontMatch, FontMetrics, FontQuery};
 use crate::limits::WarningSink;
-use crate::style::InlineStyle;
+use crate::style::{
+    InlineStyle,
+    identity::{metric_float, same_metric_inputs},
+};
 use skrifa::{
     FontRef, MetadataProvider,
     instance::{LocationRef, Size},
@@ -229,11 +232,7 @@ impl PartialEq for StyleMetricsKey<'_> {
 impl Eq for StyleMetricsKey<'_> {}
 
 fn hash_f32<H: Hasher>(value: f32, state: &mut H) {
-    (if value == 0.0 { 0 } else { value.to_bits() }).hash(state);
-}
-
-fn same_f32(a: f32, b: f32) -> bool {
-    a == b || (a.is_nan() && b.is_nan() && a.to_bits() == b.to_bits())
+    metric_float(value).hash(state);
 }
 
 fn hash_metric_kind<H: Hasher>(metric: crate::style::FontMetricKind, state: &mut H) {
@@ -246,39 +245,6 @@ fn hash_metric_kind<H: Hasher>(metric: crate::style::FontMetricKind, state: &mut
         FontMetricKind::IcHeight => 4,
     }
     .hash(state);
-}
-
-fn same_metric_inputs(a: &InlineStyle, b: &InlineStyle) -> bool {
-    let same_font_style = match (a.font_style, b.font_style) {
-        (crate::style::FontStyle::Normal, crate::style::FontStyle::Normal)
-        | (crate::style::FontStyle::Italic, crate::style::FontStyle::Italic) => true,
-        (crate::style::FontStyle::Oblique(a), crate::style::FontStyle::Oblique(b)) => {
-            same_f32(a, b)
-        }
-        _ => false,
-    };
-    let same_variations = a.font_variations.len() == b.font_variations.len()
-        && a.font_variations
-            .iter()
-            .zip(&b.font_variations)
-            .all(|(a, b)| a.tag == b.tag && same_f32(a.value, b.value));
-    let same_size_adjust = match (a.font_size_adjust, b.font_size_adjust) {
-        (None, None) => true,
-        (Some(a), Some(b)) => a.metric == b.metric && same_f32(a.value, b.value),
-        _ => false,
-    };
-
-    a.font_families == b.font_families
-        && same_f32(a.font_weight, b.font_weight)
-        && same_f32(a.font_width, b.font_width)
-        && same_font_style
-        && a.lang == b.lang
-        && a.font_synthesis == b.font_synthesis
-        && same_f32(a.font_size, b.font_size)
-        && same_variations
-        && a.font_optical_sizing == b.font_optical_sizing
-        && same_size_adjust
-        && a.text_emphasis.is_some() == b.text_emphasis.is_some()
 }
 
 pub(crate) fn resolve(
@@ -678,6 +644,41 @@ mod tests {
         InlineStyle {
             font_families: vec![FontFamily::Named("Latin".into())],
             ..Default::default()
+        }
+    }
+
+    #[test]
+    fn metric_float_keys_merge_signed_zero_but_keep_nan_payloads() {
+        use std::collections::hash_map::DefaultHasher;
+        for (a, b, expected) in [
+            (0.0, -0.0, true),
+            (f32::NAN, f32::NAN, true),
+            (f32::NAN, f32::from_bits(0x7fc0_0001), false),
+        ] {
+            let a = InlineStyle {
+                font_size: a,
+                ..Default::default()
+            };
+            let b = InlineStyle {
+                font_size: b,
+                ..Default::default()
+            };
+            let a = StyleMetricsKey {
+                style: &a,
+                generations: (0, None),
+            };
+            let b = StyleMetricsKey {
+                style: &b,
+                generations: (0, None),
+            };
+            assert_eq!(a == b, expected);
+            if expected {
+                let mut left = DefaultHasher::new();
+                let mut right = DefaultHasher::new();
+                a.hash(&mut left);
+                b.hash(&mut right);
+                assert_eq!(left.finish(), right.finish());
+            }
         }
     }
 

@@ -1,6 +1,9 @@
 //! Eligibility for copying first-line work while retaining separate data.
 
-use crate::style::{FontStyle, InlineStyle, LineHeight};
+use crate::style::{
+    InlineStyle,
+    identity::{authored_float, inherited_float_bits, same_variations},
+};
 
 #[cfg(test)]
 std::thread_local! {
@@ -28,33 +31,61 @@ pub(super) fn styles_match(normal: &[InlineStyle], alternate: &[InlineStyle]) ->
             let mut without_paint = a.clone();
             without_paint.paint = b.paint;
             without_paint == *b
-                && a.font_variations
-                    .iter()
-                    .zip(&b.font_variations)
-                    .all(|(a, b)| a.value.to_bits() == b.value.to_bits())
+                && same_variations(&a.font_variations, &b.font_variations, authored_float)
         })
 }
 
-// PartialEq equates signed zeros. RunInstance exposes variation values and
-// shaping depends on these inherited floats; require their exact bits too.
-fn inherited_float_bits(style: &InlineStyle) -> [u32; 9] {
-    [
-        style.font_size.to_bits(),
-        style.font_weight.to_bits(),
-        style.font_width.to_bits(),
-        match style.font_style {
-            FontStyle::Oblique(value) => value.to_bits(),
-            _ => 0,
-        },
-        style
-            .font_size_adjust
-            .map_or(0, |adjust| adjust.value.to_bits()),
-        match style.line_height {
-            LineHeight::Px(value) | LineHeight::Number(value) => value.to_bits(),
-            _ => 0,
-        },
-        style.letter_spacing.to_bits(),
-        style.word_spacing.to_bits(),
-        style.word_spacing_percent.to_bits(),
-    ]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::style::{FontStyle, LineHeight};
+
+    #[test]
+    fn inherited_floats_require_authored_bits_and_reject_nan() {
+        let fields: [fn(&mut InlineStyle, f32); 10] = [
+            |s, v| s.font_size = v,
+            |s, v| s.font_weight = v,
+            |s, v| s.font_width = v,
+            |s, v| s.font_style = FontStyle::Oblique(v),
+            |s, v| {
+                s.font_size_adjust = Some(crate::style::FontSizeAdjust {
+                    metric: crate::style::FontMetricKind::ExHeight,
+                    value: v,
+                })
+            },
+            |s, v| s.line_height = LineHeight::Number(v),
+            |s, v| s.letter_spacing = v,
+            |s, v| s.word_spacing = v,
+            |s, v| s.word_spacing_percent = v,
+            |s, v| {
+                s.font_variations = vec![crate::style::FontVariation {
+                    tag: *b"wght",
+                    value: v,
+                }]
+            },
+        ];
+        for set in fields {
+            for (left, right, expected) in [
+                (0.0, -0.0, false),
+                (1.0, 1.0, true),
+                (f32::NAN, f32::NAN, false),
+            ] {
+                let mut a = InlineStyle::default();
+                let mut b = InlineStyle::default();
+                set(&mut a, left);
+                set(&mut b, right);
+                assert_eq!(styles_match(&[a], &[b]), expected);
+            }
+        }
+        // Non-inherited layout properties retain their public equality policy.
+        let a = InlineStyle {
+            tab_size: crate::style::TabSize::Px(0.0),
+            ..Default::default()
+        };
+        let b = InlineStyle {
+            tab_size: crate::style::TabSize::Px(-0.0),
+            ..Default::default()
+        };
+        assert!(styles_match(&[a], &[b]));
+    }
 }

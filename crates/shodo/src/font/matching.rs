@@ -1,6 +1,7 @@
 //! Cluster matching, CSS range ranking, and shared fallback configuration.
 
-use super::{FontCollection, FontData, FontFaceDescriptor, FontId, LayerState, check};
+use super::{BlobCharge, FontCollection, FontData, FontFaceDescriptor, FontId, LayerState, check};
+#[cfg(test)]
 use crate::limits::{LimitKind, Limits};
 use crate::style::{FontFamily, FontStyle, FontSynthesis, FontVariation, GenericFamily};
 use fontique::{FontInfo, SourceId, SourceInfo, SourceKind};
@@ -905,29 +906,10 @@ impl FontCollection {
             } else {
                 let limits = &self.layer.limits;
                 check::check_font(selected.data.data.as_ref(), limits).ok()?;
-                Limits::check(
-                    limits.max_faces_per_layer,
-                    LimitKind::FacesPerLayer,
-                    state.faces.len() as u64 + 1,
-                )
-                .ok()?;
-                let additional = if state
-                    .faces
-                    .iter()
-                    .any(|face| face.data.id() == selected.data.data.id())
-                {
-                    0
-                } else {
-                    selected.data.data.len() as u64
-                };
-                let blob_bytes = state.blob_bytes + additional;
-                Limits::check(
-                    limits.max_layer_blob_bytes,
-                    LimitKind::LayerBlobBytes,
-                    blob_bytes,
-                )
-                .ok()?;
-                let index = state.faces.len();
+                let admission = state
+                    .admit(1, BlobCharge::Shared(&selected.data.data), limits)
+                    .ok()?;
+                let index = admission.first;
                 // A materialized platform face uses the same cumulative
                 // layer budgets as an explicitly registered face.
                 u32::try_from(index).ok().filter(|&id| id != u32::MAX)?;
@@ -943,11 +925,12 @@ impl FontCollection {
                     .ok()?;
                 // Match future queries against the retained blob, even if a
                 // platform source changed after its family metadata was read.
-                state.face_infos.push(face_info(&selected.data));
-                state.faces.push(selected.data.clone());
-                state.native_faces.insert(index);
-                state.descriptors.push(None);
-                state.index_face(index, true);
+                state.commit(
+                    admission,
+                    [(selected.data.clone(), face_info(&selected.data), None)],
+                    true,
+                    true,
+                );
                 if let Some(prepared) = local_names {
                     let LayerState {
                         local_names,
@@ -956,7 +939,6 @@ impl FontCollection {
                     } = &mut *state;
                     local_names.commit_registration(prepared, &face_infos[index..]);
                 }
-                state.blob_bytes = blob_bytes;
                 index
             };
             state

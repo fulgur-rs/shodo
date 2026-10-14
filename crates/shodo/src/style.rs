@@ -5,6 +5,7 @@
 
 use crate::geometry::{Direction, WritingMode};
 
+pub(crate) mod identity;
 pub(crate) mod memory;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

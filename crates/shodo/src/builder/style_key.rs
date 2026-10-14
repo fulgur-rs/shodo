@@ -1,4 +1,7 @@
 //! Borrowed structural keys: no Debug formatting or cloned key payloads.
+use crate::style::identity::{
+    InternedFloat as Float, font_style_key, same_variations, size_adjust_key,
+};
 use crate::style::*;
 use std::hash::{BuildHasher, Hash, Hasher};
 use std::mem::discriminant;
@@ -40,34 +43,8 @@ pub(super) fn fingerprint(pair: Pair<'_>, state: &impl BuildHasher) -> u64 {
     state.hash_one(Key(pair))
 }
 
-/// Debug-style float identity: all NaNs share a key, while signed zeros differ.
-/// Keep this internal; public style PartialEq continues to use float equality.
-#[derive(Clone, Copy)]
-struct Float(u32);
-
 fn float(value: f32) -> Float {
-    Float(value.to_bits())
-}
-
-impl PartialEq for Float {
-    fn eq(&self, other: &Self) -> bool {
-        // Most comparisons have identical bits. Delay NaN normalization until
-        // needed so consecutive style reuse does not scan every float eagerly.
-        self.0 == other.0 || (f32::from_bits(self.0).is_nan() && f32::from_bits(other.0).is_nan())
-    }
-}
-
-impl Eq for Float {}
-
-impl Hash for Float {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        (if f32::from_bits(self.0).is_nan() {
-            f32::NAN.to_bits()
-        } else {
-            self.0
-        })
-        .hash(state);
-    }
+    Float::new(value)
 }
 
 fn decoration(value: &TextDecoration) -> impl Eq + Hash {
@@ -92,12 +69,7 @@ impl Hash for Variations<'_> {
 
 impl PartialEq for Variations<'_> {
     fn eq(&self, other: &Self) -> bool {
-        self.0.len() == other.0.len()
-            && self
-                .0
-                .iter()
-                .zip(other.0)
-                .all(|(a, b)| a.tag == b.tag && float(a.value) == float(b.value))
+        same_variations(self.0, other.0, float)
     }
 }
 
@@ -200,17 +172,11 @@ fn variations(value: &[FontVariation]) -> Variations<'_> {
 }
 
 fn font_style(value: &FontStyle) -> impl Eq + Hash {
-    (
-        discriminant(value),
-        match value {
-            FontStyle::Oblique(value) => Some(float(*value)),
-            FontStyle::Normal | FontStyle::Italic => None,
-        },
-    )
+    font_style_key(value, float)
 }
 
 fn font_size_adjust(value: &Option<FontSizeAdjust>) -> impl Eq + Hash {
-    value.map(|value| (value.metric, float(value.value)))
+    size_adjust_key(*value, float)
 }
 
 fn line_height(value: &LineHeight) -> impl Eq + Hash {
