@@ -592,3 +592,50 @@ fn supplemental_snapshots_preserve_glyph_budget_keys_and_release_on_clear() {
     );
     assert!(weak.upgrade().is_none());
 }
+
+#[test]
+fn accounted_cost_covers_the_heap_the_cache_retains() {
+    use crate::test_support::alloc::live_bytes;
+    let fonts = crate::font::FontCollection::new(&crate::limits::Limits::default());
+    let mut cx = LayoutContext::new();
+    let sat = Saturation::default();
+    let recording = replay::begin(&mut cx, &sat);
+    replay::record_charge(&mut cx, 12, 1024, true);
+    let base = replay::finish(&mut cx, recording, &sat).unwrap();
+    let mut cache = EdgeShapeCache::default();
+    for i in 0..4096 {
+        let instance = crate::shape::RunInstance {
+            coords: Vec::with_capacity(i % 3),
+            language: Some("ja".into()),
+            ..Default::default()
+        };
+        let glyphs = 1 + i % 8;
+        let run = crate::shape::ShapedRun {
+            shaping_input: 0,
+            glyphs: 0..glyphs as u32,
+            text: 0..glyphs as u32,
+            item: 0,
+            orientation: crate::shape::orientation::RunOrientation::Horizontal,
+            font: fonts.primary_font(),
+            font_size: 16.0,
+            instance: Arc::new(instance),
+        };
+        let (store, _) = Arc::try_unwrap(window(glyphs)).unwrap();
+        // The temporary Arc drops here, leaving the cache as the sole owner.
+        cache.insert((i, i + 1, None), &Arc::new((store, vec![run])));
+        remember(&mut cache, (i, i + 1), base.times((i % 5 + 1) as u64));
+    }
+    assert!(cache.len() > 0 && !cache.measurements.is_empty());
+    let accounted = (cache.cost + cache.measurement_storage_cost()) as u64;
+    let before = live_bytes();
+    drop(cache);
+    let retained = (before - live_bytes()) as u64;
+    println!(
+        "edge cache: retained {retained} / accounted {accounted} = {:.3}",
+        retained as f64 / accounted as f64
+    );
+    assert!(
+        retained <= accounted,
+        "edge cache retains {retained} heap bytes but accounts only {accounted}"
+    );
+}
