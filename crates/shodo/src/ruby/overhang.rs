@@ -192,27 +192,39 @@ fn put_neighbors(data: &ParagraphData, index: Box<NeighborIndex>, cx: &mut Layou
     *cx.ruby_ranges.neighbors.entry(key).or_default() = Some(index);
 }
 
-/// Visual neighbours of the single `unit` among the event units of
-/// `selected`, in line-relative order. Not interchangeable with the
-/// neighbours an allowance records (`around` over a whole clipped ruby
-/// target, whose visual edge may be a non-event unit); the accumulator's D3
-/// rule (`ruby::accumulate`) relates the two.
+/// Calls `f` with the visual neighbours of each single event unit of
+/// `units`, in order, among the event units of `selected`, in line-relative
+/// order. Not interchangeable with the neighbours an allowance records
+/// (`around` over a whole clipped ruby target, whose visual edge may be a
+/// non-event unit); the accumulator's D3 rule (`ruby::accumulate`) relates
+/// the two. The cached index is taken once, and only when `units` holds an
+/// event unit.
 pub(crate) fn visual_neighbours(
     data: &ParagraphData,
     selected: &Range<usize>,
-    unit: usize,
+    units: Range<usize>,
     cx: &mut LayoutContext,
-) -> (Option<usize>, Option<usize>) {
-    let index = take_neighbors(data, cx);
-    let pair = index
-        .neighbors
-        .around(selected, &(unit..unit + 1), data.base_level % 2 == 1);
-    #[cfg(test)]
-    {
-        cx.ruby_measure_visits += index.neighbors.take_visits();
+    mut f: impl FnMut(Option<usize>, Option<usize>, &mut LayoutContext),
+) {
+    let mut index = None;
+    for unit in units {
+        if !is_event(data, unit) {
+            continue;
+        }
+        let index = index.get_or_insert_with(|| take_neighbors(data, cx));
+        let (before, after) =
+            index
+                .neighbors
+                .around(selected, &(unit..unit + 1), data.base_level % 2 == 1);
+        #[cfg(test)]
+        {
+            cx.ruby_measure_visits += index.neighbors.take_visits();
+        }
+        f(before, after, cx);
     }
-    put_neighbors(data, index, cx);
-    pair
+    if let Some(index) = index {
+        put_neighbors(data, index, cx);
+    }
 }
 
 /// Physical line-right column, from the same sparse pieces used by retained L2.
