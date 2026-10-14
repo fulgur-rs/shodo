@@ -10,28 +10,31 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
 std::thread_local! {
-    static LIVE: Cell<u64> = const { Cell::new(0) };
-    static PEAK: Cell<u64> = const { Cell::new(0) };
+    // Signed: a thread may free memory another thread allocated (the test
+    // harness does), which takes its balance below zero. Only differences
+    // between readings are meaningful.
+    static LIVE: Cell<i64> = const { Cell::new(0) };
+    static PEAK: Cell<i64> = const { Cell::new(0) };
 }
 
 fn grow(bytes: usize) {
     // `try_with` fails only during thread teardown; such allocations are ignored.
     let _ = LIVE.try_with(|live| {
-        let next = live.get().wrapping_add(bytes as u64);
+        let next = live.get().wrapping_add(bytes as i64);
         live.set(next);
         let _ = PEAK.try_with(|peak| peak.set(peak.get().max(next)));
     });
 }
 
 fn shrink(bytes: usize) {
-    let _ = LIVE.try_with(|live| live.set(live.get().wrapping_sub(bytes as u64)));
+    let _ = LIVE.try_with(|live| live.set(live.get().wrapping_sub(bytes as i64)));
 }
 
 /// Delegates to `System`, counting requested sizes of successful calls.
 struct ThreadCounting;
 
 // SAFETY: every call forwards the caller's pointer and layout to `System`
-// unchanged. Counting touches only const-initialized thread-local `Cell<u64>`s,
+// unchanged. Counting touches only const-initialized thread-local `Cell<i64>`s,
 // which never allocate, panic or run destructors.
 unsafe impl GlobalAlloc for ThreadCounting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
@@ -69,8 +72,9 @@ unsafe impl GlobalAlloc for ThreadCounting {
 #[global_allocator]
 static ALLOCATOR: ThreadCounting = ThreadCounting;
 
-/// Bytes currently allocated by this thread and not yet freed.
-pub(crate) fn live_bytes() -> u64 {
+/// This thread's allocated-minus-freed balance. Compare two readings; the
+/// absolute value includes memory moved between threads.
+pub(crate) fn live_bytes() -> i64 {
     LIVE.with(Cell::get)
 }
 
@@ -82,7 +86,7 @@ pub(crate) fn measure_peak<R>(f: impl FnOnce() -> R) -> (R, u64) {
     PEAK.with(|peak| peak.set(start));
     let result = f();
     let peak = PEAK.with(Cell::get);
-    (result, peak.saturating_sub(start))
+    (result, peak.saturating_sub(start).max(0) as u64)
 }
 
 #[cfg(test)]
@@ -100,5 +104,15 @@ mod tests {
         let before = live_bytes();
         drop(kept);
         assert_eq!(before - live_bytes(), 1024);
+    }
+
+    #[test]
+    fn peak_is_relative_when_the_balance_is_negative() {
+        // Freeing memory allocated on another thread drives the balance negative.
+        let foreign = std::thread::spawn(|| vec![0u8; 1 << 20]).join().unwrap();
+        drop(foreign);
+        assert!(live_bytes() < 0);
+        let (_, peak) = measure_peak(|| drop(std::hint::black_box(vec![0u8; 4096])));
+        assert!(peak >= 4096, "transient block not seen below zero: {peak}");
     }
 }

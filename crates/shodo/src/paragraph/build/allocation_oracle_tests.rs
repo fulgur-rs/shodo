@@ -75,6 +75,12 @@ fn run(case: &str, unit: &str, root: InlineStyle, mode: WritingMode) -> Oracle {
         )
     });
     drop(prepared);
+    // Analysis always allocates; zero would mean the counter saw nothing and
+    // every bound below would pass vacuously.
+    assert!(
+        analysis_peak > 0,
+        "{case}: counting allocator observed no analysis heap"
+    );
 
     for (phase, peak, charge) in [
         ("transform", transform_peak, transform_charge),

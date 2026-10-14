@@ -629,7 +629,7 @@ fn accounted_cost_covers_the_heap_the_cache_retains() {
     let accounted = (cache.cost + cache.measurement_storage_cost()) as u64;
     let before = live_bytes();
     drop(cache);
-    let retained = before - live_bytes();
+    let retained = (before - live_bytes()) as u64;
     println!(
         "edge cache: retained {retained} / accounted {accounted} = {:.3}",
         retained as f64 / accounted as f64
