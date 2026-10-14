@@ -194,10 +194,9 @@ pub(crate) fn candidate_adjustment(
     }
     let key = super::memo::MemoKey::new(data, atomics, start, through);
     let epoch = cx.ruby_ranges.epoch();
+    let memo = crate::line::replay::Memo::for_ranges(cx);
     let core = match cx.ruby_memo.get(&key) {
-        Some(entry)
-            if entry.epoch == epoch && crate::line::replay::replay(cx, &entry.effects, sat) =>
-        {
+        Some(entry) if memo.replay(cx, &entry.effects, Some(entry.epoch), sat) => {
             #[cfg(test)]
             {
                 cx.ruby_memo_hits += 1;
@@ -228,14 +227,14 @@ pub(crate) fn candidate_adjustment(
         }
         _ => {
             let containers = walk.as_ref().map_or(&[][..], |w| w.visited());
-            let recording = crate::line::replay::begin(cx, sat);
+            let recording = memo.begin(cx, sat);
             let adjustment =
                 super::accumulate::core(data, start, through, containers, atomics, cx, sat);
-            let effects = crate::line::replay::finish(cx, recording, sat);
+            let effects = recording.finish(cx, sat, crate::line::replay::Store::All);
             // Range cache queries charge the same cold or warm, so a
             // recording that filled caches replays exactly; only an
             // invalidation during it leaves no single epoch to check.
-            match effects.filter(|_| cx.ruby_ranges.epoch() == epoch) {
+            match effects {
                 Some(effects) => cx.ruby_memo.insert(
                     key,
                     super::memo::MemoEntry {

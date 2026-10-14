@@ -330,6 +330,94 @@ pub(crate) fn replay_to(
     apply(cx, effects, sat, frame)
 }
 
+/// Common hit/record/store protocol. Storage, keys, and value ownership stay
+/// with the caller; epochs and targeted recording must agree on both paths.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct Memo {
+    epoch: Option<u64>,
+    target: Option<Option<usize>>,
+}
+
+pub(crate) enum Store {
+    All,
+    /// A result with no measured work need not retain empty effects.
+    ExceptTrivial(bool),
+    Never,
+}
+
+impl Memo {
+    pub(crate) fn for_ranges(cx: &LayoutContext) -> Self {
+        Self {
+            epoch: Some(cx.ruby_ranges.epoch()),
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn detached(frame: Option<usize>) -> Self {
+        Self {
+            target: Some(frame),
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn is_current(self, cx: &LayoutContext) -> bool {
+        self.epoch
+            .is_none_or(|epoch| cx.ruby_ranges.epoch() == epoch)
+    }
+
+    pub(crate) fn replay(
+        self,
+        cx: &mut LayoutContext,
+        effects: &Effects,
+        entry_epoch: Option<u64>,
+        sat: &mut Saturation,
+    ) -> bool {
+        if !self.is_current(cx) || self.epoch.is_some_and(|epoch| Some(epoch) != entry_epoch) {
+            return false;
+        }
+        match self.target {
+            Some(frame) => replay_to(cx, effects, sat, frame),
+            None => replay(cx, effects, sat),
+        }
+    }
+
+    pub(crate) fn begin(self, cx: &mut LayoutContext, sat: &Saturation) -> MemoRecording {
+        MemoRecording {
+            policy: self,
+            recording: begin(cx, sat),
+        }
+    }
+}
+
+pub(crate) struct MemoRecording {
+    policy: Memo,
+    recording: Recording,
+}
+
+impl MemoRecording {
+    pub(crate) fn finish(
+        self,
+        cx: &mut LayoutContext,
+        sat: &Saturation,
+        store: Store,
+    ) -> Option<Effects> {
+        let effects = match self.policy.target {
+            Some(frame) => finish_to(cx, self.recording, sat, frame),
+            None => finish(cx, self.recording, sat),
+        };
+        // Always close and merge the frame, even when the value cannot be
+        // stored: enclosing recordings still own the actual measurement.
+        effects.filter(|effects| {
+            self.policy.is_current(cx)
+                && match store {
+                    Store::All => true,
+                    Store::ExceptTrivial(trivial) => !(trivial && effects.is_empty()),
+                    Store::Never => false,
+                }
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -361,6 +449,81 @@ mod tests {
         }
         s.saturated += extra_sat;
         finish(cx, recording, &s)
+    }
+
+    #[test]
+    fn memo_epoch_and_storage_policies_preserve_recorded_effects() {
+        let mut cx = LayoutContext::new();
+        let mut s = Saturation::default();
+        let memo = Memo::for_ranges(&cx);
+        let recording = memo.begin(&mut cx, &s);
+        cx.edge_reshape_spent = 10;
+        record_charge(&mut cx, 10, 100, true);
+        s.saturated = 2;
+        let effects = recording.finish(&mut cx, &s, Store::All).unwrap();
+        cx.edge_reshape_spent = 0;
+        s = sat(1);
+        assert!(!memo.replay(&mut cx, &effects, Some(1), &mut s));
+        assert_eq!(cx.edge_reshape_spent, 0);
+        assert_eq!(s, sat(1));
+        assert!(memo.replay(&mut cx, &effects, Some(0), &mut s));
+        assert_eq!(cx.edge_reshape_spent, 10);
+        assert_eq!(s, sat(3));
+        let recording = Memo::default().begin(&mut cx, &s);
+        assert!(
+            recording
+                .finish(&mut cx, &s, Store::ExceptTrivial(true))
+                .is_none()
+        );
+        let recording = Memo::default().begin(&mut cx, &s);
+        s.non_finite += 1;
+        assert!(
+            recording
+                .finish(&mut cx, &s, Store::ExceptTrivial(true))
+                .is_some()
+        );
+        let recording = Memo::default().begin(&mut cx, &s);
+        record_charge(&mut cx, 5, 100, true);
+        assert!(recording.finish(&mut cx, &s, Store::Never).is_none());
+        assert_eq!(depth(&cx), 0);
+    }
+
+    #[test]
+    fn memo_invalidation_closes_recordings_without_retaining_stale_effects() {
+        let mut cx = LayoutContext::new();
+        let s = Saturation::default();
+        let outer = begin(&mut cx, &s);
+        let memo = Memo::for_ranges(&cx);
+        let recording = memo.begin(&mut cx, &s);
+        record_charge(&mut cx, 10, 100, true);
+        cx.ruby_ranges.vacate_slots();
+        assert!(!memo.is_current(&cx));
+        assert!(recording.finish(&mut cx, &s, Store::All).is_none());
+        let all = finish(&mut cx, outer, &s).unwrap();
+        assert_eq!(all.bytes(), 10);
+        assert_eq!(depth(&cx), 0);
+        assert!(!memo.replay(&mut cx, &all, Some(0), &mut Saturation::default()));
+        assert_eq!(cx.edge_reshape_spent, 0);
+    }
+
+    #[test]
+    fn memo_detached_hit_and_miss_charge_the_same_parent() {
+        let mut cx = LayoutContext::new();
+        let mut s = Saturation::default();
+        let outer = begin(&mut cx, &s);
+        let container = begin(&mut cx, &s);
+        let memo = Memo::detached(Some(0));
+        let recording = memo.begin(&mut cx, &s);
+        cx.edge_reshape_spent = 10;
+        record_charge(&mut cx, 10, 100, true);
+        s.saturated = 1;
+        let effects = recording.finish(&mut cx, &s, Store::All).unwrap();
+        assert!(memo.replay(&mut cx, &effects, None, &mut s));
+        let own = finish(&mut cx, container, &s).unwrap();
+        let all = finish(&mut cx, outer, &s).unwrap();
+        assert_eq!(own.bytes(), 0);
+        assert_eq!(all.bytes(), 20);
+        assert_eq!(all.sat(), sat(2));
     }
 
     #[test]

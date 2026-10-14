@@ -1003,8 +1003,9 @@ pub(super) fn candidate(
     sat: &mut Saturation,
 ) -> (LayoutUnit, bool) {
     cx.edge_shapes.begin(data);
+    let memo = super::replay::Memo::default();
     if let Some(hit) = cx.edge_shapes.measurement((start, end))
-        && super::replay::replay(cx, &hit.effects, sat)
+        && memo.replay(cx, &hit.effects, None, sat)
     {
         #[cfg(test)]
         {
@@ -1016,7 +1017,7 @@ pub(super) fn candidate(
     {
         cx.edge_shapes.measurement_misses += 1;
     }
-    let recording = super::replay::begin(cx, sat);
+    let recording = memo.begin(cx, sat);
     let windows = measure_edit::<MeasuredWindow>(data, start, end, None, cx, sat);
     let delta = windows
         .iter()
@@ -1030,9 +1031,7 @@ pub(super) fn candidate(
     // no work, so retain any result that shaped an edge or a suffix. A trivial
     // result (no windows, valid, no suffix, no effects) is cheaper to recompute.
     let trivial = !edge_windows && covered && !partial;
-    if let Some(effects) = super::replay::finish(cx, recording, sat)
-        && !(trivial && effects.is_empty())
-    {
+    if let Some(effects) = recording.finish(cx, sat, super::replay::Store::ExceptTrivial(trivial)) {
         cx.edge_shapes.remember_measurement(
             (start, end),
             CandidateMeasurement {

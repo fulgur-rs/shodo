@@ -561,15 +561,16 @@ pub(crate) fn content_shared(
     // `Some(frame)` for a detached share: profile charges skip the
     // container's recording and count for `frame`.
     let parent = share.detached.as_ref().map(|d| d.parent);
+    let memo = parent.map_or_else(
+        crate::line::replay::Memo::default,
+        crate::line::replay::Memo::detached,
+    );
     let shared = share
         .entry
         .as_ref()
         .filter(|e| cx.reuse_enabled() && e.owner == owner && e.selected == selected)
         .map(|e| e.effects);
-    let replayed = shared.is_some_and(|effects| match parent {
-        Some(frame) => crate::line::replay::replay_to(cx, &effects, sat, frame),
-        None => crate::line::replay::replay(cx, &effects, sat),
-    });
+    let replayed = shared.is_some_and(|effects| memo.replay(cx, &effects, None, sat));
     if replayed && let Some(d) = share.detached.as_mut() {
         d.note.calls += 1;
         add_sat(&mut d.note.sat, shared.unwrap().sat());
@@ -578,7 +579,7 @@ pub(crate) fn content_shared(
     let selection: &Selection = if replayed {
         &share.entry.as_ref().unwrap().selection
     } else {
-        let recording = crate::line::replay::begin(cx, sat);
+        let recording = memo.begin(cx, sat);
         let end =
             super::super::plan::hyphen_end(data, selected.end).filter(|e| *e > selected.start);
         let windows = end
@@ -591,10 +592,7 @@ pub(crate) fn content_shared(
         {
             cx.ruby_profile_selects += 1;
         }
-        let finished = match parent {
-            Some(frame) => crate::line::replay::finish_to(cx, recording, sat, frame),
-            None => crate::line::replay::finish(cx, recording, sat),
-        };
+        let finished = recording.finish(cx, sat, crate::line::replay::Store::All);
         if let Some(d) = share.detached.as_mut() {
             d.fresh += 1;
             d.note.calls += 1;
