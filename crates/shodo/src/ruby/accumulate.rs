@@ -1028,7 +1028,7 @@ impl Step<'_> {
                 Replay::Empty | Replay::Refused => None,
             };
             if let Some(effects) = combined
-                && crate::line::replay::replay(cx, &effects, sat)
+                && crate::line::replay::Memo::default().replay(cx, &effects, None, sat)
             {
                 if node.reverse.fits(self.total) {
                     self.total = node.reverse.total(self.total);
@@ -1113,10 +1113,10 @@ impl Step<'_> {
     ) {
         let container = self.containers[pos];
         let full_end = self.data.ruby.containers[container].units.end;
-        let epoch = cx.ruby_ranges.epoch();
+        let memo = crate::line::replay::Memo::for_ranges(cx);
         self.profile
             .begin_container(crate::line::replay::depth(cx).checked_sub(1));
-        let recording = crate::line::replay::begin(cx, sat);
+        let recording = memo.begin(cx, sat);
         let fragment = {
             let completed = Tree {
                 acc: &*acc,
@@ -1136,11 +1136,11 @@ impl Step<'_> {
                 sat,
             )
         };
-        let effects = crate::line::replay::finish(cx, recording, sat);
+
         // An invalidated cache or a profile measured again (a refused replay
         // or a warning) leaves no fixed `P` and no comparable cache state:
         // stop replaying for the rest of the step and reset afterwards.
-        if cx.ruby_ranges.epoch() != epoch || self.profile.refreshed() {
+        if !memo.is_current(cx) || self.profile.refreshed() {
             self.replays = false;
         }
         let note = self.profile.note();
@@ -1149,8 +1149,13 @@ impl Step<'_> {
         // A side read twice with different neighbours has no single key in
         // the D3 index: such an entry is not stored (always measured live).
         let storable = self.replays && !note.mixed;
-        let own = effects
-            .filter(|_| storable)
+        let store = if storable {
+            crate::line::replay::Store::All
+        } else {
+            crate::line::replay::Store::Never
+        };
+        let own = recording
+            .finish(cx, sat, store)
             .map(|e| e.without_sat(note.sat));
         let parent = acc.entries[pos].parent;
         let neighbours = note.neighbours.map(|u| u.map(|u| u as u32));

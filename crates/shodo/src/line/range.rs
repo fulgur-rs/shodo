@@ -241,14 +241,15 @@ pub(crate) fn block_size(
     if let Some(height) = cx.ruby_ranges.blocks.get(&key) {
         return *height;
     }
+    let memo = super::replay::Memo::default();
     if let Some((height, effects)) = cx.ruby_ranges.block_effects.get(&key).copied()
-        && super::replay::replay(cx, &effects, sat)
+        && memo.replay(cx, &effects, None, sat)
     {
         return height;
     }
-    let recording = super::replay::begin(cx, sat);
+    let recording = memo.begin(cx, sat);
     let height = measure_block(data, range, ruby, atomics, cx, sat);
-    let effects = super::replay::finish(cx, recording, sat);
+    let effects = recording.finish(cx, sat, super::replay::Store::All);
     let cache = &mut cx.ruby_ranges;
     if effects.is_some() {
         cache.reserve_block(&key);
