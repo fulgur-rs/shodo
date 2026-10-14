@@ -53,6 +53,8 @@ impl Bounds {
 }
 /// Bounding extrema need no query hierarchy. Keep the normalized endpoints
 /// until the final subtraction, just as tree nodes do.
+/// Equal signed zeros may differ from a sorted tree in their sign bit; callers
+/// use these private bounds for numeric comparisons, not bitwise identity.
 pub(super) fn enclosing(rects: impl Iterator<Item = LogicalRect>) -> Option<LogicalRect> {
     rects
         .map(Bounds::rect)
@@ -320,6 +322,34 @@ pub(super) mod construction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mixed_signed_zeros_preserve_numeric_bounds_for_every_tree_order() {
+        let rects = [
+            (3.0, -1.0, -3.0),
+            (0.0, 1.0, 3.0),
+            (-0.0, 1.0, 3.0),
+            (3.0, -1.0, -0.0),
+        ]
+        .map(|(inline_start, inline_size, block_start)| LogicalRect {
+            inline_start,
+            inline_size,
+            block_start,
+            block_size: 1.0,
+        });
+        let expected = enclosing(rects.iter().copied()).unwrap();
+        let bounds = [
+            Tree::new(rects.iter().copied().enumerate(), false),
+            Tree::new(rects.iter().copied().enumerate(), true),
+            Tree::new_adaptive(rects.iter().copied().enumerate()),
+        ];
+        for tree in bounds {
+            let actual = tree.bounds().unwrap();
+            assert_eq!(actual.inline_start, expected.inline_start);
+            assert_eq!(actual.inline_size, expected.inline_size);
+            assert_eq!(actual.block_start, expected.block_start);
+            assert_eq!(actual.block_size, expected.block_size);
+        }
+    }
     #[test]
     fn unindexed_extrema_match_tree_bounds_for_normalized_rectangles() {
         let cases = [

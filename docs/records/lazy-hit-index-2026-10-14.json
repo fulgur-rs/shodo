@@ -28,10 +28,10 @@
   "verification": [
     {
       "command": "cargo +stable test -p shodo --lib hit:: --config target.x86_64-unknown-linux-gnu.runner=env",
-      "passed": 32,
+      "passed": 33,
       "failed": 0,
       "ignored": 1,
-      "scope": "existing geometry/GDEF/TCY/source/selection/spatial/ruby hit tests plus lazy construction, bounds-bit equivalence and concurrent first hits"
+      "scope": "existing geometry/GDEF/TCY/source/selection/spatial/ruby hit tests plus lazy construction, numeric bounds equivalence, representative bounds-bit checks and concurrent first hits"
     },
     {
       "command": "cargo +stable test -p shodo-harness --test hit_test --test paint_styles --test ruby_paint --config target.x86_64-unknown-linux-gnu.runner=env",
@@ -58,5 +58,10 @@
     "Initial test counter helper visibility did not permit sibling test access; corrected to hit-module scope before expected RED was observed.",
     "Initial crate integration invocation named nonexisting hit/paint targets; replaced with existing dev/harness hit_test, paint_styles and ruby_paint targets."
   ],
-  "environment": "Rust stable1.97.1, TMPDIR=\"$HOME/tmp\", RUSTC_WRAPPER empty, CARGO_BUILD_JOBS2, CPU10–11, task-specific target under ~/tmp. No /tmp use."
+  "environment": "Rust stable1.97.1, TMPDIR=\"$HOME/tmp\", RUSTC_WRAPPER empty, CARGO_BUILD_JOBS2, CPU10–11, task-specific target under ~/tmp. No /tmp use.",
+  "review": {
+    "result": "No Critical or Important findings; one Minor addressed with an explicit numeric-equivalence test and contract comment.",
+    "signed_zero": "Private bounding extrema are numerically equivalent to tree bounds. A sequential union can choose the other sign bit for equal signed zeros, so arbitrary bounds do not promise bitwise identity before and after coordinate-tree initialization. These bounds feed numeric containment, distance and finite checks; no public hit difference was found.",
+    "independent_check": "Reviewer checked 60,000 aggregate/tree comparisons in both debug and release; signed-zero bit differences were found, numeric differences were not. This is supporting coverage rather than a proof for all inputs."
+  }
 }
