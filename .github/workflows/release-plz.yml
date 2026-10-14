@@ -80,6 +80,9 @@ jobs:
           private-key: ${{ secrets.RELEASE_PLZ_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: read
+          # Release tags point at commits that may change .github/workflows;
+          # GitHub rejects creating such refs without the workflows permission.
+          permission-workflows: write
       - name: Configure git user from GitHub token
         uses: release-plz/git-config@59144859caf016f8b817a2ac9b051578729173c4
         env:

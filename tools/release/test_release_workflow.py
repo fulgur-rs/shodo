@@ -96,7 +96,10 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertEqual(jobs['release-pr']['concurrency'], {
             'group': 'release-plz-pr-${{ github.ref }}', 'cancel-in-progress': 'false',
         })
-        for name, pr_permission in [('release', 'read'), ('release-pr', 'write')]:
+        for name, extra in [
+            ('release', {'permission-pull-requests': 'read', 'permission-workflows': 'write'}),
+            ('release-pr', {'permission-pull-requests': 'write'}),
+        ]:
             actions = action_steps(jobs[name])
             self.assertEqual(actions['actions/checkout']['with'], {
                 'fetch-depth': '0', 'persist-credentials': 'false',
@@ -104,7 +107,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertEqual(actions['actions/create-github-app-token']['with'], {
                 'client-id': '${{ vars.RELEASE_PLZ_APP_CLIENT_ID }}',
                 'private-key': '${{ secrets.RELEASE_PLZ_APP_PRIVATE_KEY }}',
-                'permission-contents': 'write', 'permission-pull-requests': pr_permission,
+                'permission-contents': 'write', **extra,
             })
 
 
