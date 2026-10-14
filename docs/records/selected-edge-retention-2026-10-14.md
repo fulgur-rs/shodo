@@ -61,3 +61,20 @@
 並行 PR #324 (`4ee1c97`) は `EdgeShapeCache.cost` を通常 glyph の会計だけに変更した。追加保持は `selected_cost` のみに計上し、summary と合わせた 256 KiB を実確保量で検査する。通常 glyph の 768 KiB、合計 1 MiB、snapshot 2048 件の条件を維持する。
 
 通常登録の予約を追加保持が減らさないテストを加えた。単純統合では最初の登録後の会計が期待 26032 B に対して 287680 B となり失敗し、修正後は比較に通過した。最初のコンパイルは内部 `CandidateMeasurement` の署名変更が旧テストに残って失敗し、署名を修正してから実際の RED を確認した。4変更を組み合わせた `line::` は 228 passed / 0 failed。独立レビューも Critical / Important 指摘なし。固定 baseline の個別 A/B は統合前リビジョンの記録であり、最新 main との時間・割当比較は別途保存する。
+
+最新main `4ee1c97` との比較は [統合後の全記録](performance-latest-main-ab-2026-10-14.json.gz) に保存した。glyph/source/geometry・paint・selection・座標ヒットの出力を照合し、時間と割当を別バイナリで測定した。
+
+| 対象・入力 | 変更前 ms | 変更後 ms | 比率 |
+| --- | ---: | ---: | ---: |
+| latest-edge, layout, latin-long ×64 | 14.121 | 13.123 | 0.929 |
+| latest-edge, layout, arabic-long ×64 | 31.226 | 29.209 | 0.935 |
+| latest-edge, widths, arabic-long ×8 | 7.664 | 5.992 | 0.782 |
+| latest-edge, cold, arabic-long ×64 | 80.338 | 80.912 | 1.007 |
+| latest-combined, combined, latin-long ×64 | 20.721 | 16.846 | 0.813 |
+| latest-combined, layout, latin-long ×64 | 14.019 | 10.712 | 0.764 |
+| latest-combined, layout, japanese-long ×64 | 14.547 | 14.842 | 1.020 |
+| latest-combined, all-line-hits, latin-long ×64 | 10.587 | 10.643 | 1.005 |
+
+統合版の Latin-long ×64 描画＋索引では gross allocation が 75031168 → 50849408 B（約32%減）、peak_extra が 15339520 → 17798516 B（約16%増）だった。baseline は paint を drop してから index を作るため、同時保持の違いをピーク解釈へ含める。追加保持だけの fresh-context Arabic-long ×64 は時間が約0.7%、gross allocation が約2.0%、peak_extra が約5.7%増えた。日本語の layout は統合版で約2%増であり、全入力の改善とは扱わない。
+
+最新統合版の必須ローカル13検査はすべて exit0。normal workspace 1953、AccessKit 1969、最小feature 1413、complex-scripts 1416、allocation-counting 25 件が成功、失敗0。最終HEADのCIは個別PRと、4変更を含む最後の統合PRで確認する。
