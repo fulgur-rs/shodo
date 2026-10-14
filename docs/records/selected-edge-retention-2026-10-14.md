@@ -38,3 +38,9 @@
 追加保持時には snapshot の clone と Arc/table の allocation が発生し、cold layout では費用が増える。summary が伸びる幅変更では追加 table をまとめて解放するため、以前の幅の描画 snapshot を失う。空き容量がなくなった後は新しい追加 window を拒否する。LRU で後続 window を継続的に追い出す方針は採用していない。
 
 この候補の採否は中央の paired timing・allocation・出力検証で決める。形状呼び出し数の削減だけを実行時間の改善とはみなさない。中央記録は `performance-next-2026-10-14.json`。
+
+## 中央の測定と統合検証
+
+固定された baseline `454fb916` と個別実装の反復 A/B は、[正式な記録](performance-edge-ab-2026-10-14.json) に保存した。条件ごとの全サンプル、出力ハッシュ、別バイナリの割当量、同一バイナリ対照、再測定と制約を含む。初回の mutable baseline を使った測定は指紋を保証できず却下し、固定 worktree で測り直した。
+
+4変更を組み合わせた版では、workspace 1952 / AccessKit 1968 / 最小 feature 1412 / complex-scripts 1415 / allocation-counting 25 件が成功、失敗0。fmt・通常/AccessKit Clippy・通常/AccessKit docs・Wasm3構成も exit0。並行して入った main の変更との統合と、最終HEADのCIは別の確認として扱う。
