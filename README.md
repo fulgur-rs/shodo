@@ -1,5 +1,7 @@
 # shodo
 
+[![codecov](https://codecov.io/gh/fulgur-rs/shodo/graph/badge.svg)](https://codecov.io/gh/fulgur-rs/shodo)
+
 A Rust text typesetting library that lays out the inline content of a single
 block container: a paragraph. Built for [raikiri](https://github.com/fulgur-rs/raikiri)
 as a replacement for Parley, shodo can also be used with styled text without a DOM.
