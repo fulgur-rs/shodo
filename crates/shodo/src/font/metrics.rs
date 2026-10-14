@@ -205,6 +205,17 @@ impl FontCollection {
         (horizontal, vertical)
     }
 
+    /// Used `line-height: normal` of `style`, in px: the ascent, descent and
+    /// line gap of its first available font, at the variation instance and
+    /// size a line laid out in `style` uses. This is the height of a
+    /// horizontal `normal` line of text in `style` alone, so a caller can
+    /// size the CSS `lh` unit to match it.
+    pub fn normal_line_height(&self, style: &crate::style::InlineStyle) -> f32 {
+        let mut warnings = crate::limits::WarningSink::new(Some(0));
+        let metrics = crate::line::font_metrics::resolve(self, style, &mut warnings).metrics;
+        metrics.ascent + metrics.descent + metrics.line_gap
+    }
+
     /// Advance of '0' from the selected fallback face. Missing glyph: 0.5em.
     pub fn resolve_ch(&self, query: &FontQuery, size: f32) -> FontUnit {
         self.resolve_unit(query, size, '0', 0.5)
@@ -582,6 +593,67 @@ mod tests {
         tables.push((*b"MVAR", mvar));
         tables.sort_by_key(|t| t.0);
         crate::font::sfnt::build_sfnt(&tables)
+    }
+
+    #[test]
+    fn normal_line_height_matches_a_normal_line_at_the_run_instance() {
+        let bytes = mvar_font(
+            crate::test_support::fonts::LATIN,
+            &[(*b"hasc", 100), (*b"hdsc", -50), (*b"hlgp", 40)],
+        );
+        let limits = Limits::default();
+        let fonts = crate::test_support::fonts::collection(&limits);
+        let id = fonts
+            .register_face(
+                bytes,
+                0,
+                FontFaceDescriptor {
+                    family: "Variable".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let default = fonts.metrics(id, 20.0);
+        // The face declares no weight range, so only explicit settings move
+        // its `wght` axis; a bold weight still measures the default instance.
+        let wght = vec![FontVariation {
+            tag: *b"wght",
+            value: 900.0,
+        }];
+        for (weight, variations) in [(400.0, vec![]), (900.0, vec![]), (400.0, wght)] {
+            let style = InlineStyle {
+                font_size: 20.0,
+                font_weight: weight,
+                font_families: vec![FontFamily::Named("Variable".into())],
+                font_variations: variations.clone(),
+                ..Default::default()
+            };
+            let mut b = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    root: style.clone(),
+                    ..Default::default()
+                },
+                &limits,
+            );
+            b.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+            let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+            let lines = p.break_all(
+                &mut LayoutContext::new(),
+                &Default::default(),
+                100.0,
+                &AtomicSizes::EMPTY,
+            );
+            let normal = fonts.normal_line_height(&style);
+            // The line box snaps its extents to layout units.
+            let line = lines[0].block_size();
+            assert!(
+                (normal - line).abs() < 1.0 / 32.0,
+                "{weight} {variations:?}: {normal} vs {line}"
+            );
+            let nominal = default.ascent + default.descent + default.line_gap;
+            let varied = !variations.is_empty();
+            assert_eq!(normal != nominal, varied, "{weight} {variations:?}");
+        }
     }
 
     #[test]
