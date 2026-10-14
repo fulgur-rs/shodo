@@ -15,6 +15,10 @@ mod limits {
     pub use shodo::limits::{LimitExceeded, LimitKind, Limits};
 }
 
+#[allow(dead_code)]
+#[path = "../../../crates/shodo/src/logical.rs"]
+mod logical;
+
 // Include the checked-in implementation so this executable can construct
 // synthetic mappings without widening Shodo's public or crate-private API.
 #[allow(dead_code)]

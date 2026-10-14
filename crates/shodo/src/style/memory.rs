@@ -1,17 +1,29 @@
 //! Allocation sizes of cloned resolved styles, before retaining caller data.
 use super::{FontFamily, InlineStyle, ParagraphStyle};
 
-fn vec_bytes<T>(values: &[T]) -> u64 {
-    (values.len() as u64).saturating_mul(std::mem::size_of::<T>() as u64)
+crate::logical::logical_sizes! {
+    INLINE_STYLE_BYTES: InlineStyle = 384;
+    FONT_FAMILY_BYTES: FontFamily = 24;
+}
+
+fn vec_bytes<T>(values: &[T], element: u64) -> u64 {
+    (values.len() as u64).saturating_mul(element)
+}
+
+/// Element types with fixed-width fields only, so `size_of` is target-independent.
+fn fixed_vec_bytes<T>(values: &[T]) -> u64 {
+    vec_bytes(values, std::mem::size_of::<T>() as u64)
 }
 
 fn families(values: &[FontFamily]) -> u64 {
-    values.iter().fold(vec_bytes(values), |bytes, family| {
-        bytes.saturating_add(match family {
-            FontFamily::Named(name) => name.len() as u64,
-            FontFamily::Generic(_) => 0,
+    values
+        .iter()
+        .fold(vec_bytes(values, FONT_FAMILY_BYTES), |bytes, family| {
+            bytes.saturating_add(match family {
+                FontFamily::Named(name) => name.len() as u64,
+                FontFamily::Generic(_) => 0,
+            })
         })
-    })
 }
 
 fn string(value: &Option<String>) -> u64 {
@@ -41,12 +53,12 @@ pub(crate) fn alternate(
     }
     let alternates = selected!(font_variant_alternates);
     [
-        std::mem::size_of::<InlineStyle>() as u64,
+        INLINE_STYLE_BYTES,
         families(selected!(font_families)),
-        vec_bytes(selected!(font_variations)),
-        vec_bytes(selected!(font_features)),
-        vec_bytes(&alternates.styleset),
-        vec_bytes(&alternates.character_variant),
+        fixed_vec_bytes(selected!(font_variations)),
+        fixed_vec_bytes(selected!(font_features)),
+        fixed_vec_bytes(&alternates.styleset),
+        fixed_vec_bytes(&alternates.character_variant),
         string(selected!(lang)),
         string(&normal.hyphenate_character),
     ]
@@ -62,4 +74,20 @@ pub(crate) fn styles<'a>(styles: impl IntoIterator<Item = &'a InlineStyle>) -> u
     styles
         .into_iter()
         .fold(0u64, |bytes, style| bytes.saturating_add(inline(style)))
+}
+
+#[cfg(test)]
+mod charge_tests {
+    use super::*;
+
+    #[test]
+    fn style_charge_is_a_fixed_logical_amount() {
+        let style = InlineStyle {
+            font_families: vec![FontFamily::Named("A".into())],
+            lang: Some("ja".into()),
+            ..Default::default()
+        };
+        // Header + one family slot + family name + language, identical on every target.
+        assert_eq!(inline(&style), 384 + 24 + 1 + 2);
+    }
 }

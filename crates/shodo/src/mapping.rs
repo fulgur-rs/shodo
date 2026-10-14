@@ -154,13 +154,20 @@ struct RangeIndex {
 // grouping scratch and logical BTreeMap entries. Charging entries per unit
 // conservatively covers both repeated and distinct source nodes. Query
 // construction stays lazy and infallible after producer admission.
-const INDEX_RANGE_BYTES: u64 =
-    (std::mem::size_of::<IndexedRange>() + std::mem::size_of::<(u32, usize)>()) as u64;
-const UNIT_BYTES: u64 = (std::mem::size_of::<MappingUnit>()
-    + std::mem::size_of::<(Range<u32>, usize)>()
-    + std::mem::size_of::<(NodeId, Vec<(Range<u32>, usize)>)>()
-    + std::mem::size_of::<(NodeId, RangeIndex)>()) as u64
+const INDEX_RANGE_BYTES: u64 = INDEXED_RANGE_BYTES + RANGE_END_BYTES;
+const UNIT_BYTES: u64 = std::mem::size_of::<MappingUnit>() as u64
+    + SOURCE_RECORD_BYTES
+    + SOURCE_GROUP_BYTES
+    + DOM_INDEX_BYTES
     + 2 * INDEX_RANGE_BYTES;
+
+crate::logical::logical_sizes! {
+    INDEXED_RANGE_BYTES: IndexedRange = 32;
+    RANGE_END_BYTES: (u32, usize) = 16;
+    SOURCE_RECORD_BYTES: (Range<u32>, usize) = 16;
+    SOURCE_GROUP_BYTES: (NodeId, Vec<(Range<u32>, usize)>) = 32;
+    DOM_INDEX_BYTES: (NodeId, RangeIndex) = 56;
+}
 const GENERATED_BYTES: u64 = std::mem::size_of::<(Range<u32>, NodeId)>() as u64 + INDEX_RANGE_BYTES;
 
 pub(crate) const TRANSFORM_SPAN_BYTES: u64 = std::mem::size_of::<TransformSpan>() as u64;
