@@ -1,14 +1,13 @@
 //! One shared catalog snapshot, with incremental explicitly registered faces.
 
-use super::{FontCollection, FontData, FontError, LookupWork, has_local_name};
+use super::{
+    FontCollection, FontData, FontError, LookupWork, admit_name_record, decode_name,
+    has_local_name, local_name_records,
+};
 use crate::font::LayerState;
 use crate::limits::{LimitKind, Limits};
 use fontique::{FontInfo, SourceId, SourceKind};
-use skrifa::{
-    FontRef,
-    raw::TableProvider,
-    string::{LocalizedString, StringId},
-};
+use skrifa::{FontRef, raw::TableProvider};
 use std::{
     collections::{HashMap, HashSet},
     mem::size_of,
@@ -298,51 +297,35 @@ impl LocalNames {
         let Ok(table) = font.name() else {
             return Ok(());
         };
-        // Each identifier scan visits all records, including unrelated IDs.
-        self.budget
-            .work
-            .charge(table.name_record().len() as u64 * 2, limits)?;
-        for id in [StringId::FULL_NAME, StringId::POSTSCRIPT_NAME] {
-            for record in table
-                .name_record()
-                .iter()
-                .filter(|record| record.name_id() == id)
-            {
-                let encoded = u64::from(record.length());
-                self.budget.work.charge(encoded, limits)?;
-                // Bound decode/lowercase scratch, including UTF-8 expansion
-                // and allocation growth, before constructing either String.
-                self.budget
-                    .check_bytes(encoded.saturating_mul(12), limits)?;
-                let name = LocalizedString::new(&table, record)
-                    .to_string()
-                    .to_lowercase();
-                let exists = match &target {
-                    Target::Registered(_) => self.registered.contains_key(&name),
-                    Target::Native(info) => self
-                        .native
-                        .get(&name)
-                        .and_then(|infos| infos.last())
-                        .is_some_and(|last| Arc::ptr_eq(last, info)),
-                };
-                if exists {
-                    continue;
+        for record in local_name_records(&table, &mut self.budget.work, limits)? {
+            let scratch = admit_name_record(record, &mut self.budget.work, limits)?;
+            self.budget.check_bytes(scratch, limits)?;
+            let name = decode_name(&table, record);
+            let exists = match &target {
+                Target::Registered(_) => self.registered.contains_key(&name),
+                Target::Native(info) => self
+                    .native
+                    .get(&name)
+                    .and_then(|infos| infos.last())
+                    .is_some_and(|last| Arc::ptr_eq(last, info)),
+            };
+            if exists {
+                continue;
+            }
+            match &target {
+                Target::Registered(slot) => {
+                    self.budget
+                        .retain(name.capacity() as u64 + ENTRY_BYTES, limits)?;
+                    self.registered.insert(name, *slot);
                 }
-                match &target {
-                    Target::Registered(slot) => {
-                        self.budget
-                            .retain(name.capacity() as u64 + ENTRY_BYTES, limits)?;
-                        self.registered.insert(name, *slot);
-                    }
-                    Target::Native(info) => {
-                        let key_bytes = if self.native.contains_key(&name) {
-                            0
-                        } else {
-                            name.capacity() as u64 + ENTRY_BYTES
-                        };
-                        self.budget.retain(key_bytes + CANDIDATE_BYTES, limits)?;
-                        self.native.entry(name).or_default().push(info.clone());
-                    }
+                Target::Native(info) => {
+                    let key_bytes = if self.native.contains_key(&name) {
+                        0
+                    } else {
+                        name.capacity() as u64 + ENTRY_BYTES
+                    };
+                    self.budget.retain(key_bytes + CANDIDATE_BYTES, limits)?;
+                    self.native.entry(name).or_default().push(info.clone());
                 }
             }
         }

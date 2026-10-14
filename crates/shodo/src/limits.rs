@@ -99,7 +99,9 @@ pub struct Limits {
     pub max_font_source_name_bytes: Option<u64>,
     /// Accounted shared local-name index bytes (8 MiB), including conservative
     /// metadata and construction scratch allowances. Document layers use their
-    /// root's limit; loaded platform blobs are not retained by the index.
+    /// root's limit; loaded platform blobs are not retained by the index. The
+    /// caller's limit also bounds the name-decoding scratch of re-verifying a
+    /// selected platform path face.
     pub max_local_font_index_bytes: Option<u64>,
     /// Shared local-name index construction work (2^24): family names, faces,
     /// source loads, name records and encoded name bytes. Also bounds selected
