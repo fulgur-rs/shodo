@@ -6,6 +6,11 @@ use crate::output::BreakReason;
 use crate::paragraph::ParagraphData;
 use crate::style::{TextWrapMode, WhiteSpaceCollapse};
 
+#[cfg(test)]
+std::thread_local! {
+    pub(super) static OBSTRUCTION_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 pub(super) fn hangable(data: &ParagraphData, i: usize) -> bool {
     if data.combine_at_text(data.units[i].text.start).is_some() {
         return false;
@@ -76,6 +81,8 @@ pub(super) fn transparent(data: &ParagraphData, i: usize) -> bool {
 /// End edges that occur between a preserved glyph and the line edge.
 pub(super) fn obstructed(data: &ParagraphData, end: usize) -> bool {
     for (offset, u) in data.units[end..].iter().enumerate() {
+        #[cfg(test)]
+        OBSTRUCTION_VISITS.with(|visits| visits.set(visits.get() + 1));
         match u.kind {
             UnitKind::Close { box_index } => {
                 let e = data.boxes[box_index as usize].edges;

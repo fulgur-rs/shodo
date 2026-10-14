@@ -106,6 +106,8 @@ pub(crate) struct ParagraphData {
     pub(crate) root_line_extents: (f32, f32),
     pub(crate) autospace_spaces: Vec<(f32, f32)>,
     pub(crate) unit_spacing: Vec<crate::line::spacing::UnitSpacing>,
+    /// Immutable selected-width tables, prepared during finalization.
+    pub(crate) width_index: Option<Arc<crate::line::range::Index>>,
     pub(crate) spacing_summaries: crate::line::spacing::Summaries,
     pub(crate) punctuation: Vec<crate::line::punctuation::Punctuation>,
     pub(crate) last_content_unit: Option<usize>,

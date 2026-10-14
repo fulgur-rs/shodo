@@ -689,6 +689,7 @@ impl HangingTail {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub(super) fn prepare(
     data: &ParagraphData,
     start: usize,
