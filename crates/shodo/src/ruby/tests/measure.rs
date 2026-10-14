@@ -2477,3 +2477,65 @@ fn continued_columns_keep_their_own_alignment_nodes_and_source_ranges() {
         );
     }
 }
+
+#[test]
+fn hyphenated_base_boundary_cuts_match_fresh_and_planned_lines() {
+    for (first, second) in [
+        ("ab\u{ad}", "cd"),
+        ("a\u{ad}b", "c\u{ad}d"),
+        ("ab", "\u{ad}cd"),
+    ] {
+        let p = latin_pair(first, second, crate::style::OverflowWrap::Normal);
+        let mut warm = LayoutContext::new();
+        let mut width = 80.0;
+        while width > 4.0 {
+            let constraint = crate::LineConstraint::new(width);
+            let mut lines = Vec::new();
+            for cx in [&mut warm, &mut LayoutContext::new()] {
+                let crate::LineResult::Line(line) = p.next_line(
+                    cx,
+                    p.start_token(),
+                    &Default::default(),
+                    &constraint,
+                    &AtomicSizes::EMPTY,
+                ) else {
+                    panic!("{first:?}/{second:?} at {width}")
+                };
+                lines.push((
+                    line.text_range(),
+                    line.break_reason(),
+                    line.inline_size(),
+                    line.fragments().count(),
+                ));
+            }
+            // A planned break reports the same end and reason as the greedy one.
+            let plan = p.plan_breaks(
+                &mut LayoutContext::new(),
+                &Default::default(),
+                width,
+                &AtomicSizes::EMPTY,
+            );
+            let mut planned = crate::LineConstraint::new(width);
+            planned.break_plan = Some(&plan);
+            if let crate::LineResult::Line(line) = p.next_line(
+                &mut LayoutContext::new(),
+                p.start_token(),
+                &Default::default(),
+                &planned,
+                &AtomicSizes::EMPTY,
+            ) {
+                assert_eq!(
+                    line.break_reason(),
+                    lines[1].1,
+                    "{first:?}/{second:?} at {width}"
+                );
+            }
+            assert_eq!(lines[0], lines[1], "{first:?}/{second:?} at {width}");
+            width -= 2.0;
+        }
+        assert!(
+            warm.cache_prepare_visits > 0,
+            "the narrower retries used the index"
+        );
+    }
+}

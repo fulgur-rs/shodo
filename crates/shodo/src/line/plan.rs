@@ -35,17 +35,9 @@ pub(super) fn hyphen_end(data: &ParagraphData, end: usize) -> Option<usize> {
     if end >= data.units.len() || matches!(data.units[end].kind, UnitKind::BlockInInline { .. }) {
         return None;
     }
-    (0..end)
-        .rev()
-        .find(|i| {
-            data.units[*i].break_after != BreakClass::Prohibited
-                || !matches!(
-                    data.units[*i].kind,
-                    UnitKind::Close { .. } | UnitKind::BidiControl
-                )
-        })
+    super::break_unit(data, 0, end)
         .filter(|i| data.units[*i].break_after == BreakClass::Hyphen)
-        .and_then(|_| super::hyphen::source_unit(data, 0, end).map(|i| i + 1))
+        .and_then(|_| super::cut_before_pulled(data, 0, end).map(|i| i + 1))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -291,12 +283,7 @@ impl Paragraph {
                                                 .is_some()
                                     })
                             {
-                                let mut alt = j + 1;
-                                while alt < actual_end
-                                    && super::pulls_after_break(candidate_data, alt)
-                                {
-                                    alt += 1;
-                                }
+                                let alt = super::pulled_end(candidate_data, j + 1, actual_end);
                                 if alt < actual_end {
                                     let normal =
                                         if std::sync::Arc::ptr_eq(candidate_data, &self.data) {
