@@ -409,10 +409,9 @@ pub(super) fn resolve(
         ));
     }
     let start = token.unit as usize;
-    // Explicit shrink and another paragraph's intrinsic measurement may
-    // release range indexes while retaining this partial line's cursor.
+    // Reset caller-dependent scalar state when the dataset/revision changes.
+    // Retained cursors read immutable tables from their paragraph after shrink.
     cx.ruby_ranges.begin(&para.data, atomics);
-    super::range::ensure_costs(&para.data, atomics, cx);
     let valid = sat.is_clean()
         && cx.partial.as_ref().is_some_and(|p| {
             Arc::ptr_eq(&p.data, &para.data)

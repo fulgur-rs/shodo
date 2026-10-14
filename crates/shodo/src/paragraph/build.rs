@@ -1090,6 +1090,7 @@ fn build_data(
         autospace_spaces: Vec::new(),
         unit_spacing: Vec::new(),
         spacing_summaries: Default::default(),
+        width_index: None,
         punctuation: Vec::new(),
         last_content_unit: None,
         internal_autospace_gaps: Vec::new(),
@@ -1214,6 +1215,7 @@ fn finalize_data(
     data.selectable_clusters = selectable_clusters;
     data.glyph_clusters = glyph_clusters;
     data.floats = floats;
+    crate::line::range::prepare(data, cx);
 }
 
 fn normal_cursor(

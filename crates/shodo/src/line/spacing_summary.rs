@@ -375,7 +375,7 @@ pub(super) struct RangeIndex {
     nodes: Vec<RangeNode>,
     root: Option<usize>,
     #[cfg(test)]
-    visits: std::cell::Cell<usize>,
+    visits: std::sync::atomic::AtomicUsize,
 }
 
 #[derive(Debug)]
@@ -516,7 +516,7 @@ impl RangeIndex {
 
     #[cfg(test)]
     pub(super) fn take_visits(&self) -> usize {
-        self.visits.replace(0)
+        self.visits.swap(0, std::sync::atomic::Ordering::Relaxed)
     }
 
     fn query_node(
@@ -528,7 +528,8 @@ impl RangeIndex {
     ) -> Summary {
         #[cfg(test)]
         {
-            self.visits.set(self.visits.get() + 1);
+            self.visits
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
         let node = &self.nodes[i];
         if range.start >= node.range.end || range.end <= node.range.start {
@@ -682,7 +683,9 @@ impl VisualNeighbors {
         target: &std::ops::Range<usize>,
     ) -> Neighbors {
         #[cfg(test)]
-        self.0.visits.set(self.0.visits.get() + 1);
+        self.0
+            .visits
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let node = &self.0.nodes[index];
         if selected.end <= node.range.start || node.range.end <= selected.start {
             return Neighbors::default();
@@ -1275,9 +1278,9 @@ mod tests {
                 assert_eq!(index.query(0..end, None).cost, cursor.summary(None).cost);
             }
             assert!(
-                index.visits.get() < count * 127,
+                index.visits.load(std::sync::atomic::Ordering::Relaxed) < count * 127,
                 "{} visits for{count}",
-                index.visits.get()
+                index.visits.load(std::sync::atomic::Ordering::Relaxed)
             );
             assert!(index.nodes.len() < count * 2);
         }

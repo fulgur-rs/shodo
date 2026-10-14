@@ -1,22 +1,23 @@
-//! A scan's measured deviations from the paragraph's indexed advances.
+//! A scan's visited caller dimensions and measured deviations from immutable
+//! paragraph advances. Starting a cursor never indexes or copies its suffix.
 //! Ruby probes can re-enter the paragraph cache; tab and clipped-cluster
 //! prefixes therefore belong to this cursor, never to the cache's last query.
-use super::{Natural, absorb, ensure_costs, geometry};
+use super::{Natural, absorb, geometry};
 use crate::LayoutContext;
 use crate::analysis::units::UnitKind;
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::paragraph::{AtomicSizes, ParagraphData};
 
-#[derive(Clone, Default)]
-struct Prefix(Vec<(usize, i64)>);
+#[derive(Clone, Debug, Default)]
+pub(super) struct Prefix(Vec<(usize, i64)>);
 
 impl Prefix {
-    fn push(&mut self, at: usize, amount: LayoutUnit) {
+    pub(super) fn push(&mut self, at: usize, amount: i64) {
         let previous = self.0.last().map_or(0, |(_, total)| *total);
-        self.0.push((at, previous + i64::from(amount.raw())));
+        self.0.push((at, previous + amount));
     }
 
-    fn before(&self, end: usize) -> i64 {
+    pub(super) fn before(&self, end: usize) -> i64 {
         match self.0.partition_point(|(at, _)| *at < end) {
             0 => 0,
             n => self.0[n - 1].1,
@@ -32,6 +33,7 @@ impl Prefix {
 pub(in crate::line) struct Cursor {
     start: usize,
     origin: LayoutUnit,
+    atoms: Prefix,
     tabs: Prefix,
     corrections: Prefix,
 }
@@ -45,20 +47,20 @@ impl Cursor {
         cx: &mut LayoutContext,
     ) -> Self {
         cx.ruby_ranges.begin(data, atomics);
-        ensure_costs(data, atomics, cx);
         Self {
             start,
             origin,
+            atoms: Prefix::default(),
             tabs: Prefix::default(),
             corrections: Prefix::default(),
         }
     }
 
     pub(in crate::line) fn bytes(&self) -> usize {
-        self.tabs.bytes() + self.corrections.bytes()
+        self.atoms.bytes() + self.tabs.bytes() + self.corrections.bytes()
     }
 
-    /// Charge each unit once. Only position-dependent tabs, invalid atomics
+    /// Charge each unit once. Only position-dependent tabs, caller atomics
     /// and source-clipped clusters need the original unit producer.
     pub(in crate::line) fn advance(
         &mut self,
@@ -68,11 +70,14 @@ impl Cursor {
         cx: &mut LayoutContext,
         sat: &mut Saturation,
     ) -> LayoutUnit {
-        let key = (data.id, data as *const ParagraphData as usize);
-        let costs = &cx.ruby_ranges.sets[&key];
+        #[cfg(test)]
+        {
+            cx.width_unit_visits += 1;
+        }
+        let costs = data.width_index.as_ref().expect("finalized width index");
         let indexed = LayoutUnit::from_raw((costs.advances[at + 1] - costs.advances[at]) as i32);
         let effects = costs.saturation(&(at..at + 1));
-        let bad = costs.bad_atomics.binary_search(&at).is_ok();
+        let atomic = matches!(data.units[at].kind, UnitKind::Atomic { .. });
         let unit = &data.units[at];
         let tab = matches!(unit.kind, UnitKind::Tab) && unit.combine.is_none();
         let clipped = unit.shared_cluster.as_ref().is_some_and(|shared| {
@@ -81,7 +86,9 @@ impl Cursor {
         });
         let position = if tab {
             super::super::spacing_summary::raw(
-                costs.advances[at] - costs.advances[self.start] + self.tabs.before(at),
+                costs.advances[at] - costs.advances[self.start] + self.atoms.before(at)
+                    - self.atoms.before(self.start)
+                    + self.tabs.before(at),
                 sat,
             )
             .add(self.origin, sat)
@@ -100,7 +107,7 @@ impl Cursor {
         } else {
             LayoutUnit::ZERO
         };
-        let width = if tab || clipped || bad {
+        let width = if tab || clipped || atomic {
             super::super::scan::unit_width_from(
                 data,
                 unit,
@@ -115,10 +122,14 @@ impl Cursor {
             absorb(sat, effects);
             indexed
         };
-        if tab {
-            self.tabs.push(at, width.sub(indexed, sat));
+        if atomic {
+            self.atoms
+                .push(at, i64::from(width.raw()) - i64::from(indexed.raw()));
+        } else if tab {
+            self.tabs.push(at, i64::from(width.sub(indexed, sat).raw()));
         } else if clipped {
-            self.corrections.push(at, width.sub(indexed, sat));
+            self.corrections
+                .push(at, i64::from(width.sub(indexed, sat).raw()));
         }
         width
     }
@@ -131,14 +142,14 @@ impl Cursor {
         data: &ParagraphData,
         end: usize,
         leaf: Option<(usize, super::super::spacing_summary::Summary)>,
-        cache: &super::RangeCache,
         sat: &mut Saturation,
     ) -> Natural {
-        let key = (data.id, data as *const ParagraphData as usize);
+        let index = data.width_index.as_ref().expect("finalized width index");
         geometry(
             data,
-            &cache.sets[&key],
+            index,
             self.start..end,
+            |end| index.advances[end] + self.atoms.before(end),
             |end| self.tabs.before(end),
             |end, sat| super::super::spacing_summary::raw(self.corrections.before(end), sat),
             leaf,
@@ -190,7 +201,7 @@ impl Cursor {
                 super::super::spacing::hyphen_unit_summary(data, end - 1, sat),
             )
         });
-        let mut natural = self.measure(data, end, leaf, &cx.ruby_ranges, sat);
+        let mut natural = self.measure(data, end, leaf, sat);
         natural.widths = widths;
         super::finish_selected(
             data, self.start, end, indent, flags, options, available, windows, natural, cx, sat,

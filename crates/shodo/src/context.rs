@@ -67,9 +67,12 @@ pub struct LayoutContext {
     /// Containers re-applied or visited by `ruby::memo::advance` walks.
     #[cfg(test)]
     pub(crate) ruby_walk_steps: u64,
-    /// Units of the range costs built by `line::range::build`.
+    /// Units of immutable width tables prepared during paragraph finalization.
     #[cfg(test)]
     pub(crate) ruby_range_build_units: usize,
+    /// Units advanced by a selected-width cursor, including caller atomics.
+    #[cfg(test)]
+    pub(crate) width_unit_visits: usize,
     /// Calls of `line::range::width` (ruby range widths).
     #[cfg(test)]
     pub(crate) ruby_width_calls: usize,
@@ -206,9 +209,11 @@ impl LayoutContext {
     }
 
     /// Releases shaping plans and bounds the combined accounted storage of
-    /// shaping scratch and partial-line buffers by `bytes`. Ruby range indexes
-    /// are released conservatively on every explicit shrink, as is the cache of
-    /// reshaped line-edge windows.
+    /// shaping scratch and partial-line buffers by `bytes`. Context-owned ruby
+    /// scalar, metric and neighbor indexes are released on every explicit
+    /// shrink, as is the cache of reshaped line-edge windows.
+    /// Immutable width tables belong to retained paragraphs and remain with
+    /// those owners; shrinking releases only context-owned scalar width state.
     /// Completed rejected lines are also released on every explicit shrink.
     /// `shrink_to(0)` also releases any partial line's paragraph reference.
     pub fn shrink_to(&mut self, bytes: usize) {

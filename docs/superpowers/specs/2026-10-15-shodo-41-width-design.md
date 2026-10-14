@@ -36,3 +36,19 @@ read its already-measured sparse prefixes without re-shaping source-clipped
 clusters or repeating atomic warnings. Retry restores released paragraph
 indexes before reading a retained cursor. Obstruction at each boundary is
 indexed once so a long transparent suffix does not multiply candidate work.
+
+Static advances, visual spacing, trailing whitespace and obstruction tables are
+immutable paragraph-owned indexes prepared once after finalization. Atomic
+widths are zero in the static advances; normal cursors measure only visited
+caller atomics and add sparse cumulative deviations. Scalar ruby queries keep
+a per-revision atomic prefix so repeated queries do not re-enumerate atomics.
+Context/root switches and explicit shrink cannot rebuild the static tables.
+Their preparation stores unit saturation for selected-range replay and emits
+no earlier build warning.
+
+This adds linear retained width-table memory to each live paragraph instead of
+only the context's most recent paragraph. Like existing finalized spacing and
+unit tables, it derives from admitted units/glyphs. `max_analysis_bytes` remains
+the existing logical analysis-admission contract, not an RSS cap or a quota for
+finalized spacing/width tables. Context shrink releases mutable scalar/index
+state; immutable width tables live until their paragraph owners are released.

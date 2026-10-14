@@ -7,6 +7,57 @@ use crate::style::{
 };
 use crate::{AtomicSize, ParagraphBuilder};
 
+#[test]
+fn cold_and_alternating_short_lines_do_not_index_unvisited_units() {
+    let fonts = FontCollection::new(&Limits::default());
+    let paragraphs: Vec<_> = (0..3)
+        .map(|node| {
+            let mut builder = ParagraphBuilder::new(&Default::default(), &Limits::default());
+            builder.push_text(
+                TextSource::Generated { node: NodeId(node) },
+                &"a b ".repeat(2048),
+            );
+            builder.build(&mut LayoutContext::new(), &fonts).unwrap()
+        })
+        .collect();
+    for paragraph_count in [2, 3] {
+        for counted in [false, true] {
+            let mut cx = LayoutContext::new();
+            let mut tokens: Vec<_> = paragraphs.iter().map(|p| p.start_token()).collect();
+            let mut constraint = crate::LineConstraint::new(20.0);
+            constraint.max_graphemes = counted.then_some(1);
+            for _ in 0..24 {
+                for (p, token) in paragraphs[..paragraph_count].iter().zip(&mut tokens) {
+                    let before = cx.ruby_range_build_units;
+                    let visited = cx.width_unit_visits;
+                    let crate::LineResult::Line(line) = p.next_line(
+                        &mut cx,
+                        *token,
+                        &Default::default(),
+                        &constraint,
+                        &AtomicSizes::EMPTY,
+                    ) else {
+                        panic!("expected a short line")
+                    };
+                    let next = line.break_token();
+                    assert!(next.unit > token.unit && next.unit - token.unit <= 8);
+                    assert!(
+                        cx.ruby_range_build_units - before <= 16,
+                        "counted={counted}: {} unvisited units indexed for a {}-unit line",
+                        cx.ruby_range_build_units - before,
+                        next.unit - token.unit
+                    );
+                    assert!(
+                        cx.width_unit_visits - visited <= 16,
+                        "unvisited unit producers ran"
+                    );
+                    *token = next;
+                }
+            }
+        }
+    }
+}
+
 fn clipped_hyphen_paragraph() -> (crate::Paragraph, usize, usize) {
     let fonts = crate::test_support::fonts::collection(&Limits::default());
     fonts
@@ -209,6 +260,17 @@ fn planned_selections_release_previous_paragraph_indexes() {
             &mut Saturation::default(),
         );
         assert_eq!(scan.content.to_f32(), 10.0);
+        assert_eq!(
+            width(
+                &p.data,
+                0..p.data.units.len(),
+                &atomics,
+                &mut cx,
+                &mut Saturation::default()
+            )
+            .to_f32(),
+            10.0
+        );
         assert_eq!(cx.ruby_ranges.sets.len(), 1, "previous paragraph retained");
     }
 }

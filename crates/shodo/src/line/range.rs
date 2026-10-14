@@ -299,7 +299,7 @@ fn measure_block(
 }
 
 #[derive(Debug)]
-struct Costs {
+pub(crate) struct Index {
     advances: Vec<i64>,
     spacing: RangeIndex,
     hanging_advances: Vec<i64>,
@@ -307,17 +307,44 @@ struct Costs {
     last_content: Vec<usize>,
     last_preserved: Vec<usize>,
     last_blocked_preserved: Vec<usize>,
-    bad_atomics: Vec<usize>,
+    atomics: Vec<usize>,
     obstructed: Vec<bool>,
     /// Units whose width saturated while the costs were built, with the
     /// running (wrapping) saturation through each: a query charges those of
     /// its own range. Empty for ordinary paragraphs.
     saturated: Vec<(usize, Saturation)>,
     tabs: Vec<usize>,
+}
+
+#[derive(Debug)]
+struct Costs {
+    index: std::sync::Arc<Index>,
+    atomic_advances: cursor::Prefix,
+    bad_atomics: Vec<usize>,
     tab_prefix: Option<TabPrefix>,
+    saturated: Vec<(usize, Saturation)>,
 }
 
 impl Costs {
+    fn advance(&self, end: usize) -> i64 {
+        self.index.advances[end] + self.atomic_advances.before(end)
+    }
+
+    fn saturation(&self, range: &Range<usize>) -> Saturation {
+        let mut value = self.index.saturation(range);
+        let through = |end| match self.saturated.partition_point(|(i, _)| *i < end) {
+            0 => Saturation::default(),
+            k => self.saturated[k - 1].1,
+        };
+        absorb(
+            &mut value,
+            difference(through(range.end), through(range.start)),
+        );
+        value
+    }
+}
+
+impl Index {
     /// Saturation of building the units of `range`.
     fn saturation(&self, range: &Range<usize>) -> Saturation {
         let through = |end: usize| match self.saturated.partition_point(|(i, _)| *i < end) {
@@ -384,9 +411,60 @@ fn difference(a: Saturation, b: Saturation) -> Saturation {
     }
 }
 
-/// Build the range costs of a paragraph. Charges nothing: the saturation
-/// of measuring each unit is kept in `Costs::saturated` for the queries.
+/// Prepare immutable tables once, after final units and spacing are known.
+/// Caller dimensions are excluded. Unit saturation stays in the tables and
+/// replays only for queried units, without entering the build warning sink.
+pub(crate) fn prepare(data: &mut ParagraphData, cx: &mut LayoutContext) {
+    data.width_index = Some(std::sync::Arc::new(build_index(data, cx)));
+}
+
 fn build(data: &ParagraphData, atomics: &AtomicSizes, cx: &mut LayoutContext) -> Costs {
+    let index = std::sync::Arc::clone(data.width_index.as_ref().expect("finalized width index"));
+    let mut atomic_advances = cursor::Prefix::default();
+    let mut bad_atomics = Vec::new();
+    let mut saturated = Vec::new();
+    let mut running = Saturation::default();
+    let mut warnings = crate::limits::WarningSink::new(Some(0));
+    for &i in &index.atomics {
+        #[cfg(test)]
+        {
+            cx.ruby_measure_visits += 1;
+        }
+        let UnitKind::Atomic { node } = data.units[i].kind else {
+            unreachable!()
+        };
+        let mut local = Saturation::default();
+        let value = atomics
+            .get(node)
+            .map(|size| crate::sanitize::atomic(*size, &mut warnings, &mut local));
+        let width = value.map_or(LayoutUnit::ZERO, |size| {
+            LayoutUnit::from_f32_round(size.inline_size + size.margins.inline_sum(), &mut local)
+        });
+        if value.is_none() || !warnings.take().is_empty() || !local.is_clean() {
+            bad_atomics.push(i);
+        }
+        let mut sat = Saturation::default();
+        let width = width.add(data.unit_spacing[i].word, &mut sat);
+        if !sat.is_clean() {
+            absorb(&mut running, sat);
+            saturated.push((i, running));
+        }
+        let base = index.advances[i + 1] - index.advances[i];
+        atomic_advances.push(i, i64::from(width.raw()) - base);
+    }
+    // Scalar caller dimensions replay warnings/saturation only for queried units.
+    #[cfg(not(test))]
+    let _ = cx;
+    Costs {
+        index,
+        atomic_advances,
+        bad_atomics,
+        saturated,
+        tab_prefix: None,
+    }
+}
+
+fn build_index(data: &ParagraphData, cx: &mut LayoutContext) -> Index {
     #[cfg(test)]
     {
         cx.ruby_range_build_units += data.units.len();
@@ -397,37 +475,31 @@ fn build(data: &ParagraphData, atomics: &AtomicSizes, cx: &mut LayoutContext) ->
     let mut last_content = vec![0];
     let mut last_preserved = vec![0];
     let mut last_blocked_preserved = vec![0];
-    let mut bad_atomics = Vec::new();
+    let mut atomics = Vec::new();
     let mut saturated = Vec::new();
     let mut running = Saturation::default();
     let mut tabs = Vec::new();
-    let mut local_warnings = crate::limits::WarningSink::new(Some(0));
     for (i, unit) in data.units.iter().enumerate() {
         #[cfg(test)]
         {
             cx.ruby_measure_visits += 1;
         }
         let mut sat = Saturation::default();
-        let width = if let UnitKind::Atomic { node } = unit.kind {
-            let mut local_sat = Saturation::default();
-            let value = atomics
-                .get(node)
-                .map(|value| crate::sanitize::atomic(*value, &mut local_warnings, &mut local_sat));
-            let width = value.map_or(LayoutUnit::ZERO, |value| {
-                LayoutUnit::from_f32_round(
-                    value.inline_size + value.margins.inline_sum(),
-                    &mut local_sat,
-                )
-            });
-            if value.is_none() || !local_warnings.take().is_empty() || !local_sat.is_clean() {
-                bad_atomics.push(i);
-            }
-            width
+        let width = if matches!(unit.kind, UnitKind::Atomic { .. }) {
+            atomics.push(i);
+            LayoutUnit::ZERO
         } else if matches!(unit.kind, UnitKind::Tab) && unit.combine.is_none() {
             tabs.push(i);
             LayoutUnit::ZERO
         } else {
-            super::scan::unit_width(data, unit, LayoutUnit::ZERO, atomics, cx, &mut sat)
+            super::scan::unit_width(
+                data,
+                unit,
+                LayoutUnit::ZERO,
+                &AtomicSizes::EMPTY,
+                cx,
+                &mut sat,
+            )
         };
         let width = width.add(data.unit_spacing[i].word, &mut sat);
         if !sat.is_clean() {
@@ -477,7 +549,7 @@ fn build(data: &ParagraphData, atomics: &AtomicSizes, cx: &mut LayoutContext) ->
         }),
         Some(data),
     );
-    Costs {
+    Index {
         advances,
         spacing,
         hanging_advances,
@@ -485,11 +557,10 @@ fn build(data: &ParagraphData, atomics: &AtomicSizes, cx: &mut LayoutContext) ->
         last_content,
         last_preserved,
         last_blocked_preserved,
-        bad_atomics,
+        atomics,
         obstructed: obstruction_index(data),
         saturated,
         tabs,
-        tab_prefix: None,
     }
 }
 
@@ -664,7 +735,7 @@ fn natural(
     // and every query charges the steps of its tabs, computed now or
     // earlier, so replacing the prefix for another start changes no
     // query's effects.
-    if !costs.tabs.is_empty() {
+    if !costs.index.tabs.is_empty() {
         if costs
             .tab_prefix
             .as_ref()
@@ -673,11 +744,13 @@ fn natural(
             costs.tab_prefix = Some(TabPrefix {
                 start: range.start,
                 through: range.start,
-                first: costs.tabs.partition_point(|t| *t < range.start),
+                first: costs.index.tabs.partition_point(|t| *t < range.start),
                 extra: Vec::new(),
                 sat: Vec::new(),
             });
         }
+        let index = &costs.index;
+        let atomic_advances = &costs.atomic_advances;
         let prefix = costs.tab_prefix.as_mut().unwrap();
         if prefix.through < range.end {
             // The start's decoration is the same for every step: measure it
@@ -685,8 +758,8 @@ fn natural(
             // step did.
             let mut decoration: Option<(LayoutUnit, Saturation)> = None;
             let from = prefix.first + prefix.extra.len();
-            let to = costs.tabs.partition_point(|t| *t < range.end);
-            for &i in &costs.tabs[from..to] {
+            let to = index.tabs.partition_point(|t| *t < range.end);
+            for &i in &index.tabs[from..to] {
                 #[cfg(test)]
                 {
                     cx.ruby_measure_visits += 1;
@@ -699,13 +772,15 @@ fn natural(
                     (w, s)
                 });
                 let pos = raw(
-                    costs.advances[i] - costs.advances[range.start] + previous,
+                    index.advances[i] - index.advances[range.start] + atomic_advances.before(i)
+                        - atomic_advances.before(range.start)
+                        + previous,
                     &mut step,
                 )
                 .add(clipped_delta, &mut step)
                 .add(start_decoration, &mut step)
                 .add(
-                    costs
+                    index
                         .spacing
                         .query(range.start..i, Some(data))
                         .width(&mut step),
@@ -729,18 +804,19 @@ fn natural(
             }
             prefix.through = range.end;
         }
-        absorb(sat, prefix.saturation(&costs.tabs, range.end));
+        absorb(sat, prefix.saturation(&index.tabs, range.end));
     }
     let costs = &*costs;
     let measured = geometry(
         data,
-        costs,
+        &costs.index,
         range.clone(),
+        |end| costs.advance(end),
         |end| {
             costs
                 .tab_prefix
                 .as_ref()
-                .map_or(0, |p| p.before(&costs.tabs, end))
+                .map_or(0, |p| p.before(&costs.index.tabs, end))
         },
         |end, sat| {
             raw(
@@ -757,7 +833,7 @@ fn natural(
     );
     #[cfg(test)]
     {
-        cx.ruby_measure_visits += costs.spacing.take_visits();
+        cx.ruby_measure_visits += costs.index.spacing.take_visits();
     }
     let bad_start = costs.bad_atomics.partition_point(|i| *i < range.start);
     let bad_end = costs.bad_atomics.partition_point(|i| *i < range.end);
@@ -818,8 +894,9 @@ fn obstruction_index(data: &ParagraphData) -> Vec<bool> {
 #[allow(clippy::too_many_arguments)]
 fn geometry(
     data: &ParagraphData,
-    costs: &Costs,
+    costs: &Index,
     range: Range<usize>,
+    advances_before: impl Fn(usize) -> i64,
     tabs_before: impl Fn(usize) -> i64,
     correction_before: impl Fn(usize, &mut Saturation) -> LayoutUnit,
     hyphen_leaf: Option<(usize, super::spacing_summary::Summary)>,
@@ -842,7 +919,8 @@ fn geometry(
     let trailing_tabs = tabs_before(range.end) - tabs_before(hang);
     let trailing = costs.hanging_advances[range.end] - costs.hanging_advances[hang] + trailing_tabs;
     let natural = raw(
-        costs.advances[range.end] - costs.advances[range.start] + tabs_before(range.end) - trailing,
+        advances_before(range.end) - advances_before(range.start) + tabs_before(range.end)
+            - trailing,
         sat,
     );
     let natural = natural.add(correction_before(hang, sat), sat);
@@ -858,14 +936,6 @@ fn geometry(
         summary,
         hang_start: hang,
         widths: Vec::new(),
-    }
-}
-
-pub(super) fn ensure_costs(data: &ParagraphData, atomics: &AtomicSizes, cx: &mut LayoutContext) {
-    let key = (data.id, data as *const ParagraphData as usize);
-    if !cx.ruby_ranges.sets.contains_key(&key) {
-        let costs = build(data, atomics, cx);
-        cx.ruby_ranges.sets.insert(key, costs);
     }
 }
 
@@ -1018,7 +1088,7 @@ mod tests {
                 panic!("expected a line")
             };
             assert_eq!(line.inline_size(), expected);
-            assert_eq!(cx.ruby_range_build_units - before, p.data.units.len());
+            assert_eq!(cx.ruby_range_build_units - before, 0);
             // Ruby uses a zero tab origin: the same prefix table stays valid,
             // but the tab steps must be recomputed for that origin.
             assert_eq!(
@@ -1032,7 +1102,7 @@ mod tests {
                 .to_f32(),
                 40.0 + last
             );
-            assert_eq!(cx.ruby_range_build_units - before, p.data.units.len());
+            assert_eq!(cx.ruby_range_build_units - before, 0);
         }
     }
 
@@ -1594,6 +1664,12 @@ mod tests {
                 .position(|u| matches!(u.kind, UnitKind::Cluster { .. }) && u.text.start > 3)
                 .unwrap();
             data.unit_spacing[unit].word = LayoutUnit::MAX;
+            let mut build_cx = LayoutContext::new();
+            prepare(data, &mut build_cx);
+            assert!(
+                build_cx.take_warnings().is_empty(),
+                "index preparation must defer saturation"
+            );
         }
         p
     }

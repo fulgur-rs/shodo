@@ -148,12 +148,11 @@ impl CandidateMeasure {
         if tail.hanging == LayoutUnit::ZERO {
             tail.kept_spacing = tracking;
         }
-        let natural = indexed.measure(data, break_end, None, &cx.ruby_ranges, sat);
+        let natural = indexed.measure(data, break_end, None, sat);
         let required = natural.content.add(indent, sat).add(ruby_delta, sat);
         let hyphen = (unit.break_after == BreakClass::Hyphen).then(|| {
             let leaf = super::spacing::hyphen_unit_summary(data, end - 1, sat);
-            let natural =
-                indexed.measure(data, break_end, Some((end - 1, leaf)), &cx.ruby_ranges, sat);
+            let natural = indexed.measure(data, break_end, Some((end - 1, leaf)), sat);
             HyphenMeasure {
                 end,
                 natural: natural.content.add(indent, sat).add(ruby_delta, sat),
