@@ -1,0 +1,16 @@
+# Report coverage of the published crate only. dev/ holds the test harness,
+# fixtures, benches and the Raikiri comparison crate; they drive shodo's tests
+# but are not part of the library.
+ignore:
+  - "dev/**"
+
+# Start informational: coverage changes are reported on pull requests but
+# never block a merge. Tighten to real targets once a baseline exists.
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
