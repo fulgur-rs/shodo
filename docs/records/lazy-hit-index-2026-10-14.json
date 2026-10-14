@@ -48,7 +48,7 @@
       "exit_code": 0
     }
   ],
-  "measurement_status": "Completed using immutable baseline454fb916 and checked v2 output hashes. See performance-lazy-ab-2026-10-14.json and performance-combined-ab-2026-10-14.json. Latest-main integration and final exact-head CI are separate gates.",
+  "measurement_status": "Completed using immutable baseline454fb916 and checked v2 output hashes. See performance-lazy-ab-2026-10-14.json.gz and performance-combined-ab-2026-10-14.json.gz. Latest-main integration and final exact-head CI are separate gates.",
   "limits": [
     "The first coordinate hit pays deferred construction; initialization and retained bytes may differ by use pattern.",
     "OnceLock increases the fixed per-index footprint modestly; requested allocation/live/peak bytes must be measured centrally.",
