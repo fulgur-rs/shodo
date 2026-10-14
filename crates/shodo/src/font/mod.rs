@@ -244,7 +244,85 @@ impl FamilyFaceIndices {
     }
 }
 
+/// Fresh registrations have a new blob identity; aliases and lazy platform
+/// materialization can share bytes already retained by this layer.
+enum BlobCharge<'a> {
+    Fresh(u64),
+    Shared(&'a Blob<u8>),
+}
+
+struct FaceAdmission {
+    first: usize,
+    blob_bytes: u64,
+}
+
 impl LayerState {
+    /// Check the complete batch before changing any face or index state.
+    fn admit(
+        &self,
+        count: u32,
+        blob: BlobCharge<'_>,
+        limits: &Limits,
+    ) -> Result<FaceAdmission, FontError> {
+        Limits::check(
+            limits.max_faces_per_layer,
+            LimitKind::FacesPerLayer,
+            self.faces.len() as u64 + u64::from(count),
+        )?;
+        let additional = match blob {
+            BlobCharge::Fresh(bytes) => bytes,
+            BlobCharge::Shared(blob) => {
+                if self.faces.iter().any(|face| face.data.id() == blob.id()) {
+                    0
+                } else {
+                    blob.len() as u64
+                }
+            }
+        };
+        let blob_bytes = self.blob_bytes + additional;
+        Limits::check(
+            limits.max_layer_blob_bytes,
+            LimitKind::LayerBlobBytes,
+            blob_bytes,
+        )?;
+        Ok(FaceAdmission {
+            first: self.faces.len(),
+            blob_bytes,
+        })
+    }
+
+    /// Publish only after font validation and all fallible preparations finish.
+    /// Descriptor allowances are checked by the caller before admission.
+    fn commit(
+        &mut self,
+        admission: FaceAdmission,
+        faces: impl IntoIterator<
+            Item = (
+                FontData,
+                Option<fontique::FontInfo>,
+                Option<RegisteredDescriptor>,
+            ),
+        >,
+        native_identity: bool,
+        native_only: bool,
+    ) {
+        debug_assert_eq!(self.faces.len(), admission.first);
+        for (data, info, descriptor) in faces {
+            let index = self.faces.len();
+            if let Some(descriptor) = &descriptor {
+                self.descriptor_bytes = self.descriptor_bytes.saturating_add(descriptor.bytes());
+            }
+            self.face_infos.push(info);
+            self.descriptors.push(descriptor);
+            self.faces.push(data);
+            if native_only {
+                self.native_faces.insert(index);
+            }
+            self.index_face(index, native_identity);
+        }
+        self.blob_bytes = admission.blob_bytes;
+    }
+
     fn index_face(&mut self, index: usize, native_identity: bool) {
         let face = &self.faces[index];
         if native_identity {
@@ -401,18 +479,8 @@ impl FontCollection {
         let limits = &self.layer.limits;
         let faces = check::check_font(&data, limits)?;
         let mut state = self.state();
-        Limits::check(
-            limits.max_faces_per_layer,
-            LimitKind::FacesPerLayer,
-            state.faces.len() as u64 + u64::from(faces),
-        )?;
-        let bytes = state.blob_bytes + data.len() as u64;
-        Limits::check(
-            limits.max_layer_blob_bytes,
-            LimitKind::LayerBlobBytes,
-            bytes,
-        )?;
-        let first = state.faces.len() as u32;
+        let admission = state.admit(faces, BlobCharge::Fresh(data.len() as u64), limits)?;
+        let first = admission.first as u32;
         let blob = Blob::from(data);
         let local_names = state
             .local_names
@@ -426,16 +494,13 @@ impl FontCollection {
                 }
             }
         }
-        for (index, info) in infos.into_iter().enumerate() {
+        let faces = infos.into_iter().enumerate().map(|(index, info)| {
             let data = FontData::new(blob.clone(), index as u32);
             // Fonts without intrinsic family names can still be last resorts.
             let info = info.or_else(|| matching::face_info(&data));
-            state.face_infos.push(info);
-            state.descriptors.push(None);
-            state.faces.push(data);
-            let slot = state.faces.len() - 1;
-            state.index_face(slot, true);
-        }
+            (data, info, None)
+        });
+        state.commit(admission, faces, true, false);
         if let Some(prepared) = local_names {
             let LayerState {
                 local_names,
@@ -444,7 +509,6 @@ impl FontCollection {
             } = &mut *state;
             local_names.commit_registration(prepared, &face_infos[first as usize..]);
         }
-        state.blob_bytes = bytes;
         self.layer.generation.fetch_add(1, Ordering::SeqCst);
         Ok(FontId {
             layer: self.layer.id,
@@ -511,7 +575,6 @@ impl FontCollection {
         let mut state = self.state();
         // Recheck under the publication lock: another registration can have
         // consumed the layer allowance since descriptor preparation.
-        let descriptor_bytes = state.descriptor_bytes.saturating_add(descriptor.bytes());
         self.check_descriptor_bytes(state.descriptor_bytes, descriptor.bytes())?;
         let blob = source
             .and_then(|id| state.retained_sources.get(&id).cloned())
@@ -526,36 +589,20 @@ impl FontCollection {
         let info = matching::face_info(&data)
             .ok_or(FontError::Malformed("face has no usable character map"))?;
         let native_identity = source.is_some();
-        Limits::check(
-            limits.max_faces_per_layer,
-            LimitKind::FacesPerLayer,
-            state.faces.len() as u64 + 1,
-        )?;
-        let additional = if state.faces.iter().any(|face| face.data.id() == blob.id()) {
-            0
-        } else {
-            blob.len() as u64
-        };
-        let bytes = state.blob_bytes + additional;
-        Limits::check(
-            limits.max_layer_blob_bytes,
-            LimitKind::LayerBlobBytes,
-            bytes,
-        )?;
+        let admission = state.admit(1, BlobCharge::Shared(&blob), limits)?;
         let id = FontId {
             layer: self.layer.id,
-            index: state.faces.len() as u32,
+            index: admission.first as u32,
         };
         if let Some(source) = source {
             state.retained_sources.insert(source, blob.clone());
         }
-        state.face_infos.push(Some(info));
-        state.faces.push(data);
-        state.descriptors.push(Some(descriptor));
-        let slot = state.faces.len() - 1;
-        state.index_face(slot, native_identity);
-        state.blob_bytes = bytes;
-        state.descriptor_bytes = descriptor_bytes;
+        state.commit(
+            admission,
+            [(data, Some(info), Some(descriptor))],
+            native_identity,
+            false,
+        );
         self.layer.generation.fetch_add(1, Ordering::SeqCst);
         Ok(id)
     }
@@ -759,6 +806,53 @@ mod tests {
         let fonts = FontCollection::new(&Limits::default());
         assert!(fonts.register(vec![1, 2, 3]).is_err());
         assert_eq!(fonts.generation(), 0);
+    }
+
+    #[test]
+    fn collection_admission_is_atomic_and_charges_the_blob_once() {
+        // Two valid faces share one sfnt offset in this collection.
+        let mut bytes = b"ttcf\0\x01\0\0\0\0\0\x02".to_vec();
+        bytes.extend_from_slice(&20_u32.to_be_bytes());
+        bytes.extend_from_slice(&20_u32.to_be_bytes());
+        bytes.extend_from_slice(&font_bytes());
+        for (max_faces, max_bytes, kind) in [
+            (2, 0, LimitKind::FacesPerLayer),
+            (3, bytes.len() as u64 - 1, LimitKind::LayerBlobBytes),
+        ] {
+            let fonts = crate::test_support::fonts::collection(&Limits {
+                max_faces_per_layer: Some(max_faces),
+                max_layer_blob_bytes: Some(max_bytes),
+                ..Default::default()
+            });
+            assert!(
+                matches!(fonts.register(bytes.clone()), Err(FontError::Limit(e)) if e.kind == kind)
+            );
+            let state = fonts.state();
+            assert_eq!(state.faces.len(), 1);
+            assert_eq!(state.face_infos.len(), 1);
+            assert_eq!(state.descriptors.len(), 1);
+            assert_eq!(state.blob_bytes, 0);
+            assert_eq!(state.descriptor_bytes, 0);
+            assert!(state.face_slots.is_empty());
+            assert!(state.family_faces.is_empty());
+            assert!(state.native_faces.is_empty());
+            assert!(state.retained_sources.is_empty());
+            assert_eq!(fonts.generation(), 0);
+        }
+        let fonts = crate::test_support::fonts::collection(&Limits {
+            max_faces_per_layer: Some(3),
+            max_layer_blob_bytes: Some(bytes.len() as u64),
+            ..Default::default()
+        });
+        let first = fonts.register(bytes.clone()).unwrap();
+        let state = fonts.state();
+        assert_eq!(first.index(), 1);
+        assert_eq!(state.faces.len(), 3);
+        assert_eq!(state.face_infos.len(), 3);
+        assert_eq!(state.descriptors.len(), 3);
+        assert_eq!(state.face_slots.len(), 2);
+        assert_eq!(state.blob_bytes, bytes.len() as u64);
+        assert_eq!(fonts.generation(), 1);
     }
 
     #[test]

@@ -3,7 +3,14 @@
 //! `WindowInstances` extends the same reuse across the line-edge window
 //! shapes of one paragraph.
 use super::instance::{ResolutionWarning, RunInstance};
-use crate::{font::FontMatch, limits::WarningSink, style::InlineStyle};
+use crate::{
+    font::FontMatch,
+    limits::WarningSink,
+    style::{
+        InlineStyle,
+        identity::{authored_float, same_instance_inputs, same_variations},
+    },
+};
 use std::{ops::Deref, sync::Arc};
 
 #[cfg(test)]
@@ -28,29 +35,14 @@ impl Key<'_, '_> {
                 || (self.found.id == other.found.id
                     && self.found.embolden == other.found.embolden
                     && self.found.skew.map(f32::to_bits) == other.found.skew.map(f32::to_bits)
-                    && same_variations(&self.found.variations, &other.found.variations)))
+                    && same_variations(
+                        &self.found.variations,
+                        &other.found.variations,
+                        authored_float,
+                    )))
             && (std::ptr::eq(self.style, other.style)
-                || (self.style.font_size.to_bits() == other.style.font_size.to_bits()
-                    && self
-                        .style
-                        .font_size_adjust
-                        .map(|v| (v.metric, v.value.to_bits()))
-                        == other
-                            .style
-                            .font_size_adjust
-                            .map(|v| (v.metric, v.value.to_bits()))
-                    && self.style.font_optical_sizing == other.style.font_optical_sizing
-                    && same_variations(&self.style.font_variations, &other.style.font_variations)
-                    && self.style.lang == other.style.lang))
+                || same_instance_inputs(self.style, other.style))
     }
-}
-
-fn same_variations(a: &[crate::style::FontVariation], b: &[crate::style::FontVariation]) -> bool {
-    // Public design coordinates retain the authored bits, including signed zero.
-    a.len() == b.len()
-        && a.iter()
-            .zip(b)
-            .all(|(a, b)| a.tag == b.tag && a.value.to_bits() == b.value.to_bits())
 }
 
 struct Entry<'items, 'styles> {
@@ -365,6 +357,38 @@ mod tests {
             }),
             style.font_size,
         )
+    }
+
+    #[test]
+    fn instance_style_keys_keep_signed_zero_and_nan_payloads() {
+        let found = found();
+        for (a, b, expected) in [
+            (0.0, -0.0, false),
+            (f32::NAN, f32::NAN, true),
+            (f32::NAN, f32::from_bits(0x7fc0_0001), false),
+        ] {
+            let a = InlineStyle {
+                font_size: a,
+                ..Default::default()
+            };
+            let b = InlineStyle {
+                font_size: b,
+                ..Default::default()
+            };
+            assert_eq!(
+                Key {
+                    found: &found,
+                    style: &a,
+                    script: *b"Latn"
+                }
+                .matches(Key {
+                    found: &found,
+                    style: &b,
+                    script: *b"Latn"
+                }),
+                expected
+            );
+        }
     }
 
     #[test]

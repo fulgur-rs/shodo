@@ -3,7 +3,7 @@ use super::bidi::BidiAnalysis;
 use super::{ItemKind, whitespace::Processed};
 use crate::font::{FontCluster, FontCollection, FontMatch, FontQuery};
 use crate::limits::{LimitExceeded, LimitKind, Limits};
-use crate::style::{FontFamily, FontStyle, InlineStyle};
+use crate::style::{FontFamily, FontStyle, InlineStyle, identity::shaping_compatible};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
@@ -134,33 +134,6 @@ impl Hash for QueryLanguage<'_> {
             state.write(&folded[..chunk.len()]);
         }
     }
-}
-
-fn shaping_compatible(a: &InlineStyle, b: &InlineStyle) -> bool {
-    // Face/variation selection is compared separately through FontMatch. Keep
-    // layout-only properties on their source items instead of cutting GSUB/GPOS.
-    macro_rules! same {
-        ($($field:ident),* $(,)?) => { true $(&& a.$field == b.$field)* };
-    }
-    same!(
-        font_size,
-        font_variations,
-        font_features,
-        font_kerning,
-        font_variant_ligatures,
-        font_variant_caps,
-        font_variant_numeric,
-        font_variant_east_asian,
-        font_variant_position,
-        font_variant_alternates,
-        font_optical_sizing,
-        font_synthesis,
-        font_size_adjust,
-        lang,
-        letter_spacing,
-        word_spacing,
-        word_spacing_percent
-    )
 }
 
 fn after_context(scalars: &[Scalar]) -> String {
