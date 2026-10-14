@@ -116,9 +116,55 @@ pub(crate) struct GlyphStore {
     pub(crate) leading: Option<Vec<LayoutUnit>>,
 }
 
+/// Whether retained-byte accounting counts initialized elements or the
+/// backing capacity of each vector.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ByteBasis {
+    Len,
+    Capacity,
+}
+
 impl GlyphStore {
     pub(crate) fn len(&self) -> usize {
         self.id.len()
+    }
+
+    /// Heap bytes held by the glyph vectors, excluding the store header.
+    /// Every field is destructured so a new field cannot be left uncounted.
+    pub(crate) fn retained_bytes(&self, basis: ByteBasis) -> usize {
+        fn bytes<T>(vector: &Vec<T>, basis: ByteBasis) -> usize {
+            let count = match basis {
+                ByteBasis::Len => vector.len(),
+                ByteBasis::Capacity => vector.capacity(),
+            };
+            count.saturating_mul(std::mem::size_of::<T>())
+        }
+        let Self {
+            #[cfg(test)]
+                _cache_clone_probe: _,
+            id,
+            advance,
+            pen,
+            offset_inline,
+            offset_block,
+            cluster,
+            flags,
+            spacing,
+            leading,
+        } = self;
+        [
+            bytes(id, basis),
+            bytes(advance, basis),
+            bytes(pen, basis),
+            bytes(offset_inline, basis),
+            bytes(offset_block, basis),
+            bytes(cluster, basis),
+            bytes(flags, basis),
+            spacing.as_ref().map_or(0, |v| bytes(v, basis)),
+            leading.as_ref().map_or(0, |v| bytes(v, basis)),
+        ]
+        .into_iter()
+        .fold(0, usize::saturating_add)
     }
 }
 
@@ -138,23 +184,7 @@ pub(crate) struct ShapedRun {
 
 #[cfg(test)]
 fn trial_storage_capacity_bytes(store: &GlyphStore, run_capacity: usize) -> usize {
-    use std::mem::size_of;
-
-    let mut bytes = store.id.capacity() * size_of::<u32>()
-        + store.advance.capacity() * size_of::<LayoutUnit>()
-        + store.pen.capacity() * size_of::<LayoutUnit>()
-        + store.offset_inline.capacity() * size_of::<LayoutUnit>()
-        + store.offset_block.capacity() * size_of::<LayoutUnit>()
-        + store.cluster.capacity() * size_of::<u32>()
-        + store.flags.capacity() * size_of::<u8>()
-        + run_capacity * size_of::<ShapedRun>();
-    if let Some(spacing) = &store.spacing {
-        bytes += spacing.capacity() * size_of::<LayoutUnit>();
-    }
-    if let Some(leading) = &store.leading {
-        bytes += leading.capacity() * size_of::<LayoutUnit>();
-    }
-    bytes
+    store.retained_bytes(ByteBasis::Capacity) + run_capacity * std::mem::size_of::<ShapedRun>()
 }
 
 /// Prove applicable width-feature coverage through the selected font/script/

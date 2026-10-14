@@ -29,6 +29,39 @@ pub(crate) struct RunInstance {
     pub(crate) features: Arc<[harfrust::Feature]>,
 }
 
+impl RunInstance {
+    /// Bytes an `Arc<RunInstance>` keeps alive: the Arc allocation with its
+    /// counters, the owned vectors, and the shared feature slice with its
+    /// counters. Every field is destructured so a new one cannot be missed.
+    pub(crate) fn retained_bytes(&self) -> usize {
+        use std::mem::size_of;
+        let Self {
+            metrics: _,
+            vertical_metrics: _,
+            coords,
+            variations,
+            embolden: _,
+            skew: _,
+            script: _,
+            language,
+            features,
+        } = self;
+        [
+            size_of::<Self>() + 2 * size_of::<usize>(),
+            coords
+                .capacity()
+                .saturating_mul(size_of::<NormalizedCoord>()),
+            variations
+                .capacity()
+                .saturating_mul(size_of::<FontVariation>()),
+            language.as_ref().map_or(0, String::capacity),
+            size_of_val(features.as_ref()).saturating_add(2 * size_of::<usize>()),
+        ]
+        .into_iter()
+        .fold(0, usize::saturating_add)
+    }
+}
+
 pub(crate) fn resolve(
     bytes: &[u8],
     index: u32,
