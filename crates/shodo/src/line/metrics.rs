@@ -129,6 +129,14 @@ pub(crate) fn emphasis_over(
     }
 }
 
+/// Whether the resolved emphasis side lies toward logical block-start.
+pub(crate) fn emphasis_before(
+    position: crate::style::TextEmphasisPosition,
+    mode: crate::geometry::WritingMode,
+) -> bool {
+    emphasis_over(position, mode) != mode.line_over_is_block_end()
+}
+
 /// Extents of a combined square, whose internal line-height is 1em, with the
 /// emphasis marks of its text outside the square.
 fn combination_extents(data: &ParagraphData, style: u32, em: f32) -> (f32, f32) {
@@ -544,21 +552,13 @@ fn measure_profile<const KEEP_SHIFTS: bool>(
     exclude_emphasis: bool,
     sat: &mut Saturation,
 ) -> LineMetrics {
-    let root = &data.styles[0];
-    let root_metrics = data.style_metrics[0];
-    let root_upright = data.style.writing_mode.is_upright(root.text_orientation);
     let quirk = data
         .style
         .line_height_quirk
         .then(|| super::quirk::Struts::line(data, units.clone()));
     let root_strut = quirk.as_ref().is_none_or(|q| q.root);
     let (mut above, mut below) = if root_strut {
-        extents(
-            root,
-            root_metrics.metrics,
-            root_metrics.vertical_metrics,
-            root_upright,
-        )
+        data.root_line_extents
     } else {
         // Nothing has sized the line yet; real contributions replace these.
         (f32::NEG_INFINITY, f32::NEG_INFINITY)
@@ -754,7 +754,7 @@ fn measure_profile<const KEEP_SHIFTS: bool>(
     let over_baseline = LayoutUnit::from_f32_round(above, sat);
     // The over side is the physical right in vertical-lr, opposite block-start.
     // Reflect the line-relative solution into logical block coordinates once.
-    let reverse_over = data.style.writing_mode == crate::geometry::WritingMode::VerticalLr;
+    let reverse_over = data.style.writing_mode.line_over_is_block_end();
     let combination_shifts = if KEEP_SHIFTS {
         combination_bases
             .into_iter()

@@ -317,9 +317,10 @@ impl<'a> GlyphRunView<'a> {
             font_size: half,
             line_over,
             offset: (if line_over { ascent } else { descent })
-                + if line_over
-                    != (self.line.writing_mode() == crate::geometry::WritingMode::VerticalLr)
-                {
+                + if crate::line::metrics::emphasis_before(
+                    emphasis.position,
+                    self.line.writing_mode(),
+                ) {
                     self.emphasis_offset.0.to_f32()
                 } else {
                     self.emphasis_offset.1.to_f32()
@@ -515,6 +516,8 @@ impl<'a> GlyphRunView<'a> {
                 .flatten()
         {
             let span = &self.data().combine_spans[paint.span];
+            // Convert the composition's internal horizontal x axis to the
+            // square's block axis, independently of line-over font metrics.
             let sign = if self.data().style.writing_mode == crate::geometry::WritingMode::VerticalRl
             {
                 -1.0

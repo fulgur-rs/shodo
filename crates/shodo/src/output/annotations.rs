@@ -1,6 +1,6 @@
 //! Layout annotation reservations, separate from paint overflow.
 use super::Line;
-use crate::geometry::{LayoutUnit, Saturation, WritingMode};
+use crate::geometry::{LayoutUnit, Saturation};
 use crate::line::fragments::{GlyphSource, RecordKind};
 use crate::shape::orientation::RunOrientation;
 
@@ -174,7 +174,7 @@ impl Line {
                         })
                     {
                         let side =
-                            usize::from(self.data.style.writing_mode == WritingMode::VerticalLr);
+                            usize::from(self.data.style.writing_mode.line_over_is_block_end());
                         let mark = LayoutUnit::from_f32_round(
                             self.data.style_metrics[style as usize].size / 2.,
                             sat,
@@ -213,10 +213,10 @@ impl Line {
             let span = &self.data.combine_spans[index];
             let style = self.data.items[span.item as usize].style;
             if let Some(mark) = self.data.styles[style as usize].text_emphasis {
-                let before = crate::line::metrics::emphasis_over(
+                let before = crate::line::metrics::emphasis_before(
                     mark.position,
                     self.data.style.writing_mode,
-                ) != (self.data.style.writing_mode == WritingMode::VerticalLr);
+                );
                 let size = LayoutUnit::from_f32_round(span.em / 2., sat);
                 let edge = if before {
                     top.sub(size, sat)
@@ -264,7 +264,7 @@ impl Line {
                 .min(available),
             end.sub(content.1, sat).max(LayoutUnit::ZERO).min(available),
         ];
-        let reverse = self.data.style.writing_mode == WritingMode::VerticalLr;
+        let reverse = self.data.style.writing_mode.line_over_is_block_end();
         g.overflow = if reverse {
             [overflow[1], overflow[0]]
         } else {
@@ -287,7 +287,7 @@ fn fixed(
     d: f32,
     sat: &mut Saturation,
 ) -> (LayoutUnit, LayoutUnit) {
-    let (a, d) = if data.style.writing_mode == WritingMode::VerticalLr {
+    let (a, d) = if data.style.writing_mode.line_over_is_block_end() {
         (d, a)
     } else {
         (a, d)

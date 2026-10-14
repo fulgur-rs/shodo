@@ -95,6 +95,10 @@ impl LineGeometry {
                                 continue;
                             };
                             let em = line.data.combine_spans[paint.span].em;
+                            // Combined text is horizontal inside a vertical
+                            // square: reflect its internal x toward logical
+                            // block-start in vertical-rl, independently of
+                            // the line-over reflection used for font edges.
                             let sign = if line.data.style.writing_mode
                                 == crate::geometry::WritingMode::VerticalRl
                             {
@@ -138,22 +142,22 @@ impl LineGeometry {
                     }
                     let reversed = run.bidi_level() % 2 != line.data.base_level % 2;
                     let metrics = run.metrics();
-                    let vertical = matches!(
-                        line.data.style.writing_mode,
-                        crate::geometry::WritingMode::VerticalRl
-                            | crate::geometry::WritingMode::VerticalLr
-                    );
-                    let (over, under) =
-                        if vertical && run.orientation() == crate::GlyphOrientation::Upright {
-                            run.vertical_metrics()
-                                .map_or((run.font_size() / 2.0, run.font_size() / 2.0), |v| {
-                                    (v.ascent, v.descent)
-                                })
-                        } else {
-                            (metrics.ascent, metrics.descent)
-                        };
+                    // Mixed styles can contain upright CJK and sideways Latin
+                    // runs. Hit boxes follow the shaped run's font-content
+                    // orientation; is_upright(style) describes the inline's
+                    // central baseline and would incorrectly rotate Latin metrics.
+                    let (over, under) = if line.writing_mode().is_typographic_vertical()
+                        && run.orientation() == crate::GlyphOrientation::Upright
+                    {
+                        run.vertical_metrics()
+                            .map_or((run.font_size() / 2.0, run.font_size() / 2.0), |v| {
+                                (v.ascent, v.descent)
+                            })
+                    } else {
+                        (metrics.ascent, metrics.descent)
+                    };
                     let line_over_at_block_end =
-                        line.data.style.writing_mode == crate::geometry::WritingMode::VerticalLr;
+                        line.data.style.writing_mode.line_over_is_block_end();
                     let rect = LogicalRect {
                         inline_start: 0.0,
                         inline_size: 0.0,
@@ -242,6 +246,8 @@ impl LineGeometry {
                 .filter(|(text, _)| text.start == unit.text.start)
             {
                 let span = &line.data.combine_spans[paint.span];
+                // As with combined glyphs, this converts the square's internal
+                // horizontal x axis, not the line-over/under metric axes.
                 let sign =
                     if line.data.style.writing_mode == crate::geometry::WritingMode::VerticalRl {
                         -1.0

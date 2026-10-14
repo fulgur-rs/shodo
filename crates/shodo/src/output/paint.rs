@@ -2,7 +2,7 @@
 //! the single owner of each painted glyph. No shaping or layout is performed.
 use crate::analysis::ItemKind;
 use crate::font::{FontId, FontMetrics};
-use crate::geometry::{Direction, LogicalRect, WritingMode};
+use crate::geometry::{Direction, LogicalRect};
 use crate::node::NodeId;
 use crate::style::{PaintStyle, TextDecoration};
 use crate::{Fragment, GlyphOrientation, GlyphRunView, Line};
@@ -118,11 +118,7 @@ fn run_axis(line: &Line, run: GlyphRunView<'_>, offset: u32) -> (f32, f32, bool)
         );
     }
     let sign = if run.orientation() == GlyphOrientation::Upright {
-        if line.writing_mode() == WritingMode::VerticalLr {
-            -1.0
-        } else {
-            1.0
-        }
+        -line.writing_mode().line_over_sign()
     } else {
         run.glyph_transform().block_y
     };
@@ -255,11 +251,7 @@ impl Line {
                             true,
                         )
                     } else {
-                        let under_sign = if self.writing_mode() == WritingMode::VerticalLr {
-                            -1.0
-                        } else {
-                            1.0
-                        };
+                        let under_sign = -self.writing_mode().line_over_sign();
                         let orientation = crate::shape::orientation::resolve(
                             self.writing_mode(),
                             style.text_orientation,

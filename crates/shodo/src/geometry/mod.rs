@@ -33,6 +33,21 @@ impl WritingMode {
         matches!(self, Self::VerticalRl | Self::VerticalLr)
     }
 
+    /// Whether line-over lies toward logical block-end. Sideways-lr's
+    /// line-over is physically left, so it remains toward block-start.
+    pub(crate) fn line_over_is_block_end(self) -> bool {
+        matches!(self, Self::VerticalLr)
+    }
+
+    /// Logical block displacement toward line-over.
+    pub(crate) fn line_over_sign(self) -> f32 {
+        if self.line_over_is_block_end() {
+            1.0
+        } else {
+            -1.0
+        }
+    }
+
     /// Whether text in `orientation` uses the vertical (upright) em box: a
     /// typographic vertical mode with any `text-orientation` but `sideways`.
     pub(crate) fn is_upright(self, orientation: crate::style::TextOrientation) -> bool {

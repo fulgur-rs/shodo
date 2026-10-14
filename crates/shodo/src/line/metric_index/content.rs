@@ -1,7 +1,7 @@
 //! Content and paint geometry for the selected line profile.
 use super::super::metrics::RecordProfile;
 use super::{MetricIndex, Selection};
-use crate::geometry::{LayoutUnit, Saturation, WritingMode};
+use crate::geometry::{LayoutUnit, Saturation};
 use crate::paragraph::ParagraphData;
 use crate::{AtomicSizes, LayoutContext};
 use std::collections::BTreeMap;
@@ -76,11 +76,7 @@ pub(super) fn content_bounds(
     a: LayoutUnit,
     d: LayoutUnit,
 ) -> ContentBounds {
-    let sign = if data.style.writing_mode == WritingMode::VerticalLr {
-        -1.0
-    } else {
-        1.0
-    };
+    let sign = -f64::from(data.style.writing_mode.line_over_sign());
     let center = sign * f64::from(profile.shift);
     ContentBounds {
         top: center - f64::from(a.to_f32()),
@@ -214,12 +210,7 @@ impl MetricIndex {
         } else {
             -selection.above - bounds.top
         };
-        f64::from(delta)
-            * if data.style.writing_mode == WritingMode::VerticalLr {
-                -1.0
-            } else {
-                1.0
-            }
+        f64::from(delta) * -f64::from(data.style.writing_mode.line_over_sign())
     }
     fn box_delta(&self, data: &ParagraphData, selection: &Selection, b: u32) -> f64 {
         self.boxes[b as usize].group.map_or(0.0, |g| {
@@ -245,11 +236,7 @@ impl MetricIndex {
             &selection.removed,
             cx,
         );
-        let sign = if data.style.writing_mode == WritingMode::VerticalLr {
-            -1.0
-        } else {
-            1.0
-        };
+        let sign = -f64::from(data.style.writing_mode.line_over_sign());
         let mut result = ContentBounds::join(
             summary.normal,
             summary

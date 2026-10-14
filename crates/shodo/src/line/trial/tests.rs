@@ -98,9 +98,18 @@ fn numeric_outliers_preserve_completed_line_saturation_warnings() {
             let mut style = ParagraphStyle::default();
             style.root.font_families = vec![crate::style::FontFamily::Named("Summary".into())];
             let (mut p, _fonts) = synthetic_paragraph(&style, &limits, &"ab ab ".repeat(16));
-            std::sync::Arc::get_mut(&mut p.data).unwrap().style_metrics[0]
-                .metrics
-                .ascent = ascent;
+            let data = std::sync::Arc::get_mut(&mut p.data).unwrap();
+            data.style_metrics[0].metrics.ascent = ascent;
+            // This test injects metrics after building, so refresh the root
+            // values that a real paragraph resolves from these metrics at build.
+            let root = data.style_metrics[0];
+            data.root_font_extents = root.ascent_descent(false);
+            data.root_line_extents = super::super::metrics::extents(
+                &data.styles[0],
+                root.metrics,
+                root.vertical_metrics,
+                false,
+            );
             let mut full = LayoutContext::new();
             let mut trial = LayoutContext::new();
             for width in [32., 4096., 32.] {
