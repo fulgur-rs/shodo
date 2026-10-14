@@ -1,5 +1,15 @@
+use super::super::replay::{self, Effects};
 use super::*;
 use crate::shape::GlyphStore;
+
+fn remember(cache: &mut EdgeShapeCache, key: (usize, usize), effects: Effects) {
+    let measurement = CandidateMeasurement {
+        delta: LayoutUnit::ZERO,
+        valid: true,
+        effects,
+    };
+    cache.remember_measurement(key, measurement);
+}
 
 fn window(glyphs: usize) -> ShapedWindow {
     let store = GlyphStore {
@@ -347,24 +357,19 @@ fn cached_miss_returns_original_owned_vectors() {
 fn candidate_measurements_and_glyphs_share_one_bounded_retention_budget() {
     let mut cx = LayoutContext::new();
     let sat = Saturation::default();
-    let recording = super::super::replay::begin(&mut cx, &sat);
-    let effects = super::super::replay::finish(&mut cx, recording, &sat).unwrap();
+    let recording = replay::begin(&mut cx, &sat);
+    let effects = replay::finish(&mut cx, recording, &sat).unwrap();
     let mut cache = EdgeShapeCache::default();
     for i in 0..20_000 {
-        cache.remember_measurement(CandidateMeasurement {
-            key: (i, i + 1),
-            delta: LayoutUnit::ZERO,
-            valid: true,
-            effects,
-        });
+        remember(&mut cache, (i, i + 1), effects);
         cache.insert((i, i + 1, None), &window(8));
         let glyph_cost: usize = cache
             .entries
             .values()
             .map(|w| window_storage_cost(w, false))
             .sum();
-        assert_eq!(cache.cost, glyph_cost + cache.measurement_storage_cost());
-        assert!(cache.cost <= EDGE_SHAPE_CACHE_COST);
+        assert_eq!(cache.cost, glyph_cost);
+        assert!(cache.cost + cache.measurement_storage_cost() <= EDGE_SHAPE_CACHE_COST);
     }
     assert!(cache.measurement((0, 1)).is_some());
     assert!(cache.get(&(0, 1, None)).is_some());
@@ -384,57 +389,42 @@ fn candidate_measurements_and_glyphs_share_one_bounded_retention_budget() {
 fn repeated_effects_allow_thousands_of_width_measurements_after_glyphs_fill() {
     let mut cx = LayoutContext::new();
     let sat = Saturation::default();
-    let recording = super::super::replay::begin(&mut cx, &sat);
-    super::super::replay::record_charge(&mut cx, 12, 1024, true);
-    let effects = super::super::replay::finish(&mut cx, recording, &sat).unwrap();
+    let recording = replay::begin(&mut cx, &sat);
+    replay::record_charge(&mut cx, 12, 1024, true);
+    let effects = replay::finish(&mut cx, recording, &sat).unwrap();
     let mut cache = EdgeShapeCache::default();
     for i in 0..6000 {
-        cache.remember_measurement(CandidateMeasurement {
-            key: (i, i + 1),
-            delta: LayoutUnit::ZERO,
-            valid: true,
-            effects,
-        });
+        remember(&mut cache, (i, i + 1), effects);
         cache.insert((i, i + 1, None), &window(8));
     }
     assert!(
         cache.measurement((5999, 6000)).is_some(),
         "repeated charge/saturation records must not crowd out later widths"
     );
-    assert!(cache.cost <= EDGE_SHAPE_CACHE_COST);
+    assert!(cache.cost + cache.measurement_storage_cost() <= EDGE_SHAPE_CACHE_COST);
 }
 
 #[test]
 fn distinct_measurement_effects_remain_bounded_and_do_not_alias() {
     let mut cx = LayoutContext::new();
     let sat = Saturation::default();
-    let recording = super::super::replay::begin(&mut cx, &sat);
-    super::super::replay::record_charge(&mut cx, 1, u64::MAX, true);
-    let base = super::super::replay::finish(&mut cx, recording, &sat).unwrap();
+    let recording = replay::begin(&mut cx, &sat);
+    replay::record_charge(&mut cx, 1, u64::MAX, true);
+    let base = replay::finish(&mut cx, recording, &sat).unwrap();
     let mut cache = EdgeShapeCache::default();
     for i in 1..10_000 {
         let effects = base.times(i as u64);
-        cache.remember_measurement(CandidateMeasurement {
-            key: (i, i + 1),
-            delta: LayoutUnit::ZERO,
-            valid: true,
-            effects,
-        });
+        remember(&mut cache, (i, i + 1), effects);
         if let Some(hit) = cache.measurement((i, i + 1)) {
             assert_eq!(hit.effects, effects);
         }
         assert!(cache.measurement_storage_cost() <= EDGE_MEASUREMENT_CACHE_COST);
-        assert!(cache.cost <= EDGE_SHAPE_CACHE_COST);
+        assert!(cache.cost + cache.measurement_storage_cost() <= EDGE_SHAPE_CACHE_COST);
     }
     assert_eq!(cache.measurement((1, 2)).unwrap().effects, base);
     assert!(cache.measurement((9999, 10_000)).is_none());
     if let Some(out_of_range) = (u32::MAX as usize).checked_add(1) {
-        cache.remember_measurement(CandidateMeasurement {
-            key: (out_of_range, out_of_range),
-            delta: LayoutUnit::ZERO,
-            valid: true,
-            effects: base,
-        });
+        remember(&mut cache, (out_of_range, out_of_range), base);
         assert!(cache.measurement((out_of_range, out_of_range)).is_none());
     }
     cache.clear();
@@ -462,16 +452,11 @@ fn shared_effects_distinguish_limits_outcomes_saturation_and_suppression() {
             cx.warnings.push(WarningKind::Unsupported, "suppressed");
         }
         let mut sat = Saturation::default();
-        let recording = super::super::replay::begin(&mut cx, &sat);
-        super::super::replay::record_charge(&mut cx, 1, limit, within);
+        let recording = replay::begin(&mut cx, &sat);
+        replay::record_charge(&mut cx, 1, limit, within);
         sat.saturated = saturated;
-        let effects = super::super::replay::finish(&mut cx, recording, &sat).unwrap();
-        cache.remember_measurement(CandidateMeasurement {
-            key: (index, index + 1),
-            delta: LayoutUnit::ZERO,
-            valid: true,
-            effects,
-        });
+        let effects = replay::finish(&mut cx, recording, &sat).unwrap();
+        remember(&mut cache, (index, index + 1), effects);
         records.push(effects);
     }
     for (index, expected) in records.into_iter().enumerate() {
@@ -505,13 +490,37 @@ fn assert_retained_cost(cache: &EdgeShapeCache) {
         .sum();
     assert_eq!(selected, cache.selected_cost);
     assert_eq!(
-        cache.cost,
-        ordinary + selected + cache.measurement_storage_cost()
+        cache.cost, ordinary,
+        "ordinary glyph accounting remains independent"
     );
-    assert!(cache.cost <= EDGE_SHAPE_CACHE_COST);
+    assert!(cache.cost + selected + cache.measurement_storage_cost() <= EDGE_SHAPE_CACHE_COST);
     assert!(ordinary <= EDGE_SHAPE_CACHE_COST - EDGE_MEASUREMENT_CACHE_COST);
     assert!(selected + cache.measurement_storage_cost() <= EDGE_MEASUREMENT_CACHE_COST);
     assert!(cache.entries.len() + cache.selected.len() <= EDGE_SHAPE_CACHE_ENTRIES);
+}
+
+#[test]
+fn supplemental_snapshots_preserve_ordinary_glyph_admission_after_accounting_cleanup() {
+    let mut reference = EdgeShapeCache::default();
+    let mut supplemented = EdgeShapeCache::default();
+    let snapshots = fill_selected(&mut supplemented);
+    let shape = window(EDGE_SHAPE_ENTRY_COST_MAX);
+    assert!(snapshots.len() + 64 < EDGE_SHAPE_CACHE_ENTRIES);
+    for index in 0..64 {
+        let key = (index, index + 1, None);
+        assert_eq!(
+            supplemented.insert(key, &shape),
+            reference.insert(key, &shape),
+            "summary-side snapshots must not consume ordinary glyph reservation"
+        );
+        assert_eq!(supplemented.cost, reference.cost);
+        assert_retained_cost(&supplemented);
+    }
+    assert!(
+        snapshots
+            .iter()
+            .all(|snapshot| snapshot.upgrade().is_some())
+    );
 }
 
 #[test]
@@ -529,12 +538,14 @@ fn measurement_growth_releases_supplemental_table_and_preserves_probe_residents(
     let resident = Arc::downgrade(cache.get(&(0, 1, None)).unwrap());
     let selected = fill_selected(&mut cache);
     for i in 0..20_000 {
-        cache.remember_measurement(CandidateMeasurement {
-            key: (i, i + 1),
-            delta: LayoutUnit::ZERO,
-            valid: true,
-            effects,
-        });
+        cache.remember_measurement(
+            (i, i + 1),
+            CandidateMeasurement {
+                delta: LayoutUnit::ZERO,
+                valid: true,
+                effects,
+            },
+        );
         assert_retained_cost(&cache);
     }
     assert!(selected.iter().all(|weak| weak.upgrade().is_none()));
