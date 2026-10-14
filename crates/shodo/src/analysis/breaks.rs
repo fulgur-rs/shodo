@@ -1320,13 +1320,7 @@ mod tests {
         b.push_text(TextSource::Generated { node: NodeId(1) }, "a\t")
             .push_atomic(NodeId(2), &root, InlineEdges::default())
             .push_text(TextSource::Generated { node: NodeId(3) }, "b");
-        let fonts = crate::font::FontCollection::with_options(
-            &limits,
-            crate::font::FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         let mut cx = crate::LayoutContext::new();
         let p = b.build(&mut cx, &fonts).unwrap();
         assert!(

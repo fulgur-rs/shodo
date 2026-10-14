@@ -1,5 +1,5 @@
 //! Overflow bounds regression and outline work contracts.
-use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+use crate::font::{FontCollection, FontFaceDescriptor};
 use crate::geometry::LogicalRect;
 use crate::limits::Limits;
 use crate::node::{NodeId, TextSource};
@@ -14,13 +14,7 @@ pub(super) fn record_bounds() {
 }
 
 fn fonts(bytes: &[u8]) -> FontCollection {
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     fonts
         .register_face(
             bytes.to_vec(),

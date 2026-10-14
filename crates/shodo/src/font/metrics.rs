@@ -399,13 +399,7 @@ mod tests {
 
     #[test]
     fn cached_units_match_uncached_shaping_for_query_size_and_character() {
-        let fonts = FontCollection::with_options(
-            &Limits::default(),
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&Limits::default());
         for (family, width) in [("First", 600), ("Second", 800)] {
             fonts
                 .register_face(
@@ -509,13 +503,7 @@ mod tests {
     #[test]
     fn unit_cache_recovers_from_poison_and_concurrent_registration() {
         use std::sync::{Arc, Barrier};
-        let fonts = FontCollection::with_options(
-            &Limits::default(),
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&Limits::default());
         let query = FontQuery {
             families: vec![FontFamily::Named("Concurrent".into())],
             ..Default::default()
@@ -559,25 +547,8 @@ mod tests {
     }
 
     fn mvar_font(base: &[u8], records: &[([u8; 4], i16)]) -> Vec<u8> {
-        let mut tables = Vec::new();
-        for n in 0..u16::from_be_bytes(base[4..6].try_into().unwrap()) as usize {
-            let at = 12 + n * 16;
-            let offset = u32::from_be_bytes(base[at + 8..at + 12].try_into().unwrap()) as usize;
-            let len = u32::from_be_bytes(base[at + 12..at + 16].try_into().unwrap()) as usize;
-            tables.push((
-                base[at..at + 4].try_into().unwrap(),
-                base[offset..offset + len].to_vec(),
-            ));
-        }
-        let mut fvar = Vec::new();
-        for value in [1u16, 0, 16, 2, 1, 20, 0, 8] {
-            fvar.extend(value.to_be_bytes());
-        }
-        fvar.extend(b"wght");
-        for value in [100i32, 400, 900] {
-            fvar.extend((value << 16).to_be_bytes());
-        }
-        fvar.extend([0, 0, 1, 0]);
+        let mut tables = crate::font::sfnt::read_sfnt_tables(base);
+        let fvar = crate::font::sfnt::fvar_table(&[(*b"wght", [100, 400, 900])]);
         let mut mvar = Vec::new();
         for value in [
             1u16,
@@ -625,13 +596,7 @@ mod tests {
         ];
         let bytes = mvar_font(crate::test_support::fonts::LATIN, &records);
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register_face(
                 bytes,
@@ -703,13 +668,7 @@ mod tests {
     #[test]
     fn resolved_run_reuses_its_acquired_font_data_for_metrics() {
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            crate::font::FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register_face(
                 crate::font::browser_tests::test_font("Reuse", &['a'], 500),
@@ -770,13 +729,7 @@ mod tests {
     #[test]
     fn acquired_data_metrics_preserve_root_stub_document_face_and_invalid_sizes() {
         let limits = Limits::default();
-        let shared = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let shared = crate::test_support::fonts::collection(&limits);
         let stub_id = shared.primary_font();
         let stub_data = shared.font_data(stub_id).unwrap();
         let (stub, vertical) = shared.metrics_from_data(stub_id, &stub_data, 10.0, &[]);
@@ -826,13 +779,7 @@ mod tests {
             crate::test_support::fonts::CJK,
             &[(*b"vasc", 20), (*b"vdsc", -30), (*b"vlgp", 10)],
         );
-        let fonts = FontCollection::with_options(
-            &Limits::default(),
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&Limits::default());
         let id = fonts
             .register_face(
                 bytes,

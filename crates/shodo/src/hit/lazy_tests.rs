@@ -7,13 +7,7 @@ mod fixture {
 
 fn lines() -> Vec<Line> {
     let limits = Default::default();
-    let fonts = crate::font::FontCollection::with_options(
-        &limits,
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     let style = crate::style::ParagraphStyle::default();
     let mut builder = crate::ParagraphBuilder::new(&style, &limits);
     builder.push_text(

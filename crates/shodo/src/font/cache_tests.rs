@@ -4,13 +4,7 @@ use std::sync::{Barrier, mpsc};
 use std::time::Duration;
 
 fn collections() -> (FontCollection, FontCollection, FontQuery, FontId) {
-    let shared = FontCollection::with_options(
-        &Limits::default(),
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let shared = crate::test_support::fonts::collection(&Limits::default());
     let id = shared
         .register_face(
             browser_tests::test_font("Concurrent", &['a', '0', '水'], 600),

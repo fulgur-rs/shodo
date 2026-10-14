@@ -1,6 +1,6 @@
 use super::PunctuationClass as P;
 use super::*;
-use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+use crate::font::FontFaceDescriptor;
 use crate::limits::Limits;
 use crate::node::{NodeId, TextSource};
 use crate::style::{
@@ -22,13 +22,7 @@ std::thread_local! {
 #[test]
 fn ordinary_text_skips_punctuation_font_metric_preparation() {
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::LATIN.to_vec(),
@@ -65,13 +59,7 @@ fn ordinary_text_skips_punctuation_font_metric_preparation() {
 #[test]
 fn repeated_punctuation_reuses_metrics_across_language_runs_and_keeps_sizes_distinct() {
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::CJK.to_vec(),
@@ -143,13 +131,7 @@ fn equal_glyph_ids_from_distinct_faces_do_not_share_outline_bounds() {
     let mut tables = cjk_tables();
     tables.retain(|(tag, _)| tag != b"CFF ");
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     for (family, bytes) in [
         ("Outlined", crate::test_support::fonts::CJK.to_vec()),
         ("No Outline", cjk_font(&mut tables)),
@@ -195,18 +177,7 @@ fn equal_glyph_ids_from_distinct_faces_do_not_share_outline_bounds() {
 }
 
 pub(crate) fn cjk_tables() -> Vec<([u8; 4], Vec<u8>)> {
-    let base = crate::test_support::fonts::CJK;
-    (0..u16::from_be_bytes(base[4..6].try_into().unwrap()) as usize)
-        .map(|n| {
-            let at = 12 + n * 16;
-            let offset = u32::from_be_bytes(base[at + 8..at + 12].try_into().unwrap()) as usize;
-            let len = u32::from_be_bytes(base[at + 12..at + 16].try_into().unwrap()) as usize;
-            (
-                base[at..at + 4].try_into().unwrap(),
-                base[offset..offset + len].to_vec(),
-            )
-        })
-        .collect()
+    crate::font::sfnt::read_sfnt_tables(crate::test_support::fonts::CJK)
 }
 
 pub(crate) fn cjk_font(tables: &mut [([u8; 4], Vec<u8>)]) -> Vec<u8> {
@@ -246,13 +217,7 @@ fn justification_filters_boundaries_inside_an_actual_punctuation_ligature() {
     tables.retain(|(tag, _)| tag != b"GSUB");
     tables.push((*b"GSUB", gsub));
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             cjk_font(&mut tables),
@@ -320,15 +285,7 @@ fn fallback_variation_and_size_adjust_use_the_actual_blank() {
         .maxp()
         .unwrap()
         .num_glyphs();
-    let mut fvar = Vec::new();
-    for value in [1u16, 0, 16, 2, 1, 20, 0, 8] {
-        fvar.extend(value.to_be_bytes());
-    }
-    fvar.extend(b"wght");
-    for value in [100i32, 400, 900] {
-        fvar.extend((value << 16).to_be_bytes());
-    }
-    fvar.extend([0, 0, 1, 0]);
+    let fvar = crate::font::sfnt::fvar_table(&[(*b"wght", [100, 400, 900])]);
     // A real HVAR table adds 600 font units to every advance at wght=900.
     // The outlines retain their original bounds, so halfwidth trimming
     // becomes unsafe after the ic-width adjustment keeps advances at 32px.
@@ -352,13 +309,7 @@ fn fallback_variation_and_size_adjust_use_the_actual_blank() {
     tables.push((*b"fvar", fvar));
     tables.push((*b"HVAR", hvar));
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::LATIN.to_vec(),
@@ -468,13 +419,7 @@ fn fallback_variation_and_size_adjust_use_the_actual_blank() {
 fn raw_bounds_cache_keeps_missing_outlines_and_stays_bounded() {
     let font = FontRef::new(crate::test_support::fonts::CJK).unwrap();
     let metrics = font.glyph_metrics(Size::new(16.0), LocationRef::default());
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     let id = fonts
         .register(crate::test_support::fonts::CJK.to_vec())
         .unwrap();
@@ -517,13 +462,7 @@ fn proportional_punctuation_keeps_its_advance_and_ink() {
     let hmtx = &mut tables.iter_mut().find(|t| t.0 == *b"hmtx").unwrap().1;
     hmtx[opening * 4..opening * 4 + 2].copy_from_slice(&800u16.to_be_bytes());
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             cjk_font(&mut tables),
@@ -847,13 +786,7 @@ fn quote_paragraph_with_font(
     font_features: Vec<FontFeature>,
 ) -> crate::Paragraph {
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             font,
@@ -1010,13 +943,7 @@ fn proportional_quote_expanded_across_runs_keeps_closing_class() {
 
 fn paragraph_without_fullwidth_metric(text: &str) -> crate::Paragraph {
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::LATIN.to_vec(),

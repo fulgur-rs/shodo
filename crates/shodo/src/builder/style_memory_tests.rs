@@ -314,13 +314,7 @@ fn first_line_inheritance_after_sanitization_checks_generated_bytes() {
             .close_inline();
     }
     assert_eq!(b.error(), None);
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     let error = b.build(&mut LayoutContext::new(), &fonts).err().unwrap();
     assert_eq!(error.kind, LimitKind::StyleBytes);
 }
@@ -421,13 +415,7 @@ fn nested_base_bytes_follow_remapped_styles_not_unrelated_parent_styles() {
     parent.push_atomic(NodeId(4), &unrelated, InlineEdges::default());
     parent.push_ruby(NodeId(5), &InlineStyle::default(), outer);
     assert_eq!(parent.error(), None);
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     assert!(
         parent.build(&mut LayoutContext::new(), &fonts).is_ok(),
         "nested base must use its imported style IDs"
@@ -466,13 +454,7 @@ fn imported_base_keeps_its_own_first_line_byte_cap() {
     let mut b = ParagraphBuilder::new(&paragraph, &Limits::default());
     b.push_ruby(NodeId(2), &InlineStyle::default(), ruby);
     assert_eq!(b.error(), None);
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     let error = b.build(&mut LayoutContext::new(), &fonts).err().unwrap();
     assert_eq!((error.kind, error.limit), (LimitKind::StyleBytes, 8192));
 }
@@ -526,13 +508,7 @@ fn generated_annotation_style_copies_share_the_parent_byte_cap() {
         None,
         "raw shared inputs fit; generated lane datasets must still be capped"
     );
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     let error = b.build(&mut LayoutContext::new(), &fonts).err().unwrap();
     assert_eq!((error.kind, error.limit), (LimitKind::StyleBytes, 32_768));
 }

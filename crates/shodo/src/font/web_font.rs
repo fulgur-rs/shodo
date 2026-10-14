@@ -1,29 +1,15 @@
 #[cfg(all(test, feature = "web-fonts"))]
 mod tests {
     use super::*;
-    use crate::font::{FontCollection, FontFaceDescriptor, FontOptions, FontQuery, FontSource};
+    use crate::font::{FontFaceDescriptor, FontQuery, FontSource};
     use crate::limits::{LimitKind, Limits};
     use std::io::Write;
 
-    fn tables(sfnt: &[u8]) -> Vec<([u8; 4], Vec<u8>)> {
-        let count = u16::from_be_bytes(sfnt[4..6].try_into().unwrap()) as usize;
-        (0..count)
-            .map(|n| {
-                let at = 12 + 16 * n;
-                let start = u32::from_be_bytes(sfnt[at + 8..at + 12].try_into().unwrap()) as usize;
-                let len = u32::from_be_bytes(sfnt[at + 12..at + 16].try_into().unwrap()) as usize;
-                (
-                    sfnt[at..at + 4].try_into().unwrap(),
-                    sfnt[start..start + len].to_vec(),
-                )
-            })
-            .collect()
-    }
     fn font() -> Vec<u8> {
         crate::font::browser_tests::test_font("Web", &['0', '水'], 600)
     }
     fn woff1(sfnt: &[u8]) -> Vec<u8> {
-        let tables = tables(sfnt);
+        let tables = crate::font::sfnt::read_sfnt_tables(sfnt);
         let mut header = vec![0; 44];
         header[..4].copy_from_slice(b"wOFF");
         header[4..8].copy_from_slice(&sfnt[..4]);
@@ -72,7 +58,7 @@ mod tests {
         out
     }
     fn woff2(sfnt: &[u8]) -> Vec<u8> {
-        let tables = tables(sfnt);
+        let tables = crate::font::sfnt::read_sfnt_tables(sfnt);
         let mut header = vec![0; 48];
         header[..4].copy_from_slice(b"wOF2");
         header[4..8].copy_from_slice(&sfnt[..4]);
@@ -107,13 +93,7 @@ mod tests {
         for data in [woff1(&font()), woff2(&font())] {
             let decoded = decode_web_font(&data, &Limits::default()).unwrap();
             assert!(crate::font::check::check_font(&decoded, &Limits::default()).is_ok());
-            let fonts = FontCollection::with_options(
-                &Limits::default(),
-                FontOptions {
-                    system_fonts: false,
-                    ..Default::default()
-                },
-            );
+            let fonts = crate::test_support::fonts::collection(&Limits::default());
             let id = fonts
                 .register_sources(
                     FontFaceDescriptor {
@@ -141,13 +121,7 @@ mod tests {
                 decode_web_font(&bytes, &Limits::default()),
                 Err(FontError::Malformed(_))
             ));
-            let fonts = FontCollection::with_options(
-                &Limits::default(),
-                FontOptions {
-                    system_fonts: false,
-                    ..Default::default()
-                },
-            );
+            let fonts = crate::test_support::fonts::collection(&Limits::default());
             let id = fonts
                 .register_sources(
                     FontFaceDescriptor {

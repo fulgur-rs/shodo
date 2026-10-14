@@ -89,30 +89,8 @@ fn descriptor(family: &str) -> FontFaceDescriptor {
 
 pub(super) fn font_with_axes(axes: &[([u8; 4], [i32; 3])]) -> Vec<u8> {
     let bytes = test_font("Axes", &['a'], 600);
-    let font = skrifa::FontRef::new(&bytes).unwrap();
-    let mut tables: Vec<_> = font
-        .table_directory()
-        .table_records()
-        .iter()
-        .map(|record| {
-            (
-                record.tag().to_be_bytes(),
-                font.table_data(record.tag()).unwrap().as_bytes().to_vec(),
-            )
-        })
-        .collect();
-    let mut fvar = Vec::new();
-    for field in [1u16, 0, 16, 2, axes.len() as u16, 20, 0, 4] {
-        fvar.extend(field.to_be_bytes());
-    }
-    for (tag, values) in axes {
-        fvar.extend(tag);
-        for value in values {
-            fvar.extend((value * 65536).to_be_bytes());
-        }
-        fvar.extend([0, 0, 1, 0]);
-    }
-    tables.push((*b"fvar", fvar));
+    let mut tables = sfnt::read_sfnt_tables(&bytes);
+    tables.push((*b"fvar", sfnt::fvar_table(axes)));
     sfnt::build_sfnt(&tables)
 }
 
@@ -420,13 +398,7 @@ fn fonts_data_index(fonts: &FontCollection, id: FontId) -> u32 {
 }
 
 fn no_system() -> FontCollection {
-    FontCollection::with_options(
-        &Limits::default(),
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    )
+    crate::test_support::fonts::collection(&Limits::default())
 }
 fn query(families: &[&str], weight: f32) -> FontQuery {
     FontQuery {
@@ -653,15 +625,7 @@ fn emoji_and_text_presentation_prefer_color_and_monochrome_faces() {
     let text = add_face(&fonts, "Symbol", (400., 400.), &['☺', '😀']);
     // Rebuild table directory with a minimal color marker for selection.
     let plain = test_font("Color", &['☺', '😀'], 600);
-    let count = u16::from_be_bytes([plain[4], plain[5]]) as usize;
-    let mut tables = Vec::new();
-    for n in 0..count {
-        let at = 12 + n * 16;
-        let tag = plain[at..at + 4].try_into().unwrap();
-        let start = u32::from_be_bytes(plain[at + 8..at + 12].try_into().unwrap()) as usize;
-        let len = u32::from_be_bytes(plain[at + 12..at + 16].try_into().unwrap()) as usize;
-        tables.push((tag, plain[start..start + len].to_vec()));
-    }
+    let mut tables = crate::font::sfnt::read_sfnt_tables(&plain);
     tables.push((*b"COLR", vec![0; 14]));
     let color = fonts
         .register_face(sfnt::build_sfnt(&tables), 0, descriptor("Symbol"))
@@ -757,26 +721,8 @@ fn later_css_faces_win_identical_descriptors_and_cache_is_bounded() {
 #[test]
 fn variable_weight_matches_inside_css_range_and_returns_clamped_axis_value() {
     let plain = test_font("Variable", &['a'], 600);
-    let count = u16::from_be_bytes([plain[4], plain[5]]) as usize;
-    let mut tables = Vec::new();
-    for n in 0..count {
-        let at = 12 + n * 16;
-        let start = u32::from_be_bytes(plain[at + 8..at + 12].try_into().unwrap()) as usize;
-        let len = u32::from_be_bytes(plain[at + 12..at + 16].try_into().unwrap()) as usize;
-        tables.push((
-            plain[at..at + 4].try_into().unwrap(),
-            plain[start..start + len].to_vec(),
-        ));
-    }
-    let mut fvar = Vec::new();
-    for field in [1u16, 0, 16, 2, 1, 20, 0, 8] {
-        fvar.extend_from_slice(&field.to_be_bytes());
-    }
-    fvar.extend_from_slice(b"wght");
-    for value in [100i32, 400, 900] {
-        fvar.extend_from_slice(&(value << 16).to_be_bytes());
-    }
-    fvar.extend_from_slice(&[0, 0, 1, 0]);
+    let mut tables = crate::font::sfnt::read_sfnt_tables(&plain);
+    let fvar = crate::font::sfnt::fvar_table(&[(*b"wght", [100, 400, 900])]);
     tables.push((*b"fvar", fvar));
     let fonts = no_system();
     let mut desc = descriptor("Web");
@@ -1009,25 +955,8 @@ fn ch_advance_matches_shaped_zero_at_exact_fit_width() {
 #[test]
 fn ch_advance_matches_shaping_at_intermediate_hvar_axis() {
     let base = test_font("Variable Zero", &['0'], 1000);
-    let mut tables = Vec::new();
-    for n in 0..u16::from_be_bytes(base[4..6].try_into().unwrap()) as usize {
-        let at = 12 + n * 16;
-        let offset = u32::from_be_bytes(base[at + 8..at + 12].try_into().unwrap()) as usize;
-        let len = u32::from_be_bytes(base[at + 12..at + 16].try_into().unwrap()) as usize;
-        tables.push((
-            base[at..at + 4].try_into().unwrap(),
-            base[offset..offset + len].to_vec(),
-        ));
-    }
-    let mut fvar = Vec::new();
-    for value in [1u16, 0, 16, 2, 1, 20, 0, 8] {
-        fvar.extend(value.to_be_bytes());
-    }
-    fvar.extend(b"wght");
-    for value in [400i32, 400, 900] {
-        fvar.extend((value << 16).to_be_bytes());
-    }
-    fvar.extend([0, 0, 1, 0]);
+    let mut tables = crate::font::sfnt::read_sfnt_tables(&base);
+    let fvar = crate::font::sfnt::fvar_table(&[(*b"wght", [400, 400, 900])]);
     let mut hvar = Vec::new();
     for value in [1u16, 0] {
         hvar.extend(value.to_be_bytes());
@@ -1268,13 +1197,7 @@ fn shaper_cache_is_shared_bounded_and_zero_capacity_still_returns_data() {
         max_shaper_cache_entries: Some(1),
         ..Default::default()
     };
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     let first = add_face(&fonts, "One", (400., 400.), &['a']);
     let second = add_face(&fonts, "Two", (400., 400.), &['b']);
     let a = fonts.shaper_data(first).unwrap();
@@ -1288,13 +1211,7 @@ fn shaper_cache_is_shared_bounded_and_zero_capacity_still_returns_data() {
         max_shaper_cache_entries: Some(0),
         ..Default::default()
     };
-    let empty = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let empty = crate::test_support::fonts::collection(&limits);
     let id = add_face(&empty, "Zero", (400., 400.), &['a']);
     assert!(empty.shaper_data(id).is_some());
     assert!(empty.caches().shapers.is_empty());
@@ -1338,17 +1255,7 @@ fn vertical_font_metrics_use_vhea_and_report_absence() {
         .register_face(plain.clone(), 0, descriptor("Horizontal"))
         .unwrap();
     assert!(fonts.vertical_metrics(id, 10., &[]).is_none());
-    let count = u16::from_be_bytes([plain[4], plain[5]]) as usize;
-    let mut tables = Vec::new();
-    for n in 0..count {
-        let at = 12 + n * 16;
-        let start = u32::from_be_bytes(plain[at + 8..at + 12].try_into().unwrap()) as usize;
-        let len = u32::from_be_bytes(plain[at + 12..at + 16].try_into().unwrap()) as usize;
-        tables.push((
-            plain[at..at + 4].try_into().unwrap(),
-            plain[start..start + len].to_vec(),
-        ));
-    }
+    let mut tables = crate::font::sfnt::read_sfnt_tables(&plain);
     let mut vhea = vec![0; 36];
     vhea[0..4].copy_from_slice(&0x0001_0000u32.to_be_bytes());
     vhea[4..6].copy_from_slice(&500i16.to_be_bytes());
@@ -1380,25 +1287,8 @@ fn style_selection_precedes_character_coverage() {
 #[test]
 fn css_oblique_maps_to_negative_slnt_and_respects_descriptor() {
     let plain = test_font("Variable", &['a'], 600);
-    let mut tables = Vec::new();
-    for n in 0..u16::from_be_bytes(plain[4..6].try_into().unwrap()) as usize {
-        let at = 12 + n * 16;
-        let start = u32::from_be_bytes(plain[at + 8..at + 12].try_into().unwrap()) as usize;
-        let len = u32::from_be_bytes(plain[at + 12..at + 16].try_into().unwrap()) as usize;
-        tables.push((
-            plain[at..at + 4].try_into().unwrap(),
-            plain[start..start + len].to_vec(),
-        ));
-    }
-    let mut fvar = Vec::new();
-    for field in [1u16, 0, 16, 2, 1, 20, 0, 8] {
-        fvar.extend_from_slice(&field.to_be_bytes());
-    }
-    fvar.extend_from_slice(b"slnt");
-    for value in [-20i32, 0, 0] {
-        fvar.extend_from_slice(&(value << 16).to_be_bytes());
-    }
-    fvar.extend_from_slice(&[0, 0, 1, 0]);
+    let mut tables = crate::font::sfnt::read_sfnt_tables(&plain);
+    let fvar = crate::font::sfnt::fvar_table(&[(*b"slnt", [-20, 0, 0])]);
     tables.push((*b"fvar", fvar));
     for (style, expected) in [(FontStyle::Oblique(10.), -10.), (FontStyle::Normal, 0.)] {
         let fonts = no_system();
@@ -1458,13 +1348,7 @@ fn local_aliases_share_reloaded_source_bytes_within_layer() {
 #[test]
 fn default_ignorables_emit_no_glyphs_without_losing_base_or_space() {
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     let chars = [' ', 'X', '\u{34f}', '\u{180e}', '\u{2060}'];
     let id = fonts
         .register_face(

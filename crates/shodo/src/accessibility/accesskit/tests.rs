@@ -110,13 +110,7 @@ fn exporting_word_boundaries_visits_only_each_chunks_range() {
     // node values. Exercise both 255-character chunks and many short DOM runs.
     for (count, separate) in [(2048, false), (4096, false), (256, true), (1024, true)] {
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            crate::font::FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register(crate::test_support::fonts::LATIN.to_vec())
             .unwrap();

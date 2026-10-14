@@ -428,7 +428,7 @@ pub(crate) fn build_units(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use crate::font::FontFaceDescriptor;
     use crate::limits::Limits;
     use crate::node::TextSource;
     use crate::style::{FontFamily, InlineStyle, ParagraphStyle};
@@ -436,13 +436,7 @@ mod tests {
     #[test]
     fn cluster_end_lookahead_preserves_matched_and_missing_font_graphemes() {
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         for (family, bytes) in [
             ("Latin", crate::test_support::fonts::LATIN),
             ("Arabic", crate::test_support::fonts::ARABIC),
@@ -458,13 +452,7 @@ mod tests {
                 )
                 .unwrap();
         }
-        let missing = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let missing = crate::test_support::fonts::collection(&limits);
         for (text, family, want) in [
             ("ab", "Latin", vec![(0, 1), (1, 2)]),
             ("a\u{301}b", "Latin", vec![(0, 3), (3, 4)]),

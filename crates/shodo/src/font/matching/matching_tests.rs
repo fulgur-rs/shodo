@@ -368,18 +368,9 @@ fn bulk_registered_named_and_nameless_faces_keep_cached_metadata() {
     for named in [true, false] {
         let mut bytes = super::super::browser_tests::test_font("Internal", &['a', 'b'], 600);
         if !named {
-            let font = FontRef::new(&bytes).unwrap();
-            let tables: Vec<_> = font
-                .table_directory()
-                .table_records()
-                .iter()
-                .filter(|record| record.tag() != skrifa::raw::types::Tag::new(b"name"))
-                .map(|record| {
-                    (
-                        record.tag().to_be_bytes(),
-                        font.table_data(record.tag()).unwrap().as_bytes().to_vec(),
-                    )
-                })
+            let tables: Vec<_> = super::super::sfnt::read_sfnt_tables(&bytes)
+                .into_iter()
+                .filter(|(tag, _)| tag != b"name")
                 .collect();
             bytes = super::super::sfnt::build_sfnt(&tables);
         }
@@ -506,18 +497,7 @@ fn best_candidate_costs_at_most_one_rank_per_surviving_face() {
 
 fn multi_axis_font() -> Vec<u8> {
     let bytes = super::super::browser_tests::test_font("Axes", &['a', 'b'], 400);
-    let font = FontRef::new(&bytes).unwrap();
-    let mut tables: Vec<_> = font
-        .table_directory()
-        .table_records()
-        .iter()
-        .map(|record| {
-            (
-                record.tag().to_be_bytes(),
-                font.table_data(record.tag()).unwrap().as_bytes().to_vec(),
-            )
-        })
-        .collect();
+    let mut tables = super::super::sfnt::read_sfnt_tables(&bytes);
     let mut fvar = Vec::new();
     for field in [1u16, 0, 16, 2, 5, 20, 0, 24] {
         fvar.extend_from_slice(&field.to_be_bytes());
@@ -719,13 +699,7 @@ fn old_variable_matches_survive_generation_invalidation() {
 
 #[test]
 fn distinct_clusters_reuse_registered_candidate_preparation() {
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     let mut expected = None;
     for _ in 0..4 {
         expected = Some(
@@ -769,13 +743,7 @@ fn distinct_clusters_reuse_registered_candidate_preparation() {
 
 #[test]
 fn prepared_registered_selection_matches_uncached_attributes_and_coverage() {
-    let fonts = FontCollection::with_options(
-        &Limits::unlimited(),
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::unlimited());
     for (family, weight, ranges, bytes) in [
         ("Web", (400., 400.), vec![(97, 97)], multi_axis_font()),
         ("Web", (400., 400.), vec![(98, 98)], multi_axis_font()),
@@ -836,26 +804,9 @@ fn prepared_registered_selection_matches_uncached_attributes_and_coverage() {
 
 #[test]
 fn prepared_candidates_keep_cluster_presentation_and_query_synthesis_dynamic() {
-    let fonts = FontCollection::with_options(
-        &Limits::unlimited(),
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::unlimited());
     let mono = super::super::browser_tests::test_font("Internal", &['☺', '😀'], 600);
-    let font = FontRef::new(&mono).unwrap();
-    let mut tables: Vec<_> = font
-        .table_directory()
-        .table_records()
-        .iter()
-        .map(|r| {
-            (
-                r.tag().to_be_bytes(),
-                font.table_data(r.tag()).unwrap().as_bytes().to_vec(),
-            )
-        })
-        .collect();
+    let mut tables = super::super::sfnt::read_sfnt_tables(&mono);
     tables.push((*b"COLR", vec![0; 14]));
     let color = super::super::sfnt::build_sfnt(&tables);
     let color_id = fonts

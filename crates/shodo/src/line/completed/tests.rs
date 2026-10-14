@@ -488,13 +488,7 @@ fn emphasis_offset_capacity_obeys_completed_budget_in_root_and_ruby_child() {
 fn retained_annotation_geometry_is_reused_without_content_rescans() {
     use crate::style::{LineHeight, TextEmphasis, TextEmphasisPosition, TextEmphasisShape};
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register(crate::test_support::fonts::LATIN.to_vec())
         .unwrap();
@@ -694,13 +688,7 @@ fn child_only_build_warnings_disqualify_completed_ruby_trial() {
     use crate::ruby::*;
     use crate::style::{FontFamily, InlineStyle};
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::CJK.to_vec(),

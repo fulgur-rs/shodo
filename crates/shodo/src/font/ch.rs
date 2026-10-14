@@ -30,17 +30,11 @@ impl ChLength {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::font::FontOptions;
+
     use crate::limits::Limits;
 
     fn empty() -> FontCollection {
-        FontCollection::with_options(
-            &Limits::default(),
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        )
+        crate::test_support::fonts::collection(&Limits::default())
     }
 
     #[test]

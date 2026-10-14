@@ -650,7 +650,7 @@ fn character_advance(
 mod tests {
     use super::*;
     use crate::{
-        font::{FontFaceDescriptor, FontOptions},
+        font::FontFaceDescriptor,
         limits::{Limits, WarningKind},
         style::{
             FontFamily, FontMetricKind, FontSizeAdjust, FontStyle, FontSynthesis, FontVariation,
@@ -660,13 +660,7 @@ mod tests {
     };
 
     fn fonts() -> FontCollection {
-        let fonts = FontCollection::with_options(
-            &Limits::default(),
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&Limits::default());
         fonts
             .register_face(
                 LATIN.to_vec(),
@@ -719,13 +713,7 @@ mod tests {
         }
         bytes[start..start + 2].copy_from_slice(&0x202fu16.to_be_bytes());
         bytes[end..end + 2].copy_from_slice(&0x202fu16.to_be_bytes());
-        let collection = FontCollection::with_options(
-            &Limits::default(),
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let collection = crate::test_support::fonts::collection(&Limits::default());
         collection
             .register_face(
                 bytes.clone(),

@@ -6,16 +6,10 @@ use crate::{AtomicSize, AtomicSizes, Fragment, LayoutContext, ParagraphBuilder};
 
 #[test]
 fn completed_shifts_place_every_empty_long_and_reshaped_fragment() {
-    use crate::font::{FontFaceDescriptor, FontOptions};
+    use crate::font::FontFaceDescriptor;
     use crate::style::{FontFamily, InlineStyle, LineHeight, VerticalAlign};
     let limits = Limits::unlimited();
-    let fonts = crate::font::FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::LATIN.to_vec(),
@@ -293,13 +287,7 @@ fn cluster_views_visit_only_their_own_clusters() {
 }
 
 fn final_review_fonts() -> crate::font::FontCollection {
-    crate::font::FontCollection::with_options(
-        &Limits::default(),
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    )
+    crate::test_support::fonts::collection(&Limits::default())
 }
 
 #[test]

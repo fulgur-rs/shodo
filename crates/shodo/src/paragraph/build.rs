@@ -1269,7 +1269,7 @@ fn baseline_kind(writing_mode: WritingMode, parent: &InlineStyle) -> BaselineKin
 mod tests {
     use super::*;
     use crate::AtomicSizes;
-    use crate::font::{FontFaceDescriptor, FontId, FontOptions};
+    use crate::font::{FontFaceDescriptor, FontId};
     use crate::geometry::LogicalRect;
     use crate::hit::{LineLayout, TextPosition};
     use crate::limits::{Limits, WarningSink};
@@ -1282,13 +1282,7 @@ mod tests {
 
     fn fonts() -> (FontCollection, FontId) {
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         let latin = fonts
             .register_face(
                 crate::test_support::fonts::LATIN.to_vec(),
@@ -1656,27 +1650,9 @@ mod tests {
     }
 
     fn variable_font(bytes: &[u8]) -> Vec<u8> {
-        let mut tables = Vec::new();
-        for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
-            let at = 12 + n * 16;
-            let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
-            let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
-            tables.push((
-                bytes[at..at + 4].try_into().unwrap(),
-                bytes[offset..offset + len].to_vec(),
-            ));
-        }
-        let mut fvar = Vec::new();
-        for field in [1u16, 0, 16, 2, 2, 20, 0, 8] {
-            fvar.extend(field.to_be_bytes());
-        }
-        for (tag, values) in [(b"wght", [100i32, 400, 900]), (b"opsz", [8, 12, 72])] {
-            fvar.extend(tag);
-            for value in values {
-                fvar.extend((value << 16).to_be_bytes());
-            }
-            fvar.extend([0, 0, 1, 0]);
-        }
+        let mut tables = crate::font::sfnt::read_sfnt_tables(bytes);
+        let fvar =
+            crate::font::sfnt::fvar_table(&[(*b"wght", [100, 400, 900]), (*b"opsz", [8, 12, 72])]);
         tables.push((*b"fvar", fvar));
         crate::font::sfnt::build_sfnt(&tables)
     }
@@ -1684,13 +1660,7 @@ mod tests {
     #[test]
     fn first_line_ruby_variations_size_adjust_and_fallback_keep_metrics() {
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         let variable_id = fonts
             .register_face(
                 variable_font(crate::test_support::fonts::LATIN),

@@ -1,5 +1,4 @@
 use super::*;
-use crate::font::{FontCollection, FontOptions};
 use crate::limits::Limits;
 use crate::node::{NodeId, TextSource};
 use crate::ruby::*;
@@ -52,13 +51,7 @@ fn build(levels: usize, empty_every: usize, mode: WritingMode) -> Paragraph {
             .collect(),
     )
     .unwrap();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     let mut builder = ParagraphBuilder::new(
         &ParagraphStyle {
             writing_mode: mode,

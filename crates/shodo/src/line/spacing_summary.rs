@@ -727,13 +727,7 @@ mod tests {
     fn neutral_compact_leaves_skip_level_stack_work() {
         let limits = crate::limits::Limits::default();
         let style = crate::style::ParagraphStyle::default();
-        let fonts = crate::font::FontCollection::with_options(
-            &limits,
-            crate::font::FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         let mut builder = crate::ParagraphBuilder::new(&style, &limits);
         builder.push_text(
             crate::node::TextSource::Generated {
@@ -765,13 +759,7 @@ mod tests {
         use crate::node::{InlineEdges, NodeId, TextSource};
         use crate::style::{InlineStyle, ParagraphStyle};
         let limits = crate::limits::Limits::default();
-        let fonts = crate::font::FontCollection::with_options(
-            &limits,
-            crate::font::FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         for case in 0..7 {
             let mut style = ParagraphStyle::default();
             match case {

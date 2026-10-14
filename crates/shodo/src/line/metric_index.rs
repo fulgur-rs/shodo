@@ -814,20 +814,14 @@ impl MetricIndex {
 mod tests {
     use super::*;
     use crate::ParagraphBuilder;
-    use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use crate::font::FontFaceDescriptor;
     use crate::limits::Limits;
     use crate::node::{InlineEdges, NodeId, Sides, TextSource};
     use crate::style::{FontFamily, InlineStyle, LineHeight, ParagraphStyle};
 
     #[test]
     fn hidden_soft_hyphen_scalar_and_retained_metrics_keep_the_strut() {
-        let fonts = FontCollection::with_options(
-            &Limits::default(),
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&Limits::default());
         for quirk in [false, true] {
             for mode in [
                 WritingMode::HorizontalTb,
@@ -900,13 +894,7 @@ mod tests {
 
     #[test]
     fn forced_root_strut_matches_retained_metrics_for_selected_ranges() {
-        let fonts = FontCollection::with_options(
-            &Limits::default(),
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&Limits::default());
         for mode in [
             WritingMode::HorizontalTb,
             WritingMode::VerticalRl,
@@ -976,13 +964,7 @@ mod tests {
 
     #[test]
     fn quirk_tree_is_absent_without_the_flag() {
-        let fonts = FontCollection::with_options(
-            &Limits::default(),
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&Limits::default());
         for quirk in [false, true] {
             let mut b = ParagraphBuilder::new(
                 &ParagraphStyle {
@@ -1000,13 +982,7 @@ mod tests {
 
     #[test]
     fn selected_content_profiles_match_actual_retained_top_bottom_geometry() {
-        let fonts = FontCollection::with_options(
-            &Limits::default(),
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&Limits::default());
         fonts
             .register_face(
                 crate::test_support::fonts::CJK.to_vec(),
@@ -1164,7 +1140,7 @@ mod tests {
 #[cfg(test)]
 mod emphasis_tests {
     use super::*;
-    use crate::font::{FontCollection, FontOptions};
+
     use crate::limits::Limits;
     use crate::node::{NodeId, TextSource};
     use crate::style::{
@@ -1179,13 +1155,7 @@ mod emphasis_tests {
     #[test]
     fn emphasis_ruby_probes_match_retained_ranges_and_warm_queries_stay_bounded() {
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         for mode in [
             WritingMode::HorizontalTb,
             WritingMode::VerticalRl,

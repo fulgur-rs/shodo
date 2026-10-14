@@ -678,21 +678,12 @@ fn named_font(records: &[(u16, u16, &str)]) -> Vec<u8> {
     }
     name.extend(strings);
     let bytes = test_font("Records", &['a'], 500);
-    let font = skrifa::FontRef::new(&bytes).unwrap();
-    let tables: Vec<_> = font
-        .table_directory()
-        .table_records()
-        .iter()
-        .map(|record| {
-            let tag = record.tag();
-            let data = if tag == skrifa::Tag::new(b"name") {
-                name.clone()
-            } else {
-                font.table_data(tag).unwrap().as_bytes().to_vec()
-            };
-            (tag.to_be_bytes(), data)
-        })
-        .collect();
+    let mut tables = crate::font::sfnt::read_sfnt_tables(&bytes);
+    for (tag, data) in &mut tables {
+        if tag == b"name" {
+            *data = name.clone();
+        }
+    }
     crate::font::sfnt::build_sfnt(&tables)
 }
 

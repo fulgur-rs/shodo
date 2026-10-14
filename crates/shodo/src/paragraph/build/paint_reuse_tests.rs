@@ -1,5 +1,5 @@
 use super::*;
-use crate::font::{FontFaceDescriptor, FontOptions};
+use crate::font::FontFaceDescriptor;
 use crate::node::TextSource;
 
 struct ReferenceGuard(bool);
@@ -157,13 +157,7 @@ fn mapping_budget_matches_replay_at_clone_admission_boundaries() {
 }
 
 fn fonts() -> FontCollection {
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     for (family, bytes) in [
         ("Latin", crate::test_support::fonts::LATIN),
         ("CJK", crate::test_support::fonts::CJK),
@@ -1333,25 +1327,13 @@ fn combined_width_trial_limits_preserve_reference_failure() {
         &mut gsub,
         &[4, 0, 1, 8, 1, 18, 1, 8, 1, 4, z, 2, w, 1, 1, a],
     );
-    let mut tables = Vec::new();
-    for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
-        let at = 12 + n * 16;
-        let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
-        let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
-        let tag: [u8; 4] = bytes[at..at + 4].try_into().unwrap();
-        if tag != *b"GSUB" {
-            tables.push((tag, bytes[offset..offset + len].to_vec()));
-        }
-    }
+    let mut tables: Vec<_> = crate::font::sfnt::read_sfnt_tables(bytes)
+        .into_iter()
+        .filter(|(tag, _)| tag != b"GSUB")
+        .collect();
     tables.push((*b"GSUB", gsub));
     tables.sort_by_key(|(tag, _)| *tag);
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     fonts
         .register_face(
             crate::font::sfnt::build_sfnt(&tables),

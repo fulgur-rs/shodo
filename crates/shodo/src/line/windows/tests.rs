@@ -60,39 +60,36 @@ fn ligature_font_for(bytes: &[u8], script: [u8; 4], substitutions: &[(&str, char
     {
         gsub.extend(word.to_be_bytes());
     }
-    let mut tables = Vec::new();
-    for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
-        let at = 12 + n * 16;
-        let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
-        let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
-        let tag: [u8; 4] = bytes[at..at + 4].try_into().unwrap();
-        if tag == *b"cmap" && script == *b"kana" {
-            // The subset has no halfwidth kana; give that source scalar
-            // the existing fullwidth glyph before forcing their ligature.
-            let mut chars: Vec<_> = substitutions
-                .iter()
-                .flat_map(|(s, c)| s.chars().chain(std::iter::once(*c)))
-                .collect();
-            chars.sort_unstable();
-            chars.dedup();
-            let mut cmap = Vec::new();
-            for word in [0u16, 1, 3, 10] {
+    let mut tables: Vec<_> = crate::font::sfnt::read_sfnt_tables(bytes)
+        .into_iter()
+        .filter(|(tag, _)| tag != b"GSUB")
+        .collect();
+    if script == *b"kana" {
+        // The subset has no halfwidth kana; give that source scalar
+        // the existing fullwidth glyph before forcing their ligature.
+        let mut chars: Vec<_> = substitutions
+            .iter()
+            .flat_map(|(s, c)| s.chars().chain(std::iter::once(*c)))
+            .collect();
+        chars.sort_unstable();
+        chars.dedup();
+        let mut cmap = Vec::new();
+        for word in [0u16, 1, 3, 10] {
+            cmap.extend(word.to_be_bytes());
+        }
+        cmap.extend(12u32.to_be_bytes());
+        cmap.extend(12u16.to_be_bytes());
+        cmap.extend(0u16.to_be_bytes());
+        for word in [16 + 12 * chars.len() as u32, 0, chars.len() as u32] {
+            cmap.extend(word.to_be_bytes());
+        }
+        for ch in chars {
+            for word in [ch as u32, ch as u32, glyph(ch) as u32] {
                 cmap.extend(word.to_be_bytes());
             }
-            cmap.extend(12u32.to_be_bytes());
-            cmap.extend(12u16.to_be_bytes());
-            cmap.extend(0u16.to_be_bytes());
-            for word in [16 + 12 * chars.len() as u32, 0, chars.len() as u32] {
-                cmap.extend(word.to_be_bytes());
-            }
-            for ch in chars {
-                for word in [ch as u32, ch as u32, glyph(ch) as u32] {
-                    cmap.extend(word.to_be_bytes());
-                }
-            }
-            tables.push((tag, cmap));
-        } else if tag != *b"GSUB" {
-            tables.push((tag, bytes[offset..offset + len].to_vec()));
+        }
+        if let Some((_, data)) = tables.iter_mut().find(|(tag, _)| tag == b"cmap") {
+            *data = cmap;
         }
     }
     tables.push((*b"GSUB", gsub));
@@ -104,7 +101,7 @@ fn ligature_font_for(bytes: &[u8], script: [u8; 4], substitutions: &[(&str, char
 
 #[test]
 fn mixed_width_kana_whole_cluster_uses_each_source_box_for_autospace() {
-    use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use crate::font::FontFaceDescriptor;
     use crate::limits::Limits;
     use crate::node::{InlineEdges, NodeId, TextSource};
     use crate::style::{FontFamily, OverflowWrap, ParagraphStyle, TextAutospace};
@@ -139,13 +136,7 @@ fn mixed_width_kana_whole_cluster_uses_each_source_box_for_autospace() {
         max_reshape_window_bytes: Some(0),
         ..Default::default()
     };
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             bytes,
@@ -242,16 +233,10 @@ fn expanded_hyphen_font(count: u16) -> Vec<u8> {
     {
         gsub.extend(word.to_be_bytes());
     }
-    let mut tables = Vec::new();
-    for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
-        let at = 12 + n * 16;
-        let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
-        let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
-        let tag: [u8; 4] = bytes[at..at + 4].try_into().unwrap();
-        if tag != *b"GSUB" {
-            tables.push((tag, bytes[offset..offset + len].to_vec()));
-        }
-    }
+    let mut tables: Vec<_> = crate::font::sfnt::read_sfnt_tables(bytes)
+        .into_iter()
+        .filter(|(tag, _)| tag != b"GSUB")
+        .collect();
     tables.push((*b"GSUB", gsub));
     tables.sort_by_key(|(tag, _)| *tag);
     crate::font::sfnt::build_sfnt(&tables)
@@ -259,7 +244,7 @@ fn expanded_hyphen_font(count: u16) -> Vec<u8> {
 
 #[test]
 fn generated_hyphen_and_opposite_partial_edge_share_one_glyph_budget() {
-    use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use crate::font::FontFaceDescriptor;
     use crate::limits::{Limits, WarningKind};
     use crate::node::{NodeId, OutOfFlowKind, TextSource};
     use crate::style::{FontFamily, OverflowWrap, ParagraphStyle};
@@ -285,13 +270,7 @@ fn generated_hyphen_and_opposite_partial_edge_share_one_glyph_budget() {
             max_shaped_glyphs: Some(budget),
             ..Default::default()
         };
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register_face(
                 crate::test_support::fonts::LATIN.to_vec(),
@@ -440,7 +419,7 @@ fn generated_hyphen_and_opposite_partial_edge_share_one_glyph_budget() {
 
 #[test]
 fn unshapeable_interior_slice_is_skipped_without_duplicate_glyphs() {
-    use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use crate::font::FontFaceDescriptor;
     use crate::limits::Limits;
     use crate::node::{NodeId, TextSource};
     use crate::style::{FontFamily, LineOptions, OverflowWrap, ParagraphStyle, TextWrapStyle};
@@ -482,13 +461,7 @@ fn unshapeable_interior_slice_is_skipped_without_duplicate_glyphs() {
         max_shaped_glyphs: Some(1),
         ..Default::default()
     };
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             bytes.clone(),
@@ -575,7 +548,7 @@ fn unshapeable_interior_slice_is_skipped_without_duplicate_glyphs() {
 
 #[test]
 fn unshapeable_ligature_remainder_retains_whole_source() {
-    use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use crate::font::FontFaceDescriptor;
     use crate::limits::Limits;
     use crate::node::{NodeId, TextSource};
     use crate::style::{FontFamily, LineOptions, OverflowWrap, ParagraphStyle, TextWrapStyle};
@@ -613,13 +586,7 @@ fn unshapeable_ligature_remainder_retains_whole_source() {
         max_shaped_glyphs: Some(1),
         ..Default::default()
     };
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             bytes.clone(),
@@ -697,7 +664,7 @@ fn unshapeable_ligature_remainder_retains_whole_source() {
 
 #[test]
 fn combined_square_survives_an_adjacent_owned_ligature_window() {
-    use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use crate::font::FontFaceDescriptor;
     use crate::geometry::WritingMode;
     use crate::node::{InlineEdges, NodeId, TextSource};
     use crate::style::{FontFamily, ParagraphStyle, TextAutospace, TextCombineUpright, WordBreak};
@@ -706,13 +673,7 @@ fn combined_square_survives_an_adjacent_owned_ligature_window() {
         ParagraphBuilder,
     };
     let limits = Default::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     for (family, bytes) in [
         ("Latin", crate::test_support::fonts::LATIN),
         ("Arabic", crate::test_support::fonts::ARABIC),
@@ -826,7 +787,7 @@ fn combined_square_survives_an_adjacent_owned_ligature_window() {
 
 #[test]
 fn adjacent_unsafe_edges_with_different_fonts_keep_both_glyphs() {
-    use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use crate::font::FontFaceDescriptor;
     use crate::limits::Limits;
     use crate::node::{NodeId, TextSource};
     use crate::style::{FontFamily, ParagraphStyle};
@@ -834,13 +795,7 @@ fn adjacent_unsafe_edges_with_different_fonts_keep_both_glyphs() {
         AtomicSizes, Fragment, LayoutContext, LineConstraint, LineResult, ParagraphBuilder,
     };
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     let latin = fonts
         .register_face(
             crate::test_support::fonts::LATIN.to_vec(),

@@ -7,3 +7,14 @@ pub(crate) const CJK: &[u8] = include_bytes!("../../../../dev/fixtures/assets/fo
 pub(crate) const ARABIC: &[u8] = include_bytes!("../../../../dev/fixtures/assets/fonts/arabic.ttf");
 pub(crate) const EMOJI_COLOR: &[u8] =
     include_bytes!("../../../../dev/fixtures/assets/fonts/emoji-color.ttf");
+
+/// A collection without platform fonts, so tests see only what they register.
+pub(crate) fn collection(limits: &crate::limits::Limits) -> crate::font::FontCollection {
+    crate::font::FontCollection::with_options(
+        limits,
+        crate::font::FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    )
+}

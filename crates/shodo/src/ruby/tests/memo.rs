@@ -1,7 +1,7 @@
 //! Reference equivalence and operation-count guards for adjustment-only ruby
 //! candidates (shodo-d77). The reference path (`cx.ruby_reference = true`)
 //! measures every probe in full; every reuse path must match it exactly.
-use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+use crate::font::{FontCollection, FontFaceDescriptor};
 use crate::geometry::{Direction, LayoutUnit, Saturation};
 use crate::limits::{Limits, Warning, WarningKind};
 use crate::node::{NodeId, OutOfFlowKind, TextSource};
@@ -25,13 +25,7 @@ const FAMILIES: [&str; 3] = [
 pub(super) const RESHAPE_WINDOWS: u64 = 64;
 
 pub(super) fn fonts() -> FontCollection {
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     for (bytes, family) in [
         (crate::test_support::fonts::CJK, FAMILIES[0]),
         (crate::test_support::fonts::ARABIC, FAMILIES[1]),

@@ -610,7 +610,7 @@ fn shape_ellipsis(
 
 #[cfg(test)]
 mod tests {
-    use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use crate::font::FontFaceDescriptor;
     use crate::limits::Limits;
     use crate::line::punctuation::tests::{add_cmap_format12_mappings, cjk_font, cjk_tables};
     use crate::node::{NodeId, TextSource};
@@ -627,13 +627,7 @@ mod tests {
         let glyph = base.charmap().map('、').unwrap().to_u32() as u16;
         let mut tables = cjk_tables();
         add_cmap_format12_mappings(&mut tables, &[(0x2026, glyph)]);
-        let fonts = FontCollection::with_options(
-            &Limits::default(),
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&Limits::default());
         fonts
             .register_face(
                 cjk_font(&mut tables),

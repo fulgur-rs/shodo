@@ -1,5 +1,5 @@
 use super::*;
-use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+use crate::font::FontFaceDescriptor;
 use crate::geometry::{Direction, WritingMode};
 use crate::mapping::Affinity;
 use crate::node::{NodeId, TextSource};
@@ -16,13 +16,7 @@ fn take_work() -> usize {
 
 fn lines(mode: &str, count: usize) -> Vec<Line> {
     let limits = Default::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     for (family, bytes) in [
         ("Latin", crate::test_support::fonts::LATIN),
         ("Arabic", crate::test_support::fonts::ARABIC),

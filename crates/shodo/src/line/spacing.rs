@@ -876,13 +876,7 @@ mod memory_tests {
     fn ordinary_text_keeps_spacing_below_64_bytes_per_unit() {
         let limits = crate::limits::Limits::default();
         let style = crate::style::ParagraphStyle::default();
-        let fonts = crate::font::FontCollection::with_options(
-            &limits,
-            crate::font::FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         let mut builder = crate::ParagraphBuilder::new(&style, &limits);
         builder.push_text(
             crate::node::TextSource::Generated {

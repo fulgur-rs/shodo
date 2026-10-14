@@ -189,13 +189,7 @@ fn balance_eligible_text_does_not_construct_trial_lines() {
     };
     let mut style = ParagraphStyle::default();
     style.root.font_families = vec![crate::style::FontFamily::Named("Summary".into())];
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register(crate::font::test_font_bytes(
             "Summary",
@@ -229,13 +223,7 @@ fn balance_eligible_text_does_not_construct_trial_lines() {
 fn trial_driver_matches_completed_text_lines() {
     let limits = Limits::default();
     let style = ParagraphStyle::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register(crate::test_support::fonts::LATIN.to_vec())
         .unwrap();
@@ -282,13 +270,7 @@ fn trial_driver_preserves_first_line_float_and_block_progress() {
                 ..style.root.clone()
             });
         }
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register(crate::test_support::fonts::LATIN.to_vec())
             .unwrap();
