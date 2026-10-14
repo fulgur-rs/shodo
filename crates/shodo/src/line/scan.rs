@@ -373,7 +373,7 @@ pub(super) fn scan(
         if terminating
             && let Some(last) = pending.back().map(Deferred::plain)
             && last.end <= i
-            && (last.end..i).all(|at| super::pulls_after_break(data, at))
+            && super::pulled_end(data, last.end, i) == i
             && !last.hangs
         {
             let (edge_delta, _) = super::windows::candidate(data, start, last.end, cx, sat);

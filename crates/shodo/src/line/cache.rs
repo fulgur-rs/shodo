@@ -342,12 +342,7 @@ impl PartialLine {
                 .then(|| self.hyphens.candidates.last().copied())
                 .flatten()
                 .filter(|(end, _)| {
-                    (*end..self.scan.end).all(|at| {
-                        matches!(
-                            self.data.units[at].kind,
-                            UnitKind::Close { .. } | UnitKind::BidiControl
-                        )
-                    })
+                    super::pulled_end(&self.data, *end, self.scan.end) == self.scan.end
                 });
             let Some((end, required)) = hyphen else {
                 return (self.scan.end, None);
@@ -363,7 +358,7 @@ impl PartialLine {
         let emergency = self.emergencies.select(i, limit);
         let fitting_hyphen = self.hyphens.select(i, limit);
         let preferred = normal.into_iter().chain(fitting_hyphen).max();
-        let mut end = preferred.or(emergency).unwrap_or_else(|| {
+        let end = preferred.or(emergency).unwrap_or_else(|| {
             self.breaks
                 .candidates
                 .first()
@@ -380,10 +375,7 @@ impl PartialLine {
             .binary_search_by_key(&end, |c| c.0)
             .ok()
             .map(|_| end);
-        while end < self.scan.end && super::pulls_after_break(&self.data, end) {
-            end += 1;
-        }
-        (end, hyphen)
+        (super::pulled_end(&self.data, end, self.scan.end), hyphen)
     }
 }
 

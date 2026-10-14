@@ -651,11 +651,9 @@ pub(super) fn soft_break_reason(
     start: usize,
     end: usize,
 ) -> BreakReason {
-    let last = data.units[start..end].iter().rev().find(|u| {
-        u.break_after != crate::analysis::units::BreakClass::Prohibited
-            || !matches!(u.kind, UnitKind::Close { .. } | UnitKind::BidiControl)
-    });
-    if last.is_some_and(|u| u.break_after == crate::analysis::units::BreakClass::Emergency) {
+    if break_unit(data, start, end)
+        .is_some_and(|i| data.units[i].break_after == crate::analysis::units::BreakClass::Emergency)
+    {
         BreakReason::Emergency
     } else {
         BreakReason::Regular
@@ -675,4 +673,40 @@ pub(super) fn pulls_after_break(data: &crate::paragraph::ParagraphData, i: usize
                 ..
             }
         )
+}
+
+/// The cut at `end` once the closing units after it are pulled onto the
+/// line, stopping at `limit`.
+pub(super) fn pulled_end(
+    data: &crate::paragraph::ParagraphData,
+    mut end: usize,
+    limit: usize,
+) -> usize {
+    while end < limit && pulls_after_break(data, end) {
+        end += 1;
+    }
+    end
+}
+
+/// The last unit in `start..end` that a cut at `end` did not pull onto the
+/// line: the unit the line visibly ends with.
+pub(super) fn cut_before_pulled(
+    data: &crate::paragraph::ParagraphData,
+    start: usize,
+    end: usize,
+) -> Option<usize> {
+    (start..end).rev().find(|&i| !pulls_after_break(data, i))
+}
+
+/// The unit in `start..end` whose break class a cut at `end` took: pulled
+/// units without an opportunity of their own are skipped.
+pub(super) fn break_unit(
+    data: &crate::paragraph::ParagraphData,
+    start: usize,
+    end: usize,
+) -> Option<usize> {
+    (start..end).rev().find(|&i| {
+        data.units[i].break_after != crate::analysis::units::BreakClass::Prohibited
+            || !pulls_after_break(data, i)
+    })
 }

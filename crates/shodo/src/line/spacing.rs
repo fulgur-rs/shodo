@@ -410,7 +410,7 @@ pub(super) fn hyphen_summary<'a>(
 ) -> Summary {
     let mut cursor = cursor.clone();
     let after = index + 1;
-    let index = super::hyphen::source_unit(data, 0, index + 1).unwrap_or(index);
+    let index = super::cut_before_pulled(data, 0, index + 1).unwrap_or(index);
     cursor.push(
         data.units[index].level,
         hyphen_leaf(data, index, sat),
