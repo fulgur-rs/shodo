@@ -51,6 +51,14 @@ impl Bounds {
         f64::from(self.top) + f64::from(self.bottom)
     }
 }
+/// Bounding extrema need no query hierarchy. Keep the normalized endpoints
+/// until the final subtraction, just as tree nodes do.
+pub(super) fn enclosing(rects: impl Iterator<Item = LogicalRect>) -> Option<LogicalRect> {
+    rects
+        .map(Bounds::rect)
+        .reduce(Bounds::union)
+        .map(Bounds::as_logical_rect)
+}
 struct Node {
     bounds: Bounds,
     children: Option<(usize, usize)>,
@@ -66,6 +74,10 @@ pub(super) struct Tree {
 impl Tree {
     pub(super) fn new(rects: impl Iterator<Item = (usize, LogicalRect)>, vertical: bool) -> Self {
         let mut rects: Vec<_> = rects.map(|(i, r)| (i, Bounds::rect(r))).collect();
+        #[cfg(test)]
+        if !rects.is_empty() {
+            construction::record();
+        }
         rects.sort_by(|a, b| {
             if vertical {
                 a.1.top.total_cmp(&b.1.top)
@@ -86,6 +98,10 @@ impl Tree {
     }
     pub(super) fn new_adaptive(rects: impl Iterator<Item = (usize, LogicalRect)>) -> Self {
         let mut rects: Vec<_> = rects.map(|(i, r)| (i, Bounds::rect(r))).collect();
+        #[cfg(test)]
+        if !rects.is_empty() {
+            construction::record();
+        }
         let mut tree = Self {
             nodes: Vec::with_capacity(rects.len().saturating_mul(2)),
             root: None,
@@ -287,8 +303,72 @@ impl Tree {
     }
 }
 #[cfg(test)]
+pub(super) mod construction {
+    std::thread_local! {
+        static BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+    pub(super) fn record() {
+        BUILDS.with(|value| value.set(value.get() + 1));
+    }
+    pub(in crate::hit) fn reset() {
+        BUILDS.with(|value| value.set(0));
+    }
+    pub(in crate::hit) fn count() -> usize {
+        BUILDS.with(std::cell::Cell::get)
+    }
+}
+#[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn unindexed_extrema_match_tree_bounds_for_normalized_rectangles() {
+        let cases = [
+            Vec::new(),
+            vec![LogicalRect {
+                inline_start: -0.0,
+                inline_size: 0.0,
+                block_start: 0.0,
+                block_size: -0.0,
+            }],
+            vec![
+                LogicalRect {
+                    inline_start: 7.25,
+                    inline_size: -10.75,
+                    block_start: 3.0,
+                    block_size: -7.0,
+                },
+                LogicalRect {
+                    inline_start: 100.0,
+                    inline_size: 2.0,
+                    block_start: -10.0,
+                    block_size: 1.0,
+                },
+                LogicalRect {
+                    inline_start: -0.0,
+                    inline_size: 0.0,
+                    block_start: 0.0,
+                    block_size: 0.0,
+                },
+            ],
+        ];
+        let bits = |r: LogicalRect| {
+            [
+                r.inline_start.to_bits(),
+                r.inline_size.to_bits(),
+                r.block_start.to_bits(),
+                r.block_size.to_bits(),
+            ]
+        };
+        for rects in cases {
+            let expected = enclosing(rects.iter().copied());
+            for vertical in [false, true] {
+                let tree = Tree::new(rects.iter().copied().enumerate(), vertical);
+                assert_eq!(expected.map(bits), tree.bounds().map(bits));
+            }
+            let tree = Tree::new_adaptive(rects.iter().copied().enumerate());
+            assert_eq!(expected.map(bits), tree.bounds().map(bits));
+        }
+    }
     #[test]
     fn repeated_coordinate_queries_do_not_scan_all_characters_or_lines() {
         let tree = Tree::new(

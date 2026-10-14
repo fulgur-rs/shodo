@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-14",
+  "baseline_revision": "454fb916a9ae9addd6772417b64986a75717be4c",
+  "candidate": "Lazy coordinate search trees in finalized LineLayout",
+  "design": [
+    "Use std::sync::OnceLock to preserve Send/Sync and initialize body, TCY, line-block and ruby coordinate trees only on coordinate queries.",
+    "Caret/source navigation/selection still use retained finalized source geometry.",
+    "Compute normalized bounding extrema without a tree so nested Ruby annotation bounds are available before hit initialization.",
+    "Trees use the original constructors, predicates and order when initialized. No shaping/layout data or public query result change."
+  ],
+  "TDD": {
+    "red": {
+      "source_queries_do_not_construct_coordinate_trees": {
+        "actual_nonempty_trees": 2,
+        "wanted": 0
+      },
+      "nested_annotation_bounds_do_not_construct_coordinate_trees": {
+        "actual_nonempty_trees": 5,
+        "wanted": 0
+      },
+      "coordinate_trees_are_constructed_once_and_reused": {
+        "actual_nonempty_trees_at_construction": 2,
+        "wanted": 0
+      }
+    },
+    "green": "All added lazy tests pass; first hit initializes coordinate trees and repeated hits reuse them."
+  },
+  "verification": [
+    {
+      "command": "cargo +stable test -p shodo --lib hit:: --config target.x86_64-unknown-linux-gnu.runner=env",
+      "passed": 32,
+      "failed": 0,
+      "ignored": 1,
+      "scope": "existing geometry/GDEF/TCY/source/selection/spatial/ruby hit tests plus lazy construction, bounds-bit equivalence and concurrent first hits"
+    },
+    {
+      "command": "cargo +stable test -p shodo-harness --test hit_test --test paint_styles --test ruby_paint --config target.x86_64-unknown-linux-gnu.runner=env",
+      "passed": 30,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "command": "cargo +stable clippy -p shodo --all-targets -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo +stable fmt --all --check; git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "measurement_status": "Central paired A/B pending. Do not claim a speedup from construction-only timing without recording first coordinate hit cost.",
+  "limits": [
+    "The first coordinate hit pays deferred construction; initialization and retained bytes may differ by use pattern.",
+    "OnceLock increases the fixed per-index footprint modestly; requested allocation/live/peak bytes must be measured centrally.",
+    "Current verification is focused. Final combined workspace/feature/MSRV/Wasm proof belongs to final exact-head CI."
+  ],
+  "tooling_notes": [
+    "Initial test counter helper visibility did not permit sibling test access; corrected to hit-module scope before expected RED was observed.",
+    "Initial crate integration invocation named nonexisting hit/paint targets; replaced with existing dev/harness hit_test, paint_styles and ruby_paint targets."
+  ],
+  "environment": "Rust stable1.97.1, TMPDIR=\"$HOME/tmp\", RUSTC_WRAPPER empty, CARGO_BUILD_JOBS2, CPU10–11, task-specific target under ~/tmp. No /tmp use."
+}

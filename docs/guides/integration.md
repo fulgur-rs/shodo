@@ -462,7 +462,11 @@ describe processed source; a displayed synthetic hyphen retains U+00AD. Emphasis
 is placed per typographic character by a renderer, not once per shaping cluster.
 
 `hit::LineLayout::new(&lines)` indexes the finalized, accepted lines once and
-borrows them. Each `TextPosition` identifies a line, a UTF-8 offset in that
+borrows them. Coordinate search trees are prepared on the first coordinate hit;
+caret lookup, navigation and selection use the source index directly. Include
+that first-hit preparation when measuring pointer interaction, as well as index
+construction when measuring source-only use. Each `TextPosition` identifies a
+line, a UTF-8 offset in that
 line's `text()`, and an `Affinity`. First-line transforms can make datasets
 differ; translate through that line's optional `offset_mapping()` when DOM
 positions are needed. Mapping is not required for geometric queries. At a bidi
