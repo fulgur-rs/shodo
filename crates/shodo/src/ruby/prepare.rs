@@ -216,11 +216,7 @@ pub(crate) fn prepare(
     if inputs.is_empty() {
         return Ok(());
     }
-    for (index, input) in inputs.iter().enumerate() {
-        bases.container(index, input.normalized.metadata_items)?;
-        budget.charge(LimitKind::Items, input.normalized.metadata_items)?;
-    }
-    let mut result = containers(data, inputs);
+    let mut result = charged_containers(data, inputs, budget, bases)?;
     for (index, (container, input)) in result.iter_mut().zip(inputs).enumerate() {
         for (level, normalized) in input.normalized.levels.iter().enumerate() {
             for annotation in &normalized.annotations {
@@ -278,10 +274,7 @@ pub(crate) fn prepare(
             }
         }
     }
-    super::index::prepare_cuts(data, &mut result, budget, None, bases)?;
-    data.ruby.intervals = super::index::ContainerIndex::new(&result, budget, bases)?;
-    data.ruby.containers = result;
-    Ok(())
+    finish(data, result, budget, None, bases)
 }
 
 /// Alternate parents share the corresponding child data, not duplicate shapes.
@@ -296,11 +289,7 @@ pub(crate) fn prepare_alternate(
     if inputs.is_empty() {
         return Ok(());
     }
-    for (index, input) in inputs.iter().enumerate() {
-        bases.container(index, input.normalized.metadata_items)?;
-        budget.charge(LimitKind::Items, input.normalized.metadata_items)?;
-    }
-    let mut result = containers(data, inputs);
+    let mut result = charged_containers(data, inputs, budget, bases)?;
     for (alternate, normal) in result.iter_mut().zip(&normal.containers) {
         for lane in &normal.lanes {
             let mut lane = lane.clone();
@@ -312,13 +301,32 @@ pub(crate) fn prepare_alternate(
             alternate.lanes.push(lane);
         }
     }
-    super::index::prepare_cuts(
-        data,
-        &mut result,
-        budget,
-        Some((normal, parent_cursors)),
-        bases,
-    )?;
+    finish(data, result, budget, Some((normal, parent_cursors)), bases)
+}
+
+/// Charge each input's metadata items, then build its unprepared container.
+fn charged_containers(
+    data: &ParagraphData,
+    inputs: &[RubyInput],
+    budget: &mut RubyBudget,
+    bases: &mut super::base_budget::BaseScopes,
+) -> Result<Vec<PreparedRuby>, LimitExceeded> {
+    for (index, input) in inputs.iter().enumerate() {
+        bases.container(index, input.normalized.metadata_items)?;
+        budget.charge(LimitKind::Items, input.normalized.metadata_items)?;
+    }
+    Ok(containers(data, inputs))
+}
+
+/// Index the prepared containers and store them in `data`.
+fn finish(
+    data: &mut ParagraphData,
+    mut result: Vec<PreparedRuby>,
+    budget: &mut RubyBudget,
+    alternate: Option<(&RubyData, &[Option<u32>])>,
+    bases: &mut super::base_budget::BaseScopes,
+) -> Result<(), LimitExceeded> {
+    super::index::prepare_cuts(data, &mut result, budget, alternate, bases)?;
     data.ruby.intervals = super::index::ContainerIndex::new(&result, budget, bases)?;
     data.ruby.containers = result;
     Ok(())
