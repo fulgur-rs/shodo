@@ -210,9 +210,15 @@ impl FontCollection {
     /// size a line laid out in `style` uses. This is the height of a
     /// horizontal `normal` line of text in `style` alone, so a caller can
     /// size the CSS `lh` unit to match it.
+    ///
+    /// Invalid floats in `style` are sanitized as a paragraph built from it
+    /// would sanitize them.
     pub fn normal_line_height(&self, style: &crate::style::InlineStyle) -> f32 {
         let mut warnings = crate::limits::WarningSink::new(Some(0));
-        let metrics = crate::line::font_metrics::resolve(self, style, &mut warnings).metrics;
+        let mut style = style.clone();
+        style.font_size = crate::sanitize::font_size(style.font_size, &mut warnings);
+        crate::sanitize::style(&mut style, &mut warnings);
+        let metrics = crate::line::font_metrics::resolve(self, &style, &mut warnings).metrics;
         metrics.ascent + metrics.descent + metrics.line_gap
     }
 
@@ -653,6 +659,36 @@ mod tests {
             let nominal = default.ascent + default.descent + default.line_gap;
             let varied = !variations.is_empty();
             assert_eq!(normal != nominal, varied, "{weight} {variations:?}");
+        }
+        // An invalid size is sanitized as the paragraph builder does, so it
+        // measures rather than panics.
+        for font_size in [-20.0, f32::NAN, f32::INFINITY] {
+            let style = InlineStyle {
+                font_size,
+                font_families: vec![FontFamily::Named("Variable".into())],
+                ..Default::default()
+            };
+            let mut b = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    root: style.clone(),
+                    ..Default::default()
+                },
+                &limits,
+            );
+            b.push_text(TextSource::Generated { node: NodeId(1) }, "a");
+            let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+            let lines = p.break_all(
+                &mut LayoutContext::new(),
+                &Default::default(),
+                100.0,
+                &AtomicSizes::EMPTY,
+            );
+            let normal = fonts.normal_line_height(&style);
+            let line = lines[0].block_size();
+            assert!(
+                (normal - line).abs() < 1.0 / 32.0,
+                "{font_size}: {normal} vs {line}"
+            );
         }
     }
 
