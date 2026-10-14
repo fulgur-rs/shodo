@@ -565,15 +565,7 @@ pub(super) fn width(
     {
         cx.ruby_width_calls += 1;
     }
-    let hyphen_end = super::plan::hyphen_end(data, range.end).filter(|end| *end > range.start);
-    let windows = hyphen_end.and_then(|end| super::hyphen::line(data, range.start, end, cx, sat));
-    let leaf = windows.as_ref().and(hyphen_end).map(|end| {
-        (
-            end - 1,
-            super::spacing::hyphen_unit_summary(data, end - 1, sat),
-        )
-    });
-    let natural = natural(data, range.clone(), leaf, atomics, cx, sat);
+    let (natural, windows) = natural(data, range.clone(), atomics, cx, sat);
     let delta = match windows {
         Some(windows) => super::windows::cost(&windows, range.end, sat),
         None => super::windows::delta(data, range.start, range.end, cx, sat),
@@ -596,11 +588,10 @@ pub(super) fn width(
 fn natural(
     data: &ParagraphData,
     range: Range<usize>,
-    hyphen_leaf: Option<(usize, super::spacing_summary::Summary)>,
     atomics: &AtomicSizes,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
-) -> Natural {
+) -> (Natural, Option<Vec<super::windows::Window>>) {
     let first = data
         .selectable_clusters
         .partition_point(|u| (*u as usize) < range.start);
@@ -638,6 +629,16 @@ fn natural(
         corrections.iter().map(|(_, d)| i64::from(d.raw())).sum(),
         sat,
     );
+    // Scalar range queries preserve their clipped-prefix-first producer order.
+    // Planned selections use the opposite order through Cursor::selected_windows.
+    let hyphen_end = super::plan::hyphen_end(data, range.end).filter(|end| *end > range.start);
+    let windows = hyphen_end.and_then(|end| super::hyphen::line(data, range.start, end, cx, sat));
+    let hyphen_leaf = windows.as_ref().and(hyphen_end).map(|end| {
+        (
+            end - 1,
+            super::spacing::hyphen_unit_summary(data, end - 1, sat),
+        )
+    });
     if cx
         .ruby_ranges
         .root
@@ -781,7 +782,7 @@ fn natural(
         }
         super::scan::unit_width(data, &data.units[i], LayoutUnit::ZERO, atomics, cx, sat);
     }
-    measured
+    (measured, windows)
 }
 
 /// End-edge barriers at every boundary, built in linear time. A candidate

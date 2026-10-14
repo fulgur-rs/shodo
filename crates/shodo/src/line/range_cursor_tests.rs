@@ -7,8 +7,7 @@ use crate::style::{
 };
 use crate::{AtomicSize, ParagraphBuilder};
 
-#[test]
-fn planned_clipped_hyphen_keeps_reference_warning_order() {
+fn clipped_hyphen_paragraph() -> (crate::Paragraph, usize, usize) {
     let fonts = crate::test_support::fonts::collection(&Limits::default());
     fonts
         .register_face(
@@ -34,7 +33,7 @@ fn planned_clipped_hyphen_keeps_reference_warning_order() {
     for (node, text) in [(1, "f"), (2, "f"), (3, "i"), (4, " ab\u{ad}"), (5, "cd")] {
         builder.push_text(TextSource::Generated { node: NodeId(node) }, text);
     }
-    let mut p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+    let p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
     let start = p
         .data
         .units
@@ -52,6 +51,38 @@ fn planned_clipped_hyphen_keeps_reference_warning_order() {
         .position(|u| u.break_after == crate::analysis::units::BreakClass::Hyphen)
         .unwrap()
         + 1;
+    (p, start, end)
+}
+
+#[test]
+fn scalar_clipped_hyphen_keeps_clipped_warning_before_hyphen_warning() {
+    let (mut p, start, end) = clipped_hyphen_paragraph();
+    let limits = &mut std::sync::Arc::get_mut(&mut p.data).unwrap().limits;
+    limits.max_reshape_window_bytes = Some(1);
+    limits.max_shaped_glyphs = Some(0);
+    limits.max_warnings = Some(1);
+    let mut cx = LayoutContext::new();
+    cx.warnings.set_max(Some(1));
+    width(
+        &p.data,
+        start..end,
+        &AtomicSizes::EMPTY,
+        &mut cx,
+        &mut Saturation::default(),
+    );
+    let warnings = cx.take_warnings();
+    assert_eq!(warnings.len(), 2);
+    assert_eq!(warnings[0].kind, crate::limits::WarningKind::Unsupported);
+    assert_eq!(
+        warnings[0].message,
+        "line edge glyph budget exceeded; keeping shared glyphs"
+    );
+    assert_eq!(warnings[1].kind, crate::limits::WarningKind::Suppressed);
+}
+
+#[test]
+fn planned_clipped_hyphen_keeps_reference_warning_order() {
+    let (mut p, start, end) = clipped_hyphen_paragraph();
     for window in [1, 2, 4096] {
         std::sync::Arc::get_mut(&mut p.data)
             .unwrap()
