@@ -70,7 +70,7 @@ fn rejected_cache_snapshot_keeps_owned_vectors_without_clone() {
     crate::shape::cache_clone_probe::reset();
     let handle = cache_owned_window(owned, (usize::MAX, usize::MAX, None), &mut cache);
     assert_eq!(crate::shape::cache_clone_probe::count(), 0);
-    assert!(matches!(handle, WindowHandle::Owned(_)));
+    assert!(matches!(handle, WindowHandle::UnretainedClean(_)));
     assert_eq!(handle.0.id.as_ptr(), pointer);
     assert!(cache.get(&(0, 1, None)).is_some());
 }
@@ -313,9 +313,12 @@ fn changing_paragraph_owner_releases_previous_shared_cache() {
     drop(original);
     cache.begin(&first.data);
     assert_eq!(cache.len(), 1);
+    let supplemental = fill_selected(&mut cache);
     cache.begin(&second.data);
     assert_eq!((cache.len(), cache.cost), (0, 0));
     assert!(weak.upgrade().is_none());
+    assert!(supplemental.iter().all(|weak| weak.upgrade().is_none()));
+    assert_eq!(cache.selected.capacity(), 0);
     assert_eq!(
         cache.owner,
         Some((
@@ -462,4 +465,130 @@ fn shared_effects_distinguish_limits_outcomes_saturation_and_suppression() {
             expected
         );
     }
+}
+
+fn fill_selected(cache: &mut EdgeShapeCache) -> Vec<std::sync::Weak<OwnedShapedWindow>> {
+    let owned = Arc::try_unwrap(window(8)).unwrap();
+    let handle = WindowHandle::UnretainedClean(owned);
+    for i in 10_000..10_000 + EDGE_SHAPE_CACHE_ENTRIES {
+        cache.remember_selected((i, i + 1, None), &handle);
+    }
+    assert!(!cache.selected.is_empty());
+    cache.selected.values().map(Arc::downgrade).collect()
+}
+
+fn assert_retained_cost(cache: &EdgeShapeCache) {
+    let ordinary: usize = cache
+        .entries
+        .values()
+        .map(|w| window_storage_cost(w, false))
+        .sum();
+    let selected: usize = cache
+        .selected
+        .values()
+        .map(|w| window_storage_cost(w, false))
+        .sum();
+    assert_eq!(selected, cache.selected_cost);
+    assert_eq!(
+        cache.cost, ordinary,
+        "ordinary glyph accounting remains independent"
+    );
+    assert!(cache.cost + selected + cache.measurement_storage_cost() <= EDGE_SHAPE_CACHE_COST);
+    assert!(ordinary <= EDGE_SHAPE_CACHE_COST - EDGE_MEASUREMENT_CACHE_COST);
+    assert!(selected + cache.measurement_storage_cost() <= EDGE_MEASUREMENT_CACHE_COST);
+    assert!(cache.entries.len() + cache.selected.len() <= EDGE_SHAPE_CACHE_ENTRIES);
+}
+
+#[test]
+fn supplemental_snapshots_preserve_ordinary_glyph_admission_after_accounting_cleanup() {
+    let mut reference = EdgeShapeCache::default();
+    let mut supplemented = EdgeShapeCache::default();
+    let snapshots = fill_selected(&mut supplemented);
+    let shape = window(EDGE_SHAPE_ENTRY_COST_MAX);
+    assert!(snapshots.len() + 64 < EDGE_SHAPE_CACHE_ENTRIES);
+    for index in 0..64 {
+        let key = (index, index + 1, None);
+        assert_eq!(
+            supplemented.insert(key, &shape),
+            reference.insert(key, &shape),
+            "summary-side snapshots must not consume ordinary glyph reservation"
+        );
+        assert_eq!(supplemented.cost, reference.cost);
+        assert_retained_cost(&supplemented);
+    }
+    assert!(
+        snapshots
+            .iter()
+            .all(|snapshot| snapshot.upgrade().is_some())
+    );
+}
+
+#[test]
+fn measurement_growth_releases_supplemental_table_and_preserves_probe_residents() {
+    let mut cx = LayoutContext::new();
+    let sat = Saturation::default();
+    let recording = super::super::replay::begin(&mut cx, &sat);
+    let effects = super::super::replay::finish(&mut cx, recording, &sat).unwrap();
+    let mut cache = EdgeShapeCache::default();
+    for i in 0..2048 {
+        if !cache.insert((i, i + 1, None), &window(EDGE_SHAPE_ENTRY_COST_MAX)) {
+            break;
+        }
+    }
+    let resident = Arc::downgrade(cache.get(&(0, 1, None)).unwrap());
+    let selected = fill_selected(&mut cache);
+    for i in 0..20_000 {
+        cache.remember_measurement(
+            (i, i + 1),
+            CandidateMeasurement {
+                delta: LayoutUnit::ZERO,
+                valid: true,
+                effects,
+            },
+        );
+        assert_retained_cost(&cache);
+    }
+    assert!(selected.iter().all(|weak| weak.upgrade().is_none()));
+    assert_eq!((cache.selected.capacity(), cache.selected_cost), (0, 0));
+    assert!(resident.upgrade().is_some());
+    assert!(cache.measurement((0, 1)).is_some());
+    cache.clear();
+    assert!(resident.upgrade().is_none());
+}
+
+#[test]
+fn ordinary_entry_pressure_releases_supplemental_table_without_exceeding_cap() {
+    let mut cache = EdgeShapeCache::default();
+    assert!(cache.insert((0, 1, None), &window(EDGE_SHAPE_ENTRY_COST_MAX)));
+    let selected = fill_selected(&mut cache);
+    for i in 1..2048 {
+        cache.insert((i, i + 1, None), &window(0));
+        assert_retained_cost(&cache);
+    }
+    assert!(selected.iter().all(|weak| weak.upgrade().is_none()));
+    assert_eq!(cache.selected.capacity(), 0);
+    assert!(cache.get(&(0, 1, None)).is_some());
+}
+
+#[test]
+fn supplemental_snapshots_preserve_glyph_budget_keys_and_release_on_clear() {
+    let mut cache = EdgeShapeCache::default();
+    let ordinary = WindowHandle::UnretainedClean(Arc::try_unwrap(window(16)).unwrap());
+    let limited = WindowHandle::UnretainedClean(Arc::try_unwrap(window(1)).unwrap());
+    cache.remember_selected((0, 1, None), &ordinary);
+    cache.remember_selected((0, 1, Some(0)), &limited);
+    let weak = Arc::downgrade(cache.get(&(0, 1, None)).unwrap());
+    assert_eq!(cache.get(&(0, 1, None)).unwrap().0.len(), 16);
+    assert_eq!(cache.get(&(0, 1, Some(0))).unwrap().0.len(), 1);
+    assert!(cache.get(&(0, 1, Some(1))).is_none());
+    let before = cache.cost;
+    cache.remember_selected((0, 1, None), &ordinary);
+    assert_eq!(cache.cost, before, "duplicate admission must not overcount");
+    assert_retained_cost(&cache);
+    cache.clear();
+    assert_eq!(
+        (cache.selected.capacity(), cache.selected_cost, cache.cost),
+        (0, 0, 0)
+    );
+    assert!(weak.upgrade().is_none());
 }

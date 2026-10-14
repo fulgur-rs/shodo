@@ -36,6 +36,7 @@ impl MeasuredWindow {
 /// Specialize the same validation and arithmetic for compact measurements and
 /// final owned overlays, without an intermediate vector of glyph handles.
 trait WindowOutput {
+    const RETAIN_SELECTED: bool;
     fn from_shape(
         glyphs: Range<u32>,
         text: Range<u32>,
@@ -48,6 +49,7 @@ trait WindowOutput {
 }
 
 impl WindowOutput for Window {
+    const RETAIN_SELECTED: bool = true;
     fn from_shape(
         glyphs: Range<u32>,
         text: Range<u32>,
@@ -81,6 +83,7 @@ impl WindowOutput for Window {
 }
 
 impl WindowOutput for MeasuredWindow {
+    const RETAIN_SELECTED: bool = false;
     fn from_shape(
         glyphs: Range<u32>,
         text: Range<u32>,
@@ -239,10 +242,16 @@ fn partial(data: &ParagraphData, range: &Range<usize>) -> bool {
 /// records. They replay the full measurement's budget and saturation effects
 /// through `replay`, including the partial-cluster suffix check. They own no
 /// drawing glyphs, so later candidates still fit after glyph admission stops.
+/// Verified drawing windows may borrow unused measurement reservation. Growing
+/// measurements release that supplemental table first; ordinary residents stay.
 #[derive(Default)]
 pub(crate) struct EdgeShapeCache {
     owner: Option<(u64, usize)>,
     entries: crate::hashing::FastMap<(usize, usize, Option<u64>), ShapedWindow>,
+    selected: crate::hashing::FastMap<(usize, usize, Option<u64>), ShapedWindow>,
+    selected_cost: usize,
+    // Ordinary glyph snapshots only; supplemental snapshots share the separate
+    // measurement reservation and cannot reduce ordinary glyph admission.
     cost: usize,
     measurements: Vec<RetainedMeasurement>,
     measurement_effects: Vec<super::replay::Effects>,
@@ -258,6 +267,8 @@ impl std::fmt::Debug for EdgeShapeCache {
         let mut debug = f.debug_struct("EdgeShapeCache");
         debug
             .field("entries", &self.entries.len())
+            .field("selected", &self.selected.len())
+            .field("selected_cost", &self.selected_cost)
             .field("cost", &self.cost)
             .field("measurement_cost", &self.measurement_storage_cost())
             .field("measurements", &self.measurements.len())
@@ -298,6 +309,9 @@ type ShapedWindow = std::sync::Arc<OwnedShapedWindow>;
 #[allow(clippy::large_enum_variant)]
 enum WindowHandle {
     Owned(OwnedShapedWindow),
+    // Clean, unedited, small shape refused by ordinary snapshot admission.
+    // Only a final validated drawing output may borrow measurement space.
+    UnretainedClean(OwnedShapedWindow),
     Shared(ShapedWindow),
 }
 
@@ -305,7 +319,7 @@ impl std::ops::Deref for WindowHandle {
     type Target = OwnedShapedWindow;
     fn deref(&self) -> &Self::Target {
         match self {
-            Self::Owned(window) => window,
+            Self::Owned(window) | Self::UnretainedClean(window) => window,
             Self::Shared(window) => window,
         }
     }
@@ -314,7 +328,7 @@ impl std::ops::Deref for WindowHandle {
 impl WindowHandle {
     fn into_owned(self) -> OwnedShapedWindow {
         match self {
-            Self::Owned(window) => window,
+            Self::Owned(window) | Self::UnretainedClean(window) => window,
             Self::Shared(window) => {
                 std::sync::Arc::try_unwrap(window).unwrap_or_else(|shared| (*shared).clone())
             }
@@ -330,7 +344,7 @@ fn cache_owned_window(
     // Cloning produces len-sized vectors. Refuse admission before allocating
     // that snapshot when it cannot fit; the owned miss remains usable.
     if !cache.can_insert(&key, window_storage_cost(&shaped, true)) {
-        return WindowHandle::Owned(shaped);
+        return WindowHandle::UnretainedClean(shaped);
     }
     // A miss keeps its original output vectors. Clone exactly one len-sized
     // cache snapshot, as before, instead of shrinking every growing vector and
@@ -434,11 +448,13 @@ impl EdgeShapeCache {
 
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
-        self.entries.len()
+        self.entries.len() + self.selected.len()
     }
 
     pub(crate) fn clear(&mut self) {
         self.entries = Default::default();
+        self.selected = Default::default();
+        self.selected_cost = 0;
         self.cost = 0;
         self.measurements = Vec::new();
         self.measurement_effects = Vec::new();
@@ -452,7 +468,7 @@ impl EdgeShapeCache {
     }
 
     fn get(&self, key: &(usize, usize, Option<u64>)) -> Option<&ShapedWindow> {
-        self.entries.get(key)
+        self.entries.get(key).or_else(|| self.selected.get(key))
     }
 
     fn can_insert(&self, key: &(usize, usize, Option<u64>), cost: usize) -> bool {
@@ -468,6 +484,13 @@ impl EdgeShapeCache {
             self.measurement_effects.capacity(),
             self.effect_indices.len(),
         )
+    }
+
+    fn release_selected(&mut self) {
+        // Release table capacity along with glyph Arcs, so freed entries do
+        // not leave unaccounted hash-table storage behind.
+        self.selected = Default::default();
+        self.selected_cost = 0;
     }
 
     fn measurement(&self, key: (usize, usize)) -> Option<CandidateMeasurement> {
@@ -530,6 +553,9 @@ impl EdgeShapeCache {
         if actual_cost > EDGE_MEASUREMENT_CACHE_COST {
             return;
         }
+        if self.selected_cost + actual_cost > EDGE_MEASUREMENT_CACHE_COST {
+            self.release_selected();
+        }
         if let Some(mut grown) = entries {
             grown.extend_from_slice(&self.measurements);
             self.measurements = grown;
@@ -565,11 +591,42 @@ impl EdgeShapeCache {
         if !self.can_insert(&key, cost) {
             return false;
         }
+        if !self.entries.contains_key(&key)
+            && self.entries.len() + self.selected.len() >= EDGE_SHAPE_CACHE_ENTRIES
+        {
+            self.release_selected();
+        }
         if let Some(previous) = self.entries.insert(key, window.clone()) {
             self.cost -= window_storage_cost(&previous, false);
         }
         self.cost += cost;
         true
+    }
+
+    fn remember_selected(&mut self, key: (usize, usize, Option<u64>), window: &WindowHandle) {
+        let WindowHandle::UnretainedClean(shaped) = window else {
+            return;
+        };
+        if self.get(&key).is_some()
+            || self.entries.len() + self.selected.len() >= EDGE_SHAPE_CACHE_ENTRIES
+            || window_cost(shaped) > EDGE_SHAPE_ENTRY_COST_MAX
+        {
+            return;
+        }
+        let cost = window_storage_cost(shaped, true);
+        if cost > EDGE_MEASUREMENT_CACHE_COST - self.measurement_storage_cost() - self.selected_cost
+        {
+            return;
+        }
+        let snapshot = Arc::new(shaped.clone());
+        // Snapshot vectors are len-sized; account actual capacity after cloning.
+        let cost = window_storage_cost(&snapshot, false);
+        if cost > EDGE_MEASUREMENT_CACHE_COST - self.measurement_storage_cost() - self.selected_cost
+        {
+            return;
+        }
+        self.selected.insert(key, snapshot);
+        self.selected_cost += cost;
     }
 }
 
@@ -761,6 +818,10 @@ fn materialize<T: WindowOutput>(
                 continue;
             }
             shaped = shape(data, &range, cx, sat, budget, replacement)?;
+        }
+        if T::RETAIN_SELECTED {
+            cx.edge_shapes
+                .remember_selected((range.start, range.end, budget), &shaped);
         }
         let mut changes = Vec::new();
         let mut at = range.start;

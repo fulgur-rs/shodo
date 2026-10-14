@@ -35,6 +35,81 @@ fn paragraph(text: &str, arabic: bool, limits: &Limits) -> crate::Paragraph {
     builder.build(&mut LayoutContext::new(), &fonts).unwrap()
 }
 
+fn fill_probe_snapshots(data: &ParagraphData, cx: &mut LayoutContext) {
+    cx.edge_shapes.begin(data);
+    let large = Arc::new((
+        crate::shape::GlyphStore {
+            id: vec![0; EDGE_SHAPE_ENTRY_COST_MAX],
+            ..Default::default()
+        },
+        Vec::new(),
+    ));
+    let empty = Arc::new((crate::shape::GlyphStore::default(), Vec::new()));
+    for (base, snapshot) in [(100_000, large), (200_000, empty)] {
+        for i in base..base + EDGE_SHAPE_CACHE_ENTRIES {
+            if !cx.edge_shapes.insert((i, i + 1, None), &snapshot) {
+                break;
+            }
+        }
+    }
+}
+
+#[test]
+fn selected_windows_reuse_unused_summary_space_after_probe_snapshots_fill() {
+    use std::sync::atomic::Ordering;
+    for (text, arabic, unlimited) in [
+        ("ffi", false, false),
+        ("ببب", true, false),
+        ("ffi", false, true),
+        ("ببب", true, true),
+    ] {
+        let mut p = paragraph(text, arabic, &Limits::default());
+        let data = Arc::get_mut(&mut p.data).unwrap();
+        if unlimited {
+            data.limits.max_reshape_window_bytes = None;
+            data.limits.max_shaped_glyphs = None;
+        }
+        let mut cx = LayoutContext::new();
+        fill_probe_snapshots(data, &mut cx);
+        let mut first_sat = Saturation::default();
+        let first = measure(data, 0, 1, &mut cx, &mut first_sat);
+        assert!(
+            !first.is_empty(),
+            "exercise selected partial/cursive glyphs"
+        );
+        let first_spent = cx.edge_reshape_spent;
+        let first_warnings = cx.take_warnings();
+        let before = data.edge_shape_calls.load(Ordering::Relaxed);
+        cx.edge_reshape_spent = 0;
+        let mut second_sat = Saturation::default();
+        let second = measure(data, 0, 1, &mut cx, &mut second_sat);
+        assert_eq!(
+            first
+                .iter()
+                .map(|w| format!("{:?}{:?}", w.overlay, w.changes))
+                .collect::<Vec<_>>(),
+            second
+                .iter()
+                .map(|w| format!("{:?}{:?}", w.overlay, w.changes))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(cx.edge_reshape_spent, first_spent);
+        assert_eq!(cx.take_warnings(), first_warnings);
+        assert_eq!(second_sat, first_sat);
+        assert!(
+            cx.edge_shapes.cost
+                + cx.edge_shapes.selected_cost
+                + cx.edge_shapes.measurement_storage_cost()
+                <= EDGE_SHAPE_CACHE_COST
+        );
+        assert_eq!(
+            data.edge_shape_calls.load(Ordering::Relaxed),
+            before,
+            "{text}: selected window must survive probe admission exhaustion"
+        );
+    }
+}
+
 #[test]
 fn warmed_candidates_and_deltas_do_not_clone_glyph_stores() {
     for (text, arabic) in [("ffi", false), ("ببب", true)] {
