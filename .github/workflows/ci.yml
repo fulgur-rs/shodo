@@ -128,3 +128,41 @@ jobs:
       - run: cargo build -p shodo --target wasm32-unknown-unknown
       - run: cargo build -p shodo --target wasm32-unknown-unknown --no-default-features
       - run: cargo build -p shodo --target wasm32-unknown-unknown --no-default-features --features accesskit
+
+  coverage:
+    runs-on: ubuntu-latest
+    # ci.yml has no workflow-level permissions; Codecov OIDC needs id-token.
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Fontconfig development files
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig1-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@88ada01c46e65c47040a0ae865537cc76fcd0e1c # cargo-llvm-cov
+      # The workspace tests drive shodo through the dev harness and fixtures;
+      # codecov.yml keeps dev/ out of the reported numbers.
+      - name: Run tests with coverage
+        run: |
+          cargo llvm-cov clean --workspace
+          cargo llvm-cov --workspace --no-report
+          cargo llvm-cov --workspace --features shodo-harness/accesskit --no-report
+          cargo llvm-cov report --lcov --output-path lcov.info
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcov
+          path: lcov.info
+          if-no-files-found: error
+      # Fork pull requests get no OIDC token, so a failed upload must not fail CI.
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: lcov.info
+          use_oidc: true
+          fail_ci_if_error: false
