@@ -17,6 +17,10 @@ use crate::style::{
 };
 use icu_properties::{CodePointMapData, props};
 use std::mem::size_of;
+
+crate::logical::logical_sizes! {
+    LANGUAGE_IDENTIFIER_BYTES: icu_locale_core::LanguageIdentifier = 32;
+}
 use std::ops::{Range, RangeInclusive};
 
 // unicode-bidi 0.3.18 (UTF-8): byte classes (original + processing) and levels,
@@ -84,7 +88,7 @@ impl Budget {
             (text.len() as u64).saturating_add(
                 (items.len() as u64)
                     .saturating_add(2)
-                    .saturating_mul(size_of::<usize>() as u64),
+                    .saturating_mul(crate::logical::WORD),
             ),
         )?;
         if bases.enabled() {
@@ -94,7 +98,7 @@ impl Budget {
                     RawItem::Text { range, .. } => u64::from(range.end - range.start),
                     _ => 0,
                 };
-                bases.analysis_raw(bytes.saturating_add(size_of::<usize>() as u64))?;
+                bases.analysis_raw(bytes.saturating_add(crate::logical::WORD))?;
                 bases.after_raw(item);
             }
         }
@@ -143,7 +147,7 @@ impl Budget {
         // node, so 64 bytes per input language byte bounds those payloads.
         let locale = |s: &InlineStyle| {
             if transforms {
-                (size_of::<icu_locale_core::LanguageIdentifier>() as u64).saturating_add(
+                LANGUAGE_IDENTIFIER_BYTES.saturating_add(
                     (s.lang.as_ref().map_or(0, String::len) as u64).saturating_mul(64),
                 )
             } else {

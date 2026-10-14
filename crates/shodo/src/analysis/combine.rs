@@ -300,11 +300,15 @@ struct Candidate {
 /// Simultaneously live candidate, scope, rejection and output slots. Each
 /// collection has at most one entry per processed item; spare capacity is
 /// outside the logical admission budget.
-pub(crate) const ANALYSIS_ITEM_BYTES: u64 = (std::mem::size_of::<Candidate>()
-    + std::mem::size_of::<Option<u32>>()
-    + std::mem::size_of::<bool>()
-    + std::mem::size_of::<CombineSpan>()
-    + std::mem::size_of::<Range<u32>>()) as u64;
+pub(crate) const ANALYSIS_ITEM_BYTES: u64 = CANDIDATE_BYTES
+    + (std::mem::size_of::<Option<u32>>() + std::mem::size_of::<bool>()) as u64
+    + COMBINE_SPAN_BYTES
+    + std::mem::size_of::<Range<u32>>() as u64;
+
+crate::logical::logical_sizes! {
+    CANDIDATE_BYTES: Candidate = 48;
+    COMBINE_SPAN_BYTES: CombineSpan = 32;
+}
 
 /// Locate whole-box text that may be composed. `TextSource` boundaries are
 /// storage only, while even an empty inline box is a CSS composition boundary.

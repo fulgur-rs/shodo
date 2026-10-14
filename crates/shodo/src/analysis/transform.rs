@@ -18,6 +18,10 @@ pub(crate) struct WidthOrigin {
     pub(crate) before_width: String,
 }
 
+crate::logical::logical_sizes! {
+    WIDTH_ORIGIN_BYTES: WidthOrigin = 32;
+}
+
 #[cfg(test)]
 std::thread_local! {
     static WIDTH_ORIGIN_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -334,7 +338,7 @@ fn transform_inner(
                     &mut input.mapping_budget,
                     &mut bases,
                     index,
-                    std::mem::size_of::<WidthOrigin>() as u64
+                    WIDTH_ORIGIN_BYTES
                         + before.len() as u64
                         + width_mark.map_or(0, |mark| mark.len_utf8() as u64),
                 )?;
@@ -596,10 +600,7 @@ mod work_tests {
             text_combine_upright: crate::style::TextCombineUpright::All,
             ..Default::default()
         };
-        let scalar_bytes = TRANSFORM_SPAN_BYTES
-            + INDIVISIBLE_BYTES
-            + std::mem::size_of::<WidthOrigin>() as u64
-            + 1;
+        let scalar_bytes = TRANSFORM_SPAN_BYTES + INDIVISIBLE_BYTES + WIDTH_ORIGIN_BYTES + 1;
         for (limit, expected_copies, expected_records) in [(0, 0, 0), (scalar_bytes, 1, 1)] {
             WIDTH_ORIGIN_COPIES.with(|copies| copies.set(0));
             TRANSFORM_RECORDS.with(|records| records.set(0));
@@ -643,8 +644,7 @@ mod work_tests {
         assert_eq!(processed.indivisible.len(), 2);
         // The consumed mark keeps a collapsed span and contributes to the
         // original string, without creating an empty width-origin record.
-        let kana_bytes =
-            2 * TRANSFORM_SPAN_BYTES + std::mem::size_of::<WidthOrigin>() as u64 + "ｶﾞ".len() as u64;
+        let kana_bytes = 2 * TRANSFORM_SPAN_BYTES + WIDTH_ORIGIN_BYTES + "ｶﾞ".len() as u64;
         let kana = transform(
             input("ｶﾞ"),
             std::slice::from_ref(&style),

@@ -15,6 +15,10 @@ use std::{
     sync::Arc,
 };
 
+crate::logical::logical_sizes! {
+    FONT_INFO_BYTES: FontInfo = 96;
+}
+
 // Include hash bucket slack and conservative per-entry metadata. Work is
 // charged even for duplicate names; storage is charged only on admission.
 const ENTRY_BYTES: u64 = 256;
@@ -233,7 +237,7 @@ impl LocalNames {
             self.budget.work.charge(1 + name.len() as u64, limits)?;
             // Account the full snapshot, including Vec growth slack, before
             // copying any name. Release construction scratch on all outcomes.
-            let cost = name.len() as u64 + 3 * size_of::<String>() as u64;
+            let cost = name.len() as u64 + 3 * crate::logical::VEC_HEADER;
             self.budget.check_bytes(cost, limits)?;
             self.budget.temporary = self.budget.temporary.saturating_add(cost);
             families.push(name.to_owned());
@@ -265,7 +269,8 @@ impl LocalNames {
                     super::LOCAL_INDEX_BLOBS
                         .with(|blobs| blobs.borrow_mut().push(blob.downgrade()));
                 }
-                let metadata = (size_of::<FontInfo>() + 2 * size_of::<usize>()) as u64
+                let metadata = FONT_INFO_BYTES
+                    + 2 * crate::logical::WORD
                     + if info.axes().len() > 1 {
                         (2 * info.axes().len() * size_of::<fontique::AxisInfo>()) as u64
                     } else {

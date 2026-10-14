@@ -135,6 +135,7 @@ mod builder;
 mod context;
 mod hashing;
 mod line;
+mod logical;
 mod output;
 mod paragraph;
 mod sanitize;
