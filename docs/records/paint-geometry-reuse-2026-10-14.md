@@ -82,6 +82,16 @@ this implementation record makes no latency or allocation-reduction claim.
 
 ## 中央の測定と統合検証
 
-固定された baseline `454fb916` と個別実装の反復 A/B は、[正式な記録](performance-geometry-ab-2026-10-14.json) に保存した。条件ごとの全サンプル、出力ハッシュ、別バイナリの割当量、同一バイナリ対照、再測定と制約を含む。初回の mutable baseline を使った測定は指紋を保証できず却下し、固定 worktree で測り直した。
+固定された baseline `454fb916` と個別実装の反復 A/B は、[正式な記録](performance-geometry-ab-2026-10-14.json.gz) に保存した。条件ごとの全サンプル、出力ハッシュ、別バイナリの割当量、同一バイナリ対照、再測定と制約を含む。初回の mutable baseline を使った測定は指紋を保証できず却下し、固定 worktree で測り直した。
 
 4変更を組み合わせた版では、workspace 1952 / AccessKit 1968 / 最小 feature 1412 / complex-scripts 1415 / allocation-counting 25 件が成功、失敗0。fmt・通常/AccessKit Clippy・通常/AccessKit docs・Wasm3構成も exit0。並行して入った main の変更との統合と、最終HEADのCIは別の確認として扱う。
+
+全サンプルとハーネスは gzip 圧縮した JSON に保存している。`gzip -dc docs/records/performance-*-ab-2026-10-14.json.gz` で取り出せる。
+
+固定 baseline の代表中央値（ms、scale は入力の反復数）。個別変更の割合は足し合わせない。
+
+| 操作・入力 | 変更前 | 変更後 | 比率 |
+| --- | ---: | ---: | ---: |
+| combined → combined-shared, latin-long ×64 | 22.567 | 19.699 | 0.873 |
+| combined → combined-shared, many-short-latin ×64 | 1.826 | 0.859 | 0.471 |
+| paint → shared-paint, latin-long ×64 | 14.617 | 7.089 | 0.485 |
