@@ -77,3 +77,9 @@ root が同じ入力・バイナリ設定で実行する時間/割当の paired 
 凍結する。個々の unit の省略回数は elapsed time の改善率を保証しないため、
 ここでは時間の改善率を主張しない。root の正式な測定記録と比較し、意味のある
 改善が確認できなければ候補を採用しない。
+
+## 中央の測定と統合検証
+
+固定された baseline `454fb916` と個別実装の反復 A/B は、[正式な記録](performance-spacing-ab-2026-10-14.json) に保存した。条件ごとの全サンプル、出力ハッシュ、別バイナリの割当量、同一バイナリ対照、再測定と制約を含む。初回の mutable baseline を使った測定は指紋を保証できず却下し、固定 worktree で測り直した。
+
+4変更を組み合わせた版では、workspace 1952 / AccessKit 1968 / 最小 feature 1412 / complex-scripts 1415 / allocation-counting 25 件が成功、失敗0。fmt・通常/AccessKit Clippy・通常/AccessKit docs・Wasm3構成も exit0。並行して入った main の変更との統合と、最終HEADのCIは別の確認として扱う。
