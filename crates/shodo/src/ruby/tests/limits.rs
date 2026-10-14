@@ -424,3 +424,261 @@ fn annotation_forced_breaks_preserve_noncollapsible_spaces() {
         );
     }
 }
+
+#[test]
+fn equal_root_and_base_glyph_room_reports_the_owning_base_original_cap() {
+    use crate::limits::{LimitExceeded, LimitKind};
+    let limits = Limits {
+        max_shaped_glyphs: Some(10),
+        ..Limits::default()
+    };
+    let fonts = crate::test_support::fonts::collection(&limits);
+    fonts
+        .register_face(
+            CJK.to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let root = style(16.0);
+    for first_line in [false, true] {
+        let paragraph_style = ParagraphStyle {
+            root: root.clone(),
+            first_line: first_line.then(|| root.clone()),
+            ..Default::default()
+        };
+        let content = RubyContent::text(
+            TextSource::Generated { node: NodeId(2) },
+            "123456",
+            &root,
+            &Limits {
+                max_shaped_glyphs: Some(5),
+                ..Limits::default()
+            },
+        );
+        let annotation = RubyContent::text(
+            TextSource::Generated { node: NodeId(3) },
+            "あ",
+            &root,
+            &Limits::default(),
+        );
+        let ruby = Ruby::new(
+            vec![RubyBase {
+                node: NodeId(2),
+                content,
+                align: RubyAlign::default(),
+            }],
+            vec![RubyLevel {
+                annotations: vec![RubyAnnotation {
+                    node: NodeId(3),
+                    content: annotation,
+                    span: RubySpan::Auto,
+                    visibility: RubyVisibility::Visible,
+                }],
+                style: RubyStyle::default(),
+            }],
+        )
+        .unwrap();
+        let mut builder = ParagraphBuilder::new(&paragraph_style, &limits);
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, "12345");
+        builder.push_ruby(NodeId(4), &root, ruby);
+        let error = builder
+            .build(&mut LayoutContext::new(), &fonts)
+            .unwrap_err();
+        assert_eq!(
+            error,
+            LimitExceeded {
+                kind: LimitKind::ShapedGlyphs,
+                limit: 5,
+                actual: 6
+            },
+            "first_line={first_line}"
+        );
+    }
+}
+
+#[test]
+fn sibling_base_first_line_costs_share_only_the_paragraph_ancestor() {
+    use crate::limits::{LimitExceeded, LimitKind};
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
+    fonts
+        .register_face(
+            CJK.to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let root = style(16.0);
+    let mut first = root.clone();
+    first.paint.color = [255, 0, 0, 255];
+    let paragraph_style = ParagraphStyle {
+        root: root.clone(),
+        first_line: Some(first),
+        ..Default::default()
+    };
+    for (paragraph_cap, left_cap, right_cap, expected) in [
+        (12, 4, 6, None),
+        (
+            12,
+            3,
+            6,
+            Some(LimitExceeded {
+                kind: LimitKind::ShapedGlyphs,
+                limit: 3,
+                actual: 4,
+            }),
+        ),
+        (
+            12,
+            4,
+            5,
+            Some(LimitExceeded {
+                kind: LimitKind::ShapedGlyphs,
+                limit: 5,
+                actual: 6,
+            }),
+        ),
+        (
+            11,
+            4,
+            6,
+            Some(LimitExceeded {
+                kind: LimitKind::ShapedGlyphs,
+                limit: 11,
+                actual: 12,
+            }),
+        ),
+    ] {
+        let limits = Limits {
+            max_shaped_glyphs: Some(paragraph_cap),
+            ..Limits::default()
+        };
+        let mut builder = ParagraphBuilder::new(&paragraph_style, &limits);
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, "1");
+        for (node, text, cap) in [(NodeId(2), "12", left_cap), (NodeId(3), "123", right_cap)] {
+            let content = RubyContent::text(
+                TextSource::Generated { node },
+                text,
+                &root,
+                &Limits {
+                    max_shaped_glyphs: Some(cap),
+                    ..Limits::default()
+                },
+            );
+            let ruby = Ruby::new(
+                vec![RubyBase {
+                    node,
+                    content,
+                    align: RubyAlign::default(),
+                }],
+                Vec::new(),
+            )
+            .unwrap();
+            builder.push_ruby(node, &root, ruby);
+        }
+        let result = builder.build(&mut LayoutContext::new(), &fonts);
+        match expected {
+            Some(error) => assert_eq!(result.unwrap_err(), error),
+            None => {
+                let paragraph = result.unwrap();
+                assert_eq!(paragraph.data.glyphs.len(), 6);
+                assert_eq!(
+                    paragraph
+                        .data
+                        .first_line
+                        .as_ref()
+                        .unwrap()
+                        .data
+                        .glyphs
+                        .len(),
+                    6
+                );
+                assert!(paragraph.warnings().is_empty());
+            }
+        }
+    }
+}
+
+#[test]
+fn nested_annotation_keeps_its_own_non_cumulative_shaping_run_cap() {
+    let limits = Limits::default();
+    let fonts = crate::test_support::fonts::collection(&limits);
+    fonts
+        .register_face(
+            CJK.to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let root = style(16.0);
+    let content =
+        |node, text| RubyContent::text(TextSource::Generated { node }, text, &root, &limits);
+    let inner = Ruby::new(
+        vec![RubyBase {
+            node: NodeId(2),
+            content: content(NodeId(2), "12"),
+            align: RubyAlign::default(),
+        }],
+        vec![RubyLevel {
+            annotations: vec![RubyAnnotation {
+                node: NodeId(3),
+                content: content(NodeId(3), "あ"),
+                span: RubySpan::Auto,
+                visibility: RubyVisibility::Visible,
+            }],
+            style: RubyStyle::default(),
+        }],
+    )
+    .unwrap();
+    let paragraph_style = ParagraphStyle {
+        root: root.clone(),
+        ..Default::default()
+    };
+    let mut outer_content = ParagraphBuilder::new(
+        &paragraph_style,
+        &Limits {
+            max_shaping_run_bytes: Some(1),
+            ..Limits::default()
+        },
+    );
+    outer_content.push_ruby(NodeId(4), &root, inner);
+    let outer = Ruby::new(
+        vec![RubyBase {
+            node: NodeId(5),
+            content: RubyContent::from_builder(outer_content),
+            align: RubyAlign::default(),
+        }],
+        Vec::new(),
+    )
+    .unwrap();
+    let mut builder = ParagraphBuilder::new(&paragraph_style, &limits);
+    builder.push_ruby(NodeId(6), &root, outer);
+    let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+    let annotations: Vec<_> = paragraph
+        .data
+        .ruby
+        .containers
+        .iter()
+        .flat_map(|container| &container.lanes)
+        .collect();
+    assert_eq!(annotations.len(), 1);
+    assert!(
+        annotations[0].paragraph.warnings().is_empty(),
+        "annotation inherited its containing base's one-byte window cap: {:?}",
+        annotations[0].paragraph.warnings()
+    );
+    assert!(
+        paragraph.warnings().is_empty(),
+        "annotation inherited its containing base's one-byte window cap: {:?}",
+        paragraph.warnings()
+    );
+}

@@ -13,6 +13,7 @@ mod instance_cache;
 pub(crate) use instance_cache::WindowInstances;
 pub(crate) mod orientation;
 mod window;
+use crate::limits::ledger::{LimitsLedger, Reservations};
 pub(crate) use instance::RunInstance;
 pub(crate) use instance::resolve as resolve_instance;
 use std::sync::Arc;
@@ -56,7 +57,7 @@ pub(crate) fn combined_width_probe_mode_for_test() -> CombinedWidthProbeMode {
 
 use crate::font::FontId;
 use crate::geometry::{LayoutUnit, Saturation, WritingMode};
-use crate::limits::{LimitExceeded, LimitKind, Limits};
+use crate::limits::{LimitExceeded, Limits};
 use skrifa::{MetadataProvider, raw::TableProvider};
 
 // HarfRust centers CFF ink when VORG is absent. Preserve the OpenType origin
@@ -310,6 +311,7 @@ pub(crate) fn select_combined_widths(
                     },
                     &mut warnings,
                     &mut sat,
+                    &mut LimitsLedger::new(limits),
                     ShapeOptions::default(),
                 )
             };
@@ -346,11 +348,8 @@ pub(crate) fn select_combined_widths(
     }
 }
 
-/// Shape a paragraph, with or without Ruby base scopes, while consuming each
-/// selected width-feature trial directly into its retained output. Without
-/// scopes every selected trial is reused; with scopes a trial is reused only
-/// when `scoped_reuse_fits`, and otherwise the group is shaped through the
-/// scoped path so local budgets fail exactly as before.
+/// Select TCY widths using reversible reservations, then retain the selected
+/// producer output and commit its original owner charges without shaping again.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn shape_items_with_combined_width_reuse(
     cx: &mut crate::LayoutContext,
@@ -361,14 +360,12 @@ pub(crate) fn shape_items_with_combined_width_reuse(
     limits: &Limits,
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
-    mut bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
+    ledger: &mut LimitsLedger,
     feature_sets: &mut FeatureSets,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
     let mut glyphs = GlyphStore::default();
     let mut runs = Vec::new();
     let mut cursor = 0;
-    let mut traces = bases.is_some().then(|| (Vec::new(), Vec::new()));
-
     while cursor < items.len() {
         let Some((start, end, tag, starts)) = next_combined_width_group(items, cursor) else {
             let (rest, rest_runs) = shape_inputs(
@@ -383,16 +380,12 @@ pub(crate) fn shape_items_with_combined_width_reuse(
                 },
                 warnings,
                 sat,
-                ShapeOptions {
-                    bases: bases.as_deref_mut(),
-                    glyph_offset: glyphs.len() as u64,
-                    ..Default::default()
-                },
+                ledger,
+                ShapeOptions::default(),
             )?;
             append_shape_output(&mut glyphs, &mut runs, rest, rest_runs);
             break;
         };
-
         if start > cursor {
             let (prefix, prefix_runs) = shape_inputs(
                 cx,
@@ -406,32 +399,24 @@ pub(crate) fn shape_items_with_combined_width_reuse(
                 },
                 warnings,
                 sat,
-                ShapeOptions {
-                    bases: bases.as_deref_mut(),
-                    glyph_offset: glyphs.len() as u64,
-                    ..Default::default()
-                },
+                ledger,
+                ShapeOptions::default(),
             )?;
             append_shape_output(&mut glyphs, &mut runs, prefix, prefix_runs);
         }
-
-        let selection = {
-            let group = &items[start..end];
-            try_shape_combined_width_group(
-                cx,
-                group,
-                &starts,
-                tag,
-                styles,
-                fonts,
-                mode,
-                limits,
-                feature_sets,
-                traces.as_mut(),
-            )
-        };
-
-        let reuse = if let Some(selection) = selection {
+        let selection = try_shape_combined_width_group(
+            cx,
+            &items[start..end],
+            &starts,
+            tag,
+            styles,
+            fonts,
+            mode,
+            limits,
+            feature_sets,
+            ledger,
+        );
+        if let Some(selection) = &selection {
             if selection.use_width_feature {
                 for item in &mut items[start..end] {
                     item.width_feature = Some(tag);
@@ -442,52 +427,27 @@ pub(crate) fn shape_items_with_combined_width_reuse(
                     feature_sets.discard_unselected_width_feature(item, tag);
                 }
             }
-
-            // The independent trial limit starts at zero. If its selected
-            // output would cross the paragraph limit, shape this group through
-            // the ordinary global-counting path to preserve the exact failing
-            // run and LimitExceeded.actual value.
-            let group_exceeds_limit = limits
-                .max_shaped_glyphs
-                .is_some_and(|max| glyphs.len() as u64 + selection.glyphs.len() as u64 > max);
-            let scoped_fits = match (bases.as_deref_mut(), traces.as_ref()) {
-                (Some(bases), Some((plain, narrow))) => scoped_reuse_fits(
-                    bases,
-                    &items[start..end],
-                    limits,
-                    if selection.use_width_feature {
-                        narrow
-                    } else {
-                        plain
-                    },
-                ),
-                _ => true,
-            };
-            if !group_exceeds_limit && scoped_fits {
-                Some(selection)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-        if let Some(selection) = reuse {
-            if let (Some(bases), Some((plain, narrow))) = (bases.as_deref_mut(), traces.as_ref()) {
-                let trace = if selection.use_width_feature {
-                    narrow
-                } else {
-                    plain
-                };
-                for charge in trace {
-                    bases.item(charge.item as usize, LimitKind::ShapedGlyphs, charge.glyphs)?;
-                }
-            }
+        }
+        // A scoped run cap can change the actual window boundaries. Replay
+        // shaping only for that different input, never to reconstruct an error.
+        let windows_match = items[start..end].iter().all(|item| {
+            item.scalars.first().is_none_or(|first| {
+                let bytes = item.scalars.iter().fold(0u64, |sum, scalar| {
+                    sum.saturating_add(scalar.c.len_utf8() as u64)
+                });
+                let global = limits.max_shaping_run_bytes.unwrap_or(u64::MAX);
+                let scoped = ledger.shaping_run_bytes(first.item as usize, global);
+                scoped == global || bytes <= scoped
+            })
+        });
+        if let Some(selection) = selection.filter(|_| windows_match) {
+            ledger.commit(selection.reservations)?;
             warnings.append(selection.warnings);
             sat.saturated += selection.saturation.saturated;
             sat.non_finite += selection.saturation.non_finite;
             append_shape_output(&mut glyphs, &mut runs, selection.glyphs, selection.runs);
         } else {
-            let (group_glyphs, group_runs) = shape_inputs(
+            let (output, output_runs) = shape_inputs(
                 cx,
                 items[start..end].iter().map(input::ShapeInput::whole),
                 &ShapeEnv {
@@ -499,17 +459,13 @@ pub(crate) fn shape_items_with_combined_width_reuse(
                 },
                 warnings,
                 sat,
-                ShapeOptions {
-                    bases: bases.as_deref_mut(),
-                    glyph_offset: glyphs.len() as u64,
-                    ..Default::default()
-                },
+                ledger,
+                ShapeOptions::default(),
             )?;
-            append_shape_output(&mut glyphs, &mut runs, group_glyphs, group_runs);
+            append_shape_output(&mut glyphs, &mut runs, output, output_runs);
         }
         cursor = end;
     }
-
     Ok((glyphs, runs))
 }
 
@@ -519,6 +475,7 @@ struct CombinedWidthSelection {
     warnings: crate::limits::WarningSink,
     saturation: Saturation,
     use_width_feature: bool,
+    reservations: Reservations,
 }
 
 fn next_combined_width_group(
@@ -561,34 +518,6 @@ fn next_combined_width_group(
     None
 }
 
-/// Whether a selected unscoped trial can stand in for scoped shaping: every
-/// input must be one window under both the scoped and global run budgets (so
-/// neither path splits or warns), and replaying the trial's charges must fit
-/// every owning BaseScope chain.
-fn scoped_reuse_fits(
-    bases: &mut crate::ruby::base_budget::BaseScopes,
-    group: &[crate::analysis::itemize::ShapeItem],
-    limits: &Limits,
-    trace: &[WindowCharge],
-) -> bool {
-    let global = limits.max_shaping_run_bytes.unwrap_or(u64::MAX);
-    group.iter().all(|item| {
-        let Some(first) = item.scalars.first() else {
-            return true;
-        };
-        let bytes = item
-            .scalars
-            .iter()
-            .map(|scalar| scalar.c.len_utf8() as u64)
-            .fold(0u64, u64::saturating_add);
-        bytes <= bases.shaping_run_bytes(first.item as usize, global)
-    }) && bases.can_charge_shaped_glyphs(
-        trace
-            .iter()
-            .map(|charge| (charge.item as usize, charge.glyphs)),
-    )
-}
-
 #[allow(clippy::too_many_arguments)]
 fn try_shape_combined_width_group(
     cx: &mut crate::LayoutContext,
@@ -600,23 +529,16 @@ fn try_shape_combined_width_group(
     mode: WritingMode,
     limits: &Limits,
     feature_sets: &mut FeatureSets,
-    traces: Option<&mut (Vec<WindowCharge>, Vec<WindowCharge>)>,
+    ledger: &mut LimitsLedger,
 ) -> Option<CombinedWidthSelection> {
-    let (plain_trace, narrow_trace) = match traces {
-        Some((plain, narrow)) => {
-            plain.clear();
-            narrow.clear();
-            (Some(plain), Some(narrow))
-        }
-        None => (None, None),
-    };
     for item in group {
         feature_sets.prepare_width_feature(item, styles, tag);
     }
 
     let mut plain_warnings = crate::limits::WarningSink::new(limits.max_warnings);
     let mut plain_saturation = Saturation::default();
-    let Ok((plain, plain_runs)) = shape_inputs(
+    let plain_checkpoint = ledger.checkpoint();
+    let plain_result = shape_inputs(
         cx,
         group
             .iter()
@@ -630,11 +552,14 @@ fn try_shape_combined_width_group(
         },
         &mut plain_warnings,
         &mut plain_saturation,
+        ledger,
         ShapeOptions {
-            trace: plain_trace,
+            trial: true,
             ..Default::default()
         },
-    ) else {
+    );
+    let plain_reservations = ledger.rollback(plain_checkpoint);
+    let Ok((plain, plain_runs)) = plain_result else {
         for item in group {
             feature_sets.discard_unselected_width_feature(item, tag);
         }
@@ -651,6 +576,7 @@ fn try_shape_combined_width_group(
 
     let mut narrow_warnings = crate::limits::WarningSink::new(limits.max_warnings);
     let mut narrow_saturation = Saturation::default();
+    let narrow_checkpoint = ledger.checkpoint();
     let narrow_result = shape_inputs(
         cx,
         group
@@ -665,11 +591,13 @@ fn try_shape_combined_width_group(
         },
         &mut narrow_warnings,
         &mut narrow_saturation,
+        ledger,
         ShapeOptions {
-            trace: narrow_trace,
+            trial: true,
             ..Default::default()
         },
     );
+    let narrow_reservations = ledger.rollback(narrow_checkpoint);
 
     let Some((narrow, narrow_runs)) = narrow_result.ok() else {
         for item in group {
@@ -681,6 +609,7 @@ fn try_shape_combined_width_group(
             warnings: plain_warnings,
             saturation: plain_saturation,
             use_width_feature: false,
+            reservations: plain_reservations,
         });
     };
     #[cfg(test)]
@@ -714,6 +643,7 @@ fn try_shape_combined_width_group(
             warnings: narrow_warnings,
             saturation: narrow_saturation,
             use_width_feature: true,
+            reservations: narrow_reservations,
         })
     } else {
         for item in group {
@@ -725,6 +655,7 @@ fn try_shape_combined_width_group(
             warnings: plain_warnings,
             saturation: plain_saturation,
             use_width_feature: false,
+            reservations: plain_reservations,
         })
     }
 }
@@ -798,7 +729,7 @@ pub(crate) fn shape_items(
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
-    shape_items_with_base_scopes(
+    shape_items_env(
         cx,
         items,
         &crate::shape::ShapeEnv {
@@ -810,7 +741,7 @@ pub(crate) fn shape_items(
         },
         warnings,
         sat,
-        None,
+        &mut LimitsLedger::new(limits),
     )
 }
 
@@ -823,13 +754,13 @@ pub(crate) struct ShapeEnv<'a> {
     pub(crate) feature_sets: &'a FeatureSets,
 }
 
-pub(crate) fn shape_items_with_base_scopes(
+pub(crate) fn shape_items_env(
     cx: &mut crate::LayoutContext,
     items: &[crate::analysis::itemize::ShapeItem],
     env: &ShapeEnv<'_>,
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
-    bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
+    ledger: &mut LimitsLedger,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
     shape_inputs(
         cx,
@@ -837,30 +768,15 @@ pub(crate) fn shape_items_with_base_scopes(
         env,
         warnings,
         sat,
-        ShapeOptions {
-            bases,
-            ..Default::default()
-        },
+        ledger,
+        ShapeOptions::default(),
     )
-}
-
-/// Glyphs one harfrust call charged to its first scalar's owning item, in
-/// shaping order. Trials record it so a reused output can replay BaseScope
-/// charges exactly. Only harfrust calls are traced: the per-scalar charges of
-/// missing-font notdef glyphs are not, which is safe because groups with a
-/// missing font never take part in width selection and are never reused.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct WindowCharge {
-    pub(crate) item: u32,
-    pub(crate) glyphs: u64,
 }
 
 /// Mutable accounting and reuse state for one shaping call.
 #[derive(Default)]
 struct ShapeOptions<'a> {
-    bases: Option<&'a mut crate::ruby::base_budget::BaseScopes>,
-    trace: Option<&'a mut Vec<WindowCharge>>,
-    glyph_offset: u64,
+    trial: bool,
     window_instances: Option<&'a mut WindowInstances>,
 }
 
@@ -870,6 +786,7 @@ fn shape_inputs<'a>(
     env: &ShapeEnv<'_>,
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
+    ledger: &mut LimitsLedger,
     options: ShapeOptions<'_>,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
     let ShapeEnv {
@@ -880,9 +797,7 @@ fn shape_inputs<'a>(
         feature_sets,
     } = *env;
     let ShapeOptions {
-        mut bases,
-        mut trace,
-        glyph_offset,
+        trial,
         mut window_instances,
     } = options;
     cx.bound_shaping_scratch(limits);
@@ -993,9 +908,11 @@ fn shape_inputs<'a>(
         while cursor < input.scalars.len() {
             let start = cursor;
             let budget = limits.max_shaping_run_bytes.unwrap_or(u64::MAX);
-            let budget = bases.as_ref().map_or(budget, |bases| {
-                bases.shaping_run_bytes(input.scalars[start].item as usize, budget)
-            });
+            let budget = if trial {
+                budget
+            } else {
+                ledger.shaping_run_bytes(input.scalars[start].item as usize, budget)
+            };
             let mut bytes = 0;
             let mut boundary = start;
             while cursor < input.scalars.len() {
@@ -1033,19 +950,13 @@ fn shape_inputs<'a>(
                 );
                 let run_instance = missing_instance.as_ref().expect("missing font instance");
                 for scalar in scalars {
-                    if let Some(bases) = &mut bases {
-                        bases.item(scalar.item as usize, LimitKind::ShapedGlyphs, 1)?;
-                    }
-                    let glyph = store.len();
-                    push_notdef_glyph(
-                        &mut store,
-                        scalar.c,
-                        scalar.offset,
-                        style.font_size,
-                        limits,
-                        sat,
-                        glyph_offset,
+                    ledger.shaped_glyphs(
+                        scalar.item as usize,
+                        1,
+                        trial.then_some(store.len() as u64 + 1),
                     )?;
+                    let glyph = store.len();
+                    push_notdef_glyph(&mut store, scalar.c, scalar.offset, style.font_size, sat)?;
                     // Extend the window's previous run while it is contiguous
                     // and its pen stays under the limit; otherwise start a run.
                     if runs.len() > window_run_start
@@ -1133,26 +1044,11 @@ fn shape_inputs<'a>(
             let mut shaped = buffer;
             #[cfg(test)]
             HARFRUST_SHAPE_CALLS.with(|calls| calls.set(calls.get() + 1));
-            Limits::check(
-                limits.max_shaped_glyphs,
-                LimitKind::ShapedGlyphs,
-                glyph_offset + store.len() as u64 + shaped.len() as u64,
+            ledger.shaped_glyphs(
+                scalars[0].item as usize,
+                shaped.len() as u64,
+                trial.then_some(store.len() as u64 + shaped.len() as u64),
             )?;
-            if let Some(trace) = &mut trace {
-                trace.push(WindowCharge {
-                    item: scalars[0].item,
-                    glyphs: shaped.len() as u64,
-                });
-            }
-            if let Some(bases) = &mut bases {
-                // Ruby boundaries/isolation delimit shaping segments; transparent
-                // DOM node boundaries within a base keep the same scope.
-                bases.item(
-                    scalars[0].item as usize,
-                    LimitKind::ShapedGlyphs,
-                    shaped.len() as u64,
-                )?;
-            }
             let scale = font_size / shaper.units_per_em() as f32;
             // Sort clusters into logical order while preserving the shaper's
             // intra-cluster order. Public output positions handle RTL groups.
@@ -1266,17 +1162,10 @@ fn push_notdef_glyph(
     c: char,
     cluster: u32,
     font_size: f32,
-    limits: &Limits,
     sat: &mut Saturation,
-    glyph_offset: u64,
 ) -> Result<(), LimitExceeded> {
     // Converted per glyph so saturation counts stay per scalar.
     let em = LayoutUnit::from_f32_round(font_size, sat);
-    Limits::check(
-        limits.max_shaped_glyphs,
-        LimitKind::ShapedGlyphs,
-        glyph_offset + store.len() as u64 + 1,
-    )?;
     let mark = is_mark(c);
     let advance = if mark || icu_properties::CodePointSetData::new::<
         icu_properties::props::DefaultIgnorableCodePoint,
@@ -1375,6 +1264,7 @@ pub(crate) fn shape_window_edit(
         .partition_point(|item| item.end <= unit.text.start);
     let mut limits = data.limits.clone();
     limits.max_shaped_glyphs = glyph_budget;
+    let mut ledger = LimitsLedger::new(&limits);
     let result = if !contains_replacement
         && input::can_borrow(&data.shape_items[index..], &unit.text)
     {
@@ -1392,6 +1282,7 @@ pub(crate) fn shape_window_edit(
             },
             warnings,
             sat,
+            &mut ledger,
             ShapeOptions {
                 window_instances: Some(&mut instances),
                 ..Default::default()
@@ -1476,7 +1367,7 @@ pub(crate) fn shape_window_edit(
                 at = finish;
             }
         }
-        shape_items_with_base_scopes(
+        shape_items_env(
             cx,
             &items,
             &crate::shape::ShapeEnv {
@@ -1488,7 +1379,7 @@ pub(crate) fn shape_window_edit(
             },
             warnings,
             sat,
-            None,
+            &mut ledger,
         )
     };
     match result {

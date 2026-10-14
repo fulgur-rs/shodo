@@ -31,7 +31,7 @@ fn analysis_budget_exact_boundary_and_build_error_match() {
         .unwrap()
         .state
         .normal
-        .analysis_budget
+        .analysis_cost
         .used;
     let fonts = crate::test_support::fonts::collection(&Limits::default());
     for cap in [0, 1, used - 1, used, used + 1] {
@@ -151,8 +151,8 @@ fn analysis_budget_first_line_clone_and_replay_have_identical_boundaries() {
             .unwrap()
             .state;
         assert!(state.alternate_reuses_analysis);
-        let normal = state.normal.analysis_budget.used;
-        let both = normal + state.alternate.as_ref().unwrap().analysis_budget.used;
+        let normal = state.normal.analysis_cost.used;
+        let both = normal + state.alternate.as_ref().unwrap().analysis_cost.used;
         for cap in [0, normal - 1, normal, normal + 1, both - 1, both, both + 1] {
             let limits = Limits {
                 max_analysis_bytes: Some(cap),
@@ -162,8 +162,8 @@ fn analysis_budget_first_line_clone_and_replay_have_identical_boundaries() {
                 let _guard = reference.then(ReferenceGuard::new);
                 input(text, &style, &limits).analyze().map(|a| {
                     (
-                        a.state.normal.analysis_budget.used,
-                        a.state.alternate.as_ref().unwrap().analysis_budget.used,
+                        a.state.normal.analysis_cost.used,
+                        a.state.alternate.as_ref().unwrap().analysis_cost.used,
                         a.state.normal.breaks.caret_cuts,
                         a.state
                             .alternate
@@ -195,7 +195,7 @@ fn analysis_budget_transformed_bytes_and_mapping_disabled_cannot_bypass() {
         .unwrap()
         .state
         .normal
-        .analysis_budget
+        .analysis_cost
         .used;
     let limits = Limits {
         max_analysis_bytes: Some(plain_used),
@@ -294,7 +294,7 @@ fn analysis_budget_annotation_and_ancestor_caps_precede_child_analysis() {
         .unwrap()
         .state
         .normal
-        .analysis_budget
+        .analysis_cost
         .used;
     let limits = Limits {
         max_analysis_bytes: Some(normal),
@@ -379,7 +379,7 @@ fn analysis_budget_transparent_gap_projection_and_plaintext_upright_remain_bound
         builder
     };
     let state = build(&Limits::unlimited()).analyze().unwrap().state;
-    let used = state.normal.analysis_budget.used;
+    let used = state.normal.analysis_cost.used;
     let small = Limits {
         max_analysis_bytes: Some(used - 1),
         ..Default::default()

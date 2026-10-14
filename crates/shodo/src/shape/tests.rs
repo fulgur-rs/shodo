@@ -608,11 +608,11 @@ fn combined_width_reuse_preserves_global_glyph_limit_failure() {
         (error.kind, error.limit, error.actual),
         (LimitKind::ShapedGlyphs, 3, 4)
     );
-    assert_eq!(HARFRUST_SHAPE_CALLS.with(|calls| calls.get()), 5);
+    assert_eq!(HARFRUST_SHAPE_CALLS.with(|calls| calls.get()), 4);
 }
 
 #[test]
-fn ruby_base_glyph_limits_fall_back_to_the_scoped_final_shape() {
+fn ruby_base_glyph_limits_commit_the_scoped_trial_without_reshaping() {
     let limits = Limits::default();
     let fonts = crate::test_support::fonts::collection(&limits);
     fonts
@@ -679,7 +679,7 @@ fn ruby_base_glyph_limits_fall_back_to_the_scoped_final_shape() {
         .build(&mut crate::LayoutContext::new(), &fonts)
         .unwrap_err();
     assert_eq!((error.kind, error.limit), (LimitKind::ShapedGlyphs, 1));
-    assert_eq!(HARFRUST_SHAPE_CALLS.with(|calls| calls.get()), 3);
+    assert_eq!(HARFRUST_SHAPE_CALLS.with(|calls| calls.get()), 2);
 }
 
 #[test]
@@ -1541,7 +1541,7 @@ fn scoped_output_reuse_matches_reference_for_multi_input_groups_in_nested_bases(
     // reproduces that cumulative failure boundary. It cannot tell a cumulative
     // preflight from a per-charge one, because the commit replay fails identically;
     // the preflight's cumulative semantics are pinned by the unit tests in
-    // ruby/base_budget.rs (`shaped_glyph_preflight_accumulates_shared_ancestor_charges`).
+    // limits/ledger.rs (`shaped_glyph_preflight_accumulates_shared_ancestor_charges`).
     let prefix: u64 = data
         .shape_items
         .iter()
@@ -1705,16 +1705,16 @@ fn scoped_output_reuse_preflight_stays_linear_in_deep_nested_bases() {
         builder.build(&mut crate::LayoutContext::new(), &fonts)
     };
 
-    crate::ruby::base_budget::PREFLIGHT_OPS.with(|log| log.borrow_mut().clear());
-    crate::ruby::base_budget::PREFLIGHT_OPS_ENABLED.with(|enabled| enabled.set(true));
+    crate::limits::ledger::PREFLIGHT_OPS.with(|log| log.borrow_mut().clear());
+    crate::limits::ledger::PREFLIGHT_OPS_ENABLED.with(|enabled| enabled.set(true));
     let reused = build(
         None,
         None,
         crate::shape::CombinedWidthProbeMode::ScopedReuse,
     );
-    crate::ruby::base_budget::PREFLIGHT_OPS_ENABLED.with(|enabled| enabled.set(false));
+    crate::limits::ledger::PREFLIGHT_OPS_ENABLED.with(|enabled| enabled.set(false));
     let reused = reused.unwrap();
-    let ops = crate::ruby::base_budget::PREFLIGHT_OPS.with(|log| log.take());
+    let ops = crate::limits::ledger::PREFLIGHT_OPS.with(|log| log.take());
     let reference = build(
         None,
         None,
@@ -1733,7 +1733,7 @@ fn scoped_output_reuse_preflight_stays_linear_in_deep_nested_bases() {
         .collect();
     assert!(deep.len() >= GROUPS, "{ops:?}");
     for op in &ops {
-        assert!(op.depth <= DEPTH, "{op:?}");
+        assert!(op.depth <= DEPTH + 1, "{op:?}");
         assert!(op.steps <= (op.charges + 1) * (op.depth + 1), "{op:?}");
         // A single owner is summed first: charges + one walk.
         assert!(op.steps <= op.charges + op.depth, "{op:?}");

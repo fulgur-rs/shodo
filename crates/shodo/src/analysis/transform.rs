@@ -4,7 +4,7 @@ use super::whitespace::Processed;
 use crate::analysis::ItemKind;
 use crate::limits::{LimitExceeded, LimitKind, Limits, WarningKind, WarningSink};
 use crate::mapping::{
-    INDIVISIBLE_BYTES, MappingBudget, MappingKind, TRANSFORM_SPAN_BYTES, TransformSpan,
+    INDIVISIBLE_BYTES, MappingCost, MappingKind, TRANSFORM_SPAN_BYTES, TransformSpan,
 };
 use crate::style::{CaseTransform, InlineStyle, TextTransform, WordSpaceTransform};
 use icu_casemap::CaseMapper;
@@ -28,6 +28,7 @@ std::thread_local! {
     static TRANSFORM_RECORDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+#[cfg(test)]
 pub(crate) fn transform(
     input: Processed,
     styles: &[InlineStyle],
@@ -35,33 +36,19 @@ pub(crate) fn transform(
     warnings: &mut WarningSink,
     mode: crate::geometry::WritingMode,
 ) -> Result<Processed, LimitExceeded> {
-    transform_inner(input, styles, limits, warnings, mode, None)
+    let mut ledger = crate::limits::ledger::LimitsLedger::new(limits);
+    ledger.charge(LimitKind::MappingBytes, input.mapping_cost.used)?;
+    transform_input(input, styles, limits, warnings, mode, &mut ledger)
 }
 
-pub(crate) fn transform_with_base_scopes(
-    input: Processed,
-    styles: &[InlineStyle],
-    limits: &Limits,
-    warnings: &mut WarningSink,
-    mode: crate::geometry::WritingMode,
-    bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
-) -> Result<Processed, LimitExceeded> {
-    if bases.is_some() {
-        transform_inner(input, styles, limits, warnings, mode, bases)
-    } else {
-        transform(input, styles, limits, warnings, mode)
-    }
-}
-
-fn transform_inner(
+pub(crate) fn transform_input(
     mut input: Processed,
     styles: &[InlineStyle],
-    limits: &Limits,
+    _limits: &Limits,
     warnings: &mut WarningSink,
     mode: crate::geometry::WritingMode,
-    mut bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
+    ledger: &mut crate::limits::ledger::LimitsLedger,
 ) -> Result<Processed, LimitExceeded> {
-    input.mapping_budget.set_limits(limits)?;
     let omissions = super::combine::omissions(&input, styles, mode);
     if styles
         .iter()
@@ -71,19 +58,12 @@ fn transform_inner(
             .all(|s| s.word_space_transform == WordSpaceTransform::None)
         && omissions.is_empty()
     {
-        Limits::check(
-            limits.max_text_bytes,
-            LimitKind::TextBytes,
-            input.text.len() as u64,
-        )?;
-        if let Some(bases) = &mut bases {
-            for (i, item) in input.items.iter().enumerate() {
-                bases.item(
-                    i,
-                    LimitKind::TextBytes,
-                    u64::from(item.text.end - item.text.start),
-                )?;
-            }
+        for (i, item) in input.items.iter().enumerate() {
+            ledger.item(
+                i,
+                LimitKind::TextBytes,
+                u64::from(item.text.end - item.text.start),
+            )?;
         }
         return Ok(input);
     }
@@ -299,10 +279,7 @@ fn transform_inner(
             }
             let next_len = output.len() as u64 + mapped.len() as u64;
             Limits::check(Some(u64::from(u32::MAX)), LimitKind::TextBytes, next_len)?;
-            Limits::check(limits.max_text_bytes, LimitKind::TextBytes, next_len)?;
-            if let Some(bases) = &mut bases {
-                bases.item(index, LimitKind::TextBytes, mapped.len() as u64)?;
-            }
+            ledger.item(index, LimitKind::TextBytes, mapped.len() as u64)?;
             let start_new = output.len() as u32;
             let kind = if mapped.is_empty() {
                 MappingKind::Collapsed
@@ -319,8 +296,8 @@ fn transform_inner(
             });
             if !coalesces {
                 charge_metadata(
-                    &mut input.mapping_budget,
-                    &mut bases,
+                    &mut input.mapping_cost,
+                    ledger,
                     index,
                     TRANSFORM_SPAN_BYTES
                         + if kind == MappingKind::Expanded {
@@ -335,8 +312,8 @@ fn transform_inner(
                 && !mapped.is_empty()
             {
                 charge_metadata(
-                    &mut input.mapping_budget,
-                    &mut bases,
+                    &mut input.mapping_cost,
+                    ledger,
                     index,
                     WIDTH_ORIGIN_BYTES
                         + before.len() as u64
@@ -383,10 +360,10 @@ fn transform_inner(
     }
     if let Some(mapping) = &mut input.mapping {
         let items = &input.items;
-        let budget = &mut input.mapping_budget;
+        let budget = &mut input.mapping_cost;
         mapping.remap_text(&spans, |bytes, old| {
             let item = items.partition_point(|item| item.text.end <= old);
-            charge_metadata(budget, &mut bases, item, bytes)
+            charge_metadata(budget, ledger, item, bytes)
         })?;
     }
     for item in &mut input.items {
@@ -408,14 +385,13 @@ fn transform_inner(
 }
 
 fn charge_metadata(
-    budget: &mut MappingBudget,
-    bases: &mut Option<&mut crate::ruby::base_budget::BaseScopes>,
+    budget: &mut MappingCost,
+    ledger: &mut crate::limits::ledger::LimitsLedger,
     item: usize,
     bytes: u64,
 ) -> Result<(), LimitExceeded> {
-    budget.charge_with(bytes, |bytes| match bases {
-        Some(bases) => bases.item(item, LimitKind::MappingBytes, bytes),
-        None => Ok(()),
+    budget.charge_with(bytes, |bytes| {
+        ledger.item(item, LimitKind::MappingBytes, bytes)
     })
 }
 
@@ -577,7 +553,7 @@ mod work_tests {
 
     fn input(text: &str) -> Processed {
         Processed {
-            mapping_budget: MappingBudget::new(&Limits::default()),
+            mapping_cost: MappingCost::default(),
             text: text.into(),
             items: vec![Item {
                 kind: ItemKind::Text,
@@ -639,7 +615,7 @@ mod work_tests {
         )
         .unwrap();
         assert_eq!(processed.text, "ａａ");
-        assert_eq!(processed.mapping_budget.used, 2 * scalar_bytes);
+        assert_eq!(processed.mapping_cost.used, 2 * scalar_bytes);
         assert_eq!(processed.width_origins.len(), 2);
         assert_eq!(processed.indivisible.len(), 2);
         // The consumed mark keeps a collapsed span and contributes to the
@@ -657,7 +633,7 @@ mod work_tests {
         )
         .unwrap();
         assert_eq!(kana.text, "ガ");
-        assert_eq!(kana.mapping_budget.used, kana_bytes);
+        assert_eq!(kana.mapping_cost.used, kana_bytes);
         assert_eq!(kana.width_origins.len(), 1);
         assert_eq!(kana.width_origins[0].before_width, "ｶﾞ");
     }
@@ -696,13 +672,12 @@ mod work_tests {
                 ..Default::default()
             };
             CONTEXT_CALLS.with(|count| count.set(0));
-            let p = transform_inner(
+            let p = super::transform(
                 input(text),
                 &[style],
                 &Limits::default(),
                 &mut WarningSink::default(),
                 WritingMode::HorizontalTb,
-                None,
             )
             .unwrap();
             assert_eq!(p.text, expected);
@@ -722,13 +697,12 @@ mod work_tests {
             max_text_bytes: Some(2),
             ..Limits::default()
         };
-        let error = transform_inner(
+        let error = transform(
             input("a\u{200b}b"),
             &[style],
             &limits,
             &mut warnings,
             WritingMode::HorizontalTb,
-            None,
         )
         .err()
         .unwrap();
@@ -763,13 +737,12 @@ mod work_tests {
                 ..Default::default()
             },
         ];
-        let p = transform_inner(
+        let p = super::transform(
             p,
             &styles,
             &Limits::default(),
             &mut WarningSink::default(),
             WritingMode::HorizontalTb,
-            None,
         )
         .unwrap();
         assert_eq!(p.text, "Ος");

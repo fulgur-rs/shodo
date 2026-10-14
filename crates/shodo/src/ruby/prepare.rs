@@ -1,5 +1,4 @@
 //! Shape independent annotation paragraphs and retain their source/font owners.
-pub(crate) use super::budget::RubyBudget;
 use super::builder::{Boundary, RubyInput};
 use super::cuts::PairedCut;
 use super::{RubyAlign, RubyPosition, RubyStyle, RubyVisibility};
@@ -7,6 +6,7 @@ use crate::analysis::ItemKind;
 use crate::builder::{ParagraphBuilder, RawItem};
 use crate::font::FontCollection;
 use crate::geometry::WritingMode;
+use crate::limits::ledger::LimitsLedger;
 use crate::limits::{LimitExceeded, LimitKind, Limits};
 use crate::node::{NodeId, TextSource};
 use crate::paragraph::{Paragraph, ParagraphData};
@@ -210,13 +210,12 @@ pub(crate) fn prepare(
     inputs: &[RubyInput],
     cx: &mut crate::LayoutContext,
     fonts: &FontCollection,
-    budget: &mut RubyBudget,
-    bases: &mut super::base_budget::BaseScopes,
+    ledger: &mut LimitsLedger,
 ) -> Result<(), LimitExceeded> {
     if inputs.is_empty() {
         return Ok(());
     }
-    let mut result = charged_containers(data, inputs, budget, bases)?;
+    let mut result = charged_containers(data, inputs, ledger)?;
     for (index, (container, input)) in result.iter_mut().zip(inputs).enumerate() {
         for (level, normalized) in input.normalized.levels.iter().enumerate() {
             for annotation in &normalized.annotations {
@@ -229,10 +228,10 @@ pub(crate) fn prepare(
                 let Some(node) = annotation.node else {
                     continue;
                 };
-                let scopes = bases.enter_container(index, budget);
+                let owner = ledger.container_owner(index);
                 // Check ancestor remaining bytes before cloning a lane snapshot.
                 let bytes = super::builder::InputCost::content(&content.0).style_bytes;
-                budget.check(LimitKind::StyleBytes, bytes)?;
+                ledger.check_scope(owner, LimitKind::StyleBytes, bytes)?;
                 let mut builder = ParagraphBuilder::from_ruby_content(&content.0, node)?;
                 // Annotation line-height does not apply (CSS Ruby §3.3).
                 for style in &mut builder.styles {
@@ -261,8 +260,7 @@ pub(crate) fn prepare(
                     builder.style.writing_mode = data.style.writing_mode;
                 }
                 let paragraph =
-                    Paragraph::from_builder_with_ruby_budget(builder, cx, fonts, budget);
-                bases.leave_container(scopes, budget);
+                    Paragraph::from_builder_with_ledger(builder, cx, fonts, ledger, owner);
                 let paragraph = paragraph?;
                 container.lanes.push(PreparedLane {
                     node: annotation.node,
@@ -274,7 +272,7 @@ pub(crate) fn prepare(
             }
         }
     }
-    finish(data, result, budget, None, bases)
+    finish(data, result, ledger, None)
 }
 
 /// Alternate parents share the corresponding child data, not duplicate shapes.
@@ -282,14 +280,13 @@ pub(crate) fn prepare_alternate(
     data: &mut ParagraphData,
     inputs: &[RubyInput],
     normal: &RubyData,
-    budget: &mut RubyBudget,
+    ledger: &mut LimitsLedger,
     parent_cursors: &[Option<u32>],
-    bases: &mut super::base_budget::BaseScopes,
 ) -> Result<(), LimitExceeded> {
     if inputs.is_empty() {
         return Ok(());
     }
-    let mut result = charged_containers(data, inputs, budget, bases)?;
+    let mut result = charged_containers(data, inputs, ledger)?;
     for (alternate, normal) in result.iter_mut().zip(&normal.containers) {
         for lane in &normal.lanes {
             let mut lane = lane.clone();
@@ -301,19 +298,17 @@ pub(crate) fn prepare_alternate(
             alternate.lanes.push(lane);
         }
     }
-    finish(data, result, budget, Some((normal, parent_cursors)), bases)
+    finish(data, result, ledger, Some((normal, parent_cursors)))
 }
 
 /// Charge each input's metadata items, then build its unprepared container.
 fn charged_containers(
     data: &ParagraphData,
     inputs: &[RubyInput],
-    budget: &mut RubyBudget,
-    bases: &mut super::base_budget::BaseScopes,
+    ledger: &mut LimitsLedger,
 ) -> Result<Vec<PreparedRuby>, LimitExceeded> {
     for (index, input) in inputs.iter().enumerate() {
-        bases.container(index, input.normalized.metadata_items)?;
-        budget.charge(LimitKind::Items, input.normalized.metadata_items)?;
+        ledger.container(index, input.normalized.metadata_items)?;
     }
     Ok(containers(data, inputs))
 }
@@ -322,12 +317,11 @@ fn charged_containers(
 fn finish(
     data: &mut ParagraphData,
     mut result: Vec<PreparedRuby>,
-    budget: &mut RubyBudget,
+    ledger: &mut LimitsLedger,
     alternate: Option<(&RubyData, &[Option<u32>])>,
-    bases: &mut super::base_budget::BaseScopes,
 ) -> Result<(), LimitExceeded> {
-    super::index::prepare_cuts(data, &mut result, budget, alternate, bases)?;
-    data.ruby.intervals = super::index::ContainerIndex::new(&result, budget, bases)?;
+    super::index::prepare_cuts(data, &mut result, ledger, alternate)?;
+    data.ruby.intervals = super::index::ContainerIndex::new(&result, ledger)?;
     data.ruby.containers = result;
     Ok(())
 }

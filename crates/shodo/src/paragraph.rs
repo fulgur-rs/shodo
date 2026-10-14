@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::analysis::bidi::{BidiParagraph, analyze_bidi};
 use crate::analysis::units::{InlineBoxInfo, Unit, UnitList, build_units};
-use crate::analysis::{Item, ItemKind, transform_with_base_scopes};
+use crate::analysis::{Item, ItemKind, transform_input};
 use crate::builder::ParagraphBuilder;
 use crate::font::{FontCollection, WeakFontLayer};
 use crate::geometry::{BaselineKind, Direction, Saturation, WritingMode};
@@ -19,7 +19,7 @@ use crate::node::{NodeId, Sides};
 use crate::output::Line;
 use crate::sanitize;
 #[cfg(test)]
-use crate::shape::shape_items_with_base_scopes;
+use crate::shape::shape_items_env;
 use crate::shape::{GlyphStore, ShapedRun};
 use crate::style::{InlineStyle, ParagraphStyle};
 
@@ -217,7 +217,7 @@ pub struct Paragraph {
 /// moved between threads before shaping.
 pub struct ParagraphAnalysis {
     pub(crate) state: build::BuildAnalysis,
-    pub(crate) budget: crate::ruby::prepare::RubyBudget,
+    pub(crate) ledger: crate::limits::ledger::LimitsLedger,
 }
 
 impl fmt::Debug for Paragraph {

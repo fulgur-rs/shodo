@@ -175,7 +175,7 @@ mod tests {
 
     fn prepared(text: &str) -> (Vec<Scalar>, BreakAnalysis) {
         let input = Processed {
-            mapping_budget: crate::mapping::MappingBudget::new(&crate::limits::Limits::default()),
+            mapping_cost: crate::mapping::MappingCost::default(),
             text: text.to_owned(),
             items: vec![Item {
                 kind: ItemKind::Text,

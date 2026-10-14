@@ -10,9 +10,7 @@ use super::{Item, ItemKind};
 use crate::builder::RawItem;
 use crate::geometry::Direction;
 use crate::limits::{LimitExceeded, LimitKind, Limits};
-use crate::mapping::{
-    MappingBudget, MappingKind, MappingUnit, OffsetMapping, TRANSFORM_SPAN_BYTES,
-};
+use crate::mapping::{MappingCost, MappingKind, MappingUnit, OffsetMapping, TRANSFORM_SPAN_BYTES};
 use crate::node::{NodeId, TextSource};
 use crate::style::{InlineStyle, UnicodeBidi, WhiteSpaceCollapse};
 
@@ -21,7 +19,7 @@ const PARAGRAPH_SEPARATOR: char = '\u{2029}';
 
 #[derive(Clone)]
 pub(crate) struct Processed {
-    pub(crate) mapping_budget: MappingBudget,
+    pub(crate) mapping_cost: MappingCost,
     pub(crate) text: String,
     pub(crate) items: Vec<Item>,
     pub(crate) mapping: Option<OffsetMapping>,
@@ -41,6 +39,7 @@ pub(crate) struct ProcessInput<'a> {
     pub(crate) annotation: bool,
 }
 
+#[cfg(test)]
 pub(crate) fn process(
     raw_text: &str,
     raw: &[RawItem],
@@ -48,7 +47,8 @@ pub(crate) fn process(
     with_mapping: bool,
     limits: &Limits,
 ) -> Result<Processed, LimitExceeded> {
-    process_in_context(
+    let mut ledger = crate::limits::ledger::LimitsLedger::new(limits);
+    process_input(
         ProcessInput {
             raw_text,
             raw,
@@ -57,53 +57,16 @@ pub(crate) fn process(
             limits,
             annotation: false,
         },
-        None,
+        &mut ledger,
     )
 }
 
-pub(crate) fn process_annotation(
-    raw_text: &str,
-    raw: &[RawItem],
-    styles: &[InlineStyle],
-    with_mapping: bool,
-    limits: &Limits,
-) -> Result<Processed, LimitExceeded> {
-    process_in_context(
-        ProcessInput {
-            raw_text,
-            raw,
-            styles,
-            with_mapping,
-            limits,
-            annotation: true,
-        },
-        None,
-    )
-}
-
-pub(crate) fn process_with_base_scopes(
+pub(crate) fn process_input(
     input: ProcessInput<'_>,
-    bases: &mut crate::ruby::base_budget::BaseScopes,
+    ledger: &mut crate::limits::ledger::LimitsLedger,
 ) -> Result<Processed, LimitExceeded> {
-    if bases.enabled() {
-        process_in_context(input, Some(bases))
-    } else if input.annotation {
-        process_annotation(
-            input.raw_text,
-            input.raw,
-            input.styles,
-            input.with_mapping,
-            input.limits,
-        )
-    } else {
-        process(
-            input.raw_text,
-            input.raw,
-            input.styles,
-            input.with_mapping,
-            input.limits,
-        )
-    }
+    let flags = prepare_whitespace_flags(&input);
+    process_input_with_flags(input, &flags, ledger)
 }
 
 pub(crate) fn prepare_whitespace_flags(input: &ProcessInput<'_>) -> Vec<u8> {
@@ -115,27 +78,10 @@ pub(crate) fn prepare_whitespace_flags(input: &ProcessInput<'_>) -> Vec<u8> {
     )
 }
 
-pub(crate) fn process_with_base_scopes_and_flags(
+pub(crate) fn process_input_with_flags(
     input: ProcessInput<'_>,
     flags: &[u8],
-    bases: &mut crate::ruby::base_budget::BaseScopes,
-) -> Result<Processed, LimitExceeded> {
-    let bases = if bases.enabled() { Some(bases) } else { None };
-    process_in_context_with_flags(input, flags, bases)
-}
-
-fn process_in_context(
-    input: ProcessInput<'_>,
-    bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
-) -> Result<Processed, LimitExceeded> {
-    let flags = prepare_whitespace_flags(&input);
-    process_in_context_with_flags(input, &flags, bases)
-}
-
-fn process_in_context_with_flags(
-    input: ProcessInput<'_>,
-    flags: &[u8],
-    bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
+    ledger: &mut crate::limits::ledger::LimitsLedger,
 ) -> Result<Processed, LimitExceeded> {
     let ProcessInput {
         raw_text,
@@ -155,28 +101,20 @@ fn process_in_context_with_flags(
                     .unwrap_or(usize::MAX),
             ),
         ),
-        items: Vec::with_capacity(
-            raw.len().min(
-                limits
-                    .max_items
-                    .and_then(|n| usize::try_from(n).ok())
-                    .unwrap_or(usize::MAX),
-            ),
-        ),
+        // Scope admission precedes each push, including exhausted alternate
+        // and ancestor budgets. Raw count alone cannot authorize capacity.
+        items: Vec::new(),
         mapping: with_mapping.then(OffsetMapping::default),
-        mapping_budget: MappingBudget::new(limits),
+        mapping_cost: MappingCost::default(),
         // Collapsible spaces at the start of the paragraph are removed.
         after_space: true,
         open: Vec::new(),
-        limits,
         styles,
         annotation,
-        bases,
+        ledger,
     };
     for item in raw {
-        if let Some(bases) = &mut p.bases {
-            bases.before_raw(item);
-        }
+        p.ledger.before_raw(item);
         match item {
             RawItem::RubyBoundary {
                 ruby,
@@ -265,14 +203,14 @@ fn process_in_context_with_flags(
                 p.after_space = true;
             }
         }
-        if let Some(bases) = &mut p.bases {
-            bases.after_raw(item);
-        }
+        p.ledger.after_raw(item);
     }
     let source_spans = if p.out.is_empty() {
         Vec::new()
     } else {
-        p.mapping_budget.charge(TRANSFORM_SPAN_BYTES)?;
+        p.mapping_cost.charge_with(TRANSFORM_SPAN_BYTES, |bytes| {
+            p.ledger.charge(LimitKind::MappingBytes, bytes)
+        })?;
         vec![crate::mapping::TransformSpan {
             old: 0..p.out.len() as u32,
             new: 0..p.out.len() as u32,
@@ -280,7 +218,7 @@ fn process_in_context_with_flags(
         }]
     };
     Ok(Processed {
-        mapping_budget: p.mapping_budget,
+        mapping_cost: p.mapping_cost,
         width_origins: Vec::new(),
         source_spans,
         text: p.out,
@@ -291,15 +229,14 @@ fn process_in_context_with_flags(
 }
 
 struct Processor<'a> {
-    mapping_budget: MappingBudget,
-    bases: Option<&'a mut crate::ruby::base_budget::BaseScopes>,
+    mapping_cost: MappingCost,
+    ledger: &'a mut crate::limits::ledger::LimitsLedger,
     annotation: bool,
     out: String,
     items: Vec<Item>,
     mapping: Option<OffsetMapping>,
     after_space: bool,
     open: Vec<(NodeId, u32)>,
-    limits: &'a Limits,
     styles: &'a [InlineStyle],
 }
 
@@ -330,30 +267,18 @@ impl Processor<'_> {
             LimitKind::Items,
             self.items.len() as u64 + 1,
         )?;
-        Limits::check(
-            self.limits.max_items,
-            LimitKind::Items,
-            self.items.len() as u64 + 1,
-        )?;
-        if let Some(bases) = &mut self.bases {
-            bases.check_current_item()?;
-        }
+        self.ledger.check_current_item()?;
         Ok(())
     }
     fn push_item(&mut self, item: Item) -> Result<(), LimitExceeded> {
-        if let Some(bases) = &mut self.bases {
-            bases.record_item()?;
-        }
+        self.ledger.record_item()?;
         self.items.push(item);
         Ok(())
     }
     fn append(&mut self, c: char) -> Result<(), LimitExceeded> {
         let len = (self.out.len() as u64).saturating_add(c.len_utf8() as u64);
         Limits::check(Some(u64::from(u32::MAX)), LimitKind::TextBytes, len)?;
-        Limits::check(self.limits.max_text_bytes, LimitKind::TextBytes, len)?;
-        if let Some(bases) = &mut self.bases {
-            bases.transient_text(c.len_utf8() as u64)?;
-        }
+        self.ledger.transient_text(c.len_utf8() as u64)?;
         self.out.push(c);
         Ok(())
     }
@@ -386,13 +311,10 @@ impl Processor<'_> {
         self.append(c)?;
         let text = start..self.pos();
         if let Some(m) = &mut self.mapping {
-            let budget = &mut self.mapping_budget;
-            let bases = &mut self.bases;
+            let budget = &mut self.mapping_cost;
+            let ledger = &mut self.ledger;
             m.try_push_generated(text.clone(), node, |bytes| {
-                budget.charge_with(bytes, |bytes| match bases {
-                    Some(bases) => bases.mapping_record(bytes),
-                    None => Ok(()),
-                })
+                budget.charge_with(bytes, |bytes| ledger.mapping_record(bytes))
             })?;
         }
         self.push_item(Item {
@@ -416,14 +338,9 @@ impl Processor<'_> {
         let Some(m) = &mut self.mapping else {
             return Ok(());
         };
-        let budget = &mut self.mapping_budget;
-        let bases = &mut self.bases;
-        let mut charge = |bytes| {
-            budget.charge_with(bytes, |bytes| match bases {
-                Some(bases) => bases.mapping_record(bytes),
-                None => Ok(()),
-            })
-        };
+        let budget = &mut self.mapping_cost;
+        let ledger = &mut self.ledger;
+        let mut charge = |bytes| budget.charge_with(bytes, |bytes| ledger.mapping_record(bytes));
         match dom {
             // `dom` is a caller-supplied offset, not covered by any
             // resource limit; saturate instead of overflowing so no input
@@ -795,10 +712,13 @@ mod tests {
                         annotation,
                     };
                     let flags = prepare_whitespace_flags(&input);
-                    let expected = process_in_context(input, None).unwrap();
-                    let mut bases = crate::ruby::base_budget::BaseScopes::new(&[]);
-                    let actual =
-                        process_with_base_scopes_and_flags(input, &flags, &mut bases).unwrap();
+                    let expected = process_input(
+                        input,
+                        &mut crate::limits::ledger::LimitsLedger::new(input.limits),
+                    )
+                    .unwrap();
+                    let mut bases = crate::limits::ledger::LimitsLedger::new(input.limits);
+                    let actual = process_input_with_flags(input, &flags, &mut bases).unwrap();
 
                     assert_processed_eq(&actual, &expected);
                 }
@@ -834,11 +754,14 @@ mod tests {
                 limits: &limits,
                 ..flags_input
             };
-            let expected = process_in_context(input, None)
-                .err()
-                .expect("generated flags should hit the same resource limit");
-            let mut bases = crate::ruby::base_budget::BaseScopes::new(&[]);
-            let actual = process_with_base_scopes_and_flags(input, &flags, &mut bases)
+            let expected = process_input(
+                input,
+                &mut crate::limits::ledger::LimitsLedger::new(input.limits),
+            )
+            .err()
+            .expect("generated flags should hit the same resource limit");
+            let mut bases = crate::limits::ledger::LimitsLedger::new(input.limits);
+            let actual = process_input_with_flags(input, &flags, &mut bases)
                 .err()
                 .expect("supplied flags should hit the same resource limit");
 
@@ -1211,5 +1134,54 @@ mod tests {
         let p = run(&b);
         assert_eq!(p.text, format!("日{}本", "\u{FFFC}".repeat(4096)));
         assert!(p.items.len() <= 3 * 4096 + 2);
+    }
+}
+
+#[cfg(test)]
+mod ledger_admission_tests {
+    use super::*;
+
+    #[test]
+    fn exhausted_item_ledger_rejects_before_reserving_the_raw_item_array() {
+        let limits = Limits {
+            max_items: Some(1024),
+            ..Limits::unlimited()
+        };
+        let mut ledger = crate::limits::ledger::LimitsLedger::new(&limits);
+        ledger.charge(LimitKind::Items, 1024).unwrap();
+        let styles = [InlineStyle::default()];
+        let raw = vec![
+            RawItem::Open {
+                node: NodeId(1),
+                style: 0,
+                edges: Default::default()
+            };
+            1024
+        ];
+        let (result, peak) = crate::test_support::alloc::measure_peak(|| {
+            process_input(
+                ProcessInput {
+                    raw_text: "",
+                    raw: &raw,
+                    styles: &styles,
+                    with_mapping: false,
+                    limits: &limits,
+                    annotation: false,
+                },
+                &mut ledger,
+            )
+        });
+        assert_eq!(
+            result.err(),
+            Some(LimitExceeded {
+                kind: LimitKind::Items,
+                limit: 1024,
+                actual: 1025
+            })
+        );
+        assert!(
+            peak < std::mem::size_of::<Item>() as u64 * raw.len() as u64,
+            "rejected input reserved an unadmitted Item array: peak={peak}"
+        );
     }
 }

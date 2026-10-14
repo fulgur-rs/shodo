@@ -1,8 +1,8 @@
 //! Source-safe unit opportunities, indexed once before monotone lane matching.
-use super::budget::RubyBudget;
 use super::cuts::{self, LaneSpan, SafeCut};
 use super::prepare::{PreparedBase, PreparedLane, PreparedRuby, RubyData};
 use crate::analysis::units::{BreakClass, UnitKind};
+use crate::limits::ledger::LimitsLedger;
 use crate::limits::{LimitExceeded, LimitKind};
 use crate::paragraph::ParagraphData;
 use std::ops::Range;
@@ -237,9 +237,8 @@ impl Index {
 pub(super) fn prepare_cuts(
     data: &mut ParagraphData,
     containers: &mut [PreparedRuby],
-    budget: &mut RubyBudget,
+    ledger: &mut LimitsLedger,
     normal: Option<(&RubyData, &[Option<u32>])>,
-    bases: &mut super::base_budget::BaseScopes,
 ) -> Result<(), LimitExceeded> {
     let mut index = Index::new(data);
     for (container, ruby) in containers.iter_mut().enumerate().rev() {
@@ -282,8 +281,7 @@ pub(super) fn prepare_cuts(
             .saturating_mul((lanes.len() as u64).saturating_add(1))
             .saturating_add(lane_cuts)
             .saturating_mul(2);
-        bases.container_cost(container, LimitKind::RubyCutWork, work)?;
-        budget.charge(LimitKind::RubyCutWork, work)?;
+        ledger.container_cost(container, LimitKind::RubyCutWork, work)?;
         // Count the exact retained table before allocating its lane-cell product.
         let count = if let Some((normal, cursors)) = normal {
             let mut count = 0;
@@ -298,12 +296,8 @@ pub(super) fn prepare_cuts(
         } else {
             cuts::count_spanned(&base, &lanes, &spans)
         };
-        bases.container(
+        ledger.container(
             container,
-            (count as u64).saturating_mul(1 + lanes.len() as u64),
-        )?;
-        budget.charge(
-            LimitKind::Items,
             (count as u64).saturating_mul(1 + lanes.len() as u64),
         )?;
         ruby.cuts = if let Some((normal, cursors)) = normal {
@@ -434,8 +428,7 @@ pub(crate) struct ContainerIndex {
 impl ContainerIndex {
     pub(crate) fn new(
         containers: &[PreparedRuby],
-        budget: &mut RubyBudget,
-        bases: &mut super::base_budget::BaseScopes,
+        ledger: &mut LimitsLedger,
     ) -> Result<Self, LimitExceeded> {
         if containers.is_empty() {
             return Ok(Self::default());
@@ -446,8 +439,7 @@ impl ContainerIndex {
                 .all(|pair| pair[0].units.start <= pair[1].units.start)
         );
         let leaves = containers.len().next_power_of_two();
-        budget.charge(LimitKind::Items, (leaves as u64).saturating_mul(2))?;
-        bases.index(containers.len(), leaves)?;
+        ledger.index(containers.len(), leaves)?;
         let mut ends = vec![0; leaves * 2];
         for (i, ruby) in containers.iter().enumerate() {
             visit();

@@ -583,7 +583,7 @@ fn shape_ellipsis(
     let mut limits = data.limits.clone();
     limits.max_shaped_glyphs = Some(16);
     let mut warnings = std::mem::take(&mut cx.warnings);
-    let result = crate::shape::shape_items_with_base_scopes(
+    let result = crate::shape::shape_items_env(
         cx,
         &items,
         &crate::shape::ShapeEnv {
@@ -595,7 +595,7 @@ fn shape_ellipsis(
         },
         &mut warnings,
         sat,
-        None,
+        &mut crate::limits::ledger::LimitsLedger::new(&limits),
     );
     cx.warnings = warnings;
     match result {

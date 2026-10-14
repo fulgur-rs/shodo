@@ -37,22 +37,22 @@ fn run(case: &str, unit: &str, root: InlineStyle, mode: WritingMode) -> Oracle {
         styles,
         ..
     } = builder;
-    let mut bases = crate::ruby::base_budget::BaseScopes::new(&[]);
+    let mut bases = crate::limits::ledger::LimitsLedger::new(&limits);
     let mut warnings = WarningSink::new(None);
     let processed =
         crate::analysis::whitespace::process(&text, &items, &styles, false, &limits).unwrap();
-    let mut budget = analysis_budget::Budget::new(&limits);
+    let mut budget = analysis_cost::Cost::new();
 
     let before = budget.used;
     budget
         .transform(&processed, &styles, mode, &mut bases)
         .unwrap();
     // Transform spans and width origins are charged to the mapping budget.
-    let mapping_before = processed.mapping_budget.used;
+    let mapping_before = processed.mapping_cost.used;
     let (processed, transform_peak) = measure_peak(|| {
-        transform_with_base_scopes(processed, &styles, &limits, &mut warnings, mode, None).unwrap()
+        transform_input(processed, &styles, &limits, &mut warnings, mode, &mut bases).unwrap()
     });
-    let transform_charge = budget.used - before + (processed.mapping_budget.used - mapping_before);
+    let transform_charge = budget.used - before + (processed.mapping_cost.used - mapping_before);
 
     let before = budget.used;
     budget
@@ -64,7 +64,6 @@ fn run(case: &str, unit: &str, root: InlineStyle, mode: WritingMode) -> Oracle {
         analyze_data(
             style,
             analysis_limits,
-            None,
             processed,
             styles,
             1,
