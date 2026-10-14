@@ -1,6 +1,6 @@
 //! Retain one edge for ordinary clusters, full summaries only for exceptions.
 use super::super::autospace::Class;
-use super::super::spacing_summary::{Edge, Kind, Summary};
+use super::super::spacing_summary::{Cursor, Edge, Kind, Summary};
 
 /// A leaf's unit is its storage index, leaving room for the precomputed cost
 /// without growing the edge. Costs outside i32 stay in full summaries.
@@ -16,15 +16,20 @@ struct Leaf {
 
 impl Leaf {
     #[inline]
-    fn summary(self, unit: u32) -> Summary {
-        let edge = Edge {
+    fn edge(self, unit: u32) -> Edge {
+        Edge {
             tracking: self.tracking,
             unit,
             box_node: self.box_node,
             punct: self.punct,
             kind: self.kind,
             class: self.class,
-        };
+        }
+    }
+
+    #[inline]
+    fn summary(self, unit: u32) -> Summary {
+        let edge = self.edge(unit);
         Summary {
             first: Some(edge),
             last: Some(edge),
@@ -156,6 +161,21 @@ impl Summaries {
                     .map(|(unit, s)| s.resolve(unit, full)),
             );
             self.0 = Storage::Dense(dense);
+        }
+    }
+
+    /// Only compact leaves can avoid full summary expansion. Empty entries
+    /// carry flags, and dense/full entries retain the general composition.
+    #[inline]
+    pub(super) fn push_neutral(&self, index: usize, level: u8, cursor: &mut Cursor) -> bool {
+        if let Storage::Compact { entries, .. } = &self.0
+            && let Stored::Leaf(leaf) = entries[index]
+            && leaf.tracking == 0
+            && leaf.cost == 0
+        {
+            cursor.push_neutral_leaf(level, leaf.edge(index as u32))
+        } else {
+            false
         }
     }
 
