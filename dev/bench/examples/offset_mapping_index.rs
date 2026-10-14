@@ -12,7 +12,9 @@ mod node {
 }
 
 mod limits {
-    pub use shodo::limits::{LimitExceeded, LimitKind, Limits};
+    pub use shodo::limits::LimitExceeded;
+    #[cfg(test)]
+    pub use shodo::limits::{LimitKind, Limits};
 }
 
 #[allow(dead_code)]
