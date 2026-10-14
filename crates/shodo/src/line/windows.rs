@@ -508,20 +508,33 @@ impl EdgeShapeCache {
         let effect_capacity =
             self.measurement_effects.capacity() + if grow_effects { EDGE_EFFECT_GROWTH } else { 0 };
         let effect_count = self.effect_indices.len() + usize::from(existing_effect.is_none());
-        // Refuse without allocating when either side cannot fit. For non-ZST
-        // elements `Vec::with_capacity` allocates exactly the planned capacity.
+        // Refuse without allocating when either side cannot fit.
         if measurement_cost(entry_capacity, effect_capacity, effect_count)
             > EDGE_MEASUREMENT_CACHE_COST
         {
             return;
         }
-        if grow_entries {
-            let mut grown = Vec::with_capacity(entry_capacity);
+        // `with_capacity` may over-allocate, so check the actual capacities
+        // again before retaining the new buffers.
+        let entries = grow_entries.then(|| Vec::with_capacity(entry_capacity));
+        let effects = grow_effects.then(|| Vec::with_capacity(effect_capacity));
+        let actual_cost = measurement_cost(
+            entries
+                .as_ref()
+                .map_or(self.measurements.capacity(), Vec::capacity),
+            effects
+                .as_ref()
+                .map_or(self.measurement_effects.capacity(), Vec::capacity),
+            effect_count,
+        );
+        if actual_cost > EDGE_MEASUREMENT_CACHE_COST {
+            return;
+        }
+        if let Some(mut grown) = entries {
             grown.extend_from_slice(&self.measurements);
             self.measurements = grown;
         }
-        if grow_effects {
-            let mut grown = Vec::with_capacity(effect_capacity);
+        if let Some(mut grown) = effects {
             grown.extend_from_slice(&self.measurement_effects);
             self.measurement_effects = grown;
         }
