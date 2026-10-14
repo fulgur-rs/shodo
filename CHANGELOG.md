@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.30](https://github.com/fulgur-rs/shodo/compare/v0.0.29...v0.0.30) - 2026-10-14
+
+### Added
+
+- measure line-height: normal with the line builder's font metrics
+
+### Fixed
+
+- sanitize the style before measuring line-height: normal
+- preserve bounded scan work with paragraph-owned width indexes
+- *(line)* preserve scalar clipped-range warning order
+- bound local-name verification decoding like the name index
+- keep the test allocator balance signed
+- charge Limits with a target-independent byte model (SHODO-39)
+- keep the post-allocation measurement capacity check
+
+### Other
+
+- Merge pull request #346 from fulgur-rs/refactor/shodo-41-42
+- *(line)* share indexed width geometry for SHODO-41
+- Merge pull request #343 from fulgur-rs/refactor/shodo-50-minor-followups
+- Merge pull request #342 from fulgur-rs/refactor/shodo-43-replay-memo
+- Merge pull request #341 from fulgur-rs/refactor/shodo-47-style-admission
+- Merge pull request #340 from fulgur-rs/refactor/shodo-46-shaping-env
+- simplify internal layout bookkeeping (SHODO-50)
+- unify style identities and font admission (SHODO-47)
+- keep injected root metric outliers effective
+- centralize vertical line-over geometry and root extents
+- share shaping inputs and instance preparation (SHODO-46)
+- share measurement memo replay policies (SHODO-43)
+- share fixture font collection, SFNT reader and fvar builder
+- Merge pull request #336 from fulgur-rs/fix/shodo-49-local-name-bound
+- route pulled-closer cuts through pulls_after_break
+- reuse the measured tracking in the cache index
+- share candidate-width measurement between scan and cache
+- use ? for the last fallback arm in take_fallback
+- walk break analysis lookups with monotonic cursors
+- take the ruby neighbour index once per D3 pass
+- map itemize clusters with a byte cursor and resolve scripts from scalars
+- use FastMap for index-keyed itemize and CFF origin maps
+- share the completed-descendant walk in ruby measure
+- share ruby prepare prologue and epilogue
+- extract line helpers and drop unread trial and float-count fields
+- dedupe line scan fallbacks, sanitize helpers and lazy warnings
+- use FastMap and skip repeated parent inserts in ruby Frame
+- share the primary-font ascent/descent selection in StyleMetrics
+- name the typographic vertical and upright writing-mode predicates
+- allocation oracles for the analysis byte model and edge cache (SHODO-38)
+- centralize glyph and run-instance retained-byte accounting (SHODO-37)
+- Merge remote-tracking branch 'origin/main' into perf/selected-edge-retention
+- Merge pull request #327 from fulgur-rs/perf/neutral-spacing-summary
+- Merge pull request #326 from fulgur-rs/perf/paint-geometry-reuse
+- keep supplemental snapshots separate from ordinary glyph accounting
+- Merge remote-tracking branch 'origin/main' into perf/lazy-hit-index
+- Merge remote-tracking branch 'origin/main' into perf/neutral-spacing-summary
+- Merge remote-tracking branch 'origin/main' into perf/paint-geometry-reuse
+- Merge pull request #324 from fulgur-rs/refactor/shodo-ey4-candidate-measurement-cleanup
+- clarify numeric equivalence of lazy hit bounds
+- build coordinate hit trees on first query
+- report coverage to Codecov
+- simplify compact candidate measurement retention
+- reuse finalized line geometry for paint spans
+- append neutral compact spacing leaves directly
+- *(line)* retain selected edges within unused measurement reserve
+- Merge remote-tracking branch 'origin/main' into perf/shodo-35-edge-retention
+- Merge pull request #322 from fulgur-rs/perf/shodo-34-outline-bounds
+- preserve zero delta edge measurements and record retention checks
+- *(output)* share bounded glyph outline bounds (SHODO-34)
+- retain compact width results and build overlays directly
+- retain compact width results and build overlays directly
+- intern edge replay effects and compact measurement keys
+- retain bounded edge candidate measurements separately from glyphs
+- borrow shaped edge windows during candidate evaluation
+- borrow shaped edge windows during candidate evaluation
+
 ## [0.0.29](https://github.com/fulgur-rs/shodo/compare/v0.0.28...v0.0.29) - 2026-10-13
 
 ### Fixed
