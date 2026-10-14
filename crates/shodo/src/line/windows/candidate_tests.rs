@@ -221,7 +221,7 @@ fn compact_measurements_replay_without_glyphs_and_fall_back_at_budget_boundaries
         assert!(cached.edge_shapes.measurement((0, 1)).is_some());
         // Draw snapshots may have been refused or released independently.
         cached.edge_shapes.entries.clear();
-        cached.edge_shapes.cost = cached.edge_shapes.measurement_storage_cost();
+        cached.edge_shapes.cost = 0;
         let before = data.edge_shape_calls.load(Ordering::Relaxed);
         cached.edge_reshape_spent = 0;
         let mut replayed_sat = Saturation::default();
@@ -290,6 +290,7 @@ fn compact_measurements_preserve_arithmetic_saturation() {
 
 #[test]
 fn zero_delta_edge_measurements_without_a_charge_budget_are_reused() {
+    use std::sync::atomic::Ordering;
     let limits = Limits {
         max_reshape_window_bytes: None,
         ..Limits::default()
@@ -297,45 +298,26 @@ fn zero_delta_edge_measurements_without_a_charge_budget_are_reused() {
     let mut p = paragraph("ببب", true, &limits);
     let data = Arc::get_mut(&mut p.data).unwrap();
     data.units.last_mut().unwrap().unsafe_to_break = true;
+    let end = data.units.len();
     let mut cx = LayoutContext::new();
     assert_eq!(
-        candidate(
-            data,
-            0,
-            data.units.len(),
-            &mut cx,
-            &mut Saturation::default()
-        ),
+        candidate(data, 0, end, &mut cx, &mut Saturation::default()),
         (LayoutUnit::ZERO, true)
     );
     assert!(
-        data.edge_shape_calls
-            .load(std::sync::atomic::Ordering::Relaxed)
-            > 0,
+        data.edge_shape_calls.load(Ordering::Relaxed) > 0,
         "fixture must perform an edge reshape before checking retention"
     );
     assert!(
-        cx.edge_shapes.measurement((0, data.units.len())).is_some(),
+        cx.edge_shapes.measurement((0, end)).is_some(),
         "zero delta can still require expensive edge shaping"
     );
     cx.edge_shapes.entries.clear();
-    cx.edge_shapes.cost = cx.edge_shapes.measurement_storage_cost();
-    let before = data
-        .edge_shape_calls
-        .load(std::sync::atomic::Ordering::Relaxed);
+    cx.edge_shapes.cost = 0;
+    let before = data.edge_shape_calls.load(Ordering::Relaxed);
     assert_eq!(
-        candidate(
-            data,
-            0,
-            data.units.len(),
-            &mut cx,
-            &mut Saturation::default()
-        ),
+        candidate(data, 0, end, &mut cx, &mut Saturation::default()),
         (LayoutUnit::ZERO, true)
     );
-    assert_eq!(
-        data.edge_shape_calls
-            .load(std::sync::atomic::Ordering::Relaxed),
-        before
-    );
+    assert_eq!(data.edge_shape_calls.load(Ordering::Relaxed), before);
 }
