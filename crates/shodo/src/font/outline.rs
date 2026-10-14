@@ -141,13 +141,7 @@ mod tests {
         use crate::node::{NodeId, TextSource};
         use crate::style::{FontFamily, InlineStyle, ParagraphStyle};
         use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult, ParagraphBuilder};
-        let fonts = FontCollection::with_options(
-            &Limits::default(),
-            super::super::FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&Limits::default());
         let id = fonts
             .register_face(
                 crate::test_support::fonts::LATIN.to_vec(),

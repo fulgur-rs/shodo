@@ -1,6 +1,6 @@
 //! Real shaping must constrain the correspondence, including source fragments.
 use crate::analysis::units::{BreakClass, UnitKind};
-use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+use crate::font::{FontCollection, FontFaceDescriptor};
 use crate::limits::Limits;
 use crate::node::{NodeId, TextSource};
 use crate::ruby::*;
@@ -10,13 +10,7 @@ use crate::style::{
 use crate::{LayoutContext, Paragraph, ParagraphBuilder};
 
 fn fonts() -> FontCollection {
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     for (family, bytes) in [
         ("Shodo Fixture CJK", crate::test_support::fonts::CJK),
         ("Shodo Fixture Latin", crate::test_support::fonts::LATIN),

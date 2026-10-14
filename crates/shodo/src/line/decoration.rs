@@ -169,7 +169,7 @@ pub(super) fn width(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::font::{FontCollection, FontOptions};
+
     use crate::limits::Limits;
     use crate::node::{InlineEdges, NodeId, TextSource};
     use crate::style::ParagraphStyle;
@@ -195,13 +195,7 @@ mod tests {
             ..style.root.clone()
         });
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         let mut builder = ParagraphBuilder::new(&style, &limits);
         for i in 0..depth {
             let mut inline = style.root.clone();

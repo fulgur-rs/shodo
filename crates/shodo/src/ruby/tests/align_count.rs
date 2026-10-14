@@ -1,6 +1,6 @@
 use super::*;
 use crate::analysis::units::UnitKind;
-use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+use crate::font::FontFaceDescriptor;
 use crate::limits::Limits;
 use crate::node::{NodeId, TextSource};
 use crate::ruby::*;
@@ -102,13 +102,7 @@ fn reference_groups(
 fn nested_ruby_paragraph() -> Paragraph {
     let limits = Limits::default();
     let style = style();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::CJK.to_vec(),

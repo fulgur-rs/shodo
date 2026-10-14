@@ -848,13 +848,7 @@ mod tests {
         builder
             .build(
                 &mut LayoutContext::new(),
-                &crate::font::FontCollection::with_options(
-                    &crate::limits::Limits::default(),
-                    crate::font::FontOptions {
-                        system_fonts: false,
-                        ..Default::default()
-                    },
-                ),
+                &crate::test_support::fonts::collection(&crate::limits::Limits::default()),
             )
             .unwrap()
     }
@@ -866,13 +860,7 @@ mod tests {
             .push(&"a".repeat(4096), &style.root)
             .build(
                 &mut LayoutContext::new(),
-                &crate::font::FontCollection::with_options(
-                    &crate::limits::Limits::default(),
-                    crate::font::FontOptions {
-                        system_fonts: false,
-                        ..Default::default()
-                    },
-                ),
+                &crate::test_support::fonts::collection(&crate::limits::Limits::default()),
             )
             .unwrap();
         assert_eq!(p.data.units.len(), 4098);

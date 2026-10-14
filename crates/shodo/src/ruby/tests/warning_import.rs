@@ -154,13 +154,7 @@ fn hidden_annotation_warnings_survive_parent_suppression_while_collapse_skips_re
         max_warnings: Some(0),
         ..Default::default()
     };
-    let fonts = crate::font::FontCollection::with_options(
-        &limits,
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     for visibility in [
         RubyVisibility::Visible,
         RubyVisibility::Hidden,

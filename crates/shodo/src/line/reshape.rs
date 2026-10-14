@@ -644,20 +644,14 @@ pub(super) fn apply(line: &mut Line, sat: &mut Saturation) {
 mod tests {
     #[test]
     fn edge_overlay_exposes_changed_count_clusters_and_positions() {
-        use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+        use crate::font::FontFaceDescriptor;
         use crate::limits::Limits;
         use crate::style::{FontFamily, FontFeature, InlineStyle, ParagraphStyle};
         use crate::{
             AtomicSizes, Fragment, LayoutContext, LineConstraint, LineResult, ParagraphBuilder,
         };
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register_face(
                 crate::test_support::fonts::LATIN.to_vec(),
@@ -784,20 +778,14 @@ mod tests {
 
     #[test]
     fn changed_edge_width_moves_shared_neighbors() {
-        use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+        use crate::font::FontFaceDescriptor;
         use crate::limits::Limits;
         use crate::style::{FontFamily, InlineStyle, ParagraphStyle};
         use crate::{
             AtomicSizes, Fragment, LayoutContext, LineConstraint, LineResult, ParagraphBuilder,
         };
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register_face(
                 crate::test_support::fonts::LATIN.to_vec(),

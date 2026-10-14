@@ -1,5 +1,4 @@
 use super::*;
-use crate::font::{FontCollection, FontOptions};
 use crate::geometry::WritingMode;
 use crate::limits::{Limits, WarningSink};
 use crate::node::{NodeId, TextSource};
@@ -14,13 +13,7 @@ use crate::{
 
 fn accepted(mode: WritingMode, marked: bool, grouped: bool, combined: bool, ruby: bool) -> Line {
     let limits = Limits::unlimited();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register(crate::test_support::fonts::LATIN.to_vec())
         .unwrap();

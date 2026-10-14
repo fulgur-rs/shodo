@@ -33,13 +33,7 @@ fn analysis_budget_exact_boundary_and_build_error_match() {
         .normal
         .analysis_budget
         .used;
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     for cap in [0, 1, used - 1, used, used + 1] {
         let limits = Limits {
             max_analysis_bytes: Some(cap),
@@ -277,13 +271,7 @@ fn analysis_budget_imported_base_and_nested_snapshot_keep_local_caps() {
 }
 
 fn build_ruby(ruby: crate::ruby::Ruby, limits: &Limits) -> Result<(), LimitExceeded> {
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     ruby_input(ruby, limits)
         .build(&mut crate::LayoutContext::new(), &fonts)
         .map(|_| ())

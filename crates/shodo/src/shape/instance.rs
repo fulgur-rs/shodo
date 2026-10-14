@@ -273,13 +273,7 @@ mod tests {
 
     #[test]
     fn distinct_variations_have_bounded_lookup_work_and_last_wins() {
-        let fonts = crate::font::FontCollection::with_options(
-            &crate::limits::Limits::default(),
-            crate::font::FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&crate::limits::Limits::default());
         let found = FontMatch {
             id: fonts
                 .register(crate::test_support::fonts::LATIN.to_vec())
@@ -345,13 +339,7 @@ mod tests {
 
     #[test]
     fn no_size_adjust_uses_only_final_coordinate_instance() {
-        let fonts = crate::font::FontCollection::with_options(
-            &crate::limits::Limits::default(),
-            crate::font::FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&crate::limits::Limits::default());
         let found = FontMatch {
             id: fonts
                 .register(crate::test_support::fonts::LATIN.to_vec())
@@ -401,13 +389,7 @@ mod tests {
 
     #[test]
     fn metric_instance_does_not_build_shaping_features() {
-        let fonts = crate::font::FontCollection::with_options(
-            &crate::limits::Limits::default(),
-            crate::font::FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&crate::limits::Limits::default());
         let found = FontMatch {
             id: fonts
                 .register(crate::test_support::fonts::LATIN.to_vec())
@@ -452,15 +434,7 @@ mod tests {
         let upem = font
             .metrics(Size::unscaled(), LocationRef::default())
             .units_per_em as f32;
-        let mut fvar = Vec::new();
-        for value in [1u16, 0, 16, 2, 1, 20, 0, 8] {
-            fvar.extend(value.to_be_bytes());
-        }
-        fvar.extend(b"wght");
-        for value in [100i32, 400, 900] {
-            fvar.extend((value << 16).to_be_bytes());
-        }
-        fvar.extend([0, 0, 1, 0]);
+        let fvar = crate::font::sfnt::fvar_table(&[(*b"wght", [100, 400, 900])]);
         let mut vvar = Vec::new();
         for value in [1u16, 0] {
             vvar.extend(value.to_be_bytes());
@@ -483,16 +457,7 @@ mod tests {
         for id in 0..=glyph.to_u32() {
             vvar.extend((if id == glyph.to_u32() { 100i16 } else { 0 }).to_be_bytes());
         }
-        let mut tables = Vec::new();
-        for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
-            let at = 12 + n * 16;
-            let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
-            let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
-            tables.push((
-                bytes[at..at + 4].try_into().unwrap(),
-                bytes[offset..offset + len].to_vec(),
-            ));
-        }
+        let mut tables = crate::font::sfnt::read_sfnt_tables(bytes);
         tables.push((*b"fvar", fvar));
         tables.push((*b"VVAR", vvar));
         tables.sort_by_key(|(tag, _)| *tag);
@@ -546,13 +511,7 @@ mod tests {
         // The same VVAR delta must reach the public paragraph's TTB glyph
         // advance, rather than affecting only font-size-adjust's ic-height.
         let limits = crate::limits::Limits::default();
-        let fonts = crate::font::FontCollection::with_options(
-            &limits,
-            crate::font::FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register_face(
                 bytes,

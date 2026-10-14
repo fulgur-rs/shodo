@@ -767,7 +767,7 @@ fn ligature_carets(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use crate::font::FontFaceDescriptor;
     use crate::node::{NodeId, TextSource};
     use crate::style::{FontFamily, FontVariation, InlineStyle, ParagraphStyle};
     use crate::{AtomicSizes, LayoutContext, ParagraphBuilder};
@@ -836,13 +836,7 @@ mod tests {
     ) -> Vec<Line> {
         use crate::style::{TextCombineUpright, WordBreak};
         let limits = Default::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register_face(
                 crate::test_support::fonts::LATIN.to_vec(),
@@ -1010,13 +1004,7 @@ mod tests {
     #[test]
     fn line_geometry_bypasses_public_cluster_iterator() {
         let limits = Default::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register_face(
                 crate::test_support::fonts::LATIN.to_vec(),
@@ -1253,26 +1241,11 @@ mod tests {
         for word in [1u16, 1, 0, 16384, 16384, 1, 1, 1, 0, 50] {
             gdef.extend(word.to_be_bytes());
         }
-        let mut fvar = Vec::new();
-        for word in [1u16, 0, 16, 2, 1, 20, 0, 8] {
-            fvar.extend(word.to_be_bytes());
-        }
-        fvar.extend(b"wght");
-        for v in [100i32, 400, 900] {
-            fvar.extend((v << 16).to_be_bytes());
-        }
-        fvar.extend([0, 0, 1, 0]);
-        let mut tables = Vec::new();
-        for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
-            let at = 12 + n * 16;
-            let tag: [u8; 4] = bytes[at..at + 4].try_into().unwrap();
-            if matches!(&tag, b"GDEF" | b"fvar") {
-                continue;
-            }
-            let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
-            let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
-            tables.push((tag, bytes[offset..offset + len].to_vec()));
-        }
+        let fvar = crate::font::sfnt::fvar_table(&[(*b"wght", [100, 400, 900])]);
+        let mut tables: Vec<_> = crate::font::sfnt::read_sfnt_tables(bytes)
+            .into_iter()
+            .filter(|(tag, _)| !matches!(tag, b"GDEF" | b"fvar"))
+            .collect();
         tables.push((*b"GDEF", gdef));
         tables.push((*b"fvar", fvar));
         tables.sort_by_key(|v| v.0);
@@ -1285,13 +1258,7 @@ mod tests {
         for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
             for direction in [Direction::Ltr, Direction::Rtl] {
                 let limits = Default::default();
-                let fonts = FontCollection::with_options(
-                    &limits,
-                    FontOptions {
-                        system_fonts: false,
-                        ..Default::default()
-                    },
-                );
+                let fonts = crate::test_support::fonts::collection(&limits);
                 fonts
                     .register_face(
                         synthetic_font(1, false),
@@ -1368,13 +1335,7 @@ mod tests {
             for bad in [false, true] {
                 for size in [20.0, 40.0] {
                     let limits = Default::default();
-                    let fonts = FontCollection::with_options(
-                        &limits,
-                        FontOptions {
-                            system_fonts: false,
-                            ..Default::default()
-                        },
-                    );
+                    let fonts = crate::test_support::fonts::collection(&limits);
                     fonts
                         .register_face(
                             synthetic_font(format, bad),

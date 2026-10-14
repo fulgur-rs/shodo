@@ -64,19 +64,13 @@ impl PlanCache {
 mod tests {
     use super::PLAN_SEARCH_COMPARISONS;
     use crate::LayoutContext;
-    use crate::font::{FontCollection, FontOptions};
+
     use crate::limits::Limits;
     use std::sync::Arc;
 
     #[test]
     fn recent_plan_hit_inspects_only_one_entry() {
-        let fonts = FontCollection::with_options(
-            &Limits::default(),
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&Limits::default());
         let id = fonts
             .register(crate::test_support::fonts::LATIN.to_vec())
             .unwrap();
@@ -106,13 +100,7 @@ mod tests {
 
     #[test]
     fn plan_keys_remain_font_qualified_and_distinguish_properties() {
-        let fonts = FontCollection::with_options(
-            &Limits::default(),
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&Limits::default());
         let a = fonts
             .register(crate::test_support::fonts::LATIN.to_vec())
             .unwrap();
@@ -158,13 +146,7 @@ mod tests {
 
     #[test]
     fn plan_hits_promote_lru_and_external_owners_survive_eviction_and_shrink() {
-        let fonts = FontCollection::with_options(
-            &Limits::default(),
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&Limits::default());
         let id = fonts
             .register(crate::test_support::fonts::LATIN.to_vec())
             .unwrap();
@@ -203,13 +185,7 @@ mod tests {
 
     #[test]
     fn plans_reuse_are_bounded_and_release_on_shrink() {
-        let fonts = FontCollection::with_options(
-            &Limits::default(),
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&Limits::default());
         let id = fonts
             .register(crate::test_support::fonts::LATIN.to_vec())
             .unwrap();

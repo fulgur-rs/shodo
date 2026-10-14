@@ -1,5 +1,5 @@
 //! Prepared lanes must retain real fonts and their own source projection.
-use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+use crate::font::FontFaceDescriptor;
 use crate::limits::Limits;
 use crate::mapping::TextOrigin;
 use crate::node::{NodeId, TextSource};
@@ -19,13 +19,7 @@ fn style(size: f32) -> InlineStyle {
 
 #[test]
 fn annotation_retains_real_fonts() {
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     let face = fonts
         .register_face(
             CJK.to_vec(),
@@ -109,13 +103,7 @@ fn annotation_retains_real_fonts() {
 
 #[test]
 fn annotation_only_first_line_change_prepares_both_sets() {
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     fonts
         .register_face(
             CJK.to_vec(),
@@ -217,13 +205,7 @@ fn annotation_shaping_runs_share_the_parent_item_limit() {
         max_items: Some(300),
         ..Limits::default()
     };
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     let annotation_text = "a§b".repeat(100);
     let annotation = |node| RubyAnnotation {
         node: NodeId(node),
@@ -293,13 +275,7 @@ fn imported_base_shaping_runs_use_the_base_snapshot_item_limit() {
         max_items: Some(7),
         ..Limits::default()
     };
-    let fonts = FontCollection::with_options(
-        &parent_limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&parent_limits);
     let ruby = Ruby::new(
         vec![RubyBase {
             node: NodeId(10),
@@ -356,13 +332,7 @@ fn imported_base_shaping_runs_use_the_base_snapshot_item_limit() {
 
 #[test]
 fn annotation_forced_breaks_preserve_noncollapsible_spaces() {
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     fonts
         .register_face(
             CJK.to_vec(),

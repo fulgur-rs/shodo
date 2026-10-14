@@ -23,6 +23,43 @@ pub(crate) fn build_sfnt(tables: &[([u8; 4], Vec<u8>)]) -> Vec<u8> {
     out
 }
 
+/// The tables of a single-face SFNT in directory order: the inverse of
+/// `build_sfnt`, so tests can replace or add tables of a fixture font.
+#[cfg(test)]
+pub(crate) fn read_sfnt_tables(font: &[u8]) -> Vec<([u8; 4], Vec<u8>)> {
+    let be32 = |at: usize| u32::from_be_bytes(font[at..at + 4].try_into().unwrap()) as usize;
+    let count = u16::from_be_bytes(font[4..6].try_into().unwrap()) as usize;
+    (0..count)
+        .map(|n| {
+            let record = 12 + 16 * n;
+            let (offset, len) = (be32(record + 8), be32(record + 12));
+            (
+                font[record..record + 4].try_into().unwrap(),
+                font[offset..offset + len].to_vec(),
+            )
+        })
+        .collect()
+}
+
+/// An `fvar` table with the given axes as `(tag, [min, default, max])` in
+/// whole units, and no named instances.
+#[cfg(test)]
+pub(crate) fn fvar_table(axes: &[([u8; 4], [i32; 3])]) -> Vec<u8> {
+    let mut fvar = Vec::new();
+    for field in [1u16, 0, 16, 2, axes.len() as u16, 20, 0, 8] {
+        fvar.extend(field.to_be_bytes());
+    }
+    for (tag, values) in axes {
+        fvar.extend(tag);
+        for value in values {
+            fvar.extend((value << 16).to_be_bytes());
+        }
+        // Axis flags 0, axis name ID 256.
+        fvar.extend([0, 0, 1, 0]);
+    }
+    fvar
+}
+
 /// A GSUB/GPOS table whose LookupList has `lookup_count` entries that all
 /// point at one Lookup, whose `subtable_count` subtable offsets all point at
 /// one empty SingleSubst subtable. Tiny on disk, huge once expanded per

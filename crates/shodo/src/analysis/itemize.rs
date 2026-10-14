@@ -778,13 +778,7 @@ mod tests {
 
     fn build(style: &ParagraphStyle, add: impl FnOnce(&mut ParagraphBuilder)) -> Paragraph {
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         let mut builder = ParagraphBuilder::new(style, &limits);
         add(&mut builder);
         builder.build(&mut LayoutContext::new(), &fonts).unwrap()

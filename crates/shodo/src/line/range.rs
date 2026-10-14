@@ -723,7 +723,7 @@ pub(super) fn width(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use crate::font::{FontCollection, FontFaceDescriptor};
     use crate::limits::Limits;
     use crate::node::{InlineEdges, NodeId, Sides, TextSource};
     use crate::style::{
@@ -733,13 +733,7 @@ mod tests {
     use crate::{Paragraph, ParagraphBuilder};
 
     fn fonts() -> FontCollection {
-        let fonts = FontCollection::with_options(
-            &Limits::default(),
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&Limits::default());
         fonts
             .register_face(
                 crate::test_support::fonts::CJK.to_vec(),
@@ -1036,13 +1030,7 @@ mod tests {
     #[test]
     fn indexed_actual_ranges_match_selected_edge_spacing_and_cloned_boxes() {
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register_face(
                 crate::test_support::fonts::CJK.to_vec(),

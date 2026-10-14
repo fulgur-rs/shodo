@@ -236,7 +236,7 @@ impl LayoutContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::font::{FontCollection, FontOptions};
+
     use crate::limits::Limits;
     use crate::node::{NodeId, OutOfFlowKind, TextSource};
     use crate::style::ParagraphStyle;
@@ -245,13 +245,7 @@ mod tests {
     #[test]
     fn shrink_budget_is_shared_by_real_shaping_and_partial_line_buffers() {
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register(crate::test_support::fonts::LATIN.to_vec())
             .unwrap();

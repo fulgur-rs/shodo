@@ -675,17 +675,10 @@ mod tests {
         text: &str,
         style: &crate::style::ParagraphStyle,
     ) -> crate::Paragraph {
-        use crate::font::{FontCollection, FontOptions};
         use crate::limits::Limits;
         use crate::node::{NodeId, TextSource};
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register(crate::test_support::fonts::LATIN.to_vec())
             .unwrap();
@@ -820,18 +813,11 @@ mod tests {
 
     #[test]
     fn fixed_width_float_retries_still_scan_and_index_once() {
-        use crate::font::{FontCollection, FontOptions};
         use crate::limits::Limits;
         use crate::node::{NodeId, OutOfFlowKind, TextSource};
         use crate::{AtomicSizes, LayoutContext, ParagraphBuilder};
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register(crate::test_support::fonts::LATIN.to_vec())
             .unwrap();
@@ -1813,7 +1799,7 @@ mod tests {
 
     #[test]
     fn punctuation_float_retries_keep_candidate_work_linear() {
-        use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+        use crate::font::FontFaceDescriptor;
         use crate::limits::Limits;
         use crate::node::{NodeId, OutOfFlowKind, TextSource};
         use crate::style::{
@@ -1823,13 +1809,7 @@ mod tests {
             AtomicSizes, Fragment, LayoutContext, LineConstraint, LineResult, ParagraphBuilder,
         };
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register_face(
                 crate::test_support::fonts::CJK.to_vec(),
@@ -1922,7 +1902,7 @@ mod tests {
 
     #[test]
     fn indented_punctuation_retries_match_fresh_lines_across_widths() {
-        use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+        use crate::font::FontFaceDescriptor;
         use crate::limits::Limits;
         use crate::node::{NodeId, OutOfFlowKind, TextSource};
         use crate::style::{
@@ -1931,13 +1911,7 @@ mod tests {
         };
         use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult, ParagraphBuilder};
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register_face(
                 crate::test_support::fonts::CJK.to_vec(),

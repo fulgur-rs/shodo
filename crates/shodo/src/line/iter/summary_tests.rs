@@ -1,4 +1,3 @@
-use crate::font::{FontCollection, FontOptions};
 use crate::limits::Limits;
 use crate::node::{InlineEdges, NodeId};
 use crate::style::{LineOptions, ParagraphStyle, TextWrapStyle};
@@ -14,13 +13,7 @@ fn balance_releases_each_trial_line_before_constructing_next() {
         max_balance_iterations: Some(1),
         ..Default::default()
     };
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register(crate::test_support::fonts::LATIN.to_vec())
         .unwrap();
@@ -124,13 +117,7 @@ fn infeasible_balance_trial_still_scans_tail_resource_warnings() {
         max_warnings: None,
         ..Default::default()
     };
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register(crate::test_support::fonts::LATIN.to_vec())
         .unwrap();

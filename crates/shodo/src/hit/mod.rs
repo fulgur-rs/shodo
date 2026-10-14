@@ -364,13 +364,7 @@ mod tests {
     #[test]
     fn paint_spans_reuse_accepted_geometry_without_rebuilding() {
         let limits = Default::default();
-        let fonts = crate::font::FontCollection::with_options(
-            &limits,
-            crate::font::FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         let paragraph = crate::RichText::new(&Default::default())
             .push("ffi abc def ghi", &Default::default())
             .build(&mut crate::LayoutContext::new(), &fonts)
@@ -513,13 +507,7 @@ mod tests {
     #[test]
     fn repeated_hits_and_navigation_do_not_rebuild_glyph_indexes() {
         let limits = Default::default();
-        let fonts = crate::font::FontCollection::with_options(
-            &limits,
-            crate::font::FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         let style = crate::style::ParagraphStyle::default();
         let mut b = crate::ParagraphBuilder::new(&style, &limits);
         b.push_text(

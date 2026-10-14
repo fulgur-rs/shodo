@@ -426,7 +426,7 @@ impl QuirkIndex {
 mod tests {
     use super::*;
     use crate::ParagraphBuilder;
-    use crate::font::{FontCollection, FontOptions};
+
     use crate::limits::Limits;
     use crate::node::{InlineEdges, NodeId, Sides, TextSource};
     use crate::style::{BoxDecorationBreak, InlineStyle, ParagraphStyle, WhiteSpaceCollapse};
@@ -477,13 +477,7 @@ mod tests {
         let p = b
             .build(
                 &mut LayoutContext::new(),
-                &FontCollection::with_options(
-                    &Limits::default(),
-                    FontOptions {
-                        system_fonts: false,
-                        ..Default::default()
-                    },
-                ),
+                &crate::test_support::fonts::collection(&Limits::default()),
             )
             .unwrap();
         let data = &p.data;

@@ -1,6 +1,6 @@
 use super::index;
 use super::*;
-use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+use crate::font::FontFaceDescriptor;
 use crate::limits::Limits;
 use crate::node::{NodeId, TextSource};
 use crate::ruby::*;
@@ -73,13 +73,7 @@ fn paragraph_with_emphasis(
         .unwrap();
         b.push_ruby(NodeId(10 + i as u64), &style, ruby);
     }
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::CJK.to_vec(),

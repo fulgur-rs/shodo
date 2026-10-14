@@ -260,7 +260,7 @@ mod tests {
     }
 
     use super::*;
-    use crate::font::{FontCollection, FontOptions};
+
     use crate::geometry::Direction;
     use crate::limits::Limits;
     use crate::node::{NodeId, TextSource};
@@ -499,13 +499,7 @@ mod tests {
         };
         let mut b = ParagraphBuilder::new(&style, &limits);
         b.push_text(TextSource::Generated { node: NodeId(1) }, "אב\n123\nabc");
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         let mut cx = LayoutContext::new();
         let p = b.build(&mut cx, &fonts).unwrap();
         let mut token = p.start_token();
@@ -556,13 +550,7 @@ mod tests {
         };
         let mut b = ParagraphBuilder::new(&style, &limits);
         b.push_text(TextSource::Generated { node: NodeId(1) }, "אב");
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         let mut cx = LayoutContext::new();
         let p = b.build(&mut cx, &fonts).unwrap();
         let options = crate::style::LineOptions {

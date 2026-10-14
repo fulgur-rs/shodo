@@ -32,13 +32,7 @@ fn ordered_windows_do_not_allocate_glyph_indices() {
                 max_shaping_run_bytes: budget,
                 ..Limits::default()
             };
-            let fonts = FontCollection::with_options(
-                &limits,
-                crate::font::FontOptions {
-                    system_fonts: false,
-                    ..Default::default()
-                },
-            );
+            let fonts = crate::test_support::fonts::collection(&limits);
             fonts
                 .register_face(
                     bytes.to_vec(),
@@ -518,13 +512,7 @@ fn width_probe_snapshot(paragraph: &crate::Paragraph) -> String {
 #[test]
 fn combined_width_trials_reuse_selected_result_for_two_shaper_calls() {
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::CJK.to_vec(),
@@ -581,13 +569,7 @@ fn combined_width_reuse_preserves_global_glyph_limit_failure() {
         max_shaped_glyphs: Some(3),
         ..Limits::default()
     };
-    let fonts = FontCollection::with_options(
-        &limits,
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::CJK.to_vec(),
@@ -632,13 +614,7 @@ fn combined_width_reuse_preserves_global_glyph_limit_failure() {
 #[test]
 fn ruby_base_glyph_limits_fall_back_to_the_scoped_final_shape() {
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::CJK.to_vec(),
@@ -1929,13 +1905,7 @@ fn combined_width_reuse_replays_selected_warnings_through_the_global_cap() {
         max_warnings: Some(1),
         ..Limits::default()
     };
-    let fonts = FontCollection::with_options(
-        &limits,
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::CJK.to_vec(),
@@ -1985,13 +1955,7 @@ fn combined_width_reuse_replays_selected_warnings_through_the_global_cap() {
 fn split_items_share_retained_author_features() {
     for real in [false, true] {
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            crate::font::FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         if real {
             fonts
                 .register_face(
@@ -2124,23 +2088,11 @@ fn shared_features_preserve_style_orientation_and_width_settings() {
 #[test]
 fn missing_vorg_origin_cache_spans_budget_windows_but_not_inputs() {
     let original = crate::test_support::fonts::CJK;
-    let count = u16::from_be_bytes(original[4..6].try_into().unwrap()) as usize;
-    let tables: Vec<_> = (0..count)
-        .filter_map(|n| {
-            let at = 12 + n * 16;
-            let tag: [u8; 4] = original[at..at + 4].try_into().unwrap();
-            let start = u32::from_be_bytes(original[at + 8..at + 12].try_into().unwrap()) as usize;
-            let len = u32::from_be_bytes(original[at + 12..at + 16].try_into().unwrap()) as usize;
-            (&tag != b"VORG").then(|| (tag, original[start..start + len].to_vec()))
-        })
+    let tables: Vec<_> = crate::font::sfnt::read_sfnt_tables(original)
+        .into_iter()
+        .filter(|(tag, _)| tag != b"VORG")
         .collect();
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     fonts
         .register_face(
             crate::font::sfnt::build_sfnt(&tables),
@@ -2220,21 +2172,12 @@ fn missing_vorg_uses_vmtx_top_bearing_for_vertical_origin() {
     let original = crate::test_support::fonts::CJK;
     let face = skrifa::FontRef::from_index(original, 0).unwrap();
     let gid = face.charmap().map('水').unwrap().to_u32() as usize;
-    let mut tables = Vec::new();
-    let count = u16::from_be_bytes(original[4..6].try_into().unwrap()) as usize;
-    for n in 0..count {
-        let at = 12 + n * 16;
-        let tag: [u8; 4] = original[at..at + 4].try_into().unwrap();
-        if &tag == b"VORG" {
-            continue;
-        }
-        let start = u32::from_be_bytes(original[at + 8..at + 12].try_into().unwrap()) as usize;
-        let len = u32::from_be_bytes(original[at + 12..at + 16].try_into().unwrap()) as usize;
-        let mut data = original[start..start + len].to_vec();
-        if &tag == b"vmtx" {
+    let mut tables = crate::font::sfnt::read_sfnt_tables(original);
+    tables.retain(|(tag, _)| tag != b"VORG");
+    for (tag, data) in &mut tables {
+        if tag == b"vmtx" {
             data[gid * 4 + 2..gid * 4 + 4].copy_from_slice(&142i16.to_be_bytes());
         }
-        tables.push((tag, data));
     }
     let bytes = crate::font::sfnt::build_sfnt(&tables);
     let derived = skrifa::FontRef::from_index(&bytes, 0).unwrap();
@@ -2255,13 +2198,7 @@ fn missing_vorg_uses_vmtx_top_bearing_for_vertical_origin() {
         .unwrap();
     assert_eq!(bounds.y_max, 838.0);
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     let registered = fonts
         .register_face(
             bytes,
@@ -2398,13 +2335,7 @@ fn glyph_count_limit_is_checked_before_pushing() {
 #[test]
 fn arabic_joining_retains_shaper_safety_flags() {
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::ARABIC.to_vec(),
@@ -2438,36 +2369,12 @@ fn arabic_joining_retains_shaper_safety_flags() {
 #[test]
 fn optical_sizing_and_explicit_variations_survive_public_views() {
     let bytes = crate::test_support::fonts::LATIN;
-    let mut tables = Vec::new();
-    for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
-        let at = 12 + n * 16;
-        let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
-        let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
-        tables.push((
-            bytes[at..at + 4].try_into().unwrap(),
-            bytes[offset..offset + len].to_vec(),
-        ));
-    }
-    let mut fvar = Vec::new();
-    for field in [1u16, 0, 16, 2, 2, 20, 0, 8] {
-        fvar.extend(field.to_be_bytes());
-    }
-    for (tag, values) in [(b"wght", [100i32, 400, 900]), (b"opsz", [8, 12, 72])] {
-        fvar.extend(tag);
-        for value in values {
-            fvar.extend((value << 16).to_be_bytes());
-        }
-        fvar.extend([0, 0, 1, 0]);
-    }
+    let mut tables = crate::font::sfnt::read_sfnt_tables(bytes);
+    let fvar =
+        crate::font::sfnt::fvar_table(&[(*b"wght", [100, 400, 900]), (*b"opsz", [8, 12, 72])]);
     tables.push((*b"fvar", fvar));
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::font::sfnt::build_sfnt(&tables),
@@ -2579,13 +2486,7 @@ fn optical_sizing_and_explicit_variations_survive_public_views() {
 #[test]
 fn real_font_pen_splits_before_prefix_overflow() {
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::LATIN.to_vec(),
@@ -2649,16 +2550,10 @@ fn expanded_single_cluster_pen_splits_without_new_breaks() {
     for value in [1u16, 1, a] {
         gsub.extend(value.to_be_bytes());
     }
-    let mut tables = Vec::new();
-    for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
-        let at = 12 + n * 16;
-        let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
-        let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
-        let tag: [u8; 4] = bytes[at..at + 4].try_into().unwrap();
-        if tag != *b"GSUB" {
-            tables.push((tag, bytes[offset..offset + len].to_vec()));
-        }
-    }
+    let mut tables: Vec<_> = crate::font::sfnt::read_sfnt_tables(bytes)
+        .into_iter()
+        .filter(|(tag, _)| tag != b"GSUB")
+        .collect();
     tables.push((*b"GSUB", gsub));
     tables.sort_by_key(|(tag, _)| *tag);
     let bytes = crate::font::sfnt::build_sfnt(&tables);
@@ -2671,13 +2566,7 @@ fn expanded_single_cluster_pen_splits_without_new_breaks() {
     let shaped = buffer;
     assert_eq!(shaped.len(), 32, "direct test substitution must expand");
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::font::sfnt::build_sfnt(&tables),
@@ -2831,26 +2720,14 @@ fn negative_positioning_advances_obey_run_pen_budget() {
     ] {
         gpos.extend(value.to_be_bytes());
     }
-    let mut tables = Vec::new();
-    for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
-        let at = 12 + n * 16;
-        let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
-        let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
-        let tag: [u8; 4] = bytes[at..at + 4].try_into().unwrap();
-        if tag != *b"GPOS" {
-            tables.push((tag, bytes[offset..offset + len].to_vec()));
-        }
-    }
+    let mut tables: Vec<_> = crate::font::sfnt::read_sfnt_tables(bytes)
+        .into_iter()
+        .filter(|(tag, _)| tag != b"GPOS")
+        .collect();
     tables.push((*b"GPOS", gpos));
     tables.sort_by_key(|(tag, _)| *tag);
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::font::sfnt::build_sfnt(&tables),
@@ -2897,13 +2774,7 @@ fn tiny_run_windows_share_one_resolved_instance() {
             max_shaping_run_bytes: Some(1),
             ..Default::default()
         };
-        let fonts = FontCollection::with_options(
-            &limits,
-            crate::font::FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         if real {
             fonts
                 .register_face(
@@ -2949,13 +2820,7 @@ fn tiny_run_windows_share_one_resolved_instance() {
 #[test]
 fn smaller_run_budget_automatically_releases_retained_scratch() {
     let limits = Limits::unlimited();
-    let fonts = FontCollection::with_options(
-        &limits,
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::LATIN.to_vec(),
@@ -3006,13 +2871,7 @@ fn shaping_windows_borrow_source_scalars() {
                 max_shaping_run_bytes: Some(budget),
                 ..Default::default()
             };
-            let fonts = FontCollection::with_options(
-                &limits,
-                crate::font::FontOptions {
-                    system_fonts: false,
-                    ..Default::default()
-                },
-            );
+            let fonts = crate::test_support::fonts::collection(&limits);
             if real {
                 fonts
                     .register_face(
@@ -3167,13 +3026,7 @@ fn edge_input_paragraph(real: bool, budget: u64) -> crate::Paragraph {
         max_shaping_run_bytes: Some(budget),
         ..Default::default()
     };
-    let fonts = FontCollection::with_options(
-        &limits,
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     if real {
         fonts
             .register_face(
@@ -3503,7 +3356,7 @@ fn tcy_base_reuse_probe_shaper_calls() {
 
 #[test]
 fn vertical_punctuation_blanks_follow_the_upright_inline_axis() {
-    use crate::font::{FontFaceDescriptor, FontOptions};
+    use crate::font::FontFaceDescriptor;
     use crate::line::punctuation::PunctuationClass;
     use crate::node::{NodeId, TextSource};
     use crate::style::{
@@ -3512,13 +3365,7 @@ fn vertical_punctuation_blanks_follow_the_upright_inline_axis() {
     };
 
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::CJK.to_vec(),
@@ -3623,18 +3470,12 @@ fn vertical_punctuation_blanks_follow_the_upright_inline_axis() {
 
 #[test]
 fn vertical_layout_trims_use_upright_blanks() {
-    use crate::font::{FontFaceDescriptor, FontOptions};
+    use crate::font::FontFaceDescriptor;
     use crate::node::{NodeId, TextSource};
     use crate::style::{FontFamily, InlineStyle, ParagraphStyle, TextSpacingTrim};
 
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::CJK.to_vec(),
@@ -3712,16 +3553,10 @@ fn vertical_layout_trims_use_upright_blanks() {
 }
 
 fn vertical_spacing_fonts(family: &str) -> (Limits, FontCollection) {
-    use crate::font::{FontFaceDescriptor, FontOptions};
+    use crate::font::FontFaceDescriptor;
 
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register_face(
             crate::test_support::fonts::CJK.to_vec(),
@@ -4069,13 +3904,7 @@ fn mixed_instance_paragraph(
     use crate::node::{NodeId, TextSource};
     use crate::style::{FontFamily, InlineStyle, ParagraphStyle};
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     for (family, bytes) in [
         ("Latin", variable_latin(2).as_slice()),
         ("CJK", crate::test_support::fonts::CJK),
@@ -4300,16 +4129,7 @@ fn mixed_instance_reuse_preserves_distinct_conditions_and_warning_effects() {
 
 fn variable_latin(axis_count: u16) -> Vec<u8> {
     let bytes = crate::test_support::fonts::LATIN;
-    let mut tables = Vec::new();
-    for n in 0..u16::from_be_bytes(bytes[4..6].try_into().unwrap()) as usize {
-        let at = 12 + n * 16;
-        let offset = u32::from_be_bytes(bytes[at + 8..at + 12].try_into().unwrap()) as usize;
-        let len = u32::from_be_bytes(bytes[at + 12..at + 16].try_into().unwrap()) as usize;
-        tables.push((
-            bytes[at..at + 4].try_into().unwrap(),
-            bytes[offset..offset + len].to_vec(),
-        ));
-    }
+    let mut tables = crate::font::sfnt::read_sfnt_tables(bytes);
     let mut fvar = Vec::new();
     for field in [1u16, 0, 16, 2, axis_count, 20, 0, 4 + axis_count * 4] {
         fvar.extend(field.to_be_bytes());
@@ -4333,13 +4153,7 @@ fn variable_latin(axis_count: u16) -> Vec<u8> {
 #[test]
 fn high_axis_default_instance_bypasses_reuse_without_retaining_hidden_coordinate_heap() {
     use crate::style::{FontFamily, InlineStyle, ParagraphStyle};
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        crate::font::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     let id = fonts
         .register_face(
             variable_latin(12),

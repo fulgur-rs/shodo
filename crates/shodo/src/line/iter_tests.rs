@@ -1,4 +1,3 @@
-use crate::font::{FontCollection, FontOptions};
 use crate::limits::Limits;
 use crate::node::{NodeId, TextSource};
 use crate::output::clone_probe;
@@ -9,13 +8,7 @@ use std::rc::Rc;
 
 fn paragraph() -> Paragraph {
     let limits = Limits::default();
-    let fonts = FontCollection::with_options(
-        &limits,
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .register(crate::test_support::fonts::LATIN.to_vec())
         .unwrap();
@@ -158,13 +151,7 @@ fn internal_driver_preserves_float_block_forced_and_saturated_offsets() {
                 max_warnings: Some(1),
                 ..Default::default()
             };
-            let fonts = FontCollection::with_options(
-                &limits,
-                FontOptions {
-                    system_fonts: false,
-                    ..Default::default()
-                },
-            );
+            let fonts = crate::test_support::fonts::collection(&limits);
             fonts
                 .register(crate::test_support::fonts::LATIN.to_vec())
                 .unwrap();

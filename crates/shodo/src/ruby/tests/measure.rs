@@ -1,4 +1,4 @@
-use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+use crate::font::{FontCollection, FontFaceDescriptor};
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::limits::Limits;
 use crate::node::{NodeId, TextSource};
@@ -117,13 +117,7 @@ pub(super) fn base(text: &str) -> RubyContent {
 }
 
 pub(super) fn fonts() -> FontCollection {
-    let fonts = FontCollection::with_options(
-        &Limits::default(),
-        FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
     fonts
         .register_face(
             crate::test_support::fonts::CJK.to_vec(),

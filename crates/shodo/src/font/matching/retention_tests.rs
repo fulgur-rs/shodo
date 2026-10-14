@@ -289,13 +289,7 @@ fn native_and_explicit_faces_share_layer_face_budget() {
         max_faces_per_layer: Some(2),
         ..Default::default()
     };
-    let fonts = FontCollection::with_options(
-        &limits,
-        super::super::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .best_match(
             vec![reloaded(SourceId::new())],
@@ -318,13 +312,7 @@ fn explicit_local_aliases_charge_a_native_blob_once() {
         max_layer_blob_bytes: Some(bytes.len() as u64),
         ..Default::default()
     };
-    let fonts = FontCollection::with_options(
-        &limits,
-        super::super::FontOptions {
-            system_fonts: false,
-            ..Default::default()
-        },
-    );
+    let fonts = crate::test_support::fonts::collection(&limits);
     fonts
         .best_match(
             vec![reloaded(SourceId::new())],

@@ -274,7 +274,7 @@ fn ruby_on_line(data: &ParagraphData, units: &Range<usize>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::font::{FontCollection, FontOptions};
+
     use crate::limits::Limits;
     use crate::node::{InlineEdges, NodeId, Sides, TextSource};
     use crate::style::{InlineStyle, ParagraphStyle, WhiteSpaceCollapse};
@@ -291,13 +291,7 @@ mod tests {
         input(&mut b);
         b.build(
             &mut LayoutContext::new(),
-            &FontCollection::with_options(
-                &Limits::default(),
-                FontOptions {
-                    system_fonts: false,
-                    ..Default::default()
-                },
-            ),
+            &crate::test_support::fonts::collection(&Limits::default()),
         )
         .unwrap()
     }

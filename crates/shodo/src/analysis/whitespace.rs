@@ -643,20 +643,14 @@ mod tests {
 
     #[test]
     fn first_line_ruby_annotation_reuses_flags_with_annotation_context() {
-        use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+        use crate::font::FontFaceDescriptor;
         use crate::ruby::{
             Ruby, RubyAnnotation, RubyBase, RubyContent, RubyLevel, RubySpan, RubyStyle,
             RubyVisibility,
         };
 
         let limits = Limits::default();
-        let fonts = FontCollection::with_options(
-            &limits,
-            FontOptions {
-                system_fonts: false,
-                ..Default::default()
-            },
-        );
+        let fonts = crate::test_support::fonts::collection(&limits);
         fonts
             .register_face(
                 crate::test_support::fonts::LATIN.to_vec(),
