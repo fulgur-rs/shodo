@@ -136,8 +136,9 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       # The minimum supported Rust version only needs to compile; the test,
-      # example and snapshot behaviour is checked on stable.
-      - run: cargo build --workspace --all-targets
+      # example and snapshot behaviour is checked on stable. accesskit is
+      # additive, so enabling it covers the default build as well.
+      - run: cargo build --workspace --all-targets --features shodo-harness/accesskit
 
   wasm:
     runs-on: ubuntu-latest
