@@ -301,16 +301,16 @@ pub(crate) fn select_combined_widths(
                     group
                         .iter()
                         .map(|item| input::ShapeInput::whole(item).with_width_feature(Some(tag))),
-                    styles,
-                    fonts,
-                    mode,
-                    limits,
+                    &ShapeEnv {
+                        styles,
+                        fonts,
+                        mode,
+                        limits,
+                        feature_sets: &trial_features,
+                    },
                     &mut warnings,
                     &mut sat,
-                    None,
-                    None,
-                    &trial_features,
-                    0,
+                    ShapeOptions::default(),
                 )
             };
         let Ok((narrow, _narrow_runs)) = narrow_result else {
@@ -374,16 +374,20 @@ pub(crate) fn shape_items_with_combined_width_reuse(
             let (rest, rest_runs) = shape_inputs(
                 cx,
                 items[cursor..].iter().map(input::ShapeInput::whole),
-                styles,
-                fonts,
-                mode,
-                limits,
+                &ShapeEnv {
+                    styles,
+                    fonts,
+                    mode,
+                    limits,
+                    feature_sets,
+                },
                 warnings,
                 sat,
-                bases.as_deref_mut(),
-                None,
-                feature_sets,
-                glyphs.len() as u64,
+                ShapeOptions {
+                    bases: bases.as_deref_mut(),
+                    glyph_offset: glyphs.len() as u64,
+                    ..Default::default()
+                },
             )?;
             append_shape_output(&mut glyphs, &mut runs, rest, rest_runs);
             break;
@@ -393,16 +397,20 @@ pub(crate) fn shape_items_with_combined_width_reuse(
             let (prefix, prefix_runs) = shape_inputs(
                 cx,
                 items[cursor..start].iter().map(input::ShapeInput::whole),
-                styles,
-                fonts,
-                mode,
-                limits,
+                &ShapeEnv {
+                    styles,
+                    fonts,
+                    mode,
+                    limits,
+                    feature_sets,
+                },
                 warnings,
                 sat,
-                bases.as_deref_mut(),
-                None,
-                feature_sets,
-                glyphs.len() as u64,
+                ShapeOptions {
+                    bases: bases.as_deref_mut(),
+                    glyph_offset: glyphs.len() as u64,
+                    ..Default::default()
+                },
             )?;
             append_shape_output(&mut glyphs, &mut runs, prefix, prefix_runs);
         }
@@ -423,7 +431,7 @@ pub(crate) fn shape_items_with_combined_width_reuse(
             )
         };
 
-        if let Some(selection) = selection {
+        let reuse = if let Some(selection) = selection {
             if selection.use_width_feature {
                 for item in &mut items[start..end] {
                     item.width_feature = Some(tag);
@@ -455,54 +463,47 @@ pub(crate) fn shape_items_with_combined_width_reuse(
                 ),
                 _ => true,
             };
-            if group_exceeds_limit || !scoped_fits {
-                let (group_glyphs, group_runs) = shape_inputs(
-                    cx,
-                    items[start..end].iter().map(input::ShapeInput::whole),
-                    styles,
-                    fonts,
-                    mode,
-                    limits,
-                    warnings,
-                    sat,
-                    bases.as_deref_mut(),
-                    None,
-                    feature_sets,
-                    glyphs.len() as u64,
-                )?;
-                append_shape_output(&mut glyphs, &mut runs, group_glyphs, group_runs);
+            if !group_exceeds_limit && scoped_fits {
+                Some(selection)
             } else {
-                if let (Some(bases), Some((plain, narrow))) =
-                    (bases.as_deref_mut(), traces.as_ref())
-                {
-                    let trace = if selection.use_width_feature {
-                        narrow
-                    } else {
-                        plain
-                    };
-                    for charge in trace {
-                        bases.item(charge.item as usize, LimitKind::ShapedGlyphs, charge.glyphs)?;
-                    }
-                }
-                warnings.append(selection.warnings);
-                sat.saturated += selection.saturation.saturated;
-                sat.non_finite += selection.saturation.non_finite;
-                append_shape_output(&mut glyphs, &mut runs, selection.glyphs, selection.runs);
+                None
             }
+        } else {
+            None
+        };
+        if let Some(selection) = reuse {
+            if let (Some(bases), Some((plain, narrow))) = (bases.as_deref_mut(), traces.as_ref()) {
+                let trace = if selection.use_width_feature {
+                    narrow
+                } else {
+                    plain
+                };
+                for charge in trace {
+                    bases.item(charge.item as usize, LimitKind::ShapedGlyphs, charge.glyphs)?;
+                }
+            }
+            warnings.append(selection.warnings);
+            sat.saturated += selection.saturation.saturated;
+            sat.non_finite += selection.saturation.non_finite;
+            append_shape_output(&mut glyphs, &mut runs, selection.glyphs, selection.runs);
         } else {
             let (group_glyphs, group_runs) = shape_inputs(
                 cx,
                 items[start..end].iter().map(input::ShapeInput::whole),
-                styles,
-                fonts,
-                mode,
-                limits,
+                &ShapeEnv {
+                    styles,
+                    fonts,
+                    mode,
+                    limits,
+                    feature_sets,
+                },
                 warnings,
                 sat,
-                bases.as_deref_mut(),
-                None,
-                feature_sets,
-                glyphs.len() as u64,
+                ShapeOptions {
+                    bases: bases.as_deref_mut(),
+                    glyph_offset: glyphs.len() as u64,
+                    ..Default::default()
+                },
             )?;
             append_shape_output(&mut glyphs, &mut runs, group_glyphs, group_runs);
         }
@@ -620,16 +621,19 @@ fn try_shape_combined_width_group(
         group
             .iter()
             .map(|item| input::ShapeInput::whole(item).with_width_feature(None)),
-        styles,
-        fonts,
-        mode,
-        limits,
+        &ShapeEnv {
+            styles,
+            fonts,
+            mode,
+            limits,
+            feature_sets,
+        },
         &mut plain_warnings,
         &mut plain_saturation,
-        None,
-        plain_trace,
-        feature_sets,
-        0,
+        ShapeOptions {
+            trace: plain_trace,
+            ..Default::default()
+        },
     ) else {
         for item in group {
             feature_sets.discard_unselected_width_feature(item, tag);
@@ -652,16 +656,19 @@ fn try_shape_combined_width_group(
         group
             .iter()
             .map(|item| input::ShapeInput::whole(item).with_width_feature(Some(tag))),
-        styles,
-        fonts,
-        mode,
-        limits,
+        &ShapeEnv {
+            styles,
+            fonts,
+            mode,
+            limits,
+            feature_sets,
+        },
         &mut narrow_warnings,
         &mut narrow_saturation,
-        None,
-        narrow_trace,
-        feature_sets,
-        0,
+        ShapeOptions {
+            trace: narrow_trace,
+            ..Default::default()
+        },
     );
 
     let Some((narrow, narrow_runs)) = narrow_result.ok() else {
@@ -794,43 +801,46 @@ pub(crate) fn shape_items(
     shape_items_with_base_scopes(
         cx,
         items,
-        styles,
-        fonts,
-        mode,
-        limits,
+        &crate::shape::ShapeEnv {
+            styles,
+            fonts,
+            mode,
+            limits,
+            feature_sets: &FeatureSets::new(items, styles),
+        },
         warnings,
         sat,
         None,
-        &FeatureSets::new(items, styles),
     )
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Immutable inputs shared by paragraph and line-edge shaping.
+pub(crate) struct ShapeEnv<'a> {
+    pub(crate) styles: &'a [crate::style::InlineStyle],
+    pub(crate) fonts: &'a crate::font::FontCollection,
+    pub(crate) mode: WritingMode,
+    pub(crate) limits: &'a Limits,
+    pub(crate) feature_sets: &'a FeatureSets,
+}
+
 pub(crate) fn shape_items_with_base_scopes(
     cx: &mut crate::LayoutContext,
     items: &[crate::analysis::itemize::ShapeItem],
-    styles: &[crate::style::InlineStyle],
-    fonts: &crate::font::FontCollection,
-    mode: WritingMode,
-    limits: &Limits,
+    env: &ShapeEnv<'_>,
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
     bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
-    feature_sets: &FeatureSets,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
     shape_inputs(
         cx,
         items.iter().map(input::ShapeInput::whole),
-        styles,
-        fonts,
-        mode,
-        limits,
+        env,
         warnings,
         sat,
-        bases,
-        None,
-        feature_sets,
-        0,
+        ShapeOptions {
+            bases,
+            ..Default::default()
+        },
     )
 }
 
@@ -845,56 +855,36 @@ pub(crate) struct WindowCharge {
     pub(crate) glyphs: u64,
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Mutable accounting and reuse state for one shaping call.
+#[derive(Default)]
+struct ShapeOptions<'a> {
+    bases: Option<&'a mut crate::ruby::base_budget::BaseScopes>,
+    trace: Option<&'a mut Vec<WindowCharge>>,
+    glyph_offset: u64,
+    window_instances: Option<&'a mut WindowInstances>,
+}
+
 fn shape_inputs<'a>(
     cx: &mut crate::LayoutContext,
     items: impl IntoIterator<Item = input::ShapeInput<'a>>,
-    styles: &[crate::style::InlineStyle],
-    fonts: &crate::font::FontCollection,
-    mode: WritingMode,
-    limits: &Limits,
+    env: &ShapeEnv<'_>,
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
-    bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
-    trace: Option<&mut Vec<WindowCharge>>,
-    feature_sets: &FeatureSets,
-    glyph_offset: u64,
+    options: ShapeOptions<'_>,
 ) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
-    shape_inputs_with(
-        cx,
-        items,
+    let ShapeEnv {
         styles,
         fonts,
         mode,
         limits,
-        warnings,
-        sat,
-        bases,
-        trace,
         feature_sets,
+    } = *env;
+    let ShapeOptions {
+        mut bases,
+        mut trace,
         glyph_offset,
-        None,
-    )
-}
-
-/// `window_instances` keeps prepared instances across calls for the line-edge
-/// windows of one paragraph; `None` prepares them once per call.
-#[allow(clippy::too_many_arguments)]
-fn shape_inputs_with<'a>(
-    cx: &mut crate::LayoutContext,
-    items: impl IntoIterator<Item = input::ShapeInput<'a>>,
-    styles: &[crate::style::InlineStyle],
-    fonts: &crate::font::FontCollection,
-    mode: WritingMode,
-    limits: &Limits,
-    warnings: &mut crate::limits::WarningSink,
-    sat: &mut Saturation,
-    mut bases: Option<&mut crate::ruby::base_budget::BaseScopes>,
-    mut trace: Option<&mut Vec<WindowCharge>>,
-    feature_sets: &FeatureSets,
-    glyph_offset: u64,
-    mut window_instances: Option<&mut WindowInstances>,
-) -> Result<(GlyphStore, Vec<ShapedRun>), LimitExceeded> {
+        mut window_instances,
+    } = options;
     cx.bound_shaping_scratch(limits);
     let mut store = GlyphStore::default();
     let mut runs: Vec<ShapedRun> = Vec::new();
@@ -1390,20 +1380,22 @@ pub(crate) fn shape_window_edit(
     {
         let mut instances = std::mem::take(&mut cx.window_instances);
         instances.begin(data);
-        let result = shape_inputs_with(
+        let result = shape_inputs(
             cx,
             input::clipped_items(&data.shape_items[index..], unit.text.clone()),
-            &data.styles,
-            &data.fonts,
-            data.style.writing_mode,
-            &limits,
+            &ShapeEnv {
+                styles: &data.styles,
+                fonts: &data.fonts,
+                mode: data.style.writing_mode,
+                limits: &limits,
+                feature_sets: &data.shape_features,
+            },
             warnings,
             sat,
-            None,
-            None,
-            &data.shape_features,
-            0,
-            Some(&mut instances),
+            ShapeOptions {
+                window_instances: Some(&mut instances),
+                ..Default::default()
+            },
         );
         cx.window_instances = instances;
         result
@@ -1487,14 +1479,16 @@ pub(crate) fn shape_window_edit(
         shape_items_with_base_scopes(
             cx,
             &items,
-            &data.styles,
-            &data.fonts,
-            data.style.writing_mode,
-            &limits,
+            &crate::shape::ShapeEnv {
+                styles: &data.styles,
+                fonts: &data.fonts,
+                mode: data.style.writing_mode,
+                limits: &limits,
+                feature_sets: &data.shape_features,
+            },
             warnings,
             sat,
             None,
-            &data.shape_features,
         )
     };
     match result {
