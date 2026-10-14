@@ -27,12 +27,11 @@ fn matched_bracket(c: char) -> Option<unicode_bidi::data_source::BidiMatchedOpen
     HardcodedBidiData.bidi_matched_opening_bracket(c)
 }
 
-pub(super) fn resolve(chars: impl Iterator<Item = char>) -> Vec<Script> {
+pub(super) fn resolve(scalars: &[super::itemize::Scalar]) -> Vec<Script> {
     let data = ScriptWithExtensions::new();
-    let chars: Vec<_> = chars.collect();
-    let mut scripts: Vec<_> = chars
+    let mut scripts: Vec<_> = scalars
         .iter()
-        .map(|c| ascii_script(*c).unwrap_or_else(|| data.get_script_val(*c)))
+        .map(|s| ascii_script(s.c).unwrap_or_else(|| data.get_script_val(s.c)))
         .collect();
     let permits = |c, script| {
         let ext = data.get_script_extensions_val(c);
@@ -43,11 +42,11 @@ pub(super) fn resolve(chars: impl Iterator<Item = char>) -> Vec<Script> {
     let mut openings = Vec::new();
     let mut by_class: BTreeMap<char, Vec<usize>> = BTreeMap::new();
     let mut last = Script::Common;
-    for (i, c) in chars.iter().enumerate() {
-        if neutral(scripts[i]) && permits(*c, last) {
+    for (i, c) in scalars.iter().map(|s| s.c).enumerate() {
+        if neutral(scripts[i]) && permits(c, last) {
             scripts[i] = last;
         }
-        if let Some(bracket) = matched_bracket(*c) {
+        if let Some(bracket) = matched_bracket(c) {
             if bracket.is_open {
                 by_class
                     .entry(bracket.opening)
@@ -75,8 +74,9 @@ pub(super) fn resolve(chars: impl Iterator<Item = char>) -> Vec<Script> {
     last = Script::Latin;
     for i in (0..scripts.len()).rev() {
         if neutral(scripts[i]) {
-            let ext = data.get_script_extensions_val(chars[i]);
-            scripts[i] = if permits(chars[i], last) {
+            let c = scalars[i].c;
+            let ext = data.get_script_extensions_val(c);
+            scripts[i] = if permits(c, last) {
                 last
             } else {
                 ext.iter().find(|s| !neutral(*s)).unwrap_or(Script::Latin)

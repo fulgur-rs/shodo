@@ -249,14 +249,24 @@ pub(crate) fn itemize(
             return Ok(());
         }
         let segment_start = result.len();
-        let scalar_scripts = super::scripts::resolve(scalars.iter().map(|s| s.c));
-        let offsets: Vec<_> = text.char_indices().map(|(i, _)| i).collect();
+        let scalar_scripts = super::scripts::resolve(scalars);
         let boundaries = graphemes::boundaries(scalars, breaks);
+        // `text` holds exactly the scalars' characters and boundaries ascend,
+        // so a running byte cursor maps scalar indices to text offsets.
+        let mut cursor = (0, 0);
+        let advance = |scalars: &[Scalar], (scalar, byte): &mut (usize, usize), to: usize| {
+            *byte += scalars[*scalar..to]
+                .iter()
+                .map(|s| s.c.len_utf8())
+                .sum::<usize>();
+            *scalar = to;
+            *byte
+        };
         for window in boundaries.windows(2) {
             let scalar_start = window[0];
             let scalar_end = window[1];
-            let cluster = &text
-                [offsets[scalar_start]..offsets.get(scalar_end).copied().unwrap_or(text.len())];
+            let cluster_start = advance(scalars, &mut cursor, scalar_start);
+            let cluster = &text[cluster_start..advance(scalars, &mut cursor, scalar_end)];
             let mut prepared = FontCluster::new(cluster);
             let mut matched = crate::hashing::FastMap::default();
             let grapheme_offset = scalars[scalar_start].offset;
