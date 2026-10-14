@@ -259,6 +259,46 @@ impl<'a> Cursor<'a> {
         };
     }
 
+    /// Append one zero-cost, zero-tracking leaf without expanding a Summary
+    /// or joining/revising the embedding stack. The caller has proved that
+    /// its paragraph needs no boundary spacing and has no first-line dataset.
+    /// Level changes and a nonzero prior cost/tracking fall back.
+    pub(super) fn push_neutral_leaf(&mut self, level: u8, edge: Edge) -> bool {
+        let frame = self.frames.last_mut().unwrap();
+        if frame.level != level {
+            return false;
+        }
+        let summary = &mut frame.summary;
+        let adjacent = if level.is_multiple_of(2) {
+            summary.last
+        } else {
+            summary.first
+        };
+        if summary.cost != 0 || adjacent.is_some_and(|previous| previous.tracking != 0) {
+            return false;
+        }
+        debug_assert_eq!(edge.tracking, 0);
+        self.cached.set(None);
+        if level.is_multiple_of(2) {
+            if summary.first.is_none() {
+                summary.first = Some(edge);
+            }
+            summary.last = Some(edge);
+            summary.after = false;
+            summary.hang_after = false;
+            summary.autospace_after = false;
+        } else {
+            summary.first = Some(edge);
+            if summary.last.is_none() {
+                summary.last = Some(edge);
+            }
+            summary.before = false;
+            summary.hang_before = false;
+            summary.autospace_before = false;
+        }
+        true
+    }
+
     pub(super) fn push(&mut self, level: u8, summary: Summary, data: Option<&ParagraphData>) {
         self.cached.set(None);
         #[cfg(test)]
@@ -680,6 +720,201 @@ mod tests {
             tracking,
             unit,
             ..Default::default()
+        }
+    }
+
+    #[test]
+    fn neutral_compact_leaves_skip_level_stack_work() {
+        let limits = crate::limits::Limits::default();
+        let style = crate::style::ParagraphStyle::default();
+        let fonts = crate::font::FontCollection::with_options(
+            &limits,
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+        builder.push_text(
+            crate::node::TextSource::Generated {
+                node: crate::node::NodeId(1),
+            },
+            "abcd",
+        );
+        let paragraph = builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        assert!(!paragraph.data.needs_spacing);
+        let mut cursor = Cursor::default();
+        for index in 0..paragraph.data.units.len() {
+            super::super::spacing::push(&paragraph.data, &mut cursor, index);
+        }
+        assert_eq!(cursor.frames[0].summary.cost, 0);
+        assert_eq!(cursor.frames[0].summary.first.unwrap().unit, 0);
+        assert_eq!(cursor.frames[0].summary.last.unwrap().unit, 3);
+        assert_eq!(
+            cursor.visits.get(),
+            0,
+            "neutral leaves must avoid generic pushes"
+        );
+    }
+
+    #[test]
+    fn compact_leaf_push_matches_generic_with_spacing_and_special_boundaries() {
+        use crate::geometry::WritingMode;
+        use crate::node::{InlineEdges, NodeId, TextSource};
+        use crate::style::{InlineStyle, ParagraphStyle};
+        let limits = crate::limits::Limits::default();
+        let fonts = crate::font::FontCollection::with_options(
+            &limits,
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        for case in 0..7 {
+            let mut style = ParagraphStyle::default();
+            match case {
+                1 => style.root.letter_spacing = 1.25,
+                2 => style.root.word_spacing = -2.0,
+                3 => {
+                    style.first_line = Some(InlineStyle {
+                        letter_spacing: 2.5,
+                        ..style.root.clone()
+                    })
+                }
+                4 => style.writing_mode = WritingMode::VerticalRl,
+                _ => {}
+            }
+            let mut builder = crate::ParagraphBuilder::new(&style, &limits);
+            let middle = if case == 6 {
+                "水（e）אfgعرب"
+            } else {
+                "efאghعرب"
+            };
+            for (part, text) in ["ab \u{200b}cd", middle, "\t\nhi\u{ad}j"]
+                .into_iter()
+                .enumerate()
+            {
+                let mut edges = InlineEdges::default();
+                if case == 5 {
+                    edges.border.inline_start = 1.0;
+                    edges.padding.inline_end = 2.0;
+                }
+                builder
+                    .open_inline(NodeId(part as u64 * 2 + 1), &style.root, edges)
+                    .push_text(
+                        TextSource::Generated {
+                            node: NodeId(part as u64 * 2 + 2),
+                        },
+                        text,
+                    )
+                    .close_inline();
+            }
+            let paragraph = builder
+                .build(&mut crate::LayoutContext::new(), &fonts)
+                .unwrap();
+            // Ideograph and explicit-spacing cases keep general composition;
+            // neutral cases still need exact flags after barriers and U+200B.
+            let datasets = std::iter::once(paragraph.data.as_ref())
+                .chain(paragraph.data.first_line.as_ref().map(|f| f.data.as_ref()));
+            for data in datasets {
+                let mut actual = Cursor::default();
+                let mut reference = Cursor::default();
+                for index in 0..data.units.len() {
+                    super::super::spacing::push(data, &mut actual, index);
+                    let unit = &data.units[index];
+                    let level = if matches!(unit.kind, crate::analysis::units::UnitKind::Tab)
+                        && data.combine_at_text(unit.text.start).is_none()
+                    {
+                        data.base_level
+                    } else {
+                        unit.level
+                    };
+                    reference.push(level, data.spacing_summaries.get(index), Some(data));
+                    assert_eq!(
+                        actual.summary(Some(data)),
+                        reference.summary(Some(data)),
+                        "case {case}, unit {index}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn neutral_leaf_append_preserves_flags_for_both_directions_and_cached_reads() {
+        for level in 0..=4 {
+            for flags in 0..64 {
+                for kind in [Kind::Text, Kind::Cursive, Kind::Atomic, Kind::Barrier] {
+                    let mut actual = Cursor::default();
+                    let mut reference = Cursor::default();
+                    let empty = Summary {
+                        before: flags & 1 != 0,
+                        after: flags & 2 != 0,
+                        hang_before: flags & 4 != 0,
+                        hang_after: flags & 8 != 0,
+                        autospace_before: flags & 16 != 0,
+                        autospace_after: flags & 32 != 0,
+                        ..Default::default()
+                    };
+                    for summary in [Summary::leaf(edge(0, 0), None), empty] {
+                        actual.push(level, summary, None);
+                        reference.push(level, summary, None);
+                    }
+                    let previous = actual.summary(None);
+                    let untouched = actual.clone();
+                    let edge = Edge { kind, ..edge(0, 1) };
+                    assert!(actual.push_neutral_leaf(level, edge));
+                    reference.push(level, Summary::leaf(edge, None), None);
+                    assert_eq!(
+                        actual.summary(None),
+                        reference.summary(None),
+                        "level {level}, flags {flags}, kind {kind:?}"
+                    );
+                    assert_eq!(untouched.summary(None), previous);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn neutral_leaf_append_rejects_a_nonzero_prior_cost_without_mutation() {
+        for cost in [i64::MIN, -1, 1, i64::MAX] {
+            let mut cursor = Cursor::default();
+            cursor.push(
+                0,
+                Summary {
+                    cost,
+                    ..Summary::leaf(edge(0, 0), None)
+                },
+                None,
+            );
+            let before = cursor.summary(None);
+            assert!(!cursor.push_neutral_leaf(0, edge(0, 1)));
+            assert_eq!(cursor.summary(None), before);
+        }
+    }
+
+    #[test]
+    fn neutral_leaf_append_falls_back_for_level_changes_and_prior_tracking() {
+        for previous_level in 0..=4 {
+            for next_level in 0..=4 {
+                for tracking in [-65, 0, 65] {
+                    let mut cursor = Cursor::default();
+                    cursor.push(previous_level, Summary::leaf(edge(tracking, 0), None), None);
+                    let before = cursor.summary(None);
+                    let accepted = cursor.push_neutral_leaf(next_level, edge(0, 1));
+                    assert_eq!(accepted, previous_level == next_level && tracking == 0);
+                    if !accepted {
+                        assert_eq!(
+                            cursor.summary(None),
+                            before,
+                            "fallback must leave cached state untouched"
+                        );
+                    }
+                }
+            }
         }
     }
 

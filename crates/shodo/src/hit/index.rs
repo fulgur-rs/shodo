@@ -3,6 +3,7 @@ use crate::geometry::LogicalRect;
 use crate::mapping::Affinity;
 use crate::{Fragment, GlyphRunView, Line};
 use std::ops::Range;
+use std::sync::OnceLock;
 
 #[derive(Clone, Debug)]
 pub(super) struct Segment {
@@ -31,9 +32,9 @@ pub(super) struct LineIndex {
     pub(super) source: super::source::SourceIndex,
     pub(super) selection_sorted: bool,
     range: Range<u32>,
-    spatial: super::spatial::Tree,
+    spatial: OnceLock<super::spatial::Tree>,
     combined: Vec<CombineHit>,
-    combined_spatial: super::spatial::Tree,
+    combined_spatial: OnceLock<super::spatial::Tree>,
 }
 
 pub(super) fn visual_key(caret: &Caret) -> (f32, f32) {
@@ -71,6 +72,8 @@ fn combined_cluster_glyph_index(
 
 impl LineGeometry {
     fn new(number: usize, line: &Line, retain_carets: bool) -> Self {
+        #[cfg(test)]
+        crate::test_support::GEOMETRY_BUILDS.with(|count| count.set(count.get() + 1));
         let mut result = Self {
             stops: retain_carets.then(Vec::new),
             segments: Vec::new(),
@@ -446,9 +449,9 @@ impl LineIndex {
             source: super::source::SourceIndex::Ordered,
             selection_sorted: false,
             range: range.start as u32..range.end as u32,
-            spatial: super::spatial::Tree::new(std::iter::empty(), false),
+            spatial: OnceLock::new(),
             combined: Vec::new(),
-            combined_spatial: super::spatial::Tree::new(std::iter::empty(), false),
+            combined_spatial: OnceLock::new(),
         };
         let mut fallback_positions = Vec::new();
         // Empty lines and nonpainting source at their ends still have stops.
@@ -577,14 +580,6 @@ impl LineIndex {
                 result.combined.push(CombineHit { rect, stops });
             }
         }
-        result.combined_spatial = super::spatial::Tree::new(
-            result
-                .combined
-                .iter()
-                .enumerate()
-                .map(|(i, group)| (i, group.rect)),
-            false,
-        );
         result.source = super::source::SourceIndex::new(&result.segments);
         // Ordered source queries visit a contiguous segment slice. Only this
         // order can be merged while gathering, without buffering every glyph.
@@ -593,16 +588,29 @@ impl LineIndex {
                 .segments
                 .windows(2)
                 .all(|pair| super::selection::inline_order(&pair[0].rect, &pair[1].rect).is_le());
-        result.spatial = super::spatial::Tree::new(
-            result
-                .segments
-                .iter()
-                .enumerate()
-                .filter(|(_, s)| !s.text.is_empty() && s.from != s.to && s.rect.block_size > 0.0)
-                .map(|(i, s)| (i, s.rect)),
-            false,
-        );
         result
+    }
+    fn spatial_rects(&self) -> impl Iterator<Item = (usize, LogicalRect)> {
+        self.segments
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| !s.text.is_empty() && s.from != s.to && s.rect.block_size > 0.0)
+            .map(|(i, s)| (i, s.rect))
+    }
+    fn spatial(&self) -> &super::spatial::Tree {
+        self.spatial
+            .get_or_init(|| super::spatial::Tree::new(self.spatial_rects(), false))
+    }
+    fn combined_spatial(&self) -> &super::spatial::Tree {
+        self.combined_spatial.get_or_init(|| {
+            super::spatial::Tree::new(
+                self.combined
+                    .iter()
+                    .enumerate()
+                    .map(|(i, group)| (i, group.rect)),
+                false,
+            )
+        })
     }
     pub(super) fn caret(&self, position: TextPosition) -> Option<Caret> {
         if position.offset < self.range.start || position.offset > self.range.end {
@@ -629,7 +637,7 @@ impl LineIndex {
     }
     pub(super) fn hit(&self, inline: f32, block: f32) -> Option<&Caret> {
         if let Some(group) = self
-            .combined_spatial
+            .combined_spatial()
             .containing(inline, block)
             .map(|i| &self.combined[i])
         {
@@ -672,10 +680,13 @@ impl LineIndex {
         }
     }
     pub(super) fn inside(&self, inline: f32, block: f32) -> bool {
-        self.spatial.contains(inline, block)
+        self.spatial().contains(inline, block)
     }
     pub(super) fn hit_bounds(&self) -> Option<LogicalRect> {
-        self.spatial.bounds()
+        self.spatial.get().map_or_else(
+            || super::spatial::enclosing(self.spatial_rects().map(|(_, rect)| rect)),
+            super::spatial::Tree::bounds,
+        )
     }
 }
 fn affinity_key(a: Affinity) -> u8 {
@@ -1342,6 +1353,11 @@ mod tests {
                 // unlike a proportional third of the ffi advance.
                 assert!(((at(1) - at(0)).abs() - 4.0 * scale).abs() < 0.032);
                 assert!(((at(2) - at(0)).abs() - 8.0 * scale).abs() < 0.032);
+                let spans = layout.paint_spans(0).unwrap();
+                assert_eq!(spans[0].text_range, 0..1);
+                assert_eq!(spans[1].text_range, 1..2);
+                assert!((spans[0].rect.block_size - 4.0 * scale).abs() < 0.032);
+                assert!((spans[1].rect.block_size - 4.0 * scale).abs() < 0.032);
             }
         }
     }
@@ -1425,6 +1441,12 @@ mod tests {
                         "format {format},bad {bad},size {size}:{} vs {second}",
                         at(2)
                     );
+                    let spans = layout.paint_spans(0).unwrap();
+                    assert_eq!(spans.len(), 3);
+                    assert_eq!(spans[0].text_range, 0..1);
+                    assert_eq!(spans[1].text_range, 1..2);
+                    assert!((spans[0].rect.inline_size - first).abs() < 0.032);
+                    assert!((spans[1].rect.inline_size - (second - first)).abs() < 0.032);
                 }
             }
         }
