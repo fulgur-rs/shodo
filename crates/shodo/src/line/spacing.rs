@@ -319,18 +319,30 @@ pub(crate) fn last_content(data: &ParagraphData) -> Option<usize> {
 }
 
 pub(super) fn push(data: &ParagraphData, cursor: &mut Cursor, index: usize) {
-    push_summary(data, cursor, index, data.spacing_summaries.get(index));
+    let level = spacing_level(data, index);
+    // `needed` proves there is no boundary contribution between this
+    // dataset's edges. First-line intrinsic sizing can carry earlier edges
+    // into the normal dataset, so it must keep general composition.
+    if !data.needs_spacing
+        && data.first_line.is_none()
+        && data.spacing_summaries.push_neutral(index, level, cursor)
+    {
+        return;
+    }
+    cursor.push(level, data.spacing_summaries.get(index), Some(data));
+}
+
+fn spacing_level(data: &ParagraphData, index: usize) -> u8 {
+    let unit = &data.units[index];
+    if matches!(unit.kind, UnitKind::Tab) && data.combine_at_text(unit.text.start).is_none() {
+        data.base_level
+    } else {
+        unit.level
+    }
 }
 
 fn push_summary(data: &ParagraphData, cursor: &mut Cursor, index: usize, summary: Summary) {
-    let unit = &data.units[index];
-    let level =
-        if matches!(unit.kind, UnitKind::Tab) && data.combine_at_text(unit.text.start).is_none() {
-            data.base_level
-        } else {
-            unit.level
-        };
-    cursor.push(level, summary, Some(data));
+    cursor.push(spacing_level(data, index), summary, Some(data));
 }
 
 /// A typographic edge's kind and source offset.
