@@ -67,6 +67,8 @@ pub(super) struct CandidateMeasure<'a> {
     required: LayoutUnit,
     /// Spacing through `break_end` when a break pulls closing units.
     spacing: Option<super::spacing_summary::Cursor<'a>>,
+    /// Spacing width of the live line through this unit.
+    pub(super) tracking: LayoutUnit,
     /// Line position after this unit.
     next: LayoutUnit,
     /// Hanging whitespace through this unit.
@@ -177,6 +179,7 @@ impl<'a> CandidateMeasure<'a> {
             shared_extent,
             required,
             spacing: candidate_spacing,
+            tracking,
             next: pos.add(w, sat),
             hanging: tail.hanging,
         }

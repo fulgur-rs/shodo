@@ -248,7 +248,7 @@ impl PartialLine {
                 cx,
                 sat,
             );
-            tracking.push(spacing.summary(Some(data)).width(sat));
+            tracking.push(measure.tracking);
             if let UnitKind::Float { node, ordinal } = u.kind {
                 floats.push((at, node, ordinal));
             }
