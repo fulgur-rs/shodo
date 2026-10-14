@@ -14,10 +14,21 @@ env:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Superseded pull request runs are cancelled, but main runs always finish so
+  # every job saves the dependency cache that pull requests restore.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Swatinem/rust-cache caches dependencies only; workspace crates rebuild in
+# every job and for every distinct feature set. Jobs therefore run in parallel,
+# and each job keeps its Cargo invocations on as few feature sets as possible.
+# Caches are saved from main only: pull request caches are branch-scoped and
+# would push the repository past the Actions cache quota.
+#
+# The accesskit feature is purely additive (no cfg(not(feature = "accesskit"))),
+# so workspace tests run once with it enabled. The non-accesskit build stays
+# covered by clippy and the -p shodo feature-isolation tests.
 jobs:
-  check:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,8 +38,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Clear restored snapshot reports
-        run: rm -rf target/snapshot-report target/snapshot-checks
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo fmt --all --check
       - name: Check for machine-local home paths
         run: |
@@ -45,11 +56,25 @@ jobs:
             echo "::error::cargo package -p shodo would publish unexpected paths (see above); update Cargo.toml [package].include"
             exit 1
           fi
-      - run: cargo test --workspace
-      - run: cargo test -p shodo-bench --example match_eviction_algorithms
-      - run: cargo run -p shodo-bench --example match_cache_eviction -- warm 256 256 4 1024 1 2 16
-      - name: Check line cache with debug assertions disabled
-        run: cargo test --release -p shodo --lib line::cache::tests
+      - run: cargo doc --workspace --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - run: cargo doc --workspace --no-deps --features shodo-harness/accesskit
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Fontconfig development files
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig1-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Clear restored snapshot reports
+        run: rm -rf target/snapshot-report target/snapshot-checks
       - run: cargo test --workspace --features shodo-harness/accesskit
       - run: cargo run -p shodo-harness --features accesskit,shodo/complex-scripts --example accessibility
       - run: cargo run -p shodo-harness --example emoji_png -- target/emoji.png
@@ -66,18 +91,8 @@ jobs:
             target/snapshot-report
             target/snapshot-checks
           if-no-files-found: warn
-      - run: cargo test -p shodo-bench --features allocation-counting --test allocator --test probe --test ruby_hit_path_allocations --test ruby_base_caret_range --test ruby_base_decoration --test style_memory --test suppressed_warning_format --test selection_allocations --test paint_geometry_allocations --test font_query_allocations --test font_descriptor_allocations --test ruby_constructor_allocations --test ruby_warning_import_allocations --test block_shift_allocations --test emphasis_extents_allocations
-      - run: cargo test -p shodo-bench --bench layout
-        env:
-          SHODO_BENCH_CASE: latin-short
-      - run: cargo test -p shodo --no-default-features
-      - run: cargo test -p shodo --no-default-features --features complex-scripts
-      - run: cargo doc --workspace --no-deps
-        env:
-          RUSTDOCFLAGS: -D warnings
-      - run: cargo doc --workspace --no-deps --features shodo-harness/accesskit
-        env:
-          RUSTDOCFLAGS: -D warnings
+      # tools/browser/test_snapshots.py runs an offline Cargo build of the
+      # snapshots example, so the Python checks stay where that build is fresh.
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -89,6 +104,27 @@ jobs:
       - run: python -m unittest discover -s tools -v
       - run: python tools/fixtures/regenerate.py --check
 
+  features:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Fontconfig development files
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig1-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo test -p shodo --no-default-features
+      - run: cargo test -p shodo --no-default-features --features complex-scripts
+      - name: Check line cache with debug assertions disabled
+        run: cargo test --release -p shodo --lib line::cache::tests
+      - run: cargo test -p shodo-bench --example match_eviction_algorithms
+      - run: cargo run -p shodo-bench --example match_cache_eviction -- warm 256 256 4 1024 1 2 16
+      - run: cargo test -p shodo-bench --features allocation-counting --test allocator --test probe --test ruby_hit_path_allocations --test ruby_base_caret_range --test ruby_base_decoration --test style_memory --test suppressed_warning_format --test selection_allocations --test paint_geometry_allocations --test font_query_allocations --test font_descriptor_allocations --test ruby_constructor_allocations --test ruby_warning_import_allocations --test block_shift_allocations --test emphasis_extents_allocations
+      - run: cargo test -p shodo-bench --bench layout
+        env:
+          SHODO_BENCH_CASE: latin-short
+
   msrv:
     runs-on: ubuntu-latest
     steps:
@@ -97,25 +133,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig1-dev
       - uses: dtolnay/rust-toolchain@1.89.0
       - uses: Swatinem/rust-cache@v2
-      - name: Clear restored snapshot reports
-        run: rm -rf target/snapshot-report target/snapshot-checks
-      - run: cargo test --workspace
-      - run: cargo test --workspace --features shodo-harness/accesskit
-      - run: cargo run -p shodo-harness --features accesskit,shodo/complex-scripts --example accessibility
-      - run: cargo run -p shodo-harness --example emoji_png -- target/emoji.png
-      - run: cargo run -p shodo-harness --example ruby_png -- target/ruby-png
-      - name: Check fixed glyph snapshots
-        if: always()
-        run: cargo run -p shodo-harness --example snapshots -- --output target/snapshot-report
-      - name: Upload snapshot report
-        if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: snapshots-${{ github.job }}
-          path: |
-            target/snapshot-report
-            target/snapshot-checks
-          if-no-files-found: warn
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # The minimum supported Rust version only needs to compile; the test,
+      # example and snapshot behaviour is checked on stable. accesskit is
+      # additive, so enabling it covers the default build as well.
+      - run: cargo build --workspace --all-targets --features shodo-harness/accesskit
 
   wasm:
     runs-on: ubuntu-latest
@@ -125,6 +148,8 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo build -p shodo --target wasm32-unknown-unknown
       - run: cargo build -p shodo --target wasm32-unknown-unknown --no-default-features
       - run: cargo build -p shodo --target wasm32-unknown-unknown --no-default-features --features accesskit
@@ -143,6 +168,8 @@ jobs:
         with:
           components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@88ada01c46e65c47040a0ae865537cc76fcd0e1c # cargo-llvm-cov
       # The workspace tests drive shodo through the dev harness and fixtures;
@@ -150,7 +177,6 @@ jobs:
       - name: Run tests with coverage
         run: |
           cargo llvm-cov clean --workspace
-          cargo llvm-cov --workspace --no-report
           cargo llvm-cov --workspace --features shodo-harness/accesskit --no-report
           cargo llvm-cov report --lcov --output-path lcov.info
       - name: Upload coverage artifact
