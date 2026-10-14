@@ -9,7 +9,7 @@
 //! answered from arrays precomputed in `new`.
 use super::super::metrics::RecordProfile;
 use super::super::quirk::{ContentCredit, CreditBox, content_credit};
-use super::scalar::{Bounds, union};
+use super::scalar::{Bounds, profile_bounds, union};
 use crate::LayoutContext;
 use crate::analysis::units::UnitKind;
 use crate::paragraph::ParagraphData;
@@ -34,15 +34,10 @@ impl Side {
 
     /// Mirrors `Summary::profile`: only ungrouped profiles size the root.
     pub(super) fn from(p: RecordProfile, content: ContentCredit) -> Self {
-        let bounds = Some(Bounds {
-            top: p.top,
-            bottom: p.bottom,
-        });
+        let (normal, raw) = profile_bounds(p);
         Self {
-            normal: (p.group.is_none() && p.own_group.is_none())
-                .then_some(bounds)
-                .flatten(),
-            raw: bounds,
+            normal,
+            raw,
             content,
         }
     }

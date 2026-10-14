@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use crate::hashing::FastMap;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -253,7 +253,7 @@ pub(crate) struct ContentInput {
     pub(crate) text: String,
     pub(crate) items: Vec<RawItem>,
     pub(crate) styles: Vec<InlineStyle>,
-    pub(crate) first_line_styles: HashMap<u32, InlineStyle>,
+    pub(crate) first_line_styles: FastMap<u32, InlineStyle>,
     pub(crate) error: Option<LimitExceeded>,
     pub(crate) warnings: Vec<Warning>,
     pub(crate) offset_mapping: bool,

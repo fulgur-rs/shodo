@@ -523,7 +523,7 @@ fn add_sat(total: &mut Saturation, part: Saturation) {
 /// Resolve all requested columns against one actual selected line profile.
 /// Production callers share the profile through `content_shared`.
 #[allow(clippy::too_many_arguments)]
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg(test)]
 pub(crate) fn content(
     data: &ParagraphData,
     selected: Range<usize>,

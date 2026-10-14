@@ -9,9 +9,11 @@ mod scalar;
 
 use content::{ContentBounds, ContentSummary, content_bounds, record_content_bounds};
 // Keep the existing crate-visible type path even when callers infer it.
+#[cfg(test)]
+pub(crate) use content::content;
 #[allow(unused_imports)]
 pub(crate) use content::{
-    ContainerNote, ContentGeometry, ProfileShare, SelectionDigest, content, content_shared,
+    ContainerNote, ContentGeometry, ProfileShare, SelectionDigest, content_shared,
 };
 use ghost::Ghost;
 use scalar::{Bounds, Summary, union};

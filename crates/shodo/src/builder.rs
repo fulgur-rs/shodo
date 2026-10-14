@@ -1,6 +1,6 @@
 //! Paragraph builders: record the inline content of one block container.
 
-use std::collections::HashMap;
+use crate::hashing::FastMap;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -125,7 +125,7 @@ pub struct ParagraphBuilder {
     pub(crate) styles: Vec<InlineStyle>,
     /// Explicit alternatives, keyed by the normal/alternate pair's index.
     /// Sparse storage adds no alternate style allocations to legacy inputs.
-    pub(crate) first_line_styles: HashMap<u32, InlineStyle>,
+    pub(crate) first_line_styles: FastMap<u32, InlineStyle>,
     style_index: crate::hashing::FastMap<u64, Vec<u32>>,
     /// Data and keys already retained by this builder, excluding ruby inputs.
     pub(crate) style_bytes: u64,
@@ -162,7 +162,7 @@ impl ParagraphBuilder {
             text: String::new(),
             items: Vec::new(),
             styles: Vec::new(),
-            first_line_styles: HashMap::new(),
+            first_line_styles: FastMap::default(),
             style_index: crate::hashing::FastMap::default(),
             style_bytes: 0,
             last_interned: 0,

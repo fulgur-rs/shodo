@@ -76,10 +76,6 @@ pub(super) struct Tree {
 impl Tree {
     pub(super) fn new(rects: impl Iterator<Item = (usize, LogicalRect)>, vertical: bool) -> Self {
         let mut rects: Vec<_> = rects.map(|(i, r)| (i, Bounds::rect(r))).collect();
-        #[cfg(test)]
-        if !rects.is_empty() {
-            construction::record();
-        }
         rects.sort_by(|a, b| {
             if vertical {
                 a.1.top.total_cmp(&b.1.top)
@@ -87,19 +83,16 @@ impl Tree {
                 a.1.left.total_cmp(&b.1.left)
             }
         });
-        let mut tree = Self {
-            nodes: Vec::with_capacity(rects.len().saturating_mul(2)),
-            root: None,
-            #[cfg(test)]
-            visits: Default::default(),
-        };
-        if !rects.is_empty() {
-            tree.root = Some(tree.build(&rects));
-        }
-        tree
+        Self::with_rects(rects, |tree, rects| tree.build(rects))
     }
     pub(super) fn new_adaptive(rects: impl Iterator<Item = (usize, LogicalRect)>) -> Self {
-        let mut rects: Vec<_> = rects.map(|(i, r)| (i, Bounds::rect(r))).collect();
+        let rects = rects.map(|(i, r)| (i, Bounds::rect(r))).collect();
+        Self::with_rects(rects, Self::build_adaptive)
+    }
+    fn with_rects(
+        mut rects: Vec<(usize, Bounds)>,
+        build: impl FnOnce(&mut Self, &mut [(usize, Bounds)]) -> usize,
+    ) -> Self {
         #[cfg(test)]
         if !rects.is_empty() {
             construction::record();
@@ -111,41 +104,45 @@ impl Tree {
             visits: Default::default(),
         };
         if !rects.is_empty() {
-            tree.root = Some(tree.build_adaptive(&mut rects));
+            tree.root = Some(build(&mut tree, &mut rects));
         }
         tree
     }
-    fn build(&mut self, rects: &[(usize, Bounds)]) -> usize {
-        let node = if rects.len() == 1 {
-            Node {
-                bounds: rects[0].1,
-                children: None,
-                value: rects[0].0,
-                max_value: rects[0].0,
-            }
-        } else {
-            let mid = rects.len() / 2;
-            let left = self.build(&rects[..mid]);
-            let right = self.build(&rects[mid..]);
-            Node {
-                bounds: self.nodes[left].bounds.union(self.nodes[right].bounds),
-                children: Some((left, right)),
-                value: 0,
-                max_value: self.nodes[left].max_value.max(self.nodes[right].max_value),
-            }
-        };
+    fn leaf((value, bounds): (usize, Bounds)) -> Node {
+        Node {
+            bounds,
+            children: None,
+            value,
+            max_value: value,
+        }
+    }
+    fn parent(&self, left: usize, right: usize) -> Node {
+        Node {
+            bounds: self.nodes[left].bounds.union(self.nodes[right].bounds),
+            children: Some((left, right)),
+            value: 0,
+            max_value: self.nodes[left].max_value.max(self.nodes[right].max_value),
+        }
+    }
+    fn push(&mut self, node: Node) -> usize {
         let index = self.nodes.len();
         self.nodes.push(node);
         index
     }
+    fn build(&mut self, rects: &[(usize, Bounds)]) -> usize {
+        let node = if rects.len() == 1 {
+            Self::leaf(rects[0])
+        } else {
+            let mid = rects.len() / 2;
+            let left = self.build(&rects[..mid]);
+            let right = self.build(&rects[mid..]);
+            self.parent(left, right)
+        };
+        self.push(node)
+    }
     fn build_adaptive(&mut self, rects: &mut [(usize, Bounds)]) -> usize {
         let node = if rects.len() == 1 {
-            Node {
-                bounds: rects[0].1,
-                children: None,
-                value: rects[0].0,
-                max_value: rects[0].0,
-            }
+            Self::leaf(rects[0])
         } else {
             let mid = rects.len() / 2;
             let (min_inline, max_inline, min_block, max_block) = rects.iter().fold(
@@ -178,16 +175,9 @@ impl Tree {
             };
             let left = self.build_adaptive(&mut rects[..mid]);
             let right = self.build_adaptive(&mut rects[mid..]);
-            Node {
-                bounds: self.nodes[left].bounds.union(self.nodes[right].bounds),
-                children: Some((left, right)),
-                value: 0,
-                max_value: self.nodes[left].max_value.max(self.nodes[right].max_value),
-            }
+            self.parent(left, right)
         };
-        let index = self.nodes.len();
-        self.nodes.push(node);
-        index
+        self.push(node)
     }
     fn visit(&self) {
         #[cfg(test)]

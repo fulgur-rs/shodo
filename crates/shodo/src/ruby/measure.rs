@@ -609,6 +609,7 @@ pub(super) fn measure_one(
         .empty
         || heights.iter().any(|h| *h != LayoutUnit::ZERO)
         || completed.any_content(&units);
+    let sides = super::geometry::level_sides(data, ruby);
     let tracks = super::geometry::tracks(
         data,
         ruby,
@@ -619,12 +620,12 @@ pub(super) fn measure_one(
         &geometry.contents,
         &right_columns,
         &heights,
+        &sides,
         has_content,
         geometry.area,
         geometry.marks,
         sat,
     );
-    let sides = super::geometry::level_sides(data, ruby);
     let mut level_overhang = vec![(LayoutUnit::ZERO, LayoutUnit::ZERO); ruby.levels.len()];
     for l in &mut lanes {
         let source = &ruby.lanes[l.lane];

@@ -407,6 +407,7 @@ pub(crate) fn tracks(
     contents: &[Bounds],
     right_columns: &std::collections::HashMap<(usize, usize), usize>,
     heights: &[LayoutUnit],
+    before: &[bool],
     has_content: bool,
     original_base: Bounds,
     emphasis: [Option<Bounds>; 2],
@@ -433,7 +434,6 @@ pub(crate) fn tracks(
             annotation_edges: [None, None],
         };
     }
-    let before = level_sides(data, ruby);
     let mut levels = vec![LayoutUnit::ZERO; ruby.levels.len()];
     for (i, (lane, height)) in lanes.iter().zip(heights).enumerate() {
         let source = &ruby.lanes[lane.lane];
@@ -600,6 +600,11 @@ pub(crate) fn layout(
         let contents: Vec<_> = (0..fragment.bases.len())
             .map(|i| frame.column_content(fragment, i, sat))
             .collect();
+        let sides = if fragment.has_content {
+            level_sides(data, ruby)
+        } else {
+            Vec::new()
+        };
         let result = tracks(
             data,
             ruby,
@@ -610,6 +615,7 @@ pub(crate) fn layout(
             &contents,
             &fragment.right_columns,
             heights,
+            &sides,
             fragment.has_content,
             original_base,
             emphasis,
