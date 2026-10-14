@@ -340,12 +340,7 @@ fn shared_pen(
         let actual = &overlay.cluster[window.glyphs.start as usize..window.glyphs.end as usize];
         let a = actual.partition_point(|c| *c < from) + window.glyphs.start as usize;
         let b = actual.partition_point(|c| *c < to) + window.glyphs.start as usize;
-        let new = (a..b).fold(LayoutUnit::ZERO, |p, g| {
-            p.add(overlay.advance[g], sat).add(
-                overlay.spacing.as_ref().map_or(LayoutUnit::ZERO, |s| s[g]),
-                sat,
-            )
-        });
+        let new = overlay_width(overlay, a..b, sat);
         let old = line.data.glyphs.advance[begin as usize..end as usize]
             .iter()
             .fold(LayoutUnit::ZERO, |p, w| p.add(*w, sat));
@@ -354,7 +349,52 @@ fn shared_pen(
     p
 }
 
-pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturation) {
+/// Overlay advance plus allocated spacing of the overlay glyphs `glyphs`.
+fn overlay_width(
+    overlay: &GlyphStore,
+    glyphs: std::ops::Range<usize>,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    glyphs.fold(LayoutUnit::ZERO, |p, g| {
+        p.add(overlay.advance[g], sat).add(
+            overlay.spacing.as_ref().map_or(LayoutUnit::ZERO, |s| s[g]),
+            sat,
+        )
+    })
+}
+
+/// Append the overlay glyphs of each owned part whose clusters start in
+/// `text`, in part order. Parts without such glyphs are skipped.
+fn select_owned<'a>(
+    overlay: &GlyphStore,
+    parts: &'a [OwnedPart],
+    text: std::ops::Range<u32>,
+    selected: &mut Vec<(&'a OwnedPart, std::ops::Range<u32>)>,
+) {
+    for owner in parts {
+        let clusters = &overlay.cluster[owner.glyphs.start as usize..owner.glyphs.end as usize];
+        let a = owner.glyphs.start + clusters.partition_point(|c| *c < text.start) as u32;
+        let b = owner.glyphs.start + clusters.partition_point(|c| *c < text.end) as u32;
+        if a < b {
+            selected.push((owner, a..b));
+        }
+    }
+}
+
+/// Overlay cluster indices `(first, end)` that cover the glyphs `actual` of
+/// `owner`.
+fn cluster_span(
+    clusters: &[crate::output::OverlayCluster],
+    owner: &OwnedPart,
+    actual: &std::ops::Range<u32>,
+) -> (u32, u32) {
+    let c = &clusters[owner.clusters.start as usize..owner.clusters.end as usize];
+    let ca = owner.clusters.start + c.partition_point(|c| c.glyphs.end <= actual.start) as u32;
+    let cb = owner.clusters.start + c.partition_point(|c| c.glyphs.start < actual.end) as u32;
+    (ca, cb)
+}
+
+pub(super) fn apply(line: &mut Line, sat: &mut Saturation) {
     let windows = std::mem::take(&mut line.pending_overlays);
     if windows.is_empty() {
         return;
@@ -449,16 +489,7 @@ pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturati
                 if window.text.end <= text.start || text.end <= window.text.start {
                     continue;
                 }
-                for owner in &window.parts {
-                    let clusters =
-                        &overlay.cluster[owner.glyphs.start as usize..owner.glyphs.end as usize];
-                    let a =
-                        owner.glyphs.start + clusters.partition_point(|c| *c < text.start) as u32;
-                    let b = owner.glyphs.start + clusters.partition_point(|c| *c < text.end) as u32;
-                    if a < b {
-                        selected.push((owner, a..b));
-                    }
-                }
+                select_owned(&overlay, &window.parts, text.clone(), &mut selected);
             }
             if selected.is_empty() {
                 records.push(record.clone());
@@ -466,15 +497,8 @@ pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturati
             }
             let mut consumed = LayoutUnit::ZERO;
             for (position, (owner, actual)) in selected.iter().enumerate() {
-                let natural = actual.clone().fold(LayoutUnit::ZERO, |width, g| {
-                    width.add(overlay.advance[g as usize], sat).add(
-                        overlay
-                            .spacing
-                            .as_ref()
-                            .map_or(LayoutUnit::ZERO, |spacing| spacing[g as usize]),
-                        sat,
-                    )
-                });
+                let natural =
+                    overlay_width(&overlay, actual.start as usize..actual.end as usize, sat);
                 let advance = if position + 1 == selected.len() {
                     record.inline_size.sub(consumed, sat)
                 } else {
@@ -488,12 +512,7 @@ pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturati
                         consumed
                     };
                 part.inline_size = advance;
-                let c =
-                    &overlay_clusters[owner.clusters.start as usize..owner.clusters.end as usize];
-                let ca = owner.clusters.start
-                    + c.partition_point(|c| c.glyphs.end <= actual.start) as u32;
-                let cb = owner.clusters.start
-                    + c.partition_point(|c| c.glyphs.start < actual.end) as u32;
+                let (ca, cb) = cluster_span(&overlay_clusters, owner, actual);
                 if let RecordKind::Glyphs { source, item, .. } = &mut part.kind {
                     *item = overlay_runs[owner.run as usize].item;
                     *source = GlyphSource::Overlay {
@@ -534,24 +553,11 @@ pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturati
                 .find(|w| w.shared.start <= begin && end <= w.shared.end)
             {
                 let mut selected = Vec::new();
-                for owner in &window.parts {
-                    let clusters =
-                        &overlay.cluster[owner.glyphs.start as usize..owner.glyphs.end as usize];
-                    let a = owner.glyphs.start + clusters.partition_point(|c| *c < from) as u32;
-                    let b = owner.glyphs.start + clusters.partition_point(|c| *c < to) as u32;
-                    if a < b {
-                        selected.push((owner, a..b));
-                    }
-                }
+                select_owned(&overlay, &window.parts, from..to, &mut selected);
                 let mut consumed = LayoutUnit::ZERO;
                 for (position, (owner, actual)) in selected.iter().enumerate() {
-                    let natural = actual.clone().fold(LayoutUnit::ZERO, |p, g| {
-                        let g = g as usize;
-                        p.add(overlay.advance[g], sat).add(
-                            overlay.spacing.as_ref().map_or(LayoutUnit::ZERO, |s| s[g]),
-                            sat,
-                        )
-                    });
+                    let natural =
+                        overlay_width(&overlay, actual.start as usize..actual.end as usize, sat);
                     let advance = if position + 1 == selected.len() {
                         width.sub(consumed, sat)
                     } else {
@@ -565,12 +571,7 @@ pub(super) fn apply(line: &mut Line, _cx: &mut LayoutContext, sat: &mut Saturati
                             left + consumed
                         };
                     part.inline_size = advance;
-                    let c = &overlay_clusters
-                        [owner.clusters.start as usize..owner.clusters.end as usize];
-                    let ca = owner.clusters.start
-                        + c.partition_point(|c| c.glyphs.end <= actual.start) as u32;
-                    let cb = owner.clusters.start
-                        + c.partition_point(|c| c.glyphs.start < actual.end) as u32;
+                    let (ca, cb) = cluster_span(&overlay_clusters, owner, actual);
                     if let RecordKind::Glyphs {
                         glyphs,
                         text,

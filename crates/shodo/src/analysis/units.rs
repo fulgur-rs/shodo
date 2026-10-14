@@ -115,7 +115,6 @@ pub(crate) struct InlineBoxInfo {
 pub(crate) struct UnitList {
     pub(crate) units: Vec<Unit>,
     pub(crate) boxes: Vec<InlineBoxInfo>,
-    pub(crate) float_count: u32,
 }
 
 /// Whether a unit's innermost enclosing box (`b`) is `target` or nested
@@ -175,6 +174,7 @@ pub(crate) fn build_units(
                 while run_index < runs.len() && runs[run_index].item == index {
                     let run = &runs[run_index];
                     if run.glyphs.is_empty() {
+                        let opportunity = breaks.at(run.text.end);
                         units.push(Unit {
                             combine: None,
                             shared_cluster: None,
@@ -188,8 +188,8 @@ pub(crate) fn build_units(
                             },
                             item: index,
                             text: run.text.clone(),
-                            break_after: breaks.at(run.text.end).class,
-                            emergency_min_content: breaks.at(run.text.end).min_content,
+                            break_after: opportunity.class,
+                            emergency_min_content: opportunity.min_content,
                             first_line_cursor: false,
                             level: base_level,
                             parent_box,
@@ -214,8 +214,11 @@ pub(crate) fn build_units(
                             run.text.end
                         };
                         let c = text[cluster as usize..].chars().next().unwrap_or(' ');
+                        // Invariant for every glyph of the cluster group.
+                        let inside_grapheme = breaks.graphemes.binary_search(&cluster).is_err();
+                        let opportunity = breaks.at(end);
                         for g in begin..group_end {
-                            if (breaks.graphemes.binary_search(&cluster).is_err()
+                            if (inside_grapheme
                                 || units.last().is_some_and(|u| u.text.start == cluster))
                                 && let Some(last) = units.last_mut()
                                 && let UnitKind::Cluster {
@@ -227,8 +230,8 @@ pub(crate) fn build_units(
                             {
                                 range.end = g + 1;
                                 last.text.end = end;
-                                last.break_after = breaks.at(end).class;
-                                last.emergency_min_content = breaks.at(end).min_content;
+                                last.break_after = opportunity.class;
+                                last.emergency_min_content = opportunity.min_content;
                                 continue;
                             }
                             let space = c == ' ';
@@ -245,8 +248,8 @@ pub(crate) fn build_units(
                                 },
                                 item: index,
                                 text: cluster..end,
-                                break_after: breaks.at(end).class,
-                                emergency_min_content: breaks.at(end).min_content,
+                                break_after: opportunity.class,
+                                emergency_min_content: opportunity.min_content,
                                 first_line_cursor: false,
                                 level: base_level,
                                 parent_box,
@@ -283,6 +286,7 @@ pub(crate) fn build_units(
                 }
             }
             ItemKind::Atomic { .. } => {
+                let opportunity = breaks.at(item.text.end);
                 units.push(Unit {
                     combine: None,
                     shared_cluster: None,
@@ -292,8 +296,8 @@ pub(crate) fn build_units(
                     kind: UnitKind::Atomic { node },
                     item: index,
                     text: item.text.clone(),
-                    break_after: breaks.at(item.text.end).class,
-                    emergency_min_content: breaks.at(item.text.end).min_content,
+                    break_after: opportunity.class,
+                    emergency_min_content: opportunity.min_content,
                     first_line_cursor: false,
                     level: base_level,
                     parent_box,
@@ -418,11 +422,7 @@ pub(crate) fn build_units(
     for (unit, level) in units.iter_mut().zip(resolved) {
         unit.level = level;
     }
-    UnitList {
-        units,
-        boxes,
-        float_count,
-    }
+    UnitList { units, boxes }
 }
 
 #[cfg(test)]

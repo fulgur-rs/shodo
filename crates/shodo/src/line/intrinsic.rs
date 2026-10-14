@@ -502,23 +502,18 @@ impl Paragraph {
                     true,
                     &mut sat,
                 ));
-                let natural_max = total
-                    .add(
-                        crate::ruby::measure::candidate_adjustment(
-                            data,
-                            total_unit,
-                            i,
-                            &ruby_max_atomics,
-                            cx,
-                            &mut sat,
-                        ),
-                        &mut sat,
-                    )
-                    .add(kept_total_spacing, &mut sat)
-                    .sub(trailing, &mut sat)
-                    .add(left, &mut sat)
-                    .add(right, &mut sat)
-                    .add(suffix, &mut sat);
+                let natural_max = natural_max(
+                    data,
+                    total_unit..i,
+                    &ruby_max_atomics,
+                    total,
+                    kept_total_spacing,
+                    trailing,
+                    (left, right),
+                    cx,
+                    &mut sat,
+                )
+                .add(suffix, &mut sat);
                 max = max.max(super::punctuation::intrinsic(
                     data,
                     total_spacing.summary(Some(data)),
@@ -593,24 +588,17 @@ impl Paragraph {
                     || matches!(value.clear, FloatClear::InlineStart) && rtl
                     || matches!(value.clear, FloatClear::InlineEnd) && !rtl;
                 if clear_left || clear_right {
-                    max = max.max(
-                        total
-                            .add(
-                                crate::ruby::measure::candidate_adjustment(
-                                    data,
-                                    total_unit,
-                                    i,
-                                    &ruby_max_atomics,
-                                    cx,
-                                    &mut sat,
-                                ),
-                                &mut sat,
-                            )
-                            .add(kept_total_spacing, &mut sat)
-                            .sub(trailing, &mut sat)
-                            .add(left, &mut sat)
-                            .add(right, &mut sat),
-                    );
+                    max = max.max(natural_max(
+                        data,
+                        total_unit..i,
+                        &ruby_max_atomics,
+                        total,
+                        kept_total_spacing,
+                        trailing,
+                        (left, right),
+                        cx,
+                        &mut sat,
+                    ));
                     if clear_left {
                         left = LayoutUnit::ZERO;
                     }
@@ -810,22 +798,17 @@ impl Paragraph {
                 &mut sat,
             ))
             .max(LayoutUnit::ZERO);
-        let natural_max = total
-            .add(
-                crate::ruby::measure::candidate_adjustment(
-                    data,
-                    total_unit,
-                    data.units.len(),
-                    &ruby_max_atomics,
-                    cx,
-                    &mut sat,
-                ),
-                &mut sat,
-            )
-            .add(kept_total_spacing, &mut sat)
-            .sub(trailing, &mut sat)
-            .add(left, &mut sat)
-            .add(right, &mut sat);
+        let natural_max = natural_max(
+            data,
+            total_unit..data.units.len(),
+            &ruby_max_atomics,
+            total,
+            kept_total_spacing,
+            trailing,
+            (left, right),
+            cx,
+            &mut sat,
+        );
         max = max
             .max(super::punctuation::intrinsic(
                 data,
@@ -844,6 +827,39 @@ impl Paragraph {
             max_content: max.to_f32(),
         }
     }
+}
+
+/// Natural max-content width of the line run `units`: its advance `total`
+/// plus the ruby adjustment of the range, the kept spacing and the float
+/// widths beside it, without the trailing hanging advance.
+#[allow(clippy::too_many_arguments)]
+fn natural_max(
+    data: &ParagraphData,
+    units: std::ops::Range<usize>,
+    ruby_atomics: &AtomicSizes,
+    total: LayoutUnit,
+    kept_spacing: LayoutUnit,
+    trailing: LayoutUnit,
+    (left, right): (LayoutUnit, LayoutUnit),
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    total
+        .add(
+            crate::ruby::measure::candidate_adjustment(
+                data,
+                units.start,
+                units.end,
+                ruby_atomics,
+                cx,
+                sat,
+            ),
+            sat,
+        )
+        .add(kept_spacing, sat)
+        .sub(trailing, sat)
+        .add(left, sat)
+        .add(right, sat)
 }
 
 /// Min- and max-content atomic sizes for ruby measurement. Every `insert`

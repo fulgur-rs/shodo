@@ -546,7 +546,7 @@ impl Paragraph {
         line.positions = positions;
         line.glyph_spacing = glyph_spacing;
         line.displaced = displaced;
-        reshape::apply(&mut line, cx, &mut sat);
+        reshape::apply(&mut line, &mut sat);
         let (root_strut, trimmed_trailing) = line.measure_metrics(&mut sat);
         let annotation_edges = if let Some(measure) = ruby_measure {
             crate::ruby::place::format(data, &measure, &mut line, atomics, cx, &mut sat)

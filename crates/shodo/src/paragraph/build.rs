@@ -982,7 +982,6 @@ fn build_data(
     let UnitList {
         mut units,
         mut boxes,
-        float_count,
     } = build_units(
         &processed.text,
         &processed.items,
@@ -1096,7 +1095,6 @@ fn build_data(
         breaks,
         units,
         boxes,
-        float_count,
         base_level,
         bidi_paragraphs: bidi.paragraphs,
         mapping: processed.mapping,

@@ -23,10 +23,12 @@ pub(super) fn matches(
         && p.atomics_generation == atomics.generation()
         && p.atomics_revision == atomics.revision
         && c.inline_start_offset == 0.0
-        && para.data.float_count.checked_sub(1).is_none_or(|last| {
-            c.floats_placed_through
-                .is_some_and(|cursor| cursor.0 >= last)
-        })
+        && (para.data.floats.len() as u32)
+            .checked_sub(1)
+            .is_none_or(|last| {
+                c.floats_placed_through
+                    .is_some_and(|cursor| cursor.0 >= last)
+            })
 }
 
 pub(super) fn hyphen_end(data: &ParagraphData, end: usize) -> Option<usize> {
