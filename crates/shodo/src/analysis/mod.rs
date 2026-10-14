@@ -18,7 +18,7 @@ use crate::node::{InlineEdges, NodeId, OutOfFlowKind};
 
 #[cfg(test)]
 pub(crate) use transform::transform;
-pub(crate) use transform::transform_with_base_scopes;
+pub(crate) use transform::transform_input;
 #[cfg(test)]
 pub(crate) use whitespace::process;
 

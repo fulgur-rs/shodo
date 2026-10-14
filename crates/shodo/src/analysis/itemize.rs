@@ -2,7 +2,7 @@
 use super::bidi::BidiAnalysis;
 use super::{ItemKind, whitespace::Processed};
 use crate::font::{FontCluster, FontCollection, FontMatch, FontQuery};
-use crate::limits::{LimitExceeded, LimitKind, Limits};
+use crate::limits::{LimitExceeded, Limits};
 use crate::style::{FontFamily, FontStyle, InlineStyle, identity::shaping_compatible};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -151,8 +151,8 @@ pub(crate) fn itemize(
     fonts: &FontCollection,
     mode: crate::geometry::WritingMode,
     combined: &[super::combine::CombineSpan],
-    limits: &Limits,
-    mut base_scopes: Option<&mut crate::ruby::base_budget::BaseScopes>,
+    _limits: &Limits,
+    ledger: &mut crate::limits::ledger::LimitsLedger,
 ) -> Result<Vec<ShapeItem>, LimitExceeded> {
     let revert_width: Vec<_> = combined
         .iter()
@@ -343,14 +343,7 @@ pub(crate) fn itemize(
                         .extend_from_slice(&scalars[part_start..part_end]);
                     previous.end = end;
                 } else {
-                    Limits::check(
-                        limits.max_items,
-                        LimitKind::Items,
-                        (result.len() as u64).saturating_add(1),
-                    )?;
-                    if let Some(bases) = base_scopes.as_deref_mut() {
-                        bases.shape_item(scalars[part_start].item as usize)?;
-                    }
+                    ledger.shape_item(scalars[part_start].item as usize)?;
                     if result.len() > segment_start {
                         // The preceding run is now complete. Intermediate
                         // grapheme suffixes are never used by the shaper.

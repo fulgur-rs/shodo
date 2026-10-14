@@ -7,56 +7,28 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 use std::sync::OnceLock;
 
-use crate::limits::{LimitExceeded, LimitKind, Limits};
+use crate::limits::LimitExceeded;
+#[cfg(test)]
+use crate::limits::LimitKind;
+#[cfg(test)]
+use crate::limits::Limits;
 use crate::node::NodeId;
 
 /// Logical producer payload plus reservations for private query indexes.
 /// Records retired during processing remain charged. Capacity/allocator
 /// overhead is excluded, as with the resolved-style payload budget.
-#[derive(Clone)]
-pub(crate) struct MappingBudget {
-    limit: Option<u64>,
+#[derive(Clone, Default)]
+pub(crate) struct MappingCost {
     pub(crate) used: u64,
 }
 
-impl MappingBudget {
-    pub(crate) fn new(limits: &Limits) -> Self {
-        Self {
-            limit: limits.max_mapping_bytes,
-            used: 0,
-        }
-    }
-
-    pub(crate) fn check(&self, amount: u64) -> Result<(), LimitExceeded> {
-        let actual = self.used.saturating_add(amount);
-        if let Some(limit) = self.limit
-            && actual > limit
-        {
-            return Err(LimitExceeded {
-                kind: LimitKind::MappingBytes,
-                limit,
-                actual,
-            });
-        }
-        Ok(())
-    }
-
-    pub(crate) fn set_limits(&mut self, limits: &Limits) -> Result<(), LimitExceeded> {
-        self.limit = limits.max_mapping_bytes;
-        self.check(0)
-    }
-
-    pub(crate) fn charge(&mut self, amount: u64) -> Result<(), LimitExceeded> {
-        self.charge_with(amount, |_| Ok(()))
-    }
-
+impl MappingCost {
     pub(crate) fn charge_with(
         &mut self,
         amount: u64,
-        mut check_owner: impl FnMut(u64) -> Result<(), LimitExceeded>,
+        mut charge_owner: impl FnMut(u64) -> Result<(), LimitExceeded>,
     ) -> Result<(), LimitExceeded> {
-        self.check(amount)?;
-        check_owner(amount)?;
+        charge_owner(amount)?;
         self.used = self.used.saturating_add(amount);
         Ok(())
     }
@@ -690,14 +662,15 @@ pub(crate) mod tests {
 
     #[test]
     fn unit_admission_reserves_indexes_and_rejects_before_mutating_arrays() {
-        let mut budget = MappingBudget::new(&Limits {
+        let mut ledger = crate::limits::ledger::LimitsLedger::new(&Limits {
             max_mapping_bytes: Some(UNIT_BYTES),
             ..Default::default()
         });
+        let mut budget = MappingCost::default();
         let mut mapping = OffsetMapping::default();
         mapping
             .try_push_unit(unit(MappingKind::Expanded, 0..2, 0..2), |bytes| {
-                budget.charge(bytes)
+                budget.charge_with(bytes, |bytes| ledger.charge(LimitKind::MappingBytes, bytes))
             })
             .unwrap();
         assert_eq!(budget.used, UNIT_BYTES);
@@ -706,7 +679,7 @@ pub(crate) mod tests {
         let index = mapping.index.get().unwrap() as *const MappingIndex;
         let error = mapping
             .try_push_unit(unit(MappingKind::Expanded, 2..4, 2..4), |bytes| {
-                budget.charge(bytes)
+                budget.charge_with(bytes, |bytes| ledger.charge(LimitKind::MappingBytes, bytes))
             })
             .unwrap_err();
         assert_eq!(error.kind, LimitKind::MappingBytes);
@@ -746,21 +719,24 @@ pub(crate) mod tests {
 
     #[test]
     fn coalesced_units_and_generated_ranges_do_not_pay_for_nonexistent_records() {
-        let mut budget = MappingBudget::new(&Limits {
+        let mut ledger = crate::limits::ledger::LimitsLedger::new(&Limits {
             max_mapping_bytes: Some(UNIT_BYTES + GENERATED_BYTES),
             ..Default::default()
         });
+        let mut budget = MappingCost::default();
         let mut mapping = OffsetMapping::default();
         for i in 0..32 {
             mapping
                 .try_push_unit(unit(MappingKind::Identity, i..i + 1, i..i + 1), |bytes| {
-                    budget.charge(bytes)
+                    budget.charge_with(bytes, |bytes| ledger.charge(LimitKind::MappingBytes, bytes))
                 })
                 .unwrap();
         }
         for i in 32..64 {
             mapping
-                .try_push_generated(i..i + 1, NodeId(2), |bytes| budget.charge(bytes))
+                .try_push_generated(i..i + 1, NodeId(2), |bytes| {
+                    budget.charge_with(bytes, |bytes| ledger.charge(LimitKind::MappingBytes, bytes))
+                })
                 .unwrap();
         }
         assert_eq!(budget.used, UNIT_BYTES + GENERATED_BYTES);
@@ -768,7 +744,9 @@ pub(crate) mod tests {
         assert_eq!(mapping.generated.len(), 1);
         let capacity = mapping.generated.capacity();
         let error = mapping
-            .try_push_generated(64..65, NodeId(3), |bytes| budget.charge(bytes))
+            .try_push_generated(64..65, NodeId(3), |bytes| {
+                budget.charge_with(bytes, |bytes| ledger.charge(LimitKind::MappingBytes, bytes))
+            })
             .unwrap_err();
         assert_eq!(error.kind, LimitKind::MappingBytes);
         assert_eq!(mapping.generated.len(), 1);

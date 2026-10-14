@@ -2,8 +2,10 @@
 
 use super::*;
 
-mod analysis_budget;
+mod analysis_cost;
 mod paint_reuse;
+
+use crate::limits::ledger::{FrameId, LimitsLedger, ScopeId};
 
 #[cfg(test)]
 std::thread_local! {
@@ -26,8 +28,8 @@ pub(crate) struct BuildAnalysis {
     alternate_reuses_analysis: bool,
     source_cuts: Option<Vec<std::ops::RangeInclusive<u32>>>,
     rubies: Vec<crate::ruby::builder::RubyInput>,
-    bases: crate::ruby::base_budget::BaseScopes,
-    alternate_bases: Option<crate::ruby::base_budget::BaseScopes>,
+    normal_frame: FrameId,
+    alternate_frame: Option<FrameId>,
     alternate_warnings: Option<WarningSink>,
     warnings: WarningSink,
 }
@@ -35,7 +37,6 @@ pub(crate) struct BuildAnalysis {
 struct PreparedBuild {
     style: ParagraphStyle,
     limits: Limits,
-    glyph_budget: Option<u64>,
     processed: crate::analysis::whitespace::Processed,
     styles: Vec<InlineStyle>,
     id: u64,
@@ -43,7 +44,7 @@ struct PreparedBuild {
     breaks: crate::analysis::breaks::BreakAnalysis,
     bidi: crate::analysis::bidi::BidiAnalysis,
     used_direction: Direction,
-    analysis_budget: analysis_budget::Budget,
+    analysis_cost: analysis_cost::Cost,
 }
 
 impl ParagraphAnalysis {
@@ -51,15 +52,9 @@ impl ParagraphAnalysis {
         if let Some(error) = b.error {
             return Err(error);
         }
-        let mut budget = crate::ruby::prepare::RubyBudget::new(!b.rubies.is_empty());
-        budget.enter(&b.limits);
-        match Paragraph::analyze_builder_with_ruby_budget(b, &mut budget) {
-            Ok(state) => Ok(Self { state, budget }),
-            Err(error) => {
-                budget.leave();
-                Err(error)
-            }
-        }
+        let mut ledger = LimitsLedger::new(&b.limits);
+        let state = Paragraph::analyze_builder_with_ledger(b, &mut ledger)?;
+        Ok(Self { state, ledger })
     }
 
     /// Shape this analysis using the supplied scratch context and font layers.
@@ -70,36 +65,37 @@ impl ParagraphAnalysis {
     ) -> Result<Paragraph, LimitExceeded> {
         // A build can replace shaping/edge caches used by a retained trial.
         cx.completed = None;
-        let Self { state, mut budget } = self;
-        let result = Paragraph::shape_analysis(state, cx, fonts, &mut budget);
-        budget.leave();
-        result
+        let Self { state, mut ledger } = self;
+        Paragraph::shape_analysis(state, cx, fonts, &mut ledger)
     }
 }
 
 impl Paragraph {
-    pub(crate) fn from_builder_with_ruby_budget(
+    pub(crate) fn from_builder_with_ledger(
         b: ParagraphBuilder,
         cx: &mut crate::LayoutContext,
         fonts: &FontCollection,
-        budget: &mut crate::ruby::prepare::RubyBudget,
+        ledger: &mut LimitsLedger,
+        parent: ScopeId,
     ) -> Result<Paragraph, LimitExceeded> {
         if let Some(error) = b.error {
             return Err(error);
         }
-        budget.enter(&b.limits);
-        let result = Self::analyze_builder_with_ruby_budget(b, budget)
-            .and_then(|state| Self::shape_analysis(state, cx, fonts, budget));
-        budget.leave();
+        let previous = ledger.frame();
+        ledger.paragraph(&b.limits, &[], parent);
+        let result = Self::analyze_builder_with_ledger(b, ledger)
+            .and_then(|state| Self::shape_analysis(state, cx, fonts, ledger));
+        ledger.select_frame(previous);
         result
     }
 
-    fn analyze_builder_with_ruby_budget(
+    fn analyze_builder_with_ledger(
         b: ParagraphBuilder,
-        budget: &mut crate::ruby::prepare::RubyBudget,
+        ledger: &mut LimitsLedger,
     ) -> Result<BuildAnalysis, LimitExceeded> {
         let ruby_first_line = b.has_ruby_first_line();
-        let mut bases = crate::ruby::base_budget::BaseScopes::new(&b.rubies);
+        ledger.register_bases(&b.rubies);
+        let normal_frame = ledger.frame();
         let ParagraphBuilder {
             mut style,
             limits,
@@ -127,20 +123,11 @@ impl Paragraph {
         let id = NEXT_PARAGRAPH_ID.fetch_add(1, Ordering::Relaxed);
         let has_first_line =
             style.first_line.is_some() || !first_line_styles.is_empty() || ruby_first_line;
-        bases.check_style_sets(has_first_line)?;
-        if budget.enabled() {
-            budget.check(
-                LimitKind::Styles,
-                styles.len() as u64 * if has_first_line { 2 } else { 1 },
-            )?;
-        }
-        if has_first_line {
-            Limits::check(
-                limits.max_styles,
-                LimitKind::Styles,
-                styles.len() as u64 * 2,
-            )?;
-        }
+        ledger.check_style_sets(has_first_line)?;
+        ledger.check(
+            LimitKind::Styles,
+            styles.len() as u64 * if has_first_line { 2 } else { 1 },
+        )?;
         let normal_bytes = crate::style::memory::paragraph(&style)
             .saturating_add(crate::style::memory::styles(&styles));
         let alternate_sizes = has_first_line.then(|| {
@@ -164,9 +151,8 @@ impl Paragraph {
                 .saturating_add(sizes[0]) // alternate ParagraphStyle root
         });
         let style_bytes = normal_bytes.saturating_add(alternate_bytes);
-        Limits::check(limits.max_style_bytes, LimitKind::StyleBytes, style_bytes)?;
-        budget.check(LimitKind::StyleBytes, style_bytes)?;
-        bases.check_style_bytes(&styles, alternate_sizes.as_deref())?;
+        ledger.check(LimitKind::StyleBytes, style_bytes)?;
+        ledger.check_style_bytes(&styles, alternate_sizes.as_deref())?;
         let alternate_styles = has_first_line.then(|| {
             let first = style.first_line.as_ref().unwrap_or(&style.root);
             styles
@@ -180,103 +166,74 @@ impl Paragraph {
                 )
                 .collect::<Vec<_>>()
         });
-        let run_limits = budget.remaining(&limits);
-
-        // The shared transient input is independently bounded; transformed
-        // retained output uses the remaining aggregate cap, as for first-line.
-        let mut input_limits = run_limits.clone();
-        input_limits.max_text_bytes = limits.max_text_bytes;
-        bases.start_pass(false)?;
-        let mut analysis_budget = analysis_budget::Budget::new(&run_limits);
-        analysis_budget
-            .raw(&text, &items, &mut bases)
-            .map_err(|error| bases.translate(error, budget))?;
-        // First-line styles cannot change white-space-collapse, so both raw
-        // passes use the same flags. Keep only this pure input shared; each
-        // pass still owns its Processor, output, and base-budget state.
+        ledger.charge(LimitKind::Styles, styles.len() as u64)?;
+        ledger.charge(LimitKind::StyleBytes, normal_bytes)?;
+        ledger.start_pass(false)?;
+        let normal_warnings = warnings.checkpoint();
+        let normal_checkpoint = ledger.capture();
+        let mut analysis_cost = analysis_cost::Cost::new();
+        analysis_cost.raw(&text, &items, ledger)?;
         let input = crate::analysis::whitespace::ProcessInput {
             raw_text: &text,
             raw: &items,
             styles: &styles,
             with_mapping: offset_mapping,
-            limits: &input_limits,
+            limits: &limits,
             annotation: ruby_annotation,
         };
         let shared_flags = alternate_styles
             .as_ref()
             .map(|_| crate::analysis::whitespace::prepare_whitespace_flags(&input));
         let processed = match shared_flags.as_deref() {
-            Some(flags) => crate::analysis::whitespace::process_with_base_scopes_and_flags(
-                input, flags, &mut bases,
-            ),
-            None => crate::analysis::whitespace::process_with_base_scopes(input, &mut bases),
-        }
-        .map_err(|error| bases.translate(error, budget))?;
+            Some(flags) => {
+                crate::analysis::whitespace::process_input_with_flags(input, flags, ledger)
+            }
+            None => crate::analysis::whitespace::process_input(input, ledger),
+        }?;
         let source_cuts = if alternate_styles.is_some() {
-            analysis_budget
-                .source_cuts(&processed, &mut bases)
-                .map_err(|error| bases.translate(error, budget))?;
+            ledger.record_replay(false);
+            let result = analysis_cost.source_cuts(&processed, ledger);
+            ledger.record_replay(true);
+            result?;
             Some(crate::analysis::breaks::source_cursor_ranges(&processed))
         } else {
             None
         };
-        let input_items = processed.items.len() as u64;
-        analysis_budget
-            .transform(&processed, &styles, style.writing_mode, &mut bases)
-            .map_err(|error| bases.translate(error, budget))?;
-        let mut processed = transform_with_base_scopes(
+        analysis_cost.transform(&processed, &styles, style.writing_mode, ledger)?;
+        let mut processed = transform_input(
             processed,
             &styles,
-            &run_limits,
+            &limits,
             &mut warnings,
             style.writing_mode,
-            if bases.enabled() {
-                Some(&mut bases)
-            } else {
-                None
-            },
-        )
-        .map_err(|error| bases.translate(error, budget))?;
+            ledger,
+        )?;
         if alternate_styles.is_none() {
             processed.source_spans = Vec::new();
         }
-        analysis_budget
-            .analysis(
-                &processed,
-                &styles,
-                &style,
-                alternate_styles.is_some(),
-                &mut bases,
-            )
-            .map_err(|error| bases.translate(error, budget))?;
+        analysis_cost.analysis(
+            &processed,
+            &styles,
+            &style,
+            alternate_styles.is_some(),
+            ledger,
+        )?;
         let normal = analyze_data(
             style.clone(),
             limits.clone(),
-            run_limits.max_shaped_glyphs,
             processed,
             styles,
             id,
             &mut warnings,
             true,
             line_break_override.as_deref(),
-            analysis_budget,
+            analysis_cost,
         );
-        budget.charge(LimitKind::AnalysisBytes, normal.analysis_budget.used)?;
-        budget.charge(
-            LimitKind::MappingBytes,
-            normal.processed.mapping_budget.used,
-        )?;
-        budget.paragraph_analysis(
-            normal.processed.text.len() as u64,
-            normal.processed.items.len() as u64,
-            normal.styles.len() as u64,
-            crate::style::memory::paragraph(&normal.style)
-                .saturating_add(crate::style::memory::styles(&normal.styles)),
-        )?;
+        let normal_reservations = ledger.captured(normal_checkpoint);
 
         let mut alternate_warnings = None;
         let mut alternate_reuses_analysis = false;
-        let (alternate, alternate_bases) = if let Some(mut alternate_styles) = alternate_styles {
+        let (alternate, alternate_frame) = if let Some(mut alternate_styles) = alternate_styles {
             let mut deferred_warnings = WarningSink::new(warnings.remaining_limit());
             for s in &mut alternate_styles {
                 s.font_size = sanitize::font_size(s.font_size, &mut deferred_warnings);
@@ -287,79 +244,25 @@ impl Paragraph {
             alternate_style.first_line = None;
             let alternate_style_bytes = crate::style::memory::paragraph(&alternate_style)
                 .saturating_add(crate::style::memory::styles(&alternate_styles));
-            Limits::check(
-                limits.max_style_bytes,
-                LimitKind::StyleBytes,
-                crate::style::memory::paragraph(&style)
-                    .saturating_add(crate::style::memory::styles(&normal.styles))
-                    .saturating_add(alternate_style_bytes),
-            )?;
-            budget.paragraph_analysis(
-                0,
-                0,
-                alternate_styles.len() as u64,
-                alternate_style_bytes,
-            )?;
-
-            let mut remaining = budget.remaining(&limits);
-            if !budget.enabled() {
-                remaining.max_text_bytes = limits
-                    .max_text_bytes
-                    .map(|max| max.saturating_sub(normal.processed.text.len() as u64));
-                remaining.max_items = limits
-                    .max_items
-                    .map(|max| max.saturating_sub(normal.processed.items.len() as u64));
-                remaining.max_mapping_bytes = limits
-                    .max_mapping_bytes
-                    .map(|max| max.saturating_sub(normal.processed.mapping_budget.used));
-                remaining.max_analysis_bytes = limits
-                    .max_analysis_bytes
-                    .map(|max| max.saturating_sub(normal.analysis_budget.used));
-            }
-            // Bound source processing independently, then enforce the aggregate
-            // retained-output budget on every alternate append.
-            let mut input_limits = remaining.clone();
-            input_limits.max_text_bytes = limits.max_text_bytes;
-            let mut alternate_bases = bases.clone();
-            alternate_bases.start_pass(true)?;
+            ledger.charge(LimitKind::Styles, alternate_styles.len() as u64)?;
+            ledger.charge(LimitKind::StyleBytes, alternate_style_bytes)?;
+            let alternate_frame = ledger.alternate_frame();
+            ledger.start_pass(true)?;
             let flags = shared_flags
                 .as_deref()
                 .expect("alternate pass prepares shared whitespace flags");
-            // The original pass can exceed an intermediate whitespace item
-            // cap even if a shrinking transform retains fewer items. Bound
-            // both stages before skipping their incremental limit checks.
             alternate_reuses_analysis = paint_reuse::enabled()
-                && !budget.enabled()
-                && !alternate_bases.enabled()
                 && line_break_override.is_none()
-                && warnings.checkpoint() == Some(0)
-                && deferred_warnings.checkpoint() == Some(0)
+                && normal_warnings.is_some()
+                && warnings.checkpoint() == normal_warnings
                 && paint_reuse::styles_match(&normal.styles, &alternate_styles)
-                && remaining
-                    .max_text_bytes
-                    .is_none_or(|max| max >= normal.processed.text.len() as u64)
-                && remaining
-                    .max_items
-                    .is_none_or(|max| max >= input_items.max(normal.processed.items.len() as u64));
-            alternate_reuses_analysis &= remaining
-                .max_mapping_bytes
-                .is_none_or(|max| max >= normal.processed.mapping_budget.used);
-            alternate_reuses_analysis &= remaining
-                .max_analysis_bytes
-                .is_none_or(|max| max >= normal.analysis_budget.replay_bytes());
+                && ledger.can_commit(&normal_reservations);
             let alternate = if alternate_reuses_analysis {
-                // Reserve the same producer/index allowances as replaying the
-                // normal dataset, before its deep Processed clone.
-                Limits::check(
-                    remaining.max_mapping_bytes,
-                    LimitKind::MappingBytes,
-                    normal.processed.mapping_budget.used,
-                )?;
-                let analysis_budget = normal.analysis_budget.replay(&remaining)?;
+                ledger.commit(normal_reservations)?;
+                ledger.clone_item_owners(normal_frame);
                 PreparedBuild {
                     style: alternate_style,
                     limits: limits.clone(),
-                    glyph_budget: remaining.max_shaped_glyphs,
                     processed: normal.processed.clone(),
                     styles: alternate_styles,
                     id,
@@ -367,113 +270,58 @@ impl Paragraph {
                     breaks: normal.breaks.clone(),
                     bidi: normal.bidi.clone(),
                     used_direction: normal.used_direction,
-                    analysis_budget,
+                    analysis_cost: normal.analysis_cost.replayed(),
                 }
             } else {
-                let mut analysis_budget = analysis_budget::Budget::new(&remaining);
-                let result = analysis_budget
-                    .raw(&text, &items, &mut alternate_bases)
-                    .and_then(|()| {
-                        crate::analysis::whitespace::process_with_base_scopes_and_flags(
-                            crate::analysis::whitespace::ProcessInput {
-                                raw_text: &text,
-                                raw: &items,
-                                styles: &normal.styles,
-                                with_mapping: offset_mapping,
-                                limits: &input_limits,
-                                annotation: ruby_annotation,
-                            },
-                            flags,
-                            &mut alternate_bases,
-                        )
-                    })
-                    .and_then(|processed| {
-                        analysis_budget.transform(
-                            &processed,
-                            &alternate_styles,
-                            style.writing_mode,
-                            &mut alternate_bases,
-                        )?;
-                        transform_with_base_scopes(
-                            processed,
-                            &alternate_styles,
-                            &remaining,
-                            &mut deferred_warnings,
-                            style.writing_mode,
-                            if alternate_bases.enabled() {
-                                Some(&mut alternate_bases)
-                            } else {
-                                None
-                            },
-                        )
-                    })
-                    .and_then(|alternate| {
-                        analysis_budget.analysis(
-                            &alternate,
-                            &alternate_styles,
-                            &alternate_style,
-                            true,
-                            &mut alternate_bases,
-                        )?;
-                        Ok(analyze_data(
-                            alternate_style,
-                            limits.clone(),
-                            remaining.max_shaped_glyphs,
-                            alternate,
-                            alternate_styles,
-                            id,
-                            &mut deferred_warnings,
-                            false,
-                            line_break_override.as_deref(),
-                            analysis_budget,
-                        ))
-                    });
-                result.map_err(|mut error| {
-                    if budget.enabled() {
-                        return alternate_bases.translate(error, budget);
-                    }
-                    if error.kind == LimitKind::TextBytes
-                        && let Some(limit) = limits.max_text_bytes
-                    {
-                        error.actual += normal.processed.text.len() as u64;
-                        error.limit = limit;
-                    }
-                    if error.kind == LimitKind::Items
-                        && let Some(limit) = limits.max_items
-                    {
-                        error.actual += normal.processed.items.len() as u64;
-                        error.limit = limit;
-                    }
-                    if error.kind == LimitKind::MappingBytes
-                        && let Some(limit) = limits.max_mapping_bytes
-                    {
-                        error.actual = error
-                            .actual
-                            .saturating_add(normal.processed.mapping_budget.used);
-                        error.limit = limit;
-                    }
-                    if error.kind == LimitKind::AnalysisBytes
-                        && let Some(limit) = limits.max_analysis_bytes
-                    {
-                        error.actual = error.actual.saturating_add(normal.analysis_budget.used);
-                        error.limit = limit;
-                    }
-                    error
-                })?
+                let mut analysis_cost = analysis_cost::Cost::new();
+                analysis_cost.raw(&text, &items, ledger)?;
+                let processed = crate::analysis::whitespace::process_input_with_flags(
+                    crate::analysis::whitespace::ProcessInput {
+                        raw_text: &text,
+                        raw: &items,
+                        styles: &normal.styles,
+                        with_mapping: offset_mapping,
+                        limits: &limits,
+                        annotation: ruby_annotation,
+                    },
+                    flags,
+                    ledger,
+                )?;
+                analysis_cost.transform(
+                    &processed,
+                    &alternate_styles,
+                    style.writing_mode,
+                    ledger,
+                )?;
+                let processed = transform_input(
+                    processed,
+                    &alternate_styles,
+                    &limits,
+                    &mut deferred_warnings,
+                    style.writing_mode,
+                    ledger,
+                )?;
+                analysis_cost.analysis(
+                    &processed,
+                    &alternate_styles,
+                    &alternate_style,
+                    true,
+                    ledger,
+                )?;
+                analyze_data(
+                    alternate_style,
+                    limits.clone(),
+                    processed,
+                    alternate_styles,
+                    id,
+                    &mut deferred_warnings,
+                    false,
+                    line_break_override.as_deref(),
+                    analysis_cost,
+                )
             };
-            budget.charge(LimitKind::AnalysisBytes, alternate.analysis_budget.used)?;
-            budget.charge(
-                LimitKind::MappingBytes,
-                alternate.processed.mapping_budget.used,
-            )?;
-            budget.paragraph_analysis(
-                alternate.processed.text.len() as u64,
-                alternate.processed.items.len() as u64,
-                0,
-                0,
-            )?;
             alternate_warnings = Some(deferred_warnings);
-            (Some(alternate), Some(alternate_bases))
+            (Some(alternate), Some(alternate_frame))
         } else {
             (None, None)
         };
@@ -483,8 +331,8 @@ impl Paragraph {
             alternate_reuses_analysis,
             source_cuts,
             rubies,
-            bases,
-            alternate_bases,
+            normal_frame,
+            alternate_frame,
             alternate_warnings,
             warnings,
         })
@@ -494,7 +342,7 @@ impl Paragraph {
         analysis: BuildAnalysis,
         cx: &mut crate::LayoutContext,
         fonts: &FontCollection,
-        budget: &mut crate::ruby::prepare::RubyBudget,
+        ledger: &mut LimitsLedger,
     ) -> Result<Paragraph, LimitExceeded> {
         let BuildAnalysis {
             normal,
@@ -502,111 +350,40 @@ impl Paragraph {
             alternate_reuses_analysis,
             source_cuts,
             rubies,
-            bases: mut normal_bases,
-            alternate_bases,
+            normal_frame,
+            alternate_frame,
             alternate_warnings,
             mut warnings,
         } = analysis;
-        // When RubyBudget is disabled, a first-line build still retains a
-        // second set of shaping items. Keep those runs under the same cap.
-        let mut local_shape_items = 0u64;
-        let normal_item_limits = shape_item_limits(&normal.limits, budget, local_shape_items);
+        ledger.select_frame(normal_frame);
         let mut sat = Saturation::default();
-        let mut data = build_data(
-            normal,
-            cx,
-            fonts,
-            &mut warnings,
-            &mut sat,
-            &mut normal_bases,
-            &normal_item_limits,
-            None,
-        )
-        .map_err(|error| {
-            if budget.enabled() {
-                if error.kind == LimitKind::Items {
-                    normal_bases.translate_shape_items(error, budget)
-                } else {
-                    normal_bases.translate(error, budget)
-                }
-            } else {
-                translate_local_shape_item_error(error, &normal_item_limits, local_shape_items)
-            }
-        })?;
-        account_shape_items(
-            data.shape_items.len() as u64,
-            budget,
-            &mut local_shape_items,
-            &normal_bases,
-        )?;
-        budget.paragraph_shaping(data.glyphs.len() as u64)?;
-        let limits = data.limits.clone();
-        let mut bases = if let Some(mut alternate) = alternate {
-            let mut alternate_bases = alternate_bases.expect("first-line analysis has base scopes");
-            alternate_bases.merge_shaping_from(&normal_bases)?;
-            let mut remaining = budget.remaining(&limits);
-            if !budget.enabled() {
-                remaining.max_shaped_glyphs = limits
-                    .max_shaped_glyphs
-                    .map(|max| max.saturating_sub(data.glyphs.len() as u64));
-            }
-            alternate.glyph_budget = remaining.max_shaped_glyphs;
+        let shape_warning_start = warnings.checkpoint();
+        let shape_checkpoint = ledger.capture();
+        let mut data = build_data(normal, cx, fonts, &mut warnings, &mut sat, ledger, None)?;
+        let shape_reservations = ledger.captured(shape_checkpoint);
+        let shape_warning_clean =
+            shape_warning_start.is_some() && warnings.checkpoint() == shape_warning_start;
+        if let Some(alternate) = alternate {
+            ledger.select_frame(alternate_frame.expect("first-line analysis has owner frame"));
             warnings.append(alternate_warnings.expect("first-line analysis has deferred warnings"));
-            // Task 1 proved identical sanitized non-paint style arrays and
-            // excludes scoped budgets. Copy only a clean, fully bounded
-            // shape; otherwise retain the original incremental error path.
             let reusable_shape = (alternate_reuses_analysis
-                && warnings.checkpoint() == Some(0)
+                && shape_warning_clean
                 && sat.is_clean()
-                && alternate
-                    .glyph_budget
-                    .is_none_or(|max| max >= data.glyphs.len() as u64)
-                // An unselected width trial can contain more glyphs than
-                // the retained selection. A tighter alternate cap can make
-                // that trial fail and change selection/error behavior.
-                && (alternate.glyph_budget.is_none()
-                    || !data.shape_items.iter().any(|item| item.width_feature.is_some())))
+                && ledger.trials_fit(normal_frame)
+                && ledger.can_commit(&shape_reservations))
             .then_some(&data);
-            let alternate_item_limits =
-                shape_item_limits(&alternate.limits, budget, local_shape_items);
+            if reusable_shape.is_some() {
+                ledger.commit(shape_reservations)?;
+            }
             let mut alternate = build_data(
                 alternate,
                 cx,
                 fonts,
                 &mut warnings,
                 &mut sat,
-                &mut alternate_bases,
-                &alternate_item_limits,
+                ledger,
                 reusable_shape,
-            )
-            .map_err(|mut error| {
-                if budget.enabled() {
-                    return if error.kind == LimitKind::Items {
-                        alternate_bases.translate_shape_items(error, budget)
-                    } else {
-                        alternate_bases.translate(error, budget)
-                    };
-                }
-                error = translate_local_shape_item_error(
-                    error,
-                    &alternate_item_limits,
-                    local_shape_items,
-                );
-                if error.kind == LimitKind::ShapedGlyphs
-                    && let Some(limit) = limits.max_shaped_glyphs
-                {
-                    error.actual += data.glyphs.len() as u64;
-                    error.limit = limit;
-                }
-                error
-            })?;
-            account_shape_items(
-                alternate.shape_items.len() as u64,
-                budget,
-                &mut local_shape_items,
-                &alternate_bases,
             )?;
-            budget.paragraph_shaping(alternate.glyphs.len() as u64)?;
             let cuts = first_line_cuts(&data, &alternate);
             finalize_data(&mut data, Some(&cuts), cx, &mut warnings, &mut sat);
             finalize_data(&mut alternate, None, cx, &mut warnings, &mut sat);
@@ -677,13 +454,12 @@ impl Paragraph {
                     .collect(),
                 normal_cursors,
             });
-            alternate_bases
         } else {
             data.source_spans = Vec::new();
             finalize_data(&mut data, None, cx, &mut warnings, &mut sat);
-            normal_bases
-        };
-        crate::ruby::prepare::prepare(&mut data, &rubies, cx, fonts, budget, &mut bases)?;
+        }
+        ledger.select_frame(normal_frame);
+        crate::ruby::prepare::prepare(&mut data, &rubies, cx, fonts, ledger)?;
         if let Some(first) = &mut data.first_line {
             let alternate = Arc::get_mut(&mut first.data)
                 .expect("new first-line data has one owner before publication");
@@ -691,9 +467,8 @@ impl Paragraph {
                 alternate,
                 &rubies,
                 &data.ruby,
-                budget,
+                ledger,
                 &first.normal_cursors,
-                &mut bases,
             )?;
         }
         let intrinsic_single_pass_safe = data.first_line.as_ref().is_some_and(|first| {
@@ -719,14 +494,13 @@ impl Paragraph {
 fn analyze_data(
     style: ParagraphStyle,
     limits: Limits,
-    glyph_budget: Option<u64>,
     processed: crate::analysis::whitespace::Processed,
     styles: Vec<InlineStyle>,
     id: u64,
     warnings: &mut WarningSink,
     report_combine_rejections: bool,
     line_break_override: Option<&crate::analysis::breaks::OverrideCallback>,
-    analysis_budget: analysis_budget::Budget,
+    analysis_cost: analysis_cost::Cost,
 ) -> PreparedBuild {
     #[cfg(test)]
     ANALYSIS_PASSES.with(|count| count.set(count.get() + 1));
@@ -781,7 +555,6 @@ fn analyze_data(
     PreparedBuild {
         style,
         limits,
-        glyph_budget,
         processed,
         styles,
         id,
@@ -789,53 +562,7 @@ fn analyze_data(
         breaks,
         bidi,
         used_direction,
-        analysis_budget,
-    }
-}
-
-fn shape_item_limits(
-    limits: &Limits,
-    budget: &crate::ruby::prepare::RubyBudget,
-    local_used: u64,
-) -> Limits {
-    let mut result = limits.clone();
-    result.max_items = if budget.enabled() {
-        budget.remaining_shape_items(limits)
-    } else {
-        limits
-            .max_items
-            .map(|limit| limit.saturating_sub(local_used))
-    };
-    result
-}
-
-fn translate_local_shape_item_error(
-    mut error: LimitExceeded,
-    item_limits: &Limits,
-    local_used: u64,
-) -> LimitExceeded {
-    if error.kind == LimitKind::Items
-        && let Some(remaining) = item_limits.max_items
-    {
-        error.limit = local_used.saturating_add(remaining);
-        error.actual = error.actual.saturating_add(local_used);
-    }
-    error
-}
-
-fn account_shape_items(
-    amount: u64,
-    budget: &mut crate::ruby::prepare::RubyBudget,
-    local_used: &mut u64,
-    bases: &crate::ruby::base_budget::BaseScopes,
-) -> Result<(), LimitExceeded> {
-    if budget.enabled() {
-        budget
-            .charge_shape_items(amount)
-            .map_err(|error| bases.translate_shape_items(error, budget))
-    } else {
-        *local_used = local_used.saturating_add(amount);
-        Ok(())
+        analysis_cost,
     }
 }
 
@@ -846,14 +573,12 @@ fn build_data(
     fonts: &FontCollection,
     warnings: &mut WarningSink,
     sat: &mut Saturation,
-    bases: &mut crate::ruby::base_budget::BaseScopes,
-    shape_item_limits: &Limits,
+    ledger: &mut LimitsLedger,
     reusable_shape: Option<&ParagraphData>,
 ) -> Result<ParagraphData, LimitExceeded> {
     let PreparedBuild {
         style,
         limits,
-        glyph_budget,
         processed,
         styles,
         id,
@@ -861,23 +586,10 @@ fn build_data(
         breaks,
         bidi,
         used_direction,
-        analysis_budget: _,
+        analysis_cost: _,
     } = prepared;
-    let mut shape_limits = limits.clone();
-    shape_limits.max_shaped_glyphs = glyph_budget;
+    ledger.begin_shaping();
     let (shape_items_input, glyphs, runs, shape_features) = if let Some(normal) = reusable_shape {
-        Limits::check(
-            shape_item_limits.max_items,
-            LimitKind::Items,
-            normal.shape_items.len() as u64,
-        )?;
-        for item in &normal.shape_items {
-            let scalar = item
-                .scalars
-                .first()
-                .expect("a shaping item always retains at least one scalar");
-            bases.shape_item(scalar.item as usize)?;
-        }
         (
             normal.shape_items.clone(),
             normal.glyphs.clone(),
@@ -893,73 +605,61 @@ fn build_data(
             fonts,
             style.writing_mode,
             &combine_spans,
-            shape_item_limits,
-            if bases.enabled() {
-                Some(&mut *bases)
-            } else {
-                None
-            },
+            &limits,
+            ledger,
         )?;
         #[cfg(test)]
-        let reference_shape = if bases.enabled()
-            && matches!(
-                crate::shape::combined_width_probe_mode_for_test(),
-                crate::shape::CombinedWidthProbeMode::CloneReference
-                    | crate::shape::CombinedWidthProbeMode::FeatureView
-            ) {
+        let reference_shape = if matches!(
+            crate::shape::combined_width_probe_mode_for_test(),
+            crate::shape::CombinedWidthProbeMode::CloneReference
+                | crate::shape::CombinedWidthProbeMode::FeatureView
+        ) {
             crate::shape::select_combined_widths(
                 cx,
                 &mut shape_items_input,
                 &styles,
                 fonts,
                 style.writing_mode,
-                &shape_limits,
+                &limits,
             );
-            let shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
-            let (glyphs, runs) = shape_items_with_base_scopes(
+            let features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
+            let (glyphs, runs) = shape_items_env(
                 cx,
                 &shape_items_input,
                 &crate::shape::ShapeEnv {
                     styles: &styles,
                     fonts,
                     mode: style.writing_mode,
-                    limits: &shape_limits,
-                    feature_sets: &shape_features,
+                    limits: &limits,
+                    feature_sets: &features,
                 },
                 warnings,
                 sat,
-                Some(&mut *bases),
+                ledger,
             )?;
-            Some((glyphs, runs, shape_features))
+            Some((glyphs, runs, features))
         } else {
             None
         };
-        // Production builds have no reference path; the type comes from the
-        // reuse branch below.
         #[cfg(not(test))]
         let reference_shape = None;
         let (glyphs, runs, shape_features) = if let Some(reference) = reference_shape {
             reference
         } else {
-            let mut shape_features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
-            let scoped = if bases.enabled() {
-                Some(&mut *bases)
-            } else {
-                None
-            };
+            let mut features = crate::shape::FeatureSets::new(&shape_items_input, &styles);
             let (glyphs, runs) = crate::shape::shape_items_with_combined_width_reuse(
                 cx,
                 &mut shape_items_input,
                 &styles,
                 fonts,
                 style.writing_mode,
-                &shape_limits,
+                &limits,
                 warnings,
                 sat,
-                scoped,
-                &mut shape_features,
+                ledger,
+                &mut features,
             )?;
-            (glyphs, runs, shape_features)
+            (glyphs, runs, features)
         };
         (shape_items_input, glyphs, runs, shape_features)
     };

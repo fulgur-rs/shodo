@@ -1,5 +1,7 @@
 //! Resource limits (fail-closed) and warnings.
 
+pub(crate) mod ledger;
+
 use std::fmt;
 
 use crate::geometry::Saturation;

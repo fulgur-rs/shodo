@@ -59,7 +59,7 @@ fn prepared_snapshot(data: &PreparedBuild) -> String {
     format!(
         "{:?}",
         (
-            (&data.style, &data.limits, data.glyph_budget, &data.styles),
+            (&data.style, &data.limits, &data.styles),
             &data.processed.text,
             &data.processed.items,
             &data.processed.mapping,
@@ -121,7 +121,7 @@ fn paint_style() -> ParagraphStyle {
 }
 
 #[test]
-fn mapping_budget_matches_replay_at_clone_admission_boundaries() {
+fn mapping_cost_matches_replay_at_clone_admission_boundaries() {
     for transform in [
         crate::style::TextTransform::Uppercase,
         crate::style::TextTransform::FullWidth,
@@ -138,7 +138,7 @@ fn mapping_budget_matches_replay_at_clone_admission_boundaries() {
         };
         let analysis = input(&style, &unlimited).analyze().unwrap();
         assert!(analysis.state.alternate_reuses_analysis);
-        let one = analysis.state.normal.processed.mapping_budget.used;
+        let one = analysis.state.normal.processed.mapping_cost.used;
         let both = one * 2;
         for cap in [0, 1, one - 1, one, one + 1, both - 1, both, both + 1] {
             let limits = Limits {
@@ -301,7 +301,7 @@ fn reused_analysis_matches_reference_for_identical_transforms_and_style_maps() {
 }
 
 #[test]
-fn analysis_fallback_preserves_callbacks_warnings_and_limit_errors() {
+fn analysis_reuse_preserves_callbacks_warnings_and_limit_errors() {
     use std::sync::atomic::{AtomicUsize, Ordering};
     let style = paint_style();
     let run_callback = |reference| {
@@ -332,7 +332,10 @@ fn analysis_fallback_preserves_callbacks_warnings_and_limit_errors() {
         invalid.first_line.as_mut().unwrap().font_size = f32::NAN;
         ANALYSIS_PASSES.with(|count| count.set(0));
         let candidate = analysis_snapshot(input(&invalid, &limits).analyze()).unwrap();
-        assert_eq!(ANALYSIS_PASSES.with(std::cell::Cell::get), 2);
+        assert_eq!(
+            ANALYSIS_PASSES.with(std::cell::Cell::get),
+            if cap == 8 { 1 } else { 2 }
+        );
         let reference = {
             let _guard = ReferenceGuard::new(true);
             analysis_snapshot(input(&invalid, &limits).analyze()).unwrap()
@@ -1216,7 +1219,7 @@ fn shape_fallback_preserves_warnings_saturation_and_glyph_errors() {
 }
 
 #[test]
-fn inherited_float_bits_and_ruby_use_full_fallback() {
+fn inherited_float_bits_fall_back_and_ruby_reuses_accounted_first_line() {
     let fonts = fonts();
     let mut style = font_paint_style();
     style.root.font_variations = vec![crate::style::FontVariation {
@@ -1292,7 +1295,11 @@ fn inherited_float_bits_and_ruby_use_full_fallback() {
     };
     let candidate = build_probe(builder(), &fonts, false);
     let reference = build_probe(builder(), &fonts, true);
-    assert_eq!(candidate.1, reference.1);
+    assert_eq!(candidate.1.0, 2);
+    assert_eq!(reference.1.0, 3);
+    assert!(candidate.1.1 < reference.1.1);
+    assert_eq!(candidate.1.2, 2);
+    assert_eq!(reference.1.2, 3);
     assert_eq!(
         paragraph_snapshot(candidate.0),
         paragraph_snapshot(reference.0)

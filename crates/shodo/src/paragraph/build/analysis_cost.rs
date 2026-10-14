@@ -9,8 +9,8 @@
 use crate::analysis::{Item, breaks, combine, whitespace::Processed};
 use crate::builder::RawItem;
 use crate::geometry::WritingMode;
-use crate::limits::{LimitExceeded, LimitKind, Limits};
-use crate::ruby::base_budget::BaseScopes;
+use crate::limits::ledger::LimitsLedger;
+use crate::limits::{LimitExceeded, LimitKind};
 use crate::style::{
     CaseTransform, InlineStyle, ParagraphStyle, TextCombineUpright, TextTransform, WordBreak,
     WordSpaceTransform,
@@ -44,24 +44,22 @@ const SA_SCRATCH_PER_SCALAR: u64 = 64;
 const DICTIONARY_SCRATCH_PER_SCALAR: u64 = 64;
 
 #[derive(Clone, Copy)]
-pub(super) struct Budget {
-    limit: Option<u64>,
+pub(super) struct Cost {
     pub(super) used: u64,
     source_cuts: u64,
 }
 
-impl Budget {
-    pub(super) fn new(limits: &Limits) -> Self {
+impl Cost {
+    pub(super) fn new() -> Self {
         Self {
-            limit: limits.max_analysis_bytes,
             used: 0,
             source_cuts: 0,
         }
     }
 
-    fn reserve(&mut self, bytes: u64) -> Result<(), LimitExceeded> {
+    fn reserve(&mut self, bytes: u64, ledger: &mut LimitsLedger) -> Result<(), LimitExceeded> {
         let actual = self.used.saturating_add(bytes);
-        Limits::check(self.limit, LimitKind::AnalysisBytes, actual)?;
+        ledger.charge(LimitKind::AnalysisBytes, bytes)?;
         self.used = actual;
         Ok(())
     }
@@ -71,17 +69,18 @@ impl Budget {
         self.used.saturating_sub(self.source_cuts)
     }
 
-    pub(super) fn replay(self, limits: &Limits) -> Result<Self, LimitExceeded> {
-        let mut replay = Self::new(limits);
-        replay.reserve(self.replay_bytes())?;
-        Ok(replay)
+    pub(super) fn replayed(self) -> Self {
+        Self {
+            used: self.replay_bytes(),
+            source_cuts: 0,
+        }
     }
 
     pub(super) fn raw(
         &mut self,
         text: &str,
         items: &[RawItem],
-        bases: &mut BaseScopes,
+        ledger: &mut LimitsLedger,
     ) -> Result<(), LimitExceeded> {
         // Byte flags + whitespace barrier offsets (including start/end).
         self.reserve(
@@ -90,17 +89,16 @@ impl Budget {
                     .saturating_add(2)
                     .saturating_mul(crate::logical::WORD),
             ),
+            ledger,
         )?;
-        if bases.enabled() {
-            for item in items {
-                bases.before_raw(item);
-                let bytes = match item {
-                    RawItem::Text { range, .. } => u64::from(range.end - range.start),
-                    _ => 0,
-                };
-                bases.analysis_raw(bytes.saturating_add(crate::logical::WORD))?;
-                bases.after_raw(item);
-            }
+        for item in items {
+            ledger.before_raw(item);
+            let bytes = match item {
+                RawItem::Text { range, .. } => u64::from(range.end - range.start),
+                _ => 0,
+            };
+            ledger.analysis_raw(bytes.saturating_add(crate::logical::WORD))?;
+            ledger.after_raw(item);
         }
         Ok(())
     }
@@ -108,13 +106,13 @@ impl Budget {
     pub(super) fn source_cuts(
         &mut self,
         input: &Processed,
-        bases: &mut BaseScopes,
+        ledger: &mut LimitsLedger,
     ) -> Result<(), LimitExceeded> {
         let before = self.used;
         self.processed(
             input,
             size_of::<RangeInclusive<u32>>() as u64,
-            bases,
+            ledger,
             |_, text| {
                 projection(text).saturating_add(
                     (text.chars().count() as u64)
@@ -131,7 +129,7 @@ impl Budget {
         input: &Processed,
         styles: &[InlineStyle],
         mode: WritingMode,
-        bases: &mut BaseScopes,
+        ledger: &mut LimitsLedger,
     ) -> Result<(), LimitExceeded> {
         let vertical = mode.is_typographic_vertical();
         let transforms = vertical
@@ -154,8 +152,8 @@ impl Budget {
                 0
             }
         };
-        self.styles(styles, bases, locale)?;
-        self.processed(input, 0, bases, |_, text| {
+        self.styles(styles, ledger, locale)?;
+        self.processed(input, 0, ledger, |_, text| {
             let mut bytes = 0u64;
             if vertical {
                 bytes = combine::ANALYSIS_ITEM_BYTES.saturating_add(
@@ -181,7 +179,7 @@ impl Budget {
         styles: &[InlineStyle],
         style: &ParagraphStyle,
         first_line: bool,
-        bases: &mut BaseScopes,
+        ledger: &mut LimitsLedger,
     ) -> Result<(), LimitExceeded> {
         let vertical = style.writing_mode.is_typographic_vertical();
         let internal_bidi = vertical
@@ -191,14 +189,14 @@ impl Budget {
         let direction = crate::analysis::bidi::used_root_direction(style, &styles[0]);
         let bidi = crate::analysis::bidi::needs_bidi(&input.text, style, styles, direction);
         let manual = styles.iter().any(|s| s.word_break == WordBreak::Manual);
-        self.styles(styles, bases, |_| breaks::PROFILE_BYTES)?;
+        self.styles(styles, ledger, |_| breaks::PROFILE_BYTES)?;
         let boundary = 4 * size_of::<u32>() as u64 + size_of::<breaks::BreakOpportunity>() as u64;
         // G <= scalar_count + 1. Four u32 slots include the caret merge's
         // explicit left.len + right.len reservation before deduplication.
         self.processed(
             input,
             boundary.saturating_add(if first_line { 32 } else { 0 }),
-            bases,
+            ledger,
             |_, text| {
                 let scalars = text.chars().count() as u64;
                 let len = text.len() as u64;
@@ -242,22 +240,23 @@ impl Budget {
     fn styles(
         &mut self,
         styles: &[InlineStyle],
-        bases: &mut BaseScopes,
+        ledger: &mut LimitsLedger,
         bytes: impl Fn(&InlineStyle) -> u64,
     ) -> Result<(), LimitExceeded> {
         self.reserve(
             styles
                 .iter()
                 .fold(0u64, |sum, s| sum.saturating_add(bytes(s))),
+            ledger,
         )?;
-        bases.analysis_styles(styles, bytes)
+        ledger.analysis_styles(styles, bytes)
     }
 
     fn processed(
         &mut self,
         input: &Processed,
         extra: u64,
-        bases: &mut BaseScopes,
+        ledger: &mut LimitsLedger,
         bytes: impl Fn(&Item, &str) -> u64,
     ) -> Result<(), LimitExceeded> {
         let item_bytes = |item: &Item| {
@@ -271,11 +270,10 @@ impl Budget {
                 .items
                 .iter()
                 .fold(extra, |sum, item| sum.saturating_add(item_bytes(item))),
+            ledger,
         )?;
-        if bases.enabled() {
-            for (i, item) in input.items.iter().enumerate() {
-                bases.item(i, LimitKind::AnalysisBytes, item_bytes(item))?;
-            }
+        for (i, item) in input.items.iter().enumerate() {
+            ledger.analysis_item(i, item_bytes(item))?;
         }
         Ok(())
     }
