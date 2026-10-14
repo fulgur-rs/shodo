@@ -101,25 +101,17 @@ impl Line {
     }
     pub fn metrics(&self) -> LineMetrics {
         let baseline = self.baseline.to_f32();
-        let root_style = &self.data.styles[0];
-        let root = self.data.style_metrics[0];
-        let upright = self
-            .data
-            .style
-            .writing_mode
-            .is_upright(root_style.text_orientation);
-        let (a, d) = root.ascent_descent(upright);
+        let (a, d) = self.data.root_font_extents;
         LineMetrics {
             ascent: baseline,
             descent: self.block_size.to_f32() - baseline,
             baseline,
-            text_over: if self.data.style.writing_mode == crate::geometry::WritingMode::VerticalLr {
+            text_over: if self.data.style.writing_mode.line_over_is_block_end() {
                 baseline + a
             } else {
                 baseline - a
             },
-            text_under: if self.data.style.writing_mode == crate::geometry::WritingMode::VerticalLr
-            {
+            text_under: if self.data.style.writing_mode.line_over_is_block_end() {
                 baseline - d
             } else {
                 baseline + d
@@ -198,8 +190,7 @@ impl Line {
                 }
                 Fragment::GlyphRun(run) => {
                     if let Some(mark) = run.emphasis_mark() {
-                        let before = mark.line_over
-                            != (self.writing_mode() == crate::geometry::WritingMode::VerticalLr);
+                        let before = mark.line_over != self.writing_mode().line_over_is_block_end();
                         let block_start = if before {
                             run.baseline() - mark.offset - mark.font_size
                         } else {
@@ -403,11 +394,7 @@ impl Line {
         let hanging_start = scan.punctuation_edges.hang_start;
         let mut ruby_caret_gaps = scan.ruby_caret_gaps;
         ruby_caret_gaps.sort_by_key(|gap| gap.text.start);
-        let (root_ascent, root_descent) = data.style_metrics[0].ascent_descent(
-            data.style
-                .writing_mode
-                .is_upright(data.styles[0].text_orientation),
-        );
+        let (root_ascent, root_descent) = data.root_font_extents;
         Line {
             #[cfg(test)]
             _clone_probe: super::clone_probe::CloneProbe,
@@ -597,12 +584,7 @@ impl Line {
     pub fn baseline(&self, kind: BaselineKind) -> f32 {
         let alphabetic = self.baseline.to_f32();
         let (ascent, descent) = (self.ascent.to_f32(), self.descent.to_f32());
-        let over_sign = if self.data.style.writing_mode == crate::geometry::WritingMode::VerticalLr
-        {
-            1.0
-        } else {
-            -1.0
-        };
+        let over_sign = self.data.style.writing_mode.line_over_sign();
         match kind {
             BaselineKind::Alphabetic => alphabetic,
             BaselineKind::Central => alphabetic + over_sign * (ascent - descent) / 2.0,

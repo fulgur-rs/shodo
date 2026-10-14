@@ -20,7 +20,9 @@ pub(crate) use scalar::{ScalarMetrics, measure};
 use super::fragments::{FragmentRecord, GlyphSource, RecordKind};
 use super::metrics::{ProfileResolver, RecordProfile};
 use crate::analysis::units::UnitKind;
-use crate::geometry::{LayoutUnit, Saturation, WritingMode};
+#[cfg(test)]
+use crate::geometry::WritingMode;
+use crate::geometry::{LayoutUnit, Saturation};
 use crate::paragraph::ParagraphData;
 use crate::style::VerticalAlign;
 use crate::{AtomicSizes, LayoutContext};
@@ -359,11 +361,7 @@ impl MetricIndex {
             };
             if let Some(key) = group_at[i] {
                 let g = &groups[group_keys[&key]];
-                let sign = if data.style.writing_mode == WritingMode::VerticalLr {
-                    -1.0
-                } else {
-                    1.0
-                };
+                let sign = -f64::from(data.style.writing_mode.line_over_sign());
                 if g.bottom {
                     leaf.bottom = raw.map(|r| r.shift(-sign * f64::from(g.placed().bottom)));
                 } else {
@@ -762,11 +760,7 @@ impl MetricIndex {
                 }
             }
         }
-        let root = &data.styles[0];
-        let metrics = data.style_metrics[0];
-        let upright = data.style.writing_mode.is_upright(root.text_orientation);
-        let (above, below) =
-            super::metrics::extents(root, metrics.metrics, metrics.vertical_metrics, upright);
+        let (above, below) = data.root_line_extents;
         let bounds = if self.quirk.is_some() {
             // Root text and credited struts already joined `side`; a line
             // nothing sizes has a zero-height root.
@@ -793,7 +787,7 @@ impl MetricIndex {
         let over = LayoutUnit::from_f32_round(above, sat);
         Selection {
             metrics: ScalarMetrics {
-                baseline: if data.style.writing_mode == WritingMode::VerticalLr {
+                baseline: if data.style.writing_mode.line_over_is_block_end() {
                     block_size.sub(over, sat)
                 } else {
                     over

@@ -968,6 +968,14 @@ fn build_data(
         &styles,
         warnings,
     );
+    let root_upright = style.writing_mode.is_upright(styles[0].text_orientation);
+    let root_font_extents = style_metrics[0].ascent_descent(root_upright);
+    let root_line_extents = crate::line::metrics::extents(
+        &styles[0],
+        style_metrics[0].metrics,
+        style_metrics[0].vertical_metrics,
+        root_upright,
+    );
     let combine_geometry = crate::analysis::combine::geometry(
         &processed.text,
         &processed.items,
@@ -1075,6 +1083,8 @@ fn build_data(
         combine_spans,
         combine_geometry,
         style_metrics,
+        root_font_extents,
+        root_line_extents,
         autospace_spaces: Vec::new(),
         unit_spacing: Vec::new(),
         spacing_summaries: Default::default(),
@@ -1255,13 +1265,10 @@ fn normal_cursor(
 /// The dominant baseline of a parent inline box (CSS Writing Modes 4 §4.2):
 /// central in vertical typographic modes unless the text is set sideways.
 fn baseline_kind(writing_mode: WritingMode, parent: &InlineStyle) -> BaselineKind {
-    match writing_mode {
-        WritingMode::VerticalRl | WritingMode::VerticalLr
-            if parent.text_orientation != TextOrientation::Sideways =>
-        {
-            BaselineKind::Central
-        }
-        _ => BaselineKind::Alphabetic,
+    if writing_mode.is_upright(parent.text_orientation) {
+        BaselineKind::Central
+    } else {
+        BaselineKind::Alphabetic
     }
 }
 

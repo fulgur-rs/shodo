@@ -91,11 +91,7 @@ pub(super) struct QuirkIndex {
 
 /// The root inline box's strut, as `select` and `metrics::measure` size it.
 pub(super) fn root_strut(data: &ParagraphData) -> RecordProfile {
-    let root = &data.styles[0];
-    let metrics = data.style_metrics[0];
-    let upright = data.style.writing_mode.is_upright(root.text_orientation);
-    let (above, below) =
-        super::super::metrics::extents(root, metrics.metrics, metrics.vertical_metrics, upright);
+    let (above, below) = data.root_line_extents;
     RecordProfile {
         top: -above,
         bottom: below,

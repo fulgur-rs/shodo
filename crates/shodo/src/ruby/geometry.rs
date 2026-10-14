@@ -1,7 +1,9 @@
 //! Block geometry shared by scalar candidate probes and retained output.
 //! Annotation ink may overflow available leading without increasing advance.
 use super::measure::{RubyFragmentMeasure, RubyMeasure};
-use crate::geometry::{LayoutUnit, Saturation, WritingMode};
+#[cfg(test)]
+use crate::geometry::WritingMode;
+use crate::geometry::{LayoutUnit, Saturation};
 use crate::hashing::FastMap;
 use crate::line::fragments::{FragmentRecord, GlyphSource, RecordKind};
 use crate::paragraph::ParagraphData;
@@ -162,7 +164,7 @@ fn fixed_extents(
     mut d: f32,
     sat: &mut Saturation,
 ) -> (LayoutUnit, LayoutUnit) {
-    if data.style.writing_mode == WritingMode::VerticalLr {
+    if data.style.writing_mode.line_over_is_block_end() {
         std::mem::swap(&mut a, &mut d);
     }
     (
@@ -276,8 +278,7 @@ pub(crate) fn record_emphasis(
     } else {
         crate::line::metrics::emphasized(data, style, run.font, upright, (0.0, 0.0))
     };
-    let before = crate::line::metrics::emphasis_over(mark.position, data.style.writing_mode)
-        != (data.style.writing_mode == WritingMode::VerticalLr);
+    let before = crate::line::metrics::emphasis_before(mark.position, data.style.writing_mode);
     let (a, d) = fixed_extents(data, a, d, sat);
     let (primary_a, primary_d) =
         record_primary_extents(data, record, runs, sat).expect("glyph primary edges");
@@ -358,7 +359,7 @@ pub(crate) fn level_sides(data: &ParagraphData, ruby: &super::prepare::PreparedR
             _ => true,
         };
         previous = Some(over);
-        before[i] = over != (data.style.writing_mode == WritingMode::VerticalLr);
+        before[i] = over != data.style.writing_mode.line_over_is_block_end();
     }
     before
 }

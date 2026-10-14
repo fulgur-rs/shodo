@@ -21,7 +21,7 @@ use crate::sanitize;
 #[cfg(test)]
 use crate::shape::shape_items_with_base_scopes;
 use crate::shape::{GlyphStore, ShapedRun};
-use crate::style::{InlineStyle, ParagraphStyle, TextOrientation};
+use crate::style::{InlineStyle, ParagraphStyle};
 
 static NEXT_PARAGRAPH_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_ATOMIC_REVISION: AtomicU64 = AtomicU64::new(1);
@@ -100,6 +100,10 @@ pub(crate) struct ParagraphData {
     pub(crate) combine_spans: Vec<crate::analysis::combine::CombineSpan>,
     pub(crate) combine_geometry: crate::analysis::combine::Geometry,
     pub(crate) style_metrics: Vec<crate::line::font_metrics::StyleMetrics>,
+    /// Root line-over/under font edges without leading (public text metrics).
+    pub(crate) root_font_extents: (f32, f32),
+    /// Root strut edges including leading, resolved once per paragraph dataset.
+    pub(crate) root_line_extents: (f32, f32),
     pub(crate) autospace_spaces: Vec<(f32, f32)>,
     pub(crate) unit_spacing: Vec<crate::line::spacing::UnitSpacing>,
     pub(crate) spacing_summaries: crate::line::spacing::Summaries,
@@ -144,17 +148,11 @@ impl ParagraphData {
     /// before the inline's vertical-align displacement is applied.
     pub(crate) fn combine_center_shift(&self, style: u32) -> f32 {
         let metrics = self.style_metrics[style as usize];
-        let (over, under) = if self.styles[style as usize].text_orientation
-            == crate::style::TextOrientation::Sideways
-        {
-            (metrics.metrics.ascent, metrics.metrics.descent)
-        } else {
-            metrics
-                .vertical_metrics
-                .map_or((metrics.size / 2.0, metrics.size / 2.0), |v| {
-                    (v.ascent, v.descent)
-                })
-        };
+        let (over, under) = metrics.ascent_descent(
+            self.style
+                .writing_mode
+                .is_upright(self.styles[style as usize].text_orientation),
+        );
         -(over - under) / 2.0
     }
 
