@@ -103,10 +103,11 @@ impl Line {
         let baseline = self.baseline.to_f32();
         let root_style = &self.data.styles[0];
         let root = self.data.style_metrics[0];
-        let upright = matches!(
-            self.data.style.writing_mode,
-            crate::geometry::WritingMode::VerticalRl | crate::geometry::WritingMode::VerticalLr
-        ) && root_style.text_orientation != crate::style::TextOrientation::Sideways;
+        let upright = self
+            .data
+            .style
+            .writing_mode
+            .is_upright(root_style.text_orientation);
         let (a, d) = if upright {
             root.vertical_metrics
                 .map_or((root.size / 2.0, root.size / 2.0), |v| {
@@ -434,11 +435,10 @@ impl Line {
             block_size: LayoutUnit::ZERO,
             baseline: LayoutUnit::ZERO,
             ascent: LayoutUnit::from_f32_round(
-                if matches!(
-                    data.style.writing_mode,
-                    crate::geometry::WritingMode::VerticalRl
-                        | crate::geometry::WritingMode::VerticalLr
-                ) && data.styles[0].text_orientation != crate::style::TextOrientation::Sideways
+                if data
+                    .style
+                    .writing_mode
+                    .is_upright(data.styles[0].text_orientation)
                 {
                     data.style_metrics[0]
                         .vertical_metrics
@@ -449,11 +449,10 @@ impl Line {
                 sat,
             ),
             descent: LayoutUnit::from_f32_round(
-                if matches!(
-                    data.style.writing_mode,
-                    crate::geometry::WritingMode::VerticalRl
-                        | crate::geometry::WritingMode::VerticalLr
-                ) && data.styles[0].text_orientation != crate::style::TextOrientation::Sideways
+                if data
+                    .style
+                    .writing_mode
+                    .is_upright(data.styles[0].text_orientation)
                 {
                     data.style_metrics[0]
                         .vertical_metrics

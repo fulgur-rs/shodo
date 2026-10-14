@@ -268,11 +268,7 @@ impl Line {
                         // Mixed tabs use the same alphabetic origin as
                         // sideways glyphs within a central-baseline inline.
                         let center_shift = if orientation == GlyphOrientation::SidewaysClockwise
-                            && matches!(
-                                self.writing_mode(),
-                                WritingMode::VerticalRl | WritingMode::VerticalLr
-                            )
-                            && style.text_orientation != crate::style::TextOrientation::Sideways
+                            && self.writing_mode().is_upright(style.text_orientation)
                         {
                             under_sign * (primary.metrics.ascent - primary.metrics.descent) / 2.0
                         } else {

@@ -333,7 +333,7 @@ pub(crate) fn prepare_with_rejections(
 ) -> (Vec<CombineSpan>, Vec<Range<u32>>) {
     #[cfg(test)]
     PREPARE_PASSES.with(|n| n.set(n.get() + 1));
-    if !matches!(mode, WritingMode::VerticalRl | WritingMode::VerticalLr) {
+    if !mode.is_typographic_vertical() {
         return (Vec::new(), Vec::new());
     }
     let mut candidates: Vec<Candidate> = Vec::new();

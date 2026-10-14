@@ -5,7 +5,7 @@ use crate::geometry::{LayoutUnit, Saturation, WritingMode};
 use crate::line::fragments::{FragmentRecord, GlyphSource, RecordKind};
 use crate::paragraph::ParagraphData;
 use crate::shape::ShapedRun;
-use crate::style::{LineHeight, TextOrientation};
+use crate::style::LineHeight;
 use crate::{RubyAlign, RubyPosition};
 use std::collections::HashMap;
 use std::ops::Range;
@@ -136,10 +136,7 @@ pub(crate) fn font_extents(
 ) -> (LayoutUnit, LayoutUnit) {
     let s = &data.styles[style as usize];
     let m = data.style_metrics[style as usize];
-    let upright = matches!(
-        data.style.writing_mode,
-        WritingMode::VerticalRl | WritingMode::VerticalLr
-    ) && s.text_orientation != TextOrientation::Sideways;
+    let upright = data.style.writing_mode.is_upright(s.text_orientation);
     let (a, d) = if upright {
         m.vertical_metrics
             .map_or((s.font_size / 2.0, s.font_size / 2.0), |m| {
@@ -371,11 +368,7 @@ fn line_height(
         LineHeight::Px(v) => v,
         LineHeight::Number(n) => n * s.font_size,
         LineHeight::Normal => {
-            if matches!(
-                data.style.writing_mode,
-                WritingMode::VerticalRl | WritingMode::VerticalLr
-            ) && s.text_orientation != TextOrientation::Sideways
-            {
+            if data.style.writing_mode.is_upright(s.text_orientation) {
                 m.vertical_metrics
                     .map_or(s.font_size, |v| v.ascent + v.descent + v.line_gap)
             } else {
