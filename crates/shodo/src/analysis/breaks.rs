@@ -221,6 +221,21 @@ impl Projection {
         let index = self
             .spans
             .partition_point(|s| s.projected.end < offset as u32);
+        self.upstream_at(index, offset)
+    }
+    /// `upstream` for ascending offsets: `cursor` is the span index of the
+    /// previous call (start at 0). Projected ends strictly ascend.
+    fn upstream_from(&self, cursor: &mut usize, offset: usize) -> u32 {
+        while self
+            .spans
+            .get(*cursor)
+            .is_some_and(|s| s.projected.end < offset as u32)
+        {
+            *cursor += 1;
+        }
+        self.upstream_at(*cursor, offset)
+    }
+    fn upstream_at(&self, index: usize, offset: usize) -> u32 {
         self.spans
             .get(index)
             .map_or(0, |s| s.original.start + offset as u32 - s.projected.start)
@@ -294,6 +309,22 @@ impl Profile {
 
 fn item_before(items: &[Item], offset: u32) -> Option<&Item> {
     let first = items.partition_point(|item| item.text.end < offset);
+    item_before_at(items, first, offset)
+}
+
+/// `item_before` for ascending offsets: `cursor` is the first item of the
+/// previous call (start at 0). Item ends ascend in source order.
+fn item_before_from<'a>(items: &'a [Item], cursor: &mut usize, offset: u32) -> Option<&'a Item> {
+    while items
+        .get(*cursor)
+        .is_some_and(|item| item.text.end < offset)
+    {
+        *cursor += 1;
+    }
+    item_before_at(items, *cursor, offset)
+}
+
+fn item_before_at(items: &[Item], first: usize, offset: u32) -> Option<&Item> {
     items[first..]
         .iter()
         .take_while(|item| item.text.start < offset)
@@ -316,18 +347,25 @@ pub(crate) fn analyze_breaks(
     let boundaries = segmenter.segment_str(&projection.text);
     #[cfg(test)]
     let boundaries = tests::observe_graphemes(boundaries);
+    // Boundaries ascend, so both span lookups advance monotonic cursors.
+    let mut upstream_span = 0;
+    let mut start_span = 0;
     let (graphemes, typographic_starts): (Vec<u32>, Vec<u32>) = boundaries
         .map(|at| {
-            let index = projection
+            while projection
                 .spans
-                .partition_point(|s| s.projected.end <= at as u32);
+                .get(start_span)
+                .is_some_and(|s| s.projected.end <= at as u32)
+            {
+                start_span += 1;
+            }
             let start = projection
                 .spans
-                .get(index)
+                .get(start_span)
                 .map_or(input.text.len() as u32, |s| {
                     s.original.start + at as u32 - s.projected.start
                 });
-            (projection.upstream(at), start)
+            (projection.upstream_from(&mut upstream_span, at), start)
         })
         .unzip();
     let mut caret_cuts = crate::sorted::merge_sorted_unique(&graphemes, &typographic_starts);
@@ -426,6 +464,12 @@ pub(crate) fn analyze_breaks(
         } else {
             &projection.text
         };
+        // Segmenter boundaries ascend, and so do their upstream offsets:
+        // upstream is injective over the projection, so `graphemes` strictly
+        // ascends and a forward scan finds the unique binary-search match.
+        let mut upstream_span = 0;
+        let mut first_item = 0;
+        let mut grapheme = 0;
         for at in line.segment_str(segment_text) {
             // ICU's Normal mode relaxes CJ as well as CJK hyphen-like
             // characters. CSS Text §6.2 only permits CJ (small kana and
@@ -439,13 +483,17 @@ pub(crate) fn analyze_breaks(
             {
                 continue;
             }
-            let offset = projection.upstream(at);
-            if let Some(item) = item_before(&input.items, offset)
+            let offset = projection.upstream_from(&mut upstream_span, at);
+            if let Some(item) = item_before_from(&input.items, &mut first_item, offset)
                 && profiles[item.style as usize] == profile
-                && let Ok(index) = graphemes.binary_search(&offset)
             {
-                opportunities[index].class = BreakClass::Allowed;
-                opportunities[index].min_content = true;
+                while graphemes.get(grapheme).is_some_and(|g| *g < offset) {
+                    grapheme += 1;
+                }
+                if graphemes.get(grapheme) == Some(&offset) {
+                    opportunities[grapheme].class = BreakClass::Allowed;
+                    opportunities[grapheme].min_content = true;
+                }
             }
         }
     }
@@ -453,13 +501,14 @@ pub(crate) fn analyze_breaks(
     let mut indivisible_index = 0;
     let mut following_span = 0;
     let mut following_item = 0;
+    let mut first_item = 0;
     for o in &mut opportunities {
         if o.offset == 0 {
             o.class = BreakClass::Prohibited;
             o.min_content = false;
             continue;
         }
-        let Some(item) = item_before(&input.items, o.offset) else {
+        let Some(item) = item_before_from(&input.items, &mut first_item, o.offset) else {
             continue;
         };
         let s = &styles[item.style as usize];
@@ -494,10 +543,14 @@ pub(crate) fn analyze_breaks(
             // ICU's opportunities include preserved whitespace; do not
             // replace them with the normal nonbreaking-space sequence rule.
         } else if preserved_spaces && (matches!(last, Some(' ' | '\t')) || break_spaces_separator) {
-            let index = projection
+            while projection
                 .spans
-                .partition_point(|span| span.original.end <= o.offset);
-            let next = projection.spans.get(index).and_then(|span| {
+                .get(following_span)
+                .is_some_and(|span| span.original.end <= o.offset)
+            {
+                following_span += 1;
+            }
+            let next = projection.spans.get(following_span).and_then(|span| {
                 input.text[span.original.start.max(o.offset) as usize..]
                     .chars()
                     .next()
