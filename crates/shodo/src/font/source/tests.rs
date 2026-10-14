@@ -595,6 +595,44 @@ fn unavailable_or_renamed_native_candidate_uses_the_next_exact_name() {
 }
 
 #[test]
+fn selected_native_verification_bounds_name_decoding_like_the_index() {
+    let file = NativeFile::new();
+    let root = file.collection(0);
+    missing(&root, "absent");
+    // The root index decoded the same records under its own limit. The
+    // caller's limit bounds the scratch of re-reading a path face's names.
+    let doc = FontCollection::for_document(
+        &root,
+        &Limits {
+            max_local_font_index_bytes: Some(64),
+            ..Default::default()
+        },
+    );
+    LOCAL_NAME_FACE_READS.with(|calls| calls.set(0));
+    limit_error(
+        doc.register_sources(
+            descriptor(),
+            vec![
+                FontSource::Local("Installed Regular".into()),
+                FontSource::Data(test_font("Web", &['a'], 500), 0),
+            ],
+        ),
+        LimitKind::LocalFontIndexBytes,
+    );
+    assert_eq!(LOCAL_NAME_FACE_READS.with(std::cell::Cell::get), 1);
+    assert_eq!(doc.generation(), 0);
+    let roomy = FontCollection::for_document(&root, &Limits::default());
+    assert!(
+        roomy
+            .register_sources(
+                descriptor(),
+                vec![FontSource::Local("Installed Regular".into())]
+            )
+            .is_ok()
+    );
+}
+
+#[test]
 fn selected_native_verification_limit_stops_before_data_fallback() {
     let file = NativeFile::new();
     let root = file.collection(0);

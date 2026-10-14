@@ -2,7 +2,11 @@
 
 use super::{FontCollection, FontData, FontError, FontFaceDescriptor, FontId};
 use crate::limits::{LimitKind, Limits};
-use skrifa::{FontRef, string::StringId};
+use skrifa::{
+    FontRef,
+    raw::tables::name::{Name, NameRecord},
+    string::{LocalizedString, StringId},
+};
 
 mod index;
 pub(super) use index::LocalNames;
@@ -140,22 +144,53 @@ fn has_local_name(
     let Ok(table) = font.name() else {
         return Ok(false);
     };
-    work.charge(table.name_record().len() as u64 * 2, limits)?;
-    for id in [StringId::FULL_NAME, StringId::POSTSCRIPT_NAME] {
-        for record in table
-            .name_record()
-            .iter()
-            .filter(|record| record.name_id() == id)
-        {
-            work.charge(u64::from(record.length()), limits)?;
-            if skrifa::string::LocalizedString::new(&table, record)
-                .to_string()
-                .to_lowercase()
-                == requested
-            {
-                return Ok(true);
-            }
+    for record in local_name_records(&table, work, limits)? {
+        // Bound the decode scratch as the index does; this re-reads a face
+        // the root index already decoded under its own limit.
+        let scratch = admit_name_record(record, work, limits)?;
+        Limits::check(
+            limits.max_local_font_index_bytes,
+            LimitKind::LocalFontIndexBytes,
+            scratch,
+        )?;
+        if decode_name(&table, record) == requested {
+            return Ok(true);
         }
     }
     Ok(false)
+}
+
+/// The full and PostScript name records of a face, in lookup order, after
+/// charging `work` for scanning every record once per identifier.
+fn local_name_records<'a>(
+    table: &Name<'a>,
+    work: &mut LookupWork,
+    limits: &Limits,
+) -> Result<impl Iterator<Item = &'a NameRecord> + use<'a>, FontError> {
+    let records = table.name_record();
+    work.charge(records.len() as u64 * 2, limits)?;
+    Ok([StringId::FULL_NAME, StringId::POSTSCRIPT_NAME]
+        .into_iter()
+        .flat_map(move |id| records.iter().filter(move |record| record.name_id() == id)))
+}
+
+/// Charge a name record's encoded bytes to `work`, and return the scratch
+/// bytes that decoding and lowercasing it may take, including UTF-8
+/// expansion and allocation growth. Callers check that bound before
+/// `decode_name` constructs either String.
+fn admit_name_record(
+    record: &NameRecord,
+    work: &mut LookupWork,
+    limits: &Limits,
+) -> Result<u64, FontError> {
+    let encoded = u64::from(record.length());
+    work.charge(encoded, limits)?;
+    Ok(encoded.saturating_mul(12))
+}
+
+/// A name record's text, lowercased for case-insensitive `local()` lookup.
+fn decode_name(table: &Name<'_>, record: &NameRecord) -> String {
+    LocalizedString::new(table, record)
+        .to_string()
+        .to_lowercase()
 }
