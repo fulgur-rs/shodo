@@ -26,6 +26,28 @@ pub(crate) fn word_separator(ch: char) -> bool {
     )
 }
 
+/// A letter of a cursive script, whose joined letters take no letter
+/// spacing or justification gaps between them.
+fn is_cursive_letter(script: Script, gc: GeneralCategory) -> bool {
+    matches!(
+        script,
+        Script::Arabic
+            | Script::HanifiRohingya
+            | Script::Mandaic
+            | Script::Mongolian
+            | Script::Nko
+            | Script::PhagsPa
+            | Script::Syriac
+    ) && matches!(
+        gc,
+        GeneralCategory::UppercaseLetter
+            | GeneralCategory::LowercaseLetter
+            | GeneralCategory::TitlecaseLetter
+            | GeneralCategory::ModifierLetter
+            | GeneralCategory::OtherLetter
+    )
+}
+
 pub(crate) fn build(
     data: &ParagraphData,
     sat: &mut Saturation,
@@ -112,23 +134,7 @@ pub(crate) fn build(
                         ) {
                             continue;
                         }
-                        let cursive = matches!(
-                            script.get(ch),
-                            Script::Arabic
-                                | Script::HanifiRohingya
-                                | Script::Mandaic
-                                | Script::Mongolian
-                                | Script::Nko
-                                | Script::PhagsPa
-                                | Script::Syriac
-                        ) && matches!(
-                            category.get(ch),
-                            GeneralCategory::UppercaseLetter
-                                | GeneralCategory::LowercaseLetter
-                                | GeneralCategory::TitlecaseLetter
-                                | GeneralCategory::ModifierLetter
-                                | GeneralCategory::OtherLetter
-                        );
+                        let cursive = is_cursive_letter(script.get(ch), category.get(ch));
                         // A resource-limited cluster can span source items and
                         // inline markers; ownership comes from the character,
                         // not the cluster's first shaping slice.
@@ -381,16 +387,7 @@ pub(super) fn justification_metadata(
         {
             continue;
         }
-        let cursive = matches!(
-            script.get(ch),
-            Script::Arabic
-                | Script::HanifiRohingya
-                | Script::Mandaic
-                | Script::Mongolian
-                | Script::Nko
-                | Script::PhagsPa
-                | Script::Syriac
-        ) && icu_properties::props::GeneralCategoryGroup::Letter.contains(gc);
+        let cursive = is_cursive_letter(script.get(ch), gc);
         let kind = if cursive { Kind::Cursive } else { Kind::Text };
         if let Some((previous, previous_offset)) = last
             && !(previous == Kind::Cursive && kind == Kind::Cursive)
@@ -526,9 +523,7 @@ pub(super) fn apply(
         .overlays
         .iter()
         .find_map(|w| w.hyphen.as_ref().map(|t| t.start));
-    let mut metadata: Vec<_> = (start..scan.end)
-        .map(|index| data.spacing_summaries.get(index))
-        .collect();
+    let mut metadata = Vec::with_capacity(scan.end - start);
     for (k, unit) in data.units[start..scan.end].iter().enumerate() {
         let unit_spacing = &data.unit_spacing[start + k];
         scan.autospace_gaps.extend_from_slice(
@@ -540,7 +535,7 @@ pub(super) fn apply(
             scan.widths[k] = scan.widths[k].sub(after, sat);
             scan.widths[tail - start] = scan.widths[tail - start].add(after, sat);
         }
-        metadata[k] = visible_summary(data, start + k, visible, sat);
+        metadata.push(visible_summary(data, start + k, visible, sat));
         scan.widths[k] =
             scan.widths[k].add(super::spacing_summary::raw(metadata[k].cost, sat), sat);
         if let Some(first) = metadata[k].first {
@@ -771,7 +766,7 @@ pub(super) fn positions(
         let mut extra = window
             .store
             .spacing
-            .clone()
+            .take()
             .unwrap_or_else(|| vec![LayoutUnit::ZERO; window.store.len()]);
         // Justification can attach leading space to an exact owned cluster;
         // retain it when adding the original units' tracking/word spacing.

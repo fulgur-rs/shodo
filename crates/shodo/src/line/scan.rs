@@ -108,22 +108,16 @@ pub(super) fn scan(
                 ) {
                     last_break = Some(b);
                 }
-                if let Some((b, edge)) = last_break.take() {
-                    taken_hyphen = edge.then_some(b);
-                    widths.truncate(b - start);
-                    i = b;
-                    break BreakReason::Regular;
-                }
-                if let Some(b) = last_emergency {
-                    widths.truncate(b - start);
-                    i = b;
-                    break BreakReason::Emergency;
-                }
-                if let Some(b) = first_hyphen.take() {
-                    taken_hyphen = Some(b);
-                    widths.truncate(b - start);
-                    i = b;
-                    break BreakReason::Regular;
+                if let Some(reason) = take_fallback(
+                    start,
+                    &mut last_break,
+                    last_emergency,
+                    &mut first_hyphen,
+                    &mut taken_hyphen,
+                    &mut widths,
+                    &mut i,
+                ) {
+                    break reason;
                 }
                 // The run overflows with no earlier break, so it ends here,
                 // hyphenated when that is possible.
@@ -196,8 +190,10 @@ pub(super) fn scan(
         .add(data.unit_spacing[i].word, sat);
         // Fit excludes eligible trailing space/tab advances (CSS Text 3 §4.1.2).
         let hangs = super::whitespace::fits_hanging(data, i);
-        let transparent =
-            super::whitespace::transparent(data, i) && !matches!(unit.kind, UnitKind::ForcedBreak);
+        // `transparent` excludes forced breaks from the hanging run; the
+        // unmasked value still keeps a forced break's hanging state below.
+        let raw_transparent = super::whitespace::transparent(data, i);
+        let transparent = raw_transparent && !matches!(unit.kind, UnitKind::ForcedBreak);
         if !count_mode {
             hanging_tail.observe(data, i, &spacing, hangs, transparent);
         }
@@ -333,22 +329,16 @@ pub(super) fn scan(
             ) {
                 last_break = Some(b);
             }
-            if let Some((b, edge)) = last_break.take() {
-                taken_hyphen = edge.then_some(b);
-                widths.truncate(b - start);
-                i = b;
-                break BreakReason::Regular;
-            }
-            if let Some(b) = last_emergency {
-                widths.truncate(b - start);
-                i = b;
-                break BreakReason::Emergency;
-            }
-            if let Some(b) = first_hyphen.take() {
-                taken_hyphen = Some(b);
-                widths.truncate(b - start);
-                i = b;
-                break BreakReason::Regular;
+            if let Some(reason) = take_fallback(
+                start,
+                &mut last_break,
+                last_emergency,
+                &mut first_hyphen,
+                &mut taken_hyphen,
+                &mut widths,
+                &mut i,
+            ) {
+                break reason;
             }
             // No opportunity yet: the unbreakable run overflows
             // (`overflow-wrap: normal`) and the line ends at the next one.
@@ -358,7 +348,7 @@ pub(super) fn scan(
         pos = pos.add(w, sat);
         match unit.kind {
             _ if hangs => hanging = hanging.add(w, sat),
-            _ if super::whitespace::transparent(data, i) => {}
+            _ if raw_transparent => {}
             _ => {
                 hanging = LayoutUnit::ZERO;
                 kept_spacing = tracking;
@@ -553,6 +543,39 @@ pub(super) fn scan(
         sat,
     );
     result
+}
+
+/// The break an overflowing line falls back to, in priority order: the last
+/// verified break (hyphenated when its edge says so), the last emergency
+/// break, then the first measurable hyphen. The chosen break truncates
+/// `widths` and moves `i` back to it. Only the regular and hyphen arms set
+/// `taken_hyphen`; an emergency break leaves it unchanged. `None` changes
+/// nothing.
+#[allow(clippy::too_many_arguments)]
+fn take_fallback(
+    start: usize,
+    last_break: &mut Option<(usize, bool)>,
+    last_emergency: Option<usize>,
+    first_hyphen: &mut Option<usize>,
+    taken_hyphen: &mut Option<usize>,
+    widths: &mut Vec<LayoutUnit>,
+    i: &mut usize,
+) -> Option<BreakReason> {
+    let (b, hyphen, reason) = if let Some((b, edge)) = last_break.take() {
+        (b, Some(edge.then_some(b)), BreakReason::Regular)
+    } else if let Some(b) = last_emergency {
+        (b, None, BreakReason::Emergency)
+    } else if let Some(b) = first_hyphen.take() {
+        (b, Some(Some(b)), BreakReason::Regular)
+    } else {
+        return None;
+    };
+    if let Some(hyphen) = hyphen {
+        *taken_hyphen = hyphen;
+    }
+    widths.truncate(b - start);
+    *i = b;
+    Some(reason)
 }
 
 /// An `Allowed` break opportunity whose edge reshape was deferred, with the
@@ -873,10 +896,9 @@ pub(super) fn unit_width(
                 LayoutUnit::from_f32_round(inline + size.margins.inline_sum(), sat)
             }
             None => {
-                cx.warnings.push(
-                    WarningKind::MissingAtomicSize,
-                    format!("no size for atomic inline {node:?}"),
-                );
+                cx.warnings.push_lazy(WarningKind::MissingAtomicSize, || {
+                    format!("no size for atomic inline {node:?}")
+                });
                 LayoutUnit::ZERO
             }
         },

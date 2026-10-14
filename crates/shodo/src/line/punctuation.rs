@@ -93,9 +93,11 @@ impl Punctuation {
 
 pub(crate) fn classify(ch: char, language: Option<&str>) -> PunctuationClass {
     use PunctuationClass as P;
-    let gc = CodePointMapData::<GeneralCategory>::new().get(ch);
-    let full = ('\u{3000}'..='\u{303f}').contains(&ch)
-        || CodePointMapData::<EastAsianWidth>::new().get(ch) == EastAsianWidth::Fullwidth;
+    // Only bracket punctuation reads the width, so look it up lazily.
+    let full = || {
+        ('\u{3000}'..='\u{303f}').contains(&ch)
+            || CodePointMapData::<EastAsianWidth>::new().get(ch) == EastAsianWidth::Fullwidth
+    };
     match ch {
         '\u{3000}' => P::Space,
         '\u{2018}' | '\u{201c}' => P::Opening,
@@ -115,9 +117,9 @@ pub(crate) fn classify(ch: char, language: Option<&str>) -> PunctuationClass {
                 P::Closing
             }
         }
-        _ => match gc {
-            GeneralCategory::OpenPunctuation if full => P::Opening,
-            GeneralCategory::ClosePunctuation if full => P::Closing,
+        _ => match CodePointMapData::<GeneralCategory>::new().get(ch) {
+            GeneralCategory::OpenPunctuation if full() => P::Opening,
+            GeneralCategory::ClosePunctuation if full() => P::Closing,
             GeneralCategory::OpenPunctuation => P::Ps,
             GeneralCategory::ClosePunctuation => P::Pe,
             _ => P::Other,

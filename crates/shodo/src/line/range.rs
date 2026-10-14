@@ -490,7 +490,7 @@ pub(super) fn width(
     atomics: &AtomicSizes,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
-) -> Option<LayoutUnit> {
+) -> LayoutUnit {
     #[cfg(test)]
     {
         cx.ruby_width_calls += 1;
@@ -552,7 +552,11 @@ pub(super) fn width(
         let costs = build(data, atomics, cx);
         cx.ruby_ranges.sets.insert(key, costs);
     }
-    let costs = cx.ruby_ranges.sets.get_mut(&key)?;
+    let costs = cx
+        .ruby_ranges
+        .sets
+        .get_mut(&key)
+        .expect("the range costs were inserted above");
     absorb(sat, costs.saturation(&range));
     // Each tab step's value and saturation depend only on the paragraph,
     // the range start and the tab (`clipped_delta` is the same for every
@@ -630,7 +634,7 @@ pub(super) fn width(
         tab_total = prefix.before(&costs.tabs, range.end);
         absorb(sat, prefix.saturation(&costs.tabs, range.end));
     }
-    let costs = cx.ruby_ranges.sets.get(&key)?;
+    let costs = &*costs;
     let mut stop = range
         .start
         .max(costs.last_content[range.end])
@@ -713,7 +717,7 @@ pub(super) fn width(
         width,
         sat,
     );
-    Some(width.sub(adjustment.removed(sat), sat))
+    width.sub(adjustment.removed(sat), sat)
 }
 
 #[cfg(test)]
@@ -812,8 +816,7 @@ mod tests {
                         &AtomicSizes::EMPTY,
                         &mut cx,
                         &mut Saturation::default(),
-                    )
-                    .expect("manual hyphen uses actual indexed costs");
+                    );
                     let expected = super::super::plan::selected_raw(
                         &p.data,
                         start,
@@ -893,8 +896,7 @@ mod tests {
                             &AtomicSizes::EMPTY,
                             &mut cx,
                             &mut Saturation::default(),
-                        )
-                        .expect("only the clipped source cluster needs bounded correction");
+                        );
                         let expected = super::super::plan::selected_raw(
                             &p.data,
                             start,
@@ -964,8 +966,7 @@ mod tests {
                         &atomics,
                         &mut cx,
                         &mut Saturation::default(),
-                    )
-                    .expect("dynamic range must use the index");
+                    );
                     let expected = super::super::plan::selected_raw(
                         &p.data,
                         start,
@@ -1014,7 +1015,6 @@ mod tests {
                 &mut cx,
                 &mut Saturation::default()
             )
-            .unwrap()
             .to_f32(),
             24.0
         );
@@ -1025,8 +1025,7 @@ mod tests {
             &AtomicSizes::EMPTY,
             &mut cx,
             &mut Saturation::default(),
-        )
-        .unwrap();
+        );
         assert!(
             cx.take_warnings()
                 .iter()
@@ -1105,8 +1104,7 @@ mod tests {
                         &AtomicSizes::EMPTY,
                         &mut cx,
                         &mut Saturation::default(),
-                    )
-                    .unwrap();
+                    );
                     let expected = super::super::plan::selected_raw(
                         &p.data,
                         start,
@@ -1158,8 +1156,7 @@ mod tests {
                 &AtomicSizes::EMPTY,
                 cx,
                 &mut Saturation::default(),
-            )
-            .unwrap();
+            );
         };
         cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
         let e = cx.ruby_ranges.epoch();
@@ -1228,7 +1225,7 @@ mod tests {
         let n = p.data.units.len();
         let query = |cx: &mut LayoutContext, range: Range<usize>| {
             let mut sat = Saturation::default();
-            width(&p.data, range, &AtomicSizes::EMPTY, cx, &mut sat).unwrap();
+            width(&p.data, range, &AtomicSizes::EMPTY, cx, &mut sat);
             sat
         };
         cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
@@ -1628,14 +1625,16 @@ mod tests {
             cx.ruby_ranges.begin(&p.data, &AtomicSizes::EMPTY);
             for range in history {
                 let mut sat = Saturation::default();
-                let value = width(
-                    &p.data,
-                    range.clone(),
-                    &AtomicSizes::EMPTY,
-                    &mut cx,
-                    &mut sat,
-                )
-                .map(|w| w.raw());
+                let value = Some(
+                    width(
+                        &p.data,
+                        range.clone(),
+                        &AtomicSizes::EMPTY,
+                        &mut cx,
+                        &mut sat,
+                    )
+                    .raw(),
+                );
                 out.push_str(&format!(
                     "{name} {range:?} {value:?} {} {}\n",
                     sat.saturated, sat.non_finite

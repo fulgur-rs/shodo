@@ -13,7 +13,7 @@ use crate::analysis::{Item, ItemKind, transform_with_base_scopes};
 use crate::builder::ParagraphBuilder;
 use crate::font::{FontCollection, WeakFontLayer};
 use crate::geometry::{BaselineKind, Direction, Saturation, WritingMode};
-use crate::limits::{LimitExceeded, LimitKind, Limits, Warning, WarningKind, WarningSink};
+use crate::limits::{LimitExceeded, LimitKind, Limits, Warning, WarningSink};
 use crate::mapping::OffsetMapping;
 use crate::node::{NodeId, Sides};
 use crate::output::Line;
@@ -25,9 +25,6 @@ use crate::style::{InlineStyle, ParagraphStyle, TextOrientation};
 
 static NEXT_PARAGRAPH_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_ATOMIC_REVISION: AtomicU64 = AtomicU64::new(1);
-
-/// Largest accepted font size in px; larger values are clamped.
-const MAX_FONT_SIZE: f32 = 1.0e6;
 
 /// Position in a paragraph where a line starts. Opaque and cheap to copy;
 /// valid only for the paragraph that produced it.

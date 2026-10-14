@@ -115,7 +115,7 @@ impl Paragraph {
             ..
         } = b;
         for s in &mut styles {
-            s.font_size = sanitize_font_size(s.font_size, &mut warnings);
+            s.font_size = sanitize::font_size(s.font_size, &mut warnings);
             sanitize::style(s, &mut warnings);
         }
         // The root inline box's interned style (index 0) is the one layout
@@ -279,7 +279,7 @@ impl Paragraph {
         let (alternate, alternate_bases) = if let Some(mut alternate_styles) = alternate_styles {
             let mut deferred_warnings = WarningSink::new(warnings.remaining_limit());
             for s in &mut alternate_styles {
-                s.font_size = sanitize_font_size(s.font_size, &mut deferred_warnings);
+                s.font_size = sanitize::font_size(s.font_size, &mut deferred_warnings);
                 sanitize::style(s, &mut deferred_warnings);
             }
             let mut alternate_style = style.clone();
@@ -741,15 +741,14 @@ fn analyze_data(
     // pass, so a duplicate does not consume the caller's warning budget.
     if report_combine_rejections {
         for range in combine_rejected {
-            warnings.push(
-                crate::limits::WarningKind::Unsupported,
+            warnings.push_lazy(crate::limits::WarningKind::Unsupported, || {
                 format!(
                     "text-combine-upright: all was not applied to processed text bytes {}..{}: \
                      a box boundary separates it from an adjacent candidate in the same combine \
                      scope, so it is laid out as normal text",
                     range.start, range.end
-                ),
-            );
+                )
+            });
         }
     }
     let mut breaks = crate::analysis::breaks::analyze_breaks(&processed, &styles, warnings);
@@ -1265,27 +1264,6 @@ fn baseline_kind(writing_mode: WritingMode, parent: &InlineStyle) -> BaselineKin
             BaselineKind::Central
         }
         _ => BaselineKind::Alphabetic,
-    }
-}
-
-fn sanitize_font_size(size: f32, warnings: &mut crate::limits::WarningSink) -> f32 {
-    if !size.is_finite() {
-        warnings.push(
-            WarningKind::NonFiniteInput,
-            "non-finite font-size replaced with 0",
-        );
-        0.0
-    } else if size < 0.0 {
-        warnings.push(
-            WarningKind::NegativeInput,
-            "negative font-size replaced with 0",
-        );
-        0.0
-    } else if size > MAX_FONT_SIZE {
-        warnings.push(WarningKind::Saturated, "font-size clamped to 1e6 px");
-        MAX_FONT_SIZE
-    } else {
-        size
     }
 }
 

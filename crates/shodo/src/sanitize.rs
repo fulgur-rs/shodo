@@ -7,7 +7,7 @@ use crate::geometry::{LayoutUnit, Saturation};
 use crate::limits::{WarningKind, WarningSink};
 use crate::node::{InlineEdges, Sides};
 use crate::paragraph::{AtomicSize, LineConstraint};
-use crate::style::{InlineStyle, LineHeight, TabSize, VerticalAlign};
+use crate::style::{InlineStyle, LineHeight, LineOptions, TabSize, VerticalAlign};
 
 /// Round every caller length once before layout or geometry reads it.
 pub(crate) fn layout_length(
@@ -22,6 +22,18 @@ pub(crate) fn layout_length(
         length(value, "layout length", warnings)
     };
     LayoutUnit::from_f32_round(v, sat).to_f32()
+}
+
+/// Line options with the caller's `text-indent` length rounded like any
+/// other signed layout length.
+pub(crate) fn line_options(
+    options: &LineOptions,
+    warnings: &mut WarningSink,
+    sat: &mut Saturation,
+) -> LineOptions {
+    let mut options = *options;
+    options.text_indent.length = layout_length(options.text_indent.length, false, warnings, sat);
+    options
 }
 
 pub(crate) fn atomic(
@@ -62,6 +74,9 @@ pub(crate) fn constraint<'a>(
 /// Largest accepted magnitude of a length that may be negative (spacing,
 /// margins, `vertical-align` lengths); larger values are clamped.
 const MAX_LENGTH: f32 = 1.0e7;
+
+/// Largest accepted font size in px; larger values are clamped.
+const MAX_FONT_SIZE: f32 = 1.0e6;
 
 /// Initial values of `font-weight` and `font-width` (CSS Fonts 4).
 const INITIAL_FONT_WEIGHT: f32 = 400.0;
@@ -115,6 +130,17 @@ fn non_negative(v: f32, what: &str, warnings: &mut WarningSink) -> f32 {
         0.0
     } else {
         v
+    }
+}
+
+/// Finite, non-negative font size clamped to `MAX_FONT_SIZE`.
+pub(crate) fn font_size(size: f32, warnings: &mut WarningSink) -> f32 {
+    let size = non_negative(size, "font-size", warnings);
+    if size > MAX_FONT_SIZE {
+        warnings.push(WarningKind::Saturated, "font-size clamped to 1e6 px");
+        MAX_FONT_SIZE
+    } else {
+        size
     }
 }
 

@@ -446,13 +446,7 @@ impl Paragraph {
         } else {
             ruby_atomics(inputs, cx, &mut sat)
         };
-        let mut options = *options;
-        options.text_indent.length = crate::sanitize::layout_length(
-            options.text_indent.length,
-            false,
-            &mut cx.warnings,
-            &mut sat,
-        );
+        let options = crate::sanitize::line_options(options, &mut cx.warnings, &mut sat);
         let rtl = data.base_level % 2 == 1;
         let mut indent = super::text_indent(&options, BreakToken::FIRST_LINE, &mut sat);
         let mut word_flags = BreakToken::FIRST_LINE;
