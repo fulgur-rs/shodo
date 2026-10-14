@@ -9,34 +9,25 @@ use crate::style::TabSize;
 
 /// The suffix and spacing of a candidate include the closing units that will
 /// be pulled onto its line. The live scan/index cursor stays at the text cut.
-fn candidate_end<'a>(
-    data: &'a ParagraphData,
+fn candidate_end(
+    data: &ParagraphData,
     mut end: usize,
-    spacing: &super::spacing_summary::Cursor<'a>,
     atomics: &AtomicSizes,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
-) -> (
-    usize,
-    LayoutUnit,
-    Option<super::spacing_summary::Cursor<'a>>,
-) {
+) -> (usize, LayoutUnit) {
     let mut pulled = LayoutUnit::ZERO;
-    let mut candidate_spacing = None;
-    if data.units.get(end).is_some() && super::pulls_after_break(data, end) {
-        let mut cursor = spacing.clone();
-        while data.units.get(end).is_some() && super::pulls_after_break(data, end) {
-            pulled = pulled.add(
-                unit_width(data, &data.units[end], LayoutUnit::ZERO, atomics, cx, sat),
-                sat,
-            );
-            super::spacing::push(data, &mut cursor, end);
-            end += 1;
-        }
-        candidate_spacing = Some(cursor);
+    while data.units.get(end).is_some() && super::pulls_after_break(data, end) {
+        pulled = pulled.add(
+            unit_width(data, &data.units[end], LayoutUnit::ZERO, atomics, cx, sat),
+            sat,
+        );
+        end += 1;
     }
-    let suffix = pulled.add(super::decoration::width(data, end, false, sat), sat);
-    (end, suffix, candidate_spacing)
+    (
+        end,
+        pulled.add(super::decoration::width(data, end, false, sat), sat),
+    )
 }
 
 /// Trailing whitespace that hangs past the end of the line being scanned, and
@@ -50,14 +41,10 @@ pub(super) struct Tail {
 /// One unit's widths as a line end, shared by the eager scan and the cached
 /// index so both apply the same edge rules. Edge reshape deltas are left out:
 /// the scan measures them only where it must, the index everywhere.
-pub(super) struct CandidateMeasure<'a> {
+pub(super) struct CandidateMeasure {
     /// Unit index the line would end at.
     end: usize,
-    /// `end` plus the closing units a break there pulls onto the line.
-    break_end: usize,
-    /// Width of the pulled closing units and the closing decoration.
-    suffix: LayoutUnit,
-    ruby_delta: LayoutUnit,
+    /// Whether the current unit hangs during overflow detection.
     hangs: bool,
     paragraph_end: bool,
     last: bool,
@@ -66,27 +53,26 @@ pub(super) struct CandidateMeasure<'a> {
     /// Width the line needs when it ends here.
     required: LayoutUnit,
     /// Spacing through `break_end` when a break pulls closing units.
-    spacing: Option<super::spacing_summary::Cursor<'a>>,
+    summary: super::spacing_summary::Summary,
+    hyphen: Option<HyphenMeasure>,
     /// Spacing width of the live line through this unit.
     pub(super) tracking: LayoutUnit,
-    /// Line position after this unit.
-    next: LayoutUnit,
-    /// Hanging whitespace through this unit.
-    hanging: LayoutUnit,
 }
 
-impl<'a> CandidateMeasure<'a> {
+impl CandidateMeasure {
     /// Measure unit `at` of advance `w` placed at `pos`, and advance the live
     /// `spacing` and `tail` past it. `hanging_tail` is `None` when the line
     /// cannot break here (grapheme counting), which also skips pulling
     /// closing units.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn new(
+    pub(super) fn new<'a>(
         data: &'a ParagraphData,
         start: usize,
         at: usize,
         pos: LayoutUnit,
         w: LayoutUnit,
+        indexed: &super::range::Cursor,
+        indent: LayoutUnit,
         spacing: &mut super::spacing_summary::Cursor<'a>,
         tail: &mut Tail,
         hanging_tail: Option<&mut super::punctuation::HangingTail>,
@@ -112,14 +98,14 @@ impl<'a> CandidateMeasure<'a> {
         // actual edges now, and measure Clone decoration after them so those
         // edges are not counted twice. The candidate summary includes their
         // punctuation-hanging barriers, while the live spacing stays unchanged.
-        let (break_end, suffix, candidate_spacing) = if candidates
+        let (break_end, suffix) = if candidates
             && matches!(
                 unit.break_after,
                 BreakClass::Allowed | BreakClass::Emergency | BreakClass::Hyphen
             ) {
-            candidate_end(data, end, spacing, atomics, cx, sat)
+            candidate_end(data, end, atomics, cx, sat)
         } else {
-            (end, super::decoration::width(data, end, false, sat), None)
+            (end, super::decoration::width(data, end, false, sat))
         };
         let ruby_delta =
             crate::ruby::measure::candidate_adjustment(data, start, end, atomics, cx, sat);
@@ -162,40 +148,42 @@ impl<'a> CandidateMeasure<'a> {
         if tail.hanging == LayoutUnit::ZERO {
             tail.kept_spacing = tracking;
         }
-        let required = pos
-            .add(w, sat)
-            .add(tail.kept_spacing, sat)
-            .add(ruby_delta, sat)
-            .sub(tail.hanging, sat)
-            .add(suffix, sat);
+        let natural = indexed.measure(data, break_end, None, &cx.ruby_ranges, sat);
+        let required = natural.content.add(indent, sat).add(ruby_delta, sat);
+        let hyphen = (unit.break_after == BreakClass::Hyphen).then(|| {
+            let leaf = super::spacing::hyphen_unit_summary(data, end - 1, sat);
+            let natural =
+                indexed.measure(data, break_end, Some((end - 1, leaf)), &cx.ruby_ranges, sat);
+            HyphenMeasure {
+                end,
+                natural: natural.content.add(indent, sat).add(ruby_delta, sat),
+                summary: natural.summary,
+            }
+        });
         Self {
             end,
-            break_end,
-            suffix,
-            ruby_delta,
             hangs,
             paragraph_end,
             last: super::punctuation::last_edge(data, end),
             shared_extent,
             required,
-            spacing: candidate_spacing,
+            summary: natural.summary,
+            hyphen,
             tracking,
-            next: pos.add(w, sat),
-            hanging: tail.hanging,
         }
     }
 
     /// The spacing summary of the line ending here.
-    fn summary(
+    fn summary<'a>(
         &self,
-        data: &'a ParagraphData,
-        live: &super::spacing_summary::Cursor<'a>,
+        _data: &'a ParagraphData,
+        _live: &super::spacing_summary::Cursor<'a>,
     ) -> super::spacing_summary::Summary {
-        self.spacing.as_ref().unwrap_or(live).summary(Some(data))
+        self.summary
     }
 
     /// The candidate's widths, to test or defer its fit.
-    fn pending(
+    fn pending<'a>(
         &self,
         data: &'a ParagraphData,
         live: &super::spacing_summary::Cursor<'a>,
@@ -220,7 +208,7 @@ impl<'a> CandidateMeasure<'a> {
     /// delta, after punctuation at its edges. A hanging tail exposes the
     /// punctuation before it.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn overflow_width(
+    pub(super) fn overflow_width<'a>(
         &self,
         data: &'a ParagraphData,
         live: &super::spacing_summary::Cursor<'a>,
@@ -241,7 +229,7 @@ impl<'a> CandidateMeasure<'a> {
     /// adjustments only ever remove width (see `EdgeAdjustment`), so a
     /// candidate that already fits is not adjusted.
     #[allow(clippy::too_many_arguments)]
-    fn overflows(
+    fn overflows<'a>(
         &self,
         data: &'a ParagraphData,
         live: &super::spacing_summary::Cursor<'a>,
@@ -259,7 +247,7 @@ impl<'a> CandidateMeasure<'a> {
     }
 
     /// The width the line needs to end here, given its edge delta.
-    pub(super) fn required_width(
+    pub(super) fn required_width<'a>(
         &self,
         data: &'a ParagraphData,
         live: &super::spacing_summary::Cursor<'a>,
@@ -273,26 +261,13 @@ impl<'a> CandidateMeasure<'a> {
     }
 
     /// The width the line needs to end here with a discretionary hyphen.
-    pub(super) fn hyphen(
+    pub(super) fn hyphen<'a>(
         &self,
-        data: &'a ParagraphData,
-        spacing: &super::spacing_summary::Cursor<'a>,
-        sat: &mut Saturation,
+        _data: &'a ParagraphData,
+        _spacing: &super::spacing_summary::Cursor<'a>,
+        _sat: &mut Saturation,
     ) -> HyphenMeasure {
-        HyphenMeasure {
-            end: self.end,
-            pos: self.next,
-            summary: super::spacing::hyphen_summary(
-                data,
-                spacing,
-                self.end - 1,
-                self.break_end,
-                sat,
-            ),
-            hanging: self.hanging,
-            suffix: self.suffix,
-            ruby_delta: self.ruby_delta,
-        }
+        self.hyphen.expect("a discretionary hyphen candidate")
     }
 }
 
@@ -309,20 +284,18 @@ fn fit_width(
     natural: LayoutUnit,
     sat: &mut Saturation,
 ) -> LayoutUnit {
-    natural.sub(
-        super::punctuation::edges(
-            data,
-            summary,
-            flags,
-            last,
-            Some(options),
-            LayoutUnit::ZERO,
-            natural,
-            sat,
-        )
-        .removed(sat),
+    super::range::finish_width(
+        data,
+        summary,
+        flags,
+        last,
+        Some(options),
+        LayoutUnit::ZERO,
+        natural,
+        LayoutUnit::ZERO,
         sat,
     )
+    .0
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -342,6 +315,7 @@ pub(super) fn scan(
 ) -> Scan {
     let units = &data.units;
     let mut widths = Vec::new();
+    let mut indexed = super::range::Cursor::new(data, start, offset.add(indent, sat), atomics, cx);
     let prefix = super::decoration::width(data, start, true, sat);
     let mut pos = indent.add(prefix, sat);
     let mut last_break: Option<(usize, bool)> = None;
@@ -461,24 +435,15 @@ pub(super) fn scan(
                 .is_none_or(|span| span.text.start >= cut);
         let limited_cut =
             character_cut && max_graphemes.is_some_and(|limit| graphemes_seen >= limit);
-        let w = unit_width_from(
-            data,
-            unit,
-            units[start].text.start,
-            offset
-                .add(pos, sat)
-                .add(spacing.summary(Some(data)).width(sat), sat),
-            atomics,
-            cx,
-            sat,
-        )
-        .add(data.unit_spacing[i].word, sat);
+        let w = indexed.advance(data, i, atomics, cx, sat);
         let measure = CandidateMeasure::new(
             data,
             start,
             i,
             pos,
             w,
+            &indexed,
+            indent,
             &mut spacing,
             &mut tail,
             (!count_mode).then_some(&mut hanging_tail),
@@ -658,58 +623,24 @@ pub(super) fn scan(
     // there, together with the zero-width bidi controls (PDI, PDF) that
     // precede a box's end. Out-of-flow anchors are not pulled.
     if matches!(reason, BreakReason::Regular | BreakReason::Emergency) {
-        while let Some(unit) = units.get(i)
-            && super::pulls_after_break(data, i)
-        {
-            widths.push(unit_width(data, unit, LayoutUnit::ZERO, atomics, cx, sat));
+        while units.get(i).is_some() && super::pulls_after_break(data, i) {
+            widths.push(indexed.advance(data, i, atomics, cx, sat));
             i += 1;
         }
     }
-    let total = widths
-        .iter()
-        .fold(LayoutUnit::ZERO, |acc, w| acc.add(*w, sat));
-    let (hang_start, trailing) = super::whitespace::trailing(data, start, i, &widths, sat);
-    let mut result = Scan {
-        ruby: None,
-        ruby_caret_gaps: Vec::new(),
-        prepared: false,
-        overlays: Vec::new(),
-        end: i,
-        reason,
-        widths,
-        leading: None,
-        autospace_gaps: Vec::new(),
-        content: total
-            .sub(trailing, sat)
-            .add(prefix, sat)
-            .add(super::decoration::width(data, i, false, sat), sat),
-        hang_start,
-        hanging_end: LayoutUnit::ZERO,
-        punctuation_edges: Default::default(),
-    };
-    if let Some(end) = taken_hyphen
-        && let Some(windows) = super::hyphen::line(data, start, end, cx, sat)
-    {
-        super::reshape::apply_windows(data, start, &mut result, windows, cx, sat);
-    }
-    let visible_hyphen = result
-        .overlays
-        .iter()
-        .find_map(|w| w.hyphen.as_ref().map(|t| t.start));
-    result.content = result.content.add(
-        super::spacing::width(data, start, result.hang_start, visible_hyphen, sat),
-        sat,
-    );
-    super::punctuation::prepare(
+    let mut result = indexed.selected(
         data,
-        start,
-        &mut result,
+        i,
+        widths,
+        indent,
         flags,
         Some(options),
         available,
-        indent,
+        taken_hyphen,
+        cx,
         sat,
     );
+    result.reason = reason;
     result
 }
 
@@ -933,13 +864,11 @@ struct PendingHyphen {
 
 /// The widths of a line ending at a discretionary hyphen, before the
 /// hyphenated edge is shaped.
+#[derive(Clone, Copy)]
 pub(super) struct HyphenMeasure {
     end: usize,
-    pos: LayoutUnit,
+    natural: LayoutUnit,
     summary: super::spacing_summary::Summary,
-    hanging: LayoutUnit,
-    suffix: LayoutUnit,
-    ruby_delta: LayoutUnit,
 }
 
 impl HyphenMeasure {
@@ -956,12 +885,8 @@ impl HyphenMeasure {
     ) -> Option<LayoutUnit> {
         let windows = super::hyphen::line(data, start, self.end, cx, sat)?;
         let required = self
-            .pos
-            .add(self.summary.width(sat), sat)
-            .sub(self.hanging, sat)
-            .add(self.suffix, sat)
-            .add(super::windows::cost(&windows, self.end, sat), sat)
-            .add(self.ruby_delta, sat);
+            .natural
+            .add(super::windows::cost(&windows, self.end, sat), sat);
         Some(fit_width(
             data,
             self.summary,

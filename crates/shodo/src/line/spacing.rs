@@ -347,6 +347,7 @@ fn spacing_level(data: &ParagraphData, index: usize) -> u8 {
     }
 }
 
+#[cfg(test)]
 fn push_summary(data: &ParagraphData, cursor: &mut Cursor, index: usize, summary: Summary) {
     cursor.push(spacing_level(data, index), summary, Some(data));
 }
@@ -480,6 +481,7 @@ fn visible_summary(
     }
 }
 
+#[cfg(test)]
 pub(super) fn width(
     data: &ParagraphData,
     start: usize,

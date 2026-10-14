@@ -1,8 +1,11 @@
-use super::{Scan, decoration};
+use super::Scan;
+#[cfg(test)]
+use super::decoration;
 use crate::LayoutContext;
 use crate::analysis::units::{BreakClass, UnitKind};
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::limits::WarningKind;
+#[cfg(test)]
 use crate::output::BreakReason;
 use crate::paragraph::{
     AtomicSizes, BreakPlan, BreakToken, LineConstraint, Paragraph, ParagraphData,
@@ -54,8 +57,19 @@ pub(super) fn selected(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> Scan {
-    let mut scan = selected_raw(
-        data, start, end, offset, indent, flags, options, available, atomics, cx, sat,
+    let mut scan = super::range::selected(
+        data,
+        start,
+        end,
+        offset,
+        indent,
+        flags,
+        options,
+        available,
+        hyphen_end(data, end),
+        atomics,
+        cx,
+        sat,
     );
     crate::ruby::measure::apply(data, start, &mut scan, atomics, cx, sat);
     scan
@@ -64,7 +78,8 @@ pub(super) fn selected(
 /// Ordinary unit costs without recursively applying this range's ruby groups.
 /// `options` is `None` for ruby range measurement (see `punctuation::edges`).
 #[allow(clippy::too_many_arguments)]
-pub(super) fn selected_raw(
+#[cfg(test)]
+pub(super) fn reference_selected_raw(
     data: &ParagraphData,
     start: usize,
     end: usize,

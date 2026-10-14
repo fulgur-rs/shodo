@@ -11,6 +11,12 @@
 //! a `blocks` hit replays the recorded effects of its measurement, and the
 //! range costs and tab prefix keep their saturation per unit and per tab
 //! step, charged for the units and tabs of each query's own range.
+mod cursor;
+#[cfg(test)]
+#[path = "range_cursor_tests.rs"]
+mod cursor_tests;
+pub(super) use cursor::Cursor;
+
 use super::spacing_summary::{RangeIndex, raw};
 use crate::LayoutContext;
 use crate::analysis::units::UnitKind;
@@ -302,6 +308,7 @@ struct Costs {
     last_preserved: Vec<usize>,
     last_blocked_preserved: Vec<usize>,
     bad_atomics: Vec<usize>,
+    obstructed: Vec<bool>,
     /// Units whose width saturated while the costs were built, with the
     /// running (wrapping) saturation through each: a query charges those of
     /// its own range. Empty for ordinary paragraphs.
@@ -479,10 +486,72 @@ fn build(data: &ParagraphData, atomics: &AtomicSizes, cx: &mut LayoutContext) ->
         last_preserved,
         last_blocked_preserved,
         bad_atomics,
+        obstructed: obstruction_index(data),
         saturated,
         tabs,
         tab_prefix: None,
     }
+}
+
+/// One indexed model for selected content, before edge-window replacement.
+pub(super) struct Natural {
+    pub(super) content: LayoutUnit,
+    pub(super) summary: super::spacing_summary::Summary,
+    pub(super) hang_start: usize,
+    widths: Vec<LayoutUnit>,
+}
+
+impl Natural {
+    #[allow(clippy::too_many_arguments)]
+    fn finish(
+        &self,
+        data: &ParagraphData,
+        end: usize,
+        delta: LayoutUnit,
+        flags: u8,
+        options: Option<&crate::style::LineOptions>,
+        available: LayoutUnit,
+        indent: LayoutUnit,
+        sat: &mut Saturation,
+    ) -> (LayoutUnit, super::punctuation::EdgeAdjustment) {
+        let width = self.content.add(delta, sat);
+        finish_width(
+            data,
+            self.summary,
+            flags,
+            super::punctuation::last_edge(data, end),
+            options,
+            available,
+            width,
+            indent,
+            sat,
+        )
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn finish_width(
+    data: &ParagraphData,
+    summary: super::spacing_summary::Summary,
+    flags: u8,
+    last: bool,
+    options: Option<&crate::style::LineOptions>,
+    available: LayoutUnit,
+    natural: LayoutUnit,
+    indent: LayoutUnit,
+    sat: &mut Saturation,
+) -> (LayoutUnit, super::punctuation::EdgeAdjustment) {
+    let edges = super::punctuation::edges(
+        data,
+        summary,
+        flags,
+        last,
+        options,
+        available,
+        natural.add(indent, sat),
+        sat,
+    );
+    (natural.sub(edges.removed(sat), sat), edges)
 }
 
 pub(super) fn width(
@@ -496,6 +565,42 @@ pub(super) fn width(
     {
         cx.ruby_width_calls += 1;
     }
+    let hyphen_end = super::plan::hyphen_end(data, range.end).filter(|end| *end > range.start);
+    let windows = hyphen_end.and_then(|end| super::hyphen::line(data, range.start, end, cx, sat));
+    let leaf = windows.as_ref().and(hyphen_end).map(|end| {
+        (
+            end - 1,
+            super::spacing::hyphen_unit_summary(data, end - 1, sat),
+        )
+    });
+    let natural = natural(data, range.clone(), leaf, atomics, cx, sat);
+    let delta = match windows {
+        Some(windows) => super::windows::cost(&windows, range.end, sat),
+        None => super::windows::delta(data, range.start, range.end, cx, sat),
+    };
+    natural
+        .finish(
+            data,
+            range.end,
+            delta,
+            0,
+            None,
+            LayoutUnit::MAX,
+            LayoutUnit::ZERO,
+            sat,
+        )
+        .0
+}
+
+#[allow(clippy::too_many_arguments)]
+fn natural(
+    data: &ParagraphData,
+    range: Range<usize>,
+    hyphen_leaf: Option<(usize, super::spacing_summary::Summary)>,
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> Natural {
     let first = data
         .selectable_clusters
         .partition_point(|u| (*u as usize) < range.start);
@@ -529,18 +634,10 @@ pub(super) fn width(
             corrections.push((i, actual.sub(data.units[i].slice_advance, sat)));
         }
     }
-    let clipped_delta = corrections
-        .iter()
-        .fold(LayoutUnit::ZERO, |w, (_, delta)| w.add(*delta, sat));
-    let hyphen_end = super::plan::hyphen_end(data, range.end).filter(|end| *end > range.start);
-    let hyphen_windows =
-        hyphen_end.and_then(|end| super::hyphen::line(data, range.start, end, cx, sat));
-    let hyphen_leaf = hyphen_windows.as_ref().and(hyphen_end).map(|end| {
-        (
-            end - 1,
-            super::spacing::hyphen_unit_summary(data, end - 1, sat),
-        )
-    });
+    let clipped_delta = raw(
+        corrections.iter().map(|(_, d)| i64::from(d.raw())).sum(),
+        sat,
+    );
     if cx
         .ruby_ranges
         .root
@@ -566,7 +663,6 @@ pub(super) fn width(
     // and every query charges the steps of its tabs, computed now or
     // earlier, so replacing the prefix for another start changes no
     // query's effects.
-    let mut tab_total = 0_i64;
     if !costs.tabs.is_empty() {
         if costs
             .tab_prefix
@@ -632,50 +728,32 @@ pub(super) fn width(
             }
             prefix.through = range.end;
         }
-        tab_total = prefix.before(&costs.tabs, range.end);
         absorb(sat, prefix.saturation(&costs.tabs, range.end));
     }
     let costs = &*costs;
-    let mut stop = range
-        .start
-        .max(costs.last_content[range.end])
-        .max(costs.last_blocked_preserved[range.end]);
-    if super::whitespace::obstructed(data, range.end) {
-        stop = stop.max(costs.last_preserved[range.end]);
-    }
-    let next = costs.hanging_units.partition_point(|u| *u < stop);
-    let hang = costs
-        .hanging_units
-        .get(next)
-        .copied()
-        .filter(|i| *i < range.end)
-        .unwrap_or(range.end);
-    let trailing_tabs = costs
-        .tab_prefix
-        .as_ref()
-        .filter(|p| p.start == range.start)
-        .map_or(0, |p| {
-            p.before(&costs.tabs, range.end) - p.before(&costs.tabs, hang)
-        });
-    let trailing = costs.hanging_advances[range.end] - costs.hanging_advances[hang] + trailing_tabs;
-    let natural = raw(
-        costs.advances[range.end] - costs.advances[range.start] + tab_total - trailing,
+    let measured = geometry(
+        data,
+        costs,
+        range.clone(),
+        |end| {
+            costs
+                .tab_prefix
+                .as_ref()
+                .map_or(0, |p| p.before(&costs.tabs, end))
+        },
+        |end, sat| {
+            raw(
+                corrections
+                    .iter()
+                    .filter(|(i, _)| *i < end)
+                    .map(|(_, delta)| i64::from(delta.raw()))
+                    .sum(),
+                sat,
+            )
+        },
+        hyphen_leaf,
         sat,
     );
-    let natural = natural.add(
-        corrections
-            .iter()
-            .filter(|(i, _)| *i < hang)
-            .fold(LayoutUnit::ZERO, |w, (_, delta)| w.add(*delta, sat)),
-        sat,
-    );
-    let summary = costs
-        .spacing
-        .query_replace(range.start..hang, hyphen_leaf, Some(data));
-    let width = natural
-        .add(summary.width(sat), sat)
-        .add(super::decoration::width(data, range.start, true, sat), sat)
-        .add(super::decoration::width(data, range.end, false, sat), sat);
     #[cfg(test)]
     {
         cx.ruby_measure_visits += costs.spacing.take_visits();
@@ -703,22 +781,165 @@ pub(super) fn width(
         }
         super::scan::unit_width(data, &data.units[i], LayoutUnit::ZERO, atomics, cx, sat);
     }
-    let delta = match hyphen_windows {
-        Some(windows) => super::windows::cost(&windows, range.end, sat),
-        None => super::windows::delta(data, range.start, range.end, cx, sat),
+    measured
+}
+
+/// End-edge barriers at every boundary, built in linear time. A candidate
+/// must not rescan the rest of a long transparent suffix or all its ancestors.
+fn obstruction_index(data: &ParagraphData) -> Vec<bool> {
+    let blocks = |b: usize| {
+        let edges = data.boxes[b].edges;
+        edges.padding.inline_end != 0.0 || edges.border.inline_end != 0.0
     };
-    let width = width.add(delta, sat);
-    let adjustment = super::punctuation::edges(
-        data,
-        summary,
-        0,
-        super::punctuation::last_edge(data, range.end),
-        None,
-        LayoutUnit::MAX,
-        width,
+    let mut cloned = vec![false; data.boxes.len()];
+    for (i, b) in data.boxes.iter().enumerate() {
+        cloned[i] = b.parent.is_some_and(|parent| cloned[parent as usize])
+            || super::decoration::cloned(data, i as u32) && blocks(i);
+    }
+    let mut obstruction = vec![false; data.units.len() + 1];
+    let mut following = false;
+    for (i, unit) in data.units.iter().enumerate().rev() {
+        following = match unit.kind {
+            UnitKind::Close { box_index } => blocks(box_index as usize) || following,
+            UnitKind::BidiControl | UnitKind::Float { .. } | UnitKind::Absolute { .. } => following,
+            UnitKind::Cluster { .. } if super::whitespace::transparent(data, i) => following,
+            _ => false,
+        };
+        let boundary = match unit.kind {
+            UnitKind::Close { box_index } => Some(box_index),
+            _ => unit.parent_box,
+        };
+        obstruction[i] = following || boundary.is_some_and(|b| cloned[b as usize]);
+    }
+    obstruction
+}
+
+#[allow(clippy::too_many_arguments)]
+fn geometry(
+    data: &ParagraphData,
+    costs: &Costs,
+    range: Range<usize>,
+    tabs_before: impl Fn(usize) -> i64,
+    correction_before: impl Fn(usize, &mut Saturation) -> LayoutUnit,
+    hyphen_leaf: Option<(usize, super::spacing_summary::Summary)>,
+    sat: &mut Saturation,
+) -> Natural {
+    let mut stop = range
+        .start
+        .max(costs.last_content[range.end])
+        .max(costs.last_blocked_preserved[range.end]);
+    if costs.obstructed[range.end] {
+        stop = stop.max(costs.last_preserved[range.end]);
+    }
+    let next = costs.hanging_units.partition_point(|u| *u < stop);
+    let hang = costs
+        .hanging_units
+        .get(next)
+        .copied()
+        .filter(|i| *i < range.end)
+        .unwrap_or(range.end);
+    let trailing_tabs = tabs_before(range.end) - tabs_before(hang);
+    let trailing = costs.hanging_advances[range.end] - costs.hanging_advances[hang] + trailing_tabs;
+    let natural = raw(
+        costs.advances[range.end] - costs.advances[range.start] + tabs_before(range.end) - trailing,
         sat,
     );
-    width.sub(adjustment.removed(sat), sat)
+    let natural = natural.add(correction_before(hang, sat), sat);
+    let summary = costs
+        .spacing
+        .query_replace(range.start..hang, hyphen_leaf, Some(data));
+    let width = natural
+        .add(summary.width(sat), sat)
+        .add(super::decoration::width(data, range.start, true, sat), sat)
+        .add(super::decoration::width(data, range.end, false, sat), sat);
+    Natural {
+        content: width,
+        summary,
+        hang_start: hang,
+        widths: Vec::new(),
+    }
+}
+
+pub(super) fn ensure_costs(data: &ParagraphData, atomics: &AtomicSizes, cx: &mut LayoutContext) {
+    let key = (data.id, data as *const ParagraphData as usize);
+    if !cx.ruby_ranges.sets.contains_key(&key) {
+        let costs = build(data, atomics, cx);
+        cx.ruby_ranges.sets.insert(key, costs);
+    }
+}
+
+/// Materialize a selected line without introducing a second width model.
+/// `hyphen` names the break actually chosen by the scanner (character-count
+/// cuts and emergency breaks need not render a discretionary hyphen).
+#[allow(clippy::too_many_arguments)]
+pub(super) fn selected(
+    data: &ParagraphData,
+    start: usize,
+    end: usize,
+    offset: LayoutUnit,
+    indent: LayoutUnit,
+    flags: u8,
+    options: Option<&crate::style::LineOptions>,
+    available: LayoutUnit,
+    hyphen: Option<usize>,
+    atomics: &AtomicSizes,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> super::Scan {
+    let mut cursor = Cursor::new(data, start, offset.add(indent, sat), atomics, cx);
+    let windows = hyphen.and_then(|end| super::hyphen::line(data, start, end, cx, sat));
+    let mut widths = Vec::with_capacity(end - start);
+    for at in start..end {
+        widths.push(cursor.advance(data, at, atomics, cx, sat));
+    }
+    cursor.selected_windows(
+        data, end, widths, indent, flags, options, available, hyphen, windows, cx, sat,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn finish_selected(
+    data: &ParagraphData,
+    start: usize,
+    end: usize,
+    indent: LayoutUnit,
+    flags: u8,
+    options: Option<&crate::style::LineOptions>,
+    available: LayoutUnit,
+    windows: Option<Vec<super::windows::Window>>,
+    mut natural: Natural,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> super::Scan {
+    let reason = if end > start && matches!(data.units[end - 1].kind, UnitKind::ForcedBreak) {
+        crate::output::BreakReason::Forced
+    } else if end == data.units.len() {
+        crate::output::BreakReason::End
+    } else if matches!(data.units[end].kind, UnitKind::BlockInInline { .. }) {
+        crate::output::BreakReason::BlockInInline
+    } else {
+        super::soft_break_reason(data, start, end)
+    };
+    let mut scan = super::Scan {
+        ruby: None,
+        ruby_caret_gaps: Vec::new(),
+        prepared: false,
+        overlays: Vec::new(),
+        end,
+        reason,
+        widths: std::mem::take(&mut natural.widths),
+        leading: None,
+        autospace_gaps: Vec::new(),
+        content: natural.content,
+        hang_start: natural.hang_start,
+        hanging_end: LayoutUnit::ZERO,
+        punctuation_edges: Default::default(),
+    };
+    let windows = windows.unwrap_or_else(|| super::windows::measure(data, start, end, cx, sat));
+    let delta = super::reshape::materialize_windows(data, start, &mut scan, windows, cx, sat);
+    (scan.content, scan.punctuation_edges) =
+        natural.finish(data, end, delta, flags, options, available, indent, sat);
+    scan
 }
 
 #[cfg(test)]
@@ -746,6 +967,96 @@ mod tests {
             )
             .unwrap();
         fonts
+    }
+
+    #[test]
+    fn normal_lines_share_indexed_tab_and_atomic_widths() {
+        let root = InlineStyle {
+            white_space_collapse: WhiteSpaceCollapse::Preserve,
+            tab_size: crate::style::TabSize::Px(40.0),
+            ..Default::default()
+        };
+        let mut builder = ParagraphBuilder::new(
+            &ParagraphStyle {
+                root: root.clone(),
+                ..Default::default()
+            },
+            &Limits::default(),
+        );
+        builder.push_atomic(NodeId(1), &root, InlineEdges::default());
+        builder.push_text(TextSource::Generated { node: NodeId(2) }, "\t");
+        builder.push_atomic(NodeId(3), &root, InlineEdges::default());
+        let p = builder.build(&mut LayoutContext::new(), &fonts()).unwrap();
+        let mut cx = LayoutContext::new();
+        let mut atomics = AtomicSizes::new();
+        atomics.insert(
+            NodeId(1),
+            crate::AtomicSize {
+                inline_size: 17.0,
+                ..Default::default()
+            },
+        );
+        for (last, expected) in [(13.0, 43.0), (23.0, 53.0)] {
+            atomics.insert(
+                NodeId(3),
+                crate::AtomicSize {
+                    inline_size: last,
+                    ..Default::default()
+                },
+            );
+            let before = cx.ruby_range_build_units;
+            let mut constraint = crate::LineConstraint::new(1000.0);
+            constraint.inline_start_offset = 10.0;
+            let crate::LineResult::Line(line) = p.next_line(
+                &mut cx,
+                p.start_token(),
+                &Default::default(),
+                &constraint,
+                &atomics,
+            ) else {
+                panic!("expected a line")
+            };
+            assert_eq!(line.inline_size(), expected);
+            assert_eq!(cx.ruby_range_build_units - before, p.data.units.len());
+            // Ruby uses a zero tab origin: the same prefix table stays valid,
+            // but the tab steps must be recomputed for that origin.
+            assert_eq!(
+                width(
+                    &p.data,
+                    0..p.data.units.len(),
+                    &atomics,
+                    &mut cx,
+                    &mut Saturation::default()
+                )
+                .to_f32(),
+                40.0 + last
+            );
+            assert_eq!(cx.ruby_range_build_units - before, p.data.units.len());
+        }
+    }
+
+    #[test]
+    fn selected_normal_line_reports_a_missing_atomic_once() {
+        let mut builder = ParagraphBuilder::new(&Default::default(), &Limits::default());
+        builder.push_atomic(NodeId(99), &Default::default(), InlineEdges::default());
+        let p = builder.build(&mut LayoutContext::new(), &fonts()).unwrap();
+        let mut cx = LayoutContext::new();
+        let crate::LineResult::Line(line) = p.next_line(
+            &mut cx,
+            p.start_token(),
+            &Default::default(),
+            &crate::LineConstraint::new(100.0),
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("expected a line")
+        };
+        assert_eq!(line.inline_size(), 0.0);
+        let warnings = cx.take_warnings();
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert_eq!(
+            warnings[0].kind,
+            crate::limits::WarningKind::MissingAtomicSize
+        );
     }
 
     #[test]
@@ -812,7 +1123,7 @@ mod tests {
                         &mut cx,
                         &mut Saturation::default(),
                     );
-                    let expected = super::super::plan::selected_raw(
+                    let expected = super::super::plan::reference_selected_raw(
                         &p.data,
                         start,
                         end,
@@ -892,7 +1203,7 @@ mod tests {
                             &mut cx,
                             &mut Saturation::default(),
                         );
-                        let expected = super::super::plan::selected_raw(
+                        let expected = super::super::plan::reference_selected_raw(
                             &p.data,
                             start,
                             end,
@@ -962,7 +1273,7 @@ mod tests {
                         &mut cx,
                         &mut Saturation::default(),
                     );
-                    let expected = super::super::plan::selected_raw(
+                    let expected = super::super::plan::reference_selected_raw(
                         &p.data,
                         start,
                         end,
@@ -1094,7 +1405,7 @@ mod tests {
                         &mut cx,
                         &mut Saturation::default(),
                     );
-                    let expected = super::super::plan::selected_raw(
+                    let expected = super::super::plan::reference_selected_raw(
                         &p.data,
                         start,
                         end,

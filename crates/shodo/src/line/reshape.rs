@@ -264,6 +264,31 @@ pub(super) fn apply_windows(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) {
+    materialize(data, start, scan, windows, true, cx, sat);
+}
+
+pub(super) fn materialize_windows(
+    data: &crate::paragraph::ParagraphData,
+    start: usize,
+    scan: &mut super::Scan,
+    windows: Vec<super::windows::Window>,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    materialize(data, start, scan, windows, false, cx, sat)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn materialize(
+    data: &crate::paragraph::ParagraphData,
+    start: usize,
+    scan: &mut super::Scan,
+    windows: Vec<super::windows::Window>,
+    update_content: bool,
+    cx: &mut LayoutContext,
+    sat: &mut Saturation,
+) -> LayoutUnit {
+    let mut delta = LayoutUnit::ZERO;
     scan.prepared = true;
     for window in windows {
         if scan.overlays.iter().any(|existing| {
@@ -290,11 +315,16 @@ pub(super) fn apply_windows(
             let old = scan.widths[index - start];
             scan.widths[index - start] = new;
             if index < scan.hang_start {
-                scan.content = scan.content.sub(old, sat).add(new, sat);
+                if update_content {
+                    scan.content = scan.content.sub(old, sat).add(new, sat);
+                } else {
+                    delta = delta.add(new.sub(old, sat), sat);
+                }
             }
         }
         scan.overlays.push(window.overlay);
     }
+    delta
 }
 
 struct OwnedPart {

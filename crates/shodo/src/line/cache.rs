@@ -109,6 +109,7 @@ pub(crate) struct PartialLine {
     offset: LayoutUnit,
     indent: LayoutUnit,
     scan: Scan,
+    indexed_widths: Option<super::range::Cursor>,
     prefix: Vec<LayoutUnit>,
     tracking: Vec<LayoutUnit>,
     thresholds: Vec<(usize, LayoutUnit)>,
@@ -172,6 +173,10 @@ impl PartialLine {
                 * std::mem::size_of::<crate::ruby::align::CaretGap>()
             + self.scan.overlays.capacity() * std::mem::size_of::<super::reshape::EdgeOverlay>()
             + overlay_bytes
+            + self
+                .indexed_widths
+                .as_ref()
+                .map_or(0, super::range::Cursor::bytes)
             + self.prefix.capacity() * std::mem::size_of::<LayoutUnit>()
             + self.tracking.capacity() * std::mem::size_of::<LayoutUnit>()
             + self.thresholds.capacity() * std::mem::size_of::<(usize, LayoutUnit)>()
@@ -197,25 +202,9 @@ impl PartialLine {
         let warning_checkpoint = cx.warnings.checkpoint();
         // A cached prefix always describes the unbroken text. The selected
         // discretionary glyph is materialized afresh after choosing an end.
-        let natural_widths: Vec<_> = units
-            .iter()
-            .enumerate()
-            .map(|(k, u)| {
-                super::scan::unit_width_from(
-                    data,
-                    u,
-                    data.units[start].text.start,
-                    LayoutUnit::ZERO,
-                    atomics,
-                    cx,
-                    sat,
-                )
-                .add(data.unit_spacing[start + k].word, sat)
-            })
-            .collect();
-        if natural_widths.iter().any(|w| *w < LayoutUnit::ZERO) {
-            return false;
-        }
+        let mut indexed =
+            super::range::Cursor::new(data, start, self.offset.add(indent, sat), atomics, cx);
+        let mut natural_widths = Vec::with_capacity(units.len());
         let mut hyphens = Candidates::default();
         let mut prefix = vec![decoration::width(data, start, true, sat)];
         let mut thresholds = Vec::new();
@@ -229,18 +218,25 @@ impl PartialLine {
         let mut tracking = vec![LayoutUnit::ZERO];
         // Widths are measured from the line's indented start, as the scan
         // measures them, and stored relative to the indent.
-        for (k, (u, w)) in units.iter().zip(&natural_widths).enumerate() {
+        for (k, u) in units.iter().enumerate() {
             #[cfg(test)]
             {
                 cx.cache_prepare_visits += 1;
             }
             let at = start + k;
+            let w = indexed.advance(data, at, atomics, cx, sat);
+            if w < LayoutUnit::ZERO {
+                return false;
+            }
+            natural_widths.push(w);
             let measure = super::scan::CandidateMeasure::new(
                 data,
                 start,
                 at,
                 prefix[k].add(indent, sat),
-                *w,
+                w,
+                &indexed,
+                indent,
                 &mut spacing,
                 &mut tail,
                 Some(&mut hanging_tail),
@@ -252,7 +248,7 @@ impl PartialLine {
             if let UnitKind::Float { node, ordinal } = u.kind {
                 floats.push((at, node, ordinal));
             }
-            prefix.push(prefix[k].add(*w, sat));
+            prefix.push(prefix[k].add(w, sat));
             let (delta, viable) = super::windows::candidate(data, start, at + 1, cx, sat);
             if k > 0 && measure.tests_overflow() && !matches!(u.kind, UnitKind::ForcedBreak) {
                 let extent = measure.overflow_width(
@@ -305,6 +301,7 @@ impl PartialLine {
         {
             return false;
         }
+        self.indexed_widths = Some(indexed);
         self.scan.widths = natural_widths;
         self.scan.overlays.clear();
         self.scan.prepared = false;
@@ -412,6 +409,10 @@ pub(super) fn resolve(
         ));
     }
     let start = token.unit as usize;
+    // Explicit shrink and another paragraph's intrinsic measurement may
+    // release range indexes while retaining this partial line's cursor.
+    cx.ruby_ranges.begin(&para.data, atomics);
+    super::range::ensure_costs(&para.data, atomics, cx);
     let valid = sat.is_clean()
         && cx.partial.as_ref().is_some_and(|p| {
             Arc::ptr_eq(&p.data, &para.data)
@@ -477,6 +478,7 @@ pub(super) fn resolve(
             offset,
             indent,
             scan: scanned,
+            indexed_widths: None,
             prefix: Vec::new(),
             tracking: Vec::new(),
             thresholds: Vec::new(),
@@ -607,61 +609,31 @@ pub(super) fn resolve(
             crate::ruby::measure::candidate_adjustment_exempt(&data, start, i, atomics, cx, sat);
         return Err((node, ordinal, position.add(delta, sat).add(ruby_delta, sat)));
     }
-    let (hang_start, trailing) =
-        super::whitespace::trailing(&p.data, start, end, &p.scan.widths, sat);
-    // Release the mutable cache borrow before accessing the context shaper.
     let data = Arc::clone(&p.data);
-    let mut result = Scan {
-        ruby: None,
-        ruby_caret_gaps: Vec::new(),
-        prepared: false,
-        overlays: Vec::new(),
-        end,
-        reason: if end == p.scan.end {
-            p.scan.reason
-        } else {
-            super::soft_break_reason(&p.data, start, end)
-        },
-        widths: p.scan.widths[..end - start].to_vec(),
-        leading: None,
-        autospace_gaps: Vec::new(),
-        content: p.prefix[end - start]
-            .sub(trailing, sat)
-            .add(p.tracking[hang_start - start], sat)
-            .add(decoration::width(&p.data, end, false, sat), sat),
-        hang_start,
-        hanging_end: LayoutUnit::ZERO,
-        punctuation_edges: Default::default(),
+    let indexed = p.indexed_widths.take().expect("indexed retry widths");
+    let widths = p.scan.widths[..end - start].to_vec();
+    let reason = if end == p.scan.end {
+        p.scan.reason
+    } else {
+        super::soft_break_reason(&data, start, end)
     };
-    if let Some(end) = selected_hyphen
-        && let Some(windows) = hyphen::line(&data, start, end, cx, sat)
-    {
-        super::reshape::apply_windows(&data, start, &mut result, windows, cx, sat);
-        let visible = result
-            .overlays
-            .iter()
-            .find_map(|w| w.hyphen.as_ref().map(|t| t.start));
-        result.content = result
-            .content
-            .sub(
-                super::spacing::width(&data, start, result.hang_start, None, sat),
-                sat,
-            )
-            .add(
-                super::spacing::width(&data, start, result.hang_start, visible, sat),
-                sat,
-            );
-    }
-    super::punctuation::prepare(
+    let mut result = indexed.selected(
         &data,
-        start,
-        &mut result,
+        end,
+        widths,
+        indent,
         token.flags,
         Some(options),
         available,
-        indent,
+        selected_hyphen,
+        cx,
         sat,
     );
+    result.reason = reason;
+    cx.partial
+        .as_mut()
+        .expect("retained indexed retry")
+        .indexed_widths = Some(indexed);
     Ok(result)
 }
 
