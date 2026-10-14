@@ -565,10 +565,9 @@ fn take_fallback(
         (b, Some(edge.then_some(b)), BreakReason::Regular)
     } else if let Some(b) = last_emergency {
         (b, None, BreakReason::Emergency)
-    } else if let Some(b) = first_hyphen.take() {
-        (b, Some(Some(b)), BreakReason::Regular)
     } else {
-        return None;
+        let b = first_hyphen.take()?;
+        (b, Some(Some(b)), BreakReason::Regular)
     };
     if let Some(hyphen) = hyphen {
         *taken_hyphen = hyphen;
