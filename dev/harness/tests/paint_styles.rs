@@ -9,6 +9,10 @@ use shodo::{
 };
 use shodo_fixtures::{FONTS, load_fonts};
 
+#[path = "support/paint_spans.rs"]
+mod shared_paint;
+use shared_paint::paint_spans;
+
 const RED: [u8; 4] = [200, 10, 20, 128];
 const BLUE: [u8; 4] = [0, 0, 255, 255];
 const GREEN: [u8; 4] = [0, 160, 0, 255];
@@ -272,7 +276,7 @@ fn source_spans_partition_ffi_and_resolve_real_metrics() {
     .unwrap();
     let ls = lines(&p, 1000.0);
     let r = runs(&ls[0])[0];
-    let spans = ls[0].paint_spans();
+    let spans = paint_spans(&ls[0]);
     assert_eq!(spans.len(), 3);
     assert_eq!(
         spans
@@ -351,7 +355,7 @@ fn multiline_bidi_justification_and_whitespace_spans() {
     let index = LineLayout::new(&ls);
     let mut covered = String::new();
     for (n, line) in ls.iter().enumerate() {
-        for s in line.paint_spans() {
+        for s in paint_spans(line) {
             covered.push_str(&line.text()[s.text_range.clone()]);
             assert!(s.rect.inline_size >= 0.0 && s.rect.block_start.is_finite());
             let rect = index.selection_rects(
@@ -374,7 +378,7 @@ fn multiline_bidi_justification_and_whitespace_spans() {
     assert_eq!(covered, p.text());
     assert!(
         ls.iter()
-            .flat_map(|l| l.paint_spans())
+            .flat_map(paint_spans)
             .any(|s| &p.text()[s.text_range.clone()] == "\t")
     );
     let p = RichText::new(&ParagraphStyle::default())
@@ -382,7 +386,7 @@ fn multiline_bidi_justification_and_whitespace_spans() {
         .build(&mut LayoutContext::new(), &fonts.collection)
         .unwrap();
     let ls = lines(&p, 1000.0);
-    let spans = ls[0].paint_spans();
+    let spans = paint_spans(&ls[0]);
     let rendered = spans
         .iter()
         .map(|s| &ls[0].text()[s.text_range.clone()])
@@ -424,7 +428,7 @@ fn fallback_adjusted_metrics_and_first_line_spans() {
     assert!(ls.len() > 1);
     let mut seen = std::collections::BTreeSet::new();
     for (n, line) in ls.iter().enumerate() {
-        for s in line.paint_spans() {
+        for s in paint_spans(line) {
             let r = runs(line)
                 .into_iter()
                 .find(|r| {
@@ -452,11 +456,7 @@ fn fallback_adjusted_metrics_and_first_line_spans() {
         }
     }
     assert_eq!(seen.len(), 2);
-    assert!(
-        ls.iter()
-            .flat_map(|l| l.paint_spans())
-            .any(|s| s.font_size > 16.0)
-    );
+    assert!(ls.iter().flat_map(paint_spans).any(|s| s.font_size > 16.0));
 }
 
 #[test]
@@ -473,7 +473,7 @@ fn combining_sources_and_shy_keep_paint() {
         .build(&mut LayoutContext::new(), &fonts.collection)
         .unwrap();
     let ls = lines(&p, 1000.0);
-    let spans = ls[0].paint_spans();
+    let spans = paint_spans(&ls[0]);
     assert_eq!(
         spans
             .iter()
@@ -507,8 +507,7 @@ fn combining_sources_and_shy_keep_paint() {
             .flat_map(|r| r.clusters())
             .any(|c| c.flags.synthetic_hyphen)
     );
-    let s = ls[0]
-        .paint_spans()
+    let s = paint_spans(&ls[0])
         .into_iter()
         .find(|s| s.text_range == (2..4))
         .unwrap();
@@ -529,8 +528,7 @@ fn combining_sources_and_shy_keep_paint() {
         .unwrap();
     let ls = lines(&p, 1000.0);
     assert!(
-        ls[0]
-            .paint_spans()
+        paint_spans(&ls[0])
             .iter()
             .all(|s| s.node != Some(NodeId(2)))
     );
@@ -570,7 +568,7 @@ fn vertical_sideways_and_combined_decorations() {
             .unwrap();
         let ls = lines(&p, 1000.0);
         let rs = runs(&ls[0]);
-        let spans = ls[0].paint_spans();
+        let spans = paint_spans(&ls[0]);
         assert!(!spans.is_empty());
         for span in &spans {
             let d = span.underline().unwrap();
@@ -642,7 +640,7 @@ fn tab_decorations_follow_adjacent_text_baselines() {
                     .build(&mut LayoutContext::new(), &fonts.collection)
                     .unwrap();
                 let ls = lines(&p, 300.0);
-                let spans = ls[0].paint_spans();
+                let spans = paint_spans(&ls[0]);
                 assert_eq!(spans.len(), 3);
                 assert_eq!(spans[1].text_range, 1..2);
                 for decoration in [
@@ -698,5 +696,71 @@ fn legacy_first_line_inherits_paint_components_independently() {
         "child color does not prevent unrelated first-line underline inheritance"
     );
     assert!(r.paint_style().underline.is_some());
-    assert!(ls[0].paint_spans()[0].underline().is_some());
+    assert!(paint_spans(&ls[0])[0].underline().is_some());
+}
+
+#[test]
+fn indexed_paint_outlives_layout_with_first_line_offsets_and_ellipsis() {
+    use shodo::hit::LineLayout;
+    let fonts = load_fonts(&Limits::default()).unwrap();
+    let mut normal = style(0, RED);
+    normal.paint.underline = Some(TextDecoration::default());
+    normal.paint.strikethrough = Some(TextDecoration::default());
+    let mut first = normal.clone();
+    first.paint.color = GREEN;
+    let root = ParagraphStyle {
+        root: normal.clone(),
+        first_line: Some(first),
+        ..Default::default()
+    };
+    let p = RichText::new(&root)
+        .push("ffi office text space ffi office text space", &normal)
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let mut ls = lines(&p, 90.0);
+    assert!(ls.len() > 1 && ls[1].block_offset() > 0.0);
+    for line in &mut ls {
+        assert!(
+            line.truncate_with_ellipsis(&mut LayoutContext::new(), line.inline_size() / 2.0)
+                .is_some()
+        );
+    }
+    let indexed = {
+        let layout = LineLayout::new(&ls);
+        assert!(layout.paint_spans(ls.len()).is_none());
+        assert!(layout.paint_spans(usize::MAX).is_none());
+        (0..ls.len())
+            .map(|n| layout.paint_spans(n).unwrap())
+            .collect::<Vec<_>>()
+    };
+    for (n, (line, spans)) in ls.iter().zip(indexed).enumerate() {
+        let standalone = paint_spans(line);
+        let hidden_from = runs(line)
+            .into_iter()
+            .find(|r| r.is_ellipsis())
+            .unwrap()
+            .text_range()
+            .start;
+        assert!(!spans.is_empty());
+        assert_eq!(spans.len(), standalone.len());
+        for (shared, direct) in spans.iter().zip(standalone) {
+            assert_eq!(shared.style.color, if n == 0 { GREEN } else { RED });
+            assert_eq!(shared.text_range, direct.text_range);
+            assert_eq!(shared.rect, direct.rect);
+            assert_eq!(shared.underline(), direct.underline());
+            assert_eq!(shared.strikethrough(), direct.strikethrough());
+            assert!(shared.text_range.end <= hidden_from);
+            assert!(shared.rect.block_start >= line.block_offset());
+        }
+    }
+    assert!(LineLayout::new(&[]).paint_spans(0).is_none());
+
+    let mut builder = ParagraphBuilder::new(&root, &Limits::default());
+    builder.push_atomic(NodeId(8), &normal, Default::default());
+    let p = builder
+        .build(&mut LayoutContext::new(), &fonts.collection)
+        .unwrap();
+    let ls = lines(&p, 1000.0);
+    assert_eq!(ls.len(), 1);
+    assert!(LineLayout::new(&ls).paint_spans(0).unwrap().is_empty());
 }

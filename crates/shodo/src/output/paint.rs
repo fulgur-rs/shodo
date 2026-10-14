@@ -137,10 +137,18 @@ impl Line {
     /// surviving hanging whitespace retains its selection advance.
     ///
     /// Builds shared source geometry once per call; retain the spans for repeated paint.
+    /// If a [`crate::hit::LineLayout`] already indexes this line, use
+    /// [`crate::hit::LineLayout::paint_spans`] to reuse that geometry.
     /// Glyphs must still be drawn once from `fragments()`/`paint_style()`.
     /// This does not implement CSS decorating-box propagation or skip-ink.
     pub fn paint_spans(&self) -> Vec<PaintSpan<'_>> {
-        let segments = crate::hit::paint_segments(self);
+        self.paint_spans_from_segments(crate::hit::paint_segments(self))
+    }
+
+    pub(crate) fn paint_spans_from_segments(
+        &self,
+        segments: impl Iterator<Item = (Range<u32>, LogicalRect)>,
+    ) -> Vec<PaintSpan<'_>> {
         let mut runs: Vec<_> = self
             .fragments()
             .filter_map(|f| {

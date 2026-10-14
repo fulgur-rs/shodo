@@ -12,6 +12,9 @@ use shodo::{
 };
 use shodo_fixtures::{EMOJI_FONTS, FONTS, load_emoji_fonts, load_fonts};
 use shodo_harness::glyph_paint;
+
+#[path = "support/paint_spans.rs"]
+mod shared_paint;
 use skrifa::{
     FontRef, GlyphId, MetadataProvider,
     instance::{LocationRef, Size},
@@ -89,12 +92,16 @@ fn layout(b: ParagraphBuilder) -> Vec<Line> {
         .build(&mut LayoutContext::new(), &fonts.collection)
         .unwrap();
     assert!(p.warnings().is_empty(), "{:?}", p.warnings());
-    p.break_all(
+    let lines = p.break_all(
         &mut LayoutContext::new(),
         &Default::default(),
         200.0,
         &AtomicSizes::EMPTY,
-    )
+    );
+    for line in &lines {
+        shared_paint::paint_spans(line);
+    }
+    lines
 }
 fn dominant(image: &tiny_skia::Pixmap, channel: usize) -> usize {
     image

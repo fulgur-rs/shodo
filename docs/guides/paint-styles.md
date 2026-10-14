@@ -57,7 +57,27 @@ primary font metrics and accepted containing-inline baseline, converting to the
 alphabetic origin for sideways tabs in mixed vertical text. Removed whitespace
 bytes are absent; positive surviving hanging advances remain selectable and
 appear in the regions, including collapsed trailing spaces. Zero-width collapsed
-regions are omitted. A caller can cache the spans: each call builds a caret index.
+regions are omitted. A caller can cache the spans: each `Line::paint_spans()` call
+builds source geometry, without retaining caret stops.
+
+If a `LineLayout` already indexes the finalized lines for hit testing, navigation
+or accessibility, call `LineLayout::paint_spans(line_index)` to reuse its retained
+source geometry. It produces the same spans without another geometry build and
+returns `None` for an out-of-range index. A valid line without paintable text,
+such as an atomic-only line, returns `Some(Vec::new())`. Both APIs allocate a new
+span vector per call, so retain that vector for repeated paint. The returned
+styles borrow the original accepted lines; spans can outlive the `LineLayout`.
+They describe main text only, as `Line::paint_spans()` does. Paint retained ruby
+annotations separately from their accepted annotation lines.
+
+```rust
+use shodo::hit::LineLayout;
+let layout = LineLayout::new(&lines);
+let paint = (0..lines.len())
+    .map(|n| layout.paint_spans(n).expect("accepted line"))
+    .collect::<Vec<_>>();
+drop(layout); // `paint` remains usable while `lines` is alive.
+```
 
 Decoration rectangles are centered on baseline+offset, with thickness across
 that axis. Horizontal/sideways text decorates along inline; vertical-lr reverses
