@@ -16,10 +16,10 @@ mod navigation;
 mod selection;
 mod source;
 mod spatial;
-use crate::Line;
 use crate::geometry::LogicalRect;
 use crate::mapping::{Affinity, TextOrigin};
 pub use crate::ruby::hit::RubyHit;
+use crate::{Line, PaintSpan};
 use std::ops::Range;
 use std::sync::OnceLock;
 
@@ -73,6 +73,25 @@ pub struct LineLayout<'a> {
     ruby_unindexed: Vec<usize>,
 }
 impl<'a> LineLayout<'a> {
+    /// Source-ordered paint and decoration spans for an accepted line, reusing
+    /// this layout's retained source geometry. The output matches
+    /// [`Line::paint_spans`] without rebuilding caret or glyph geometry.
+    ///
+    /// Spans borrow the original finalized lines, so they can outlive this
+    /// index. Each call allocates a new span vector; retain it for repeated
+    /// painting. Out-of-range line indices return `None`; a line without
+    /// paintable text returns `Some` with an empty vector.
+    /// Glyphs still need to be drawn once from [`Line::fragments`].
+    pub fn paint_spans(&self, line: usize) -> Option<Vec<PaintSpan<'a>>> {
+        let source = self.lines.get(line)?;
+        Some(
+            source.paint_spans_from_segments(
+                self.accepted_segments(line)
+                    .map(|(text, rect)| (text.clone(), rect)),
+            ),
+        )
+    }
+
     /// Accessibility shares this finalized index rather than reinterpreting
     /// grapheme cuts or rebuilding source geometry for each character.
     pub(crate) fn accepted_stops(&self, line: usize) -> &[Caret] {
@@ -341,6 +360,43 @@ fn union_bounds(a: LogicalRect, b: LogicalRect) -> LogicalRect {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn paint_spans_reuse_accepted_geometry_without_rebuilding() {
+        let limits = Default::default();
+        let fonts = crate::font::FontCollection::with_options(
+            &limits,
+            crate::font::FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        let paragraph = crate::RichText::new(&Default::default())
+            .push("ffi abc def ghi", &Default::default())
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap();
+        let lines = paragraph.break_all(
+            &mut crate::LayoutContext::new(),
+            &Default::default(),
+            35.0,
+            &crate::AtomicSizes::EMPTY,
+        );
+        assert!(lines.len() > 1);
+        let layout = LineLayout::new(&lines);
+        let before = crate::test_support::GEOMETRY_BUILDS.with(std::cell::Cell::get);
+        for _ in 0..3 {
+            for number in 0..lines.len() {
+                assert!(!layout.paint_spans(number).unwrap().is_empty());
+            }
+        }
+        assert!(layout.paint_spans(lines.len()).is_none());
+        assert!(layout.paint_spans(usize::MAX).is_none());
+        assert_eq!(
+            crate::test_support::GEOMETRY_BUILDS.with(std::cell::Cell::get),
+            before,
+            "painting an indexed layout must reuse its accepted source geometry"
+        );
+    }
     mod fixture {
         use crate as shodo;
         include!("../../../../dev/bench/examples/support/ruby_base_caret_fixture.rs");

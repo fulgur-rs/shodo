@@ -1,6 +1,6 @@
 //! Repeated source-geometry measurements with preparation and hashing excluded.
 //! Usage: source_geometry OPERATION CASE SCALE ITERATIONS
-//! Operations: paint, index, selection, combined, build.
+//! Operations: paint, shared-paint, index, selection, combined, combined-shared, build.
 //! Cases use the existing workload names; plain uses SCALE Latin characters.
 //! Build measurements include input insertion; all operations include output drop.
 //! Use separate builds with/without allocation-counting for allocations/timing.
@@ -13,6 +13,12 @@ use shodo::limits::Limits;
 use shodo::mapping::Affinity;
 use shodo_bench::{Operation, Workload, digest, layout};
 use std::hint::black_box;
+
+fn shared_paint<'a>(index: &LineLayout<'a>, lines: usize) -> Vec<Vec<shodo::PaintSpan<'a>>> {
+    (0..lines)
+        .map(|line| index.paint_spans(line).expect("accepted line"))
+        .collect()
+}
 
 #[cfg(feature = "allocation-counting")]
 #[global_allocator]
@@ -29,7 +35,7 @@ fn main() {
     let operation = args[0].as_str();
     assert!(matches!(
         operation,
-        "paint" | "index" | "selection" | "combined" | "build"
+        "paint" | "shared-paint" | "index" | "selection" | "combined" | "combined-shared" | "build"
     ));
     let scale: usize = args[2].parse().unwrap();
     let iterations: usize = args[3].parse().unwrap();
@@ -103,9 +109,23 @@ fn main() {
         Sha256::digest(format!("{:?}", selection()).as_bytes())
     );
     let paint_hash = format!("{:x}", Sha256::digest(format!("{:?}", paint()).as_bytes()));
+    let shared_hash = || {
+        format!(
+            "{:x}",
+            Sha256::digest(format!("{:?}", shared_paint(&index, run.lines.len())).as_bytes())
+        )
+    };
+    assert_eq!(
+        paint_hash,
+        shared_hash(),
+        "indexed paint must match standalone paint"
+    );
     let mut execute = || match operation {
         "paint" => {
             black_box(paint());
+        }
+        "shared-paint" => {
+            black_box(shared_paint(&index, run.lines.len()));
         }
         "index" => {
             black_box(LineLayout::new(black_box(&run.lines)));
@@ -118,6 +138,11 @@ fn main() {
         "combined" => {
             black_box(paint());
             black_box(LineLayout::new(black_box(&run.lines)));
+        }
+        "combined-shared" => {
+            let index = LineLayout::new(black_box(&run.lines));
+            black_box(shared_paint(&index, run.lines.len()));
+            black_box(index);
         }
         "build" => {
             black_box(work.build(&mut cx, &fonts, &limits).unwrap());
@@ -155,6 +180,11 @@ fn main() {
     assert_eq!(
         paint_hash,
         format!("{:x}", Sha256::digest(format!("{:?}", paint()).as_bytes()))
+    );
+    assert_eq!(
+        paint_hash,
+        shared_hash(),
+        "indexed paint must remain stable"
     );
     assert!(cx.take_warnings().is_empty());
     println!(

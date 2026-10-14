@@ -72,6 +72,8 @@ fn combined_cluster_glyph_index(
 
 impl LineGeometry {
     fn new(number: usize, line: &Line, retain_carets: bool) -> Self {
+        #[cfg(test)]
+        crate::test_support::GEOMETRY_BUILDS.with(|count| count.set(count.get() + 1));
         let mut result = Self {
             stops: retain_carets.then(Vec::new),
             segments: Vec::new(),
@@ -1351,6 +1353,11 @@ mod tests {
                 // unlike a proportional third of the ffi advance.
                 assert!(((at(1) - at(0)).abs() - 4.0 * scale).abs() < 0.032);
                 assert!(((at(2) - at(0)).abs() - 8.0 * scale).abs() < 0.032);
+                let spans = layout.paint_spans(0).unwrap();
+                assert_eq!(spans[0].text_range, 0..1);
+                assert_eq!(spans[1].text_range, 1..2);
+                assert!((spans[0].rect.block_size - 4.0 * scale).abs() < 0.032);
+                assert!((spans[1].rect.block_size - 4.0 * scale).abs() < 0.032);
             }
         }
     }
@@ -1434,6 +1441,12 @@ mod tests {
                         "format {format},bad {bad},size {size}:{} vs {second}",
                         at(2)
                     );
+                    let spans = layout.paint_spans(0).unwrap();
+                    assert_eq!(spans.len(), 3);
+                    assert_eq!(spans[0].text_range, 0..1);
+                    assert_eq!(spans[1].text_range, 1..2);
+                    assert!((spans[0].rect.inline_size - first).abs() < 0.032);
+                    assert!((spans[1].rect.inline_size - (second - first)).abs() < 0.032);
                 }
             }
         }
