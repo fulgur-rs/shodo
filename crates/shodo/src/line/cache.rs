@@ -223,174 +223,74 @@ impl PartialLine {
         let mut emergencies = Candidates::default();
         let mut floats = Vec::new();
         let mut max = LayoutUnit::ZERO;
-        let mut hanging = LayoutUnit::ZERO;
+        let mut tail = super::scan::Tail::default();
         let mut spacing = super::spacing_summary::Cursor::default();
         let mut hanging_tail = super::punctuation::HangingTail::default();
         let mut tracking = vec![LayoutUnit::ZERO];
-        let mut kept_spacing = LayoutUnit::ZERO;
+        // Widths are measured from the line's indented start, as the scan
+        // measures them, and stored relative to the indent.
         for (k, (u, w)) in units.iter().zip(&natural_widths).enumerate() {
             #[cfg(test)]
             {
                 cx.cache_prepare_visits += 1;
             }
             let at = start + k;
-            let hangs = super::whitespace::fits_hanging(data, at);
-            let raw_transparent = super::whitespace::transparent(data, at);
-            let transparent = raw_transparent && !matches!(u.kind, UnitKind::ForcedBreak);
-            hanging_tail.observe(data, at, &spacing, hangs, transparent);
-            super::spacing::push(data, &mut spacing, at);
-            let spacing_width = spacing.summary(Some(data)).width(sat);
-            tracking.push(spacing_width);
-            if let UnitKind::Float { node, ordinal } = u.kind {
-                floats.push((start + k, node, ordinal));
-            }
-            let next = prefix[k].add(*w, sat);
-            prefix.push(next);
-            let (delta, viable) = super::windows::candidate(data, start, start + k + 1, cx, sat);
-            let delta = delta.add(
-                crate::ruby::measure::candidate_adjustment(
-                    data,
-                    start,
-                    start + k + 1,
-                    atomics,
-                    cx,
-                    sat,
-                ),
+            let measure = super::scan::CandidateMeasure::new(
+                data,
+                start,
+                at,
+                prefix[k].add(indent, sat),
+                *w,
+                &mut spacing,
+                &mut tail,
+                Some(&mut hanging_tail),
+                atomics,
+                cx,
                 sat,
             );
-            let (break_end, suffix, mut candidate_spacing) = if matches!(
-                u.break_after,
-                BreakClass::Allowed | BreakClass::Emergency | BreakClass::Hyphen
-            ) {
-                super::scan::candidate_end(data, at + 1, &spacing, atomics, cx, sat)
-            } else {
-                (at + 1, decoration::width(data, at + 1, false, sat), None)
-            };
-            let paragraph_end = at + 1 == data.units.len();
-            if k > 0 && (!hangs || paragraph_end) && !matches!(u.kind, UnitKind::ForcedBreak) {
-                let extent = next
-                    .add(spacing_width, sat)
-                    .add(delta, sat)
-                    .add(suffix, sat)
-                    .sub(
-                        if transparent {
-                            hanging.add(spacing_width.sub(kept_spacing, sat), sat)
-                        } else {
-                            LayoutUnit::ZERO
-                        },
-                        sat,
-                    );
-                let extent = if paragraph_end && hangs {
-                    extent
-                        .sub(hanging.add(*w, sat), sat)
-                        .sub(spacing_width.sub(kept_spacing, sat), sat)
-                } else {
-                    extent
-                };
-                let summary = hanging_tail.summary(data, at + 1).unwrap_or_else(|| {
-                    candidate_spacing
-                        .as_ref()
-                        .unwrap_or(&spacing)
-                        .summary(Some(data))
-                });
-                let adjustment = super::punctuation::edges(
+            tracking.push(spacing.summary(Some(data)).width(sat));
+            if let UnitKind::Float { node, ordinal } = u.kind {
+                floats.push((at, node, ordinal));
+            }
+            prefix.push(prefix[k].add(*w, sat));
+            let (delta, viable) = super::windows::candidate(data, start, at + 1, cx, sat);
+            if k > 0 && measure.tests_overflow() && !matches!(u.kind, UnitKind::ForcedBreak) {
+                let extent = measure.overflow_width(
                     data,
-                    summary,
+                    &spacing,
+                    &mut hanging_tail,
+                    delta,
                     token.flags,
-                    super::punctuation::last_edge(data, start + k + 1),
-                    Some(options),
-                    LayoutUnit::ZERO,
-                    extent,
+                    options,
                     sat,
                 );
-                max = max.max(extent.sub(adjustment.removed(sat), sat));
-                thresholds.push((start + k, max));
+                max = max.max(extent.sub(indent, sat));
+                thresholds.push((at, max));
             }
-            match u.kind {
-                _ if hangs => hanging = hanging.add(*w, sat),
-                _ if raw_transparent => {}
-                _ => {
-                    hanging = LayoutUnit::ZERO;
-                    kept_spacing = spacing_width;
-                }
-            }
-            if hanging == LayoutUnit::ZERO {
-                kept_spacing = spacing_width;
-            }
-            let required = next
-                .add(kept_spacing, sat)
-                .add(delta, sat)
-                .sub(hanging, sat)
-                .add(suffix, sat);
-            // Only candidate breaks record `required`, so the edge adjustment
-            // is computed for those alone.
-            let last = super::punctuation::last_edge(data, start + k + 1);
-            let natural = required.add(indent, sat);
-            if u.break_after == BreakClass::Hyphen {
-                if let Some(windows) = hyphen::line(data, start, start + k + 1, cx, sat) {
-                    let summary =
-                        super::spacing::hyphen_summary(data, &spacing, at, break_end, sat);
-                    let required = next
-                        .add(summary.width(sat), sat)
-                        .sub(hanging, sat)
-                        .add(suffix, sat)
-                        .add(super::windows::cost(&windows, start + k + 1, sat), sat);
-                    let required = required.add(
-                        crate::ruby::measure::candidate_adjustment(
-                            data,
-                            start,
-                            start + k + 1,
-                            atomics,
-                            cx,
-                            sat,
-                        ),
-                        sat,
-                    );
-                    let adjustment = super::punctuation::edges(
+            let candidates = match u.break_after {
+                BreakClass::Hyphen => {
+                    let required = measure.hyphen(data, &spacing, sat).required(
                         data,
-                        summary,
+                        start,
                         token.flags,
-                        false,
-                        Some(options),
-                        LayoutUnit::ZERO,
-                        required.add(indent, sat),
+                        options,
+                        cx,
                         sat,
                     );
-                    let required = required.sub(adjustment.removed(sat), sat);
-                    hyphens.push(start + k + 1, required);
+                    required.map(|required| (&mut hyphens, required))
                 }
-            } else if viable && u.break_after == BreakClass::Allowed {
-                breaks.push(
-                    start + k + 1,
-                    required.sub(
-                        super::punctuation::removed(
-                            data,
-                            candidate_spacing.as_mut().unwrap_or(&mut spacing),
-                            token.flags,
-                            last,
-                            options,
-                            natural,
-                            sat,
-                        ),
-                        sat,
-                    ),
-                );
-            } else if viable && u.break_after == BreakClass::Emergency {
-                emergencies.push(
-                    start + k + 1,
-                    required.sub(
-                        super::punctuation::removed(
-                            data,
-                            candidate_spacing.as_mut().unwrap_or(&mut spacing),
-                            token.flags,
-                            last,
-                            options,
-                            natural,
-                            sat,
-                        ),
-                        sat,
-                    ),
-                );
+                BreakClass::Allowed if viable => Some((
+                    &mut breaks,
+                    measure.required_width(data, &spacing, delta, token.flags, options, sat),
+                )),
+                BreakClass::Emergency if viable => Some((
+                    &mut emergencies,
+                    measure.required_width(data, &spacing, delta, token.flags, options, sat),
+                )),
+                _ => None,
+            };
+            if let Some((candidates, required)) = candidates {
+                candidates.push(at + 1, required.sub(indent, sat));
             }
         }
         #[cfg(test)]
@@ -2025,6 +1925,134 @@ mod tests {
                     .collect::<Vec<_>>()
             };
             assert_eq!(glyphs(&line), glyphs(&fresh));
+        }
+    }
+
+    #[test]
+    fn indented_punctuation_retries_match_fresh_lines_across_widths() {
+        use crate::font::{FontCollection, FontFaceDescriptor, FontOptions};
+        use crate::limits::Limits;
+        use crate::node::{NodeId, OutOfFlowKind, TextSource};
+        use crate::style::{
+            FontFamily, HangingPunctuation, LineOptions, ParagraphStyle, TextIndent,
+            TextSpacingTrim,
+        };
+        use crate::{AtomicSizes, LayoutContext, LineConstraint, LineResult, ParagraphBuilder};
+        let limits = Limits::default();
+        let fonts = FontCollection::with_options(
+            &limits,
+            FontOptions {
+                system_fonts: false,
+                ..Default::default()
+            },
+        );
+        fonts
+            .register_face(
+                crate::test_support::fonts::CJK.to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: "CJK".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let mut style = ParagraphStyle::default();
+        style.root.font_families = vec![FontFamily::Named("CJK".into())];
+        style.root.font_size = 16.;
+        style.root.lang = Some("ja".into());
+        for trim in [TextSpacingTrim::TrimAll, TextSpacingTrim::SpaceAll] {
+            let mut style = style.clone();
+            style.root.text_spacing_trim = trim;
+            let mut builder = ParagraphBuilder::new(&style, &limits);
+            for (i, text) in ["「日本」、", "語。", "「あい」", "う、", "えお。"]
+                .into_iter()
+                .enumerate()
+            {
+                let node = i as u64 * 2;
+                builder
+                    .push_text(
+                        TextSource::Generated {
+                            node: NodeId(node + 1),
+                        },
+                        text,
+                    )
+                    .push_out_of_flow(NodeId(node + 2), OutOfFlowKind::Float);
+            }
+            let p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+            for hanging in [
+                HangingPunctuation::default(),
+                HangingPunctuation {
+                    first: true,
+                    allow_end: true,
+                    ..Default::default()
+                },
+                HangingPunctuation {
+                    force_end: true,
+                    last: true,
+                    ..Default::default()
+                },
+            ] {
+                for indent in [0., 7., 23.] {
+                    let options = LineOptions {
+                        hanging_punctuation: hanging,
+                        text_indent: TextIndent {
+                            length: indent,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    };
+                    let mut cx = LayoutContext::new();
+                    let mut constraint = LineConstraint::new(260.);
+                    // Each float retry narrows the line, so the cached index
+                    // answers every width after the first scan.
+                    while constraint.available_inline_size > 8. {
+                        let actual = p.next_line(
+                            &mut cx,
+                            p.start_token(),
+                            &options,
+                            &constraint,
+                            &AtomicSizes::EMPTY,
+                        );
+                        let expected = p.next_line(
+                            &mut LayoutContext::new(),
+                            p.start_token(),
+                            &options,
+                            &constraint,
+                            &AtomicSizes::EMPTY,
+                        );
+                        let key = (trim, hanging, indent, constraint.available_inline_size);
+                        match (&actual, &expected) {
+                            (LineResult::Line(a), LineResult::Line(e)) => assert_eq!(
+                                (
+                                    a.text_range(),
+                                    a.inline_size(),
+                                    a.hang_start(),
+                                    a.hang_end()
+                                ),
+                                (
+                                    e.text_range(),
+                                    e.inline_size(),
+                                    e.hang_start(),
+                                    e.hang_end()
+                                ),
+                                "{key:?}"
+                            ),
+                            _ => assert_eq!(
+                                format!("{actual:?}"),
+                                format!("{expected:?}"),
+                                "{key:?}"
+                            ),
+                        }
+                        if let LineResult::FloatEncountered { float_cursor, .. } = actual {
+                            constraint.floats_placed_through = Some(float_cursor);
+                        } else {
+                            constraint.floats_placed_through = None;
+                        }
+                        constraint.available_inline_size -= 3.;
+                    }
+                    assert!(cx.cache_prepare_visits > 0, "the retries used the index");
+                }
+            }
         }
     }
 }
