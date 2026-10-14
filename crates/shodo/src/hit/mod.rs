@@ -10,6 +10,8 @@
 //!
 //! [integration guide]: https://github.com/fulgur-rs/shodo/blob/adf02f0dda2cb41837f371eef5b70b7389e28eea/docs/guides/integration.md
 mod index;
+#[cfg(test)]
+mod lazy_tests;
 mod navigation;
 mod selection;
 mod source;
@@ -19,6 +21,7 @@ use crate::geometry::LogicalRect;
 use crate::mapping::{Affinity, TextOrigin};
 pub use crate::ruby::hit::RubyHit;
 use std::ops::Range;
+use std::sync::OnceLock;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TextPosition {
@@ -59,12 +62,14 @@ pub(crate) fn paint_segments(
 
 /// Borrows finalized lines and builds their caret index once. No paragraph or
 /// font bytes are copied, and queries do not reshape or rebuild glyph data.
+/// Coordinate search trees are initialized on their first hit query; source
+/// navigation and selection do not require them.
 pub struct LineLayout<'a> {
     lines: &'a [Line],
     index: Vec<index::LineIndex>,
-    block_tree: spatial::Tree,
+    block_tree: OnceLock<spatial::Tree>,
     ruby: Vec<crate::ruby::hit::AnnotationIndex<'a>>,
-    ruby_spatial: spatial::Tree,
+    ruby_spatial: OnceLock<spatial::Tree>,
     ruby_unindexed: Vec<usize>,
 }
 impl<'a> LineLayout<'a> {
@@ -104,24 +109,27 @@ impl<'a> LineLayout<'a> {
                 })
             })
             .collect();
-        let mut ruby_rects = Vec::with_capacity(ruby.len());
         let mut ruby_unindexed = Vec::new();
         for (i, entry) in ruby.iter().enumerate() {
             match entry.bounds() {
-                Some(rect) if bounds_are_finite(rect) => ruby_rects.push((i, rect)),
+                Some(rect) if bounds_are_finite(rect) => {}
                 Some(_) => ruby_unindexed.push(i),
                 None => {}
             }
         }
-        let ruby_spatial = spatial::Tree::new_adaptive(ruby_rects.into_iter());
         Self {
             index,
             ruby,
-            ruby_spatial,
+            ruby_spatial: OnceLock::new(),
             ruby_unindexed,
             lines,
-            block_tree: spatial::Tree::new(
-                lines.iter().enumerate().map(|(i, l)| {
+            block_tree: OnceLock::new(),
+        }
+    }
+    fn block_tree(&self) -> &spatial::Tree {
+        self.block_tree.get_or_init(|| {
+            spatial::Tree::new(
+                self.lines.iter().enumerate().map(|(i, l)| {
                     (
                         i,
                         LogicalRect {
@@ -133,8 +141,20 @@ impl<'a> LineLayout<'a> {
                     )
                 }),
                 true,
-            ),
-        }
+            )
+        })
+    }
+    fn ruby_rects(&self) -> impl Iterator<Item = (usize, LogicalRect)> {
+        self.ruby.iter().enumerate().filter_map(|(i, entry)| {
+            entry
+                .bounds()
+                .filter(|rect| bounds_are_finite(*rect))
+                .map(|rect| (i, rect))
+        })
+    }
+    fn ruby_spatial(&self) -> &spatial::Tree {
+        self.ruby_spatial
+            .get_or_init(|| spatial::Tree::new_adaptive(self.ruby_rects()))
     }
     /// Snap an interior byte/grapheme/indivisible transform according to
     /// affinity. Out-of-range line indices and offsets return `None`.
@@ -198,7 +218,7 @@ impl<'a> LineLayout<'a> {
         mut hit: impl FnMut(usize) -> Option<T>,
     ) -> Option<(usize, T)> {
         let indexed = self
-            .ruby_spatial
+            .ruby_spatial()
             .best_containing_by(inline, block, &mut hit);
         for &i in self.ruby_unindexed.iter().rev() {
             if let Some(candidate) = hit(i) {
@@ -213,12 +233,16 @@ impl<'a> LineLayout<'a> {
 
     #[cfg(test)]
     pub(crate) fn reset_ruby_spatial_visits(&self) {
-        self.ruby_spatial.reset_visits();
+        if let Some(tree) = self.ruby_spatial.get() {
+            tree.reset_visits();
+        }
     }
 
     #[cfg(test)]
     pub(crate) fn ruby_spatial_visits(&self) -> usize {
-        self.ruby_spatial.visit_count()
+        self.ruby_spatial
+            .get()
+            .map_or(0, spatial::Tree::visit_count)
     }
 
     pub(crate) fn hit_bounds(&self) -> Option<LogicalRect> {
@@ -228,7 +252,10 @@ impl<'a> LineLayout<'a> {
             .filter_map(index::LineIndex::hit_bounds)
             .reduce(union_bounds);
         let ruby = if self.ruby_unindexed.is_empty() {
-            self.ruby_spatial.bounds()
+            self.ruby_spatial.get().map_or_else(
+                || spatial::enclosing(self.ruby_rects().map(|(_, rect)| rect)),
+                spatial::Tree::bounds,
+            )
         } else {
             Some(invalid_bounds())
         };
@@ -245,7 +272,7 @@ impl<'a> LineLayout<'a> {
         if inline.is_nan() || block.is_nan() {
             return None;
         }
-        let line = self.block_tree.nearest_y(block)?;
+        let line = self.block_tree().nearest_y(block)?;
         let index = &self.index[line];
         let stop = index.hit(inline, block)?;
         Some(HitResult {
