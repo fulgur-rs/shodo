@@ -139,24 +139,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Clear restored snapshot reports
-        run: rm -rf target/snapshot-report target/snapshot-checks
-      - run: cargo test --workspace --features shodo-harness/accesskit
-      - run: cargo run -p shodo-harness --features accesskit,shodo/complex-scripts --example accessibility
-      - run: cargo run -p shodo-harness --example emoji_png -- target/emoji.png
-      - run: cargo run -p shodo-harness --example ruby_png -- target/ruby-png
-      - name: Check fixed glyph snapshots
-        if: always()
-        run: cargo run -p shodo-harness --example snapshots -- --output target/snapshot-report
-      - name: Upload snapshot report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: snapshots-${{ github.job }}
-          path: |
-            target/snapshot-report
-            target/snapshot-checks
-          if-no-files-found: warn
+      # The minimum supported Rust version only needs to compile; the test,
+      # example and snapshot behaviour is checked on stable.
+      - run: cargo build --workspace --all-targets
 
   wasm:
     runs-on: ubuntu-latest
