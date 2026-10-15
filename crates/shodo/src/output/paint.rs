@@ -3,10 +3,10 @@
 use crate::analysis::ItemKind;
 use crate::font::{FontId, FontMetrics};
 use crate::geometry::{Direction, LogicalRect};
+use crate::hashing::FastMap;
 use crate::node::NodeId;
 use crate::style::{PaintStyle, TextDecoration};
 use crate::{Fragment, GlyphOrientation, GlyphRunView, Line};
-use std::collections::HashMap;
 use std::ops::Range;
 
 /// A resolved solid stroke in container-relative logical coordinates.
@@ -156,7 +156,7 @@ impl Line {
             })
             .collect();
         runs.sort_by_key(|r| r.text_range().start);
-        let box_shifts: HashMap<_, _> = self
+        let box_shifts: FastMap<_, _> = self
             .fragments
             .iter()
             .enumerate()
@@ -168,7 +168,7 @@ impl Line {
                 }
             })
             .collect();
-        let tab_parents: HashMap<_, _> = self
+        let tab_parents: FastMap<_, _> = self
             .tabs
             .iter()
             .map(|tab| {

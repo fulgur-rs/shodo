@@ -484,7 +484,7 @@ impl Line {
         if self.data.combine_spans.is_empty() {
             return;
         }
-        let mut origins = std::collections::HashMap::new();
+        let mut origins = crate::hashing::FastMap::default();
         for record in &self.fragments {
             if let RecordKind::Glyphs { text, .. } = &record.kind {
                 let index = self

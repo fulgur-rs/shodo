@@ -178,6 +178,7 @@ fn take_neighbors(data: &ParagraphData, cx: &mut LayoutContext) -> Box<NeighborI
     let key = (data.id, data as *const ParagraphData as usize);
     match cx
         .ruby_ranges
+        .caches
         .neighbors
         .get_mut(&key)
         .and_then(Option::take)
@@ -189,7 +190,7 @@ fn take_neighbors(data: &ParagraphData, cx: &mut LayoutContext) -> Box<NeighborI
 
 fn put_neighbors(data: &ParagraphData, index: Box<NeighborIndex>, cx: &mut LayoutContext) {
     let key = (data.id, data as *const ParagraphData as usize);
-    *cx.ruby_ranges.neighbors.entry(key).or_default() = Some(index);
+    *cx.ruby_ranges.caches.neighbors.entry(key).or_default() = Some(index);
 }
 
 /// Calls `f` with the visual neighbours of each single event unit of

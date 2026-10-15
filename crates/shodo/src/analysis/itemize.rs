@@ -183,6 +183,8 @@ pub(crate) fn itemize(
         .collect();
     // Borrow canonical keys from the retained styles. Only a new query identity
     // needs owned family/language payloads; paint-only styles reuse that query.
+    // Keys hold caller-chosen family and language names, so keep the
+    // randomized SipHash map rather than `hashing::FastMap`.
     let mut query_ids = HashMap::new();
     let mut queries = Vec::new();
     let style_queries: Vec<_> = styles

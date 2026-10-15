@@ -366,11 +366,12 @@ pub(crate) fn shape_items_with_combined_width_reuse(
     let mut glyphs = GlyphStore::default();
     let mut runs = Vec::new();
     let mut cursor = 0;
-    while cursor < items.len() {
-        let Some((start, end, tag, starts)) = next_combined_width_group(items, cursor) else {
-            let (rest, rest_runs) = shape_inputs(
+    // Shape `items[range]` through the ordinary path and append the output.
+    macro_rules! shape_whole {
+        ($range:expr) => {{
+            let (group_glyphs, group_runs) = shape_inputs(
                 cx,
-                items[cursor..].iter().map(input::ShapeInput::whole),
+                items[$range].iter().map(input::ShapeInput::whole),
                 &ShapeEnv {
                     styles,
                     fonts,
@@ -383,26 +384,17 @@ pub(crate) fn shape_items_with_combined_width_reuse(
                 ledger,
                 ShapeOptions::default(),
             )?;
-            append_shape_output(&mut glyphs, &mut runs, rest, rest_runs);
+            append_shape_output(&mut glyphs, &mut runs, group_glyphs, group_runs);
+        }};
+    }
+
+    while cursor < items.len() {
+        let Some((start, end, tag, starts)) = next_combined_width_group(items, cursor) else {
+            shape_whole!(cursor..);
             break;
         };
         if start > cursor {
-            let (prefix, prefix_runs) = shape_inputs(
-                cx,
-                items[cursor..start].iter().map(input::ShapeInput::whole),
-                &ShapeEnv {
-                    styles,
-                    fonts,
-                    mode,
-                    limits,
-                    feature_sets,
-                },
-                warnings,
-                sat,
-                ledger,
-                ShapeOptions::default(),
-            )?;
-            append_shape_output(&mut glyphs, &mut runs, prefix, prefix_runs);
+            shape_whole!(cursor..start);
         }
         let selection = try_shape_combined_width_group(
             cx,
@@ -447,22 +439,7 @@ pub(crate) fn shape_items_with_combined_width_reuse(
             sat.non_finite += selection.saturation.non_finite;
             append_shape_output(&mut glyphs, &mut runs, selection.glyphs, selection.runs);
         } else {
-            let (output, output_runs) = shape_inputs(
-                cx,
-                items[start..end].iter().map(input::ShapeInput::whole),
-                &ShapeEnv {
-                    styles,
-                    fonts,
-                    mode,
-                    limits,
-                    feature_sets,
-                },
-                warnings,
-                sat,
-                ledger,
-                ShapeOptions::default(),
-            )?;
-            append_shape_output(&mut glyphs, &mut runs, output, output_runs);
+            shape_whole!(start..end);
         }
         cursor = end;
     }
@@ -1243,9 +1220,10 @@ pub(crate) fn shape_window_edit(
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
 ) -> Option<(GlyphStore, Vec<ShapedRun>)> {
-    let contains_replacement =
-        replacement.is_some_and(|r| unit.text.start <= r.text.start && r.text.end <= unit.text.end);
-    let synthetic_extra = replacement.filter(|_| contains_replacement).map_or(0, |r| {
+    // A replacement outside the window does not apply to it.
+    let replacement =
+        replacement.filter(|r| unit.text.start <= r.text.start && r.text.end <= unit.text.end);
+    let synthetic_extra = replacement.map_or(0, |r| {
         (r.c.len_utf8() as u64).saturating_sub(u64::from(r.text.end - r.text.start))
     });
     if data
@@ -1265,7 +1243,7 @@ pub(crate) fn shape_window_edit(
     let mut limits = data.limits.clone();
     limits.max_shaped_glyphs = glyph_budget;
     let mut ledger = LimitsLedger::new(&limits);
-    let result = if !contains_replacement
+    let result = if replacement.is_none()
         && input::can_borrow(&data.shape_items[index..], &unit.text)
     {
         let mut instances = std::mem::take(&mut cx.window_instances);
@@ -1309,16 +1287,13 @@ pub(crate) fn shape_window_edit(
             // adjacent segments join before shaping so GPOS sees the hyphen.
             let mut at = begin;
             while at < end {
-                let edited = replacement.filter(|r| {
-                    contains_replacement && original.scalars[at].offset == r.text.start
-                });
+                let edited = replacement.filter(|r| original.scalars[at].offset == r.text.start);
                 let font = edited.map_or_else(|| original.font.clone(), |r| r.font.clone());
                 let mut finish = at + 1;
                 if edited.is_none() {
                     while finish < end
-                        && !replacement.is_some_and(|r| {
-                            contains_replacement && original.scalars[finish].offset == r.text.start
-                        })
+                        && replacement
+                            .is_none_or(|r| original.scalars[finish].offset != r.text.start)
                     {
                         finish += 1;
                     }
@@ -1384,7 +1359,7 @@ pub(crate) fn shape_window_edit(
     };
     match result {
         Ok((store, mut runs)) => {
-            if let Some(r) = replacement.filter(|_| contains_replacement) {
+            if let Some(r) = replacement {
                 for run in &mut runs {
                     if run.text.end == r.text.start + r.c.len_utf8() as u32 {
                         run.text.end = r.text.end;

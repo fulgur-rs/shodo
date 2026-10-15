@@ -117,14 +117,15 @@ impl Line {
         // positions overlap, so narrowing never moves a kept glyph.
         for (record, range) in by_record.iter().enumerate() {
             if let Some(run) = &clusters[record] {
-                let mut order: Vec<usize> = range.clone().collect();
-                if run.reversed {
-                    order.reverse();
-                }
                 let mut open = true;
-                for i in order {
+                let mut keep = |i: usize| {
                     open &= kept[i];
                     kept[i] = open;
+                };
+                if run.reversed {
+                    range.clone().rev().for_each(&mut keep);
+                } else {
+                    range.clone().for_each(&mut keep);
                 }
             }
         }

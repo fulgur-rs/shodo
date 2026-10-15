@@ -1,6 +1,6 @@
 //! Source-local queries over retained annotation lines, without reshaping.
 use crate::geometry::LogicalRect;
-use crate::hit::{Caret, HitResult, LineLayout};
+use crate::hit::{Caret, HitResult, LineLayout, invalid_bounds};
 use crate::{RubyAnnotationView, RubyTransform, RubyVisibility};
 use std::ops::Range;
 
@@ -177,15 +177,6 @@ fn transformed_bounds(
         result
     } else {
         invalid_bounds()
-    }
-}
-
-fn invalid_bounds() -> LogicalRect {
-    LogicalRect {
-        inline_start: f32::NAN,
-        inline_size: f32::NAN,
-        block_start: f32::NAN,
-        block_size: f32::NAN,
     }
 }
 

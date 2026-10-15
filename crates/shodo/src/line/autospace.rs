@@ -181,9 +181,8 @@ impl Tree {
             tree.right[node] = tree.right[parent] + u32::from(if rtl { start } else { end });
             let cloned = data.styles[b.style as usize].box_decoration_break
                 == crate::style::BoxDecorationBreak::Clone;
-            let hang_start =
-                cloned && (e.border.inline_start != 0.0 || e.padding.inline_start != 0.0);
-            let hang_end = cloned && (e.border.inline_end != 0.0 || e.padding.inline_end != 0.0);
+            let hang_start = cloned && super::quirk::start_edge(data, i as u32);
+            let hang_end = cloned && super::quirk::end_edge(data, i as u32);
             tree.hang_left[node] =
                 tree.hang_left[parent] + u32::from(if rtl { hang_end } else { hang_start });
             tree.hang_right[node] =

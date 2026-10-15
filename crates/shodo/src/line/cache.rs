@@ -599,9 +599,7 @@ pub(super) fn resolve(
         let windows = selected_hyphen
             .and_then(|h| hyphen::line(&data, start, h, cx, sat))
             .unwrap_or_else(|| super::windows::measure(&data, start, end, cx, sat));
-        let delta = windows.iter().fold(LayoutUnit::ZERO, |sum, window| {
-            sum.add(window.delta(i, sat), sat)
-        });
+        let delta = super::windows::cost(&windows, i, sat);
         // One probe per call, after `index`, whose work state differs between
         // a retained and a fresh call: measure it outside the allowance.
         let ruby_delta =

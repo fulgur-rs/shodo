@@ -126,6 +126,8 @@ impl Summary {
                 - i64::from(right.raw())
                 - i64::from(left.raw())
         };
+        let open_start = self.first.is_none();
+        let open_end = other.last.is_none();
         Self {
             first: self.first.or(other.first),
             last: other.last.or(self.last),
@@ -150,36 +152,13 @@ impl Summary {
                             }
                         })
                 }),
-            before: if self.first.is_some() {
-                self.before
-            } else {
-                self.before || other.before
-            },
-            after: if other.last.is_some() {
-                other.after
-            } else {
-                self.after || other.after
-            },
-            hang_before: if self.first.is_some() {
-                self.hang_before
-            } else {
-                self.hang_before || other.hang_before
-            },
-            hang_after: if other.last.is_some() {
-                other.hang_after
-            } else {
-                self.hang_after || other.hang_after
-            },
-            autospace_before: if self.first.is_some() {
-                self.autospace_before
-            } else {
-                self.autospace_before || other.autospace_before
-            },
-            autospace_after: if other.last.is_some() {
-                other.autospace_after
-            } else {
-                self.autospace_after || other.autospace_after
-            },
+            // A side's flags pass through a part without an edge on it.
+            before: self.before || open_start && other.before,
+            after: other.after || open_end && self.after,
+            hang_before: self.hang_before || open_start && other.hang_before,
+            hang_after: other.hang_after || open_end && self.hang_after,
+            autospace_before: self.autospace_before || open_start && other.autospace_before,
+            autospace_after: other.autospace_after || open_end && self.autospace_after,
         }
     }
 
@@ -495,9 +474,7 @@ impl RangeIndex {
         range: std::ops::Range<usize>,
         data: Option<&ParagraphData>,
     ) -> Summary {
-        self.root.map_or(Summary::default(), |root| {
-            self.query_node(root, &range, None, data)
-        })
+        self.query_replace(range, None, data)
     }
 
     /// Replace one source leaf for an accepted discretionary glyph. Only the
@@ -602,25 +579,11 @@ impl Neighbors {
 }
 impl VisualNeighbors {
     pub(crate) fn new(events: impl Iterator<Item = (u8, bool)>) -> Self {
-        Self(RangeIndex::new(
-            events.enumerate().map(|(unit, (level, event))| {
-                (
-                    level,
-                    if event {
-                        Summary::leaf(
-                            Edge {
-                                unit: unit as u32,
-                                ..Default::default()
-                            },
-                            None,
-                        )
-                    } else {
-                        Summary::default()
-                    },
-                )
-            }),
-            None,
-        ))
+        Self::rendered(
+            events
+                .enumerate()
+                .map(|(unit, (level, event))| (unit, level, event)),
+        )
     }
 
     /// Source indices survive removal of non-rendered bidi controls.

@@ -108,12 +108,11 @@ impl Effects {
         }
         let mut charges = self.charges;
         charges.merge(&other.charges);
+        let mut sat = self.sat;
+        sat.absorb(other.sat);
         Some(Self {
             charges,
-            sat: Saturation {
-                saturated: self.sat.saturated.wrapping_add(other.sat.saturated),
-                non_finite: self.sat.non_finite.wrapping_add(other.sat.non_finite),
-            },
+            sat,
             suppressed: self.suppressed,
         })
     }
@@ -152,10 +151,7 @@ impl Effects {
     /// These effects without `sat` (a part recorded elsewhere).
     pub(crate) fn without_sat(self, sat: Saturation) -> Self {
         Self {
-            sat: Saturation {
-                saturated: self.sat.saturated.wrapping_sub(sat.saturated),
-                non_finite: self.sat.non_finite.wrapping_sub(sat.non_finite),
-            },
+            sat: self.sat.since(sat),
             ..self
         }
     }
@@ -232,10 +228,7 @@ fn recorded(
         && cx.warnings.checkpoint() == recording.checkpoint;
     clean.then_some(Effects {
         charges,
-        sat: Saturation {
-            saturated: sat.saturated.wrapping_sub(recording.sat.saturated),
-            non_finite: sat.non_finite.wrapping_sub(recording.sat.non_finite),
-        },
+        sat: sat.since(recording.sat),
         suppressed: recording.suppressed,
     })
 }
@@ -306,9 +299,7 @@ fn apply(
     if let Some(target) = frame.and_then(|i| cx.reshape_log.frames.get_mut(i)) {
         target.merge(&effects.charges);
     }
-    // Counters only ever increment; `+=` in release wraps the same way.
-    sat.saturated = sat.saturated.wrapping_add(effects.sat.saturated);
-    sat.non_finite = sat.non_finite.wrapping_add(effects.sat.non_finite);
+    sat.absorb(effects.sat);
     true
 }
 

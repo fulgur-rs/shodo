@@ -7,14 +7,10 @@ mod ghost;
 mod quirk;
 mod scalar;
 
-use content::{ContentBounds, ContentSummary, content_bounds, record_content_bounds};
-// Keep the existing crate-visible type path even when callers infer it.
 #[cfg(test)]
 pub(crate) use content::content;
-#[allow(unused_imports)]
-pub(crate) use content::{
-    ContainerNote, ContentGeometry, ProfileShare, SelectionDigest, content_shared,
-};
+use content::{ContentBounds, ContentSummary, content_bounds, record_content_bounds};
+pub(crate) use content::{ProfileShare, SelectionDigest, content_shared};
 use ghost::Ghost;
 use scalar::{Bounds, Summary, union};
 pub(crate) use scalar::{ScalarMetrics, measure};
@@ -142,7 +138,13 @@ fn take_index(
     cx: &mut LayoutContext,
 ) -> Box<MetricIndex> {
     let key = (data.id, data as *const ParagraphData as usize);
-    match cx.ruby_ranges.metrics.get_mut(&key).and_then(Option::take) {
+    match cx
+        .ruby_ranges
+        .caches
+        .metrics
+        .get_mut(&key)
+        .and_then(Option::take)
+    {
         Some(index) => index,
         None => Box::new(MetricIndex::new(data, atomics, cx)),
     }
@@ -150,7 +152,7 @@ fn take_index(
 
 fn put_index(data: &ParagraphData, index: Box<MetricIndex>, cx: &mut LayoutContext) {
     let key = (data.id, data as *const ParagraphData as usize);
-    *cx.ruby_ranges.metrics.entry(key).or_default() = Some(index);
+    *cx.ruby_ranges.caches.metrics.entry(key).or_default() = Some(index);
 }
 
 impl MetricIndex {

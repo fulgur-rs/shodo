@@ -611,14 +611,12 @@ impl ParagraphBuilder {
         // Restored items are balanced, so they are absent from builder.stack.
         // Validate the generated isolation wrapper around their real depth
         // before cloning the snapshot, including any nested ruby descendants.
+        let cost = crate::ruby::builder::InputCost::content(input);
         Limits::check(
             input.limits.max_nesting_depth,
             LimitKind::NestingDepth,
-            crate::ruby::builder::InputCost::content(input)
-                .depth
-                .saturating_add(1),
+            cost.depth.saturating_add(1),
         )?;
-        let cost = crate::ruby::builder::InputCost::content(input);
         Limits::check(
             input.limits.max_style_bytes,
             LimitKind::StyleBytes,

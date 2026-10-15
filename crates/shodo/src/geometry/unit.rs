@@ -15,6 +15,21 @@ impl Saturation {
     pub(crate) fn is_clean(&self) -> bool {
         self.saturated == 0 && self.non_finite == 0
     }
+
+    /// Add `step` to these running counters. Counters only ever increment;
+    /// wrapping matches release `+=`.
+    pub(crate) fn absorb(&mut self, step: Saturation) {
+        self.saturated = self.saturated.wrapping_add(step.saturated);
+        self.non_finite = self.non_finite.wrapping_add(step.non_finite);
+    }
+
+    /// `self - earlier` of running (wrapping) counters.
+    pub(crate) fn since(self, earlier: Saturation) -> Saturation {
+        Saturation {
+            saturated: self.saturated.wrapping_sub(earlier.saturated),
+            non_finite: self.non_finite.wrapping_sub(earlier.non_finite),
+        }
+    }
 }
 
 /// 1/64 px fixed-point value.
