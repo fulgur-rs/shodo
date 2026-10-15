@@ -5,6 +5,7 @@ use super::*;
 mod analysis_cost;
 mod paint_reuse;
 
+use crate::builder::RawItem;
 use crate::limits::ledger::{FrameId, LimitsLedger, ScopeId};
 
 #[cfg(test)]
@@ -32,6 +33,8 @@ pub(crate) struct BuildAnalysis {
     alternate_frame: Option<FrameId>,
     alternate_warnings: Option<WarningSink>,
     warnings: WarningSink,
+    edge_template: Option<Arc<ParagraphBuilder>>,
+    edge_basis: f32,
 }
 
 struct PreparedBuild {
@@ -52,8 +55,25 @@ impl ParagraphAnalysis {
         if let Some(error) = b.error {
             return Err(error);
         }
+        // Retain the unresolved input of a paragraph with percentage edges so
+        // `Paragraph::with_edge_basis` can resolve it for another basis. A
+        // rebuild for some basis already carries the original template.
+        let template = b.edge_template.clone().or_else(|| {
+            b.items
+                .iter()
+                .any(|item| {
+                    matches!(
+                        item,
+                        RawItem::Open {
+                            percents: Some(_),
+                            ..
+                        }
+                    )
+                })
+                .then(|| Arc::new(b.clone()))
+        });
         let mut ledger = LimitsLedger::new(&b.limits);
-        let state = Paragraph::analyze_builder_with_ledger(b, &mut ledger)?;
+        let state = Paragraph::analyze_builder_with_ledger(b, template, &mut ledger)?;
         Ok(Self { state, ledger })
     }
 
@@ -83,7 +103,7 @@ impl Paragraph {
         }
         let previous = ledger.frame();
         ledger.paragraph(&b.limits, &[], parent);
-        let result = Self::analyze_builder_with_ledger(b, ledger)
+        let result = Self::analyze_builder_with_ledger(b, None, ledger)
             .and_then(|state| Self::shape_analysis(state, cx, fonts, ledger));
         ledger.select_frame(previous);
         result
@@ -91,6 +111,7 @@ impl Paragraph {
 
     fn analyze_builder_with_ledger(
         b: ParagraphBuilder,
+        edge_template: Option<Arc<ParagraphBuilder>>,
         ledger: &mut LimitsLedger,
     ) -> Result<BuildAnalysis, LimitExceeded> {
         let ruby_first_line = b.has_ruby_first_line();
@@ -108,6 +129,7 @@ impl Paragraph {
             line_break_override,
             rubies,
             ruby_annotation,
+            edge_basis,
             ..
         } = b;
         for s in &mut styles {
@@ -119,7 +141,9 @@ impl Paragraph {
         if let Some(root) = styles.first() {
             style.root = root.clone();
         }
-        sanitize::items(&mut items, &mut warnings);
+        let has_percent_edges = sanitize::items(&mut items, edge_basis, &mut warnings);
+        // Percentages that sanitize to zero need no template.
+        let edge_template = edge_template.filter(|_| has_percent_edges);
         let id = NEXT_PARAGRAPH_ID.fetch_add(1, Ordering::Relaxed);
         let has_first_line =
             style.first_line.is_some() || !first_line_styles.is_empty() || ruby_first_line;
@@ -335,6 +359,8 @@ impl Paragraph {
             alternate_frame,
             alternate_warnings,
             warnings,
+            edge_template,
+            edge_basis,
         })
     }
 
@@ -354,6 +380,8 @@ impl Paragraph {
             alternate_frame,
             alternate_warnings,
             mut warnings,
+            edge_template,
+            edge_basis,
         } = analysis;
         ledger.select_frame(normal_frame);
         let mut sat = Saturation::default();
@@ -484,6 +512,12 @@ impl Paragraph {
         }
         warnings.record_saturation(&sat);
         data.warnings = warnings.take();
+        data.edge_basis = if edge_template.is_some() {
+            edge_basis
+        } else {
+            0.0
+        };
+        data.edge_template = edge_template;
         Ok(Paragraph {
             data: Arc::new(data),
         })
@@ -775,6 +809,8 @@ fn build_data(
         #[cfg(test)]
         edge_shape_bytes: Default::default(),
         first_line: None,
+        edge_template: None,
+        edge_basis: 0.0,
         source_spans: processed.source_spans,
         id,
         style,
@@ -902,6 +938,7 @@ fn finalize_data(
                 if crate::analysis::itemize::inline_boundary_breaks_shaping(
                     &data.styles[b.style as usize],
                     &b.edges,
+                    b.percent_sides,
                     start,
                 ) {
                     shaping_barriers.push(i as u32);

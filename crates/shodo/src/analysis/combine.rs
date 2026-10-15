@@ -545,6 +545,7 @@ mod tests {
     fn box_boundaries_reject_adjacent_all_candidates_even_when_empty() {
         let open = ItemKind::OpenInline {
             edges: InlineEdges::default(),
+            percent_sides: 0,
         };
         let items = [
             text(0, 2, 0),
@@ -588,6 +589,7 @@ mod tests {
             marker(
                 ItemKind::OpenInline {
                     edges: InlineEdges::default(),
+                    percent_sides: 0,
                 },
                 2,
                 1,

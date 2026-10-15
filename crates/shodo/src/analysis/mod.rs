@@ -42,6 +42,9 @@ pub(crate) enum ItemKind {
     Text,
     OpenInline {
         edges: InlineEdges,
+        /// Inline sides with a percentage edge, as
+        /// [`crate::node::InlineEdgePercents::inline_sides`] bits.
+        percent_sides: u8,
     },
     CloseInline,
     Atomic {

@@ -154,8 +154,20 @@ pub(crate) fn process_input_with_flags(
                     &flags[range.start as usize..range.end as usize],
                 )?;
             }
-            RawItem::Open { node, style, edges } => {
-                p.marker(ItemKind::OpenInline { edges: *edges }, *style, *node)?;
+            RawItem::Open {
+                node,
+                style,
+                edges,
+                percents,
+            } => {
+                p.marker(
+                    ItemKind::OpenInline {
+                        edges: *edges,
+                        percent_sides: percents.as_ref().map_or(0, |p| p.inline_sides()),
+                    },
+                    *style,
+                    *node,
+                )?;
                 for &c in bidi_open(&styles[*style as usize]) {
                     p.generated(ItemKind::BidiControl, c, *style, *node)?;
                 }
@@ -844,6 +856,7 @@ mod tests {
         let expected: Vec<_> = [
             OpenInline {
                 edges: InlineEdges::default(),
+                percent_sides: 0,
             },
             Text,
             Tab,
@@ -879,6 +892,7 @@ mod tests {
         let expected: Vec<_> = [
             OpenInline {
                 edges: InlineEdges::default(),
+                percent_sides: 0,
             },
             Text,
             CloseInline,
@@ -913,6 +927,7 @@ mod tests {
         let expected: Vec<_> = [
             OpenInline {
                 edges: InlineEdges::default(),
+                percent_sides: 0,
             },
             Text,
             Tab,
@@ -1276,7 +1291,8 @@ mod ledger_admission_tests {
             RawItem::Open {
                 node: NodeId(1),
                 style: 0,
-                edges: Default::default()
+                edges: Default::default(),
+                percents: None,
             };
             1024
         ];

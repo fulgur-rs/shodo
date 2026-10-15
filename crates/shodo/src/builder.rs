@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::context::LayoutContext;
 use crate::font::FontCollection;
 use crate::limits::{LimitExceeded, LimitKind, Limits, WarningKind, WarningSink};
-use crate::node::{InlineEdges, NodeId, OutOfFlowKind, TextSource};
+use crate::node::{InlineEdgePercents, InlineEdges, NodeId, OutOfFlowKind, TextSource};
 use crate::paragraph::Paragraph;
 use crate::style::{InlineStyle, ParagraphStyle};
 
@@ -31,6 +31,9 @@ pub(crate) enum RawItem {
         node: NodeId,
         style: u32,
         edges: InlineEdges,
+        /// Percentage margin and padding; boxed and absent when all are zero,
+        /// so ordinary items keep their size.
+        percents: Option<Box<InlineEdgePercents>>,
     },
     Close,
     Atomic {
@@ -116,6 +119,7 @@ pub(crate) enum RawItem {
 ///
 /// No font data is registered in this example: it exercises input construction
 /// with missing-glyph fallback. Register a real face before rendering glyphs.
+#[derive(Clone)]
 pub struct ParagraphBuilder {
     pub(crate) style: ParagraphStyle,
     pub(crate) limits: Limits,
@@ -140,6 +144,11 @@ pub struct ParagraphBuilder {
     pub(crate) rubies: Vec<crate::ruby::builder::RubyInput>,
     pub(crate) ruby_cost: crate::ruby::builder::InputCost,
     pub(crate) ruby_annotation: bool,
+    /// Basis that percentage edges of `items` resolve against during analysis.
+    pub(crate) edge_basis: f32,
+    /// Unresolved input retained by a paragraph with percentage edges, set
+    /// when this builder re-resolves that input for another basis.
+    pub(crate) edge_template: Option<Arc<ParagraphBuilder>>,
 }
 
 impl ParagraphBuilder {
@@ -174,6 +183,8 @@ impl ParagraphBuilder {
             rubies: Vec::new(),
             ruby_cost: Default::default(),
             ruby_annotation: false,
+            edge_basis: 0.0,
+            edge_template: None,
         };
         let data = style
             .map_or_else(
@@ -287,8 +298,72 @@ impl ParagraphBuilder {
         ) && self.reserve_item()
             && let Some(style) = self.intern_styles(style, first_line)
         {
-            self.items.push(RawItem::Open { node, style, edges });
+            self.items.push(RawItem::Open {
+                node,
+                style,
+                edges,
+                percents: None,
+            });
             self.stack.push(style);
+        }
+        self
+    }
+
+    /// Give the inline box opened by the immediately preceding
+    /// [`Self::open_inline`] or [`Self::open_inline_with_first_line`] call
+    /// percentage margins and padding, as fractions of the percentage basis
+    /// (the containing block's inline size).
+    ///
+    /// Each side's used length is its px part from the box's [`InlineEdges`]
+    /// plus `percent * basis`; resolved padding below zero becomes zero, while
+    /// margins may stay negative. The built paragraph uses a basis of `0`, so
+    /// percentages contribute nothing to it or to
+    /// [`Paragraph::intrinsic_sizes`]. Call [`Paragraph::with_edge_basis`]
+    /// with the definite basis before line layout. An inline side with a
+    /// nonzero percentage separates shaping at that box boundary for every
+    /// basis, so all resolved paragraphs share the same glyphs.
+    ///
+    /// Non-finite percentages become zero with a warning at build, and
+    /// magnitudes above `1e5` (10,000,000%) are clamped. A call that does not
+    /// directly follow an inline open is ignored with an
+    /// [`WarningKind::UnbalancedInline`] warning. Percentages on atomic inlines
+    /// are not recorded here; resolve them into the atomic's caller-supplied
+    /// size instead.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use shodo::limits::Limits;
+    /// use shodo::node::{InlineEdgePercents, InlineEdges, NodeId, Sides, TextSource};
+    /// use shodo::style::ParagraphStyle;
+    /// use shodo::ParagraphBuilder;
+    ///
+    /// let style = ParagraphStyle::default();
+    /// let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+    /// // padding-inline-start: calc(10% + 4px)
+    /// let mut edges = InlineEdges::default();
+    /// edges.padding.inline_start = 4.0;
+    /// builder
+    ///     .open_inline(NodeId(1), &style.root, edges)
+    ///     .set_inline_edge_percents(InlineEdgePercents {
+    ///         padding: Sides { inline_start: 0.1, ..Sides::default() },
+    ///         ..InlineEdgePercents::default()
+    ///     })
+    ///     .push_text(TextSource::Generated { node: NodeId(1) }, "text")
+    ///     .close_inline();
+    /// ```
+    pub fn set_inline_edge_percents(&mut self, percents: InlineEdgePercents) -> &mut Self {
+        if self.error.is_some() {
+            return self;
+        }
+        match self.items.last_mut() {
+            Some(RawItem::Open { percents: slot, .. }) => {
+                *slot = (!percents.is_zero()).then(|| Box::new(percents));
+            }
+            _ => self.warnings.push(
+                WarningKind::UnbalancedInline,
+                "set_inline_edge_percents without a preceding open_inline ignored",
+            ),
         }
         self
     }
