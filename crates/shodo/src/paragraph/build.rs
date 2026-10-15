@@ -194,7 +194,7 @@ impl Paragraph {
         ledger.charge(LimitKind::StyleBytes, normal_bytes)?;
         ledger.start_pass(false)?;
         let normal_warnings = warnings.checkpoint();
-        let normal_checkpoint = ledger.capture();
+        let normal_checkpoint = alternate_styles.as_ref().map(|_| ledger.capture());
         let mut analysis_cost = analysis_cost::Cost::new();
         analysis_cost.raw(&text, &items, ledger)?;
         let input = crate::analysis::whitespace::ProcessInput {
@@ -253,11 +253,13 @@ impl Paragraph {
             line_break_override.as_deref(),
             analysis_cost,
         );
-        let normal_reservations = ledger.captured(normal_checkpoint);
+        let normal_reservations = normal_checkpoint.map(|checkpoint| ledger.captured(checkpoint));
 
         let mut alternate_warnings = None;
         let mut alternate_reuses_analysis = false;
         let (alternate, alternate_frame) = if let Some(mut alternate_styles) = alternate_styles {
+            let normal_reservations =
+                normal_reservations.expect("alternate analysis captures normal reservations");
             let mut deferred_warnings = WarningSink::new(warnings.remaining_limit());
             for s in &mut alternate_styles {
                 s.font_size = sanitize::font_size(s.font_size, &mut deferred_warnings);
@@ -386,12 +388,14 @@ impl Paragraph {
         ledger.select_frame(normal_frame);
         let mut sat = Saturation::default();
         let shape_warning_start = warnings.checkpoint();
-        let shape_checkpoint = ledger.capture();
+        let shape_checkpoint = alternate.as_ref().map(|_| ledger.capture());
         let mut data = build_data(normal, cx, fonts, &mut warnings, &mut sat, ledger, None)?;
-        let shape_reservations = ledger.captured(shape_checkpoint);
+        let shape_reservations = shape_checkpoint.map(|checkpoint| ledger.captured(checkpoint));
         let shape_warning_clean =
             shape_warning_start.is_some() && warnings.checkpoint() == shape_warning_start;
         if let Some(alternate) = alternate {
+            let shape_reservations =
+                shape_reservations.expect("alternate shaping captures normal reservations");
             ledger.select_frame(alternate_frame.expect("first-line analysis has owner frame"));
             warnings.append(alternate_warnings.expect("first-line analysis has deferred warnings"));
             let reusable_shape = (alternate_reuses_analysis

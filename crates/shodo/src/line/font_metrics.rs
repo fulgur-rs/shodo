@@ -470,10 +470,29 @@ impl StyleMetricsMemo {
         style: &InlineStyle,
         metrics: StyleMetrics,
     ) {
+        // Keep exactly the inputs compared by `same_metric_inputs`. Shaping
+        // features, alternate selectors and hyphen strings can be large and
+        // must not stay alive solely through this context's metrics memo.
+        let mut metric_style = InlineStyle {
+            font_weight: style.font_weight,
+            font_width: style.font_width,
+            font_style: style.font_style,
+            font_size: style.font_size,
+            font_synthesis: style.font_synthesis,
+            font_optical_sizing: style.font_optical_sizing,
+            font_size_adjust: style.font_size_adjust,
+            text_emphasis: style.text_emphasis,
+            ..Default::default()
+        };
+        metric_style.font_families.clone_from(&style.font_families);
+        metric_style
+            .font_variations
+            .clone_from(&style.font_variations);
+        metric_style.lang.clone_from(&style.lang);
         let entry = MemoEntry {
             layer,
             generations,
-            style: style.clone(),
+            style: metric_style,
             metrics,
         };
         if self.entries.len() < STYLE_METRICS_MEMO_CAPACITY {
@@ -831,6 +850,7 @@ mod tests {
         assert_eq!(actual.space.to_bits(), expected.space.to_bits());
         assert_eq!(actual.ch.to_bits(), expected.ch.to_bits());
         assert_eq!(actual.ic.to_bits(), expected.ic.to_bits());
+        assert_eq!(actual.em_ascent.to_bits(), expected.em_ascent.to_bits());
     }
 
     #[test]
@@ -964,6 +984,14 @@ mod tests {
                 ..base.clone()
             },
             InlineStyle {
+                text_emphasis: Some(crate::style::TextEmphasis {
+                    shape: crate::style::TextEmphasisShape::Dot,
+                    filled: true,
+                    position: Default::default(),
+                }),
+                ..base.clone()
+            },
+            InlineStyle {
                 font_size_adjust: Some(FontSizeAdjust {
                     metric: FontMetricKind::CapHeight,
                     value: 0.5,
@@ -979,6 +1007,16 @@ mod tests {
         assert_eq!(metrics.len(), styles.len());
         assert_eq!(resolve_counts::snapshot().0, styles.len());
         assert!(warnings.as_slice().is_empty());
+
+        let mut memo = StyleMetricsMemo::default();
+        for (style, expected) in styles.iter().zip(metrics) {
+            memo.insert(fonts.layer_id(), fonts.generations(), style, expected);
+            assert_metrics_eq(
+                memo.get(fonts.layer_id(), fonts.generations(), style)
+                    .expect("memo retains every metric input"),
+                expected,
+            );
+        }
     }
 
     #[test]
@@ -1140,6 +1178,59 @@ mod tests {
         assert_eq!(after[0].font, replacement);
         assert_eq!(resolve_counts::snapshot().0, 3);
         assert!(warnings.as_slice().is_empty());
+    }
+
+    #[test]
+    fn memo_does_not_retain_large_shaping_only_payloads() {
+        use crate::style::{FontFeature, FontVariantAlternates};
+        use crate::test_support::alloc::{live_bytes, measure_peak};
+
+        let fonts = fonts();
+        let style = InlineStyle {
+            font_features: vec![
+                FontFeature {
+                    tag: *b"liga",
+                    value: 1
+                };
+                8192
+            ],
+            font_variant_alternates: FontVariantAlternates {
+                styleset: vec![1; 8192],
+                character_variant: vec![(1, 1); 8192],
+                ..Default::default()
+            },
+            hyphenate_character: Some("x".repeat(64 * 1024)),
+            ..style()
+        };
+        let mut warnings = WarningSink::default();
+        // Warm font caches outside the heap window; only the memo and returned
+        // metrics remain owned by the measured operation.
+        let expected = resolve(&fonts, &style, &mut warnings);
+        let mut memo = StyleMetricsMemo::default();
+        let before = live_bytes();
+        let (metrics, peak) = measure_peak(|| {
+            resolve_styles_memo(
+                &mut memo,
+                &fonts,
+                std::slice::from_ref(&style),
+                &mut warnings,
+            )
+        });
+        let retained = live_bytes() - before;
+        assert!(warnings.as_slice().is_empty());
+        assert_metrics_eq(metrics[0], expected);
+        resolve_counts::reset();
+        let again = resolve_styles_memo(
+            &mut memo,
+            &fonts,
+            std::slice::from_ref(&style),
+            &mut warnings,
+        );
+        assert_metrics_eq(again[0], expected);
+        assert_eq!(resolve_counts::snapshot().0, 0);
+        println!("metric memo retained={retained} peak={peak}");
+        assert!(retained < 16 * 1024, "shaping payload retained: {retained}");
+        assert!(peak < 16 * 1024, "shaping payload copied: {peak}");
     }
 
     #[test]

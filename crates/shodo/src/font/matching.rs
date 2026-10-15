@@ -619,14 +619,15 @@ impl FontCollection {
 
     fn find_cluster(&self, query: &FontQuery, cluster: &mut FontCluster<'_>) -> Option<FontMatch> {
         for family in &query.families {
-            let names = match family {
-                FontFamily::Named(name) => vec![name.clone()],
-                FontFamily::Generic(generic) => self.generic_names(*generic),
+            let found = match family {
+                FontFamily::Named(name) => self.named_match(name, query, cluster),
+                FontFamily::Generic(generic) => self
+                    .generic_names(*generic)
+                    .into_iter()
+                    .find_map(|name| self.named_match(&name, query, cluster)),
             };
-            for name in names {
-                if let Some(found) = self.named_match(&name, query, cluster) {
-                    return Some(found);
-                }
+            if let Some(found) = found {
+                return Some(found);
             }
         }
         let fallback_names = {
