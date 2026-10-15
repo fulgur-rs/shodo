@@ -192,7 +192,7 @@ fn suppressed_warnings_keep_exact_output_without_per_drop_strings() {
     assert!(
         warnings
             .iter()
-            .all(|w| w.message.is_empty() == false && w.message.len() < 200)
+            .all(|w| !w.message.is_empty() && w.message.len() < 200)
     );
 
     let scope = ALLOCATOR.begin().unwrap();

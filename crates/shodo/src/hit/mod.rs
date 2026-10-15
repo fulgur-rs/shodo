@@ -183,10 +183,8 @@ impl<'a> LineLayout<'a> {
     /// Hit a visible retained lane, descending through nested annotations.
     /// The result's offsets are local to its annotation, never the main text.
     pub fn hit_test_ruby(&self, inline: f32, block: f32) -> Option<RubyHit<'a>> {
-        if !inline.is_finite() || !block.is_finite() {
-            return None;
-        }
-        self.ruby_hit(inline, block).map(|(_, hit)| hit)
+        self.ruby_hit(inline, block)
+            .map(RubyHit::into_root_first_path)
     }
 
     /// Outside the layout, clamp to a nearest stop with `inside=false`.
@@ -216,8 +214,13 @@ impl<'a> LineLayout<'a> {
         self.hit_test_body(inline, block)
     }
 
-    fn ruby_hit(&self, inline: f32, block: f32) -> Option<(usize, RubyHit<'a>)> {
+    /// The internal path is leaf-first; only `hit_test_ruby` reverses it.
+    pub(crate) fn ruby_hit(&self, inline: f32, block: f32) -> Option<RubyHit<'a>> {
+        if !inline.is_finite() || !block.is_finite() {
+            return None;
+        }
         self.best_ruby_candidate(inline, block, |i| self.ruby[i].hit(inline, block))
+            .map(|(_, hit)| hit)
     }
 
     pub(crate) fn ruby_hit_entry(&self, inline: f32, block: f32) -> Option<usize> {

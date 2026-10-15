@@ -220,15 +220,8 @@ fn memory(
     cluster: &str,
     limits: &Limits,
 ) -> Result<serde_json::Value, Box<dyn Error>> {
-    let ((fonts, registration_ns), registration) = measured(|| {
-        Ok(build_collection(
-            workload,
-            family_names,
-            face_bytes,
-            limits,
-            8,
-        )?)
-    })?;
+    let ((fonts, registration_ns), registration) =
+        measured(|| build_collection(workload, family_names, face_bytes, limits, 8))?;
     let (cold_result, cold_match) = measured(|| Ok(match_face(&fonts, query, cluster)))?;
     let (warm_query, warm_cluster) = match workload {
         Workload::Registered => (
