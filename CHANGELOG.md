@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.32](https://github.com/fulgur-rs/shodo/compare/v0.0.31...v0.0.32) - 2026-10-15
+
+### Fixed
+
+- carry percentage edge metadata onto first-line annotation paragraphs
+- keep percentage edge metadata on ruby annotation paragraphs
+- resolve percentage inline edges inside ruby annotations
+
+### Other
+
+- reduce redundant work on first paragraph build
+- reduce paragraph allocations and metrics retention
+
 ## [0.0.31](https://github.com/fulgur-rs/shodo/compare/v0.0.30...v0.0.31) - 2026-10-15
 
 ### Added
