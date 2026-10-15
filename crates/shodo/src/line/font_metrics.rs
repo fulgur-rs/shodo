@@ -305,9 +305,9 @@ pub(crate) fn resolve(
             style,
             warnings,
         );
-        let metrics = fonts
-            .metrics_with_coords(font, size, &instance.coords)
-            .expect("retained primary face");
+        let (metrics, vertical_metrics) =
+            fonts.metrics_from_data(font, &data, size, &instance.coords);
+        let metrics = metrics.expect("retained primary face");
         // Only emphasis marks read the em box; skip the face otherwise.
         let typo_ratio = style.text_emphasis.and_then(|_| {
             #[cfg(test)]
@@ -325,7 +325,7 @@ pub(crate) fn resolve(
             ch,
             ic,
             metrics,
-            vertical_metrics: fonts.vertical_metrics(font, size, &instance.coords),
+            vertical_metrics,
             em_ascent,
         };
     }
@@ -513,7 +513,7 @@ pub(crate) fn resolve_styles_memo(
     warnings: &mut WarningSink,
 ) -> Vec<StyleMetrics> {
     let layer = fonts.layer_id();
-    let mut cache = StyleMetricsCache::default();
+    let mut cache = None;
     let mut resolved = Vec::with_capacity(styles.len());
     for style in styles {
         let generations = fonts.generations();
@@ -522,7 +522,14 @@ pub(crate) fn resolve_styles_memo(
             continue;
         }
         let before = warnings.checkpoint();
-        let metrics = cache.resolve(fonts, style, &resolved, warnings);
+        let metrics = if styles.len() == 1 {
+            // A single style has no later peer to deduplicate in this build.
+            resolve(fonts, style, warnings)
+        } else {
+            cache
+                .get_or_insert_with(StyleMetricsCache::default)
+                .resolve(fonts, style, &resolved, warnings)
+        };
         let after = warnings.checkpoint();
         if matches!((before, after), (Some(before), Some(after)) if before == after)
             && fonts.generations() == generations
@@ -795,7 +802,7 @@ mod tests {
         assert!(warnings.as_slice().is_empty());
         assert_eq!(resolve_counts::snapshot(), (1, 1));
         assert_eq!(resolve_counts::matches(), 4);
-        assert_eq!(crate::font::metric_font_ref_opens(), 10);
+        assert_eq!(crate::font::metric_font_ref_opens(), 9);
     }
 
     #[test]
@@ -838,7 +845,7 @@ mod tests {
         assert_eq!(metrics.font, primary);
         assert_eq!(resolve_counts::snapshot().1, 2);
         assert_eq!(resolve_counts::matches(), 4);
-        assert_eq!(crate::font::metric_font_ref_opens(), 9);
+        assert_eq!(crate::font::metric_font_ref_opens(), 8);
         assert!(warnings.as_slice().is_empty());
     }
 
@@ -1143,6 +1150,24 @@ mod tests {
         assert!(actual_warnings.is_suppressed());
         assert_eq!(resolve_counts::snapshot().0, 2);
         assert_eq!(resolve_counts::snapshot().1, 6);
+    }
+
+    #[test]
+    fn single_style_memo_miss_skips_the_paragraph_deduplication_cache() {
+        let fonts = fonts();
+        let styles = [style()];
+        let mut warnings = WarningSink::default();
+        let expected = resolve(&fonts, &styles[0], &mut warnings);
+        let mut memo = StyleMetricsMemo::default();
+
+        resolve_counts::reset();
+        let first = resolve_styles_memo(&mut memo, &fonts, &styles, &mut warnings);
+        let again = resolve_styles_memo(&mut memo, &fonts, &styles, &mut warnings);
+        assert_metrics_eq(first[0], expected);
+        assert_metrics_eq(again[0], expected);
+        assert!(warnings.as_slice().is_empty());
+        assert_eq!(resolve_counts::snapshot().0, 1);
+        assert_eq!(resolve_counts::key_hashes(), 0);
     }
 
     #[test]

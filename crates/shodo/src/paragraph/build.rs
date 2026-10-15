@@ -243,7 +243,7 @@ impl Paragraph {
             ledger,
         )?;
         let normal = analyze_data(
-            style.clone(),
+            style,
             limits.clone(),
             processed,
             styles,
@@ -265,7 +265,7 @@ impl Paragraph {
                 s.font_size = sanitize::font_size(s.font_size, &mut deferred_warnings);
                 sanitize::style(s, &mut deferred_warnings);
             }
-            let mut alternate_style = style.clone();
+            let mut alternate_style = normal.style.clone();
             alternate_style.root = alternate_styles[0].clone();
             alternate_style.first_line = None;
             let alternate_style_bytes = crate::style::memory::paragraph(&alternate_style)
@@ -316,7 +316,7 @@ impl Paragraph {
                 analysis_cost.transform(
                     &processed,
                     &alternate_styles,
-                    style.writing_mode,
+                    normal.style.writing_mode,
                     ledger,
                 )?;
                 let processed = transform_input(
@@ -324,7 +324,7 @@ impl Paragraph {
                     &alternate_styles,
                     &limits,
                     &mut deferred_warnings,
-                    style.writing_mode,
+                    normal.style.writing_mode,
                     ledger,
                 )?;
                 analysis_cost.analysis(
