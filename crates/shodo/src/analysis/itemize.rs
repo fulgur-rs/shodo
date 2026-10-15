@@ -4,6 +4,7 @@ use super::{ItemKind, whitespace::Processed};
 use crate::font::{FontCluster, FontCollection, FontMatch, FontQuery};
 use crate::limits::{LimitExceeded, Limits};
 use crate::style::{FontFamily, FontStyle, InlineStyle, identity::shaping_compatible};
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 mod graphemes;
@@ -182,7 +183,9 @@ pub(crate) fn itemize(
         .collect();
     // Borrow canonical keys from the retained styles. Only a new query identity
     // needs owned family/language payloads; paint-only styles reuse that query.
-    let mut query_ids = crate::hashing::FastMap::default();
+    // Keys hold caller-chosen family and language names, so keep the
+    // randomized SipHash map rather than `hashing::FastMap`.
+    let mut query_ids = HashMap::new();
     let mut queries = Vec::new();
     let style_queries: Vec<_> = styles
         .iter()
