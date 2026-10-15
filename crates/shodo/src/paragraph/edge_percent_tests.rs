@@ -703,3 +703,33 @@ fn ruby_paragraph_without_percents_is_not_rebuilt() {
     assert!(!p.has_percent_edges());
     assert_eq!(resolve(&p, BASIS).id(), p.id());
 }
+
+#[test]
+fn first_line_annotation_keeps_percent_metadata() {
+    let mut style = style();
+    style.first_line = Some(InlineStyle {
+        font_size: 20.0,
+        ..style.root.clone()
+    });
+    let limits = Limits::unlimited();
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    let source = |offset: u32| TextSource::Dom {
+        node: NodeId(20),
+        offset,
+    };
+    b.push_text(source(0), "ab")
+        .open_inline(NodeId(21), &style.root, InlineEdges::default())
+        .set_inline_edge_percents(padding(inline_start(0.1)))
+        .push_text(source(2), "cd")
+        .close_inline();
+    let p = build_ruby(crate::RubyContent::from_builder(b));
+    let resolved = resolve(&p, BASIS);
+    let first = line(&resolved);
+    let annotation = first.ruby_annotations().next().unwrap().paragraph();
+    // The first line exposes the annotation's first-line dataset.
+    assert!(annotation.has_percent_edges());
+    assert_eq!(annotation.edge_basis(), BASIS);
+    let rebuilt = resolve(annotation, 0.0);
+    assert_ne!(rebuilt.id(), annotation.id());
+    assert_eq!(rebuilt.edge_basis(), 0.0);
+}

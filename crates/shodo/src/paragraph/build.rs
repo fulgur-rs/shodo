@@ -527,6 +527,14 @@ impl Paragraph {
         } else {
             0.0
         };
+        // A ruby annotation exposes its first-line dataset as its paragraph
+        // on the first line, so that dataset carries the same metadata.
+        if let Some(first) = &mut data.first_line {
+            let alternate = Arc::get_mut(&mut first.data)
+                .expect("new first-line data has one owner before publication");
+            alternate.edge_basis = data.edge_basis;
+            alternate.edge_template = edge_template.clone();
+        }
         data.edge_template = edge_template;
         Ok(Paragraph {
             data: Arc::new(data),
