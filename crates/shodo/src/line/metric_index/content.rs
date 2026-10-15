@@ -502,11 +502,6 @@ impl SelectionDigest {
     }
 }
 
-fn add_sat(total: &mut Saturation, part: Saturation) {
-    total.saturated = total.saturated.wrapping_add(part.saturated);
-    total.non_finite = total.non_finite.wrapping_add(part.non_finite);
-}
-
 /// Resolve all requested columns against one actual selected line profile.
 /// Production callers share the profile through `content_shared`.
 #[allow(clippy::too_many_arguments)]
@@ -560,7 +555,7 @@ pub(crate) fn content_shared(
     let replayed = shared.is_some_and(|effects| memo.replay(cx, &effects, None, sat));
     if replayed && let Some(d) = share.detached.as_mut() {
         d.note.calls += 1;
-        add_sat(&mut d.note.sat, shared.unwrap().sat());
+        d.note.sat.absorb(shared.unwrap().sat());
     }
     let fresh;
     let selection: &Selection = if replayed {
@@ -584,7 +579,7 @@ pub(crate) fn content_shared(
             d.fresh += 1;
             d.note.calls += 1;
             if let Some(effects) = &finished {
-                add_sat(&mut d.note.sat, effects.sat());
+                d.note.sat.absorb(effects.sat());
             }
         }
         match finished {

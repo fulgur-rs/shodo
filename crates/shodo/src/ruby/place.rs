@@ -3,10 +3,10 @@ use super::align::AnnotationAlign;
 use super::geometry::Frame;
 use super::measure::RubyMeasure;
 use crate::geometry::{Direction, LayoutUnit, Saturation};
+use crate::hashing::FastMap;
 use crate::output::ruby::RubyAnnotationRecord;
 use crate::paragraph::ParagraphData;
 use crate::{AtomicSizes, LayoutContext, Line, RubyTransform};
-use std::collections::HashMap;
 use std::ops::Range;
 
 fn span_width(
@@ -44,7 +44,7 @@ pub(crate) fn format(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> [Option<LayoutUnit>; 2] {
-    let box_origins: HashMap<_, _> = line
+    let box_origins: FastMap<_, _> = line
         .fragments
         .iter()
         .filter_map(|r| match r.kind {
@@ -98,7 +98,7 @@ pub(crate) fn format(
                 fallback = raw_origin + fragment.columns[i].to_f32();
             }
         }
-        let mut merged = HashMap::new();
+        let mut merged = FastMap::default();
         let mut merged_gaps = Vec::new();
         let mut level_lanes = vec![Vec::new(); ruby.levels.len()];
         for lane in &fragment.lanes {

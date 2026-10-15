@@ -271,7 +271,11 @@ fn planned_selections_release_previous_paragraph_indexes() {
             .to_f32(),
             10.0
         );
-        assert_eq!(cx.ruby_ranges.sets.len(), 1, "previous paragraph retained");
+        assert_eq!(
+            cx.ruby_ranges.caches.sets.len(),
+            1,
+            "previous paragraph retained"
+        );
     }
 }
 

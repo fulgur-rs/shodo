@@ -204,10 +204,6 @@ impl QuirkIndex {
         for i in (1..size).rev() {
             tree[i] = tree[i * 2].join(tree[i * 2 + 1]);
         }
-        let end_blocks = |b: u32| {
-            let e = data.boxes[b as usize].edges;
-            e.padding.inline_end != 0.0 || e.border.inline_end != 0.0
-        };
         // The backward scan of `whitespace::trailing_start`, for every end
         // and entry state.
         let mut stop = [vec![0u32; n + 1], vec![0u32; n + 1]];
@@ -216,7 +212,7 @@ impl QuirkIndex {
             for s in [false, true] {
                 stop[usize::from(s)][e] = match data.units[u].kind {
                     UnitKind::Close { box_index } => {
-                        stop[usize::from(s || end_blocks(box_index))][u]
+                        stop[usize::from(s || end_edge(data, box_index))][u]
                     }
                     _ if (hangable(data, u) && (!preserved(data, u) || !s))
                         || transparent(data, u) =>
@@ -243,7 +239,7 @@ impl QuirkIndex {
                 cursor = data.boxes[b as usize].parent;
             }
             for b in path.into_iter().rev() {
-                value |= super::super::decoration::cloned(data, b) && end_blocks(b);
+                value |= super::super::decoration::cloned(data, b) && end_edge(data, b);
                 chained[b as usize] = Some(value);
             }
             value
@@ -252,7 +248,7 @@ impl QuirkIndex {
         let mut scan = false;
         for e in (0..n).rev() {
             scan = match data.units[e].kind {
-                UnitKind::Close { box_index } => end_blocks(box_index) || scan,
+                UnitKind::Close { box_index } => end_edge(data, box_index) || scan,
                 UnitKind::BidiControl | UnitKind::Float { .. } | UnitKind::Absolute { .. } => scan,
                 UnitKind::Cluster { .. } if transparent(data, e) => scan,
                 _ => false,

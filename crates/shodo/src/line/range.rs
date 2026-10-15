@@ -28,6 +28,32 @@ type BlockKey = (u64, usize, usize, usize);
 
 #[derive(Debug, Default)]
 pub(crate) struct RangeCache {
+    pub(crate) caches: Caches,
+    /// Invalidations: caches cleared (`begin` with a new root,
+    /// `vacate_slots`). Fills need no counter: a query's side effects do not
+    /// depend on what the caches hold, so a measurement recorded before a
+    /// fill replays exactly after it. Reuse across measurements
+    /// (`ruby::accumulate`) still resets on an invalidation, conservatively.
+    epoch: u64,
+    /// The caches of the same dataset under the previous atomic revision.
+    /// `intrinsic_sizes` measures min and max content with separate atomics
+    /// and switches at every forced break and cleared float: dropping the
+    /// caches at each switch rebuilt the paragraph's indexes every time,
+    /// quadratic in the paragraph (shodo-mc0). At most one is kept, and only
+    /// once the revisions alternate (holding both costs memory and fresh
+    /// allocations, measurably slower for a single switch).
+    alt: Option<Box<Caches>>,
+    /// The root whose caches the last revision change of the same dataset
+    /// dropped. Returning to it starts keeping `alt`.
+    dropped: Option<(u64, usize, u64)>,
+    /// Override of `MAX_BLOCKS`.
+    #[cfg(test)]
+    pub(crate) block_cap: Option<usize>,
+}
+
+/// The caches of one root; `RangeCache::begin` stashes them whole.
+#[derive(Debug, Default)]
+pub(crate) struct Caches {
     root: Option<(u64, usize, u64)>,
     sets: crate::hashing::FastMap<(u64, usize), Costs>,
     /// Value slots: a query moves the index out and back without removing the
@@ -42,38 +68,17 @@ pub(crate) struct RangeCache {
     block_effects: crate::hashing::FastMap<BlockKey, (LayoutUnit, crate::line::replay::Effects)>,
     pub(crate) neighbors:
         crate::hashing::FastMap<(u64, usize), Option<Box<crate::ruby::overhang::NeighborIndex>>>,
-    /// Invalidations: caches cleared (`begin` with a new root,
-    /// `vacate_slots`). Fills need no counter: a query's side effects do not
-    /// depend on what the caches hold, so a measurement recorded before a
-    /// fill replays exactly after it. Reuse across measurements
-    /// (`ruby::accumulate`) still resets on an invalidation, conservatively.
-    epoch: u64,
-    /// The caches of the same dataset under the previous atomic revision.
-    /// `intrinsic_sizes` measures min and max content with separate atomics
-    /// and switches at every forced break and cleared float: dropping the
-    /// caches at each switch rebuilt the paragraph's indexes every time,
-    /// quadratic in the paragraph (shodo-mc0). At most one is kept, and only
-    /// once the revisions alternate (holding both costs memory and fresh
-    /// allocations, measurably slower for a single switch).
-    alt: Option<Box<Stash>>,
-    /// The root whose caches the last revision change of the same dataset
-    /// dropped. Returning to it starts keeping `alt`.
-    dropped: Option<(u64, usize, u64)>,
-    /// Override of `MAX_BLOCKS`.
-    #[cfg(test)]
-    pub(crate) block_cap: Option<usize>,
 }
 
-/// The caches of one root, stashed by `RangeCache::begin`.
-#[derive(Debug, Default)]
-struct Stash {
-    root: Option<(u64, usize, u64)>,
-    sets: crate::hashing::FastMap<(u64, usize), Costs>,
-    metrics: crate::hashing::FastMap<(u64, usize), Option<Box<super::metric_index::MetricIndex>>>,
-    blocks: crate::hashing::FastMap<BlockKey, LayoutUnit>,
-    block_effects: crate::hashing::FastMap<BlockKey, (LayoutUnit, crate::line::replay::Effects)>,
-    neighbors:
-        crate::hashing::FastMap<(u64, usize), Option<Box<crate::ruby::overhang::NeighborIndex>>>,
+impl Caches {
+    /// Empty every map, keeping its capacity and the root.
+    fn clear(&mut self) {
+        self.sets.clear();
+        self.metrics.clear();
+        self.blocks.clear();
+        self.block_effects.clear();
+        self.neighbors.clear();
+    }
 }
 
 /// Entries kept in `blocks` and `block_effects` together. Reaching it clears
@@ -98,24 +103,24 @@ impl RangeCache {
     /// Entries in the block caches.
     #[cfg(test)]
     pub(crate) fn block_entries(&self) -> usize {
-        self.blocks.len() + self.block_effects.len()
+        self.caches.blocks.len() + self.caches.block_effects.len()
     }
 
     /// Make room for one more block entry under `key`.
     fn reserve_block(&mut self, key: &BlockKey) {
-        if self.blocks.contains_key(key) || self.block_effects.contains_key(key) {
+        if self.caches.blocks.contains_key(key) || self.caches.block_effects.contains_key(key) {
             return;
         }
-        if self.blocks.len() + self.block_effects.len() < self.block_cap() {
+        if self.caches.blocks.len() + self.caches.block_effects.len() < self.block_cap() {
             return;
         }
-        self.blocks.clear();
-        self.block_effects.clear();
-        if self.blocks.capacity() > RETAINED_BLOCKS {
-            self.blocks.shrink_to(RETAINED_BLOCKS);
+        self.caches.blocks.clear();
+        self.caches.block_effects.clear();
+        if self.caches.blocks.capacity() > RETAINED_BLOCKS {
+            self.caches.blocks.shrink_to(RETAINED_BLOCKS);
         }
-        if self.block_effects.capacity() > RETAINED_BLOCKS {
-            self.block_effects.shrink_to(RETAINED_BLOCKS);
+        if self.caches.block_effects.capacity() > RETAINED_BLOCKS {
+            self.caches.block_effects.shrink_to(RETAINED_BLOCKS);
         }
     }
 
@@ -125,16 +130,6 @@ impl RangeCache {
 
     fn invalidate(&mut self) {
         self.epoch = self.epoch.wrapping_add(1);
-    }
-
-    /// Exchange the current caches with `stash`.
-    fn swap(&mut self, stash: &mut Stash) {
-        std::mem::swap(&mut self.root, &mut stash.root);
-        std::mem::swap(&mut self.sets, &mut stash.sets);
-        std::mem::swap(&mut self.metrics, &mut stash.metrics);
-        std::mem::swap(&mut self.blocks, &mut stash.blocks);
-        std::mem::swap(&mut self.block_effects, &mut stash.block_effects);
-        std::mem::swap(&mut self.neighbors, &mut stash.neighbors);
     }
 
     pub(crate) fn begin(&mut self, data: &ParagraphData, atomics: &AtomicSizes) {
@@ -149,17 +144,18 @@ impl RangeCache {
         // dataset replaces the whole cache; a changed atomic revision of the
         // same dataset stashes it, and the stashed revision comes back whole.
         let key = (root.0, root.1);
-        if self.root.is_some_and(|owner| owner.2 == root.2)
-            && (self.sets.contains_key(&key)
-                || self.metrics.contains_key(&key)
-                || self.neighbors.contains_key(&key))
+        if self.caches.root.is_some_and(|owner| owner.2 == root.2)
+            && (self.caches.sets.contains_key(&key)
+                || self.caches.metrics.contains_key(&key)
+                || self.caches.neighbors.contains_key(&key))
         {
             return;
         }
-        if self.root == Some(root) {
+        if self.caches.root == Some(root) {
             return;
         }
         let same_dataset = self
+            .caches
             .root
             .is_some_and(|owner| (owner.0, owner.1) == (root.0, root.1));
         if same_dataset {
@@ -169,7 +165,7 @@ impl RangeCache {
                     // Memo and accumulator keys include the atomic revision,
                     // so their entries only ever meet their own revision's
                     // caches.
-                    self.swap(&mut alt);
+                    std::mem::swap(&mut self.caches, &mut alt);
                     self.alt = Some(alt);
                     return;
                 }
@@ -178,22 +174,16 @@ impl RangeCache {
                 // Back to the revision dropped last: the revisions alternate,
                 // so keep the current caches for the next switch. A single
                 // switch (the usual intrinsic call) keeps nothing extra.
-                let mut stash = Box::<Stash>::default();
-                self.swap(&mut stash);
-                self.alt = Some(stash);
-                self.root = Some(root);
+                self.alt = Some(Box::new(std::mem::take(&mut self.caches)));
+                self.caches.root = Some(root);
                 self.invalidate();
                 return;
             }
         }
-        self.dropped = if same_dataset { self.root } else { None };
-        self.sets.clear();
-        self.blocks.clear();
-        self.block_effects.clear();
-        self.metrics.clear();
-        self.neighbors.clear();
+        self.dropped = if same_dataset { self.caches.root } else { None };
+        self.caches.clear();
         self.alt = None;
-        self.root = Some(root);
+        self.caches.root = Some(root);
         self.invalidate();
     }
 
@@ -204,21 +194,27 @@ impl RangeCache {
     pub(crate) fn vacate_slots(&mut self) {
         self.alt = None;
         self.dropped = None;
-        self.sets.clear();
-        self.blocks.clear();
-        self.block_effects.clear();
-        self.metrics.values_mut().for_each(|slot| *slot = None);
-        self.neighbors.values_mut().for_each(|slot| *slot = None);
+        self.caches.sets.clear();
+        self.caches.blocks.clear();
+        self.caches.block_effects.clear();
+        self.caches
+            .metrics
+            .values_mut()
+            .for_each(|slot| *slot = None);
+        self.caches
+            .neighbors
+            .values_mut()
+            .for_each(|slot| *slot = None);
         self.invalidate();
     }
 
     /// Both index maps are populated and every slot holds an index.
     #[cfg(test)]
     pub(crate) fn slots_filled(&self) -> bool {
-        !self.metrics.is_empty()
-            && !self.neighbors.is_empty()
-            && self.metrics.values().all(Option::is_some)
-            && self.neighbors.values().all(Option::is_some)
+        !self.caches.metrics.is_empty()
+            && !self.caches.neighbors.is_empty()
+            && self.caches.metrics.values().all(Option::is_some)
+            && self.caches.neighbors.values().all(Option::is_some)
     }
 }
 
@@ -244,11 +240,11 @@ pub(crate) fn block_size(
         range.start,
         range.end,
     );
-    if let Some(height) = cx.ruby_ranges.blocks.get(&key) {
+    if let Some(height) = cx.ruby_ranges.caches.blocks.get(&key) {
         return *height;
     }
     let memo = super::replay::Memo::default();
-    if let Some((height, effects)) = cx.ruby_ranges.block_effects.get(&key).copied()
+    if let Some((height, effects)) = cx.ruby_ranges.caches.block_effects.get(&key).copied()
         && memo.replay(cx, &effects, None, sat)
     {
         return height;
@@ -262,16 +258,16 @@ pub(crate) fn block_size(
     }
     match effects {
         Some(effects) if effects.is_empty() => {
-            cache.block_effects.remove(&key);
-            cache.blocks.insert(key, height);
+            cache.caches.block_effects.remove(&key);
+            cache.caches.blocks.insert(key, height);
         }
         Some(effects) => {
             // No `blocks` entry exists: a hit there returned above.
-            debug_assert!(!cache.blocks.contains_key(&key));
-            cache.block_effects.insert(key, (height, effects));
+            debug_assert!(!cache.caches.blocks.contains_key(&key));
+            cache.caches.block_effects.insert(key, (height, effects));
         }
         None => {
-            cache.block_effects.remove(&key);
+            cache.caches.block_effects.remove(&key);
         }
     }
     height
@@ -336,10 +332,7 @@ impl Costs {
             0 => Saturation::default(),
             k => self.saturated[k - 1].1,
         };
-        absorb(
-            &mut value,
-            difference(through(range.end), through(range.start)),
-        );
+        value.absorb(through(range.end).since(through(range.start)));
         value
     }
 }
@@ -351,7 +344,7 @@ impl Index {
             0 => Saturation::default(),
             k => self.saturated[k - 1].1,
         };
-        difference(through(range.end), through(range.start))
+        through(range.end).since(through(range.start))
     }
 }
 
@@ -396,21 +389,6 @@ impl TabPrefix {
     }
 }
 
-/// Add saturation to the caller's counters. Counters only ever increment;
-/// wrapping matches release `+=` and `line::replay`.
-fn absorb(sat: &mut Saturation, step: Saturation) {
-    sat.saturated = sat.saturated.wrapping_add(step.saturated);
-    sat.non_finite = sat.non_finite.wrapping_add(step.non_finite);
-}
-
-/// `a - b` of running (wrapping) saturation counts.
-fn difference(a: Saturation, b: Saturation) -> Saturation {
-    Saturation {
-        saturated: a.saturated.wrapping_sub(b.saturated),
-        non_finite: a.non_finite.wrapping_sub(b.non_finite),
-    }
-}
-
 /// Prepare immutable tables once, after final units and spacing are known.
 /// Caller dimensions are excluded. Unit saturation stays in the tables and
 /// replays only for queried units, without entering the build warning sink.
@@ -446,7 +424,7 @@ fn build(data: &ParagraphData, atomics: &AtomicSizes, cx: &mut LayoutContext) ->
         let mut sat = Saturation::default();
         let width = width.add(data.unit_spacing[i].word, &mut sat);
         if !sat.is_clean() {
-            absorb(&mut running, sat);
+            running.absorb(sat);
             saturated.push((i, running));
         }
         let base = index.advances[i + 1] - index.advances[i];
@@ -503,7 +481,7 @@ fn build_index(data: &ParagraphData, cx: &mut LayoutContext) -> Index {
         };
         let width = width.add(data.unit_spacing[i].word, &mut sat);
         if !sat.is_clean() {
-            absorb(&mut running, sat);
+            running.absorb(sat);
             saturated.push((i, running));
         }
         advances.push(advances.last().unwrap() + i64::from(width.raw()));
@@ -524,12 +502,10 @@ fn build_index(data: &ParagraphData, cx: &mut LayoutContext) -> Index {
         } else {
             *last_preserved.last().unwrap()
         });
-        let blocks = if let UnitKind::Close { box_index } = unit.kind {
-            let e = data.boxes[box_index as usize].edges;
-            e.padding.inline_end != 0.0 || e.border.inline_end != 0.0
-        } else {
-            false
-        };
+        let blocks = matches!(
+            unit.kind,
+            UnitKind::Close { box_index } if super::quirk::end_edge(data, box_index)
+        );
         last_blocked_preserved.push(if blocks {
             *last_preserved.last().unwrap()
         } else {
@@ -537,13 +513,9 @@ fn build_index(data: &ParagraphData, cx: &mut LayoutContext) -> Index {
         });
     }
     let spacing = RangeIndex::new(
-        data.units.iter().enumerate().map(|(i, u)| {
+        (0..data.units.len()).map(|i| {
             (
-                if matches!(u.kind, UnitKind::Tab) && u.combine.is_none() {
-                    data.base_level
-                } else {
-                    u.level
-                },
+                super::spacing::spacing_level(data, i),
                 data.spacing_summaries.get(i),
             )
         }),
@@ -712,22 +684,24 @@ fn natural(
     });
     if cx
         .ruby_ranges
+        .caches
         .root
         .is_none_or(|root| root.2 != atomics.revision)
     {
         cx.ruby_ranges.begin(data, atomics);
     }
     let key = (data.id, data as *const ParagraphData as usize);
-    if !cx.ruby_ranges.sets.contains_key(&key) {
+    if !cx.ruby_ranges.caches.sets.contains_key(&key) {
         let costs = build(data, atomics, cx);
-        cx.ruby_ranges.sets.insert(key, costs);
+        cx.ruby_ranges.caches.sets.insert(key, costs);
     }
     let costs = cx
         .ruby_ranges
+        .caches
         .sets
         .get_mut(&key)
         .expect("the range costs were inserted above");
-    absorb(sat, costs.saturation(&range));
+    sat.absorb(costs.saturation(&range));
     // Each tab step's value and saturation depend only on the paragraph,
     // the range start and the tab (`clipped_delta` is the same for every
     // end past the tab: a preserved tab is its own item, so no shared
@@ -786,7 +760,7 @@ fn natural(
                         .width(&mut step),
                     &mut step,
                 );
-                absorb(&mut step, decoration_sat);
+                step.absorb(decoration_sat);
                 let extra =
                     i64::from(super::scan::tab_width(data, &data.units[i], pos, &mut step).raw());
                 prefix.extra.push(previous + extra);
@@ -798,13 +772,13 @@ fn natural(
                     prefix.sat.push(step);
                 } else if !prefix.sat.is_empty() {
                     let mut running = prefix.sat.last().copied().unwrap_or_default();
-                    absorb(&mut running, step);
+                    running.absorb(step);
                     prefix.sat.push(running);
                 }
             }
             prefix.through = range.end;
         }
-        absorb(sat, prefix.saturation(&index.tabs, range.end));
+        sat.absorb(prefix.saturation(&index.tabs, range.end));
     }
     let costs = &*costs;
     let measured = geometry(

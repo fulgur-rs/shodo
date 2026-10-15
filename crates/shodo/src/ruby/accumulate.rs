@@ -760,6 +760,24 @@ fn mark(
     true
 }
 
+/// D6: mark the ancestors of `pos` dirty, stopping at the first one `mark`
+/// refuses (already dirty, or at or past `top`).
+fn mark_ancestors(
+    acc: &Accumulator,
+    dirty: &mut BTreeSet<u32>,
+    top: usize,
+    pos: u32,
+    cx: &mut LayoutContext,
+) {
+    let mut parent = acc.parent(pos);
+    while let Some(q) = parent {
+        if !mark(dirty, top, q, Dirty::Ancestor, cx) {
+            break;
+        }
+        parent = acc.parent(q);
+    }
+}
+
 /// Sum of the container adjustments of `start..through` (whose walk
 /// visited `containers`), with exactly the result and side effects of
 /// `measure::measure_containers`, measuring live only the positions whose
@@ -993,13 +1011,7 @@ impl Step<'_> {
     fn close(&self, acc: &Accumulator, dirty: &mut BTreeSet<u32>, cx: &mut LayoutContext) {
         let seeds: Vec<u32> = dirty.iter().copied().collect();
         for seed in seeds {
-            let mut parent = acc.parent(seed);
-            while let Some(q) = parent {
-                if !mark(dirty, self.top, q, Dirty::Ancestor, cx) {
-                    break;
-                }
-                parent = acc.parent(q);
-            }
+            mark_ancestors(acc, dirty, self.top, seed, cx);
         }
     }
 
@@ -1190,13 +1202,7 @@ impl Step<'_> {
         let changed = !acc.entries[pos].same_values(&entry);
         acc.store(pos, entry, full_end);
         if changed {
-            let mut parent = acc.parent(pos as u32);
-            while let Some(q) = parent {
-                if !mark(dirty, self.top, q, Dirty::Ancestor, cx) {
-                    break;
-                }
-                parent = acc.parent(q);
-            }
+            mark_ancestors(acc, dirty, self.top, pos as u32, cx);
         }
     }
 }

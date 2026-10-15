@@ -1,5 +1,6 @@
 //! Punctuation classification and blank space from the actual shaping face.
 use crate::geometry::{LayoutUnit, Saturation, WritingMode};
+use crate::hashing::FastMap;
 use crate::paragraph::ParagraphData;
 use crate::style::{HangingPunctuation, TextSpacingTrim};
 use icu_properties::{
@@ -10,7 +11,6 @@ use skrifa::{
     FontRef, GlyphId, MetadataProvider,
     instance::{LocationRef, Size},
 };
-use std::collections::HashMap;
 
 // These entries live only for this paragraph build. Coordinates are borrowed
 // from retained runs; raw bounds can be shared across languages, orientations,
@@ -21,7 +21,7 @@ struct FontGeometry<'a> {
     coords: &'a [crate::font::NormalizedCoord],
     nominal: Option<f32>,
     proportional: bool,
-    bounds: HashMap<u32, Option<skrifa::metrics::BoundingBox>>,
+    bounds: FastMap<u32, Option<skrifa::metrics::BoundingBox>>,
 }
 
 impl FontGeometry<'_> {
@@ -313,7 +313,7 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
                 coords: &run.instance.coords,
                 nominal,
                 proportional,
-                bounds: HashMap::new(),
+                bounds: FastMap::default(),
             });
             geometry.len() - 1
         });
@@ -661,11 +661,10 @@ impl HangingTail {
             self.obstruction = None;
             self.visible = None;
             self.blocked_visible = None;
-        } else if let crate::analysis::units::UnitKind::Close { box_index } = data.units[at].kind {
-            let edges = data.boxes[box_index as usize].edges;
-            if edges.padding.inline_end != 0.0 || edges.border.inline_end != 0.0 {
-                self.visible = self.blocked_visible;
-            }
+        } else if let crate::analysis::units::UnitKind::Close { box_index } = data.units[at].kind
+            && super::quirk::end_edge(data, box_index)
+        {
+            self.visible = self.blocked_visible;
         }
     }
 

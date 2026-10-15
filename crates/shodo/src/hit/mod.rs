@@ -323,7 +323,7 @@ fn bounds_are_finite(rect: LogicalRect) -> bool {
     .all(f32::is_finite)
 }
 
-fn invalid_bounds() -> LogicalRect {
+pub(crate) fn invalid_bounds() -> LogicalRect {
     LogicalRect {
         inline_start: f32::NAN,
         inline_size: f32::NAN,

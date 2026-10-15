@@ -223,7 +223,6 @@ impl LineGeometry {
                         let (from, to) = (rect.inline_start, rect.inline_start + rect.inline_size);
                         result.add(
                             number,
-                            unit.text.clone(),
                             &[unit.text.start, unit.text.end],
                             if reversed { to } else { from },
                             if reversed { from } else { to },
@@ -284,7 +283,6 @@ impl LineGeometry {
             };
             result.add(
                 number,
-                unit.text.clone(),
                 &[unit.text.start, unit.text.end],
                 rect.inline_start,
                 rect.inline_start + rect.inline_size,
@@ -322,7 +320,6 @@ impl LineGeometry {
             let cuts = caret_cuts(line, &cluster.text);
             result.add(
                 number,
-                cluster.text,
                 cuts,
                 cluster.from,
                 cluster.to,
@@ -338,7 +335,6 @@ impl LineGeometry {
     fn add(
         &mut self,
         line: usize,
-        text: Range<u32>,
         cuts: &[u32],
         from: f32,
         to: f32,
@@ -353,25 +349,17 @@ impl LineGeometry {
         let n = cuts.len() - 1;
         let mut previous = None;
         for (i, offset) in cuts.iter().copied().enumerate() {
-            let ratio = if i == 0 {
-                0.0
-            } else if i == n {
-                1.0
-            } else {
-                gdef.and_then(|g| g.get(i - 1))
-                    .filter(|_| natural > 0.0)
-                    .map_or(i as f32 / n as f32, |v| *v / natural)
-            };
             // Distribute layout expansion over the grapheme intervals while
             // retaining the font's natural caret coordinate when provided.
-            let distance = if i > 0 && i < n {
-                gdef.and_then(|g| g.get(i - 1))
-                    .map_or((to - from) * ratio, |v| {
-                        (to - from).signum()
-                            * (*v + ((to - from).abs() - natural) * i as f32 / n as f32)
-                    })
-            } else {
-                (to - from) * ratio
+            let natural_caret = (i > 0 && i < n)
+                .then(|| gdef.and_then(|g| g.get(i - 1)))
+                .flatten();
+            let distance = match natural_caret {
+                Some(v) => {
+                    (to - from).signum()
+                        * (*v + ((to - from).abs() - natural) * i as f32 / n as f32)
+                }
+                None => (to - from) * (i as f32 / n as f32),
             };
             let x = from + distance;
             let caret_rect = if block_axis {
@@ -431,7 +419,6 @@ impl LineGeometry {
             }
             previous = Some((offset, x));
         }
-        let _ = text;
     }
 }
 

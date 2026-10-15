@@ -85,8 +85,7 @@ pub(super) fn obstructed(data: &ParagraphData, end: usize) -> bool {
         OBSTRUCTION_VISITS.with(|visits| visits.set(visits.get() + 1));
         match u.kind {
             UnitKind::Close { box_index } => {
-                let e = data.boxes[box_index as usize].edges;
-                if e.padding.inline_end != 0.0 || e.border.inline_end != 0.0 {
+                if super::quirk::end_edge(data, box_index) {
                     return true;
                 }
             }
@@ -95,11 +94,8 @@ pub(super) fn obstructed(data: &ParagraphData, end: usize) -> bool {
             _ => break,
         }
     }
-    super::decoration::ancestors(data, end).any(|b| {
-        let e = data.boxes[b as usize].edges;
-        super::decoration::cloned(data, b)
-            && (e.padding.inline_end != 0.0 || e.border.inline_end != 0.0)
-    })
+    super::decoration::ancestors(data, end)
+        .any(|b| super::decoration::cloned(data, b) && super::quirk::end_edge(data, b))
 }
 
 pub(super) fn fits_hanging(data: &ParagraphData, i: usize) -> bool {
@@ -118,8 +114,7 @@ pub(super) fn trailing(
     let mut blocked = obstructed(data, end);
     for i in (start..end).rev() {
         if let UnitKind::Close { box_index } = data.units[i].kind {
-            let e = data.boxes[box_index as usize].edges;
-            blocked |= e.padding.inline_end != 0.0 || e.border.inline_end != 0.0;
+            blocked |= super::quirk::end_edge(data, box_index);
         } else if hangable(data, i) && (!preserved(data, i) || !blocked) {
             begin = i;
             sum = sum.add(widths[i - start], sat);
@@ -139,8 +134,7 @@ pub(crate) fn trailing_start(data: &ParagraphData, start: usize, end: usize) -> 
     let mut blocked = obstructed(data, end);
     for i in (start..end).rev() {
         if let UnitKind::Close { box_index } = data.units[i].kind {
-            let e = data.boxes[box_index as usize].edges;
-            blocked |= e.padding.inline_end != 0.0 || e.border.inline_end != 0.0;
+            blocked |= super::quirk::end_edge(data, box_index);
         } else if !(hangable(data, i) && (!preserved(data, i) || !blocked)) && !transparent(data, i)
         {
             break;

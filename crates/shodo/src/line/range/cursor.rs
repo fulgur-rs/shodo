@@ -2,7 +2,7 @@
 //! paragraph advances. Starting a cursor never indexes or copies its suffix.
 //! Ruby probes can re-enter the paragraph cache; tab and clipped-cluster
 //! prefixes therefore belong to this cursor, never to the cache's last query.
-use super::{Natural, absorb, geometry};
+use super::{Natural, geometry};
 use crate::LayoutContext;
 use crate::analysis::units::UnitKind;
 use crate::geometry::{LayoutUnit, Saturation};
@@ -119,7 +119,7 @@ impl Cursor {
             )
             .add(data.unit_spacing[at].word, sat)
         } else {
-            absorb(sat, effects);
+            sat.absorb(effects);
             indexed
         };
         if atomic {

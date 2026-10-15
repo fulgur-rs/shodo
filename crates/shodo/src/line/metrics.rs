@@ -755,6 +755,7 @@ fn measure_profile<const KEEP_SHIFTS: bool>(
     // The over side is the physical right in vertical-lr, opposite block-start.
     // Reflect the line-relative solution into logical block coordinates once.
     let reverse_over = data.style.writing_mode.line_over_is_block_end();
+    let reflect = |v: f32| if reverse_over { -v } else { v };
     let combination_shifts = if KEEP_SHIFTS {
         combination_bases
             .into_iter()
@@ -762,14 +763,7 @@ fn measure_profile<const KEEP_SHIFTS: bool>(
                 let displacement = base + group.map_or(0.0, |g| deltas[&g]);
                 (
                     index,
-                    LayoutUnit::from_f32_round(
-                        if reverse_over {
-                            -displacement
-                        } else {
-                            displacement
-                        },
-                        sat,
-                    ),
+                    LayoutUnit::from_f32_round(reflect(displacement), sat),
                 )
             })
             .collect()
@@ -785,14 +779,7 @@ fn measure_profile<const KEEP_SHIFTS: bool>(
                         .combination(data, u)
                         .expect("combined unit has a span");
                     let displacement = profile.shift + profile.group.map_or(0.0, |g| deltas[&g]);
-                    let _ = LayoutUnit::from_f32_round(
-                        if reverse_over {
-                            -displacement
-                        } else {
-                            displacement
-                        },
-                        sat,
-                    );
+                    let _ = LayoutUnit::from_f32_round(reflect(displacement), sat);
                 }
             }
         }
@@ -813,7 +800,7 @@ fn measure_profile<const KEEP_SHIFTS: bool>(
                 .map_or(0.0, |profile| {
                     place_shift(i, profile.shift, profile.group, profile.own_group)
                 });
-            let _ = LayoutUnit::from_f32_round(if reverse_over { -value } else { value }, sat);
+            let _ = LayoutUnit::from_f32_round(reflect(value), sat);
         }
     }
     LineMetrics {
@@ -821,7 +808,7 @@ fn measure_profile<const KEEP_SHIFTS: bool>(
         block_size,
         shifts: shifts
             .into_iter()
-            .map(|v| LayoutUnit::from_f32_round(if reverse_over { -v } else { v }, sat))
+            .map(|v| LayoutUnit::from_f32_round(reflect(v), sat))
             .collect(),
         combination_shifts,
         empty,

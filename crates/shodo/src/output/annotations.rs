@@ -123,7 +123,7 @@ impl Line {
                             &self.data, style, run.font, size, upright, raw,
                         )
                     };
-                    let extents = fixed(&self.data, a, d, sat);
+                    let extents = crate::ruby::geometry::fixed_extents(&self.data, a, d, sat);
                     let marks = crate::ruby::geometry::record_emphasis(
                         &self.data,
                         record,
@@ -279,21 +279,4 @@ fn include(slot: &mut Option<LayoutUnit>, edge: LayoutUnit, before: bool) {
         edge,
         |old| if before { old.min(edge) } else { old.max(edge) },
     ));
-}
-
-fn fixed(
-    data: &crate::paragraph::ParagraphData,
-    a: f32,
-    d: f32,
-    sat: &mut Saturation,
-) -> (LayoutUnit, LayoutUnit) {
-    let (a, d) = if data.style.writing_mode.line_over_is_block_end() {
-        (d, a)
-    } else {
-        (a, d)
-    };
-    (
-        LayoutUnit::from_f32_round(a, sat),
-        LayoutUnit::from_f32_round(d, sat),
-    )
 }

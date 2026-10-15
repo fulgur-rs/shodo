@@ -158,7 +158,7 @@ pub(crate) fn font_extents(
     };
     fixed_extents(data, a, d, sat)
 }
-fn fixed_extents(
+pub(crate) fn fixed_extents(
     data: &ParagraphData,
     mut a: f32,
     mut d: f32,

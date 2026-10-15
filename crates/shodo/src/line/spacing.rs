@@ -338,9 +338,11 @@ pub(super) fn push(data: &ParagraphData, cursor: &mut Cursor, index: usize) {
     cursor.push(level, data.spacing_summaries.get(index), Some(data));
 }
 
-fn spacing_level(data: &ParagraphData, index: usize) -> u8 {
+/// Bidi level a unit's spacing is resolved at: an uncombined tab takes the
+/// paragraph level.
+pub(super) fn spacing_level(data: &ParagraphData, index: usize) -> u8 {
     let unit = &data.units[index];
-    if matches!(unit.kind, UnitKind::Tab) && data.combine_at_text(unit.text.start).is_none() {
+    if matches!(unit.kind, UnitKind::Tab) && unit.combine.is_none() {
         data.base_level
     } else {
         unit.level
@@ -550,13 +552,10 @@ pub(super) fn apply(
     let mut autospace_barrier = false;
     let bidi_start = super::whitespace::bidi_trailing(data, start, scan.end);
     let level = |i: usize| {
-        if i >= bidi_start
-            || matches!(data.units[i].kind, UnitKind::Tab)
-                && data.combine_at_text(data.units[i].text.start).is_none()
-        {
+        if i >= bidi_start {
             data.base_level
         } else {
-            data.units[i].level
+            spacing_level(data, i)
         }
     };
     for range in [start..bidi_start, bidi_start..scan.end] {

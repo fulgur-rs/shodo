@@ -429,7 +429,7 @@ fn raw_bounds_cache_keeps_missing_outlines_and_stays_bounded() {
         coords: &[],
         nominal: None,
         proportional: false,
-        bounds: HashMap::new(),
+        bounds: crate::hashing::FastMap::default(),
     };
     BOUNDS_REQUESTS.with(|count| count.set(0));
     for _ in 0..128 {
