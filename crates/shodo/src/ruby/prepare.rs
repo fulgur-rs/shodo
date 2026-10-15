@@ -205,12 +205,40 @@ fn containers(data: &ParagraphData, inputs: &[RubyInput]) -> Vec<PreparedRuby> {
     result
 }
 
+/// Whether an annotation that `prepare` lays out, or a ruby nested in one,
+/// holds an inline box with a percentage edge that stays nonzero after
+/// sanitizing. Such a paragraph needs its input retained to resolve the
+/// annotation percentages against another basis.
+pub(crate) fn annotations_have_percent_edges(inputs: &[RubyInput]) -> bool {
+    inputs.iter().any(|input| {
+        input.normalized.levels.iter().any(|level| {
+            level.annotations.iter().any(|annotation| {
+                let shown =
+                    !annotation.auto_hidden && annotation.visibility != RubyVisibility::Collapse;
+                shown
+                    && annotation.content.as_ref().is_some_and(|content| {
+                        content.0.items.iter().any(|item| {
+                            matches!(
+                                item,
+                                RawItem::Open { percents: Some(p), .. }
+                                    if crate::sanitize::edge_percents_nonzero(p)
+                            )
+                        }) || annotations_have_percent_edges(&content.0.rubies)
+                    })
+            })
+        })
+    })
+}
+
+/// Lay out the annotation lanes of `inputs`. Percentage edges of annotation
+/// inline boxes resolve against `edge_basis`, the parent's basis.
 pub(crate) fn prepare(
     data: &mut ParagraphData,
     inputs: &[RubyInput],
     cx: &mut crate::LayoutContext,
     fonts: &FontCollection,
     ledger: &mut LimitsLedger,
+    edge_basis: f32,
 ) -> Result<(), LimitExceeded> {
     if inputs.is_empty() {
         return Ok(());
@@ -233,6 +261,7 @@ pub(crate) fn prepare(
                 let bytes = super::builder::InputCost::content(&content.0).style_bytes;
                 ledger.check_scope(owner, LimitKind::StyleBytes, bytes)?;
                 let mut builder = ParagraphBuilder::from_ruby_content(&content.0, node)?;
+                builder.edge_basis = edge_basis;
                 // Annotation line-height does not apply (CSS Ruby §3.3).
                 for style in &mut builder.styles {
                     style.line_height = LineHeight::Normal;

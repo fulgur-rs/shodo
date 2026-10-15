@@ -249,6 +249,15 @@ pub(crate) fn edge_percents(p: &mut InlineEdgePercents, warnings: &mut WarningSi
     }
 }
 
+/// Whether some percentage of `p` stays nonzero after [`edge_percents`].
+pub(crate) fn edge_percents_nonzero(p: &InlineEdgePercents) -> bool {
+    p.margin
+        .values()
+        .into_iter()
+        .chain(p.padding.values())
+        .any(|v| v.is_finite() && v != 0.0)
+}
+
 /// Finite, non-negative percentage basis clamped to `MAX_LENGTH`.
 pub(crate) fn edge_basis(basis: f32, warnings: &mut WarningSink) -> f32 {
     non_negative_length(basis, "percentage basis", warnings)

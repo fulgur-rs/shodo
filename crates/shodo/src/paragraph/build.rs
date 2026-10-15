@@ -50,28 +50,31 @@ struct PreparedBuild {
     analysis_cost: analysis_cost::Cost,
 }
 
+/// Retain the unresolved input of a paragraph with percentage edges,
+/// including those inside ruby annotations, so `Paragraph::with_edge_basis`
+/// can resolve it for another basis. A rebuild for some basis already carries
+/// the original template.
+fn edge_template(b: &ParagraphBuilder) -> Option<Arc<ParagraphBuilder>> {
+    b.edge_template.clone().or_else(|| {
+        (b.items.iter().any(|item| {
+            matches!(
+                item,
+                RawItem::Open {
+                    percents: Some(_),
+                    ..
+                }
+            )
+        }) || crate::ruby::prepare::annotations_have_percent_edges(&b.rubies))
+        .then(|| Arc::new(b.clone()))
+    })
+}
+
 impl ParagraphAnalysis {
     pub(crate) fn from_builder(b: ParagraphBuilder) -> Result<Self, LimitExceeded> {
         if let Some(error) = b.error {
             return Err(error);
         }
-        // Retain the unresolved input of a paragraph with percentage edges so
-        // `Paragraph::with_edge_basis` can resolve it for another basis. A
-        // rebuild for some basis already carries the original template.
-        let template = b.edge_template.clone().or_else(|| {
-            b.items
-                .iter()
-                .any(|item| {
-                    matches!(
-                        item,
-                        RawItem::Open {
-                            percents: Some(_),
-                            ..
-                        }
-                    )
-                })
-                .then(|| Arc::new(b.clone()))
-        });
+        let template = edge_template(&b);
         let mut ledger = LimitsLedger::new(&b.limits);
         let state = Paragraph::analyze_builder_with_ledger(b, template, &mut ledger)?;
         Ok(Self { state, ledger })
@@ -103,7 +106,8 @@ impl Paragraph {
         }
         let previous = ledger.frame();
         ledger.paragraph(&b.limits, &[], parent);
-        let result = Self::analyze_builder_with_ledger(b, None, ledger)
+        let template = edge_template(&b);
+        let result = Self::analyze_builder_with_ledger(b, template, ledger)
             .and_then(|state| Self::shape_analysis(state, cx, fonts, ledger));
         ledger.select_frame(previous);
         result
@@ -143,7 +147,9 @@ impl Paragraph {
         }
         let has_percent_edges = sanitize::items(&mut items, edge_basis, &mut warnings);
         // Percentages that sanitize to zero need no template.
-        let edge_template = edge_template.filter(|_| has_percent_edges);
+        let edge_template = edge_template.filter(|_| {
+            has_percent_edges || crate::ruby::prepare::annotations_have_percent_edges(&rubies)
+        });
         let id = NEXT_PARAGRAPH_ID.fetch_add(1, Ordering::Relaxed);
         let has_first_line =
             style.first_line.is_some() || !first_line_styles.is_empty() || ruby_first_line;
@@ -491,7 +497,7 @@ impl Paragraph {
             finalize_data(&mut data, None, cx, &mut warnings, &mut sat);
         }
         ledger.select_frame(normal_frame);
-        crate::ruby::prepare::prepare(&mut data, &rubies, cx, fonts, ledger)?;
+        crate::ruby::prepare::prepare(&mut data, &rubies, cx, fonts, ledger, edge_basis)?;
         if let Some(first) = &mut data.first_line {
             let alternate = Arc::get_mut(&mut first.data)
                 .expect("new first-line data has one owner before publication");
@@ -521,6 +527,14 @@ impl Paragraph {
         } else {
             0.0
         };
+        // A ruby annotation exposes its first-line dataset as its paragraph
+        // on the first line, so that dataset carries the same metadata.
+        if let Some(first) = &mut data.first_line {
+            let alternate = Arc::get_mut(&mut first.data)
+                .expect("new first-line data has one owner before publication");
+            alternate.edge_basis = data.edge_basis;
+            alternate.edge_template = edge_template.clone();
+        }
         data.edge_template = edge_template;
         Ok(Paragraph {
             data: Arc::new(data),

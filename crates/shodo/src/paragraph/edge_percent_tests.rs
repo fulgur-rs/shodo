@@ -481,3 +481,255 @@ fn rtl_inline_start_is_on_the_right() {
     assert_eq!(run_start(&l, 4), run_start(&plain, 4));
     assert!(run_start(&l, 4) < run_start(&l, 2) && run_start(&l, 2) < run_start(&l, 0));
 }
+
+/// Inline position of the `index`th glyph of a left-to-right line.
+fn glyph_start(line: &crate::Line, index: usize) -> f32 {
+    line.fragments()
+        .filter_map(|f| match f {
+            Fragment::GlyphRun(r) => Some(r),
+            _ => None,
+        })
+        .flat_map(|r| r.glyphs().collect::<Vec<_>>())
+        .nth(index)
+        .unwrap()
+        .inline_position
+}
+
+/// Annotation text without a kerning pair at the box boundary.
+const WORDS: (&str, &str) = ("ab", "cd");
+
+/// Ruby with base text `base` whose single annotation is `content`.
+fn ruby_with(base: &str, content: crate::RubyContent) -> crate::Ruby {
+    use crate::ruby::{RubyAlign, RubyAnnotation, RubyBase, RubyLevel, RubySpan, RubyVisibility};
+    let style = style();
+    crate::Ruby::new(
+        vec![RubyBase {
+            node: NodeId(10),
+            content: crate::RubyContent::text(
+                TextSource::Dom {
+                    node: NodeId(10),
+                    offset: 0,
+                },
+                base,
+                &style.root,
+                &Limits::unlimited(),
+            ),
+            align: RubyAlign::default(),
+        }],
+        vec![RubyLevel {
+            annotations: vec![RubyAnnotation {
+                node: NodeId(20),
+                content,
+                span: RubySpan::All,
+                visibility: RubyVisibility::Visible,
+            }],
+            style: Default::default(),
+        }],
+    )
+    .unwrap()
+}
+
+/// Annotation content `before` + an inline box (node 21) holding `inside`, the
+/// box given percentage `percents`; `nested` wraps it in one more ruby level.
+fn annotation_content(
+    (before, inside): (&str, &str),
+    percents: InlineEdgePercents,
+    nested: bool,
+) -> crate::RubyContent {
+    let style = style();
+    let limits = Limits::unlimited();
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    let source = |offset: u32| TextSource::Dom {
+        node: NodeId(20),
+        offset,
+    };
+    b.push_text(source(0), before)
+        .open_inline(NodeId(21), &style.root, InlineEdges::default())
+        .set_inline_edge_percents(percents)
+        .push_text(source(before.len() as u32), inside)
+        .close_inline();
+    let content = crate::RubyContent::from_builder(b);
+    if !nested {
+        return content;
+    }
+    let mut outer = ParagraphBuilder::new(&style, &limits);
+    // A base text unlike the outer base keeps the lane visible.
+    outer.push_ruby(NodeId(30), &style.root, ruby_with("y", content));
+    crate::RubyContent::from_builder(outer)
+}
+
+/// A paragraph holding only a ruby whose annotation is `content`.
+fn build_ruby(content: crate::RubyContent) -> Paragraph {
+    let style = style();
+    let limits = Limits::unlimited();
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    b.push_ruby(NodeId(8), &style.root, ruby_with("x", content));
+    b.build(&mut LayoutContext::new(), &fonts(&limits)).unwrap()
+}
+
+/// The annotation line of the single ruby, descending `depth` nested levels.
+fn annotation_line(line: &crate::Line, depth: usize) -> crate::Line {
+    let annotation = line.ruby_annotations().next().unwrap();
+    let inner = annotation.line().clone();
+    if depth == 0 {
+        inner
+    } else {
+        annotation_line(&inner, depth - 1)
+    }
+}
+
+#[test]
+fn annotation_percent_edges_resolve_against_the_parent_basis() {
+    for (nested, depth) in [(false, 0), (true, 1)] {
+        let plain = build_ruby(annotation_content(
+            WORDS,
+            InlineEdgePercents::default(),
+            nested,
+        ));
+        assert!(!plain.has_percent_edges());
+        let p = build_ruby(annotation_content(
+            WORDS,
+            padding(inline_start(0.1)),
+            nested,
+        ));
+        // The parent's own items carry no percentages.
+        assert!(p.has_percent_edges());
+        assert_eq!(p.edge_basis(), 0.0);
+        let resolved = resolve(&p, BASIS);
+        assert!(resolved.has_percent_edges());
+        assert_eq!(resolved.edge_basis(), BASIS);
+        assert_ne!(resolved.id(), p.id());
+        let (plain, base, wide) = (
+            annotation_line(&line(&plain), depth),
+            annotation_line(&line(&p), depth),
+            annotation_line(&line(&resolved), depth),
+        );
+        // The base build resolves the annotation percentage against zero.
+        assert!(close(base.inline_size(), plain.inline_size()));
+        assert!(close(glyph_start(&base, 2), glyph_start(&plain, 2)));
+        let pad = |l: &crate::Line| {
+            let b = l
+                .fragments()
+                .find_map(|f| match f {
+                    Fragment::InlineBox(b) if b.node == NodeId(21) => Some(b),
+                    _ => None,
+                })
+                .unwrap();
+            b.content_rect.inline_start - b.rect.inline_start
+        };
+        assert!(close(pad(&base), 0.0));
+        // 10% of 200 opens 20px before "cd" inside the annotation.
+        assert!(close(pad(&wide), 20.0));
+        assert!(close(wide.inline_size(), base.inline_size() + 20.0));
+        assert!(close(glyph_start(&wide, 0), glyph_start(&base, 0)));
+        assert!(close(glyph_start(&wide, 2), glyph_start(&base, 2) + 20.0));
+        // Resolving again starts from the recorded input.
+        let again = annotation_line(&line(&resolve(&resolved, 0.0)), depth);
+        assert!(close(again.inline_size(), base.inline_size()));
+        // The annotation paragraph keeps its own percentage metadata.
+        let first = |p: &Paragraph| {
+            line(p)
+                .ruby_annotations()
+                .next()
+                .unwrap()
+                .paragraph()
+                .clone()
+        };
+        let annotation = first(&resolved);
+        assert!(annotation.has_percent_edges());
+        assert_eq!(annotation.edge_basis(), BASIS);
+        assert!(first(&p).has_percent_edges());
+        assert_eq!(first(&p).edge_basis(), 0.0);
+        let plain = build_ruby(annotation_content(
+            WORDS,
+            InlineEdgePercents::default(),
+            nested,
+        ));
+        assert!(!first(&plain).has_percent_edges());
+        if !nested {
+            let rebuilt = resolve(&annotation, 0.0);
+            assert_ne!(rebuilt.id(), annotation.id());
+            assert_eq!(rebuilt.edge_basis(), 0.0);
+            assert!(close(line(&rebuilt).inline_size(), base.inline_size()));
+        }
+    }
+}
+
+#[test]
+fn annotation_shaping_is_the_same_for_every_basis() {
+    // "AV" kerns in the fixture font when shaped as one run.
+    let plain = build_ruby(annotation_content(
+        ("A", "V"),
+        InlineEdgePercents::default(),
+        false,
+    ));
+    let p = build_ruby(annotation_content(
+        ("A", "V"),
+        padding(inline_start(0.1)),
+        false,
+    ));
+    let resolved = resolve(&p, BASIS);
+    let lane = |p: &Paragraph| {
+        let line = line(p);
+        let annotation = line.ruby_annotations().next().unwrap();
+        let shape_items = annotation.paragraph().data.shape_items.len();
+        let barriers = annotation.paragraph().data.shaping_barriers.clone();
+        (glyphs(annotation.line()), shape_items, barriers)
+    };
+    let (plain, base, wide) = (lane(&plain), lane(&p), lane(&resolved));
+    assert_ne!(base.0, plain.0, "fixture pair should kern");
+    assert_eq!(plain.1, 1);
+    assert_eq!(base.1, 2);
+    assert_eq!(base, wide);
+}
+
+#[test]
+fn ruby_paragraph_without_percents_is_not_rebuilt() {
+    let p = build_ruby(annotation_content(
+        WORDS,
+        InlineEdgePercents::default(),
+        true,
+    ));
+    assert!(!p.has_percent_edges());
+    let resolved = resolve(&p, BASIS);
+    assert_eq!(resolved.id(), p.id());
+    assert_eq!(resolved.edge_basis(), 0.0);
+    // Percentages that sanitize to zero do not count either.
+    let p = build_ruby(annotation_content(
+        WORDS,
+        padding(inline_start(f32::NAN)),
+        false,
+    ));
+    assert!(!p.has_percent_edges());
+    assert_eq!(resolve(&p, BASIS).id(), p.id());
+}
+
+#[test]
+fn first_line_annotation_keeps_percent_metadata() {
+    let mut style = style();
+    style.first_line = Some(InlineStyle {
+        font_size: 20.0,
+        ..style.root.clone()
+    });
+    let limits = Limits::unlimited();
+    let mut b = ParagraphBuilder::new(&style, &limits);
+    let source = |offset: u32| TextSource::Dom {
+        node: NodeId(20),
+        offset,
+    };
+    b.push_text(source(0), "ab")
+        .open_inline(NodeId(21), &style.root, InlineEdges::default())
+        .set_inline_edge_percents(padding(inline_start(0.1)))
+        .push_text(source(2), "cd")
+        .close_inline();
+    let p = build_ruby(crate::RubyContent::from_builder(b));
+    let resolved = resolve(&p, BASIS);
+    let first = line(&resolved);
+    let annotation = first.ruby_annotations().next().unwrap().paragraph();
+    // The first line exposes the annotation's first-line dataset.
+    assert!(annotation.has_percent_edges());
+    assert_eq!(annotation.edge_basis(), BASIS);
+    let rebuilt = resolve(annotation, 0.0);
+    assert_ne!(rebuilt.id(), annotation.id());
+    assert_eq!(rebuilt.edge_basis(), 0.0);
+}
