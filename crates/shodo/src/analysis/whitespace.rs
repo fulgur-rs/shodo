@@ -17,6 +17,11 @@ use crate::style::{InlineStyle, UnicodeBidi, WhiteSpaceCollapse};
 const OBJECT_REPLACEMENT: char = '\u{FFFC}';
 const PARAGRAPH_SEPARATOR: char = '\u{2029}';
 
+#[cfg(test)]
+std::thread_local! {
+    static BIDI_SCOPE_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 #[derive(Clone)]
 pub(crate) struct Processed {
     pub(crate) mapping_cost: MappingCost,
@@ -109,6 +114,7 @@ pub(crate) fn process_input_with_flags(
         // Collapsible spaces at the start of the paragraph are removed.
         after_space: true,
         open: Vec::new(),
+        bidi_scopes: Vec::new(),
         styles,
         annotation,
         ledger,
@@ -153,10 +159,16 @@ pub(crate) fn process_input_with_flags(
                 for &c in bidi_open(&styles[*style as usize]) {
                     p.generated(ItemKind::BidiControl, c, *style, *node)?;
                 }
+                if !bidi_open(&styles[*style as usize]).is_empty() {
+                    p.bidi_scopes.push(p.open.len());
+                }
                 p.open.push((*node, *style));
             }
             RawItem::Close => {
                 if let Some((node, style)) = p.open.pop() {
+                    if p.bidi_scopes.last() == Some(&p.open.len()) {
+                        p.bidi_scopes.pop();
+                    }
                     for &c in bidi_close(&styles[style as usize]) {
                         p.generated(ItemKind::BidiControl, c, style, node)?;
                     }
@@ -237,13 +249,18 @@ struct Processor<'a> {
     mapping: Option<OffsetMapping>,
     after_space: bool,
     open: Vec<(NodeId, u32)>,
+    /// Indices into `open` for scopes that emit controls. Normal inlines must
+    /// not be visited again at every paragraph boundary.
+    bidi_scopes: Vec<usize>,
     styles: &'a [InlineStyle],
 }
 
 impl Processor<'_> {
     fn close_bidi_scopes(&mut self) -> Result<(), LimitExceeded> {
-        for i in (0..self.open.len()).rev() {
-            let (node, style) = self.open[i];
+        for i in (0..self.bidi_scopes.len()).rev() {
+            #[cfg(test)]
+            BIDI_SCOPE_VISITS.with(|visits| visits.set(visits.get() + 1));
+            let (node, style) = self.open[self.bidi_scopes[i]];
             for &c in bidi_close(&self.styles[style as usize]) {
                 self.generated(ItemKind::BidiControl, c, style, node)?;
             }
@@ -252,8 +269,10 @@ impl Processor<'_> {
     }
 
     fn open_bidi_scopes(&mut self) -> Result<(), LimitExceeded> {
-        for i in 0..self.open.len() {
-            let (node, style) = self.open[i];
+        for i in 0..self.bidi_scopes.len() {
+            #[cfg(test)]
+            BIDI_SCOPE_VISITS.with(|visits| visits.set(visits.get() + 1));
+            let (node, style) = self.open[self.bidi_scopes[i]];
             for &c in bidi_open(&self.styles[style as usize]) {
                 self.generated(ItemKind::BidiControl, c, style, node)?;
             }
@@ -1029,6 +1048,109 @@ mod tests {
             let mut b = ParagraphBuilder::new(&style, &Limits::default());
             b.push_text(dom(1), "a\r\nb");
             assert_eq!(run(&b).text, expected);
+        }
+    }
+
+    #[test]
+    fn paragraph_breaks_visit_only_active_bidi_scopes() {
+        for depth in [32, 128] {
+            for breaks in [32, 128] {
+                for active in [false, true] {
+                    let normal = InlineStyle {
+                        white_space_collapse: WhiteSpaceCollapse::Preserve,
+                        ..Default::default()
+                    };
+                    let mut b = builder();
+                    for i in 0..depth {
+                        let style = InlineStyle {
+                            unicode_bidi: if active && i == 0 {
+                                UnicodeBidi::Isolate
+                            } else if active && i == depth - 1 {
+                                UnicodeBidi::Embed
+                            } else {
+                                UnicodeBidi::Normal
+                            },
+                            ..normal.clone()
+                        };
+                        b.open_inline(NodeId(i as u64), &style, InlineEdges::default());
+                    }
+                    let text = "a\nb".repeat(breaks);
+                    b.push_text(dom(1000), &text);
+                    for _ in 0..depth {
+                        b.close_inline();
+                    }
+                    BIDI_SCOPE_VISITS.with(|visits| visits.set(0));
+                    let p = run(&b);
+                    let visits = BIDI_SCOPE_VISITS.with(std::cell::Cell::get);
+                    assert_eq!(
+                        visits,
+                        if active { 4 * breaks } else { 0 },
+                        "depth={depth}/breaks={breaks}/active={active}"
+                    );
+                    let expected = if active {
+                        let start = "\u{2066}\u{202A}";
+                        let end = "\u{202C}\u{2069}";
+                        format!(
+                            "{start}{}{end}",
+                            text.replace('\n', &format!("{end}\n{start}"))
+                        )
+                    } else {
+                        text
+                    };
+                    assert_eq!(p.text, expected);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn bidi_scope_restarts_keep_order_after_normal_and_active_scopes_close() {
+        for (mode, start, end) in [
+            (UnicodeBidi::Isolate, "\u{2066}", "\u{2069}"),
+            (
+                UnicodeBidi::IsolateOverride,
+                "\u{2066}\u{202D}",
+                "\u{202C}\u{2069}",
+            ),
+        ] {
+            let normal = InlineStyle {
+                white_space_collapse: WhiteSpaceCollapse::Preserve,
+                ..Default::default()
+            };
+            let active = InlineStyle {
+                unicode_bidi: mode,
+                ..normal.clone()
+            };
+            let mut b = builder();
+            b.open_inline(NodeId(1), &normal, InlineEdges::default())
+                .open_inline(NodeId(2), &active, InlineEdges::default())
+                .open_inline(NodeId(3), &normal, InlineEdges::default())
+                .push_text(dom(4), "a\nb")
+                .close_inline()
+                .push_forced_break(NodeId(5))
+                .close_inline()
+                .push_forced_break(NodeId(6))
+                .close_inline();
+            BIDI_SCOPE_VISITS.with(|visits| visits.set(0));
+            let p = run(&b);
+            assert_eq!(
+                p.text,
+                format!("{start}a{end}\n{start}b{end}\n{start}{end}\n")
+            );
+            assert_eq!(BIDI_SCOPE_VISITS.with(std::cell::Cell::get), 4);
+            let at = p.text.find('\n').unwrap() as u32;
+            let mapping = p.mapping.unwrap();
+            assert_eq!(
+                mapping.text_to_dom(at, Affinity::Downstream),
+                Some(TextOrigin::Dom {
+                    node: NodeId(4),
+                    offset: 1
+                })
+            );
+            assert_eq!(
+                mapping.text_to_dom(at + 1, Affinity::Downstream),
+                Some(TextOrigin::Generated { node: NodeId(2) })
+            );
         }
     }
 

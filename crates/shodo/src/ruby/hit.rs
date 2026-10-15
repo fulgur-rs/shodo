@@ -20,6 +20,15 @@ impl<'a> RubyHit<'a> {
     pub fn path(&self) -> &[RubyAnnotationView<'a>] {
         &self.path
     }
+
+    /// Recursion appends ancestors without shifting the accumulated path.
+    /// Normalize it once at the public hit-test boundary.
+    pub(crate) fn into_root_first_path(mut self) -> Self {
+        #[cfg(test)]
+        tests::PATH_WRITES.with(|writes| writes.set(writes.get() + self.path.len()));
+        self.path.reverse();
+        self
+    }
 }
 
 pub(crate) struct AnnotationIndex<'a> {
@@ -111,12 +120,18 @@ impl<'a> AnnotationIndex<'a> {
         #[cfg(test)]
         tests::VISITS.with(|visits| visits.set(visits.get() + 1));
         let (x_local, y_local) = self.local_point(inline, block)?;
-        if let Some(mut nested) = self.child.hit_test_ruby(x_local, y_local) {
+        if let Some(mut nested) = self.child.ruby_hit(x_local, y_local) {
             nested.parent_line = self.parent_line;
-            nested.path.insert(0, self.annotation);
+            #[cfg(test)]
+            tests::PATH_WRITES.with(|writes| writes.set(writes.get() + 1));
+            nested.path.push(self.annotation);
             return Some(nested);
         }
         let hit = self.child.hit_test_body(x_local, y_local)?;
+        #[cfg(test)]
+        if hit.inside {
+            tests::PATH_WRITES.with(|writes| writes.set(writes.get() + 1));
+        }
         hit.inside.then(|| RubyHit {
             annotation: self.annotation,
             hit,
@@ -190,6 +205,50 @@ mod tests {
     }
     thread_local! {
         pub(super) static VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        pub(super) static PATH_WRITES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    #[test]
+    fn nested_hit_path_work_is_linear_and_keeps_root_to_leaf_order() {
+        for depth in [4, 8, 16] {
+            let (lines, _) = fixture::fixture(depth, &Default::default()).unwrap();
+            let mut path = Vec::new();
+            let mut line = &lines[0];
+            while let Some(annotation) = line.ruby_annotations().next() {
+                path.push(annotation);
+                line = annotation.line();
+            }
+            assert_eq!(path.len(), depth);
+            let mut point = body_point(line);
+            for annotation in path.into_iter().rev() {
+                point = parent_point(annotation, point);
+            }
+            point.1 += lines[0].block_offset();
+            let layout = LineLayout::new(&lines);
+            PATH_WRITES.with(|writes| writes.set(0));
+            let hit = layout.hit_test_ruby(point.0, point.1).unwrap();
+            let writes = PATH_WRITES.with(std::cell::Cell::get);
+            assert!(writes <= 2 * depth, "depth={depth}: {writes} path writes");
+            let expected: Vec<_> = std::iter::once(9999)
+                .chain((1..depth).rev().map(|i| 300 + i as u64))
+                .collect();
+            assert_eq!(
+                hit.path()
+                    .iter()
+                    .map(|a| a.container().0)
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            assert_eq!(hit.annotation.node(), Some(crate::node::NodeId(201)));
+            assert_eq!(hit.parent_line(), 0);
+            assert!(matches!(
+                hit.hit.origin,
+                Some(crate::mapping::TextOrigin::Dom {
+                    node: crate::node::NodeId(1000),
+                    ..
+                })
+            ));
+        }
     }
 
     #[test]
