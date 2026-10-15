@@ -213,19 +213,18 @@ pub(crate) fn annotations_have_percent_edges(inputs: &[RubyInput]) -> bool {
     inputs.iter().any(|input| {
         input.normalized.levels.iter().any(|level| {
             level.annotations.iter().any(|annotation| {
-                if annotation.auto_hidden || annotation.visibility == RubyVisibility::Collapse {
-                    return false;
-                }
-                let Some(content) = &annotation.content else {
-                    return false;
-                };
-                content.0.items.iter().any(|item| {
-                    matches!(
-                        item,
-                        RawItem::Open { percents: Some(p), .. }
-                            if crate::sanitize::edge_percents_nonzero(p)
-                    )
-                }) || annotations_have_percent_edges(&content.0.rubies)
+                let shown =
+                    !annotation.auto_hidden && annotation.visibility != RubyVisibility::Collapse;
+                shown
+                    && annotation.content.as_ref().is_some_and(|content| {
+                        content.0.items.iter().any(|item| {
+                            matches!(
+                                item,
+                                RawItem::Open { percents: Some(p), .. }
+                                    if crate::sanitize::edge_percents_nonzero(p)
+                            )
+                        }) || annotations_have_percent_edges(&content.0.rubies)
+                    })
             })
         })
     })

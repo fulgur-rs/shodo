@@ -50,27 +50,31 @@ struct PreparedBuild {
     analysis_cost: analysis_cost::Cost,
 }
 
+/// Retain the unresolved input of a paragraph with percentage edges,
+/// including those inside ruby annotations, so `Paragraph::with_edge_basis`
+/// can resolve it for another basis. A rebuild for some basis already carries
+/// the original template.
+fn edge_template(b: &ParagraphBuilder) -> Option<Arc<ParagraphBuilder>> {
+    b.edge_template.clone().or_else(|| {
+        (b.items.iter().any(|item| {
+            matches!(
+                item,
+                RawItem::Open {
+                    percents: Some(_),
+                    ..
+                }
+            )
+        }) || crate::ruby::prepare::annotations_have_percent_edges(&b.rubies))
+        .then(|| Arc::new(b.clone()))
+    })
+}
+
 impl ParagraphAnalysis {
     pub(crate) fn from_builder(b: ParagraphBuilder) -> Result<Self, LimitExceeded> {
         if let Some(error) = b.error {
             return Err(error);
         }
-        // Retain the unresolved input of a paragraph with percentage edges,
-        // including those inside ruby annotations, so
-        // `Paragraph::with_edge_basis` can resolve it for another basis. A
-        // rebuild for some basis already carries the original template.
-        let template = b.edge_template.clone().or_else(|| {
-            (b.items.iter().any(|item| {
-                matches!(
-                    item,
-                    RawItem::Open {
-                        percents: Some(_),
-                        ..
-                    }
-                )
-            }) || crate::ruby::prepare::annotations_have_percent_edges(&b.rubies))
-            .then(|| Arc::new(b.clone()))
-        });
+        let template = edge_template(&b);
         let mut ledger = LimitsLedger::new(&b.limits);
         let state = Paragraph::analyze_builder_with_ledger(b, template, &mut ledger)?;
         Ok(Self { state, ledger })
@@ -102,7 +106,8 @@ impl Paragraph {
         }
         let previous = ledger.frame();
         ledger.paragraph(&b.limits, &[], parent);
-        let result = Self::analyze_builder_with_ledger(b, None, ledger)
+        let template = edge_template(&b);
+        let result = Self::analyze_builder_with_ledger(b, template, ledger)
             .and_then(|state| Self::shape_analysis(state, cx, fonts, ledger));
         ledger.select_frame(previous);
         result

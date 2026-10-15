@@ -626,6 +626,32 @@ fn annotation_percent_edges_resolve_against_the_parent_basis() {
         // Resolving again starts from the recorded input.
         let again = annotation_line(&line(&resolve(&resolved, 0.0)), depth);
         assert!(close(again.inline_size(), base.inline_size()));
+        // The annotation paragraph keeps its own percentage metadata.
+        let first = |p: &Paragraph| {
+            line(p)
+                .ruby_annotations()
+                .next()
+                .unwrap()
+                .paragraph()
+                .clone()
+        };
+        let annotation = first(&resolved);
+        assert!(annotation.has_percent_edges());
+        assert_eq!(annotation.edge_basis(), BASIS);
+        assert!(first(&p).has_percent_edges());
+        assert_eq!(first(&p).edge_basis(), 0.0);
+        let plain = build_ruby(annotation_content(
+            WORDS,
+            InlineEdgePercents::default(),
+            nested,
+        ));
+        assert!(!first(&plain).has_percent_edges());
+        if !nested {
+            let rebuilt = resolve(&annotation, 0.0);
+            assert_ne!(rebuilt.id(), annotation.id());
+            assert_eq!(rebuilt.edge_basis(), 0.0);
+            assert!(close(line(&rebuilt).inline_size(), base.inline_size()));
+        }
     }
 }
 
