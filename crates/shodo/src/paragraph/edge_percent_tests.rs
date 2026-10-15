@@ -257,6 +257,12 @@ fn px_and_percent_parts_add_and_resolved_padding_is_not_negative() {
     let b = inline_box(&l);
     assert!(close(b.content_rect.inline_start, b.rect.inline_start));
     assert!(p.warnings().is_empty());
+    // calc(10% - 4px) keeps its negative px part until the sum is resolved.
+    let mut px = InlineEdges::default();
+    px.padding.inline_start = -4.0;
+    let p = resolve(&build(px, padding(inline_start(0.1))), BASIS);
+    assert!(close(run_start(&line(&p), 2), run_start(&plain, 2) + 16.0));
+    assert!(p.warnings().is_empty());
     // A negative resolved margin pulls the following content back:
     // calc(4px - 10%) = -16px.
     let mut px = InlineEdges::default();

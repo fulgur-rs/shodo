@@ -35,6 +35,26 @@ impl Sides {
     pub fn inline_sum(&self) -> f32 {
         self.inline_start + self.inline_end
     }
+
+    /// The four sides in a fixed order, for per-side updates.
+    pub(crate) fn values_mut(&mut self) -> [&mut f32; 4] {
+        [
+            &mut self.inline_start,
+            &mut self.inline_end,
+            &mut self.block_start,
+            &mut self.block_end,
+        ]
+    }
+
+    /// The four sides in the order of [`Self::values_mut`].
+    pub(crate) fn values(&self) -> [f32; 4] {
+        [
+            self.inline_start,
+            self.inline_end,
+            self.block_start,
+            self.block_end,
+        ]
+    }
 }
 
 /// Margin, border and padding of an inline box or atomic inline. The inline
@@ -78,12 +98,7 @@ pub struct InlineEdgePercents {
 impl InlineEdgePercents {
     /// Whether every percentage is zero.
     pub fn is_zero(&self) -> bool {
-        [self.margin, self.padding].iter().all(|s| {
-            s.inline_start == 0.0
-                && s.inline_end == 0.0
-                && s.block_start == 0.0
-                && s.block_end == 0.0
-        })
+        *self == Self::default()
     }
 
     /// Logical inline sides that carry a nonzero percentage:
