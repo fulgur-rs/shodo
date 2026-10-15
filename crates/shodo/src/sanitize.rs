@@ -5,7 +5,7 @@
 use crate::builder::RawItem;
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::limits::{WarningKind, WarningSink};
-use crate::node::{InlineEdges, Sides};
+use crate::node::{InlineEdgePercents, InlineEdges, Sides};
 use crate::paragraph::{AtomicSize, LineConstraint};
 use crate::style::{InlineStyle, LineHeight, LineOptions, TabSize, VerticalAlign};
 
@@ -208,12 +208,7 @@ pub(crate) fn style(s: &mut InlineStyle, warnings: &mut WarningSink) {
 }
 
 fn sides(s: &mut Sides, what: &str, allow_negative: bool, warnings: &mut WarningSink) {
-    for v in [
-        &mut s.inline_start,
-        &mut s.inline_end,
-        &mut s.block_start,
-        &mut s.block_end,
-    ] {
+    for v in s.values_mut() {
         *v = if allow_negative {
             length(*v, what, warnings)
         } else {
@@ -230,10 +225,94 @@ pub(crate) fn edges(e: &mut InlineEdges, warnings: &mut WarningSink) {
     sides(&mut e.padding, "padding", false, warnings);
 }
 
-pub(crate) fn items(items: &mut [RawItem], warnings: &mut WarningSink) {
-    for item in items {
-        if let RawItem::Open { edges: e, .. } | RawItem::Atomic { edges: e, .. } = item {
-            edges(e, warnings);
+/// Largest accepted magnitude of an edge percentage as a fraction
+/// (10,000,000%); larger values are clamped.
+const MAX_EDGE_PERCENT: f32 = 1.0e5;
+
+/// Finite percentage fractions clamped to `±MAX_EDGE_PERCENT`. Negative
+/// padding percentages are kept: they combine with the px part before the
+/// resolved padding is clamped to zero.
+pub(crate) fn edge_percents(p: &mut InlineEdgePercents, warnings: &mut WarningSink) {
+    for (s, what) in [
+        (&mut p.margin, "margin percentage"),
+        (&mut p.padding, "padding percentage"),
+    ] {
+        for v in s.values_mut() {
+            let finite = finite_or(*v, 0.0, what, warnings);
+            *v = if finite.abs() > MAX_EDGE_PERCENT {
+                warnings.push_lazy(WarningKind::Saturated, || format!("{what} clamped to 1e5"));
+                finite.clamp(-MAX_EDGE_PERCENT, MAX_EDGE_PERCENT)
+            } else {
+                finite
+            };
         }
     }
+}
+
+/// Finite, non-negative percentage basis clamped to `MAX_LENGTH`.
+pub(crate) fn edge_basis(basis: f32, warnings: &mut WarningSink) -> f32 {
+    non_negative_length(basis, "percentage basis", warnings)
+}
+
+/// Sanitize the px parts of `e`, then add the percentage parts of `p`
+/// resolved against `basis`. The px part of a padding side with a percentage
+/// may be negative (`calc(10% - 4px)`); only the resolved sum is clamped to
+/// zero. Margins stay within `±MAX_LENGTH` and padding within
+/// `0..=MAX_LENGTH`.
+pub(crate) fn resolve_edge_percents(
+    e: &mut InlineEdges,
+    p: &InlineEdgePercents,
+    basis: f32,
+    warnings: &mut WarningSink,
+) {
+    sides(&mut e.margin, "margin", true, warnings);
+    sides(&mut e.border, "border width", false, warnings);
+    for (v, pct) in e.padding.values_mut().into_iter().zip(p.padding.values()) {
+        *v = if pct == 0.0 {
+            non_negative_length(*v, "padding", warnings)
+        } else {
+            length(*v, "padding", warnings)
+        };
+    }
+    for (px, pct) in [(&mut e.margin, &p.margin), (&mut e.padding, &p.padding)] {
+        for (v, pct) in px.values_mut().into_iter().zip(pct.values()) {
+            *v += pct * basis;
+        }
+    }
+    sides(&mut e.margin, "resolved margin", true, warnings);
+    for v in e.padding.values_mut() {
+        // A percentage can legitimately cancel the px part, or the reverse;
+        // the used padding is then zero, without a warning.
+        *v = length(v.max(0.0), "resolved padding", warnings);
+    }
+}
+
+/// Sanitize recorded edges, then resolve percentage edges against `basis`.
+/// Returns whether any open inline box keeps a nonzero percentage.
+pub(crate) fn items(items: &mut [RawItem], basis: f32, warnings: &mut WarningSink) -> bool {
+    let mut has_percents = false;
+    for item in items {
+        match item {
+            RawItem::Open {
+                edges: e, percents, ..
+            } => {
+                if let Some(p) = percents.as_deref_mut() {
+                    edge_percents(p, warnings);
+                    if p.is_zero() {
+                        *percents = None;
+                    }
+                }
+                match percents.as_deref() {
+                    Some(p) => {
+                        has_percents = true;
+                        resolve_edge_percents(e, p, basis, warnings);
+                    }
+                    None => edges(e, warnings),
+                }
+            }
+            RawItem::Atomic { edges: e, .. } => edges(e, warnings),
+            _ => {}
+        }
+    }
+    has_percents
 }

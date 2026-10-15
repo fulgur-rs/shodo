@@ -60,11 +60,20 @@ pub(crate) struct ShapeItem {
     pub(crate) after: String,
 }
 
+/// Whether an inline box boundary separates shaping. A side with a
+/// percentage edge always does, whatever its resolved length, so paragraphs
+/// resolved against different percentage bases shape identically.
 pub(crate) fn inline_boundary_breaks_shaping(
     style: &InlineStyle,
     edges: &crate::node::InlineEdges,
+    percent_sides: u8,
     start: bool,
 ) -> bool {
+    let side = if start {
+        crate::node::InlineEdgePercents::INLINE_START
+    } else {
+        crate::node::InlineEdgePercents::INLINE_END
+    };
     let values = if start {
         [
             edges.margin.inline_start,
@@ -79,6 +88,7 @@ pub(crate) fn inline_boundary_breaks_shaping(
         ]
     };
     style.vertical_align != crate::style::VerticalAlign::Baseline
+        || percent_sides & side != 0
         || values.into_iter().any(|v| v != 0.0)
 }
 
@@ -469,13 +479,18 @@ pub(crate) fn itemize(
                     }
                 }
             }
-            ItemKind::OpenInline { edges } => {
+            ItemKind::OpenInline {
+                edges,
+                percent_sides,
+            } => {
+                let style = &styles[item.style as usize];
                 close_boundaries.push(inline_boundary_breaks_shaping(
-                    &styles[item.style as usize],
+                    style,
                     &edges,
+                    percent_sides,
                     false,
                 ));
-                if inline_boundary_breaks_shaping(&styles[item.style as usize], &edges, true) {
+                if inline_boundary_breaks_shaping(style, &edges, percent_sides, true) {
                     flush(&mut text, &mut scalars, &mut style_indices, &mut result)?;
                 }
             }

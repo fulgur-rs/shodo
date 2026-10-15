@@ -1,6 +1,8 @@
 //! Paragraphs: immutable results of `ParagraphBuilder::build`.
 
 mod build;
+#[cfg(test)]
+mod edge_percent_tests;
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
@@ -90,6 +92,11 @@ pub(crate) struct ParagraphData {
     #[cfg(test)]
     pub(crate) edge_shape_bytes: std::sync::atomic::AtomicUsize,
     pub(crate) first_line: Option<FirstLineData>,
+    /// Unresolved input of a paragraph with percentage inline edges; absent
+    /// for every other paragraph.
+    pub(crate) edge_template: Option<Arc<ParagraphBuilder>>,
+    /// Basis the percentage edges were resolved against (0 without them).
+    pub(crate) edge_basis: f32,
     pub(crate) source_spans: Vec<crate::mapping::TransformSpan>,
     pub(crate) id: u64,
     pub(crate) style: ParagraphStyle,
@@ -285,6 +292,59 @@ impl Paragraph {
     /// `AtomicSizes`: the dominant baseline of its parent inline box.
     pub fn required_baseline(&self, node: NodeId) -> Option<BaselineKind> {
         self.data.baseline_kind(node)
+    }
+
+    /// Whether some inline box has a nonzero percentage margin or padding,
+    /// recorded with [`ParagraphBuilder::set_inline_edge_percents`].
+    ///
+    /// Such a paragraph lays out its percentages against
+    /// [`Self::edge_basis`]; use [`Self::with_edge_basis`] to lay it out
+    /// against the containing block's inline size.
+    pub fn has_percent_edges(&self) -> bool {
+        self.data.edge_template.is_some()
+    }
+
+    /// The basis that percentage inline edges were resolved against: `0` for
+    /// a paragraph built by [`ParagraphBuilder::build`] or
+    /// [`crate::ParagraphAnalysis::shape`], and for a paragraph without
+    /// percentage edges.
+    pub fn edge_basis(&self) -> f32 {
+        self.data.edge_basis
+    }
+
+    /// The paragraph with its percentage margins and padding resolved against
+    /// `basis`, normally the containing block's inline size in px.
+    ///
+    /// Without percentage edges this returns a clone with the same
+    /// [`Self::id`]. Otherwise the recorded input is analyzed and shaped again
+    /// with each side's length set to its px part plus `percent * basis`
+    /// (padding below zero becomes zero), including the first-line dataset.
+    /// The result has a new id, so break tokens and plans of this paragraph
+    /// are not valid for it. It still reports [`Self::has_percent_edges`] and
+    /// keeps the original input: calling this again on the result resolves
+    /// against the new basis, not on top of the previous one. Shaping is the
+    /// same for every basis. Keep using the paragraph built with basis `0`
+    /// for [`Self::intrinsic_sizes`], where percentages contribute nothing.
+    ///
+    /// A non-finite or negative `basis` is treated as `0` and a basis above
+    /// `1e7` px is clamped; both are reported in the result's warnings.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LimitExceeded`] if the rebuild exceeds the configured limits.
+    pub fn with_edge_basis(
+        &self,
+        basis: f32,
+        cx: &mut crate::LayoutContext,
+        fonts: &FontCollection,
+    ) -> Result<Paragraph, LimitExceeded> {
+        let Some(template) = &self.data.edge_template else {
+            return Ok(self.clone());
+        };
+        let mut builder = ParagraphBuilder::clone(template);
+        builder.edge_basis = sanitize::edge_basis(basis, &mut builder.warnings);
+        builder.edge_template = Some(Arc::clone(template));
+        builder.build(cx, fonts)
     }
 }
 

@@ -106,6 +106,9 @@ pub(crate) struct InlineBoxInfo {
     pub(crate) node: NodeId,
     pub(crate) style: u32,
     pub(crate) edges: InlineEdges,
+    /// Inline sides whose edges include a percentage; see
+    /// [`crate::node::InlineEdgePercents::inline_sides`].
+    pub(crate) percent_sides: u8,
     pub(crate) parent: Option<u32>,
     /// Innermost Clone box in this box's inclusive ancestor chain.
     /// Finalized independently for each paragraph style set at build time.
@@ -260,12 +263,16 @@ pub(crate) fn build_units(
                     run_index += 1;
                 }
             }
-            ItemKind::OpenInline { edges } => {
+            ItemKind::OpenInline {
+                edges,
+                percent_sides,
+            } => {
                 let box_index = boxes.len() as u32;
                 boxes.push(InlineBoxInfo {
                     node,
                     style: item.style,
                     edges: *edges,
+                    percent_sides: *percent_sides,
                     parent: parent_box,
                     nearest_clone: None,
                 });
