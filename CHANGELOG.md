@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.31](https://github.com/fulgur-rs/shodo/compare/v0.0.30...v0.0.31) - 2026-10-15
+
+### Added
+
+- resolve percentage inline-box margins and padding against a basis
+
+### Fixed
+
+- keep a negative px part of percentage padding until the sum is resolved
+- keep randomized hashing for caller-chosen font query keys
+
+### Other
+
+- linearize bidi scope restarts and ruby hit paths
+- reuse shared helpers and drop duplicated bookkeeping
+- Merge pull request #348 from fulgur-rs/refactor/shodo-42-ledger
+- *(shodo)* account paragraph and ruby limits in one ledger
+
 ## [0.0.30](https://github.com/fulgur-rs/shodo/compare/v0.0.29...v0.0.30) - 2026-10-14
 
 ### Added
