@@ -55,22 +55,21 @@ impl ParagraphAnalysis {
         if let Some(error) = b.error {
             return Err(error);
         }
-        // Retain the unresolved input of a paragraph with percentage edges so
+        // Retain the unresolved input of a paragraph with percentage edges,
+        // including those inside ruby annotations, so
         // `Paragraph::with_edge_basis` can resolve it for another basis. A
         // rebuild for some basis already carries the original template.
         let template = b.edge_template.clone().or_else(|| {
-            b.items
-                .iter()
-                .any(|item| {
-                    matches!(
-                        item,
-                        RawItem::Open {
-                            percents: Some(_),
-                            ..
-                        }
-                    )
-                })
-                .then(|| Arc::new(b.clone()))
+            (b.items.iter().any(|item| {
+                matches!(
+                    item,
+                    RawItem::Open {
+                        percents: Some(_),
+                        ..
+                    }
+                )
+            }) || crate::ruby::prepare::annotations_have_percent_edges(&b.rubies))
+            .then(|| Arc::new(b.clone()))
         });
         let mut ledger = LimitsLedger::new(&b.limits);
         let state = Paragraph::analyze_builder_with_ledger(b, template, &mut ledger)?;
@@ -143,7 +142,9 @@ impl Paragraph {
         }
         let has_percent_edges = sanitize::items(&mut items, edge_basis, &mut warnings);
         // Percentages that sanitize to zero need no template.
-        let edge_template = edge_template.filter(|_| has_percent_edges);
+        let edge_template = edge_template.filter(|_| {
+            has_percent_edges || crate::ruby::prepare::annotations_have_percent_edges(&rubies)
+        });
         let id = NEXT_PARAGRAPH_ID.fetch_add(1, Ordering::Relaxed);
         let has_first_line =
             style.first_line.is_some() || !first_line_styles.is_empty() || ruby_first_line;
@@ -491,7 +492,7 @@ impl Paragraph {
             finalize_data(&mut data, None, cx, &mut warnings, &mut sat);
         }
         ledger.select_frame(normal_frame);
-        crate::ruby::prepare::prepare(&mut data, &rubies, cx, fonts, ledger)?;
+        crate::ruby::prepare::prepare(&mut data, &rubies, cx, fonts, ledger, edge_basis)?;
         if let Some(first) = &mut data.first_line {
             let alternate = Arc::get_mut(&mut first.data)
                 .expect("new first-line data has one owner before publication");

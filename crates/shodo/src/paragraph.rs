@@ -295,7 +295,9 @@ impl Paragraph {
     }
 
     /// Whether some inline box has a nonzero percentage margin or padding,
-    /// recorded with [`ParagraphBuilder::set_inline_edge_percents`].
+    /// recorded with [`ParagraphBuilder::set_inline_edge_percents`]. Inline
+    /// boxes inside ruby annotation content count too; their percentages
+    /// resolve against the same basis.
     ///
     /// Such a paragraph lays out its percentages against
     /// [`Self::edge_basis`]; use [`Self::with_edge_basis`] to lay it out
