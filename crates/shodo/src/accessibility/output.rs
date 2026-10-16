@@ -8,6 +8,7 @@ use crate::{Fragment, GlyphOrientation, Line};
 #[cfg(test)]
 std::thread_local! {
     pub(super) static GLYPH_OWNER_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(super) static SOURCE_PARTITION_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Query offsets and run starts are monotone. Keep the latest containing run,
@@ -62,11 +63,10 @@ fn point(c: Caret) -> (f32, f32) {
 }
 
 pub(super) fn build<'a>(lines: &'a [Line], hit: &LineLayout<'_>) -> Vec<AccessibleLine<'a>> {
-    let mut result: Vec<_> = lines
-        .iter()
-        .enumerate()
-        .map(|(index, line)| build_line(index, line, hit))
-        .collect();
+    let mut result = Vec::with_capacity(lines.len());
+    for (index, line) in lines.iter().enumerate() {
+        result.push(build_line(index, line, hit));
+    }
     word_starts(&mut result);
     result
 }
@@ -92,7 +92,17 @@ fn build_line<'a>(index: usize, line: &'a Line, hit: &LineLayout<'_>) -> Accessi
         .collect();
     glyph_runs.sort_by_key(|r| r.text_range().start);
     let mut glyph_owner = OwnerCursor::default();
-    let mut characters = Vec::new();
+    let mut unit_cursor = line.data.units.partition_point(|u| {
+        #[cfg(test)]
+        SOURCE_PARTITION_VISITS.with(|visits| visits.set(visits.get() + 1));
+        u.text.end <= text_range.start
+    });
+    let mut item_cursor = line.data.items.partition_point(|i| {
+        #[cfg(test)]
+        SOURCE_PARTITION_VISITS.with(|visits| visits.set(visits.get() + 1));
+        i.text.end <= text_range.start
+    });
+    let mut characters = Vec::with_capacity(offsets.len().saturating_sub(1));
     let mut runs: Vec<AccessibleRun<'a>> = Vec::new();
     for pair in offsets.windows(2) {
         let span = pair[0]..pair[1];
@@ -127,45 +137,66 @@ fn build_line<'a>(index: usize, line: &'a Line, hit: &LineLayout<'_>) -> Accessi
                     ..leading.rect
                 }
             });
-        let unit_begin = line
+        while unit_cursor < line.data.units.len()
+            && line.data.units[unit_cursor].text.end <= span.start
+        {
+            unit_cursor += 1;
+        }
+        let bidi_level = line
             .data
             .units
-            .partition_point(|u| u.text.end <= span.start);
-        let units = &line.data.units[unit_begin..];
-        let atomic = units
-            .iter()
-            .take_while(|u| u.text.start < span.end)
-            .find_map(|u| match u.kind {
-                UnitKind::Atomic { node } => Some(node),
-                _ => None,
-            });
+            .get(unit_cursor)
+            .map_or(line.data.base_level, |u| u.level);
+        let mut unit_scan = unit_cursor;
+        let mut atomic = None;
+        let mut forced_break = false;
+        while unit_scan < line.data.units.len() {
+            let unit = &line.data.units[unit_scan];
+            if unit.text.start >= span.end {
+                break;
+            }
+            match unit.kind {
+                UnitKind::Atomic { node } => {
+                    atomic = Some(node);
+                    break;
+                }
+                UnitKind::ForcedBreak => forced_break = true,
+                _ => {}
+            }
+            unit_scan += 1;
+        }
         let kind = if let Some(node) = atomic {
             AccessibleCharacterKind::Atomic(node)
-        } else if units
-            .iter()
-            .take_while(|u| u.text.start < span.end)
-            .any(|u| u.kind == UnitKind::ForcedBreak)
-        {
+        } else if forced_break {
             AccessibleCharacterKind::HardBreak
         } else {
             AccessibleCharacterKind::Text
         };
         let character = characters.len();
-        let item_begin = line
-            .data
-            .items
-            .partition_point(|i| i.text.end <= span.start);
-        let items = &line.data.items[item_begin..];
-        let item = items
-            .iter()
-            .take_while(|i| i.text.start < span.end)
-            .find(|i| matches!(i.kind, ItemKind::Text))
-            .or_else(|| {
-                items
-                    .iter()
-                    .take_while(|i| i.text.start < span.end)
-                    .find(|i| !i.text.is_empty())
-            });
+        while item_cursor < line.data.items.len()
+            && line.data.items[item_cursor].text.end <= span.start
+        {
+            item_cursor += 1;
+        }
+        let mut item_scan = item_cursor;
+        let mut first_text_item = None;
+        let mut first_nonempty_item = None;
+        let mut tab = false;
+        while item_scan < line.data.items.len() {
+            let item = &line.data.items[item_scan];
+            if item.text.start >= span.end {
+                break;
+            }
+            if first_text_item.is_none() && matches!(item.kind, ItemKind::Text) {
+                first_text_item = Some(item);
+            }
+            if first_nonempty_item.is_none() && !item.text.is_empty() {
+                first_nonempty_item = Some(item);
+            }
+            tab |= matches!(item.kind, ItemKind::Tab);
+            item_scan += 1;
+        }
+        let item = first_text_item.or(first_nonempty_item);
         let style_index = item.map_or(0, |i| i.style) as usize;
         let style = &line.data.styles[style_index];
         let owner_offset = item.map_or(span.start, |i| i.text.start.max(span.start));
@@ -175,10 +206,6 @@ fn build_line<'a>(index: usize, line: &'a Line, hit: &LineLayout<'_>) -> Accessi
                 glyph_runs[i].text_range()
             })
             .map(|i| &glyph_runs[i]);
-        let tab = items
-            .iter()
-            .take_while(|i| i.text.start < span.end)
-            .any(|i| matches!(i.kind, ItemKind::Tab));
         let metrics = line.data.style_metrics[style_index];
         let orientation = glyph.map_or_else(
             || {
@@ -206,10 +233,7 @@ fn build_line<'a>(index: usize, line: &'a Line, hit: &LineLayout<'_>) -> Accessi
                 .map(|r| r.font())
                 .or_else(|| tab.then_some(metrics.font)),
             font_size: glyph.map_or(metrics.size, |r| r.font_size()),
-            bidi_level: glyph.map_or_else(
-                || units.first().map_or(line.data.base_level, |u| u.level),
-                |r| r.bidi_level(),
-            ),
+            bidi_level: glyph.map_or_else(|| bidi_level, |r| r.bidi_level()),
             orientation,
             bounds: rect,
         };

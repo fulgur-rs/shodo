@@ -89,7 +89,16 @@ impl<'a, F: FnMut() -> types::NodeId> NodeBuilder<'a, F> {
         semantics: impl Fn(NodeId) -> NodeSemantics,
     ) -> Result<(), AccessKitError> {
         for line in layout.lines() {
-            let line_node_begin = self.nodes.len();
+            let text_nodes_on_line = line.runs.iter().fold(0usize, |count, run| {
+                count.saturating_add(run.character_range.len().div_ceil(255).max(1))
+            });
+            let line_node_capacity = text_nodes_on_line.saturating_add(line.runs.len());
+            self.nodes.reserve(line_node_capacity);
+            self.registry.reserve(line_node_capacity);
+            self.issued.reserve(line_node_capacity);
+            self.occurrences.reserve(line_node_capacity);
+            self.children.reserve(text_nodes_on_line);
+            self.spans.reserve(text_nodes_on_line);
             let converter = PhysicalConverter::new(
                 line.writing_mode,
                 line.direction,
@@ -98,7 +107,7 @@ impl<'a, F: FnMut() -> types::NodeId> NodeBuilder<'a, F> {
                     height: frame.height,
                 },
             );
-            let mut on_line = Vec::new();
+            let mut on_line = Vec::with_capacity(text_nodes_on_line);
             for run in &line.runs {
                 let semantic = run.node.map(&semantics).unwrap_or_default();
                 let atomic = run
@@ -109,7 +118,8 @@ impl<'a, F: FnMut() -> types::NodeId> NodeBuilder<'a, F> {
                     || semantic.role != types::Role::GenericContainer
                     || semantic.label.is_some()
                     || semantic.description.is_some();
-                let mut chunks = Vec::new();
+                let text_node_count = run.character_range.len().div_ceil(255).max(1);
+                let mut chunks = Vec::with_capacity(text_node_count);
                 let mut start = run.character_range.start;
                 loop {
                     let end = (start + 255).min(run.character_range.end);
@@ -124,9 +134,10 @@ impl<'a, F: FnMut() -> types::NodeId> NodeBuilder<'a, F> {
                         converter,
                         frame,
                     )?;
+                    let node_index = self.nodes.len();
                     self.nodes.push((id, node));
                     chunks.push(id);
-                    on_line.push(id);
+                    on_line.push(node_index);
                     self.spans.push(Span {
                         node: id,
                         line: line.index,
@@ -157,30 +168,11 @@ impl<'a, F: FnMut() -> types::NodeId> NodeBuilder<'a, F> {
                     self.children.extend(chunks);
                 }
             }
-            // The current nodes for this line are contiguous, except wrappers.
-            // Index IDs once instead of searching the whole tree per link.
-            let links: HashMap<_, _> = on_line
-                .iter()
-                .enumerate()
-                .map(|(i, id)| {
-                    (
-                        *id,
-                        (
-                            i.checked_sub(1).map(|j| on_line[j]),
-                            on_line.get(i + 1).copied(),
-                        ),
-                    )
-                })
-                .collect();
-            for (id, node) in &mut self.nodes[line_node_begin..] {
-                if let Some((previous, next)) = links.get(id) {
-                    if let Some(previous) = previous {
-                        node.set_previous_on_line(*previous);
-                    }
-                    if let Some(next) = next {
-                        node.set_next_on_line(*next);
-                    }
-                }
+            for pair in on_line.windows(2) {
+                let previous = self.nodes[pair[0]].0;
+                let next = self.nodes[pair[1]].0;
+                self.nodes[pair[0]].1.set_next_on_line(next);
+                self.nodes[pair[1]].1.set_previous_on_line(previous);
             }
         }
         // Readings are explicit metadata, not TextRuns in the document's text
@@ -396,10 +388,22 @@ fn text_node(
     let rect = bounds(converter, frame, rect);
     let mut node = types::Node::new(types::Role::TextRun);
     node.set_bounds(rect);
-    let mut value = String::new();
-    let mut lengths = Vec::new();
-    let mut positions = Vec::new();
-    let mut widths = Vec::new();
+    let mut value_capacity = 0;
+    for c in characters {
+        let text = if let Some(alternative) = alternative {
+            alternative
+        } else if c.kind == AccessibleCharacterKind::HardBreak {
+            "\n"
+        } else {
+            c.text
+        };
+        u8::try_from(text.len()).map_err(|_| AccessKitError::CharacterTooLong)?;
+        value_capacity += text.len();
+    }
+    let mut value = String::with_capacity(value_capacity);
+    let mut lengths = Vec::with_capacity(characters.len());
+    let mut positions = Vec::with_capacity(characters.len());
+    let mut widths = Vec::with_capacity(characters.len());
     let direction = characters
         .iter()
         .find_map(|c| {
@@ -471,16 +475,13 @@ fn text_node(
         word_work::visit();
         i < range.end
     });
-    node.set_word_starts(
-        line.word_starts[first_word..last_word]
-            .iter()
-            .map(|i| {
-                #[cfg(test)]
-                word_work::visit();
-                (i - range.start) as u8
-            })
-            .collect::<Vec<_>>(),
-    );
+    let mut word_starts = Vec::with_capacity(last_word - first_word);
+    word_starts.extend(line.word_starts[first_word..last_word].iter().map(|i| {
+        #[cfg(test)]
+        word_work::visit();
+        (i - range.start) as u8
+    }));
+    node.set_word_starts(word_starts);
     node.set_font_size(run.font_size);
     node.set_font_weight(run.style.font_weight);
     if let Some(lang) = &run.style.lang {
