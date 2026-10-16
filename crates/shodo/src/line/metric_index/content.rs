@@ -547,66 +547,76 @@ pub(crate) fn content_shared(
         crate::line::replay::Memo::default,
         crate::line::replay::Memo::detached,
     );
-    let shared = share
+    let lookup = share
         .entry
         .as_ref()
         .filter(|e| cx.reuse_enabled() && e.owner == owner && e.selected == selected)
-        .map(|e| e.effects);
-    let replayed = shared.is_some_and(|effects| memo.replay(cx, &effects, None, sat));
-    if replayed && let Some(d) = share.detached.as_mut() {
-        d.note.calls += 1;
-        d.note.sat.absorb(shared.unwrap().sat());
-    }
-    let fresh;
-    let selection: &Selection = if replayed {
-        &share.entry.as_ref().unwrap().selection
-    } else {
-        let recording = memo.begin(cx, sat);
-        let end =
-            super::super::plan::hyphen_end(data, selected.end).filter(|e| *e > selected.start);
-        let windows = end
-            .and_then(|end| super::super::hyphen::line(data, selected.start, end, cx, sat))
-            .unwrap_or_else(|| {
-                super::super::windows::measure(data, selected.start, selected.end, cx, sat)
-            });
-        let selection = index.select(data, &selected, &windows, cx, sat);
-        #[cfg(test)]
-        {
-            cx.ruby_profile_selects += 1;
-        }
-        let finished = recording.finish(cx, sat, crate::line::replay::Store::All);
-        if let Some(d) = share.detached.as_mut() {
-            d.fresh += 1;
-            d.note.calls += 1;
-            if let Some(effects) = &finished {
-                d.note.sat.absorb(effects.sat());
+        .map(|e| (None, e.effects, None));
+    let result = memo.cached(
+        cx,
+        sat,
+        &mut (&mut index, &mut *share),
+        lookup,
+        |_, _, _| None,
+        |(index, _), cx, sat| {
+            let end =
+                super::super::plan::hyphen_end(data, selected.end).filter(|e| *e > selected.start);
+            let windows = end
+                .and_then(|end| super::super::hyphen::line(data, selected.start, end, cx, sat))
+                .unwrap_or_else(|| {
+                    super::super::windows::measure(data, selected.start, selected.end, cx, sat)
+                });
+            let selection = index.select(data, &selected, &windows, cx, sat);
+            #[cfg(test)]
+            {
+                cx.ruby_profile_selects += 1;
             }
-        }
-        match finished {
-            Some(effects) => {
-                let digest = parent.is_some().then(|| index.digest(&selection));
-                &share
-                    .entry
-                    .insert(SharedSelection {
+            (Some(selection), crate::line::replay::Store::All)
+        },
+        |(index, share), _cx, selection, finished| {
+            if let Some(d) = share.detached.as_mut() {
+                d.fresh += 1;
+                d.note.calls += 1;
+                if let Some(effects) = &finished {
+                    d.note.sat.absorb(effects.sat());
+                }
+            }
+            let selection = selection.expect("fresh profile selection");
+            match finished {
+                Some(effects) => {
+                    let digest = parent.is_some().then(|| index.digest(&selection));
+                    share.entry = Some(SharedSelection {
                         owner,
                         selected: selected.clone(),
                         effects,
                         selection,
                         digest,
-                    })
-                    .selection
-            }
-            None => {
-                #[cfg(test)]
-                if parent.is_some() {
-                    cx.ruby_profile_warnings += 1;
+                    });
+                    None
                 }
-                share.entry = None;
-                fresh = selection;
-                &fresh
+                None => {
+                    #[cfg(test)]
+                    if parent.is_some() {
+                        _cx.ruby_profile_warnings += 1;
+                    }
+                    share.entry = None;
+                    Some(selection)
+                }
             }
-        }
-    };
+        },
+    );
+    if result.replayed
+        && let Some(d) = share.detached.as_mut()
+    {
+        d.note.calls += 1;
+        d.note
+            .sat
+            .absorb(share.entry.as_ref().unwrap().effects.sat());
+    }
+    let fresh = result.value;
+    let selection = fresh
+        .as_ref()
+        .unwrap_or_else(|| &share.entry.as_ref().unwrap().selection);
     if let Some(d) = share.detached.as_mut() {
         d.note.profile |= boxes
             .iter()

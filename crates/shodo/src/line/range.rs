@@ -243,34 +243,48 @@ pub(crate) fn block_size(
     if let Some(height) = cx.ruby_ranges.caches.blocks.get(&key) {
         return *height;
     }
-    let memo = super::replay::Memo::default();
-    if let Some((height, effects)) = cx.ruby_ranges.caches.block_effects.get(&key).copied()
-        && memo.replay(cx, &effects, None, sat)
-    {
-        return height;
-    }
-    let recording = memo.begin(cx, sat);
-    let height = measure_block(data, range, ruby, atomics, cx, sat);
-    let effects = recording.finish(cx, sat, super::replay::Store::All);
-    let cache = &mut cx.ruby_ranges;
-    if effects.is_some() {
-        cache.reserve_block(&key);
-    }
-    match effects {
-        Some(effects) if effects.is_empty() => {
-            cache.caches.block_effects.remove(&key);
-            cache.caches.blocks.insert(key, height);
-        }
-        Some(effects) => {
-            // No `blocks` entry exists: a hit there returned above.
-            debug_assert!(!cache.caches.blocks.contains_key(&key));
-            cache.caches.block_effects.insert(key, (height, effects));
-        }
-        None => {
-            cache.caches.block_effects.remove(&key);
-        }
-    }
-    height
+    let lookup = cx
+        .ruby_ranges
+        .caches
+        .block_effects
+        .get(&key)
+        .copied()
+        .map(|(height, effects)| (height, effects, None));
+    super::replay::Memo::default()
+        .cached(
+            cx,
+            sat,
+            &mut (),
+            lookup,
+            |_, _, _| None,
+            |_, cx, sat| {
+                (
+                    measure_block(data, range, ruby, atomics, cx, sat),
+                    super::replay::Store::All,
+                )
+            },
+            |_, cx, height, effects| {
+                let cache = &mut cx.ruby_ranges;
+                if effects.is_some() {
+                    cache.reserve_block(&key);
+                }
+                match effects {
+                    Some(effects) if effects.is_empty() => {
+                        cache.caches.block_effects.remove(&key);
+                        cache.caches.blocks.insert(key, height);
+                    }
+                    Some(effects) => {
+                        debug_assert!(!cache.caches.blocks.contains_key(&key));
+                        cache.caches.block_effects.insert(key, (height, effects));
+                    }
+                    None => {
+                        cache.caches.block_effects.remove(&key);
+                    }
+                }
+                height
+            },
+        )
+        .value
 }
 
 fn measure_block(

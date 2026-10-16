@@ -329,6 +329,13 @@ pub(crate) struct Memo {
     target: Option<Option<usize>>,
 }
 
+/// The value remains owned by the caller; replay status is useful for its
+/// existing cache-hit instrumentation.
+pub(crate) struct Cached<T> {
+    pub(crate) value: T,
+    pub(crate) replayed: bool,
+}
+
 pub(crate) enum Store {
     All,
     /// A result with no measured work need not retain empty effects.
@@ -369,6 +376,46 @@ impl Memo {
         match self.target {
             Some(frame) => replay_to(cx, effects, sat, frame),
             None => replay(cx, effects, sat),
+        }
+    }
+
+    /// Replay a lookup or record one fresh computation and hand its effects
+    /// to the caller's storage policy. A refused replay changes no effects.
+    /// `bypass` runs only on a miss and before opening a frame, so admission
+    /// failures and deliberately uncached work preserve their parent/entry.
+    /// `store` sees `None` for warnings, invalidation or excluded values; it
+    /// owns the choice to remove or retain an older entry and may move values.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn cached<S, T>(
+        self,
+        cx: &mut LayoutContext,
+        sat: &mut Saturation,
+        state: &mut S,
+        lookup: Option<(T, Effects, Option<u64>)>,
+        bypass: impl FnOnce(&mut S, &mut LayoutContext, &mut Saturation) -> Option<T>,
+        compute: impl FnOnce(&mut S, &mut LayoutContext, &mut Saturation) -> (T, Store),
+        store: impl FnOnce(&mut S, &mut LayoutContext, T, Option<Effects>) -> T,
+    ) -> Cached<T> {
+        if let Some((value, effects, epoch)) = lookup
+            && self.replay(cx, &effects, epoch, sat)
+        {
+            return Cached {
+                value,
+                replayed: true,
+            };
+        }
+        if let Some(value) = bypass(state, cx, sat) {
+            return Cached {
+                value,
+                replayed: false,
+            };
+        }
+        let recording = self.begin(cx, sat);
+        let (value, policy) = compute(state, cx, sat);
+        let effects = recording.finish(cx, sat, policy);
+        Cached {
+            value: store(state, cx, value, effects),
+            replayed: false,
         }
     }
 
@@ -440,6 +487,109 @@ mod tests {
         }
         s.saturated += extra_sat;
         finish(cx, recording, &s)
+    }
+
+    #[test]
+    fn cached_miss_and_hit_preserve_values_charges_and_saturation() {
+        let mut cx = LayoutContext::new();
+        let mut s = Saturation::default();
+        let mut slot = None;
+        let fresh = Memo::default().cached(
+            &mut cx,
+            &mut s,
+            &mut slot,
+            None,
+            |_, _, _| None,
+            |_, cx, s| {
+                cx.edge_reshape_spent += 10;
+                record_charge(cx, 10, 100, true);
+                s.saturated += 2;
+                (7u32, Store::All)
+            },
+            |slot, _, value, effects| {
+                *slot = effects.map(|effects| (value, effects));
+                value
+            },
+        );
+        assert!(!fresh.replayed);
+        assert_eq!(fresh.value, 7);
+        let (value, effects) = slot.unwrap();
+        cx.edge_reshape_spent = 0;
+        let hit = Memo::default().cached(
+            &mut cx,
+            &mut s,
+            &mut slot,
+            Some((value, effects, None)),
+            |_, _, _| panic!("a replay must skip bypass"),
+            |_, _, _| panic!("a replay must skip computation"),
+            |_, _, _, _| panic!("a replay must skip storage"),
+        );
+        assert!(hit.replayed);
+        assert_eq!(hit.value, 7);
+        assert_eq!(cx.edge_reshape_spent, 10);
+        assert_eq!(s, sat(4));
+        assert_eq!(depth(&cx), 0);
+    }
+
+    #[test]
+    fn cached_refused_replay_removes_a_warning_producing_entry() {
+        let mut cx = LayoutContext::new();
+        let effects = record(&mut cx, &[(10, 100)], 0).unwrap();
+        cx.edge_reshape_spent = 95;
+        let mut s = Saturation::default();
+        let mut slot = Some((7u32, effects));
+        let fresh = Memo::default().cached(
+            &mut cx,
+            &mut s,
+            &mut slot,
+            Some((7u32, effects, None)),
+            |_, _, _| None,
+            |_, cx, _| {
+                cx.warnings.push(WarningKind::Unsupported, "new warning");
+                (9, Store::All)
+            },
+            |slot, _, value, effects| {
+                assert!(effects.is_none());
+                *slot = None;
+                value
+            },
+        );
+        assert!(!fresh.replayed);
+        assert_eq!(fresh.value, 9);
+        assert!(slot.is_none());
+        assert_eq!(cx.edge_reshape_spent, 95);
+        assert_eq!(cx.take_warnings()[0].message, "new warning");
+        assert_eq!(depth(&cx), 0);
+    }
+
+    #[test]
+    fn cached_miss_bypass_keeps_the_parent_frame_and_stale_entry() {
+        let mut cx = LayoutContext::new();
+        let mut s = Saturation::default();
+        let outer = begin(&mut cx, &s);
+        let mut slot = Some(7u32);
+        let result = Memo::default().cached(
+            &mut cx,
+            &mut s,
+            &mut slot,
+            None,
+            |_, cx, s| {
+                assert_eq!(depth(cx), 1, "no extra frame before admission");
+                cx.edge_reshape_spent += 5;
+                record_charge(cx, 5, 100, true);
+                s.saturated += 1;
+                Some(0u32)
+            },
+            |_, _, _| panic!("bypass must skip recording/computation"),
+            |_, _, _, _| panic!("bypass must retain the stale entry"),
+        );
+        assert_eq!(result.value, 0);
+        assert!(!result.replayed);
+        assert_eq!(slot, Some(7));
+        let effects = finish(&mut cx, outer, &s).unwrap();
+        assert_eq!(effects.bytes(), 5);
+        assert_eq!(effects.sat(), sat(1));
+        assert_eq!(depth(&cx), 0);
     }
 
     #[test]

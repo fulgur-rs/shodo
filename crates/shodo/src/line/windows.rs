@@ -1031,45 +1031,56 @@ pub(super) fn candidate(
     sat: &mut Saturation,
 ) -> (LayoutUnit, bool) {
     cx.edge_shapes.begin(data);
-    let memo = super::replay::Memo::default();
-    if let Some(hit) = cx.edge_shapes.measurement((start, end))
-        && memo.replay(cx, &hit.effects, None, sat)
-    {
-        #[cfg(test)]
-        {
-            cx.edge_shapes.measurement_hits += 1;
-        }
-        return (hit.delta, hit.valid);
-    }
+    let lookup = cx
+        .edge_shapes
+        .measurement((start, end))
+        .map(|hit| ((hit.delta, hit.valid), hit.effects, None));
+    let result = super::replay::Memo::default().cached(
+        cx,
+        sat,
+        &mut (),
+        lookup,
+        |_, _cx, _| {
+            #[cfg(test)]
+            {
+                _cx.edge_shapes.measurement_misses += 1;
+            }
+            None
+        },
+        |_, cx, sat| {
+            let windows = measure_edit::<MeasuredWindow>(data, start, end, None, cx, sat);
+            let delta = windows
+                .iter()
+                .fold(LayoutUnit::ZERO, |p, w| p.add(w.delta(data, end, sat), sat));
+            let covered = covers_partial_edges(data, start, end, windows.iter().map(|w| &w.text));
+            let edge_windows = !windows.is_empty();
+            drop(windows);
+            let partial = covered && has_partial_remainder(data, start, end);
+            let valid = covered && (!partial || suffix_covered(data, end, cx, sat));
+            // Unlimited reshape budgets still perform measured work.
+            let trivial = !edge_windows && covered && !partial;
+            ((delta, valid), super::replay::Store::ExceptTrivial(trivial))
+        },
+        |_, cx, (delta, valid), effects| {
+            // Keep a previous entry on a warning or a trivial fresh result.
+            if let Some(effects) = effects {
+                cx.edge_shapes.remember_measurement(
+                    (start, end),
+                    CandidateMeasurement {
+                        delta,
+                        valid,
+                        effects,
+                    },
+                );
+            }
+            (delta, valid)
+        },
+    );
     #[cfg(test)]
-    {
-        cx.edge_shapes.measurement_misses += 1;
+    if result.replayed {
+        cx.edge_shapes.measurement_hits += 1;
     }
-    let recording = memo.begin(cx, sat);
-    let windows = measure_edit::<MeasuredWindow>(data, start, end, None, cx, sat);
-    let delta = windows
-        .iter()
-        .fold(LayoutUnit::ZERO, |p, w| p.add(w.delta(data, end, sat), sat));
-    let covered = covers_partial_edges(data, start, end, windows.iter().map(|w| &w.text));
-    let edge_windows = !windows.is_empty();
-    drop(windows);
-    let partial = covered && has_partial_remainder(data, start, end);
-    let valid = covered && (!partial || suffix_covered(data, end, cx, sat));
-    // No charges (an unlimited reshape budget) do not prove that measuring did
-    // no work, so retain any result that shaped an edge or a suffix. A trivial
-    // result (no windows, valid, no suffix, no effects) is cheaper to recompute.
-    let trivial = !edge_windows && covered && !partial;
-    if let Some(effects) = recording.finish(cx, sat, super::replay::Store::ExceptTrivial(trivial)) {
-        cx.edge_shapes.remember_measurement(
-            (start, end),
-            CandidateMeasurement {
-                delta,
-                valid,
-                effects,
-            },
-        );
-    }
-    (delta, valid)
+    result.value
 }
 
 fn has_partial_remainder(data: &ParagraphData, start: usize, end: usize) -> bool {
