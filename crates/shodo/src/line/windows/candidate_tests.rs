@@ -167,7 +167,7 @@ fn owned_candidate(
     sat: &mut Saturation,
 ) -> (LayoutUnit, bool) {
     let windows = measure(data, start, end, cx, sat);
-    let delta = cost(&windows, end, sat);
+    let delta = cost(data, &windows, end, sat);
     let covered = covers_partial_edges(data, start, end, windows.iter().map(|w| &w.overlay.text));
     drop(windows);
     let remainder = last(data, start, end).is_some_and(|at| group(data, at).end > end);
@@ -281,7 +281,10 @@ fn candidate_measurements_release_shared_glyph_handles() {
         retained.iter().all(|weak| weak.upgrade().is_none()),
         "width/coverage results must not keep cached glyph allocations alive"
     );
-    assert_eq!(windows[0].delta(1, &mut Saturation::default()), expected.0);
+    assert_eq!(
+        windows[0].delta(&p.data, 1, &mut Saturation::default()),
+        expected.0
+    );
 }
 
 #[test]
@@ -395,4 +398,38 @@ fn zero_delta_edge_measurements_without_a_charge_budget_are_reused() {
         (LayoutUnit::ZERO, true)
     );
     assert_eq!(data.edge_shape_calls.load(Ordering::Relaxed), before);
+}
+
+#[test]
+fn replacement_delta_keeps_the_word_spacing_clamp_and_charges_it_once() {
+    let mut p = paragraph("ab", false, &Limits::default());
+    let data = Arc::get_mut(&mut p.data).unwrap();
+    // Upper/lower clamps: the unchanged word spacing cancels only when
+    // both sums remain representable. Reconstructing an already-clamped old
+    // width must not add another saturation charge.
+    for (word, old, new, expected_delta, expected_saturations) in [
+        (i32::MAX - 7, 5, 10, 2, 1),
+        (i32::MIN + 7, -5, -10, -2, 1),
+        (i32::MAX - 7, 10, 5, -2, 0),
+        (i32::MIN + 7, -10, -5, 2, 0),
+        (7, 5, 10, 5, 0),
+        (-7, 5, 10, 5, 0),
+    ] {
+        data.unit_spacing[0].word = LayoutUnit::from_raw(word);
+        let mut sat = Saturation::default();
+        let delta = changes_delta(
+            data,
+            &[(0, LayoutUnit::from_raw(old), LayoutUnit::from_raw(new))],
+            1,
+            &mut sat,
+        );
+        assert_eq!(delta.raw(), expected_delta, "word={word}, {old}->{new}");
+        assert_eq!(
+            sat,
+            Saturation {
+                saturated: expected_saturations,
+                non_finite: 0
+            }
+        );
+    }
 }

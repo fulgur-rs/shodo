@@ -885,7 +885,7 @@ impl HyphenMeasure {
         let windows = super::hyphen::line(data, start, self.end, cx, sat)?;
         let required = self
             .natural
-            .add(super::windows::cost(&windows, self.end, sat), sat);
+            .add(super::windows::cost(data, &windows, self.end, sat), sat);
         Some(fit_width(
             data,
             self.summary,
