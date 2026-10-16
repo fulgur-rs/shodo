@@ -1128,47 +1128,54 @@ impl Step<'_> {
         let memo = crate::line::replay::Memo::for_ranges(cx);
         self.profile
             .begin_container(crate::line::replay::depth(cx).checked_sub(1));
-        let recording = memo.begin(cx, sat);
-        let fragment = {
-            let completed = Tree {
-                acc: &*acc,
-                data: self.data,
-                containers: self.containers,
-                start: self.start,
-                from: pos + 1,
-            };
-            super::measure::measure_one(
-                self.data,
-                &self.selected,
-                container,
-                &completed,
-                &mut self.profile,
-                self.atomics,
-                cx,
-                sat,
-            )
-        };
-
-        // An invalidated cache or a profile measured again (a refused replay
-        // or a warning) leaves no fixed `P` and no comparable cache state:
-        // stop replaying for the rest of the step and reset afterwards.
-        if !memo.is_current(cx) || self.profile.refreshed() {
-            self.replays = false;
-        }
+        let result = memo.cached(
+            cx,
+            sat,
+            self,
+            None,
+            |_, _, _| None,
+            |this, cx, sat| {
+                let fragment = {
+                    let completed = Tree {
+                        acc: &*acc,
+                        data: this.data,
+                        containers: this.containers,
+                        start: this.start,
+                        from: pos + 1,
+                    };
+                    super::measure::measure_one(
+                        this.data,
+                        &this.selected,
+                        container,
+                        &completed,
+                        &mut this.profile,
+                        this.atomics,
+                        cx,
+                        sat,
+                    )
+                };
+                // An epoch change or refreshed profile has no fixed shared
+                // effect to subtract from the remaining step's replays.
+                if !memo.is_current(cx) || this.profile.refreshed() {
+                    this.replays = false;
+                }
+                let note = this.profile.note();
+                let store = if this.replays && !note.mixed {
+                    crate::line::replay::Store::All
+                } else {
+                    crate::line::replay::Store::Never
+                };
+                ((fragment, None), store)
+            },
+            |this, _, (fragment, _), effects| {
+                (
+                    fragment,
+                    effects.map(|e| e.without_sat(this.profile.note().sat)),
+                )
+            },
+        );
+        let (fragment, own) = result.value;
         let note = self.profile.note();
-        // Range cache queries charge the same cold or warm, so measuring
-        // again under the same epoch repeats exactly these effects.
-        // A side read twice with different neighbours has no single key in
-        // the D3 index: such an entry is not stored (always measured live).
-        let storable = self.replays && !note.mixed;
-        let store = if storable {
-            crate::line::replay::Store::All
-        } else {
-            crate::line::replay::Store::Never
-        };
-        let own = recording
-            .finish(cx, sat, store)
-            .map(|e| e.without_sat(note.sat));
         let parent = acc.entries[pos].parent;
         let neighbours = note.neighbours.map(|u| u.map(|u| u as u32));
         let entry = match fragment {

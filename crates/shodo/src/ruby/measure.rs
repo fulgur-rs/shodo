@@ -195,50 +195,52 @@ pub(crate) fn candidate_adjustment(
     let key = super::memo::MemoKey::new(data, atomics, start, through);
     let epoch = cx.ruby_ranges.epoch();
     let memo = crate::line::replay::Memo::for_ranges(cx);
-    let core = match cx.ruby_memo.get(&key) {
-        Some(entry) if memo.replay(cx, &entry.effects, Some(entry.epoch), sat) => {
-            #[cfg(test)]
-            {
-                cx.ruby_memo_hits += 1;
+    let lookup = cx
+        .ruby_memo
+        .get(&key)
+        .map(|entry| (Some(entry.adjustment), entry.effects, Some(entry.epoch)));
+    let core = memo.cached(
+        cx,
+        sat,
+        &mut walk,
+        lookup,
+        |walk, cx, sat| {
+            if !super::line_work::admit_walk(
+                data,
+                atomics,
+                start,
+                through,
+                walk.as_ref().map_or(0, |w| w.visited().len()),
+                cx,
+            ) {
+                // A second wide walk fits without adjustment or tail work.
+                return Some(None);
             }
-            entry.adjustment
-        }
-        _ if !super::line_work::admit_walk(
-            data,
-            atomics,
-            start,
-            through,
-            walk.as_ref().map_or(0, |w| w.visited().len()),
-            cx,
-        ) =>
-        {
-            // A second wide walk from this start: fit without it.
-            cx.ruby_memo.put_walk(walk);
-            return LayoutUnit::ZERO;
-        }
-        _ if through == end => {
-            // No look-ahead: the key can still replay the entry of an earlier
-            // look-ahead probe with the same `through` (above), but it is not
-            // stored. Fit scans ask for an exact key once per scan, so storing
-            // it only grows the memo by one entry per probe (one per unit in
-            // `intrinsic_sizes`). Measure as the reference path does.
+            if through == end {
+                // Exact probes can replay old look-ahead entries but are not
+                // newly retained, and open no extra recording frame.
+                let containers = walk.as_ref().map_or(&[][..], |w| w.visited());
+                return Some(Some(super::accumulate::core(
+                    data, start, through, containers, atomics, cx, sat,
+                )));
+            }
+            None
+        },
+        |walk, cx, sat| {
             let containers = walk.as_ref().map_or(&[][..], |w| w.visited());
-            super::accumulate::core(data, start, through, containers, atomics, cx, sat)
-        }
-        _ => {
-            let containers = walk.as_ref().map_or(&[][..], |w| w.visited());
-            let recording = memo.begin(cx, sat);
-            let adjustment =
-                super::accumulate::core(data, start, through, containers, atomics, cx, sat);
-            let effects = recording.finish(cx, sat, crate::line::replay::Store::All);
-            // Range cache queries charge the same cold or warm, so a
-            // recording that filled caches replays exactly; only an
-            // invalidation during it leaves no single epoch to check.
+            (
+                Some(super::accumulate::core(
+                    data, start, through, containers, atomics, cx, sat,
+                )),
+                crate::line::replay::Store::All,
+            )
+        },
+        |_, cx, adjustment, effects| {
             match effects {
                 Some(effects) => cx.ruby_memo.insert(
                     key,
                     super::memo::MemoEntry {
-                        adjustment,
+                        adjustment: adjustment.expect("recorded core adjustment"),
                         effects,
                         epoch,
                     },
@@ -246,7 +248,15 @@ pub(crate) fn candidate_adjustment(
                 None => cx.ruby_memo.remove(&key),
             }
             adjustment
-        }
+        },
+    );
+    #[cfg(test)]
+    if core.replayed {
+        cx.ruby_memo_hits += 1;
+    }
+    let Some(core) = core.value else {
+        cx.ruby_memo.put_walk(walk);
+        return LayoutUnit::ZERO;
     };
     cx.ruby_memo.put_walk(walk);
     lookahead(data, start, end, through, core, atomics, cx, sat)
