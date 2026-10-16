@@ -76,6 +76,30 @@ fn preserved_tabs_have_linear_glyph_owner_work() {
     }
 }
 
+#[test]
+fn accessible_output_partitions_units_and_items_once_per_line() {
+    for count in [128, 512] {
+        let limits = Limits::default();
+        let fonts = fonts(&limits);
+        let text = "a".repeat(count);
+        let mut builder = ParagraphBuilder::new(&style(), &limits);
+        builder.push_text(dom(1, 0), &text);
+        let lines = finish(builder, &fonts, 1_000_000.0);
+        assert_eq!(lines.len(), 1);
+        let records = lines[0].data.units.len().max(lines[0].data.items.len());
+        let max_visits = 2 * (usize::BITS - records.leading_zeros()) as usize;
+
+        output::SOURCE_PARTITION_VISITS.with(|visits| visits.set(0));
+        let layout = AccessibleLayout::new(&lines);
+        assert_eq!(layout.lines()[0].characters.len(), count);
+        let visits = output::SOURCE_PARTITION_VISITS.with(std::cell::Cell::get);
+        assert!(
+            visits <= max_visits,
+            "{count} characters, {records} units/items: {visits} partition comparisons, expected at most {max_visits}"
+        );
+    }
+}
+
 // Independent copy of the original linear source inverse, including dataset-wide
 // preferred affinity, line-local caret normalization, stable ordering and dedup.
 fn linear(layout: &AccessibleLayout<'_>, source: SourcePosition) -> Vec<AccessiblePosition> {
