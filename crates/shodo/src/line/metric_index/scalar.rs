@@ -1,6 +1,7 @@
 //! Scalar metric summaries and selected-range queries.
 use super::super::metrics::RecordProfile;
 use super::MetricIndex;
+use crate::context::count;
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::paragraph::ParagraphData;
 use crate::{AtomicSizes, LayoutContext};
@@ -93,12 +94,9 @@ impl MetricIndex {
         replacements: &BTreeMap<usize, Summary>,
         excluded: &BTreeSet<usize>,
         removed: &[Range<usize>],
-        _cx: &mut LayoutContext,
+        cx: &mut LayoutContext,
     ) -> Summary {
-        #[cfg(test)]
-        {
-            _cx.ruby_measure_visits += 1;
-        }
+        count!(cx.ruby_measure_visits += 1);
         if source.end <= range.start || range.end <= source.start {
             return Summary::default();
         }
@@ -142,7 +140,7 @@ impl MetricIndex {
             replacements,
             excluded,
             removed,
-            _cx,
+            cx,
         )
         .join(self.query_node(
             node * 2 + 1,
@@ -151,7 +149,7 @@ impl MetricIndex {
             replacements,
             excluded,
             removed,
-            _cx,
+            cx,
         ))
     }
 }
@@ -177,10 +175,7 @@ pub(crate) fn measure(
             empty: true,
         };
     }
-    #[cfg(test)]
-    {
-        cx.ruby_scalar_calls += 1;
-    }
+    count!(cx.ruby_scalar_calls += 1);
     let mut index = super::take_index(data, atomics, cx);
     let end = super::super::plan::hyphen_end(data, range.end).filter(|e| *e > range.start);
     let windows = end

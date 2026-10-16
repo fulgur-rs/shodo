@@ -2,6 +2,19 @@
 
 use crate::limits::{Warning, WarningSink};
 
+/// Test-only counter updates. Discard the entire update outside tests,
+/// including amounts that call test-only index instrumentation. A wildcard binding
+/// marks the receiver as used without moving or borrowing it.
+macro_rules! count {
+    ($receiver:ident.$($update:tt)+) => {{
+        #[cfg(test)]
+        { $receiver.$($update)+ }
+        #[cfg(not(test))]
+        { let _ = $receiver; }
+    }};
+}
+pub(crate) use count;
+
 /// Scratch state for layout. Create one per thread and reuse it; it is
 /// `Send` but not meant to be shared.
 #[derive(Debug, Default)]

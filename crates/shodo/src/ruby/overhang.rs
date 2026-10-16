@@ -2,8 +2,10 @@
 use super::geometry::Bounds;
 use super::prepare::PreparedRuby;
 use crate::analysis::units::UnitKind;
+use crate::context::count;
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::paragraph::ParagraphData;
+use crate::range::intersect;
 use crate::{AtomicSizes, LayoutContext};
 use std::ops::Range;
 
@@ -42,13 +44,10 @@ pub(crate) fn is_event(data: &ParagraphData, i: usize) -> bool {
 }
 
 impl NeighborIndex {
-    fn new(data: &ParagraphData, _cx: &mut LayoutContext) -> Self {
+    fn new(data: &ParagraphData, cx: &mut LayoutContext) -> Self {
         let mut box_units = vec![0..0; data.boxes.len()];
         for (i, u) in data.units.iter().enumerate() {
-            #[cfg(test)]
-            {
-                _cx.ruby_measure_visits += 1;
-            }
+            count!(cx.ruby_measure_visits += 1);
             match u.kind {
                 UnitKind::Open { box_index } => box_units[box_index as usize].start = i,
                 UnitKind::Close { box_index } => box_units[box_index as usize].end = i + 1,
@@ -61,10 +60,7 @@ impl NeighborIndex {
                 .enumerate()
                 .map(|(i, u)| (u.level, is_event(data, i))),
         );
-        #[cfg(test)]
-        {
-            _cx.ruby_measure_visits += data.units.len();
-        }
+        count!(cx.ruby_measure_visits += data.units.len());
         let mut content_counts = vec![0];
         for u in &data.units {
             let content = matches!(
@@ -107,10 +103,7 @@ impl NeighborIndex {
                 piece.then_some((i, u.level, content || empty))
             }),
         );
-        #[cfg(test)]
-        {
-            _cx.ruby_measure_visits += data.units.len() * 2;
-        }
+        count!(cx.ruby_measure_visits += data.units.len() * 2);
         Self {
             box_units,
             neighbor_boxes: Default::default(),
@@ -139,10 +132,7 @@ impl NeighborIndex {
                     let mut boxes = Vec::new();
                     let mut cursor = Some(parent);
                     while let Some(b) = cursor {
-                        #[cfg(test)]
-                        {
-                            cx.ruby_measure_visits += 1;
-                        }
+                        count!(cx.ruby_measure_visits += 1);
                         // Common ancestors are not independent neighboring paint.
                         if self.box_units[b as usize].contains(&ruby_start) {
                             break;
@@ -217,10 +207,7 @@ pub(crate) fn visual_neighbours(
             index
                 .neighbors
                 .around(selected, &(unit..unit + 1), data.base_level % 2 == 1);
-        #[cfg(test)]
-        {
-            cx.ruby_measure_visits += index.neighbors.take_visits();
-        }
+        count!(cx.ruby_measure_visits += index.neighbors.take_visits());
         f(before, after, cx);
     }
     if let Some(index) = index {
@@ -238,10 +225,7 @@ pub(crate) fn rightmost_column(
     let index = take_neighbors(data, cx);
     let target = bases[columns.start].start..bases[columns.end - 1].end;
     let (_, right) = index.columns.edges(target, false);
-    #[cfg(test)]
-    {
-        cx.ruby_measure_visits += index.columns.take_visits();
-    }
+    count!(cx.ruby_measure_visits += index.columns.take_visits());
     put_neighbors(data, index, cx);
     right
         .and_then(|u| {
@@ -338,19 +322,13 @@ pub(crate) fn allowances(
     // Move the scalar index out only while querying, so counters and bounded
     // actual advance queries can use the same context without cloning tables.
     let mut index = take_neighbors(data, cx);
-    let target = ruby.units.start.max(selected.start)..ruby.units.end.min(selected.end);
+    let target = intersect(&ruby.units, selected);
     let (before, after) = index
         .neighbors
         .around(selected, &target, data.base_level % 2 == 1);
-    #[cfg(test)]
-    {
-        cx.ruby_measure_visits += index.neighbors.take_visits();
-    }
+    count!(cx.ruby_measure_visits += index.neighbors.take_visits());
     let (first, last) = index.columns.edges(target, data.base_level % 2 == 1);
-    #[cfg(test)]
-    {
-        cx.ruby_measure_visits += index.columns.take_visits();
-    }
+    count!(cx.ruby_measure_visits += index.columns.take_visits());
     let column_at = |unit: Option<usize>| {
         unit.and_then(|u| {
             let i = bases.partition_point(|b| b.end <= u);

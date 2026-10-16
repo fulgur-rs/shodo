@@ -5,6 +5,7 @@
 use super::{Natural, geometry};
 use crate::LayoutContext;
 use crate::analysis::units::UnitKind;
+use crate::context::count;
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::paragraph::{AtomicSizes, ParagraphData};
 
@@ -70,10 +71,7 @@ impl Cursor {
         cx: &mut LayoutContext,
         sat: &mut Saturation,
     ) -> LayoutUnit {
-        #[cfg(test)]
-        {
-            cx.width_unit_visits += 1;
-        }
+        count!(cx.width_unit_visits += 1);
         let costs = data.width_index.as_ref().expect("finalized width index");
         let indexed = LayoutUnit::from_raw((costs.advances[at + 1] - costs.advances[at]) as i32);
         let effects = costs.saturation(&(at..at + 1));

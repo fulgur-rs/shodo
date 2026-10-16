@@ -2,6 +2,7 @@
 use super::MetricIndex;
 use super::scalar::{Bounds, union};
 use crate::LayoutContext;
+use crate::context::count;
 use std::collections::BTreeMap;
 use std::ops::Range;
 
@@ -46,12 +47,9 @@ impl MetricIndex {
         range: &Range<usize>,
         replacements: &BTreeMap<usize, Bounds>,
         removed: &[Range<usize>],
-        _cx: &mut LayoutContext,
+        cx: &mut LayoutContext,
     ) -> Option<Bounds> {
-        #[cfg(test)]
-        {
-            _cx.ruby_measure_visits += 1;
-        }
+        count!(cx.ruby_measure_visits += 1);
         if source.end <= range.start || range.end <= source.start {
             return None;
         }
@@ -90,7 +88,7 @@ impl MetricIndex {
                 range,
                 replacements,
                 removed,
-                _cx,
+                cx,
             ),
             self.ghost_node(
                 node * 2 + 1,
@@ -98,7 +96,7 @@ impl MetricIndex {
                 range,
                 replacements,
                 removed,
-                _cx,
+                cx,
             ),
         )
     }

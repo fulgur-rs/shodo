@@ -141,6 +141,7 @@ mod line;
 mod logical;
 mod output;
 mod paragraph;
+mod range;
 mod sanitize;
 mod shape;
 mod sorted;

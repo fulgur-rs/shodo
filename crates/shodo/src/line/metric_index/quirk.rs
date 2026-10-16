@@ -12,7 +12,9 @@ use super::super::quirk::{ContentCredit, CreditBox, content_credit};
 use super::scalar::{Bounds, profile_bounds, union};
 use crate::LayoutContext;
 use crate::analysis::units::UnitKind;
+use crate::context::count;
 use crate::paragraph::ParagraphData;
+use crate::range::intersect;
 use std::ops::Range;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -367,7 +369,7 @@ impl QuirkIndex {
         else {
             return self.query(&range, |l| l.all, cx);
         };
-        let inside = range.start.max(r.start)..range.end.min(r.end);
+        let inside = intersect(&range, r);
         self.query(&(range.start..inside.start), |l| l.all, cx)
             .join(self.query(&inside, |l| l.bare, cx))
             .join(self.lead(inside.end..range.end, removed, cx))
@@ -391,12 +393,9 @@ impl QuirkIndex {
         source: Range<usize>,
         range: &Range<usize>,
         pick: fn(&Leaf) -> Side,
-        _cx: &mut LayoutContext,
+        cx: &mut LayoutContext,
     ) -> Side {
-        #[cfg(test)]
-        {
-            _cx.ruby_measure_visits += 1;
-        }
+        count!(cx.ruby_measure_visits += 1);
         if source.end <= range.start || range.end <= source.start {
             return Side::default();
         }
@@ -404,8 +403,8 @@ impl QuirkIndex {
             return pick(&self.tree[node]);
         }
         let mid = (source.start + source.end) / 2;
-        self.query_node(node * 2, source.start..mid, range, pick, _cx)
-            .join(self.query_node(node * 2 + 1, mid..source.end, range, pick, _cx))
+        self.query_node(node * 2, source.start..mid, range, pick, cx)
+            .join(self.query_node(node * 2 + 1, mid..source.end, range, pick, cx))
     }
 }
 

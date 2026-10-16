@@ -1,6 +1,7 @@
 //! Bounded edge windows shared by candidate measurements and materialization.
 use super::reshape::EdgeOverlay;
 use crate::analysis::units::UnitKind;
+use crate::context::count;
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::limits::{WarningKind, WarningSink};
 use crate::paragraph::ParagraphData;
@@ -1040,11 +1041,8 @@ pub(super) fn candidate(
         sat,
         &mut (),
         lookup,
-        |_, _cx, _| {
-            #[cfg(test)]
-            {
-                _cx.edge_shapes.measurement_misses += 1;
-            }
+        |_, cx, _| {
+            count!(cx.edge_shapes.measurement_misses += 1);
             None
         },
         |_, cx, sat| {
@@ -1076,10 +1074,7 @@ pub(super) fn candidate(
             (delta, valid)
         },
     );
-    #[cfg(test)]
-    if result.replayed {
-        cx.edge_shapes.measurement_hits += 1;
-    }
+    count!(cx.edge_shapes.measurement_hits += if result.replayed { 1 } else { 0 });
     result.value
 }
 

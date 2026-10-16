@@ -3,6 +3,7 @@ use crate::analysis::units::UnitKind;
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::output::BreakReason;
 use crate::paragraph::ParagraphData;
+use crate::range::intersect;
 use crate::style::{LineOptions, TextAlign, TextAlignLast, TextJustify};
 use std::ops::Range;
 use unicode_bidi::{BidiInfo, Level};
@@ -210,7 +211,7 @@ fn inter_character_opportunities(
     let mut opportunities = Vec::new();
     let mut previous = None;
     for Cluster { point, text } in clusters {
-        let text = text.start.max(content.start)..text.end.min(content.end);
+        let text = intersect(text, &content);
         let (internal, first, last) =
             super::spacing::justification_metadata(data, text.clone(), visible_hyphen);
         if let Some((first, first_offset)) = first {
@@ -249,7 +250,7 @@ fn inter_word_opportunities(
         if data.combine_at_text(text.start).is_some() {
             continue;
         }
-        let text = text.start.max(content.start)..text.end.min(content.end);
+        let text = intersect(text, &content);
         if text.start >= text.end {
             continue;
         }

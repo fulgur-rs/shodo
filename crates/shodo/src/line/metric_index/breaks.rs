@@ -5,6 +5,7 @@ use super::super::metrics::RecordProfile;
 use super::quirk::QuirkIndex;
 use super::scalar::Summary;
 use crate::LayoutContext;
+use crate::context::count;
 use crate::paragraph::ParagraphData;
 use std::ops::Range;
 
@@ -170,10 +171,7 @@ fn eligible(
     trailing: Option<usize>,
     cx: &mut LayoutContext,
 ) -> bool {
-    #[cfg(test)]
-    {
-        cx.ruby_break_credit_queries += 1;
-    }
+    count!(cx.ruby_break_credit_queries += 1);
     let range = start..unit + 1;
     let (_, lo) = q.ending_break(data, &range).expect("styled break window");
     if q.break_parent_edge(data, &range, unit) {
@@ -196,15 +194,12 @@ fn update(tree: &mut [Summary], index: usize, summary: Summary) {
     }
 }
 
-fn query(tree: &[Summary], range: Range<usize>, _cx: &mut LayoutContext) -> Summary {
+fn query(tree: &[Summary], range: Range<usize>, cx: &mut LayoutContext) -> Summary {
     let size = tree.len() / 2;
     let (mut lo, mut hi) = (size + range.start, size + range.end);
     let mut summary = Summary::default();
     while lo < hi {
-        #[cfg(test)]
-        {
-            _cx.ruby_measure_visits += 1;
-        }
+        count!(cx.ruby_measure_visits += 1);
         if lo & 1 != 0 {
             summary = summary.join(tree[lo]);
             lo += 1;

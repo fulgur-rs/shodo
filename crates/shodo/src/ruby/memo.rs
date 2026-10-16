@@ -64,6 +64,7 @@
 //!   reuse against that value;
 //! - no recording encloses `PartialLine::index`, so the reshape log has no
 //!   open frame across the rollback (and `finish` folds any stray frame).
+use crate::context::count;
 use crate::geometry::LayoutUnit;
 use crate::line::replay::Effects;
 use crate::paragraph::{AtomicSizes, ParagraphData};
@@ -154,10 +155,7 @@ impl RubyMemo {
             // Dropping entries only means measuring again, which is exactly
             // what the reference path does.
             self.entries.clear();
-            #[cfg(test)]
-            {
-                self.overflow_clears += 1;
-            }
+            count!(self.overflow_clears += 1);
         }
         self.entries.insert(key, entry);
     }
