@@ -610,7 +610,7 @@ pub(super) fn width(
     }
     let (natural, windows) = natural(data, range.clone(), atomics, cx, sat);
     let delta = match windows {
-        Some(windows) => super::windows::cost(&windows, range.end, sat),
+        Some(windows) => super::windows::cost(data, &windows, range.end, sat),
         None => super::windows::delta(data, range.start, range.end, cx, sat),
     };
     natural
@@ -1185,6 +1185,113 @@ mod tests {
                     assert_eq!(actual, expected, "{direction:?}: {start}..{end}");
                 }
             }
+        }
+    }
+
+    #[test]
+    fn selected_hyphen_finish_preserves_saturated_spacing_across_query_history() {
+        let fonts = fonts();
+        fonts
+            .register_face(
+                crate::test_support::fonts::LATIN.to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: "Shodo Fixture Latin".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        for tracking in [-1.5, 1.5] {
+            let root = InlineStyle {
+                font_families: vec![FontFamily::Named("Shodo Fixture Latin".into())],
+                font_size: 12.0,
+                letter_spacing: tracking,
+                ..Default::default()
+            };
+            let mut builder = ParagraphBuilder::new(
+                &ParagraphStyle {
+                    root,
+                    ..Default::default()
+                },
+                &Limits::default(),
+            );
+            builder.push_text(TextSource::Generated { node: NodeId(1) }, "AVab\u{ad}cd");
+            let mut p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+            let data = std::sync::Arc::get_mut(&mut p.data).unwrap();
+            // A single fixed-point advance at the boundary exercises signed
+            // spacing and an actual discretionary edge replacement together.
+            data.unit_spacing[0].word = LayoutUnit::MAX;
+            prepare(data, &mut LayoutContext::new());
+            let end = data
+                .units
+                .iter()
+                .position(|u| u.break_after == crate::analysis::units::BreakClass::Hyphen)
+                .unwrap()
+                + 1;
+            let measure = |cx: &mut LayoutContext| {
+                cx.begin_reshape_operation();
+                let mut sat = Saturation::default();
+                let line = selected(
+                    data,
+                    0,
+                    end,
+                    LayoutUnit::ZERO,
+                    LayoutUnit::ZERO,
+                    0,
+                    None,
+                    LayoutUnit::MAX,
+                    Some(end),
+                    &AtomicSizes::EMPTY,
+                    cx,
+                    &mut sat,
+                );
+                assert!(line.overlays.iter().any(|w| w.hyphen.is_some()));
+                (line.content, sat, cx.edge_reshape_spent, cx.take_warnings())
+            };
+            let mut cx = LayoutContext::new();
+            let cold = measure(&mut cx);
+            assert!(cold.1.saturated > 0);
+            assert!(cold.2 > 0);
+            let mut scalar_cx = LayoutContext::new();
+            scalar_cx.begin_reshape_operation();
+            let mut scalar_sat = Saturation::default();
+            let scalar = width(
+                data,
+                0..end,
+                &AtomicSizes::EMPTY,
+                &mut scalar_cx,
+                &mut scalar_sat,
+            );
+            assert_eq!(
+                (
+                    scalar,
+                    scalar_sat,
+                    scalar_cx.edge_reshape_spent,
+                    scalar_cx.take_warnings()
+                ),
+                cold,
+                "scalar tracking={tracking}",
+            );
+            assert_eq!(measure(&mut cx), cold, "warm tracking={tracking}");
+            let mut other_sat = Saturation::default();
+            let _ = selected(
+                data,
+                1,
+                data.units.len(),
+                LayoutUnit::ZERO,
+                LayoutUnit::ZERO,
+                0,
+                None,
+                LayoutUnit::MAX,
+                None,
+                &AtomicSizes::EMPTY,
+                &mut cx,
+                &mut other_sat,
+            );
+            cx.take_warnings();
+            assert_eq!(measure(&mut cx), cold, "interleaved tracking={tracking}");
+            cx.ruby_ranges.vacate_slots();
+            assert_eq!(measure(&mut cx), cold, "vacated tracking={tracking}");
         }
     }
 

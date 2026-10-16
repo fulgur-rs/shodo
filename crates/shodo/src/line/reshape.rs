@@ -310,9 +310,15 @@ fn materialize(
             );
             continue;
         }
-        for (index, _, new) in window.changes {
-            let new = new.add(data.unit_spacing[index].word, sat);
-            let old = scan.widths[index - start];
+        for (index, old, new) in window.changes {
+            let (old, new) = if update_content {
+                (
+                    scan.widths[index - start],
+                    new.add(data.unit_spacing[index].word, sat),
+                )
+            } else {
+                super::windows::spaced_change(data, index, old, new, sat)
+            };
             scan.widths[index - start] = new;
             if index < scan.hang_start {
                 if update_content {

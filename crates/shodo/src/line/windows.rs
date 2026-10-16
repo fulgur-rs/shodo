@@ -14,8 +14,13 @@ pub(super) struct Window {
     pub(super) changes: Vec<(usize, LayoutUnit, LayoutUnit)>,
 }
 impl Window {
-    pub(super) fn delta(&self, through: usize, sat: &mut Saturation) -> LayoutUnit {
-        changes_delta(&self.changes, through, sat)
+    pub(super) fn delta(
+        &self,
+        data: &ParagraphData,
+        through: usize,
+        sat: &mut Saturation,
+    ) -> LayoutUnit {
+        changes_delta(data, &self.changes, through, sat)
     }
 }
 
@@ -28,8 +33,8 @@ struct MeasuredWindow {
 }
 
 impl MeasuredWindow {
-    fn delta(&self, through: usize, sat: &mut Saturation) -> LayoutUnit {
-        changes_delta(&self.changes, through, sat)
+    fn delta(&self, data: &ParagraphData, through: usize, sat: &mut Saturation) -> LayoutUnit {
+        changes_delta(data, &self.changes, through, sat)
     }
 }
 
@@ -109,16 +114,34 @@ impl WindowOutput for MeasuredWindow {
 }
 
 fn changes_delta(
+    data: &ParagraphData,
     changes: &[(usize, LayoutUnit, LayoutUnit)],
     through: usize,
     sat: &mut Saturation,
 ) -> LayoutUnit {
-    changes
-        .iter()
-        .filter(|(i, _, _)| *i < through)
-        .fold(LayoutUnit::ZERO, |p, (_, old, new)| {
-            p.add(new.sub(*old, sat), sat)
-        })
+    changes.iter().filter(|(i, _, _)| *i < through).fold(
+        LayoutUnit::ZERO,
+        |p, &(index, old, new)| {
+            let (old, new) = spaced_change(data, index, old, new, sat);
+            p.add(new.sub(old, sat), sat)
+        },
+    )
+}
+
+/// Unit widths before/after an edge replacement, including unchanged word
+/// spacing. The original unit's saturation was charged by its producer; only
+/// the replacement conversion is new work. Subtracting glyph contributions
+/// alone is not equivalent when adding word spacing saturates.
+pub(super) fn spaced_change(
+    data: &ParagraphData,
+    index: usize,
+    old: LayoutUnit,
+    new: LayoutUnit,
+    sat: &mut Saturation,
+) -> (LayoutUnit, LayoutUnit) {
+    let word = data.unit_spacing[index].word;
+    let old = old.add(word, &mut Saturation::default());
+    (old, new.add(word, sat))
 }
 
 pub(super) fn hyphen(
@@ -144,10 +167,15 @@ pub(super) fn hyphen(
     Some(windows)
 }
 
-pub(super) fn cost(windows: &[Window], end: usize, sat: &mut Saturation) -> LayoutUnit {
+pub(super) fn cost(
+    data: &ParagraphData,
+    windows: &[Window],
+    end: usize,
+    sat: &mut Saturation,
+) -> LayoutUnit {
     windows
         .iter()
-        .fold(LayoutUnit::ZERO, |p, w| p.add(w.delta(end, sat), sat))
+        .fold(LayoutUnit::ZERO, |p, w| p.add(w.delta(data, end, sat), sat))
 }
 
 fn first(data: &ParagraphData, at: usize, end: usize) -> Option<usize> {
@@ -970,7 +998,7 @@ pub(super) fn delta(
 ) -> LayoutUnit {
     measure_edit::<MeasuredWindow>(data, start, end, None, cx, sat)
         .iter()
-        .fold(LayoutUnit::ZERO, |p, w| p.add(w.delta(end, sat), sat))
+        .fold(LayoutUnit::ZERO, |p, w| p.add(w.delta(data, end, sat), sat))
 }
 
 fn covers_partial_edges<'a>(
@@ -1021,7 +1049,7 @@ pub(super) fn candidate(
     let windows = measure_edit::<MeasuredWindow>(data, start, end, None, cx, sat);
     let delta = windows
         .iter()
-        .fold(LayoutUnit::ZERO, |p, w| p.add(w.delta(end, sat), sat));
+        .fold(LayoutUnit::ZERO, |p, w| p.add(w.delta(data, end, sat), sat));
     let covered = covers_partial_edges(data, start, end, windows.iter().map(|w| &w.text));
     let edge_windows = !windows.is_empty();
     drop(windows);

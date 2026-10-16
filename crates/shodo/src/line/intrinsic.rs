@@ -683,7 +683,7 @@ impl Paragraph {
             }
             let hyphen = if u.break_after == BreakClass::Hyphen {
                 super::hyphen::line(data, word_unit, i + 1, cx, &mut sat)
-                    .map(|windows| super::windows::cost(&windows, i + 1, &mut sat))
+                    .map(|windows| super::windows::cost(data, &windows, i + 1, &mut sat))
             } else {
                 None
             };
