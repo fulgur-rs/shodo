@@ -1,7 +1,9 @@
 //! Candidate column widths derived from the actual accepted base/lane windows.
 use crate::LayoutContext;
+use crate::context::count;
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::paragraph::{AtomicSizes, ParagraphData};
+use crate::range::intersect;
 use std::ops::Range;
 
 pub(crate) struct SpanWidth {
@@ -83,11 +85,6 @@ pub(crate) struct LaneMeasure {
     pub(crate) block_size: LayoutUnit,
     pub(crate) cross_width: Option<LayoutUnit>,
     pub(crate) overhang: (LayoutUnit, LayoutUnit),
-}
-
-pub(super) fn intersect(a: &Range<usize>, b: &Range<usize>) -> Range<usize> {
-    let start = a.start.max(b.start);
-    start..a.end.min(b.end).max(start)
 }
 
 /// Prepared columns are in source-unit order; trim empty boundary columns
@@ -186,10 +183,7 @@ pub(crate) fn candidate_adjustment(
     if let Some(w) = walk.as_ref() {
         // A restarted walk (a new start) visits its containers again.
         super::line_work::charge(cx, w.steps());
-        #[cfg(test)]
-        {
-            cx.ruby_walk_steps += w.steps();
-        }
+        count!(cx.ruby_walk_steps += w.steps());
         super::line_work::walked(cx, w.visited().len());
     }
     let key = super::memo::MemoKey::new(data, atomics, start, through);
@@ -250,10 +244,7 @@ pub(crate) fn candidate_adjustment(
             adjustment
         },
     );
-    #[cfg(test)]
-    if core.replayed {
-        cx.ruby_memo_hits += 1;
-    }
+    count!(cx.ruby_memo_hits += if core.replayed { 1 } else { 0 });
     let Some(core) = core.value else {
         cx.ruby_memo.put_walk(walk);
         return LayoutUnit::ZERO;
@@ -313,7 +304,7 @@ pub(super) fn walk(
     data: &ParagraphData,
     start: usize,
     end: usize,
-    _cx: &mut LayoutContext,
+    cx: &mut LayoutContext,
 ) -> (usize, Vec<usize>) {
     let mut through = end;
     let mut containers = Vec::new();
@@ -323,10 +314,7 @@ pub(super) fn walk(
         &mut through,
         |container, through| {
             let ruby = &data.ruby.containers[container];
-            #[cfg(test)]
-            {
-                _cx.ruby_measure_visits += 1;
-            }
+            count!(cx.ruby_measure_visits += 1);
             let clipped = (*through).min(ruby.units.end);
             *through = (*through).max(ruby.cuts[cut_at_or_after(ruby, clipped)].unit);
             containers.push(container);
@@ -395,17 +383,13 @@ impl<'a> Completed<'a> {
     fn contained<'r>(
         &'r self,
         range: &'r Range<usize>,
-        _cx: &'r mut LayoutContext,
+        cx: &'r mut LayoutContext,
     ) -> impl Iterator<Item = &'a RubyFragmentMeasure> + 'r {
         let fragments = self.fragments;
         self.index
             .range((range.start, 0)..(range.end, 0))
             .map(move |(_, &index)| {
-                #[cfg(test)]
-                {
-                    _cx.ruby_measure_visits += 1;
-                    _cx.ruby_descendant_reads += 1;
-                }
+                count!(cx.ruby_measure_visits += 1; cx.ruby_descendant_reads += 1);
                 &fragments[index]
             })
             .filter(move |nested| nested.units.end <= range.end)
@@ -502,18 +486,12 @@ pub(super) fn measure_one(
     sat: &mut Saturation,
 ) -> Option<RubyFragmentMeasure> {
     let ruby = &data.ruby.containers[container];
-    #[cfg(test)]
-    {
-        cx.ruby_measure_visits += 1;
-    }
+    count!(cx.ruby_measure_visits += 1);
     let units = intersect(selected, &ruby.units);
     if units.is_empty() {
         return None;
     }
-    #[cfg(test)]
-    {
-        cx.ruby_container_measures += 1;
-    }
+    count!(cx.ruby_container_measures += 1);
     super::line_work::charge(cx, 1);
     let begin = &ruby.cuts[cut_at_or_before(ruby, units.start)];
     let finish = &ruby.cuts[cut_at_or_after(ruby, units.end)];
@@ -526,10 +504,7 @@ pub(super) fn measure_one(
         .collect();
     let mut base_widths = Vec::with_capacity(bases.len());
     for (column, base) in source_bases.iter().zip(&bases) {
-        #[cfg(test)]
-        {
-            cx.ruby_column_visits += 1;
-        }
+        count!(cx.ruby_column_visits += 1);
         let width = crate::line::ruby_base_width(
             data,
             column.units.clone(),
@@ -544,10 +519,7 @@ pub(super) fn measure_one(
     let mut lanes = Vec::new();
     for index in selected_lanes(ruby, &source_columns) {
         let lane = &ruby.lanes[index];
-        #[cfg(test)]
-        {
-            cx.ruby_lane_visits += 1;
-        }
+        count!(cx.ruby_lane_visits += 1);
         let range = begin.lanes[index]..finish.lanes[index];
         if range.is_empty() {
             continue;

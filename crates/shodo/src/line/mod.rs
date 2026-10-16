@@ -1,5 +1,6 @@
 //! Line breaking.
 
+use crate::context::count;
 mod align;
 pub(crate) mod autospace;
 pub(crate) mod cache;
@@ -493,10 +494,7 @@ impl Paragraph {
             let handled = (u64::from(cursor.0) + 1).min(data.floats.len() as u64) as usize;
             if begin < handled {
                 for (index, (_, node)) in data.floats[begin..handled].iter().enumerate() {
-                    #[cfg(test)]
-                    {
-                        cx.float_search_visits += 1;
-                    }
+                    count!(cx.float_search_visits += 1);
                     displaced.push((*node, FloatCursor((begin + index) as u32)));
                 }
             }

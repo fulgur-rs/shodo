@@ -21,6 +21,7 @@
 //! nothing and would otherwise look replayable.
 
 use crate::LayoutContext;
+use crate::context::count;
 use crate::geometry::Saturation;
 
 /// Aggregate of the reshape budget charges of one recorded measurement.
@@ -289,10 +290,7 @@ fn apply(
         "replay target frame {frame:?} is not open"
     );
     if !gate(cx, effects) {
-        #[cfg(test)]
-        {
-            cx.ruby_replay_refusals += 1;
-        }
+        count!(cx.ruby_replay_refusals += 1);
         return false;
     }
     cx.edge_reshape_spent = cx.edge_reshape_spent.saturating_add(effects.charges.bytes);

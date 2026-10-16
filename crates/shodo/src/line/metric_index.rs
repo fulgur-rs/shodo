@@ -1,6 +1,8 @@
 //! Real scalar line profiles, with bounded selected edge replacements.
 //! Top/bottom groups are disjoint; only clipped or replaced groups need a
 //! fresh range query. Every other group reuses its cached complete height.
+use crate::context::count;
+use crate::range::intersect;
 mod breaks;
 mod content;
 mod ghost;
@@ -181,10 +183,7 @@ impl MetricIndex {
             Vec::new()
         };
         for (i, u) in data.units.iter().enumerate() {
-            #[cfg(test)]
-            {
-                cx.ruby_measure_visits += 2;
-            }
+            count!(cx.ruby_measure_visits += 2);
             let active = match u.kind {
                 UnitKind::Cluster { .. }
                 | UnitKind::Atomic { .. }
@@ -355,10 +354,7 @@ impl MetricIndex {
         }
         let mut contents = vec![ContentSummary::default(); size * 2];
         for (i, raw) in record_content.into_iter().enumerate() {
-            #[cfg(test)]
-            {
-                cx.ruby_measure_visits += 1;
-            }
+            count!(cx.ruby_measure_visits += 1);
             let mut leaf = ContentSummary {
                 raw,
                 ..Default::default()
@@ -475,10 +471,7 @@ impl MetricIndex {
                     continue;
                 }
                 let at = window.changes.partition_point(|(i, _, _)| {
-                    #[cfg(test)]
-                    {
-                        cx.ruby_measure_visits += 1;
-                    }
+                    count!(cx.ruby_measure_visits += 1);
                     data.units[*i].text.end <= run.text.start
                 });
                 let Some(owner) = window
@@ -562,10 +555,7 @@ impl MetricIndex {
             let first = self.groups.partition_point(|g| g.units.end <= r.start);
             let last = self.groups.partition_point(|g| g.units.start < r.end);
             for i in first..last {
-                #[cfg(test)]
-                {
-                    cx.ruby_measure_visits += 1;
-                }
+                count!(cx.ruby_measure_visits += 1);
                 affected.insert(i);
             }
         }
@@ -632,12 +622,9 @@ impl MetricIndex {
                 .copied()
                 .take_while(|i| self.groups[*i].units.start < range.end)
             {
-                #[cfg(test)]
-                {
-                    cx.ruby_measure_visits += 1;
-                }
+                count!(cx.ruby_measure_visits += 1);
                 let g = &self.groups[i];
-                let selected = range.start.max(g.units.start)..range.end.min(g.units.end);
+                let selected = intersect(range, &g.units);
                 let bounds = self
                     .breaks
                     .query(data, q, &selected, range.start, t, cx)
@@ -660,10 +647,7 @@ impl MetricIndex {
                 if !ancestors.insert(b) {
                     break;
                 }
-                #[cfg(test)]
-                {
-                    cx.ruby_measure_visits += 1;
-                }
+                count!(cx.ruby_measure_visits += 1);
                 let p = self.boxes[b as usize];
                 let e = data.boxes[b as usize].edges;
                 let active = (e.padding.block_start + e.padding.block_end) != 0.0
@@ -722,7 +706,7 @@ impl MetricIndex {
         let mut partial = crate::hashing::FastMap::default();
         for i in affected {
             let group = &self.groups[i];
-            let selected = range.start.max(group.units.start)..range.end.min(group.units.end);
+            let selected = intersect(range, &group.units);
             let mut raw = union(
                 self.query(&selected, &replacements, &BTreeSet::new(), &removed, cx)
                     .raw,

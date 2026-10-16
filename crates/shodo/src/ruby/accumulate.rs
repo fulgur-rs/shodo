@@ -167,10 +167,12 @@
 use super::geometry::Bounds;
 use super::measure::Descendants;
 use crate::LayoutContext;
+use crate::context::count;
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::line::metric_index::{ProfileShare, SelectionDigest};
 use crate::line::replay::Effects;
 use crate::paragraph::{AtomicSizes, ParagraphData};
+use crate::range::intersect;
 use std::collections::BTreeSet;
 use std::ops::Range;
 
@@ -748,15 +750,12 @@ fn mark(
     top: usize,
     pos: u32,
     _reason: Dirty,
-    _cx: &mut LayoutContext,
+    cx: &mut LayoutContext,
 ) -> bool {
     if pos as usize >= top || !dirty.insert(pos) {
         return false;
     }
-    #[cfg(test)]
-    {
-        _cx.ruby_dirty[_reason as usize] += 1;
-    }
+    count!(cx.ruby_dirty[_reason as usize] += 1);
     true
 }
 
@@ -899,10 +898,7 @@ impl Step<'_> {
             acc.digest = digest;
         } else {
             acc.reset(acc.key, cx.ruby_ranges.epoch());
-            #[cfg(test)]
-            {
-                cx.ruby_accumulator_resets += 1;
-            }
+            count!(cx.ruby_accumulator_resets += 1);
         }
     }
 
@@ -918,9 +914,7 @@ impl Step<'_> {
         let top = self.top;
         for &pos in acc.clipped.range(..top as u32) {
             let ruby = &self.data.ruby.containers[self.containers[pos as usize]];
-            if super::measure::intersect(&self.selected, &ruby.units)
-                != acc.entries[pos as usize].units
-            {
+            if intersect(&self.selected, &ruby.units) != acc.entries[pos as usize].units {
                 mark(dirty, top, pos, Dirty::Clipped, cx);
             }
         }
@@ -1054,10 +1048,7 @@ impl Step<'_> {
                             self.total = self.total.add(entry.adjustment, sat);
                         }
                     }
-                    #[cfg(test)]
-                    {
-                        cx.ruby_sequential_replays += 1;
-                    }
+                    count!(cx.ruby_sequential_replays += 1);
                 }
                 #[cfg(test)]
                 {
@@ -1248,16 +1239,12 @@ impl Tree<'_> {
         span: Range<usize>,
         range: &Range<usize>,
         mut width: LayoutUnit,
-        _cx: &mut LayoutContext,
+        cx: &mut LayoutContext,
         sat: &mut Saturation,
     ) -> LayoutUnit {
         for pos in span {
             let entry = &self.acc.entries[pos];
-            #[cfg(test)]
-            {
-                _cx.ruby_measure_visits += 1;
-                _cx.ruby_descendant_reads += 1;
-            }
+            count!(cx.ruby_measure_visits += 1; cx.ruby_descendant_reads += 1);
             if entry.present && entry.units.end <= range.end {
                 width = width.add(entry.adjustment, sat);
             }
@@ -1275,50 +1262,34 @@ impl Descendants for Tree<'_> {
         &self,
         range: &Range<usize>,
         width: LayoutUnit,
-        _cx: &mut LayoutContext,
+        cx: &mut LayoutContext,
         sat: &mut Saturation,
     ) -> LayoutUnit {
         let span = self.span(range);
         let node = self.acc.query(span.clone());
-        #[cfg(test)]
-        {
-            _cx.ruby_measure_visits += 1;
-        }
+        count!(cx.ruby_measure_visits += 1);
         if node.max_end <= range.end && node.forward.fits(width) {
-            #[cfg(test)]
-            {
-                _cx.ruby_descendant_reads += 1;
-            }
+            count!(cx.ruby_descendant_reads += 1);
             return node.forward.total(width);
         }
-        self.add_each(span, range, width, _cx, sat)
+        self.add_each(span, range, width, cx, sat)
     }
 
     /// `Bounds::union` is a min/max, so the tree's union equals the
     /// sequential one in any grouping once every present position passes
     /// the end filter; otherwise the reference loop.
-    fn union_areas(&self, range: &Range<usize>, area: Bounds, _cx: &mut LayoutContext) -> Bounds {
+    fn union_areas(&self, range: &Range<usize>, area: Bounds, cx: &mut LayoutContext) -> Bounds {
         let span = self.span(range);
         let node = self.acc.query(span.clone());
-        #[cfg(test)]
-        {
-            _cx.ruby_measure_visits += 1;
-        }
+        count!(cx.ruby_measure_visits += 1);
         if node.max_end <= range.end {
-            #[cfg(test)]
-            {
-                _cx.ruby_descendant_reads += 1;
-            }
+            count!(cx.ruby_descendant_reads += 1);
             return node.area.map_or(area, |a| area.union(a));
         }
         let mut area = area;
         for pos in span {
             let entry = &self.acc.entries[pos];
-            #[cfg(test)]
-            {
-                _cx.ruby_measure_visits += 1;
-                _cx.ruby_descendant_reads += 1;
-            }
+            count!(cx.ruby_measure_visits += 1; cx.ruby_descendant_reads += 1);
             if entry.present && entry.units.end <= range.end {
                 area = area.union(entry.whole_area);
             }

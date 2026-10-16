@@ -1,8 +1,10 @@
 //! Content and paint geometry for the selected line profile.
 use super::super::metrics::RecordProfile;
 use super::{MetricIndex, Selection};
+use crate::context::count;
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::paragraph::ParagraphData;
+use crate::range::intersect;
 use crate::{AtomicSizes, LayoutContext};
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -133,12 +135,9 @@ impl MetricIndex {
         replacements: &BTreeMap<usize, ContentSummary>,
         excluded: &[Range<usize>],
         removed: &[Range<usize>],
-        _cx: &mut LayoutContext,
+        cx: &mut LayoutContext,
     ) -> ContentSummary {
-        #[cfg(test)]
-        {
-            _cx.ruby_measure_visits += 1;
-        }
+        count!(cx.ruby_measure_visits += 1);
         if source.end <= range.start
             || range.end <= source.start
             || excluded
@@ -184,7 +183,7 @@ impl MetricIndex {
             replacements,
             excluded,
             removed,
-            _cx,
+            cx,
         )
         .join(self.content_node(
             node * 2 + 1,
@@ -193,7 +192,7 @@ impl MetricIndex {
             replacements,
             excluded,
             removed,
-            _cx,
+            cx,
         ))
     }
     fn group_delta(&self, data: &ParagraphData, selection: &Selection, i: usize) -> f64 {
@@ -251,7 +250,7 @@ impl MetricIndex {
         );
         for i in selection.partial.keys() {
             let g = &self.groups[*i];
-            let selected = range.start.max(g.units.start)..range.end.min(g.units.end);
+            let selected = intersect(range, &g.units);
             if selected.start < selected.end {
                 let raw = self
                     .content_query(
@@ -567,13 +566,10 @@ pub(crate) fn content_shared(
                     super::super::windows::measure(data, selected.start, selected.end, cx, sat)
                 });
             let selection = index.select(data, &selected, &windows, cx, sat);
-            #[cfg(test)]
-            {
-                cx.ruby_profile_selects += 1;
-            }
+            count!(cx.ruby_profile_selects += 1);
             (Some(selection), crate::line::replay::Store::All)
         },
-        |(index, share), _cx, selection, finished| {
+        |(index, share), cx, selection, finished| {
             if let Some(d) = share.detached.as_mut() {
                 d.fresh += 1;
                 d.note.calls += 1;
@@ -595,10 +591,7 @@ pub(crate) fn content_shared(
                     None
                 }
                 None => {
-                    #[cfg(test)]
-                    if parent.is_some() {
-                        _cx.ruby_profile_warnings += 1;
-                    }
+                    count!(cx.ruby_profile_warnings += if parent.is_some() { 1 } else { 0 });
                     share.entry = None;
                     Some(selection)
                 }
@@ -680,10 +673,7 @@ pub(crate) fn content_shared(
                     if !seen.insert(b) {
                         break;
                     }
-                    #[cfg(test)]
-                    {
-                        cx.ruby_measure_visits += 1;
-                    }
+                    count!(cx.ruby_measure_visits += 1);
                     // A column includes its own descendant inlines, but does not
                     // inherit an independent containing inline's painted area.
                     if let Some(limit) = boundary {

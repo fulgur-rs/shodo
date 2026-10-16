@@ -1,6 +1,7 @@
 use super::{Scan, decoration, hyphen, scan::scan};
 use crate::analysis::units::{BreakClass, UnitKind};
 use crate::context::LayoutContext;
+use crate::context::count;
 use crate::geometry::{LayoutUnit, Saturation};
 use crate::node::NodeId;
 use crate::paragraph::{
@@ -41,10 +42,7 @@ impl Candidates {
             .is_some_and(|i| self.candidates[*i].1 >= required)
         {
             self.popped.push(self.frontier.pop().unwrap());
-            #[cfg(test)]
-            {
-                self.visits += 1;
-            }
+            count!(self.visits += 1);
         }
         self.undo.push(begin..self.popped.len());
         self.frontier.push(self.candidates.len());
@@ -56,36 +54,24 @@ impl Candidates {
     fn select(&mut self, through: usize, limit: LayoutUnit) -> Option<usize> {
         while self.active > 0 && self.candidates[self.active - 1].0 > through {
             self.active -= 1;
-            #[cfg(test)]
-            {
-                self.visits += 1;
-            }
+            count!(self.visits += 1);
             let removed = self.frontier.pop();
             debug_assert_eq!(removed, Some(self.active));
             for i in self.popped[self.undo[self.active].clone()].iter().rev() {
                 self.frontier.push(*i);
-                #[cfg(test)]
-                {
-                    self.visits += 1;
-                }
+                count!(self.visits += 1);
             }
         }
         self.fitting = self.fitting.min(self.frontier.len());
         while self.fitting > 0 && self.candidates[self.frontier[self.fitting - 1]].1 > limit {
             self.fitting -= 1;
-            #[cfg(test)]
-            {
-                self.visits += 1;
-            }
+            count!(self.visits += 1);
         }
         while self.fitting < self.frontier.len()
             && self.candidates[self.frontier[self.fitting]].1 <= limit
         {
             self.fitting += 1;
-            #[cfg(test)]
-            {
-                self.visits += 1;
-            }
+            count!(self.visits += 1);
         }
         self.fitting
             .checked_sub(1)
@@ -219,10 +205,7 @@ impl PartialLine {
         // Widths are measured from the line's indented start, as the scan
         // measures them, and stored relative to the indent.
         for (k, u) in units.iter().enumerate() {
-            #[cfg(test)]
-            {
-                cx.cache_prepare_visits += 1;
-            }
+            count!(cx.cache_prepare_visits += 1);
             let at = start + k;
             let w = indexed.advance(data, at, atomics, cx, sat);
             if w < LayoutUnit::ZERO {
@@ -441,10 +424,7 @@ pub(super) fn resolve(
             cx,
             sat,
         );
-        #[cfg(test)]
-        {
-            cx.cache_visits += scanned.end - start;
-        }
+        count!(cx.cache_visits += scanned.end - start);
         let units = &para.data.units[start..scanned.end];
         let safe = indent >= LayoutUnit::ZERO
             && scanned.widths.iter().all(|w| *w >= LayoutUnit::ZERO)
@@ -490,10 +470,7 @@ pub(super) fn resolve(
             // Ordinary first calls retain one raw result. They do not repeat
             // unit measurement or build candidate searches until a retry
             // actually needs a smaller width.
-            #[cfg(test)]
-            {
-                cx.raw_scan_clones += 1;
-            }
+            count!(cx.raw_scan_clones += 1);
             let result = cached.scan.clone();
             cx.partial = Some(cached);
             return Ok(result);
@@ -529,10 +506,7 @@ pub(super) fn resolve(
                 return Ok(cached.scan);
             }
             cached.cursor = constraint.floats_placed_through;
-            #[cfg(test)]
-            {
-                cx.raw_scan_clones += 1;
-            }
+            count!(cx.raw_scan_clones += 1);
             let result = cached.scan.clone();
             cx.partial = Some(cached);
             return Ok(result);
@@ -552,10 +526,7 @@ pub(super) fn resolve(
             // on the retained line (`ruby::line_work`).
             cx.ruby_line_work = ruby_work_before;
             cx.ruby_memo.clear();
-            #[cfg(test)]
-            {
-                cx.index_failures += 1;
-            }
+            count!(cx.index_failures += 1);
             if valid {
                 return resolve(
                     para,

@@ -11,6 +11,7 @@
 //! a `blocks` hit replays the recorded effects of its measurement, and the
 //! range costs and tab prefix keep their saturation per unit and per tab
 //! step, charged for the units and tabs of each query's own range.
+use crate::context::count;
 mod cursor;
 #[cfg(test)]
 #[path = "range_cursor_tests.rs"]
@@ -418,10 +419,7 @@ fn build(data: &ParagraphData, atomics: &AtomicSizes, cx: &mut LayoutContext) ->
     let mut running = Saturation::default();
     let mut warnings = crate::limits::WarningSink::new(Some(0));
     for &i in &index.atomics {
-        #[cfg(test)]
-        {
-            cx.ruby_measure_visits += 1;
-        }
+        count!(cx.ruby_measure_visits += 1);
         let UnitKind::Atomic { node } = data.units[i].kind else {
             unreachable!()
         };
@@ -457,10 +455,7 @@ fn build(data: &ParagraphData, atomics: &AtomicSizes, cx: &mut LayoutContext) ->
 }
 
 fn build_index(data: &ParagraphData, cx: &mut LayoutContext) -> Index {
-    #[cfg(test)]
-    {
-        cx.ruby_range_build_units += data.units.len();
-    }
+    count!(cx.ruby_range_build_units += data.units.len());
     let mut advances = vec![0_i64];
     let mut hanging_advances = vec![0_i64];
     let mut hanging_units = Vec::new();
@@ -472,10 +467,7 @@ fn build_index(data: &ParagraphData, cx: &mut LayoutContext) -> Index {
     let mut running = Saturation::default();
     let mut tabs = Vec::new();
     for (i, unit) in data.units.iter().enumerate() {
-        #[cfg(test)]
-        {
-            cx.ruby_measure_visits += 1;
-        }
+        count!(cx.ruby_measure_visits += 1);
         let mut sat = Saturation::default();
         let width = if matches!(unit.kind, UnitKind::Atomic { .. }) {
             atomics.push(i);
@@ -618,10 +610,7 @@ pub(super) fn width(
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> LayoutUnit {
-    #[cfg(test)]
-    {
-        cx.ruby_width_calls += 1;
-    }
+    count!(cx.ruby_width_calls += 1);
     let (natural, windows) = natural(data, range.clone(), atomics, cx, sat);
     let delta = match windows {
         Some(windows) => super::windows::cost(data, &windows, range.end, sat),
@@ -666,10 +655,7 @@ fn natural(
         let begin = shared.slices.partition_point(|i| *i < range.start);
         let finish = shared.slices.partition_point(|i| *i < range.end);
         for &i in &shared.slices[begin..finish] {
-            #[cfg(test)]
-            {
-                cx.ruby_measure_visits += 1;
-            }
+            count!(cx.ruby_measure_visits += 1);
             let actual = super::scan::unit_width_from(
                 data,
                 &data.units[i],
@@ -748,10 +734,7 @@ fn natural(
             let from = prefix.first + prefix.extra.len();
             let to = index.tabs.partition_point(|t| *t < range.end);
             for &i in &index.tabs[from..to] {
-                #[cfg(test)]
-                {
-                    cx.ruby_measure_visits += 1;
-                }
+                count!(cx.ruby_measure_visits += 1);
                 let previous = prefix.extra.last().copied().unwrap_or(0);
                 let mut step = Saturation::default();
                 let (start_decoration, decoration_sat) = *decoration.get_or_insert_with(|| {
@@ -819,10 +802,7 @@ fn natural(
         hyphen_leaf,
         sat,
     );
-    #[cfg(test)]
-    {
-        cx.ruby_measure_visits += costs.index.spacing.take_visits();
-    }
+    count!(cx.ruby_measure_visits += costs.index.spacing.take_visits());
     let bad_start = costs.bad_atomics.partition_point(|i| *i < range.start);
     let bad_end = costs.bad_atomics.partition_point(|i| *i < range.end);
     // Only selected invalid caller values report warnings; the sink's cap also
