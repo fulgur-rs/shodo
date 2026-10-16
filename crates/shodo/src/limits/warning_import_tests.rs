@@ -45,7 +45,7 @@ fn zero_and_already_suppressed_imports_skip_payload_clones_and_tail_walks() {
     sink.extend_from_slice(&warnings);
     assert_eq!(BORROWED_WARNING_CLONES.with(|n| n.get()), 0);
     assert_eq!(BORROWED_WARNING_VISITS.with(|n| n.get()), 0);
-    assert_eq!(sink.checkpoint(), None);
+    assert!(!sink.checkpoint().unchanged(&sink));
 }
 
 #[test]
@@ -115,10 +115,12 @@ fn incoming_suppressed_kind_is_an_ordinary_record_with_room() {
     sink.extend_from_slice(&warnings);
     assert_eq!(sink.as_slice(), warnings);
     assert!(!sink.is_suppressed());
-    assert_eq!(sink.checkpoint(), Some(4));
+    assert_eq!(sink.as_slice().len(), 4);
+    assert!(sink.checkpoint().unchanged(&sink));
     sink.push(WarningKind::NegativeInput, "after source marker");
     assert_eq!(sink.as_slice()[4].message, "after source marker");
-    assert_eq!(sink.checkpoint(), Some(5));
+    assert_eq!(sink.as_slice().len(), 5);
+    assert!(sink.checkpoint().unchanged(&sink));
 }
 
 #[test]
@@ -128,7 +130,8 @@ fn empty_chunks_take_and_cap_changes_keep_existing_lifecycle() {
     reset();
     sink.extend_from_slice(&[]);
     assert!(!sink.is_suppressed());
-    assert_eq!(sink.checkpoint(), Some(0));
+    assert_eq!(sink.as_slice().len(), 0);
+    assert!(sink.checkpoint().unchanged(&sink));
     sink.extend_from_slice(&warnings);
     sink.set_max(None);
     reset();
@@ -140,5 +143,6 @@ fn empty_chunks_take_and_cap_changes_keep_existing_lifecycle() {
     assert_eq!(sink.as_slice(), warnings);
     assert_eq!(BORROWED_WARNING_CLONES.with(|n| n.get()), 4);
     assert_eq!(sink.remaining_limit(), None);
-    assert_eq!(sink.checkpoint(), Some(4));
+    assert_eq!(sink.as_slice().len(), 4);
+    assert!(sink.checkpoint().unchanged(&sink));
 }

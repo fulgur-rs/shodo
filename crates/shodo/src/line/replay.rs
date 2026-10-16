@@ -178,7 +178,7 @@ impl ReshapeLog {
 pub(crate) struct Recording {
     depth: usize,
     sat: Saturation,
-    checkpoint: Option<usize>,
+    checkpoint: crate::limits::Checkpoint,
     suppressed: bool,
 }
 
@@ -224,8 +224,8 @@ fn recorded(
     sat: &Saturation,
 ) -> Option<Effects> {
     // A suppressed sink drops every push, so it cannot have changed.
-    let clean = cx.warnings.is_suppressed() == recording.suppressed
-        && cx.warnings.checkpoint() == recording.checkpoint;
+    let clean = (recording.suppressed && cx.warnings.is_suppressed())
+        || recording.checkpoint.unchanged(&cx.warnings);
     clean.then_some(Effects {
         charges,
         sat: sat.since(recording.sat),

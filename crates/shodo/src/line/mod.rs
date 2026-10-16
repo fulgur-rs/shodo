@@ -397,8 +397,7 @@ impl Paragraph {
             && constraint.max_graphemes.is_none()
             && data.warnings.is_empty()
             && sat.is_clean()
-            && warning_checkpoint.is_some()
-            && cx.warnings.checkpoint() == warning_checkpoint;
+            && warning_checkpoint.unchanged(&cx.warnings);
         // Ordinary acceptance with no retained trial does not construct a key.
         let key = (eligible && (cx.completed.is_some() || constraint.max_block_size.is_some()))
             .then(|| completed::Key::new(self, token, options, &constraint, atomics));
@@ -517,8 +516,7 @@ impl Paragraph {
             .sub(scan.punctuation_edges.hang_start, &mut sat);
         if F::SUMMARY
             && sat.is_clean()
-            && warning_checkpoint.is_some()
-            && cx.warnings.checkpoint() == warning_checkpoint
+            && warning_checkpoint.unchanged(&cx.warnings)
             && constraint.max_block_size.is_none()
             && positions.is_none()
             && glyph_spacing.is_none()
@@ -561,7 +559,7 @@ impl Paragraph {
         {
             let needed_block_size = line.block_size();
             if sat.is_clean()
-                && cx.warnings.checkpoint() == warning_checkpoint
+                && warning_checkpoint.unchanged(&cx.warnings)
                 && cx
                     .partial
                     .as_ref()
