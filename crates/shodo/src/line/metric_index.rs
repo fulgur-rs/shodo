@@ -791,11 +791,10 @@ impl MetricIndex {
         let over = LayoutUnit::from_f32_round(above, sat);
         Selection {
             metrics: ScalarMetrics {
-                baseline: if data.style.writing_mode.line_over_is_block_end() {
-                    block_size.sub(over, sat)
-                } else {
-                    over
-                },
+                baseline: data
+                    .style
+                    .writing_mode
+                    .baseline_from_over(over, block_size, sat),
                 block_size,
                 empty: !summary.active,
             },

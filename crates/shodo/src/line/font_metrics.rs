@@ -77,16 +77,25 @@ pub(crate) struct StyleMetrics {
     pub(crate) em_ascent: f32,
 }
 
+/// Upright font metrics at the caller's chosen scale. CSS style size,
+/// size-adjusted primary metrics and shaped-run size are distinct inputs.
+pub(crate) fn upright_or_em_box(
+    vertical: Option<crate::font::VerticalFontMetrics>,
+    size: f32,
+) -> (f32, f32, f32) {
+    vertical.map_or((size / 2.0, size / 2.0, 0.0), |v| {
+        (v.ascent, v.descent, v.line_gap)
+    })
+}
+
 impl StyleMetrics {
     /// Unleaded ascent and descent of the primary font: its vertical metrics
     /// for upright text, falling back to half of `size` on each side, and its
     /// horizontal metrics otherwise.
     pub(crate) fn ascent_descent(&self, upright: bool) -> (f32, f32) {
         if upright {
-            self.vertical_metrics
-                .map_or((self.size / 2.0, self.size / 2.0), |v| {
-                    (v.ascent, v.descent)
-                })
+            let (a, d, _) = upright_or_em_box(self.vertical_metrics, self.size);
+            (a, d)
         } else {
             (self.metrics.ascent, self.metrics.descent)
         }
@@ -1299,5 +1308,22 @@ mod tests {
                 assert_metrics_eq(actual, *expected);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod upright_fallback_tests {
+    use super::*;
+
+    #[test]
+    fn upright_fallback_uses_the_callers_size_and_keeps_real_vertical_metrics() {
+        assert_eq!(upright_or_em_box(None, 20.0), (10.0, 10.0, 0.0));
+        assert_eq!(upright_or_em_box(None, 40.0), (20.0, 20.0, 0.0));
+        let vertical = crate::font::VerticalFontMetrics {
+            ascent: 12.0,
+            descent: 5.0,
+            line_gap: 3.0,
+        };
+        assert_eq!(upright_or_em_box(Some(vertical), 100.0), (12.0, 5.0, 3.0));
     }
 }

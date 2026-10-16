@@ -149,10 +149,9 @@ pub(crate) fn font_extents(
     let m = data.style_metrics[style as usize];
     let upright = data.style.writing_mode.is_upright(s.text_orientation);
     let (a, d) = if upright {
-        m.vertical_metrics
-            .map_or((s.font_size / 2.0, s.font_size / 2.0), |m| {
-                (m.ascent, m.descent)
-            })
+        let (a, d, _) =
+            crate::line::font_metrics::upright_or_em_box(m.vertical_metrics, s.font_size);
+        (a, d)
     } else {
         (m.metrics.ascent, m.metrics.descent)
     };
@@ -160,13 +159,11 @@ pub(crate) fn font_extents(
 }
 pub(crate) fn fixed_extents(
     data: &ParagraphData,
-    mut a: f32,
-    mut d: f32,
+    a: f32,
+    d: f32,
     sat: &mut Saturation,
 ) -> (LayoutUnit, LayoutUnit) {
-    if data.style.writing_mode.line_over_is_block_end() {
-        std::mem::swap(&mut a, &mut d);
-    }
+    let (a, d) = data.style.writing_mode.over_under_to_block((a, d));
     (
         LayoutUnit::from_f32_round(a, sat),
         LayoutUnit::from_f32_round(d, sat),
@@ -191,12 +188,13 @@ pub(crate) fn record_extents(
                 .metrics
                 .unwrap_or_else(|| data.fonts.metrics(run.font, run.font_size));
             let (a, d) = match run.orientation {
-                crate::shape::orientation::RunOrientation::Upright => run
-                    .instance
-                    .vertical_metrics
-                    .map_or((run.font_size / 2.0, run.font_size / 2.0), |v| {
-                        (v.ascent, v.descent)
-                    }),
+                crate::shape::orientation::RunOrientation::Upright => {
+                    let (a, d, _) = crate::line::font_metrics::upright_or_em_box(
+                        run.instance.vertical_metrics,
+                        run.font_size,
+                    );
+                    (a, d)
+                }
                 crate::shape::orientation::RunOrientation::Combined => {
                     let size = data.styles[data.items[*item as usize].style as usize].font_size;
                     (size / 2.0, size / 2.0)
