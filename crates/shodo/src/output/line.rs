@@ -102,20 +102,13 @@ impl Line {
     pub fn metrics(&self) -> LineMetrics {
         let baseline = self.baseline.to_f32();
         let (a, d) = self.data.root_font_extents;
+        let over_sign = self.data.style.writing_mode.line_over_sign();
         LineMetrics {
             ascent: baseline,
             descent: self.block_size.to_f32() - baseline,
             baseline,
-            text_over: if self.data.style.writing_mode.line_over_is_block_end() {
-                baseline + a
-            } else {
-                baseline - a
-            },
-            text_under: if self.data.style.writing_mode.line_over_is_block_end() {
-                baseline - d
-            } else {
-                baseline + d
-            },
+            text_over: baseline + over_sign * a,
+            text_under: baseline - over_sign * d,
         }
     }
     /// Leading hanging punctuation advance included in [`Self::inline_size`].

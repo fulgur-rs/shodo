@@ -104,10 +104,13 @@ impl Line {
                     let upright = run.orientation == RunOrientation::Upright;
                     let raw = match run.orientation {
                         RunOrientation::Combined => (size / 2., size / 2.),
-                        RunOrientation::Upright => run
-                            .instance
-                            .vertical_metrics
-                            .map_or((size / 2., size / 2.), |v| (v.ascent, v.descent)),
+                        RunOrientation::Upright => {
+                            let (a, d, _) = crate::line::font_metrics::upright_or_em_box(
+                                run.instance.vertical_metrics,
+                                size,
+                            );
+                            (a, d)
+                        }
                         _ => {
                             let m = run
                                 .instance
@@ -264,13 +267,11 @@ impl Line {
                 .min(available),
             end.sub(content.1, sat).max(LayoutUnit::ZERO).min(available),
         ];
-        let reverse = self.data.style.writing_mode.line_over_is_block_end();
-        g.overflow = if reverse {
-            [overflow[1], overflow[0]]
-        } else {
-            overflow
-        };
-        g.space = if reverse { [space[1], space[0]] } else { space };
+        let mode = self.data.style.writing_mode;
+        let (over, under) = mode.over_under_to_block((overflow[0], overflow[1]));
+        g.overflow = [over, under];
+        let (over, under) = mode.over_under_to_block((space[0], space[1]));
+        g.space = [over, under];
     }
 }
 

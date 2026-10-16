@@ -39,6 +39,31 @@ impl WritingMode {
         matches!(self, Self::VerticalLr)
     }
 
+    /// Map line-over/under values to logical block-start/end. The same
+    /// swap maps back; sideways-lr keeps line-over at block-start.
+    pub(crate) fn over_under_to_block<T>(self, (over, under): (T, T)) -> (T, T) {
+        if self.line_over_is_block_end() {
+            (under, over)
+        } else {
+            (over, under)
+        }
+    }
+
+    /// Convert the distance from line-over to a block-start baseline. Keep
+    /// the subtraction conditional: even an unused conversion can saturate.
+    pub(crate) fn baseline_from_over(
+        self,
+        over: LayoutUnit,
+        block_size: LayoutUnit,
+        sat: &mut Saturation,
+    ) -> LayoutUnit {
+        if self.line_over_is_block_end() {
+            block_size.sub(over, sat)
+        } else {
+            over
+        }
+    }
+
     /// Logical block displacement toward line-over.
     pub(crate) fn line_over_sign(self) -> f32 {
         if self.line_over_is_block_end() {
@@ -227,6 +252,43 @@ impl PhysicalConverter {
                 width: r.block_size,
                 height: r.inline_size,
             },
+        }
+    }
+}
+
+#[cfg(test)]
+mod writing_mode_tests {
+    use super::*;
+
+    #[test]
+    fn baseline_conversion_preserves_conditional_saturation() {
+        for (mode, raw, saturated) in [
+            (WritingMode::HorizontalTb, i32::MIN, 0),
+            (WritingMode::VerticalRl, i32::MIN, 0),
+            (WritingMode::VerticalLr, i32::MAX, 1),
+            (WritingMode::SidewaysRl, i32::MIN, 0),
+            (WritingMode::SidewaysLr, i32::MIN, 0),
+        ] {
+            let mut sat = Saturation::default();
+            assert_eq!(
+                mode.baseline_from_over(LayoutUnit::MIN, LayoutUnit::ZERO, &mut sat)
+                    .raw(),
+                raw
+            );
+            assert_eq!(sat.saturated, saturated, "{mode:?}");
+        }
+    }
+
+    #[test]
+    fn over_under_mapping_distinguishes_vertical_lr_from_sideways_lr() {
+        for (mode, expected) in [
+            (WritingMode::HorizontalTb, (3, 7)),
+            (WritingMode::VerticalRl, (3, 7)),
+            (WritingMode::VerticalLr, (7, 3)),
+            (WritingMode::SidewaysRl, (3, 7)),
+            (WritingMode::SidewaysLr, (3, 7)),
+        ] {
+            assert_eq!(mode.over_under_to_block((3, 7)), expected, "{mode:?}");
         }
     }
 }

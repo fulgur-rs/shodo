@@ -149,20 +149,19 @@ impl LineGeometry {
                     let (over, under) = if line.writing_mode().is_typographic_vertical()
                         && run.orientation() == crate::GlyphOrientation::Upright
                     {
-                        run.vertical_metrics()
-                            .map_or((run.font_size() / 2.0, run.font_size() / 2.0), |v| {
-                                (v.ascent, v.descent)
-                            })
+                        let (a, d, _) = crate::line::font_metrics::upright_or_em_box(
+                            run.vertical_metrics(),
+                            run.font_size(),
+                        );
+                        (a, d)
                     } else {
                         (metrics.ascent, metrics.descent)
                     };
-                    let line_over_at_block_end =
-                        line.data.style.writing_mode.line_over_is_block_end();
+                    let (before, _) = line.writing_mode().over_under_to_block((over, under));
                     let rect = LogicalRect {
                         inline_start: 0.0,
                         inline_size: 0.0,
-                        block_start: line.block_offset() + run.baseline()
-                            - if line_over_at_block_end { under } else { over },
+                        block_start: line.block_offset() + run.baseline() - before,
                         block_size: (over + under).max(0.0),
                     };
                     let mut pen = 0.0;

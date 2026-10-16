@@ -52,14 +52,7 @@ pub(crate) fn emphasized(
         return leaded;
     };
     let metrics = data.style_metrics[style as usize];
-    let content = if upright {
-        let half = metrics.size / 2.0;
-        metrics
-            .vertical_metrics
-            .map_or((half, half), |v| (v.ascent, v.descent))
-    } else {
-        (metrics.metrics.ascent, metrics.metrics.descent)
-    };
+    let content = metrics.ascent_descent(upright);
     let content = em_content_extents(data, style, run_font, metrics.size, upright, content);
     emphasize(data, emphasis, metrics.size, content, leaded)
 }
@@ -155,9 +148,7 @@ fn font_extents(
     upright: bool,
 ) -> (f32, f32, f32) {
     let (a, d, gap) = if upright {
-        vertical.map_or((s.font_size / 2.0, s.font_size / 2.0, 0.0), |v| {
-            (v.ascent, v.descent, v.line_gap)
-        })
+        super::font_metrics::upright_or_em_box(vertical, s.font_size)
     } else {
         (m.ascent, m.descent, m.line_gap)
     };
@@ -183,6 +174,43 @@ fn shift(s: &InlineStyle, parent: StyleMetrics, parent_upright: bool, a: f32, d:
     }
 }
 
+/// Align an inline to its parent without reassociating the baseline sum.
+/// Atomics supply their distinct dominant displacement; ordinary inlines and
+/// styled breaks share the central/alphabetic conversion from style metrics.
+fn aligned_shift(
+    data: &ParagraphData,
+    style: u32,
+    parent_box: Option<u32>,
+    (a, d): (f32, f32),
+    base: f32,
+    dominant: Option<f32>,
+) -> f32 {
+    let s = &data.styles[style as usize];
+    let parent_style = parent_box.map_or(0, |p| data.boxes[p as usize].style) as usize;
+    let parent_upright = data
+        .style
+        .writing_mode
+        .is_upright(data.styles[parent_style].text_orientation);
+    let dominant = dominant.unwrap_or_else(|| {
+        let upright = data.style.writing_mode.is_upright(s.text_orientation);
+        let metrics = data.style_metrics[style as usize].metrics;
+        let center = (metrics.ascent - metrics.descent) / 2.0;
+        match (parent_upright, upright) {
+            (true, false) => center,
+            (false, true) => -center,
+            _ => 0.0,
+        }
+    });
+    base + dominant
+        + shift(
+            s,
+            data.style_metrics[parent_style],
+            parent_upright,
+            a - dominant,
+            d + dominant,
+        )
+}
+
 // Return the baseline displacement and the top/bottom-aligned ancestor.
 fn box_shift(
     data: &ParagraphData,
@@ -203,11 +231,6 @@ fn box_shift(
     for index in path.into_iter().rev() {
         let b = &data.boxes[index as usize];
         let s = &data.styles[b.style as usize];
-        let parent_style = b.parent.map_or(0, |p| data.boxes[p as usize].style) as usize;
-        let parent_upright = data
-            .style
-            .writing_mode
-            .is_upright(data.styles[parent_style].text_orientation);
         let style_metrics = data.style_metrics[b.style as usize];
         let upright = data.style.writing_mode.is_upright(s.text_orientation);
         let (a, d) = extents(
@@ -216,28 +239,11 @@ fn box_shift(
             style_metrics.vertical_metrics,
             upright,
         );
-        // A central inline and an alphabetic inline share the selected
-        // baseline, rather than placing their different origins at zero.
-        let horizontal_center =
-            (style_metrics.metrics.ascent - style_metrics.metrics.descent) / 2.0;
-        let dominant_shift = match (parent_upright, upright) {
-            (true, false) => horizontal_center,
-            (false, true) => -horizontal_center,
-            _ => 0.0,
-        };
         let group = value.1.or_else(|| {
             matches!(s.vertical_align, VerticalAlign::Top | VerticalAlign::Bottom).then_some(index)
         });
         value = (
-            value.0
-                + dominant_shift
-                + shift(
-                    s,
-                    data.style_metrics[parent_style],
-                    parent_upright,
-                    a - dominant_shift,
-                    d + dominant_shift,
-                ),
+            aligned_shift(data, b.style, b.parent, (a, d), value.0, None),
             group,
         );
         cache.insert(index, value);
@@ -307,29 +313,12 @@ impl ProfileResolver {
         }
         let s = &data.styles[item.style as usize];
         let metrics = data.style_metrics[item.style as usize];
-        let parent_style = unit.parent_box.map_or(0, |b| data.boxes[b as usize].style) as usize;
-        let mode = data.style.writing_mode;
-        let upright = mode.is_upright(s.text_orientation);
-        let parent_upright = mode.is_upright(data.styles[parent_style].text_orientation);
+        let upright = data.style.writing_mode.is_upright(s.text_orientation);
         let (a, d) = extents(s, metrics.metrics, metrics.vertical_metrics, upright);
-        let center = (metrics.metrics.ascent - metrics.metrics.descent) / 2.0;
-        let dominant = match (parent_upright, upright) {
-            (true, false) => center,
-            (false, true) => -center,
-            _ => 0.0,
-        };
         let (base, group) = unit
             .parent_box
             .map_or((0.0, None), |b| box_shift(data, b, &mut self.boxes));
-        let base = base
-            + dominant
-            + shift(
-                s,
-                data.style_metrics[parent_style],
-                parent_upright,
-                a - dominant,
-                d + dominant,
-            );
+        let base = aligned_shift(data, item.style, unit.parent_box, (a, d), base, None);
         Some(RecordProfile {
             top: base - a,
             bottom: base + d,
@@ -450,10 +439,6 @@ impl ProfileResolver {
                 let s = &data.styles[data.items[item as usize].style as usize];
                 let parent_style = parent_box.map_or(0, |p| data.boxes[p as usize].style) as usize;
                 let parent = data.style_metrics[parent_style];
-                let parent_upright = data
-                    .style
-                    .writing_mode
-                    .is_upright(data.styles[parent_style].text_orientation);
                 let (base, group) =
                     parent_box.map_or((0.0, None), |b| box_shift(data, b, &mut self.boxes));
                 let height = size.block_size + size.margins.block_start + size.margins.block_end;
@@ -492,14 +477,14 @@ impl ProfileResolver {
                 (
                     baseline + mark,
                     height - baseline,
-                    base + dominant_shift
-                        + shift(
-                            s,
-                            parent,
-                            parent_upright,
-                            baseline - dominant_shift,
-                            height - baseline + dominant_shift,
-                        ),
+                    aligned_shift(
+                        data,
+                        style,
+                        parent_box,
+                        (baseline, height - baseline),
+                        base,
+                        Some(dominant_shift),
+                    ),
                     group,
                     own,
                 )
@@ -754,8 +739,7 @@ fn measure_profile<const KEEP_SHIFTS: bool>(
     let over_baseline = LayoutUnit::from_f32_round(above, sat);
     // The over side is the physical right in vertical-lr, opposite block-start.
     // Reflect the line-relative solution into logical block coordinates once.
-    let reverse_over = data.style.writing_mode.line_over_is_block_end();
-    let reflect = |v: f32| if reverse_over { -v } else { v };
+    let reflect = |v: f32| -data.style.writing_mode.line_over_sign() * v;
     let combination_shifts = if KEEP_SHIFTS {
         combination_bases
             .into_iter()
@@ -785,11 +769,10 @@ fn measure_profile<const KEEP_SHIFTS: bool>(
         }
         crate::hashing::FastMap::default()
     };
-    let baseline = if reverse_over {
-        block_size.sub(over_baseline, sat)
-    } else {
-        over_baseline
-    };
+    let baseline = data
+        .style
+        .writing_mode
+        .baseline_from_over(over_baseline, block_size, sat);
     if !KEEP_SHIFTS {
         // Revisit cached profiles instead of retaining per-record shift and
         // membership vectors. Keep each discarded conversion and its order
@@ -838,6 +821,51 @@ mod tests {
                 &crate::test_support::fonts::collection(&crate::limits::Limits::default()),
             )
             .unwrap()
+    }
+
+    #[test]
+    fn aligned_shift_preserves_base_order_and_explicit_atomic_dominant() {
+        let root = InlineStyle {
+            font_size: 20.0,
+            ..Default::default()
+        };
+        let style = crate::style::ParagraphStyle {
+            root: root.clone(),
+            writing_mode: crate::geometry::WritingMode::VerticalRl,
+            ..Default::default()
+        };
+        let child = InlineStyle {
+            font_size: 10.0,
+            text_orientation: crate::style::TextOrientation::Sideways,
+            vertical_align: VerticalAlign::Length(2.0),
+            ..root
+        };
+        let mut builder = ParagraphBuilder::new(&style, &crate::limits::Limits::default());
+        builder.push_forced_break_with_style(NodeId(1), &child);
+        let p = build(builder);
+        let unit = p
+            .data
+            .units
+            .iter()
+            .find(|u| matches!(u.kind, UnitKind::ForcedBreak))
+            .unwrap();
+        let style = p.data.items[unit.item as usize].style;
+        let metrics = p.data.style_metrics[style as usize].metrics;
+        assert_eq!((metrics.ascent, metrics.descent), (8.0, 2.0));
+        assert_eq!(
+            aligned_shift(&p.data, style, None, (8.0, 2.0), 7.0, None),
+            8.0
+        );
+        assert_eq!(
+            aligned_shift(&p.data, style, None, (8.0, 2.0), 7.0, Some(-4.0)),
+            1.0
+        );
+        // At 2^24, (base + 3) - 2 rounds to base + 2, whereas
+        // base + (3 - 2) rounds back to base. Keep the original grouping.
+        assert_eq!(
+            aligned_shift(&p.data, style, None, (8.0, 2.0), 16_777_216.0, None),
+            16_777_218.0
+        );
     }
 
     #[test]
