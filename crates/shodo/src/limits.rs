@@ -282,6 +282,20 @@ pub(crate) struct WarningSink {
     suppressed: bool,
 }
 
+/// Snapshot for append-only warning operations on the same sink.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Checkpoint {
+    len: usize,
+    suppressed: bool,
+}
+
+impl Checkpoint {
+    /// Dropped warnings cannot qualify an operation for caching.
+    pub(crate) fn unchanged(self, sink: &WarningSink) -> bool {
+        !self.suppressed && !sink.suppressed && self.len == sink.warnings.len()
+    }
+}
+
 #[cfg(test)]
 thread_local! {
     pub(crate) static BORROWED_WARNING_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -310,10 +324,22 @@ impl WarningSink {
             .map(|max| max.saturating_sub(self.warnings.len() as u64))
     }
 
-    /// A suppressed sink cannot distinguish a clean operation from dropped
-    /// warnings, so its checkpoint must not qualify a result for caching.
-    pub(crate) fn checkpoint(&self) -> Option<usize> {
-        (!self.suppressed).then_some(self.warnings.len())
+    pub(crate) fn checkpoint(&self) -> Checkpoint {
+        Checkpoint {
+            len: self.warnings.len(),
+            suppressed: self.suppressed,
+        }
+    }
+
+    pub(crate) fn pristine(&self) -> bool {
+        self.warnings.is_empty() && !self.suppressed
+    }
+
+    /// Undo appended warnings, including a newly added suppression marker.
+    /// The checkpoint must belong to this sink, with no intervening `take`.
+    pub(crate) fn rollback_to(&mut self, checkpoint: Checkpoint) {
+        self.warnings.truncate(checkpoint.len);
+        self.suppressed = checkpoint.suppressed;
     }
 
     pub(crate) fn push(&mut self, kind: WarningKind, message: impl Into<String>) {
@@ -406,6 +432,61 @@ mod tests {
     use crate::geometry::Saturation;
 
     #[test]
+    fn warning_checkpoint_tracks_clean_operations_and_pristine_sinks() {
+        let mut sink = WarningSink::new(Some(1));
+        let empty = sink.checkpoint();
+        assert!(sink.pristine());
+        assert!(empty.unchanged(&sink));
+        sink.push(WarningKind::Unsupported, "first");
+        assert!(!sink.pristine());
+        assert!(!empty.unchanged(&sink));
+        let full = sink.checkpoint();
+        assert!(full.unchanged(&sink));
+        sink.push(WarningKind::Unsupported, "suppressed");
+        assert!(!full.unchanged(&sink));
+        assert!(!sink.checkpoint().unchanged(&sink));
+        assert!(!sink.pristine());
+        sink.take();
+        assert!(sink.pristine());
+    }
+
+    #[test]
+    fn warning_rollback_restores_prefix_and_suppression_through_nested_trials() {
+        for cap in [0, 1] {
+            let mut sink = WarningSink::new(Some(cap));
+            let empty = sink.checkpoint();
+            if cap == 1 {
+                sink.push(WarningKind::Unsupported, "prefix");
+            }
+            let prefix = sink.checkpoint();
+            sink.push(WarningKind::NegativeInput, "rejected");
+            let suppressed = sink.checkpoint();
+            sink.push(WarningKind::NegativeInput, "dropped");
+            sink.rollback_to(suppressed);
+            assert!(sink.is_suppressed());
+            assert_eq!(sink.as_slice().len(), cap as usize + 1);
+            sink.rollback_to(prefix);
+            assert!(!sink.is_suppressed());
+            assert!(prefix.unchanged(&sink));
+            assert_eq!(sink.as_slice().len(), cap as usize);
+            if cap == 1 {
+                assert_eq!(sink.as_slice()[0].message, "prefix");
+            }
+            sink.rollback_to(empty);
+            assert!(sink.pristine());
+            sink.push(WarningKind::MissingAtomicSize, "accepted");
+            assert_eq!(
+                sink.as_slice()[0].kind,
+                if cap == 0 {
+                    WarningKind::Suppressed
+                } else {
+                    WarningKind::MissingAtomicSize
+                }
+            );
+        }
+    }
+
+    #[test]
     fn check_reports_kind_limit_and_actual() {
         assert_eq!(Limits::check(Some(10), LimitKind::Items, 10), Ok(()));
         assert_eq!(
@@ -490,7 +571,7 @@ mod tests {
         assert_eq!(sink.as_slice().len(), 1);
         assert_eq!(sink.as_slice()[0].kind, WarningKind::Suppressed);
         assert!(sink.is_suppressed());
-        assert_eq!(sink.checkpoint(), None);
+        assert!(!sink.checkpoint().unchanged(&sink));
     }
 
     #[test]
@@ -516,8 +597,8 @@ mod tests {
         }
         assert_eq!(lazy.as_slice(), eager.as_slice());
         assert!(lazy.is_suppressed() && eager.is_suppressed());
-        assert_eq!(lazy.checkpoint(), None);
-        assert_eq!(eager.checkpoint(), None);
+        assert!(!lazy.checkpoint().unchanged(&lazy));
+        assert!(!eager.checkpoint().unchanged(&eager));
         assert_eq!(lazy.remaining_limit(), eager.remaining_limit());
     }
 }

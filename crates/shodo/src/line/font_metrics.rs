@@ -148,8 +148,7 @@ impl ProbeInstanceCache {
         resolve_counts::record_instance_resolve();
         let (_, instance, size) =
             crate::shape::resolve_instance(bytes, index, &matched, style, *b"Latn", warnings);
-        let after = warnings.checkpoint();
-        if matches!((before, after), (Some(before), Some(after)) if before == after)
+        if before.unchanged(warnings)
             && fonts.generations() == generations
             && self.len < PROBE_INSTANCE_CACHE_CAPACITY
         {
@@ -400,10 +399,7 @@ impl<'a> StyleMetricsCache<'a> {
             std::collections::hash_map::Entry::Vacant(entry) => {
                 let before = warnings.checkpoint();
                 let metrics = resolve(fonts, style, warnings);
-                let after = warnings.checkpoint();
-                if matches!((before, after), (Some(before), Some(after)) if before == after)
-                    && fonts.generations() == generations
-                {
+                if before.unchanged(warnings) && fonts.generations() == generations {
                     entry.insert(resolved.len());
                 }
                 metrics
@@ -530,10 +526,7 @@ pub(crate) fn resolve_styles_memo(
                 .get_or_insert_with(StyleMetricsCache::default)
                 .resolve(fonts, style, &resolved, warnings)
         };
-        let after = warnings.checkpoint();
-        if matches!((before, after), (Some(before), Some(after)) if before == after)
-            && fonts.generations() == generations
-        {
+        if before.unchanged(warnings) && fonts.generations() == generations {
             memo.insert(layer, generations, style, metrics);
         }
         resolved.push(metrics);

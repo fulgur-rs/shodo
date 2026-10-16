@@ -392,7 +392,7 @@ impl Paragraph {
         #[cfg(not(test))]
         let force_two_passes = false;
         if !force_two_passes
-            && cx.warnings.checkpoint() == Some(0)
+            && cx.warnings.pristine()
             && let Some(first) = first
             && let Some(sizes) = simple_first_line_intrinsics(&self.data, first, options)
         {
@@ -400,7 +400,7 @@ impl Paragraph {
         }
         let single_geometry = first.is_some_and(|first| {
             first.intrinsic_geometry_reused
-                && cx.warnings.checkpoint() == Some(0)
+                && cx.warnings.pristine()
                 && single_pass_options_safe(options)
                 && first.intrinsic_single_pass_safe
         });

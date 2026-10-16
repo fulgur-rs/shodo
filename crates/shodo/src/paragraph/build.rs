@@ -285,8 +285,7 @@ impl Paragraph {
                 .expect("alternate pass prepares shared whitespace flags");
             alternate_reuses_analysis = paint_reuse::enabled()
                 && line_break_override.is_none()
-                && normal_warnings.is_some()
-                && warnings.checkpoint() == normal_warnings
+                && normal_warnings.unchanged(&warnings)
                 && paint_reuse::styles_match(&normal.styles, &alternate_styles)
                 && ledger.can_commit(&normal_reservations);
             let alternate = if alternate_reuses_analysis {
@@ -397,8 +396,7 @@ impl Paragraph {
         let shape_checkpoint = alternate.as_ref().map(|_| ledger.capture());
         let mut data = build_data(normal, cx, fonts, &mut warnings, &mut sat, ledger, None)?;
         let shape_reservations = shape_checkpoint.map(|checkpoint| ledger.captured(checkpoint));
-        let shape_warning_clean =
-            shape_warning_start.is_some() && warnings.checkpoint() == shape_warning_start;
+        let shape_warning_clean = shape_warning_start.unchanged(&warnings);
         if let Some(alternate) = alternate {
             let shape_reservations =
                 shape_reservations.expect("alternate shaping captures normal reservations");
