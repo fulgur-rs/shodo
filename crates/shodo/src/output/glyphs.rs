@@ -284,6 +284,49 @@ impl<'a> GlyphRunView<'a> {
         self.run_data().font_size
     }
 
+    /// The typographic characters (grapheme clusters) of `cluster`, one of
+    /// this run's [`Self::clusters`], that take an emphasis mark, in logical
+    /// order. Separators, controls and most punctuation take none (CSS Text
+    /// Decoration 3 §3.1), nor does combined text, whose square takes one
+    /// mark of its own; see [`crate::Line::text_combinations`].
+    pub fn emphasis_slots(
+        &self,
+        cluster: &Cluster,
+    ) -> impl Iterator<Item = crate::EmphasisSlot> + 'a {
+        let source: &'a str = if cluster.flags.emphasis_excluded {
+            ""
+        } else {
+            self.data()
+                .text
+                .get(cluster.text_range.clone())
+                .unwrap_or_default()
+        };
+        let mut chars = source.chars();
+        let shared = chars.next().is_some() && chars.next().is_some();
+        // A one-character cluster takes the cluster's own classification.
+        let single =
+            (!source.is_empty() && !shared).then_some(crate::EmphasisSlot { index: 0, count: 1 });
+        let characters = shared
+            .then(|| {
+                let segmenter = icu_segmenter::GraphemeClusterSegmenter::new();
+                let count = segmenter.segment_str(source).count().saturating_sub(1) as u32;
+                let mut breaks = segmenter.segment_str(source);
+                let mut start = breaks.next().unwrap_or_default();
+                breaks.enumerate().filter_map(move |(index, end)| {
+                    let character = &source[std::mem::replace(&mut start, end)..end];
+                    (!ClusterFlags::from_source(character, false).emphasis_excluded).then_some(
+                        crate::EmphasisSlot {
+                            index: index as u32,
+                            count,
+                        },
+                    )
+                })
+            })
+            .into_iter()
+            .flatten();
+        single.into_iter().chain(characters)
+    }
+
     /// Emphasis marks of this run's style, or `None` without
     /// `text-emphasis`. See [`crate::EmphasisMark`] for placement.
     pub fn emphasis_mark(&self) -> Option<crate::EmphasisMark> {
