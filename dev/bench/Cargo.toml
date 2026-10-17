@@ -24,6 +24,10 @@ sha2.workspace = true
 name = "allocator"
 required-features = ["allocation-counting"]
 
+[[test]]
+name = "reshape_split_allocations"
+required-features = ["allocation-counting"]
+
 [[bin]]
 name = "shodo-probe"
 path = "src/bin/probe.rs"
@@ -123,3 +127,6 @@ name = "shape_context_allocations"
 
 [[example]]
 name = "punctuation_metrics"
+
+[[example]]
+name = "reshape_split_allocations"
