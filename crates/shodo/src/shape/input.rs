@@ -161,7 +161,7 @@ mod tests {
             orientation: crate::shape::orientation::RunOrientation::Horizontal,
             combine: None,
             width_feature: None,
-            before: crate::analysis::itemize::ShapeContext::from_chars("前😀é甲乙丙".chars()),
+            before: crate::analysis::itemize::ShapeContext::from_chars("😀é甲乙丙".chars()),
             after: crate::analysis::itemize::ShapeContext::from_chars("後😀é甲乙丙".chars()),
         }
     }
