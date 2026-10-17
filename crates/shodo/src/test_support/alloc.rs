@@ -1,4 +1,4 @@
-//! Per-thread heap accounting for unit-test oracles that check `Limits` byte
+//! Per-thread heap accounting for tests that check `Limits` byte
 //! models and cache retention against real allocations.
 //!
 //! `shodo-bench`'s `CountingAllocator` keeps process-global counters and allows

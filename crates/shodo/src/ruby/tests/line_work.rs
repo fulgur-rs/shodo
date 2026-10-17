@@ -1,4 +1,4 @@
-//! shodo-mc0: the fail-closed ruby line-measurement work allowance.
+//! Tests for the ruby line-measurement work limit.
 use super::accumulate_tests::{digit_siblings, doubling, one_line, profile_churn};
 use super::memo_tests::*;
 use crate::limits::{Limits, Warning};
@@ -29,7 +29,7 @@ fn churn_line(r: usize, factor: Option<u64>) -> (usize, usize) {
     (cx.ruby_container_measures, exceeded(&warnings))
 }
 
-/// The profile churn line (shodo-2j6's remaining quadratic shape) measures
+/// A line profile that changes at every probe measures
 /// quadratically many containers without the limit and linearly many with
 /// it, warning once per operation.
 #[test]
@@ -242,10 +242,9 @@ fn intrinsic_builds(r: usize) -> usize {
     cx.ruby_range_build_units
 }
 
-/// shodo-2j6's "atomics with intrinsic sizes": the min and max probes at
-/// every forced break alternate two atomic revisions. Each switch used to
-/// drop the range caches and rebuild the paragraph's indexes, quadratic in
-/// the paragraph; both revisions' caches are now kept.
+/// Min- and max-content probes at each forced break alternate atomic
+/// revisions. Keeping both revisions' range caches avoids rebuilding the
+/// paragraph indexes at every switch.
 #[test]
 fn alternating_intrinsic_revisions_keep_both_range_caches() {
     // Each dataset (the paragraph and each ruby base) is built once per
@@ -297,7 +296,7 @@ fn ruby_then_clearing_floats(r: usize, f: usize, words: &str) -> (Paragraph, Ato
     (finish(b), inputs)
 }
 
-/// shodo-5wa: word and row probes alternate around clearing floats. Keeping
+/// Word and row probes alternate around clearing floats. Keeping
 /// both walks makes their work linear even with the allowance disabled.
 #[test]
 fn clearing_floats_keep_walk_work_linear() {
@@ -323,7 +322,7 @@ fn clearing_floats_keep_walk_work_linear() {
 
 /// Two distinct words, each with two ruby containers, before every clearing
 /// float. Word probes need accumulators of their own and must not evict the
-/// growing row's accumulator (shodo-ogn).
+/// growing row's accumulator.
 #[derive(Clone, Copy, Debug, Default)]
 struct RowFixture {
     first_line: bool,
@@ -634,13 +633,10 @@ fn retained_and_cold(
     (got, line(&mut cold, narrow), retained.index_failures)
 }
 
-/// Review of shodo-mc0: when a speculative `PartialLine::index` of a retained
-/// wider line fails, the narrower call scans again from the ruby work state
-/// it had before indexing, with an empty memo, and matches a call without
-/// the retained line. (The reshape budget keeps the index's charges, as on
-/// main.) The failure is forced after the index's probes; with these
-/// fixtures the restore is defense in depth: no case here diverges without
-/// it, but the branch runs.
+/// When indexing a retained wider line fails, the narrower call scans
+/// again from the ruby work state it had before indexing, with an empty memo,
+/// and matches a call without the retained line. The reshape budget keeps the
+/// index's charges. This fixture exercises the recovery path.
 #[test]
 fn failed_index_rescans_like_a_cold_call() {
     let mut failures = 0;

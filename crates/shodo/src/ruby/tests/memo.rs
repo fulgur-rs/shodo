@@ -1,5 +1,5 @@
 //! Reference equivalence and operation-count guards for adjustment-only ruby
-//! candidates (shodo-d77). The reference path (`cx.ruby_reference = true`)
+//! candidates. The reference path (`cx.ruby_reference = true`)
 //! measures every probe in full; every reuse path must match it exactly.
 use crate::font::{FontCollection, FontFaceDescriptor};
 use crate::geometry::{Direction, LayoutUnit, Saturation};
@@ -501,7 +501,7 @@ pub(super) struct Observed {
     reset_values: Vec<LayoutUnit>,
     reset_warnings: Vec<Warning>,
     reset_spent: u64,
-    /// Step-oracle mismatches over both sweeps.
+    /// Reused entries that differ from live measurements across both sweeps.
     misses: Vec<String>,
 }
 
@@ -640,12 +640,12 @@ pub(super) fn result_signature(result: LineResult) -> String {
 pub(super) enum Mode {
     /// Every probe measured in full (`cx.ruby_reference`).
     Reference,
-    /// The per-through memo alone (the shodo-d77 path).
+    /// Reuse per-through measurements without accumulating them.
     Memo,
     /// The default path: the memo and the container accumulator.
     Accumulate,
-    /// As `Accumulate`, with clean containers measured live and compared
-    /// with their entries (the step oracle).
+    /// As `Accumulate`, but measure reusable entries live and compare them
+    /// with the stored measurements.
     Verify,
 }
 
@@ -697,8 +697,8 @@ pub(super) fn counters(cx: &LayoutContext) -> Counters {
     }
 }
 
-/// Step-oracle mismatches of `cx` since the last call (always empty on the
-/// reference path), recorded next to the warnings they accompany.
+/// Return mismatches between reused entries and live measurements since
+/// the last call. The reference path always returns an empty list.
 fn oracle(cx: &mut LayoutContext) -> String {
     format!("oracle: {:?}", std::mem::take(&mut cx.ruby_oracle_misses))
 }
@@ -1293,9 +1293,8 @@ fn shared_profile_recomputes_when_its_charges_cross_the_budget() {
 }
 
 /// Probes sharing `start..through` inside one operation measure the core
-/// once; a new operation measures it again. A warm-up operation fills the
-/// range caches first (since shodo-tj5 a measurement that fills them is
-/// memoized too: `cold_cache_fills_are_memoized`).
+/// once; a new operation measures it again. An earlier operation fills
+/// the range caches before the measurement-count check begins.
 #[test]
 fn repeated_probe_in_one_operation_is_measured_once() {
     let p = nested(4, &Limits::default(), "日", &style(24.0));
@@ -1373,8 +1372,8 @@ fn memoized_nested_candidates_measure_linearly() {
 
 type CrossingRun = (Vec<LayoutUnit>, Vec<Warning>, u64, Saturation);
 
-/// Review focus 1: a core recorded within budget must be recomputed once a
-/// replayed charge would cross the operation's limit.
+/// A measurement recorded within budget must be recomputed if replaying
+/// its charge would cross the operation's limit.
 #[test]
 fn memo_recomputes_when_replay_would_cross_reshape_budget() {
     let window = 8;
@@ -1396,8 +1395,8 @@ fn memo_recomputes_when_replay_would_cross_reshape_budget() {
         let mut cx = context(reference);
         cx.warnings.set_max(data.limits.max_warnings);
         let mut sat = Saturation::default();
-        // Warm-up: fill the range caches in an earlier operation (kept from
-        // before shodo-tj5, when cache fills were never memoized).
+        // Fill the range caches during an earlier operation before
+        // measuring reuse within this operation.
         cx.begin_reshape_operation();
         crate::ruby::measure::candidate_adjustment(
             data,
@@ -1451,9 +1450,8 @@ fn memo_recomputes_when_replay_would_cross_reshape_budget() {
     let (optimized, _, measured, refused) = run(false, limit - 1);
     let (reference, _, _, _) = run(true, limit - 1);
     assert_eq!(optimized, reference);
-    // `measured` shows the memo entry itself was refused (a replayed core
-    // visits no column); `refused` also counts refused `blocks` replays
-    // since shodo-tj5.
+    // `measured` is positive when a rejected memo entry is recomputed.
+    // `refused` also counts rejected block-cache replays.
     assert!(measured > 0);
     assert!(refused > 0);
     assert!(
@@ -1492,9 +1490,9 @@ pub(super) fn cursive_words(limits: &Limits, words: usize) -> Paragraph {
     finish(b)
 }
 
-/// Review focus 2: a speculative `PartialLine::index` that exhausts the
-/// budget is rolled back (warnings and saturation, not spent bytes or memo
-/// entries); the retried line must match the reference.
+/// If indexing a wider candidate exhausts the budget, roll back its
+/// warnings and saturation while retaining the work already charged. The
+/// narrower retry must produce the same line as full measurement.
 ///
 /// With a 12-byte window (limit 768 bytes) the wide scan of either fixture
 /// stays within budget and is retained. The 999 retry indexes it: six words
@@ -1580,11 +1578,9 @@ fn narrow_retry_after_budget_exhausting_index_matches_reference() {
     }
 }
 
-/// Review focus 4: the min- and max-content atomics built by
-/// `intrinsic_sizes` get distinct memo keys for the same range, so they can
-/// never answer each other's probes. A hit pattern alone cannot show this: a
-/// changed revision also moves the range cache epoch
-/// (`RangeCache::begin`), which already refuses every older entry.
+/// Min-content and max-content atomics use separate memo entries for
+/// the same range. A change in atomic revision also clears the range caches,
+/// so cache hits alone cannot demonstrate that the entries stay separate.
 #[test]
 fn intrinsic_min_and_max_atomics_have_distinct_memo_keys() {
     let p = atomic_base(&Limits::default(), true);
@@ -1625,7 +1621,7 @@ fn intrinsic_min_and_max_atomics_have_distinct_memo_keys() {
     assert_eq!(empty_min, empty_max);
 }
 
-/// Review focus 4, end to end: `intrinsic_sizes` with min/max atomics matches
+/// End to end, `intrinsic_sizes` with min/max atomics matches
 /// the reference, and look-ahead probes of one range under both revisions in
 /// one operation replay only within a revision.
 ///
@@ -1695,7 +1691,7 @@ fn intrinsic_min_and_max_atomics_keep_separate_memo_entries() {
     // A revision switch clears the range caches (a new epoch), so the
     // entries of the earlier revision are measured again; within a
     // revision every repeat replays, including the one after the probe
-    // that filled the caches (shodo-tj5).
+    // that filled the caches.
     assert_eq!(
         hits,
         [0, 1, 1, 0, 1, 1, 0],
@@ -1703,8 +1699,8 @@ fn intrinsic_min_and_max_atomics_keep_separate_memo_entries() {
     );
 }
 
-/// Review focus 5: entries never outlive their operation, and a changed
-/// atomic revision never hits an older entry.
+/// Memoized measurements expire at the end of each operation, and a
+/// changed atomic revision cannot reuse an older entry.
 #[test]
 fn memo_does_not_survive_operations_or_atomic_revisions() {
     let p = atomic_base(&Limits::default(), false);
@@ -1743,10 +1739,9 @@ fn memo_does_not_survive_operations_or_atomic_revisions() {
     );
 }
 
-/// shodo-tj5: a measurement that fills the range caches is memoized. A
-/// `blocks` hit replays the block's reshape charges, so the cold recording
-/// charges what measuring again would (`siblings` charged 2952 bytes cold
-/// against 2808 warm before), and the next probe replays it.
+/// A measurement that fills the range caches is memoized. Cache hits
+/// replay reshape charges, so recording accounts for the same work as a fresh
+/// measurement. The next probe can then reuse the recorded result.
 #[test]
 fn cold_cache_fills_are_memoized() {
     let p = siblings(&Limits::default());
@@ -1856,7 +1851,7 @@ fn walk_fixtures() -> Vec<(String, Paragraph)> {
     );
     b.push_text(TextSource::Generated { node: NodeId(2) }, "語");
     out.push(("multi-base".to_string(), finish(b)));
-    // Review focus 3: the first-line alternate dataset uses source-matched
+    // The alternate first-line dataset uses source-matched
     // cuts, which may omit a container's own end cut.
     let first_line = atomic_base(&default, true);
     out.push(("first-line normal".to_string(), first_line.clone()));
@@ -2061,8 +2056,8 @@ fn memo_bounds_keep_look_ahead_hits() {
         let mut cx = LayoutContext::new();
         line(&p, &mut cx);
         assert_eq!(cx.ruby_memo.overflow_clears > 0, overflows, "n {n}");
-        // 16 per sibling before shodo-tj5, when probes that filled the range
-        // caches were not stored.
+        // Each sibling now reuses 19 measured cores, including probes
+        // that filled the range caches.
         assert_eq!(cx.ruby_memo_hits, 19 * n, "n {n}");
         assert!(cx.ruby_memo.len() <= crate::ruby::memo::MAX_ENTRIES);
         cx.begin_reshape_operation();
@@ -2088,8 +2083,8 @@ fn d77_operation_counts_report() {
 /// A probe ending at a container's end has no look-ahead and is not stored,
 /// but it still replays the entry that the look-ahead probe one unit earlier
 /// recorded under the same `through`: every single-base sibling of an
-/// unbreakable line replays 13 cores (12 before shodo-tj5, when the probe
-/// that filled the range caches was not stored).
+/// unbreakable line reuses 13 measured cores, including the probe
+/// that filled the range caches.
 #[test]
 fn exact_probes_replay_look_ahead_entries() {
     let default = Limits::default();

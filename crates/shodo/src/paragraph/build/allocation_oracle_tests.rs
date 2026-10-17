@@ -1,4 +1,4 @@
-//! Allocation oracles for the analysis byte model (SHODO-38).
+//! Checks the analysis byte model against measured allocations.
 //!
 //! Each phase reserves its retained payload plus an upper bound on dependency
 //! scratch (`analysis_budget`); transform metadata is reserved in the mapping
