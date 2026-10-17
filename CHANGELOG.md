@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.35](https://github.com/fulgur-rs/shodo/compare/v0.0.34...v0.0.35) - 2026-10-17
+
+### Fixed
+
+- *(ruby)* cap fallback em edges at the primary font like Blink
+- *(ruby)* place annotations from the base style's primary-font edges
+
 ## [0.0.34](https://github.com/fulgur-rs/shodo/compare/v0.0.33...v0.0.34) - 2026-10-17
 
 ### Fixed
