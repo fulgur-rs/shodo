@@ -576,8 +576,8 @@ fn shape_ellipsis(
         ),
         combine: None,
         width_feature: None,
-        before: String::new(),
-        after: String::new(),
+        before: crate::analysis::itemize::ShapeContext::default(),
+        after: crate::analysis::itemize::ShapeContext::default(),
     };
     let items = [item];
     let features = crate::shape::FeatureSets::new(&items, &data.styles);

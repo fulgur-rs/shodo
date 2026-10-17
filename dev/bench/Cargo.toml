@@ -117,3 +117,6 @@ name = "soft_hyphen_diff"
 
 [[example]]
 name = "line_small_allocations"
+
+[[example]]
+name = "shape_context_allocations"
