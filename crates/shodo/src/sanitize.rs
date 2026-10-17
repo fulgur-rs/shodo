@@ -24,8 +24,8 @@ pub(crate) fn layout_length(
     LayoutUnit::from_f32_round(v, sat).to_f32()
 }
 
-/// Line options with the caller's `text-indent` length rounded like any
-/// other signed layout length.
+/// Line options with the caller's `text-indent` length and group padding
+/// rounded like any other signed layout length.
 pub(crate) fn line_options(
     options: &LineOptions,
     warnings: &mut WarningSink,
@@ -33,6 +33,7 @@ pub(crate) fn line_options(
 ) -> LineOptions {
     let mut options = *options;
     options.text_indent.length = layout_length(options.text_indent.length, false, warnings, sat);
+    options.group_padding = layout_length(options.group_padding, false, warnings, sat);
     options
 }
 

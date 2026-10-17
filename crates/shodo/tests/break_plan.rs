@@ -118,6 +118,22 @@ fn zero_search_limits_warn_and_nan_empty_inputs_terminate() {
 }
 
 #[test]
+fn a_non_finite_group_padding_still_matches_its_plan() {
+    let p = paragraph("aaa b cccc dd e");
+    let o = LineOptions {
+        text_wrap_style: TextWrapStyle::Pretty,
+        group_padding: f32::NAN,
+        ..LineOptions::default()
+    };
+    let plan = p.plan_breaks(&mut LayoutContext::new(), &o, 70.0, &AtomicSizes::EMPTY);
+    // The plan's breaks, not the greedy fallback of a mismatched plan.
+    assert_eq!(
+        planned(&p, &o, 70.0, &AtomicSizes::EMPTY, &plan),
+        vec![0..6, 6..11, 11..15]
+    );
+}
+
+#[test]
 fn pretty_reduces_raggedness_and_atomic_instances_do_not_match() {
     let p = paragraph("aaa b cccc dd e");
     let o = LineOptions {
