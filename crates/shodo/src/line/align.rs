@@ -41,6 +41,55 @@ fn add_opportunity(opportunities: &mut Vec<Opportunity>, point: Point, count: us
     }
 }
 
+#[cfg(test)]
+std::thread_local! {
+    static REORDER_VECTOR_CONSTRUCTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+fn reset_reorder_vector_constructions() {
+    REORDER_VECTOR_CONSTRUCTIONS.with(|count| count.set(0));
+}
+
+#[cfg(test)]
+fn reorder_vector_constructions() -> usize {
+    REORDER_VECTOR_CONSTRUCTIONS.with(std::cell::Cell::get)
+}
+
+fn uniform_opportunity_level(levels: impl Iterator<Item = u8>) -> Option<u8> {
+    let mut levels = levels;
+    let first = levels.next()?;
+    levels.all(|level| level == first).then_some(first)
+}
+
+fn reorder_opportunities(
+    mut opportunities: Vec<Opportunity>,
+    base_level: u8,
+    level_for: impl Fn(&Opportunity) -> u8 + Copy,
+) -> Vec<Opportunity> {
+    if let Some(level) = uniform_opportunity_level(opportunities.iter().map(level_for)) {
+        if level % 2 != base_level % 2 {
+            opportunities.reverse();
+        }
+        return opportunities;
+    }
+    #[cfg(test)]
+    REORDER_VECTOR_CONSTRUCTIONS.with(|count| count.set(count.get() + 1));
+    let levels: Vec<Level> = opportunities
+        .iter()
+        .map(|opportunity| Level::new(level_for(opportunity)).unwrap())
+        .collect();
+    let mut order = BidiInfo::reorder_visual(&levels);
+    if base_level % 2 == 1 {
+        order.reverse();
+    }
+    opportunities = order
+        .into_iter()
+        .map(|index| opportunities[index])
+        .collect();
+    opportunities
+}
+
 fn shift_for(
     align: TextAlign,
     spare: LayoutUnit,
@@ -294,15 +343,9 @@ fn expand_opportunities(
     sat: &mut Saturation,
     mut opportunities: Vec<Opportunity>,
 ) {
-    let levels: Vec<_> = opportunities
-        .iter()
-        .map(|o| Level::new(data.units[o.point.unit].level).unwrap())
-        .collect();
-    let mut order = BidiInfo::reorder_visual(&levels);
-    if data.base_level % 2 == 1 {
-        order.reverse();
-    }
-    opportunities = order.into_iter().map(|i| opportunities[i]).collect();
+    opportunities = reorder_opportunities(opportunities, data.base_level, |opportunity| {
+        data.units[opportunity.point.unit].level
+    });
     // Aggregate internal boundaries per final glyph cluster instead of
     // retaining one allocation record per character in a compressed ligature.
     let n: i64 = opportunities.iter().map(|o| o.count).sum();
@@ -473,3 +516,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "align/tests.rs"]
+mod reorder_tests;
