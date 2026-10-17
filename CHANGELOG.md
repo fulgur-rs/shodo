@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.33](https://github.com/fulgur-rs/shodo/compare/v0.0.32...v0.0.33) - 2026-10-17
+
+### Added
+
+- *(line)* add text-group-align padding to line alignment
+
+### Fixed
+
+- *(line)* normalize group padding with the other line lengths
+- satisfy workspace clippy in allocation probe
+
+### Other
+
+- address SHODO-56 review findings
+- remove provisional split-cluster arcs
+- keep clipped context fixture within inline cap
+- lazily construct punctuation glyph metrics
+- inline shape item contexts
+- borrow glyph starts without continuations
+- skip uniform bidi opportunity reordering
+- *(accessibility)* reduce output build scans
+- share range intersections and test counter hooks
+- share vertical metric and baseline helpers (SHODO-54)
+- share memoized measurement protocol (SHODO-53)
+- *(line)* share spaced edge replacement costs (SHODO-51)
+- centralize warning checkpoints and rollback (SHODO-52)
+
 ## [0.0.32](https://github.com/fulgur-rs/shodo/compare/v0.0.31...v0.0.32) - 2026-10-15
 
 ### Fixed
