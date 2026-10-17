@@ -17,6 +17,8 @@ use skrifa::{
 std::thread_local! {
     pub(super) static METRIC_PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(super) static BOUNDS_REQUESTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(super) static FONT_REFS_CREATED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(super) static GLYPH_METRICS_CREATED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[test]
@@ -90,6 +92,8 @@ fn repeated_punctuation_reuses_metrics_across_language_runs_and_keeps_sizes_dist
         }
         METRIC_PROBES.with(|count| count.set(0));
         BOUNDS_REQUESTS.with(|count| count.set(0));
+        FONT_REFS_CREATED.with(|count| count.set(0));
+        GLYPH_METRICS_CREATED.with(|count| count.set(0));
         let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
         assert!(paragraph.warnings().is_empty());
         assert_eq!(paragraph.data.runs.len(), repeats);
@@ -105,6 +109,16 @@ fn repeated_punctuation_reuses_metrics_across_language_runs_and_keeps_sizes_dist
         assert!(
             BOUNDS_REQUESTS.with(|count| count.get()) <= 2,
             "outline requests should depend on distinct instance/glyph pairs"
+        );
+        assert_eq!(
+            FONT_REFS_CREATED.with(std::cell::Cell::get),
+            2,
+            "warm non-quote runs should not construct FontRef after each cached instance is warm"
+        );
+        assert_eq!(
+            GLYPH_METRICS_CREATED.with(std::cell::Cell::get),
+            2,
+            "warm non-quote bounds hits should not construct GlyphMetrics"
         );
     }
     // Exceed the instance cache's working set and revisit evicted sizes.
@@ -159,9 +173,13 @@ fn equal_glyph_ids_from_distinct_faces_do_not_share_outline_bounds() {
             },
         );
     }
+    FONT_REFS_CREATED.with(|count| count.set(0));
+    GLYPH_METRICS_CREATED.with(|count| count.set(0));
     let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
     assert!(paragraph.warnings().is_empty());
     assert_eq!(paragraph.data.runs.len(), 4);
+    assert_eq!(FONT_REFS_CREATED.with(std::cell::Cell::get), 2);
+    assert_eq!(GLYPH_METRICS_CREATED.with(std::cell::Cell::get), 2);
     assert!(
         paragraph
             .data
@@ -452,6 +470,76 @@ fn raw_bounds_cache_keeps_missing_outlines_and_stays_bounded() {
         geometry.bounds(&metrics, 255),
         metrics.bounds(GlyphId::new(255))
     );
+}
+
+#[test]
+fn warm_fullwidth_quote_bounds_still_use_quote_advance_metrics() {
+    use crate::geometry::WritingMode;
+
+    let limits = Limits::default();
+    let fonts = crate::test_support::fonts::collection(&limits);
+    fonts
+        .register_face(
+            quote_font(false),
+            0,
+            FontFaceDescriptor {
+                family: "QuoteMetrics".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let style = ParagraphStyle {
+        writing_mode: WritingMode::HorizontalTb,
+        root: InlineStyle {
+            font_families: vec![FontFamily::Named("QuoteMetrics".into())],
+            font_size: 20.0,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut builder = crate::RichText::with_limits(&style, &limits);
+    for lang in ["ja", "en", "fr", "de"] {
+        builder = builder.push(
+            "’",
+            &InlineStyle {
+                lang: Some(lang.into()),
+                ..style.root.clone()
+            },
+        );
+    }
+    FONT_REFS_CREATED.with(|count| count.set(0));
+    GLYPH_METRICS_CREATED.with(|count| count.set(0));
+    BOUNDS_REQUESTS.with(|count| count.set(0));
+
+    let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+
+    assert_eq!(paragraph.data.runs.len(), 4);
+    assert_eq!(
+        paragraph
+            .data
+            .punctuation
+            .iter()
+            .take(4)
+            .map(|p| p.class)
+            .collect::<Vec<_>>(),
+        [P::Closing; 4],
+        "quote advance metrics must still be used after bounds are warm"
+    );
+    assert_eq!(
+        BOUNDS_REQUESTS.with(std::cell::Cell::get),
+        1,
+        "repeated quotes should reuse their bounds: glyphs={:?}, run_instances={:?}, probes={}",
+        paragraph.data.glyphs.id,
+        paragraph
+            .data
+            .runs
+            .iter()
+            .map(|run| (run.font, run.font_size, run.instance.coords.clone()))
+            .collect::<Vec<_>>(),
+        METRIC_PROBES.with(std::cell::Cell::get),
+    );
+    assert_eq!(FONT_REFS_CREATED.with(std::cell::Cell::get), 4);
+    assert_eq!(GLYPH_METRICS_CREATED.with(std::cell::Cell::get), 4);
 }
 
 #[test]

@@ -263,7 +263,7 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
     }
     let mut shaping = 0;
     let mut geometry: Vec<FontGeometry<'_>> = Vec::new();
-    for run in &data.runs {
+    'runs: for run in &data.runs {
         while data
             .shape_items
             .get(shaping)
@@ -278,19 +278,28 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
         let Some(blob) = data.fonts.font_data(run.font) else {
             continue;
         };
-        let Ok(font) = FontRef::from_index(blob.data.as_ref(), blob.index) else {
-            continue;
-        };
-        let metrics = font.glyph_metrics(
-            Size::new(run.font_size),
-            LocationRef::new(&run.instance.coords),
-        );
+        let mut metrics = None;
         let cached = geometry.iter().rposition(|entry| {
             entry.font == run.font
                 && entry.size == run.font_size.to_bits()
                 && entry.coords == run.instance.coords
         });
-        let cached = cached.unwrap_or_else(|| {
+        let cached = if let Some(cached) = cached {
+            cached
+        } else {
+            // FontRef and metrics are needed to probe a new font instance,
+            // but a warm instance needs neither until a later path asks.
+            let Ok(font) = FontRef::from_index(blob.data.as_ref(), blob.index) else {
+                continue;
+            };
+            #[cfg(test)]
+            tests::FONT_REFS_CREATED.with(|count| count.set(count.get() + 1));
+            metrics = Some(font.glyph_metrics(
+                Size::new(run.font_size),
+                LocationRef::new(&run.instance.coords),
+            ));
+            #[cfg(test)]
+            tests::GLYPH_METRICS_CREATED.with(|count| count.set(count.get() + 1));
             // Bound both the number of instances and glyphs per instance.
             if geometry.len() == 8 {
                 geometry.clear();
@@ -298,11 +307,17 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
             #[cfg(test)]
             tests::METRIC_PROBES.with(|count| count.set(count.get() + 1));
             let charmap = font.charmap();
-            let nominal = charmap.map('水').and_then(|g| metrics.advance_width(g));
+            let run_metrics = metrics.as_ref().expect("instance probes have metrics");
+            let nominal = charmap
+                .map('水')
+                .and_then(|glyph| run_metrics.advance_width(glyph));
             // A proportional ideograph face cannot supply a dependable
             // fullwidth measure. Only compare glyphs the face contains.
-            let fullwidth_probes =
-                ['卜', '一'].map(|ch| charmap.map(ch).and_then(|g| metrics.advance_width(g)));
+            let fullwidth_probes = ['卜', '一'].map(|ch| {
+                charmap
+                    .map(ch)
+                    .and_then(|glyph| run_metrics.advance_width(glyph))
+            });
             let proportional = fullwidth_probes
                 .iter()
                 .flatten()
@@ -316,8 +331,26 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
                 bounds: FastMap::default(),
             });
             geometry.len() - 1
-        });
+        };
         let cached = &mut geometry[cached];
+        macro_rules! ensure_metrics {
+            () => {{
+                if metrics.is_none() {
+                    let Ok(font) = FontRef::from_index(blob.data.as_ref(), blob.index) else {
+                        continue 'runs;
+                    };
+                    #[cfg(test)]
+                    tests::FONT_REFS_CREATED.with(|count| count.set(count.get() + 1));
+                    metrics = Some(font.glyph_metrics(
+                        Size::new(run.font_size),
+                        LocationRef::new(&run.instance.coords),
+                    ));
+                    #[cfg(test)]
+                    tests::GLYPH_METRICS_CREATED.with(|count| count.set(count.get() + 1));
+                }
+                metrics.as_ref().expect("requested metrics are initialized")
+            }};
+        }
         let nominal_metric = cached.nominal;
         let nominal = nominal_metric.unwrap_or(run.font_size);
         let proportional = cached.proportional;
@@ -340,7 +373,7 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
             };
             let p = &mut result[index];
             let source_char = data.text[offset as usize..].chars().next().unwrap_or('\0');
-            if data.style.writing_mode == WritingMode::HorizontalTb
+            let quote_advance = if data.style.writing_mode == WritingMode::HorizontalTb
                 && p.class == PunctuationClass::Closing
                 && matches!(source_char, '\u{2019}' | '\u{201d}')
                 && g == begin + 1
@@ -353,13 +386,14 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
             {
                 // Use the selected glyph's nominal metric: shaping features
                 // such as author-provided `halt` may change its advance.
-                if let (Some(nominal), Some(glyph)) = (
-                    nominal_metric,
-                    metrics.advance_width(GlyphId::new(data.glyphs.id[begin])),
-                ) && glyph < nominal - 1.0 / 64.0
-                {
-                    p.class = PunctuationClass::Pe;
-                }
+                ensure_metrics!().advance_width(GlyphId::new(data.glyphs.id[begin]))
+            } else {
+                None
+            };
+            if let (Some(nominal), Some(glyph)) = (nominal_metric, quote_advance)
+                && glyph < nominal - 1.0 / 64.0
+            {
+                p.class = PunctuationClass::Pe;
             }
             if !matches!(
                 p.class,
@@ -378,7 +412,13 @@ pub(crate) fn build(data: &ParagraphData, sat: &mut Saturation) -> Vec<Punctuati
             let upright = run.orientation == crate::shape::orientation::RunOrientation::Upright;
             let mut bounds: Option<(f32, f32)> = None;
             for glyph in begin..g {
-                if let Some(b) = cached.bounds(&metrics, data.glyphs.id[glyph]) {
+                let glyph_id = data.glyphs.id[glyph];
+                let raw_bounds = if let Some(bounds) = cached.bounds.get(&glyph_id) {
+                    *bounds
+                } else {
+                    cached.bounds(ensure_metrics!(), glyph_id)
+                };
+                if let Some(b) = raw_bounds {
                     let (start, end) = if upright {
                         (-b.y_max, -b.y_min)
                     } else {

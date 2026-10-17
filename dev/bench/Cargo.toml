@@ -120,3 +120,6 @@ name = "line_small_allocations"
 
 [[example]]
 name = "shape_context_allocations"
+
+[[example]]
+name = "punctuation_metrics"
