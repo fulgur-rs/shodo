@@ -541,6 +541,7 @@ impl Paragraph {
         );
         line.positions = positions;
         line.glyph_spacing = glyph_spacing;
+        line.remaining = alignment.remaining;
         line.displaced = displaced;
         reshape::apply(&mut line, &mut sat);
         let (root_strut, trimmed_trailing) = line.measure_metrics(&mut sat);
