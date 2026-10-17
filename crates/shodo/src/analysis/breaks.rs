@@ -582,14 +582,17 @@ pub(crate) fn analyze_breaks(
                 following_span += 1;
             }
             // A soft hyphen directly before white space takes no hyphenated
-            // break: UAX #14 rule LB7 forbids a break before the space, and
-            // the line breaks after it instead, where the space hangs or is
-            // removed (CSS Text 3 section 4.1.3).
+            // break: UAX #14 forbids a break before the space (LB7, or LB21
+            // for the ideographic space a full-width transform makes of
+            // it), and the line breaks after it instead, where the space
+            // hangs or is removed (CSS Text 3 section 4.1.3).
             let mut space_follows = false;
             let mandatory_follows = projection.spans.get(following_span).is_some_and(|span| {
                 let pos = span.original.start.max(o.offset);
-                space_follows =
-                    matches!(input.text[pos as usize..].chars().next(), Some(' ' | '\t'));
+                space_follows = matches!(
+                    input.text[pos as usize..].chars().next(),
+                    Some(' ' | '\t' | '\u{3000}')
+                );
                 while input
                     .items
                     .get(following_item)
@@ -1221,6 +1224,16 @@ mod tests {
         assert_eq!(before_space.at(4).class, BreakClass::Prohibited);
         assert!(!before_space.at(4).min_content);
         assert_eq!(before_space.at(5).class, BreakClass::Allowed);
+        let full_width = analyze(
+            "ab\u{AD} cd",
+            InlineStyle {
+                text_transform: TextTransform::FullWidth,
+                ..InlineStyle::default()
+            },
+            true,
+        );
+        assert_eq!(full_width.at(8).class, BreakClass::Prohibited);
+        assert_eq!(full_width.at(11).class, BreakClass::Allowed);
     }
 
     #[test]
