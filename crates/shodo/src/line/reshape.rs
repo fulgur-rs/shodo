@@ -4,6 +4,61 @@ use crate::line::fragments::{GlyphSource, RecordKind};
 use crate::shape::GlyphStore;
 use crate::{LayoutContext, Line};
 
+type SourceClusterKey = usize;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct SourceCluster {
+    key: SourceClusterKey,
+    text_start: u32,
+    text_end: u32,
+    glyph_start: u32,
+    glyph_end: u32,
+}
+
+impl SourceCluster {
+    fn text(self) -> std::ops::Range<u32> {
+        self.text_start..self.text_end
+    }
+
+    fn glyphs(self) -> std::ops::Range<u32> {
+        self.glyph_start..self.glyph_end
+    }
+}
+
+fn assign_parent_box(unit: &mut crate::analysis::units::Unit, stack: &mut Vec<u32>) {
+    match unit.kind {
+        UnitKind::Open { box_index } => {
+            unit.parent_box = stack.last().copied();
+            stack.push(box_index);
+        }
+        UnitKind::Close { .. } => {
+            stack.pop();
+            unit.parent_box = stack.last().copied();
+        }
+        _ => unit.parent_box = stack.last().copied(),
+    }
+}
+
+fn finish_split_group(
+    group: &mut Vec<usize>,
+    source: Option<SourceCluster>,
+    units: &mut [crate::analysis::units::Unit],
+) {
+    let Some(source) = source else {
+        debug_assert!(group.is_empty());
+        return;
+    };
+    let shared = std::sync::Arc::new(crate::analysis::units::SharedCluster {
+        text: source.text(),
+        glyphs: source.glyphs(),
+        units: group[0]..group.last().unwrap() + 1,
+        slices: group.clone(),
+    });
+    for i in group.drain(..) {
+        units[i].shared_cluster = Some(std::sync::Arc::clone(&shared));
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct EdgeOverlay {
     pub(crate) glyphs: std::ops::Range<u32>,
@@ -22,9 +77,10 @@ pub(crate) fn initialize_slices(
     warnings: &mut crate::limits::WarningSink,
     sat: &mut Saturation,
 ) {
-    use crate::analysis::units::{BreakClass, SharedCluster};
+    use crate::analysis::units::BreakClass;
     let original = std::mem::take(&mut data.units);
     let mut units = Vec::with_capacity(original.len());
+    let mut source_clusters = Vec::new();
     let mut markers = Vec::new();
     for (i, unit) in original.iter().enumerate() {
         if !matches!(unit.kind, UnitKind::Cluster { .. }) {
@@ -141,17 +197,18 @@ pub(crate) fn initialize_slices(
             units.push((i, unit));
             continue;
         }
-        let shared = std::sync::Arc::new(SharedCluster {
-            text: unit.text.clone(),
-            glyphs: glyphs.clone(),
-            units: 0..0,
-            slices: Vec::new(),
-        });
+        let source = SourceCluster {
+            key: i,
+            text_start: unit.text.start,
+            text_end: unit.text.end,
+            glyph_start: glyphs.start,
+            glyph_end: glyphs.end,
+        };
+        source_clusters.push(source);
         let mut start = unit.text.start;
         let mut previous = LayoutUnit::ZERO;
         for (boundary, width) in boundaries.iter().zip(measured) {
             let mut slice = unit.clone();
-            slice.shared_cluster = Some(std::sync::Arc::clone(&shared));
             slice.slice_advance = width.sub(previous, sat);
             slice.text = start..boundary.offset;
             slice.break_after = boundary.class;
@@ -170,7 +227,6 @@ pub(crate) fn initialize_slices(
             p.add(data.glyphs.advance[g as usize], sat)
         });
         let mut last = unit;
-        last.shared_cluster = Some(shared);
         last.slice_advance = total.sub(previous, sat);
         last.text.start = start;
         last.unsafe_to_concat = true;
@@ -181,63 +237,45 @@ pub(crate) fn initialize_slices(
     // original ligature owner came from an earlier item.
     let mut merged = Vec::with_capacity(units.len() + markers.len());
     let mut markers = markers.into_iter().peekable();
-    for (ordinal, unit) in units {
+    let mut parent_stack = Vec::new();
+    let mut group = Vec::new();
+    let mut group_source = None;
+    let mut source_cursor = 0;
+    for (ordinal, mut unit) in units {
+        while source_cursor < source_clusters.len() && source_clusters[source_cursor].key < ordinal
+        {
+            source_cursor += 1;
+        }
+        let source = source_clusters
+            .get(source_cursor)
+            .copied()
+            .filter(|source| source.key == ordinal);
+        let source_start = source.map(|source| source.text_start);
         while markers.peek().is_some_and(|(i, marker)| {
             marker.text.start < unit.text.start
                 || marker.text.start == unit.text.start
-                    && (*i < ordinal
-                        || unit
-                            .shared_cluster
-                            .as_ref()
-                            .is_some_and(|c| unit.text.start > c.text.start))
+                    && (*i < ordinal || source_start.is_some_and(|start| unit.text.start > start))
         }) {
-            merged.push(markers.next().unwrap().1);
+            let mut marker = markers.next().unwrap().1;
+            assign_parent_box(&mut marker, &mut parent_stack);
+            merged.push(marker);
         }
+        if group_source.map(|source: SourceCluster| source.key) != source.map(|source| source.key) {
+            finish_split_group(&mut group, group_source, &mut merged);
+            group_source = source;
+        }
+        assign_parent_box(&mut unit, &mut parent_stack);
+        let index = merged.len();
         merged.push(unit);
-    }
-    merged.extend(markers.map(|(_, unit)| unit));
-    // Rebuild group indices once. Window work visits only text slices,
-    // so arbitrarily many zero-width markers do not multiply shaping work.
-    let mut group: Vec<usize> = Vec::new();
-    let finish = |group: &mut Vec<usize>, units: &mut Vec<crate::analysis::units::Unit>| {
-        if group.is_empty() {
-            return;
-        }
-        let previous = units[group[0]].shared_cluster.as_ref().unwrap();
-        let shared = std::sync::Arc::new(SharedCluster {
-            text: previous.text.clone(),
-            glyphs: previous.glyphs.clone(),
-            units: group[0]..group.last().unwrap() + 1,
-            slices: group.clone(),
-        });
-        for i in group.drain(..) {
-            units[i].shared_cluster = Some(std::sync::Arc::clone(&shared));
-        }
-    };
-    let mut stack = Vec::new();
-    for i in 0..merged.len() {
-        match merged[i].kind {
-            UnitKind::Open { box_index } => {
-                merged[i].parent_box = stack.last().copied();
-                stack.push(box_index);
-            }
-            UnitKind::Close { .. } => {
-                stack.pop();
-                merged[i].parent_box = stack.last().copied();
-            }
-            _ => merged[i].parent_box = stack.last().copied(),
-        }
-        if !matches!(merged[i].kind, UnitKind::Cluster { .. }) {
-            continue;
-        }
-        if !group.is_empty() && !merged[group[0]].shares_cluster(&merged[i]) {
-            finish(&mut group, &mut merged);
-        }
-        if merged[i].shared_cluster.is_some() {
-            group.push(i);
+        if source.is_some() {
+            group.push(index);
         }
     }
-    finish(&mut group, &mut merged);
+    for (_, mut marker) in markers {
+        assign_parent_box(&mut marker, &mut parent_stack);
+        merged.push(marker);
+    }
+    finish_split_group(&mut group, group_source, &mut merged);
     data.units = merged;
 }
 
@@ -774,6 +812,20 @@ mod tests {
         ) else {
             panic!()
         };
+        let overlay = justified
+            .overlay
+            .as_ref()
+            .expect("justification should use the reshaped owned overlay");
+        let spacing = overlay
+            .spacing
+            .as_ref()
+            .expect("owned overlay should retain per-glyph justification spacing");
+        assert_eq!(spacing.len(), 3);
+        assert!(
+            spacing
+                .iter()
+                .any(|space| *space != crate::geometry::LayoutUnit::ZERO)
+        );
         let run = justified
             .fragments()
             .find_map(|f| match f {

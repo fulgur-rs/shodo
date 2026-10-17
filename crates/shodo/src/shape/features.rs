@@ -299,8 +299,8 @@ mod tests {
             orientation,
             combine: None,
             width_feature,
-            before: String::new(),
-            after: String::new(),
+            before: crate::analysis::itemize::ShapeContext::default(),
+            after: crate::analysis::itemize::ShapeContext::default(),
         };
         STYLE_FEATURE_BUILDS.with(|count| count.set(0));
         let features = for_item(style, &item);

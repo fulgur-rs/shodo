@@ -37,8 +37,8 @@ impl<'a> ShapeInput<'a> {
         Self {
             original,
             scalars: &original.scalars,
-            before: Context::Borrowed(&original.before),
-            after: Context::Borrowed(&original.after),
+            before: Context::Borrowed(original.before.as_str()),
+            after: Context::Borrowed(original.after.as_str()),
             width_feature: original.width_feature,
         }
     }
@@ -56,6 +56,7 @@ impl<'a> ShapeInput<'a> {
         let mut count = 0;
         for c in original
             .before
+            .as_str()
             .chars()
             .chain(original.scalars[..begin].iter().map(|s| s.c))
             .rev()
@@ -72,7 +73,7 @@ impl<'a> ShapeInput<'a> {
                 original.scalars[end..]
                     .iter()
                     .map(|s| s.c)
-                    .chain(original.after.chars()),
+                    .chain(original.after.as_str().chars()),
             ),
             width_feature: original.width_feature,
         })
@@ -160,10 +161,20 @@ mod tests {
             orientation: crate::shape::orientation::RunOrientation::Horizontal,
             combine: None,
             width_feature: None,
-            before: "前😀é甲乙丙".into(),
-            after: "後😀é甲乙丙".into(),
+            before: crate::analysis::itemize::ShapeContext::from_chars("😀é甲乙丙".chars()),
+            after: crate::analysis::itemize::ShapeContext::from_chars("後😀é甲乙丙".chars()),
         }
     }
+    #[test]
+    fn whole_input_borrows_shape_contexts() {
+        let original = item();
+        let view = ShapeInput::whole(&original);
+        assert!(matches!(&view.before, Context::Borrowed(_)));
+        assert!(matches!(&view.after, Context::Borrowed(_)));
+        assert!(std::ptr::eq(view.before.as_str(), original.before.as_str()));
+        assert!(std::ptr::eq(view.after.as_str(), original.after.as_str()));
+    }
+
     #[test]
     fn utf8_clip_keeps_five_scalar_contexts_and_original_flags() {
         let original = item();

@@ -1717,3 +1717,225 @@ fn hyphen_before_closing_controls_fits_at_its_materialized_width() {
         assert!(cx.take_warnings().is_empty());
     }
 }
+
+#[test]
+fn glyph_starts_borrow_when_no_continuations() {
+    use std::borrow::Cow;
+
+    let starts = [
+        crate::geometry::LayoutUnit::from_raw(16),
+        crate::geometry::LayoutUnit::from_raw(48),
+    ];
+    crate::line::fragments::glyph_start_copy_probe::reset();
+    let adjusted = crate::line::fragments::adjusted_glyph_starts(&starts, &[]);
+    assert!(matches!(&adjusted, Cow::Borrowed(_)));
+    assert_eq!(adjusted.as_ref(), &starts);
+    assert_eq!(
+        crate::line::fragments::glyph_start_copy_probe::count(),
+        0,
+        "no continuation should not clone starts"
+    );
+}
+
+#[test]
+fn glyph_starts_clone_once_and_adjust_only_for_continuations() {
+    use std::borrow::Cow;
+
+    let starts = [
+        crate::geometry::LayoutUnit::from_raw(48),
+        crate::geometry::LayoutUnit::from_raw(16),
+        crate::geometry::LayoutUnit::from_raw(64),
+        crate::geometry::LayoutUnit::from_raw(32),
+    ];
+    crate::line::fragments::glyph_start_copy_probe::reset();
+    let adjusted = crate::line::fragments::adjusted_glyph_starts(&starts, &[(0, 1), (2, 3)]);
+    assert!(matches!(&adjusted, Cow::Owned(_)));
+    assert_eq!(
+        adjusted.as_ref(),
+        &[
+            crate::geometry::LayoutUnit::from_raw(16),
+            crate::geometry::LayoutUnit::from_raw(16),
+            crate::geometry::LayoutUnit::from_raw(32),
+            crate::geometry::LayoutUnit::from_raw(32),
+        ]
+    );
+    assert_eq!(crate::line::fragments::glyph_start_copy_probe::count(), 1);
+}
+
+#[test]
+fn glyph_starts_borrow_for_bidi_line_without_shared_cluster() {
+    use crate::geometry::Direction;
+    use crate::style::{FontFamily, UnicodeBidi};
+
+    let fonts = final_review_fonts();
+    for (bytes, family) in [
+        (crate::test_support::fonts::LATIN, "Shodo Fixture Latin"),
+        (crate::test_support::fonts::ARABIC, "Shodo Fixture Arabic"),
+    ] {
+        fonts
+            .register_face(
+                bytes.to_vec(),
+                0,
+                crate::font::FontFaceDescriptor {
+                    family: family.into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+    let mut style = ParagraphStyle::default();
+    style.root.font_families = ["Shodo Fixture Latin", "Shodo Fixture Arabic"]
+        .into_iter()
+        .map(|family| FontFamily::Named(family.into()))
+        .collect();
+    let mut rtl = style.root.clone();
+    rtl.direction = Direction::Rtl;
+    rtl.unicode_bidi = UnicodeBidi::BidiOverride;
+    let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+    builder
+        .open_inline(NodeId(30), &rtl, InlineEdges::default())
+        .push_text(TextSource::Generated { node: NodeId(31) }, "مرحبا بالعالم")
+        .close_inline();
+    let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+    assert!(
+        paragraph
+            .data
+            .units
+            .iter()
+            .all(|unit| unit.shared_cluster.is_none())
+    );
+    assert!(
+        paragraph
+            .data
+            .units
+            .iter()
+            .any(|unit| unit.level != paragraph.data.base_level)
+    );
+
+    crate::line::fragments::glyph_start_copy_probe::reset();
+    let mut cx = LayoutContext::new();
+    let lines = paragraph.break_all(
+        &mut cx,
+        &LineOptions::default(),
+        1000.0,
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(lines.len(), 1);
+    assert_eq!(crate::line::fragments::glyph_start_copy_probe::count(), 0);
+    assert!(
+        lines[0]
+            .fragments()
+            .any(|fragment| matches!(fragment, Fragment::GlyphRun(_)))
+    );
+    assert!(cx.take_warnings().is_empty());
+}
+
+#[test]
+fn glyph_starts_keep_rtl_inline_box_hanging_punctuation_geometry() {
+    use crate::geometry::Direction;
+    use crate::style::{FontFamily, OverflowWrap, UnicodeBidi};
+
+    let fonts = final_review_fonts();
+    for (bytes, family) in [
+        (crate::test_support::fonts::LATIN, "Shodo Fixture Latin"),
+        (crate::test_support::fonts::CJK, "Shodo Fixture CJK"),
+        (crate::test_support::fonts::ARABIC, "Shodo Fixture Arabic"),
+    ] {
+        fonts
+            .register_face(
+                bytes.to_vec(),
+                0,
+                crate::font::FontFaceDescriptor {
+                    family: family.into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+    let mut style = ParagraphStyle::default();
+    style.root.font_size = 16.0;
+    style.root.overflow_wrap = OverflowWrap::Anywhere;
+    style.root.font_families = [
+        "Shodo Fixture Latin",
+        "Shodo Fixture CJK",
+        "Shodo Fixture Arabic",
+    ]
+    .into_iter()
+    .map(|family| FontFamily::Named(family.into()))
+    .collect();
+    let mut rtl = style.root.clone();
+    rtl.direction = Direction::Rtl;
+    rtl.unicode_bidi = UnicodeBidi::BidiOverride;
+    rtl.box_decoration_break = crate::style::BoxDecorationBreak::Clone;
+
+    let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+    for (node, text) in [(21, "f"), (22, "f"), (23, "i")] {
+        builder.push_text(TextSource::Generated { node: NodeId(node) }, text);
+    }
+    builder.open_inline(NodeId(20), &rtl, InlineEdges::default());
+    builder.push_text(
+        TextSource::Generated { node: NodeId(24) },
+        &" VAVAVAVA العربية،".repeat(12),
+    );
+    builder.close_inline();
+    builder.push_text(TextSource::Generated { node: NodeId(25) }, "、 ");
+    let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+    assert!(paragraph.data.units.iter().any(|unit| {
+        unit.shared_cluster
+            .as_ref()
+            .is_some_and(|shared| shared.slices.len() > 1)
+    }));
+    assert!(
+        paragraph
+            .data
+            .units
+            .iter()
+            .any(|unit| unit.level != paragraph.data.base_level)
+    );
+
+    crate::line::fragments::glyph_start_copy_probe::reset();
+    let mut cx = LayoutContext::new();
+    let options = LineOptions {
+        hanging_punctuation: crate::style::HangingPunctuation {
+            force_end: true,
+            last: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let lines = paragraph.break_all(&mut cx, &options, 100.0, &AtomicSizes::EMPTY);
+    assert!(lines.len() > 1);
+    assert_eq!(
+        crate::line::fragments::glyph_start_copy_probe::count(),
+        1,
+        "only the line containing the shared shaping cluster needs an owned start copy"
+    );
+    assert!(cx.take_warnings().is_empty());
+    for line in &lines {
+        assert!(line.inline_size() <= 100.0);
+        let box_fragments: Vec<_> = line
+            .fragments()
+            .filter_map(|fragment| match fragment {
+                Fragment::InlineBox(fragment) if fragment.node == NodeId(20) => Some(fragment),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(box_fragments.len(), 1, "line {:?}", line.text_range());
+        assert!(box_fragments[0].has_start_edge);
+        assert!(box_fragments[0].has_end_edge);
+        let runs: Vec<_> = line
+            .fragments()
+            .filter_map(|fragment| match fragment {
+                Fragment::GlyphRun(run) => Some(run),
+                _ => None,
+            })
+            .collect();
+        assert!(!runs.is_empty());
+        for run in runs {
+            assert!(run.inline_start().is_finite());
+            assert!(run.glyphs().all(|glyph| {
+                glyph.id != 0 && glyph.inline_position.is_finite() && glyph.advance.is_finite()
+            }));
+        }
+    }
+}

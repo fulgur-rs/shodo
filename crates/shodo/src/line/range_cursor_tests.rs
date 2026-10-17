@@ -106,6 +106,290 @@ fn clipped_hyphen_paragraph() -> (crate::Paragraph, usize, usize) {
 }
 
 #[test]
+fn split_cluster_identity_preserves_marker_order_and_shared_groups() {
+    use crate::analysis::units::UnitKind;
+    use crate::style::ParagraphStyle;
+    use std::sync::Arc;
+
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
+    fonts
+        .register_face(
+            crate::test_support::fonts::LATIN.to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let style = InlineStyle {
+        font_families: vec![FontFamily::Named("Latin".into())],
+        overflow_wrap: OverflowWrap::Anywhere,
+        ..Default::default()
+    };
+    let paragraph_style = ParagraphStyle {
+        root: style.clone(),
+        ..Default::default()
+    };
+    let mut builder = ParagraphBuilder::new(&paragraph_style, &Limits::default());
+    builder
+        .push_text(TextSource::Generated { node: NodeId(1) }, "f")
+        .open_inline(NodeId(10), &style, InlineEdges::default())
+        .open_inline(NodeId(11), &style, InlineEdges::default())
+        .push_text(TextSource::Generated { node: NodeId(2) }, "f")
+        .close_inline()
+        .push_text(TextSource::Generated { node: NodeId(3) }, "i")
+        .close_inline()
+        .push_text(TextSource::Generated { node: NodeId(4) }, " ffi");
+    let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+
+    let mut owners = Vec::<usize>::new();
+    for (index, unit) in paragraph.data.units.iter().enumerate() {
+        let Some(shared) = &unit.shared_cluster else {
+            continue;
+        };
+        if owners.iter().all(|&owner| {
+            !Arc::ptr_eq(
+                shared,
+                paragraph.data.units[owner].shared_cluster.as_ref().unwrap(),
+            )
+        }) {
+            owners.push(index);
+        }
+    }
+    assert!(
+        owners.len() >= 2,
+        "the real Latin fixture should split the marker group and following ffi group"
+    );
+    let mut continuation_markers = Vec::new();
+    for first_index in owners {
+        let shared = paragraph.data.units[first_index]
+            .shared_cluster
+            .as_ref()
+            .unwrap();
+        assert!(shared.slices.len() >= 2);
+        assert_eq!(shared.units.start, *shared.slices.first().unwrap());
+        assert_eq!(shared.units.end, shared.slices.last().unwrap() + 1);
+        let mut end = shared.text.start;
+        for &index in &shared.slices {
+            let slice = &paragraph.data.units[index];
+            assert!(Arc::ptr_eq(slice.shared_cluster.as_ref().unwrap(), shared));
+            assert_eq!(slice.text.start, end, "slice order changed");
+            assert!(slice.text.end >= slice.text.start);
+            if slice.text.start > shared.text.start {
+                let markers: Vec<_> = paragraph
+                    .data
+                    .units
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, marker)| {
+                        !matches!(marker.kind, UnitKind::Cluster { .. })
+                            && marker.text.start == slice.text.start
+                    })
+                    .collect();
+                if !markers.is_empty() {
+                    assert!(
+                        markers
+                            .iter()
+                            .all(|(marker_index, _)| *marker_index < index),
+                        "every continuation marker must precede its slice at {}",
+                        slice.text.start
+                    );
+                    continuation_markers.push((
+                        slice.text.start,
+                        markers
+                            .iter()
+                            .map(|(_, marker)| marker.kind.clone())
+                            .collect::<Vec<_>>(),
+                    ));
+                }
+            }
+            end = slice.text.end;
+        }
+        assert_eq!(end, shared.text.end);
+        assert!(shared.glyphs.start < shared.glyphs.end);
+    }
+    assert_eq!(
+        continuation_markers,
+        [
+            (
+                1,
+                vec![
+                    UnitKind::Open { box_index: 0 },
+                    UnitKind::Open { box_index: 1 }
+                ],
+            ),
+            (2, vec![UnitKind::Close { box_index: 1 }]),
+        ],
+        "all inline markers at continuation starts must precede their slices in source order"
+    );
+
+    let mut stack = Vec::new();
+    for unit in &paragraph.data.units {
+        match unit.kind {
+            UnitKind::Open { box_index } => {
+                assert_eq!(unit.parent_box, stack.last().copied());
+                stack.push(box_index);
+            }
+            UnitKind::Close { .. } => {
+                stack.pop();
+                assert_eq!(unit.parent_box, stack.last().copied());
+            }
+            _ => assert_eq!(unit.parent_box, stack.last().copied()),
+        }
+    }
+}
+
+#[test]
+fn split_cluster_identity_preserves_first_line_cursor_slices() {
+    use crate::analysis::units::BreakClass;
+    use crate::style::{FontVariantLigatures, ParagraphStyle};
+
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
+    fonts
+        .register_face(
+            crate::test_support::fonts::LATIN.to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let normal = InlineStyle {
+        font_families: vec![FontFamily::Named("Latin".into())],
+        ..Default::default()
+    };
+    let first = InlineStyle {
+        font_variant_ligatures: FontVariantLigatures {
+            none: true,
+            ..Default::default()
+        },
+        ..normal.clone()
+    };
+    let style = ParagraphStyle {
+        root: normal,
+        first_line: Some(first),
+        ..Default::default()
+    };
+    let mut builder = ParagraphBuilder::new(&style, &Limits::default());
+    builder.push_text(TextSource::Generated { node: NodeId(1) }, "ffi");
+    let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+    let shared = paragraph
+        .data
+        .units
+        .iter()
+        .find_map(|unit| unit.shared_cluster.as_ref())
+        .expect("normal run should shape ffi as a shared ligature");
+    let cursor_cuts: Vec<_> = shared
+        .slices
+        .iter()
+        .filter_map(|&index| {
+            let unit = &paragraph.data.units[index];
+            unit.first_line_cursor.then_some(unit.text.end)
+        })
+        .collect();
+    assert_eq!(cursor_cuts, [1, 2]);
+    for &index in &shared.slices {
+        let unit = &paragraph.data.units[index];
+        if unit.first_line_cursor {
+            assert_eq!(unit.break_after, BreakClass::Prohibited);
+            assert!(unit.text.end < shared.text.end);
+        }
+    }
+    assert_eq!(
+        shared.units,
+        shared.slices[0]..shared.slices.last().unwrap() + 1
+    );
+}
+
+#[test]
+fn equal_text_ranges_keep_storage_split_owners_separate() {
+    use crate::analysis::units::UnitKind;
+    use crate::style::ParagraphStyle;
+    use std::sync::Arc;
+
+    let fonts = crate::test_support::fonts::collection(&Limits::default());
+    fonts
+        .register_face(
+            crate::test_support::fonts::LATIN.to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let style = InlineStyle {
+        font_families: vec![FontFamily::Named("Latin".into())],
+        overflow_wrap: OverflowWrap::Anywhere,
+        ..Default::default()
+    };
+    let mut builder = ParagraphBuilder::new(
+        &ParagraphStyle {
+            root: style,
+            ..Default::default()
+        },
+        &Limits::default(),
+    );
+    builder.push_text(TextSource::Generated { node: NodeId(1) }, "ffia");
+    let mut paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+    let data = Arc::get_mut(&mut paragraph.data).unwrap();
+    let (slice_index, text, other_glyphs) = {
+        let shared = data
+            .units
+            .iter()
+            .find_map(|unit| unit.shared_cluster.as_ref())
+            .unwrap();
+        let other_glyphs = data
+            .units
+            .iter()
+            .find_map(|unit| {
+                (unit.shared_cluster.is_none())
+                    .then_some(&unit.kind)
+                    .and_then(|kind| match kind {
+                        UnitKind::Cluster { glyphs, .. } => Some(glyphs.clone()),
+                        _ => None,
+                    })
+            })
+            .unwrap();
+        (shared.slices[0], shared.text.clone(), other_glyphs)
+    };
+    let mut first = data.units[slice_index].clone();
+    first.text = text;
+    first.shared_cluster = None;
+    first.slice_advance = crate::geometry::LayoutUnit::ZERO;
+    let mut second = first.clone();
+    if let UnitKind::Cluster { glyphs, .. } = &mut second.kind {
+        *glyphs = other_glyphs.clone();
+    }
+    let first_glyphs = match &first.kind {
+        UnitKind::Cluster { glyphs, .. } => glyphs.clone(),
+        _ => unreachable!(),
+    };
+    assert_ne!(first_glyphs, other_glyphs);
+    data.units = vec![first, second];
+
+    let mut cx = LayoutContext::new();
+    let mut warnings = crate::limits::WarningSink::new(None);
+    super::super::reshape::initialize_slices(
+        data,
+        None,
+        &mut cx,
+        &mut warnings,
+        &mut Saturation::default(),
+    );
+    assert_eq!(data.units.len(), 2);
+    assert_eq!(data.units[0].text, data.units[1].text);
+    assert!(data.units.iter().all(|unit| unit.shared_cluster.is_none()));
+    let glyph_range = |unit: &crate::analysis::units::Unit| match &unit.kind {
+        UnitKind::Cluster { glyphs, .. } => glyphs.clone(),
+        _ => unreachable!(),
+    };
+    assert_ne!(glyph_range(&data.units[0]), glyph_range(&data.units[1]));
+}
+
+#[test]
 fn scalar_clipped_hyphen_keeps_clipped_warning_before_hyphen_warning() {
     let (mut p, start, end) = clipped_hyphen_paragraph();
     let limits = &mut std::sync::Arc::get_mut(&mut p.data).unwrap().limits;

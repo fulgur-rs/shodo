@@ -3084,8 +3084,10 @@ fn compatible_unedited_edge_keeps_owned_merge_and_same_full_shaping() {
     let first = &mut data.shape_items[0];
     let mut second = first.clone();
     second.scalars = first.scalars.split_off(18);
-    second.before = first.scalars[13..].iter().map(|s| s.c).collect();
-    first.after = second.scalars[..5].iter().map(|s| s.c).collect();
+    second.before =
+        crate::analysis::itemize::ShapeContext::from_chars(first.scalars[13..].iter().map(|s| s.c));
+    first.after =
+        crate::analysis::itemize::ShapeContext::from_chars(second.scalars[..5].iter().map(|s| s.c));
     first.end = 18;
     data.shape_items.push(second);
     crate::analysis::itemize::SCALAR_CLONES.with(|count| count.set(0));
@@ -3104,6 +3106,32 @@ fn compatible_unedited_edge_keeps_owned_merge_and_same_full_shaping() {
     );
     assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
     assert!(warnings.take().is_empty());
+}
+
+#[test]
+fn replacement_split_merge_preserves_context_order() {
+    let p = edge_input_paragraph(true, 1024);
+    let mut original = p.data.shape_items[0].clone();
+    original.before = crate::analysis::itemize::ShapeContext::from_chars("PQRST".chars());
+    original.after = crate::analysis::itemize::ShapeContext::from_chars("UVWXY".chars());
+    let replacement = Replacement {
+        text: 17..18,
+        c: '‑',
+        font: original.font.clone(),
+    };
+
+    let items = edited_shape_items(
+        std::slice::from_ref(&original),
+        &(5..31),
+        Some(&replacement),
+    );
+
+    assert_eq!(items.len(), 1, "compatible replacement pieces should merge");
+    assert_eq!(items[0].before.as_str(), "abcde");
+    assert_eq!(items[0].after.as_str(), "56789");
+    assert_eq!(items[0].scalars.len(), 26);
+    assert_eq!(items[0].scalars[12].c, '‑');
+    assert_eq!(items[0].end, 31);
 }
 
 #[test]

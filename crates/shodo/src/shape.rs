@@ -267,13 +267,14 @@ pub(crate) fn select_combined_widths(
                     )
                 });
                 COMBINED_WIDTH_GROUP_CLONE_BYTES.with(|bytes| {
+                    // ShapeContext is inline in ShapeItem and is included in
+                    // the group storage; only each scalar Vec needs a separate
+                    // cloned buffer.
                     let cloned = std::mem::size_of_val(group)
                         + group
                             .iter()
                             .map(|item| {
                                 item.scalars.len() * size_of::<crate::analysis::itemize::Scalar>()
-                                    + item.before.len()
-                                    + item.after.len()
                             })
                             .sum::<usize>();
                     bytes.set(bytes.get().saturating_add(cloned));
@@ -1210,6 +1211,90 @@ pub(crate) struct Replacement {
     pub(crate) font: Option<std::sync::Arc<crate::font::FontMatch>>,
 }
 
+fn edited_shape_items(
+    originals: &[crate::analysis::itemize::ShapeItem],
+    text: &std::ops::Range<u32>,
+    replacement: Option<&Replacement>,
+) -> Vec<crate::analysis::itemize::ShapeItem> {
+    use crate::analysis::itemize::{ShapeContext, ShapeItem};
+
+    let replacement = replacement.filter(|r| text.start <= r.text.start && r.text.end <= text.end);
+    let mut items: Vec<ShapeItem> = Vec::new();
+    for original in originals
+        .iter()
+        .take_while(|item| item.scalars.first().is_some_and(|s| s.offset < text.end))
+    {
+        let begin = original.scalars.partition_point(|s| s.offset < text.start);
+        let end = original.scalars.partition_point(|s| s.offset < text.end);
+        if begin == end {
+            continue;
+        }
+        // Font substitution can split an original item; newly identical
+        // adjacent segments join before shaping so GPOS sees the hyphen.
+        let mut at = begin;
+        while at < end {
+            let edited = replacement.filter(|r| original.scalars[at].offset == r.text.start);
+            let font = edited.map_or_else(|| original.font.clone(), |r| r.font.clone());
+            let mut finish = at + 1;
+            if edited.is_none() {
+                while finish < end
+                    && replacement.is_none_or(|r| original.scalars[finish].offset != r.text.start)
+                {
+                    finish += 1;
+                }
+            }
+            let mut reversed = ['\0'; 5];
+            let mut count = 0;
+            for c in original
+                .before
+                .as_str()
+                .chars()
+                .chain(original.scalars[..at].iter().map(|s| s.c))
+                .rev()
+                .take(5)
+            {
+                reversed[count] = c;
+                count += 1;
+            }
+            let mut scalars = original.scalars[at..finish].to_vec();
+            if let Some(r) = edited {
+                scalars[0].c = r.c;
+                scalars[0].end = r.text.end;
+            }
+            let part = ShapeItem {
+                segment: original.segment,
+                end: edited.map_or_else(|| scalars.last().unwrap().end, |r| r.text.end),
+                scalars,
+                style: original.style,
+                level: original.level,
+                script: original.script,
+                font,
+                orientation: original.orientation,
+                combine: original.combine,
+                width_feature: original.width_feature,
+                before: ShapeContext::from_chars(reversed[..count].iter().rev().copied()),
+                after: ShapeContext::from_chars(
+                    original.scalars[finish..]
+                        .iter()
+                        .map(|s| s.c)
+                        .chain(original.after.as_str().chars()),
+                ),
+            };
+            if let Some(previous) = items.last_mut()
+                && input::compatible(previous, &part)
+            {
+                previous.scalars.extend(part.scalars);
+                previous.end = part.end;
+                previous.after = part.after;
+            } else {
+                items.push(part);
+            }
+            at = finish;
+        }
+    }
+    items
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn shape_window_edit(
     data: &crate::paragraph::ParagraphData,
@@ -1243,120 +1328,47 @@ pub(crate) fn shape_window_edit(
     let mut limits = data.limits.clone();
     limits.max_shaped_glyphs = glyph_budget;
     let mut ledger = LimitsLedger::new(&limits);
-    let result = if replacement.is_none()
-        && input::can_borrow(&data.shape_items[index..], &unit.text)
-    {
-        let mut instances = std::mem::take(&mut cx.window_instances);
-        instances.begin(data);
-        let result = shape_inputs(
-            cx,
-            input::clipped_items(&data.shape_items[index..], unit.text.clone()),
-            &ShapeEnv {
-                styles: &data.styles,
-                fonts: &data.fonts,
-                mode: data.style.writing_mode,
-                limits: &limits,
-                feature_sets: &data.shape_features,
-            },
-            warnings,
-            sat,
-            &mut ledger,
-            ShapeOptions {
-                window_instances: Some(&mut instances),
-                ..Default::default()
-            },
-        );
-        cx.window_instances = instances;
-        result
-    } else {
-        let mut items: Vec<crate::analysis::itemize::ShapeItem> = Vec::new();
-        for original in data.shape_items[index..]
-            .iter()
-            .take_while(|i| i.scalars.first().is_some_and(|s| s.offset < unit.text.end))
-        {
-            let begin = original
-                .scalars
-                .partition_point(|s| s.offset < unit.text.start);
-            let end = original
-                .scalars
-                .partition_point(|s| s.offset < unit.text.end);
-            if begin == end {
-                continue;
-            }
-            // Font substitution can split an original item; newly identical
-            // adjacent segments join before shaping so GPOS sees the hyphen.
-            let mut at = begin;
-            while at < end {
-                let edited = replacement.filter(|r| original.scalars[at].offset == r.text.start);
-                let font = edited.map_or_else(|| original.font.clone(), |r| r.font.clone());
-                let mut finish = at + 1;
-                if edited.is_none() {
-                    while finish < end
-                        && replacement
-                            .is_none_or(|r| original.scalars[finish].offset != r.text.start)
-                    {
-                        finish += 1;
-                    }
-                }
-                let mut before: Vec<_> = original
-                    .before
-                    .chars()
-                    .chain(original.scalars[..at].iter().map(|s| s.c))
-                    .rev()
-                    .take(5)
-                    .collect();
-                before.reverse();
-                let mut scalars = original.scalars[at..finish].to_vec();
-                if let Some(r) = edited {
-                    scalars[0].c = r.c;
-                    scalars[0].end = r.text.end;
-                }
-                let part = crate::analysis::itemize::ShapeItem {
-                    segment: original.segment,
-                    end: edited.map_or_else(|| scalars.last().unwrap().end, |r| r.text.end),
-                    scalars,
-                    style: original.style,
-                    level: original.level,
-                    script: original.script,
-                    font,
-                    orientation: original.orientation,
-                    combine: original.combine,
-                    width_feature: original.width_feature,
-                    before: before.into_iter().collect(),
-                    after: original.scalars[finish..]
-                        .iter()
-                        .map(|s| s.c)
-                        .chain(original.after.chars())
-                        .take(5)
-                        .collect(),
-                };
-                if let Some(previous) = items.last_mut()
-                    && input::compatible(previous, &part)
-                {
-                    previous.scalars.extend(part.scalars);
-                    previous.end = part.end;
-                    previous.after = part.after;
-                } else {
-                    items.push(part);
-                }
-                at = finish;
-            }
-        }
-        shape_items_env(
-            cx,
-            &items,
-            &crate::shape::ShapeEnv {
-                styles: &data.styles,
-                fonts: &data.fonts,
-                mode: data.style.writing_mode,
-                limits: &limits,
-                feature_sets: &data.shape_features,
-            },
-            warnings,
-            sat,
-            &mut ledger,
-        )
-    };
+    let result =
+        if replacement.is_none() && input::can_borrow(&data.shape_items[index..], &unit.text) {
+            let mut instances = std::mem::take(&mut cx.window_instances);
+            instances.begin(data);
+            let result = shape_inputs(
+                cx,
+                input::clipped_items(&data.shape_items[index..], unit.text.clone()),
+                &ShapeEnv {
+                    styles: &data.styles,
+                    fonts: &data.fonts,
+                    mode: data.style.writing_mode,
+                    limits: &limits,
+                    feature_sets: &data.shape_features,
+                },
+                warnings,
+                sat,
+                &mut ledger,
+                ShapeOptions {
+                    window_instances: Some(&mut instances),
+                    ..Default::default()
+                },
+            );
+            cx.window_instances = instances;
+            result
+        } else {
+            let items = edited_shape_items(&data.shape_items[index..], &unit.text, replacement);
+            shape_items_env(
+                cx,
+                &items,
+                &crate::shape::ShapeEnv {
+                    styles: &data.styles,
+                    fonts: &data.fonts,
+                    mode: data.style.writing_mode,
+                    limits: &limits,
+                    feature_sets: &data.shape_features,
+                },
+                warnings,
+                sat,
+                &mut ledger,
+            )
+        };
     match result {
         Ok((store, mut runs)) => {
             if let Some(r) = replacement {

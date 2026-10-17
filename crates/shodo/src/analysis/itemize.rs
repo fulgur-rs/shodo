@@ -43,6 +43,31 @@ impl Clone for Scalar {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct ShapeContext {
+    bytes: [u8; 20],
+    len: u8,
+}
+
+impl ShapeContext {
+    pub(crate) fn from_chars(chars: impl Iterator<Item = char>) -> Self {
+        let mut bytes = [0; 20];
+        let mut len = 0usize;
+        for c in chars.take(5) {
+            len += c.encode_utf8(&mut bytes[len..]).len();
+        }
+        Self {
+            bytes,
+            len: len as u8,
+        }
+    }
+
+    pub(crate) fn as_str(&self) -> &str {
+        std::str::from_utf8(&self.bytes[..self.len as usize])
+            .expect("shape context is encoded from Unicode scalars")
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct ShapeItem {
     /// Hard-boundary context; substitutions may join only within this segment.
@@ -56,8 +81,8 @@ pub(crate) struct ShapeItem {
     pub(crate) orientation: crate::shape::orientation::RunOrientation,
     pub(crate) combine: Option<u32>,
     pub(crate) width_feature: Option<[u8; 4]>,
-    pub(crate) before: String,
-    pub(crate) after: String,
+    pub(crate) before: ShapeContext,
+    pub(crate) after: ShapeContext,
 }
 
 /// Whether an inline box boundary separates shaping. A side with a
@@ -146,10 +171,10 @@ impl Hash for QueryLanguage<'_> {
     }
 }
 
-fn after_context(scalars: &[Scalar]) -> String {
+fn after_context(scalars: &[Scalar]) -> ShapeContext {
     #[cfg(test)]
     tests::AFTER_CONTEXT_CALLS.with(|calls| calls.set(calls.get() + 1));
-    scalars.iter().take(5).map(|s| s.c).collect()
+    ShapeContext::from_chars(scalars.iter().map(|s| s.c))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -372,11 +397,12 @@ pub(crate) fn itemize(
                         orientation,
                         combine,
                         width_feature: None,
-                        before: scalars[part_start.saturating_sub(5)..part_start]
-                            .iter()
-                            .map(|s| s.c)
-                            .collect(),
-                        after: String::new(),
+                        before: ShapeContext::from_chars(
+                            scalars[part_start.saturating_sub(5)..part_start]
+                                .iter()
+                                .map(|s| s.c),
+                        ),
+                        after: ShapeContext::default(),
                     });
                 }
                 part_start = part_end;
@@ -509,7 +535,7 @@ pub(crate) fn itemize(
 
 #[cfg(test)]
 mod tests {
-    use super::QueryKey;
+    use super::{QueryKey, ShapeContext};
     use crate::font::{FontCollection, FontOptions};
     use crate::geometry::WritingMode;
     use crate::limits::Limits;
@@ -517,6 +543,18 @@ mod tests {
     use crate::shape::orientation::RunOrientation;
     use crate::style::{ParagraphStyle, TextOrientation};
     use crate::{LayoutContext, Paragraph, ParagraphBuilder};
+
+    #[test]
+    fn shape_context_caps_five_scalars_in_normal_order() {
+        assert_eq!(std::mem::size_of::<ShapeContext>(), 21);
+        let emoji = ShapeContext::from_chars("😀😁😂😃😄😅".chars());
+        assert_eq!(emoji.as_str(), "😀😁😂😃😄");
+        assert_eq!(emoji.as_str().len(), 20);
+
+        let combining = ShapeContext::from_chars("a\u{301}bcdef".chars());
+        assert_eq!(combining.as_str(), "a\u{301}bcd");
+        assert_eq!(combining.as_str().chars().count(), 5);
+    }
 
     #[test]
     fn borrowed_query_keys_preserve_normalization_and_collision_identity() {
@@ -790,8 +828,8 @@ mod tests {
             AFTER_CONTEXT_CALLS.with(|calls| calls.set(0));
             let p = paragraph(WritingMode::HorizontalTb, &text);
             assert_eq!(p.data.shape_items.len(), 1);
-            assert_eq!(p.data.shape_items[0].before, "");
-            assert_eq!(p.data.shape_items[0].after, "");
+            assert_eq!(p.data.shape_items[0].before.as_str(), "");
+            assert_eq!(p.data.shape_items[0].after.as_str(), "");
             AFTER_CONTEXT_CALLS.with(|calls| assert_eq!(calls.get(), 1));
         }
         let mut style = ParagraphStyle::default();
@@ -809,7 +847,7 @@ mod tests {
         let alternate = &p.data.first_line.as_ref().unwrap().data;
         assert_eq!(alternate.shape_items.len(), 1);
         assert_eq!(alternate.text, "STRASSE".repeat(256));
-        assert_eq!(alternate.shape_items[0].after, "");
+        assert_eq!(alternate.shape_items[0].after.as_str(), "");
         AFTER_CONTEXT_CALLS.with(|calls| assert_eq!(calls.get(), 2));
     }
 

@@ -1,5 +1,6 @@
 //! Fragment records: the compact per-line table behind the public views.
 
+use std::borrow::Cow;
 use std::ops::Range;
 
 use unicode_bidi::{BidiInfo, Level};
@@ -83,6 +84,22 @@ pub(crate) struct TabSlot {
     pub(crate) width: LayoutUnit,
 }
 type Built = (Vec<FragmentRecord>, Vec<TabSlot>);
+
+pub(super) fn adjusted_glyph_starts<'a>(
+    starts: &'a [LayoutUnit],
+    continuations: &[(usize, usize)],
+) -> Cow<'a, [LayoutUnit]> {
+    if continuations.is_empty() {
+        return Cow::Borrowed(starts);
+    }
+    #[cfg(test)]
+    glyph_start_copy_probe::record();
+    let mut glyph_starts = starts.to_vec();
+    for &(owner, continuation) in continuations {
+        glyph_starts[owner] = glyph_starts[owner].min(starts[continuation]);
+    }
+    Cow::Owned(glyph_starts)
+}
 
 /// Collapsible terminal spaces retain their source/glyph advance, but are
 /// removed from inline background and border geometry (CSS Text 3 §4.1.2).
@@ -772,10 +789,7 @@ fn build_bidi(
         pos = pos + pieces[p].width;
     }
 
-    let mut glyph_starts = starts.clone();
-    for (owner, continuation) in continuations {
-        glyph_starts[owner] = glyph_starts[owner].min(starts[continuation]);
-    }
+    let glyph_starts = adjusted_glyph_starts(&starts, &continuations);
     // Inline boxes: one fragment per visually contiguous group of members,
     // found in a single pass over the visual order. `open` holds the groups
     // of the boxes enclosing the previous piece, outermost first; a piece
@@ -911,4 +925,19 @@ struct Group {
     parent: Option<usize>,
     /// Nesting depth of the box among the boxes on the line.
     depth: u32,
+}
+
+#[cfg(test)]
+pub(crate) mod glyph_start_copy_probe {
+    use std::cell::Cell;
+    thread_local! { static COUNT: Cell<usize> = const { Cell::new(0) }; }
+    pub(crate) fn record() {
+        COUNT.with(|count| count.set(count.get() + 1));
+    }
+    pub(crate) fn reset() {
+        COUNT.with(|count| count.set(0));
+    }
+    pub(crate) fn count() -> usize {
+        COUNT.with(Cell::get)
+    }
 }
