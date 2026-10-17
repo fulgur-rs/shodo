@@ -456,3 +456,15 @@ fn a_leading_block_in_inline_is_reported_from_the_start_token() {
     };
     assert_eq!(&p.text()[line.text_range()], "cd");
 }
+
+#[test]
+fn a_soft_hyphen_before_white_space_takes_no_hyphenated_break() {
+    // A collapsible space after the soft hyphen hangs at the line end, so the
+    // line keeps the space instead of hyphenating before it.
+    let p = para("xa\u{ad}\n");
+    let ls = lines(&p, 1.0, &LineOptions::default());
+    assert_eq!(ls.len(), 1);
+    assert_eq!(&p.text()[ls[0].text_range()], "xa\u{ad} ");
+    assert_eq!(ls[0].inline_size(), 20.0, "the hyphen stays hidden");
+    assert_eq!(texts(&para("x a\u{ad} b"), 1.0), ["x ", "a\u{ad} ", "b"]);
+}
