@@ -131,7 +131,11 @@ impl<'a> Frame<'a> {
 
     pub(crate) fn record_bounds(&self, index: usize, sat: &mut Saturation) -> Option<Bounds> {
         let center = self.baseline.add(self.shifts[index], sat);
-        let (above, below) = record_extents(self.data, &self.records[index], self.runs, sat)?;
+        let record = &self.records[index];
+        // Glyph runs use their style's primary-font edges, as Blink does and as
+        // emphasis marks do, so fallback faces do not move annotations.
+        let (above, below) = record_primary_extents(self.data, record, self.runs, sat)
+            .or_else(|| record_extents(self.data, record, self.runs, sat))?;
         Some(Bounds {
             top: center.sub(above, sat),
             bottom: center.add(below, sat),

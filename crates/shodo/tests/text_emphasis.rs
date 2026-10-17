@@ -376,3 +376,87 @@ fn nominal_mark_overflow_uses_untrimmed_paint_edges_and_combined_square() {
     assert_eq!(bounds.block_start, square.block_start + square.block_size);
     assert_eq!((bounds.inline_size, bounds.block_size), (5.0, 5.0));
 }
+
+#[test]
+fn ruby_over_fallback_base_sits_on_the_primary_ascent() {
+    use shodo::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use shodo::limits::Limits;
+    use shodo::ruby::{
+        Ruby, RubyAlign, RubyAnnotation, RubyBase, RubyContent, RubyLevel, RubySpan, RubyStyle,
+        RubyVisibility,
+    };
+    use shodo::style::FontFamily;
+    let fonts = FontCollection::with_options(
+        &Limits::default(),
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    for (bytes, family) in [
+        (
+            &include_bytes!("../../../dev/fixtures/assets/fonts/latin.ttf")[..],
+            "Latin",
+        ),
+        (
+            &include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf")[..],
+            "CJK",
+        ),
+    ] {
+        fonts
+            .register_face(
+                bytes.to_vec(),
+                0,
+                FontFaceDescriptor {
+                    family: family.into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+    let mut root = style();
+    root.root.font_size = 40.0;
+    root.root.font_families = vec![
+        FontFamily::Named("Latin".into()),
+        FontFamily::Named("CJK".into()),
+    ];
+    let limits = Limits::default();
+    let mut b = shodo::ParagraphBuilder::new(&root, &limits);
+    let ruby = Ruby::new(
+        vec![RubyBase {
+            node: NodeId(11),
+            content: RubyContent::text(
+                TextSource::Generated { node: NodeId(12) },
+                "日",
+                &root.root,
+                &limits,
+            ),
+            align: RubyAlign::default(),
+        }],
+        vec![RubyLevel {
+            annotations: vec![RubyAnnotation {
+                node: NodeId(13),
+                content: RubyContent::text(
+                    TextSource::Generated { node: NodeId(14) },
+                    "に",
+                    &root.root,
+                    &limits,
+                ),
+                span: RubySpan::Auto,
+                visibility: RubyVisibility::Visible,
+            }],
+            style: RubyStyle::default(),
+        }],
+    )
+    .unwrap();
+    b.push_ruby(NodeId(10), &root.root, ruby);
+    let p = b.build(&mut shodo::LayoutContext::new(), &fonts).unwrap();
+    let l = first_line(&p, 1000.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+    let annotation = l.ruby_annotations().next().unwrap();
+    let bottom = annotation.origin().1 + annotation.line().block_size();
+    let baseline = l.baseline(BaselineKind::Alphabetic);
+    // Like Blink, and like emphasis marks: the annotation rests on the Latin
+    // primary ascent (42.76px), not on the taller CJK fallback face's ascent.
+    let gap = baseline - bottom;
+    assert!((gap - 40.0 * 1.069).abs() < 0.02, "{gap}");
+}

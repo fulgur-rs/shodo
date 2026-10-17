@@ -302,7 +302,8 @@ fn indexed_bounds_keep_atomic_overlay_and_saturated_extents() {
         _ => unreachable!(),
     };
     let mut overlay = p.data.runs[run as usize].clone();
-    // Edge reshaping may select different metrics from the paragraph run.
+    // Edge reshaping may select different metrics from the paragraph run, but
+    // glyph bounds use the style's primary-font edges and must ignore them.
     let metrics = std::sync::Arc::make_mut(&mut overlay.instance)
         .metrics
         .as_mut()
@@ -367,7 +368,7 @@ fn indexed_bounds_keep_atomic_overlay_and_saturated_extents() {
             assert_eq!(index_sat.is_clean(), reference_sat.is_clean());
             if baseline == LayoutUnit::ZERO {
                 let b = got.unwrap();
-                assert_eq!(b.top.to_f32(), -91.0);
+                assert_eq!(b.top.to_f32(), -33.0);
                 assert_eq!(b.bottom.to_f32(), 167.0);
             }
         }
