@@ -65,9 +65,11 @@
 //!
 //! Font discovery depends on the platform and installed fonts. For repeatable
 //! output, disable discovery with [`font::FontOptions`] and register bundled
-//! font bytes with [`font::FontCollection::register`]. Missing fonts produce
-//! warning-backed missing-glyph output, which is not a drawable substitute for
-//! a real font. Read build warnings with [`Paragraph::warnings`] and layout
+//! font bytes with [`font::FontCollection::register`].
+//!
+//! If a requested font is unavailable, shodo records a warning and emits
+//! missing-glyph output. Ensure a matching font is available to render the
+//! text normally. Read build warnings with [`Paragraph::warnings`] and layout
 //! warnings with [`LayoutContext::take_warnings`].
 //!
 //! [`Paragraph::break_all`] is for fixed-width layout without float placement.
@@ -96,9 +98,7 @@
 //! | Expose retained text to assistive technology | [Accessibility output] |
 //! | Place, retry and withdraw floats | [Float integration] |
 //!
-//! The [documentation index] also links to development checks. Design and
-//! measurement records describe their recorded scope; they are not current
-//! API contracts. Use the API reference on this page for method signatures.
+//! See the [documentation index] for additional guides and examples.
 //!
 //! [integration guide]: https://github.com/fulgur-rs/shodo/blob/adf02f0dda2cb41837f371eef5b70b7389e28eea/docs/guides/integration.md
 //! [Character-limited lines]: https://github.com/fulgur-rs/shodo/blob/adf02f0dda2cb41837f371eef5b70b7389e28eea/docs/guides/grapheme-limited-lines.md

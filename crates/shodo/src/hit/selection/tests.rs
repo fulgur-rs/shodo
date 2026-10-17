@@ -156,7 +156,7 @@ fn short_queries_bound_actual_source_visits() {
 }
 
 // Original source predicate and visual merge phases, intentionally independent
-// of candidate index construction/pruning. Semantic oracle for accepted lines.
+// of candidate index construction/pruning. Accepted lines use the reference behavior.
 fn linear(layout: &LineLayout<'_>, a: TextPosition, b: TextPosition) -> Vec<LogicalRect> {
     let (Some(a), Some(b)) = (layout.caret(a), layout.caret(b)) else {
         return Vec::new();

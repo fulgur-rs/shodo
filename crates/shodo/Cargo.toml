@@ -12,7 +12,7 @@ keywords = ["typesetting", "text", "layout", "shaping"]
 categories = ["text-processing", "graphics"]
 # Keep the published tarball limited to the library and its own tests/examples.
 # `dev/`, `docs/`, and `.github/` (at the workspace root) are development-only
-# content; see shodo-c6r.1. README.md/LICENSE-*/CHANGELOG.md are symlinks to
+# content. README.md/LICENSE-*/CHANGELOG.md are symlinks to
 # the workspace-root copies so a single source of truth stays outside crates/.
 include = [
     "src/**",

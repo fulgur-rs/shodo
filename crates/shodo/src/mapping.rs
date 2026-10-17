@@ -1134,7 +1134,7 @@ pub(crate) mod tests {
             })
         );
     }
-    // Independent linear oracle from the pre-change commit 4cae3a3.
+    // Independent linear reference implementation for compatibility checks.
     fn linear_dom(m: &OffsetMapping, node: NodeId, offset: u32) -> Option<(u32, Affinity)> {
         let mut at_end = None;
         for u in m.units.iter().filter(|u| u.node == node) {

@@ -1,11 +1,11 @@
-//! Fail-closed bound on ruby line-measurement work (shodo-mc0).
+//! Bounds on ruby line-measurement work during line fitting.
 //!
-//! The through memo (`super::memo`) and the container accumulator
-//! (`super::accumulate`) make the common fit scans linear, but some inputs
-//! still re-measure most containers at every probe: a line profile that
-//! changes at every step, a walk beyond the accumulator's container cap,
-//! measurements that warn (never stored) under `max_warnings: None`, and
-//! the other shapes listed in `docs/records/shodo-mc0-ruby-line-work.md`.
+//! The through memo (`super::memo`) and container accumulator
+//! (`super::accumulate`) make common fit scans linear. Some inputs can
+//! still measure many containers at each probe, such as a line profile that
+//! changes at every step or a walk beyond the accumulator's capacity. A
+//! measurement that produces a warning also cannot be reused, so it may add
+//! work at later probes.
 //!
 //! Each `next_line` or `intrinsic_sizes` call therefore gets an allowance of
 //! `Limits::max_ruby_line_work` (a factor) times the units its fit probes
@@ -38,7 +38,7 @@
 //! state the exact-replay gates read (`edge_reshape_spent`, sink
 //! suppression), not of the contents of caches left by earlier calls: the
 //! per-operation memo and accumulators start empty, range cache hits charge
-//! like misses (shodo-tj5), and a scan that warned is never retained as a
+//! like misses, and a scan that warned is never retained as a
 //! `PartialLine`. A retained line changes the probe sequence only through
 //! `PartialLine::index`. Its probes are a superset of a fresh narrower
 //! scan's (repeated probes add work but never allowance: it uses maxima),

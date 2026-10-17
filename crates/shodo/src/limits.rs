@@ -6,54 +6,53 @@ use std::fmt;
 
 use crate::geometry::Saturation;
 
-/// Upper bounds on resources consumed by untrusted input. `None` disables a
-/// limit. Limits are checked before allocating; exceeding one is an error,
-/// never a silent truncation.
+/// Upper bounds on resources consumed by input. `None` disables a limit.
+/// Some limits reject the operation; layout-work limits may warn and use a
+/// documented fallback. See each field for its behavior.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Limits {
     /// Raw and processed UTF-8 bytes at build time (16 MiB). Independent of
     /// the glyph budget: ASCII may reach `max_shaped_glyphs` first.
     pub max_text_bytes: Option<u64>,
-    /// Admitted transform/offset-mapping payload and private index allowances
-    /// across normal, first-line and nested analysis (64 MiB). Includes producer
-    /// records that are later retired; excludes allocator overhead and capacity.
+    /// Transform and source-offset mapping data used by normal, first-line and
+    /// nested paragraphs (64 MiB). Includes data later discarded, but not
+    /// allocator overhead or unused capacity.
     pub max_mapping_bytes: Option<u64>,
-    /// Admitted analysis payload and conservative dependency/scratch allowances
-    /// across normal, first-line and nested paragraphs (128 MiB). Reservations
-    /// are cumulative, including retired scratch and replay-equivalent clones;
-    /// excludes allocator overhead, spare capacity and bounded temporaries.
-    /// This is an admission budget, not a process RSS limit.
+    /// Analysis data and scratch space reserved for normal, first-line and
+    /// nested paragraphs (128 MiB). Reservations add up even after scratch is
+    /// discarded or copied for replay. Does not include allocator overhead,
+    /// unused capacity or bounded temporary data. This is not a process memory
+    /// limit.
     pub max_analysis_bytes: Option<u64>,
-    /// Raw and processed items, and retained itemized shaping runs (2^20).
-    /// Also bounds each ruby constructor's container/base/level/annotation
-    /// metadata before validation; parent build/import checks remain aggregate.
+    /// Input items and shaping runs kept for layout (2^20). Also limits
+    /// the structure of each ruby annotation before validation. Paragraph
+    /// construction applies the limit across imported ruby annotations.
     pub max_items: Option<u64>,
     /// Interned inline styles per builder (2^16).
     pub max_styles: Option<u64>,
-    /// Logical owned inline-style data and builder interning keys (64 MiB). Includes
-    /// normal/first-line styles and every retained ruby input occurrence.
-    /// Counts cloned payload lengths and style slots, excluding allocator
-    /// overhead, spare capacity and bounded transient copies.
+    /// Approximate size of style data and builder lookup keys (64 MiB).
+    /// Includes normal and first-line styles and each retained ruby input.
+    /// Counts copied values, but not allocator overhead, unused capacity or
+    /// short-lived copies.
     pub max_style_bytes: Option<u64>,
     /// Simultaneously open inline boxes at build time (512).
     pub max_nesting_depth: Option<u64>,
     /// Glyphs per paragraph build and reshape output (2^22).
     pub max_shaped_glyphs: Option<u64>,
-    /// Ruby cut-search work reserved before counting and building candidate
-    /// correspondences (2^23). Shared by normal/first-line and nested ruby.
-    /// Reserves twice (base cuts * (lanes + 1) + total lane cuts), including
-    /// rejected candidates. These are work units, not CPU instructions;
-    /// `None` disables this work limit.
+    /// Work budget for matching ruby readings to base text (2^23). Shared
+    /// by normal, first-line and nested ruby. Work is reserved for both the
+    /// counting and building passes, including candidates later rejected.
+    /// These are work units, not CPU instruction counts; `None` disables
+    /// this limit.
     pub max_ruby_cut_work: Option<u64>,
-    /// Ruby line-measurement work per `next_line` or `intrinsic_sizes` call,
-    /// as a factor (16): the call may measure ruby containers this many times
-    /// per unit its fit probes cover plus per container of its widest
-    /// container walk, and measures a walk wider than 16,384 containers for
-    /// one look-ahead end per start and atomic revision only. Past it, the
-    /// rest of the call fits lines (and measures intrinsic sizes) without
-    /// ruby annotation adjustments and warns, rather than failing line
-    /// layout; accepted lines still place their ruby exactly. Zero always
-    /// fits without the adjustments; `None` disables this work limit.
+    /// Work budget for each `next_line` or `intrinsic_sizes` call. The
+    /// allowance is the configured factor (default 16) times the sum of the
+    /// fit-probe span and the widest ruby-container walk. For walks over
+    /// 16,384 containers, only one distinct look-ahead end is allowed per
+    /// start and atomic-size revision. Reaching the budget emits a warning
+    /// and skips ruby adjustments for the rest of the call. Line layout
+    /// continues, and accepted lines still place their ruby annotations
+    /// normally. A value of 0 skips adjustments; `None` disables this limit.
     pub max_ruby_line_work: Option<u64>,
     /// UTF-8 bytes per line-edge reshape window (4096); exceeding it warns
     /// and preserves shared glyphs rather than failing line layout.
@@ -99,16 +98,16 @@ pub struct Limits {
     pub max_font_sources: Option<u64>,
     /// Total UTF-8 bytes of declared local source names per registration (64 KiB).
     pub max_font_source_name_bytes: Option<u64>,
-    /// Accounted shared local-name index bytes (8 MiB), including conservative
-    /// metadata and construction scratch allowances. Document layers use their
-    /// root's limit; loaded platform blobs are not retained by the index. The
-    /// caller's limit also bounds the name-decoding scratch of re-verifying a
-    /// selected platform path face.
+    /// Approximate memory for indexing installed font names (8 MiB),
+    /// including index metadata and temporary construction data. Document
+    /// collections use their root collection's limit. Checking a selected
+    /// system-font file during registration uses the caller's limit for
+    /// decoding its name.
     pub max_local_font_index_bytes: Option<u64>,
-    /// Shared local-name index construction work (2^24): family names, faces,
-    /// source loads, name records and encoded name bytes. Also bounds selected
-    /// platform face name verification per source-registration operation.
-    /// Index construction uses the root's limit; verification uses the caller's.
+    /// Work budget for indexing installed font names (2^24), including
+    /// family names, faces, source loads and name records. Also limits checks
+    /// of a selected system font during each source registration. Indexing
+    /// uses the root collection's limit; checks use the caller's.
     pub max_local_font_lookup_work: Option<u64>,
 }
 

@@ -230,7 +230,7 @@ fn completed_bounds_preserve_nested_equal_starts_and_skip_siblings() {
     }
 }
 
-// Original membership rule retained as an independent compatibility oracle.
+// Original membership rule retained as an independent compatibility check.
 impl Frame<'_> {
     fn belongs(
         &self,

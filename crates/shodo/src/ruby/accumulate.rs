@@ -1,5 +1,5 @@
 //! Container-level differential accumulator for adjustment-only ruby
-//! candidates (shodo-2j6).
+//! candidates by reusing work across adjacent fit probes.
 //!
 //! A fit scan asks for `start..through` with a growing `through`. The
 //! through memo (`super::memo`) replays a core only for a repeated `through`;
@@ -30,27 +30,17 @@
 //! the visual neighbours of its target among the selected event units; and
 //! the range caches. Prepared ruby data is immutable for the operation.
 //!
-//! # Dirty rules
+//! # When to measure a container again
 //!
-//! - D1 new: positions visited for the first time.
-//! - D2 clipped: positions whose clipped units changed.
-//! - D3 neighbour: for every newly selected event unit `x` and each side
-//!   `s`, the neighbour-dependent positions that read side `s` and whose
-//!   recorded side-`s` neighbour (`None` at a line edge included) equals
-//!   side `s` of `overhang::visual_neighbours(selected, x)`. See "Why D3 is
-//!   sufficient" below.
-//! - D4 profile: profile-dependent positions (`ContainerNote::profile`)
-//!   when the profile's height or above changed.
-//! - D5 edge: positions whose units or recorded neighbour units intersect a
-//!   partial group, removal or replacement that differs from the previous
-//!   step (`SelectionDigest::changed_ranges`). See "Why D4 and D5 are
-//!   sufficient" below.
-//! - D6 ancestor: ancestors of every dirty position, and of every position
-//!   whose live measurement changed its values.
+//! A container needs a fresh measurement when it is first reached, when its
+//! clipped units change, or when its recorded neighbors or line-profile inputs
+//! change. Changes to partial groups and edge windows also affect containers
+//! whose units or neighbors intersect those ranges. If a measurement changes,
+//! its ancestor containers must be measured again as well.
 //!
-//! Positions without a replayable entry ("unstored") are always dirty.
+//! Positions without a reusable measurement are always measured again.
 //!
-//! # Why D3 is sufficient
+//! # Why the neighbor rule is sufficient
 //!
 //! An allowance records `around(selected, target)` (`ContainerNote::
 //! neighbours`): the last event unit visually before the target's visually
@@ -60,39 +50,34 @@
 //! neighbours of any single unit (`visual_neighbours`), and "the containers
 //! holding a neighbour of a new event" can miss a changed target.
 //!
-//! What holds instead, for a target whose clipped units did not change (a
-//! changed target is D2 dirty) and a fixed `start`: with fixed levels, UAX #9
-//! swaps two units iff the minimum level between them is odd, for every
-//! range holding both, so a longer selection only inserts the new units into
-//! the old visual order. If the target's side-`s` neighbour changed from
-//! `b0`, an event unit was inserted between `b0` (or the line edge) and the
-//! target's edge unit, and it is a new one: an old event there would have
-//! been `b0`. Of those inserted events, the one closest to `b0` has only new
-//! events and non-events between itself and `b0`, so its own side-`s`
-//! neighbour is `b0` (`None` when `b0` is `None`). Hence a changed position
-//! recorded a side-`s` neighbour equal to side `s` of some new event's
-//! visual neighbours, which is what D3 looks up in `Accumulator::neighbours`.
-//! Neither an event inside the target nor a visually contiguous target is
-//! needed (brute-forced in `ruby::accumulate_tests`). Both queries use the
-//! same index and the same `rtl` (the base level), so their sides agree.
+//! With fixed levels and a fixed `start`, UAX #9 keeps the relative visual
+//! order of selected units as the selection grows; new units are inserted
+//! into that order. If an unchanged target's neighbor changes on one side, a
+//! newly selected event unit must have been inserted between its old neighbor
+//! (possibly the line edge) and the target. The first such event has the old
+//! neighbor on that side, so looking up new events' visual neighbors finds
+//! every recorded target whose neighbor changed.
+//!
+//! This also holds for targets without event units and for visually split
+//! targets; both cases are covered by tests. The visual-neighbor query and the
+//! recorded-target query use the same order and text direction.
 //!
 //! Only the sides an allowance read are indexed. That is sound because which
 //! sides a position reads does not depend on the neighbours or the profile:
 //! `overhang::allowances` decides `leading_side`/`trailing_side` from
-//! `columns.edges(target)` and the clipped bases and columns alone, and
-//! whether it runs at all (`lane_overhang`: overhang `Auto`, a positive
-//! excess, a nonzero cap) depends on range-cache widths of the clipped
-//! units and on the completed descendants' adjustments. A position none of
-//! whose clipped units or descendants changed (D2, D6) therefore reads the
-//! same sides as recorded, so a side it never read cannot start mattering
-//! without the position being dirty for another reason.
+//! `columns.edges(target)` and the clipped bases and columns alone. Whether
+//! it runs at all (`lane_overhang`: overhang `Auto`, positive excess and a
+//! nonzero cap) depends on the clipped units' widths and completed descendant
+//! adjustments. A change to either input makes the position measure again.
+//! Other positions continue to read the same sides as before, so a side they
+//! never used cannot start mattering without another input changing.
 //!
 //! The rule is applied conservatively: an entry whose allowances read one
 //! side twice with different neighbours (`ContainerNote::mixed`) is not
-//! stored, so it is measured live at every step. Changes of the neighbours'
-//! own geometry follow the profile and are covered by D4 and D5.
+//! stored, so it is measured live at every step. Changes to a neighbor's
+//! own geometry are covered by changes to the line profile or partial groups.
 //!
-//! # Why D4 and D5 are sufficient
+//! # Why the profile and partial-group checks are sufficient
 //!
 //! Every read of the selected profile goes through `content_shared`, for the
 //! clipped bases (and the column or ruby boxes) of the container, and for
@@ -105,9 +90,10 @@
 //!   and `box_delta` of a grouped box (column, ruby or neighbour box, or an
 //!   ancestor whose paint is added). Each of these sets
 //!   `ContainerNote::profile` (`grouped` prefix count, box groups, grouped
-//!   ancestors), so D4 marks every position whose values can follow them
-//!   (a partial group's raw content counts because every unit with content
-//!   inside a group's span belongs to the group, so `grouped` sees it);
+//!   ancestors), so the profile check marks every position whose values may
+//!   change with them (a partial group's raw content counts because every unit
+//!   with content inside a group's span belongs to the group, so `grouped`
+//!   sees it);
 //! - the partial groups, removals and replacements, only where they
 //!   intersect a queried range (`content_query` visits no other unit), or
 //!   through the partial bounds of the group of a box. A queried range lies
@@ -115,13 +101,14 @@
 //!   box holds a unit of the container (column and ruby boxes, ancestors of
 //!   a base edge) or the neighbour unit (neighbour boxes), so its group's
 //!   units (contiguous, and holding every unit of the box) intersect the
-//!   container's units or that neighbour unit. D5 marks every position
-//!   whose (unclipped, so possibly more) units or indexed neighbour units
-//!   intersect a range that differs between the digests; a neighbour is
-//!   measured only on a read side, and read sides are indexed.
+//!   container's units or that neighbor unit. The partial-group check marks
+//!   every position whose units (unclipped, so possibly more) or indexed
+//!   neighbor units intersect a range that differs between the digests. A
+//!   neighbor is measured only on a side the container reads, and those sides
+//!   are indexed.
 //!
-//! Hence a position that D1-D5 leave clean reads the same profile values as
-//! when it was recorded; D6 adds the ancestors.
+//! A position left clean by these checks reads the same profile values
+//! as before. The final check also includes its ancestor containers.
 //!
 //! # Replay
 //!
@@ -731,7 +718,7 @@ pub(crate) fn max_containers(_cx: &LayoutContext) -> usize {
     MAX_CONTAINERS
 }
 
-/// Step oracle switch (test only).
+/// Enable live checks of reused entries (tests only).
 fn verify(_cx: &LayoutContext) -> bool {
     #[cfg(test)]
     {
@@ -759,8 +746,8 @@ fn mark(
     true
 }
 
-/// D6: mark the ancestors of `pos` dirty, stopping at the first one `mark`
-/// refuses (already dirty, or at or past `top`).
+/// Mark the ancestors of `pos` until `mark` finds one that is already
+/// included or lies at or past `top`.
 fn mark_ancestors(
     acc: &Accumulator,
     dirty: &mut BTreeSet<u32>,
@@ -880,8 +867,8 @@ impl Step<'_> {
         }
         // Reverse structural order, as `measure_containers`: the clean run
         // above each dirty position, then the dirty position. Live
-        // measurements may mark lower positions (D6), which the next lookup
-        // finds.
+        // A changed measurement may also affect its ancestors, which the
+        // next lookup then measures.
         let mut hi = top;
         loop {
             let next = dirty.range(..hi as u32).next_back().copied();
@@ -902,8 +889,8 @@ impl Step<'_> {
         }
     }
 
-    /// D2-D6 for the positions kept from the previous step (see the module
-    /// documentation).
+    /// Recheck positions from the previous step against changed units,
+    /// neighbors, profile values, partial groups and ancestor measurements.
     fn classify(
         &self,
         acc: &Accumulator,
@@ -920,14 +907,14 @@ impl Step<'_> {
         }
         self.neighbours(acc, dirty, cx);
         if let Some(old) = acc.digest.as_ref() {
-            // D4: every group moves with the profile's height and above.
+            // Every group moves with the line profile's height and above.
             if old.profile_changed(digest) {
                 for &pos in acc.profile.range(..top as u32) {
                     mark(dirty, top, pos, Dirty::Profile, cx);
                 }
             }
-            // D5: changed partial groups, edge-window removals and
-            // replacements.
+            // Check partial groups, edge-window removals and replacements
+            // that changed between the two measurements.
             for range in old.changed_ranges(digest) {
                 self.edge(acc, &range, dirty, cx);
             }
@@ -935,7 +922,7 @@ impl Step<'_> {
         self.close(acc, dirty, cx);
     }
 
-    /// D5: positions whose units or recorded neighbour units intersect
+    /// Mark positions whose units or recorded neighbor units intersect
     /// `range`. A container's units are compared unclipped, which can only
     /// mark more than needed.
     fn edge(
@@ -975,10 +962,9 @@ impl Step<'_> {
         }
     }
 
-    /// D3: for every newly selected event unit and each side, the positions
-    /// that read that side and recorded the unit's neighbour on it (see the
-    /// module documentation). `visual_neighbours` answers for the single
-    /// unit; the recorded keys are `around` over whole targets.
+    /// Find positions whose recorded neighbors changed when new event
+    /// units were selected. The visual-neighbor index handles individual
+    /// units, while recorded keys describe each whole target.
     fn neighbours(&self, acc: &Accumulator, dirty: &mut BTreeSet<u32>, cx: &mut LayoutContext) {
         if acc.dependents == 0 {
             return;
@@ -1001,7 +987,7 @@ impl Step<'_> {
         );
     }
 
-    /// D6: the ancestors of every dirty position.
+    /// Mark the ancestors of every position that must be measured again.
     fn close(&self, acc: &Accumulator, dirty: &mut BTreeSet<u32>, cx: &mut LayoutContext) {
         let seeds: Vec<u32> = dirty.iter().copied().collect();
         for seed in seeds {
@@ -1067,8 +1053,8 @@ impl Step<'_> {
         }
     }
 
-    /// Measure a clean position live. Under the step oracle, compare the
-    /// measurement with its entry whenever the entry would have replayed.
+    /// Measure a clean position live and compare it with the stored entry
+    /// whenever that entry would otherwise be reused.
     fn clean(
         &mut self,
         acc: &mut Accumulator,
@@ -1105,7 +1091,7 @@ impl Step<'_> {
     }
 
     /// Measure `pos` live and store its entry; mark its ancestors when the
-    /// values they read changed (D6).
+    /// values they read changed.
     fn live(
         &mut self,
         acc: &mut Accumulator,
