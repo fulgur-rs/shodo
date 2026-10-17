@@ -85,21 +85,6 @@ pub(crate) struct TabSlot {
 }
 type Built = (Vec<FragmentRecord>, Vec<TabSlot>);
 
-#[cfg(test)]
-pub(crate) mod glyph_start_copy_probe {
-    use std::cell::Cell;
-    thread_local! { static COUNT: Cell<usize> = const { Cell::new(0) }; }
-    pub(crate) fn record() {
-        COUNT.with(|count| count.set(count.get() + 1));
-    }
-    pub(crate) fn reset() {
-        COUNT.with(|count| count.set(0));
-    }
-    pub(crate) fn count() -> usize {
-        COUNT.with(Cell::get)
-    }
-}
-
 pub(super) fn adjusted_glyph_starts<'a>(
     starts: &'a [LayoutUnit],
     continuations: &[(usize, usize)],
@@ -940,4 +925,19 @@ struct Group {
     parent: Option<usize>,
     /// Nesting depth of the box among the boxes on the line.
     depth: u32,
+}
+
+#[cfg(test)]
+pub(crate) mod glyph_start_copy_probe {
+    use std::cell::Cell;
+    thread_local! { static COUNT: Cell<usize> = const { Cell::new(0) }; }
+    pub(crate) fn record() {
+        COUNT.with(|count| count.set(count.get() + 1));
+    }
+    pub(crate) fn reset() {
+        COUNT.with(|count| count.set(0));
+    }
+    pub(crate) fn count() -> usize {
+        COUNT.with(Cell::get)
+    }
 }
