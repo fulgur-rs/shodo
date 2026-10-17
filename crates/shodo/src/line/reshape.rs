@@ -812,6 +812,20 @@ mod tests {
         ) else {
             panic!()
         };
+        let overlay = justified
+            .overlay
+            .as_ref()
+            .expect("justification should use the reshaped owned overlay");
+        let spacing = overlay
+            .spacing
+            .as_ref()
+            .expect("owned overlay should retain per-glyph justification spacing");
+        assert_eq!(spacing.len(), 3);
+        assert!(
+            spacing
+                .iter()
+                .any(|space| *space != crate::geometry::LayoutUnit::ZERO)
+        );
         let run = justified
             .fragments()
             .find_map(|f| match f {

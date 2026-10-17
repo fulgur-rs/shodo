@@ -267,13 +267,14 @@ pub(crate) fn select_combined_widths(
                     )
                 });
                 COMBINED_WIDTH_GROUP_CLONE_BYTES.with(|bytes| {
+                    // ShapeContext is inline in ShapeItem and is included in
+                    // the group storage; only each scalar Vec needs a separate
+                    // cloned buffer.
                     let cloned = std::mem::size_of_val(group)
                         + group
                             .iter()
                             .map(|item| {
                                 item.scalars.len() * size_of::<crate::analysis::itemize::Scalar>()
-                                    + item.before.as_str().len()
-                                    + item.after.as_str().len()
                             })
                             .sum::<usize>();
                     bytes.set(bytes.get().saturating_add(cloned));

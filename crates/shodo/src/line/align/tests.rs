@@ -58,7 +58,7 @@ fn uniform_levels_skip_reorder_vectors_and_preserve_visual_order() {
 }
 
 #[test]
-fn uniform_opportunities_preserve_residual_distribution_and_overlay_geometry() {
+fn uniform_opportunities_preserve_residual_distribution_and_owned_metadata() {
     for levels in [&[0, 2][..], &[1, 3][..]] {
         for base_level in 0..=1 {
             reset_reorder_vector_constructions();

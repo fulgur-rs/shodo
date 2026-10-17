@@ -24,7 +24,7 @@ fn repeated_cjk_punctuation_has_stable_geometry_and_bounded_build_allocations() 
             360_768_u64,
         ),
         (
-            "repeated-closing-quote",
+            "repeated-closing-bracket",
             "e7262294ea05306467939781ad10b656828672d2e4a39f0bdd89cfe659e2f365",
             357_424_u64,
             357_472_u64,

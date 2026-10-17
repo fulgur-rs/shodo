@@ -37,22 +37,25 @@ pub fn cases() -> Vec<Case> {
         root: root.clone(),
         ..Default::default()
     };
-    [("repeated-opening", "「"), ("repeated-closing-quote", "」")]
-        .into_iter()
-        .map(|(name, text)| Case {
-            name,
-            style: style.clone(),
-            spans: (0..RUNS)
-                .map(|index| Span {
-                    style: InlineStyle {
-                        lang: Some(if index % 2 == 0 { "ja" } else { "en" }.into()),
-                        ..root.clone()
-                    },
-                    text,
-                })
-                .collect(),
-        })
-        .collect()
+    [
+        ("repeated-opening", "「"),
+        ("repeated-closing-bracket", "」"),
+    ]
+    .into_iter()
+    .map(|(name, text)| Case {
+        name,
+        style: style.clone(),
+        spans: (0..RUNS)
+            .map(|index| Span {
+                style: InlineStyle {
+                    lang: Some(if index % 2 == 0 { "ja" } else { "en" }.into()),
+                    ..root.clone()
+                },
+                text,
+            })
+            .collect(),
+    })
+    .collect()
 }
 
 pub fn build(case: &Case, limits: &Limits, fonts: &FixtureFonts) -> Paragraph {

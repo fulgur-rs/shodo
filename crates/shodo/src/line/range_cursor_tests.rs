@@ -161,7 +161,7 @@ fn split_cluster_identity_preserves_marker_order_and_shared_groups() {
         owners.len() >= 2,
         "the real Latin fixture should split the marker group and following ffi group"
     );
-    let mut marker_continuations = 0;
+    let mut continuation_markers = Vec::new();
     for first_index in owners {
         let shared = paragraph.data.units[first_index]
             .shared_cluster
@@ -177,17 +177,31 @@ fn split_cluster_identity_preserves_marker_order_and_shared_groups() {
             assert_eq!(slice.text.start, end, "slice order changed");
             assert!(slice.text.end >= slice.text.start);
             if slice.text.start > shared.text.start {
-                if let Some(marker_index) =
-                    paragraph.data.units[..index].iter().position(|marker| {
+                let markers: Vec<_> = paragraph
+                    .data
+                    .units
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, marker)| {
                         !matches!(marker.kind, UnitKind::Cluster { .. })
                             && marker.text.start == slice.text.start
                     })
-                {
+                    .collect();
+                if !markers.is_empty() {
                     assert!(
-                        marker_index < index,
-                        "continuation marker must precede slice"
+                        markers
+                            .iter()
+                            .all(|(marker_index, _)| *marker_index < index),
+                        "every continuation marker must precede its slice at {}",
+                        slice.text.start
                     );
-                    marker_continuations += 1;
+                    continuation_markers.push((
+                        slice.text.start,
+                        markers
+                            .iter()
+                            .map(|(_, marker)| marker.kind.clone())
+                            .collect::<Vec<_>>(),
+                    ));
                 }
             }
             end = slice.text.end;
@@ -195,9 +209,19 @@ fn split_cluster_identity_preserves_marker_order_and_shared_groups() {
         assert_eq!(end, shared.text.end);
         assert!(shared.glyphs.start < shared.glyphs.end);
     }
-    assert!(
-        marker_continuations > 0,
-        "fixture should interleave a marker at a continuation start"
+    assert_eq!(
+        continuation_markers,
+        [
+            (
+                1,
+                vec![
+                    UnitKind::Open { box_index: 0 },
+                    UnitKind::Open { box_index: 1 }
+                ],
+            ),
+            (2, vec![UnitKind::Close { box_index: 1 }]),
+        ],
+        "all inline markers at continuation starts must precede their slices in source order"
     );
 
     let mut stack = Vec::new();
