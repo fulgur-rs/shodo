@@ -25,11 +25,15 @@ fn main() {
     let cases = workload::cases(&fonts, &limits);
     for case in &cases {
         let warm = workload::layout(case);
-        assert!(
-            warm.lines.len() > 1,
-            "{} should exercise several lines",
-            case.name
-        );
+        if case.name == "no-continuation" {
+            assert_eq!(warm.lines.len(), 1, "{} should stay on one line", case.name);
+        } else {
+            assert!(
+                warm.lines.len() > 1,
+                "{} should exercise several lines",
+                case.name
+            );
+        }
         let expected = workload::digest(&warm, &fonts);
         let line_count = warm.lines.len();
         drop(warm);

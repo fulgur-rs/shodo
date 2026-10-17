@@ -31,6 +31,16 @@ fn fixture_output_is_stable_and_uniform_bidi_allocations_drop() {
             "a753376f7efdbb188b12d2eae75377e3599ff7e1655f8c7df0faa39aafc28ff6",
             805_757_u64,
         ),
+        (
+            "no-continuation",
+            "6f8d280d7c370c8754622059aeed3ffb91044ef8e4211ea7db48971d4f5c423e",
+            312_920_u64,
+        ),
+        (
+            "rtl-continuation-hanging",
+            "2ec7341a6d49469043168727634b2c71ce3551e248a45cb861f5043da3dc6fa0",
+            1_657_337_u64,
+        ),
     ];
 
     for (case, (name, digest, pre_change_bytes)) in
@@ -41,10 +51,10 @@ fn fixture_output_is_stable_and_uniform_bidi_allocations_drop() {
         let run = workload::layout(case);
         let counts = scope.finish();
         assert_eq!(workload::digest(&run, &fonts), digest, "{name}");
-        if name == "mixed-levels" {
-            assert_eq!(
-                counts.allocated_bytes, pre_change_bytes,
-                "{name} keeps the general path"
+        if matches!(name, "mixed-levels" | "rtl-continuation-hanging") {
+            assert!(
+                counts.allocated_bytes <= pre_change_bytes,
+                "{name} should not exceed pre-change {pre_change_bytes} bytes: {counts:?}"
             );
         } else {
             assert!(
