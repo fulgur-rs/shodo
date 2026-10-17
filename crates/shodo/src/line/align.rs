@@ -4,7 +4,7 @@ use crate::geometry::{LayoutUnit, Saturation};
 use crate::output::BreakReason;
 use crate::paragraph::ParagraphData;
 use crate::range::intersect;
-use crate::style::{LineOptions, TextAlign, TextAlignLast, TextJustify};
+use crate::style::{LineOptions, TextAlign, TextAlignLast, TextGroupAlign, TextJustify};
 use std::ops::Range;
 use unicode_bidi::{BidiInfo, Level};
 
@@ -132,6 +132,46 @@ fn unexpandable_alignment(options: &LineOptions) -> TextAlign {
 pub(super) struct Alignment {
     pub(super) shift: LayoutUnit,
     pub(super) justified: bool,
+    /// Unfilled space before group padding and alignment; negative when
+    /// the content overflows.
+    pub(super) remaining: LayoutUnit,
+}
+
+/// The space left for `text-align` after group alignment, and the shift
+/// that places the group. `remaining` is the line's own unfilled space,
+/// negative when its content overflows.
+///
+/// The group is as wide as its widest line, so each line keeps
+/// `remaining - group_padding` for its own alignment. A group wider than the
+/// line box (a negative padding) stays at the inline start, as a box with
+/// auto margins does; otherwise the padding goes on the side
+/// `text-group-align` names. The side follows the block's direction, so a
+/// bidi paragraph of the other direction is placed like its neighbors.
+fn group_alignment(
+    options: &LineOptions,
+    remaining: LayoutUnit,
+    rtl: bool,
+    sat: &mut Saturation,
+) -> (LayoutUnit, LayoutUnit) {
+    let side = match options.text_group_align {
+        TextGroupAlign::None => return (remaining.max(LayoutUnit::ZERO), LayoutUnit::ZERO),
+        TextGroupAlign::Start => TextAlign::Start,
+        TextGroupAlign::End => TextAlign::End,
+        TextGroupAlign::Left => TextAlign::Left,
+        TextGroupAlign::Right => TextAlign::Right,
+        TextGroupAlign::Center => TextAlign::Center,
+    };
+    let padding = LayoutUnit::from_f32_round(options.group_padding, sat).min(remaining);
+    let spare = remaining.sub(padding, sat).max(LayoutUnit::ZERO);
+    let shift = shift_for(
+        side,
+        padding.max(LayoutUnit::ZERO),
+        false,
+        rtl,
+        LayoutUnit::ZERO,
+        sat,
+    );
+    (spare, shift)
 }
 
 fn line_alignment(options: &LineOptions, last: bool) -> TextAlign {
@@ -408,24 +448,17 @@ pub(super) fn apply(
 ) -> Alignment {
     let last = !matches!(scan.reason, BreakReason::Regular | BreakReason::Emergency);
     let align = line_alignment(options, last);
-    let spare = available
-        .sub(indent, sat)
-        .sub(scan.content, sat)
-        .max(LayoutUnit::ZERO);
+    let remaining = available.sub(indent, sat).sub(scan.content, sat);
+    let rtl = data.base_level % 2 == 1;
+    let (spare, group_shift) = group_alignment(options, remaining, rtl, sat);
     let inline_level = data
         .bidi_paragraph_at_unit(start)
         .map_or(data.base_level, |p| p.inline_level);
     let reversed_start = inline_level % 2 != data.base_level % 2;
     let mut result = Alignment {
-        shift: shift_for(
-            align,
-            spare,
-            reversed_start,
-            data.base_level % 2 == 1,
-            indent,
-            sat,
-        ),
+        shift: shift_for(align, spare, reversed_start, rtl, indent, sat).add(group_shift, sat),
         justified: false,
+        remaining,
     };
     // Disabled justification keeps start alignment; the unexpandable-text
     // fallback below applies only when justification is enabled.
@@ -440,10 +473,11 @@ pub(super) fn apply(
             unexpandable_alignment(options),
             spare,
             reversed_start,
-            data.base_level % 2 == 1,
+            rtl,
             indent,
             sat,
         )
+        .add(group_shift, sat)
     };
     let opportunities = justification_opportunities(data, start, scan, options.text_justify);
     if opportunities.is_empty() {
@@ -462,9 +496,9 @@ pub(super) fn apply(
     // Successful justification consumes the spare width in either direction;
     // the start-alignment fallback shift is only appropriate without expansion.
     result.shift = if reversed_start {
-        LayoutUnit::ZERO.sub(indent, sat)
+        group_shift.sub(indent, sat)
     } else {
-        LayoutUnit::ZERO
+        group_shift
     };
     result.justified = true;
     result

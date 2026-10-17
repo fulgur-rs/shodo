@@ -1,6 +1,6 @@
 mod common;
 use common::*;
-use shodo::style::{LineOptions, TextAlign, TextAlignLast, TextJustify};
+use shodo::style::{LineOptions, TextAlign, TextAlignLast, TextGroupAlign, TextJustify};
 use shodo::{AtomicSizes, Fragment, LayoutContext, LineConstraint, LineResult};
 
 #[test]
@@ -375,4 +375,124 @@ fn nbsp_keeps_its_nonbreaking_and_nonhanging_behavior() {
     assert_eq!(line.inline_size(), 20.0);
     assert_eq!(line.hang_end(), 0.0);
     assert_eq!(line.trailing_whitespace(), 0.0);
+}
+
+#[test]
+fn group_padding_moves_aligned_content_to_the_group_side() {
+    let p = paragraph("ab");
+    for (group, align, expected) in [
+        (TextGroupAlign::None, TextAlign::End, 80.0),
+        (TextGroupAlign::Start, TextAlign::End, 30.0),
+        (TextGroupAlign::End, TextAlign::Start, 50.0),
+        (TextGroupAlign::Center, TextAlign::End, 55.0),
+        (TextGroupAlign::Left, TextAlign::Center, 15.0),
+        (TextGroupAlign::Right, TextAlign::Center, 65.0),
+    ] {
+        let o = LineOptions {
+            text_align: align,
+            text_group_align: group,
+            group_padding: 50.0,
+            ..LineOptions::default()
+        };
+        let line = first_line(&p, 100.0, &o, &AtomicSizes::EMPTY);
+        assert_eq!(
+            glyphs(&line)[0].inline_position,
+            expected,
+            "{group:?} {align:?}"
+        );
+        assert_eq!(line.remaining_inline_size(), 80.0, "{group:?} {align:?}");
+    }
+}
+
+#[test]
+fn group_padding_follows_the_block_direction_and_is_capped_by_the_spare_space() {
+    let mut root = style();
+    root.direction = shodo::geometry::Direction::Rtl;
+    let p = build(&root, |b| {
+        b.push_text(
+            shodo::node::TextSource::Generated {
+                node: shodo::node::NodeId(1),
+            },
+            "אב",
+        );
+    });
+    // Positions run from the inline start, the right edge here.
+    for (group, expected) in [
+        (TextGroupAlign::Start, 0.0),
+        (TextGroupAlign::End, 50.0),
+        (TextGroupAlign::Left, 50.0),
+        (TextGroupAlign::Right, 0.0),
+    ] {
+        let o = LineOptions {
+            text_group_align: group,
+            group_padding: 50.0,
+            ..LineOptions::default()
+        };
+        let line = first_line(&p, 100.0, &o, &AtomicSizes::EMPTY);
+        assert_eq!(glyphs(&line)[0].inline_position, expected, "{group:?}");
+    }
+    let o = LineOptions {
+        text_group_align: TextGroupAlign::End,
+        group_padding: 500.0,
+        ..LineOptions::default()
+    };
+    let line = first_line(&p, 100.0, &o, &AtomicSizes::EMPTY);
+    assert_eq!(glyphs(&line)[0].inline_position, 80.0);
+}
+
+#[test]
+fn justification_fills_only_the_space_left_by_group_padding() {
+    let p = paragraph("a b");
+    let o = LineOptions {
+        text_align: TextAlign::JustifyAll,
+        text_group_align: TextGroupAlign::End,
+        group_padding: 40.0,
+        ..LineOptions::default()
+    };
+    let line = first_line(&p, 100.0, &o, &AtomicSizes::EMPTY);
+    assert_eq!(glyphs(&line)[0].inline_position, 40.0);
+    assert_eq!(glyphs(&line)[2].inline_position, 90.0);
+    assert_eq!(line.remaining_inline_size(), 70.0);
+    // Justification that finds no opportunity falls back inside the group.
+    let p = paragraph("ab");
+    let o = LineOptions {
+        text_align: TextAlign::JustifyAll,
+        text_group_align: TextGroupAlign::Start,
+        group_padding: 40.0,
+        ..LineOptions::default()
+    };
+    let line = first_line(&p, 100.0, &o, &AtomicSizes::EMPTY);
+    // `justify-all` without an opportunity centers in the 40px left.
+    assert_eq!(glyphs(&line)[0].inline_position, 20.0);
+}
+
+#[test]
+fn a_group_wider_than_the_line_box_stays_at_the_inline_start() {
+    // The overflowing line reports how far it overflows.
+    let wide = first_line(
+        &paragraph("abc"),
+        20.0,
+        &LineOptions::default(),
+        &AtomicSizes::EMPTY,
+    );
+    assert_eq!(wide.remaining_inline_size(), -10.0);
+    let p = paragraph("ab");
+    for (group, align, expected) in [
+        (TextGroupAlign::End, TextAlign::End, 100.0),
+        (TextGroupAlign::Center, TextAlign::Center, 50.0),
+        (TextGroupAlign::Right, TextAlign::Start, 0.0),
+    ] {
+        let o = LineOptions {
+            text_align: align,
+            text_group_align: group,
+            group_padding: -20.0,
+            ..LineOptions::default()
+        };
+        let line = first_line(&p, 100.0, &o, &AtomicSizes::EMPTY);
+        assert_eq!(
+            glyphs(&line)[0].inline_position,
+            expected,
+            "{group:?} {align:?}"
+        );
+    }
 }

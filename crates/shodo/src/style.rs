@@ -663,6 +663,19 @@ pub enum TextAlignLast {
     Justify,
 }
 
+/// `text-group-align` (CSS Text 4): the side the lines of a block are
+/// aligned to as a group, while each line keeps its own `text-align`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TextGroupAlign {
+    #[default]
+    None,
+    Start,
+    End,
+    Left,
+    Right,
+    Center,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TextJustify {
     #[default]
@@ -724,4 +737,15 @@ pub struct LineOptions {
     pub hanging_punctuation: HangingPunctuation,
     pub text_wrap_style: TextWrapStyle,
     pub text_box_trim: TextBoxTrim,
+    /// The side the lines are aligned to as a group. With
+    /// [`TextGroupAlign::None`], [`Self::group_padding`] is ignored.
+    pub text_group_align: TextGroupAlign,
+    /// The shortest remaining space among the lines aligned as a group (see
+    /// [`crate::Line::remaining_inline_size`]), negative when the widest
+    /// line overflows. Each line gives up this much of its remaining space
+    /// as padding on the side `text_group_align` names, and `text-align`
+    /// then applies within what is left. A negative padding widens the space
+    /// for `text-align` past the line box's inline end instead, so the group
+    /// stays at the inline start.
+    pub group_padding: f32,
 }

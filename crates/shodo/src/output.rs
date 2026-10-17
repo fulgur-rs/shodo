@@ -114,6 +114,9 @@ pub struct Line {
     pub(crate) origin: LayoutUnit,
     /// Fragment indices of the ellipsis runs after truncation.
     pub(crate) ellipsis: Option<Range<u32>>,
+    /// Unfilled inline space before group padding and alignment; negative
+    /// when the content overflows.
+    pub(crate) remaining: LayoutUnit,
 }
 
 /// Final line-box extents and root font edges, in line-local logical block coordinates.

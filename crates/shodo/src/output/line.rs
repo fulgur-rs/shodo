@@ -430,6 +430,7 @@ impl Line {
             combinations: Vec::new(),
             origin,
             ellipsis: None,
+            remaining: LayoutUnit::ZERO,
         }
     }
 
@@ -541,6 +542,16 @@ impl Line {
             self.reason,
             BreakReason::Forced | BreakReason::End | BreakReason::BlockInInline
         )
+    }
+
+    /// Inline space this line left unfilled: the available inline size less
+    /// the text indent and the content, before `text-align`, justification
+    /// and group padding took any of it. Negative when the content
+    /// overflows. The shortest of a group's values is the
+    /// [`LineOptions::group_padding`](crate::style::LineOptions::group_padding)
+    /// for `text-group-align`.
+    pub fn remaining_inline_size(&self) -> f32 {
+        self.remaining.to_f32()
     }
 
     /// Width of the content, including leading hanging punctuation but
