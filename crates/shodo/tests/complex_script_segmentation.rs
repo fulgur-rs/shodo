@@ -1,4 +1,4 @@
-//! Characterization of the model availability assumption in shodo-0ce.
+//! Checks line segmentation when locale-specific models are available.
 #![cfg(feature = "complex-scripts")]
 
 use icu_segmenter::LineSegmenter;

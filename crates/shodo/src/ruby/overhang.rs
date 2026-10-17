@@ -187,7 +187,7 @@ fn put_neighbors(data: &ParagraphData, index: Box<NeighborIndex>, cx: &mut Layou
 /// `units`, in order, among the event units of `selected`, in line-relative
 /// order. Not interchangeable with the neighbours an allowance records
 /// (`around` over a whole clipped ruby target, whose visual edge may be a
-/// non-event unit); the accumulator's D3 rule (`ruby::accumulate`) relates
+/// non-event unit); the accumulator's neighbor invalidation rule (`ruby::accumulate`) relates
 /// the two. The cached index is taken once, and only when `units` holds an
 /// event unit.
 pub(crate) fn visual_neighbours(

@@ -38,9 +38,9 @@ pub(crate) struct RangeCache {
     epoch: u64,
     /// The caches of the same dataset under the previous atomic revision.
     /// `intrinsic_sizes` measures min and max content with separate atomics
-    /// and switches at every forced break and cleared float: dropping the
-    /// caches at each switch rebuilt the paragraph's indexes every time,
-    /// quadratic in the paragraph (shodo-mc0). At most one is kept, and only
+    /// and switches at every forced break and cleared float. Keeping only
+    /// one cache rebuilt the paragraph's indexes at every switch, making the
+    /// work quadratic in paragraph size. At most one is kept, and only
     /// once the revisions alternate (holding both costs memory and fresh
     /// allocations, measurably slower for a single switch).
     alt: Option<Box<Caches>>,
@@ -84,7 +84,7 @@ impl Caches {
 
 /// Entries kept in `blocks` and `block_effects` together. Reaching it clears
 /// both before the next insert. A hit has exactly the side effects of a
-/// fresh measurement (shodo-tj5), so clearing changes no result, charge or
+/// fresh measurement, so clearing changes no result, charge or
 /// warning, only how often a block is measured. At most about 16,384 × 60
 /// bytes (key, value and `Effects`), roughly 1 MiB.
 const MAX_BLOCKS: usize = 16_384;
@@ -1749,9 +1749,9 @@ mod tests {
         p
     }
 
-    /// shodo-tj5: a `blocks` hit charges the reshape budget and saturation
-    /// exactly as the cold measurement that filled it, and so does a cold
-    /// measurement after the caches are vacated.
+    /// A block-cache hit charges the reshape budget and saturation exactly as
+    /// the cold measurement that filled it, and so does a cold measurement
+    /// after the caches are vacated.
     #[test]
     fn block_size_charges_the_same_cold_and_warm() {
         let p = charging_paragraph(crate::style::TabSize::Px(40.0), false);
@@ -1792,9 +1792,9 @@ mod tests {
         assert!(charged > 0, "some range must charge the reshape budget");
     }
 
-    /// shodo-mc0: the block caches stay within their cap, and crossing it
-    /// (a clear before the insert) leaves every query's height, saturation,
-    /// spent bytes and warnings equal to a context that never cached.
+    /// The block caches stay within their cap. Crossing it clears them before
+    /// insertion and leaves each query's height, saturation, spent bytes and
+    /// warnings equal to a context that never cached.
     #[test]
     fn block_cap_crossing_matches_a_fresh_context() {
         let p = charging_paragraph(crate::style::TabSize::Px(40.0), false);
@@ -1833,11 +1833,10 @@ mod tests {
         assert!(clears > 0, "the cap must be crossed");
     }
 
-    /// shodo-tj5: a `blocks` entry with effects whose replay the gate refuses
-    /// (the operation's budget is nearly spent, or the sink's suppression
-    /// changed) is measured again, exactly as in a context that never cached
-    /// it: same height, saturation, spent bytes and warnings, also for the
-    /// next query after a measurement that warned (it is not stored).
+    /// A block-cache entry is measured again when the replay gate refuses its
+    /// effects, such as when the budget is nearly spent or warning suppression
+    /// changes. Results, saturation, spent bytes and warnings match a context
+    /// that never cached the entry, including the next query after a warning.
     #[test]
     fn refused_block_replays_measure_like_a_fresh_context() {
         let p = charging_paragraph(crate::style::TabSize::Px(40.0), false);
@@ -1900,9 +1899,9 @@ mod tests {
         assert!(warned > 0, "some refused measurement must warn");
     }
 
-    /// shodo-tj5: `width` charges depend only on the range, not on the
-    /// queries before it: a history run forwards, backwards and query by
-    /// query in fresh contexts gives the same value and saturation per range.
+    /// Width charges depend only on the queried range. Querying ranges
+    /// forward, backward or repeatedly produces the same value and saturation
+    /// as measuring each range in a fresh context.
     #[test]
     fn width_charges_do_not_depend_on_query_order() {
         for (tab_size, saturating_unit) in [
@@ -2096,9 +2095,8 @@ mod tests {
         out
     }
 
-    /// Byte-identity with the previous tab prefix: the golden file was
-    /// captured on the code before shodo-b7d. Regenerate only on purpose
-    /// with `SHODO_UPDATE_GOLDEN=1`.
+    /// The golden file preserves the previous tab-prefix output. Regenerate it
+    /// only on purpose with `SHODO_UPDATE_GOLDEN=1`.
     #[test]
     fn tab_width_queries_match_the_golden_record() {
         let path = concat!(
@@ -2112,8 +2110,8 @@ mod tests {
         }
         let want = std::fs::read_to_string(path).expect("golden file");
         assert_eq!(got, want);
-        // shodo-tj5: a repeated query charges what it charged the first time,
-        // whatever ran in between.
+        // A repeated query charges the same as it did the first time,
+        // regardless of the queries in between.
         let mut seen = std::collections::HashMap::new();
         for line in want.lines() {
             let mut words = line.splitn(3, ' ');

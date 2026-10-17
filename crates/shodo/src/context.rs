@@ -39,7 +39,7 @@ pub struct LayoutContext {
     pub(crate) reshape_log: crate::line::replay::ReshapeLog,
     /// Adjustment-only ruby candidates measured in the current operation.
     pub(crate) ruby_memo: crate::ruby::memo::RubyMemo,
-    /// Ruby line-measurement work of the current operation (shodo-mc0).
+    /// Ruby line-measurement work spent by the current operation.
     pub(crate) ruby_line_work: crate::ruby::line_work::LineWork,
     /// Style metrics of earlier paragraphs, reused while their font
     /// collection is unchanged.
@@ -108,8 +108,7 @@ pub struct LayoutContext {
     /// Containers measured by `ruby::measure::measure_one`.
     #[cfg(test)]
     pub(crate) ruby_container_measures: usize,
-    /// Step-oracle mismatches (clean containers whose live measurement
-    /// differed from their entry).
+    /// Mismatches between live measurements and reused accumulator entries.
     #[cfg(test)]
     pub(crate) ruby_oracle_misses: Vec<String>,
     /// Containers answered by an accumulator segment replay.
@@ -121,18 +120,17 @@ pub struct LayoutContext {
     /// Accumulators reset at the end of a step that could not keep them.
     #[cfg(test)]
     pub(crate) ruby_accumulator_resets: usize,
-    /// Use the per-through memo alone (the shodo-d77 path).
+    /// Use the per-through memo without the accumulator.
     #[cfg(test)]
     pub(crate) ruby_accumulate_disabled: bool,
-    /// Step oracle: measure clean accumulator positions live and compare
-    /// them with their entries (`ruby_oracle_misses`).
+    /// Measure clean accumulator positions live and compare them with
+    /// their stored entries.
     #[cfg(test)]
     pub(crate) ruby_accumulate_verify: bool,
     /// Override of `ruby::accumulate::MAX_CONTAINERS`.
     #[cfg(test)]
     pub(crate) ruby_accumulate_cap: Option<usize>,
-    /// Step-oracle comparisons (clean entries that would have replayed,
-    /// measured live and compared).
+    /// Live comparisons of clean entries that would otherwise be reused.
     #[cfg(test)]
     pub(crate) ruby_oracle_checks: usize,
     /// Accumulator replays whose saturation guard failed, so the run's

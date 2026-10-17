@@ -1,5 +1,5 @@
-//! Container accumulator (shodo-2j6): characterization, oracles, operation
-//! count guards and equivalence fixtures. Shares the shodo-d77 harness.
+//! Tests for container accumulation: result equivalence and operation counts
+//! across representative ruby layouts.
 use super::memo_tests::*;
 use crate::geometry::{Direction, LayoutUnit, Saturation};
 use crate::limits::Limits;
@@ -13,8 +13,8 @@ use crate::style::{
 use crate::{AtomicSize, AtomicSizes, LayoutContext, LineConstraint, Paragraph, ParagraphBuilder};
 use std::ops::Range;
 
-/// `r` sibling rubies over "12", each with the reading "日": one
-/// unbreakable line (the shodo-d77 `siblings` probe shape).
+/// Several sibling ruby annotations over "12", each with reading "日",
+/// form one unbreakable line.
 pub(super) fn digit_siblings(r: usize) -> Paragraph {
     let default = Limits::default();
     let mut b = ParagraphBuilder::new(&paragraph_style(false), &default);
@@ -608,7 +608,7 @@ pub(super) fn huge_siblings(r: usize) -> Paragraph {
 }
 
 /// Growing sweeps of `candidate_adjustment` from `start` in one operation:
-/// values, Saturation, spent bytes, oracle mismatches and counters.
+/// values, Saturation, spent bytes, reference mismatches and counters.
 type Sweep = (Vec<LayoutUnit>, Saturation, u64, Vec<String>, Counters);
 
 pub(super) fn sweep_from(p: &Paragraph, starts: &[usize], mode: Mode) -> Sweep {
@@ -620,7 +620,7 @@ pub(super) fn sweep_in(p: &Paragraph, starts: &[usize], cx: &mut LayoutContext) 
     let data = &p.data;
     let n = data.units.len();
     let mut sat = Saturation::default();
-    // Sweeps check reuse exactness, not the work allowance (shodo-mc0).
+    // Sweeps check reuse exactness, not the work allowance.
     cx.ruby_line_work_disabled = true;
     cx.begin_reshape_operation();
     let mut values = Vec::new();
@@ -691,8 +691,8 @@ fn accumulator_never_measures_more_containers_than_the_memo() {
     assert!(counters(&cx).replayed > 0, "{:?}", counters(&cx));
 }
 
-/// Review focus 1: a profile replay that crosses the budget re-measures the
-/// profile mid-step; the step finishes live and the accumulator resets.
+/// A profile replay that crosses the budget is measured again. The step
+/// finishes with live measurements and resets the accumulator.
 #[test]
 fn profile_measured_again_mid_step_resets_and_matches_reference() {
     let window = 8;
@@ -770,8 +770,8 @@ fn profile_measured_again_mid_step_resets_and_matches_reference() {
     assert!(refusals > 0, "some profile replay must be refused");
 }
 
-/// Review focus 2: entries recorded while the sink was unsuppressed never
-/// replay once a later sibling's warning suppresses it.
+/// Entries recorded before warning suppression are not replayed after a
+/// later sibling's warning suppresses the sink.
 #[test]
 fn suppression_flip_mid_scan_refuses_older_entries() {
     for warnings in [Some(1), Some(2), Some(5)] {
@@ -824,8 +824,8 @@ fn pre_paragraph_in(style: &InlineStyle) -> ParagraphStyle {
 }
 
 /// As `nested`, under `white-space: pre` throughout, so a tab in `text`
-/// is preserved (the shodo-d77 `nestedtab` probe used `normal`, which
-/// collapses the tab to a space).
+/// is preserved. Under normal white-space handling, a tab would collapse
+/// to a space.
 pub(super) fn pre_nested(depth: usize, text: &str) -> Paragraph {
     pre_nested_in(depth, text, &pre_style())
 }
@@ -908,7 +908,7 @@ pub(super) fn effectful_tab_siblings(limits: &Limits) -> Paragraph {
     )
 }
 
-/// shodo-b7d: one preserved tab no longer moves the cache epoch, so the
+/// A preserved tab no longer moves the cache epoch, so the
 /// memo and the accumulator keep their linear container work.
 #[test]
 fn preserved_tabs_keep_nested_measures_linear() {
@@ -959,10 +959,9 @@ fn preserved_tabs_keep_sibling_measures_linear() {
     }
 }
 
-/// shodo-tj5: tab steps that saturate (`tab-size: 1e12px`) no longer
-/// invalidate the cache when another start replaces the tab prefix, so the
-/// memo and the accumulator stay linear as with clean tabs (shodo-b7d left
-/// this shape quadratic).
+/// Saturating tab steps (`tab-size: 1e12px`) do not invalidate the cache
+/// when another start replaces the tab prefix. Memo and accumulator work
+/// remains linear, as it does for non-saturating tabs.
 #[test]
 fn saturating_tabs_keep_measures_linear() {
     let nested = |depth: usize, mode: Mode| {
@@ -997,9 +996,8 @@ fn saturating_tabs_keep_measures_linear() {
     assert!(growth.iter().all(|g| *g <= 2.2), "{growth:?} {all:?}");
 }
 
-/// Values, warnings and saturation of every tab fixture agree across the
-/// reference, memo, accumulator and step-oracle paths, in candidates and
-/// in layout (which covers intrinsic sizes).
+/// Candidate measurements and line results for each tab fixture agree
+/// across full measurement, memo reuse and accumulator reuse.
 #[test]
 fn tab_fixtures_match_reference() {
     let fixtures = [
@@ -1046,9 +1044,9 @@ fn tab_fixtures_match_reference() {
     }
 }
 
-/// Review focus 3 of shodo-2j6, under shodo-tj5: replacing a prefix whose
-/// tab steps saturated no longer moves the cache epoch (every query charges
-/// its own tab steps), so the accumulator keeps replaying.
+/// Replacing a prefix whose tab steps saturated does not move the cache
+/// epoch. Each query still charges its tab steps, so the accumulator can reuse
+/// earlier measurements.
 #[test]
 fn effectful_tab_prefix_replacement_keeps_replay() {
     let fixture = Fixture::new(
@@ -1118,8 +1116,9 @@ fn clean_tab_prefix_replacement_keeps_replay() {
     assert!(counters.replayed > 0, "{counters:?}");
 }
 
-/// Review focus 4: a replayed run whose running total would saturate is
-/// added one value at a time, counting every saturation.
+/// If a replayed total would saturate the segment tree's prefix bound,
+/// add each adjustment in order so results and saturation counts match a full
+/// measurement.
 #[test]
 fn huge_readings_saturate_like_reference() {
     let p = huge_siblings(40);
@@ -1146,8 +1145,8 @@ fn huge_readings_saturate_like_reference() {
     );
 }
 
-/// Review focus 5: three starts alternate in one operation; the least
-/// recently used accumulator is evicted and restarted exactly.
+/// When three starts alternate in one operation, the least recently
+/// used accumulator is evicted and restarted with the same results.
 #[test]
 fn three_keys_alternating_evict_and_restart_exactly() {
     let p = digit_siblings(12);
@@ -1164,11 +1163,9 @@ fn three_keys_alternating_evict_and_restart_exactly() {
     }
 }
 
-/// Carried (review of Task 4): replayed containers that made several profile
-/// calls (allowances read neighbour bounds through the shared profile)
-/// replay `own + m * P` with a profile that charges reshape bytes. Every
-/// probe is asked twice: an exact probe is not memoized, so the second ask
-/// reaches the accumulator with the same `through` and replays.
+/// A reused container may call the shared profile more than once to
+/// read neighboring bounds. Replaying its measurements must repeat those
+/// profile calls and their reshape charges.
 #[test]
 fn repeated_profile_calls_replay_with_their_charges() {
     let window = 8;
@@ -1243,8 +1240,8 @@ fn repeated_profile_calls_replay_with_their_charges() {
     );
 }
 
-/// Carried (review of Task 5): a walk longer than the accumulator cap
-/// releases the accumulator and measures on the through-memo path, exactly.
+/// When a walk exceeds the accumulator cap, release it and continue
+/// with memoized measurements. The results must match a full measurement.
 #[test]
 fn walks_beyond_the_cap_fall_back_to_the_memo_path() {
     let p = digit_siblings(12);
@@ -1273,9 +1270,9 @@ fn walks_beyond_the_cap_fall_back_to_the_memo_path() {
     }
 }
 
-/// Carried (review of Task 5): when the segment tree's prefix guard refuses
-/// a replayed run's total, its adjustments are added one by one in the
-/// reference order, so values and Saturation counts stay identical.
+/// If a replayed total exceeds the segment tree's prefix bound, add
+/// each adjustment in order so results and saturation counts match a full
+/// measurement.
 #[test]
 fn saturating_replayed_runs_add_one_value_at_a_time() {
     let p = huge_siblings(40);
@@ -1349,8 +1346,8 @@ fn alternating_clean_tab_starts_keep_the_epoch() {
     }
 }
 
-/// The step oracle is not vacuous: under `Mode::Verify` clean entries that
-/// would have replayed are measured live and compared.
+/// Verify mode measures entries live before reusing them and compares
+/// those results with the stored measurements.
 #[test]
 fn step_oracle_compares_entries() {
     let mut checks = 0;
@@ -1371,9 +1368,9 @@ fn step_oracle_compares_entries() {
     assert!(checks > 0);
 }
 
-/// Carried (review of Task 5): a cache invalidation between two steps for
-/// the same start and `through` moves the epoch; taking the accumulator back
-/// finds entries of another epoch and resets it, so nothing replays.
+/// If the range cache is cleared between steps for the same start and
+/// end position, the next lookup detects the change, resets the accumulator
+/// and measures again.
 #[test]
 fn epoch_moved_between_steps_resets_on_take() {
     let p = digit_siblings(8);
@@ -1429,12 +1426,10 @@ fn epoch_moved_between_steps_resets_on_take() {
     }
 }
 
-/// Brute force of the claim D3 relies on, over UAX #9 reorderings of fixed
-/// levels: when `start..old` grows to `start..new`, a target's recorded side
-/// `s` neighbour changes only to a newly selected event unit, and its old
-/// value (`None` included) is side `s` of the visual neighbours of some new
-/// event unit. Targets without event units and visually split targets are
-/// included. Returns the number of side changes seen.
+/// Check the neighbor-change property across UAX #9 reorderings of fixed
+/// levels. When a selection grows, a target's recorded neighbor can change
+/// only to a newly selected event unit. Targets without event units and
+/// visually split targets are included. Returns the number of changes found.
 fn check_d3_premise(seed: u64, cases: usize, max_len: u64, max_level: u64) -> usize {
     use crate::line::spacing_summary::VisualNeighbors;
     let mut seed = seed;
@@ -1501,8 +1496,8 @@ fn growing_selections_change_recorded_neighbours_only_through_new_event_units() 
     assert!(changes > 0);
 }
 
-/// The larger sweep behind D3 (60 000 cases, lengths up to 10, levels up to
-/// 4); run with `--ignored` (seconds in release, minutes in debug).
+/// A larger neighbor-change sweep (60,000 cases, lengths up to 10 and
+/// levels up to 4). Run with `--ignored`; it takes seconds in release and minutes in debug.
 #[test]
 #[ignore]
 fn growing_selections_change_recorded_neighbours_only_through_new_event_units_sweep() {
@@ -1568,8 +1563,8 @@ pub(super) fn rtl_isolate_siblings() -> Paragraph {
 }
 
 /// Overhang siblings with nothing between them: a ruby's trailing side is
-/// read at the line edge (`None`) until the next ruby is selected, so D3
-/// must find it through the recorded `None` key.
+/// read at the line edge (`None`) until the next ruby is selected, so cached
+/// measurements must account for that change too.
 pub(super) fn adjacent_overhang_siblings(paragraph: &ParagraphStyle) -> Paragraph {
     row(
         paragraph,
@@ -1583,19 +1578,17 @@ pub(super) fn adjacent_overhang_siblings(paragraph: &ParagraphStyle) -> Paragrap
     )
 }
 
-/// D3 against the reference and the step oracle on overhang siblings. With
-/// plain text between the rubies no clean position's recorded neighbour
-/// ever changes (the trailing text is selected while its ruby is still the
-/// top position), so D3 marks nothing there; adjacent rubies need marks.
-/// Profile digest changes, which `rtl_isolate_siblings` has, are handled by
-/// D4-D5 (no fallback marks every position).
+/// Plain text between ruby annotations keeps every clean position's
+/// recorded neighbor unchanged. Adjacent annotations can change the trailing
+/// neighbor, and a change in the line profile can affect other measurements.
+/// Compare both layouts with full measurements.
 #[test]
 fn neighbour_rule_matches_reference_on_overhang_siblings() {
     let rtl = ParagraphStyle {
         direction: Direction::Rtl,
         ..paragraph_style(false)
     };
-    // (fixture, D3 must mark)
+    // (fixture, whether a changed neighbor should trigger remeasurement)
     let fixtures = [
         (
             Fixture::new(
@@ -1657,8 +1650,9 @@ fn neighbour_rule_matches_reference_on_overhang_siblings() {
     }
 }
 
-/// With D1-D6 the sibling shapes measure each container a bounded number of
-/// times per line: container measures grow linearly.
+/// Across sibling layouts with changed clipping, neighbors, line profiles
+/// and partial bounds, each container is measured only a bounded number of
+/// times per line.
 #[test]
 fn sibling_container_measures_grow_linearly_with_the_accumulator() {
     let (all, growth) = doubling(|r| sibling_measures(r, Mode::Accumulate), [16, 32, 64]);
@@ -1668,7 +1662,8 @@ fn sibling_container_measures_grow_linearly_with_the_accumulator() {
     );
     let (all, growth) = doubling(|r| outer_measures(r, Mode::Accumulate), [16, 32, 64]);
     assert!(growth.iter().all(|g| *g < 2.5), "outer {growth:?} {all:?}");
-    // Adjacent overhang siblings: the shape where D3 marks.
+    // Adjacent ruby annotations change the neighbor and require
+    // remeasurement.
     let adjacent = |r: usize| {
         let mut cx = mode_context(Mode::Accumulate);
         let p = row(
@@ -1695,10 +1690,9 @@ fn sibling_container_measures_grow_linearly_with_the_accumulator() {
     );
 }
 
-/// Overhang siblings inside a top/bottom aligned span that also holds a
-/// larger glyph, then a distant tall plain glyph and more siblings: the
-/// clipped span's partial bounds change as the line grows inside it (D5)
-/// and the tall glyph changes the profile's height and above (D4).
+/// Overhang siblings inside a top/bottom aligned span with larger glyphs
+/// nearby. As the selected line grows, both the span's partial bounds and
+/// line profile can change.
 pub(super) fn grouped_siblings(align: VerticalAlign) -> Paragraph {
     let limits = Limits::default();
     let ruby = |b: &mut ParagraphBuilder, i: u64| {
@@ -1804,8 +1798,9 @@ fn sibling_container_measures_grow_linearly() {
 /// A plain glyph of `normal` px, a ruby whose trailing neighbour opens a
 /// top-aligned span, then siblings inside the span before an atomic inline
 /// of `block` px (no descent) that grows the span's partial bounds without
-/// changing the line's height or above: D5 alone must mark the siblings in
-/// the span (their units) and the first ruby (its neighbour unit).
+/// changing the line's height or above. In this case, the changed partial
+/// bounds affect both siblings in the span and the first ruby, whose neighbor
+/// is the span's first glyph.
 pub(super) fn partial_group_siblings(normal: f32, block: f32) -> Fixture {
     let limits = Limits::default();
     let ruby = |b: &mut ParagraphBuilder, i: u64| {
@@ -1858,12 +1853,10 @@ pub(super) fn partial_group_siblings(normal: f32, block: f32) -> Fixture {
     fixture
 }
 
-/// D5 against the reference and the step oracle where the partial bounds
-/// of a top-aligned span change while the line's height and above do not
-/// (D4 does not fire for those steps). Without D5's container branch the
-/// siblings inside the span miss; without its neighbour branch the ruby
-/// before the span, whose trailing neighbour is the span's first glyph,
-/// misses (checked by disabling each branch while writing this test).
+/// Partial bounds can change inside a top-aligned span without changing
+/// line height or the space above it. Check that sibling measurements still
+/// match full measurements, including the ruby before the span whose trailing
+/// neighbor is its first glyph.
 #[test]
 fn edge_rule_covers_partial_groups_on_units_and_neighbour_units() {
     for block in [56.0, 60.0] {
@@ -1939,11 +1932,9 @@ pub(super) fn grouped_neighbour_siblings(tall: f32) -> Paragraph {
     finish(b)
 }
 
-/// D4 against the reference and the step oracle where the first ruby reads
-/// the profile only through its grouped neighbour unit
-/// (`overhang::neighbor_bounds` under the container's share). Without D4
-/// that ruby misses at every step the tall glyph enters (checked by
-/// disabling D4 while writing this test).
+/// The first ruby may read the line profile only through its grouped
+/// neighboring unit. Check that measurements remain correct when a taller
+/// glyph enters the group.
 #[test]
 fn profile_rule_covers_grouped_neighbour_units() {
     let fixture = Fixture::new("grouped-neighbour", grouped_neighbour_siblings(48.0));
@@ -2010,8 +2001,8 @@ fn outer_base_siblings_grow_linearly() {
 
 /// An outer ruby whose base ends with plain text after its inner siblings:
 /// probes inside the tail move the outer container's clipped end while the
-/// last inner sibling (the top position) stays unchanged, so only D2 marks
-/// the outer container.
+/// last inner sibling (the top position) stays unchanged, so only the
+/// outer container's clipped units trigger a new measurement.
 fn outer_tail_siblings() -> Paragraph {
     let default = Limits::default();
     let mut base = ParagraphBuilder::new(&paragraph_style(false), &default);
@@ -2042,7 +2033,7 @@ fn outer_tail_siblings() -> Paragraph {
     finish(b)
 }
 
-/// Every sibling shape the dirty rules distinguish.
+/// Representative sibling layouts used to check ruby measurements.
 pub(super) fn sibling_fixtures() -> Vec<Fixture> {
     let default = Limits::default();
     vec![
@@ -2054,7 +2045,7 @@ pub(super) fn sibling_fixtures() -> Vec<Fixture> {
             overhang_siblings(&paragraph_style(false)),
         ),
         // Text between the rubies above keeps every clean position's
-        // recorded neighbour; adjacent rubies are the shape D3 marks.
+        // recorded neighbor; adjacent rubies change that neighbor.
         Fixture::new(
             "adjacent-overhang-siblings",
             adjacent_overhang_siblings(&paragraph_style(false)),
@@ -2117,10 +2108,8 @@ pub(super) fn sibling_fixtures() -> Vec<Fixture> {
 const SIBLING_CHUNK: usize = 2;
 const SIBLING_CHUNKS: usize = 8;
 
-/// All `(start, end)` probes (growing, shrinking, restarted in a new
-/// operation) and line layout (break_all warm/cold, narrow retries through
-/// `PartialLine::index`, floats, intrinsic sizes), on every path, with the
-/// step oracle, for chunk `chunk` of `sibling_fixtures`.
+/// Compare every candidate probe and line-layout result for chunk
+/// `chunk` of `sibling_fixtures` against full measurements.
 fn sibling_fixtures_match_reference_in(chunk: usize) {
     let fixtures = sibling_fixtures();
     for fixture in fixtures
@@ -2149,8 +2138,8 @@ fn sibling_fixtures_match_reference_in(chunk: usize) {
     }
 }
 
-/// Warm contexts over every fixture, with the step oracle; the per-fixture
-/// probes and line layout run in the `_N` chunks below, which together cover
+/// Exercise every fixture with a warmed context. The chunks below run
+/// candidate probes and line layout for each fixture, and together cover
 /// every sibling fixture.
 #[test]
 fn sibling_fixtures_match_reference_with_the_step_oracle() {
@@ -2267,13 +2256,9 @@ fn cursive_words_then_siblings(limits: &Limits) -> Paragraph {
     finish(b)
 }
 
-/// The wide scan, then narrow retries of the same token. Up to a 48-byte
-/// window the wide scan itself exceeds the budget (warns, not retained, no
-/// index); from 56 bytes the 999 retry's index stays within it and serves
-/// 998. With 52 and 54 bytes the wide scan is clean and retained, the 999
-/// retry's index crosses the limit and is rolled back, and the 998 retry
-/// indexes again while replaying the accumulators the rolled-back pass
-/// recorded (measured while writing this test).
+/// Run a wide scan, then retry the same token at narrower widths. Depending
+/// on the work limit, the wide scan or the first retry can exceed the budget.
+/// A retry after a rolled-back index must still match full measurement.
 #[test]
 fn narrow_retry_rollback_with_siblings_matches_reference() {
     for window in [8, 12, 16, 52, 54, 64] {
@@ -2405,9 +2390,9 @@ fn accumulator_memory_is_bounded_and_released_per_operation() {
     }
 }
 
-/// shodo-tj5: range cache queries charge the same cold or warm, so a step
-/// whose measurements fill the caches stores its entries, and the same step
-/// again replays them with the same effects as the reference.
+/// Range-cache queries charge the same amount on a hit as on a fresh
+/// measurement. A step that fills the caches can store its entries, and a
+/// repeated step replays them with the same effects as full measurement.
 #[test]
 fn entries_recorded_while_caches_fill_are_stored() {
     let p = digit_siblings(8);
@@ -2469,10 +2454,8 @@ fn outer_descendant_reads(r: usize, mode: Mode) -> usize {
     cx.ruby_descendant_reads
 }
 
-/// Carried (review of Task 9): end to end, the clipped outer container's
-/// descendant reads are answered by the segment tree, so they grow linearly
-/// with the sibling count (the reference iterates every completed fragment
-/// at every step: quadratic).
+/// Descendant reads in a clipped outer container use the segment tree,
+/// so their count grows linearly with the number of siblings.
 #[test]
 fn outer_base_descendant_reads_grow_linearly() {
     let (all, growth) = doubling(
@@ -2487,15 +2470,10 @@ fn outer_base_descendant_reads_grow_linearly() {
     );
 }
 
-/// Carried (review of Task 4): on charging cursive siblings (edge windows
-/// charge the reshape budget, overhang `Auto` reads neighbour bounds through
-/// the shared profile, so containers make several profile calls), replayed
-/// runs repeat a charging profile (`own + m * P`, `m > 1`) and some step's
-/// profile measurement warns, everywhere matching the reference. The
-/// allowances' empty-base fallback call (`overhang::columns`, a second
-/// `content_shared`) is reached here too: clipped selections leave a
-/// container's bases empty (checked with temporary instrumentation while
-/// writing this test).
+/// Cursive sibling measurements can read neighboring bounds through the
+/// shared profile while edge windows charge the reshape budget. Repeated
+/// measurements must preserve those charges and warnings, including when a
+/// clipped selection leaves a container with no bases.
 #[test]
 fn charging_sibling_profiles_repeat_and_warn_like_the_reference() {
     let (mut repeated, mut warned) = (0, 0);
@@ -2523,10 +2501,9 @@ fn charging_sibling_profiles_repeat_and_warn_like_the_reference() {
     assert!(warned > 0, "some step's profile measurement must warn");
 }
 
-/// A remaining worst case (shodo-mc0): siblings inside a top-aligned span,
-/// each followed by a glyph larger than every earlier one, so the partial
-/// group and the profile change at every step and every profile-dependent
-/// position is measured again.
+/// Siblings inside a top-aligned span can still require repeated work
+/// when each is followed by a glyph taller than all earlier glyphs. The partial
+/// group and line profile change at every step.
 pub(super) fn profile_churn(r: usize) -> Paragraph {
     let default = Limits::default();
     let mut b = ParagraphBuilder::new(&paragraph_style(false), &default);
