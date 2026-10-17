@@ -191,7 +191,8 @@ impl Line {
                         };
                         // Marks are caller-painted em boxes. Character centers
                         // divide a shared shaping cluster's advance evenly.
-                        for (glyphs, text, _) in run.cluster_parts() {
+                        for ((glyphs, text, _), cluster) in run.cluster_parts().zip(run.clusters())
+                        {
                             if run.orientation() == crate::GlyphOrientation::Combined {
                                 if let Some(square) = self.combination_at(text.start)
                                     && square.text_range.start == text.start as usize
@@ -206,23 +207,6 @@ impl Line {
                                 }
                                 continue;
                             }
-                            let source = run
-                                .data()
-                                .text
-                                .get(text.start as usize..text.end as usize)
-                                .unwrap_or_default();
-                            let mut cuts =
-                                icu_segmenter::GraphemeClusterSegmenter::new().segment_str(source);
-                            let Some(mut start) = cuts.next() else {
-                                continue;
-                            };
-                            let ranges: Vec<_> = cuts
-                                .map(|end| {
-                                    let range = start..end;
-                                    start = end;
-                                    range
-                                })
-                                .collect();
                             let advance: f32 = glyphs.clone().map(|i| run.glyph(i).advance).sum();
                             let reversed = run.record.level % 2 != self.data.base_level % 2;
                             let pen = run.logical_pen(glyphs.start).to_f32();
@@ -232,22 +216,15 @@ impl Line {
                                 } else {
                                     pen
                                 };
-                            let count = ranges.len();
-                            let step = advance / count.max(1) as f32;
-                            for (i, range) in ranges.into_iter().enumerate() {
-                                if super::ClusterFlags::from_source(
-                                    &source[range],
-                                    self.visible_hyphen == Some(text.start),
-                                )
-                                .emphasis_excluded
-                                {
-                                    continue;
-                                }
+                            for slot in run.emphasis_slots(&cluster) {
+                                let step = advance / slot.count as f32;
+                                let index = if reversed {
+                                    slot.count - 1 - slot.index
+                                } else {
+                                    slot.index
+                                };
                                 include(LogicalRect {
-                                    inline_start: cluster_start
-                                        + step
-                                            * (if reversed { count - 1 - i } else { i } as f32
-                                                + 0.5)
+                                    inline_start: cluster_start + step * (index as f32 + 0.5)
                                         - mark.font_size / 2.0,
                                     block_start,
                                     inline_size: mark.font_size,

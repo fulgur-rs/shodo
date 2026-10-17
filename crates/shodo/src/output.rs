@@ -267,9 +267,9 @@ pub struct Cluster {
 
 /// Where a glyph run's emphasis marks go, from [`GlyphRunView::emphasis_mark`].
 ///
-/// Draw one mark per typographic character whose cluster is not
-/// [`ClusterFlags::emphasis_excluded`], centered on the character in the
-/// inline direction. The mark's em box at `font_size` starts `offset` from the
+/// Draw one mark per typographic character that takes one, from
+/// [`GlyphRunView::emphasis_slots`], centered on the character in the inline
+/// direction. The mark's em box at `font_size` starts `offset` from the
 /// run's baseline toward its side, the position Blink paints it at. Lines grow
 /// only where text and its marks overflow the line box; see the horizontal
 /// layout guide.
@@ -286,6 +286,21 @@ pub struct EmphasisMark {
     /// metrics and for combined text, plus the same-side annotation extent
     /// covering this run’s base text (including nested ruby).
     pub offset: f32,
+}
+
+/// One typographic character of a shaping cluster that takes an emphasis
+/// mark, from [`GlyphRunView::emphasis_slots`].
+///
+/// A shared shaping cluster, such as a ligature, divides its advance evenly
+/// among its characters: the mark is centered at `(index + 0.5) / count` of
+/// the cluster's advance from its logical start.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EmphasisSlot {
+    /// The character's position among the cluster's characters, in logical
+    /// order.
+    pub index: u32,
+    /// How many typographic characters the cluster holds.
+    pub count: u32,
 }
 
 /// Source classification; whitespace and punctuation describe the first

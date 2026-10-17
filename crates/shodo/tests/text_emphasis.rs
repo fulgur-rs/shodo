@@ -461,3 +461,53 @@ fn ruby_over_fallback_base_ignores_the_taller_fallback_ascent() {
     let gap = baseline - bottom;
     assert!((gap - 40.0 * 1.069).abs() < 0.02, "{gap}");
 }
+
+#[test]
+fn a_shared_ligature_takes_one_mark_per_character() {
+    use shodo::font::{FontCollection, FontFaceDescriptor, FontOptions};
+    use shodo::limits::Limits;
+    use shodo::style::FontFamily;
+    use shodo::{EmphasisSlot, Fragment, LayoutContext, ParagraphBuilder};
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            include_bytes!("../../../dev/fixtures/assets/fonts/latin.ttf").to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Latin".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let mut root = style();
+    root.root.font_families = vec![FontFamily::Named("Latin".into())];
+    root.root.text_emphasis = emphasis(TextEmphasisPosition::OverRight);
+    let slots = |text: &str| {
+        let mut builder = ParagraphBuilder::new(&root, &limits);
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
+        let p = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        let line = first_line(&p, 1000.0, &LineOptions::default(), &AtomicSizes::EMPTY);
+        let mut slots = Vec::new();
+        for fragment in line.fragments() {
+            if let Fragment::GlyphRun(run) = fragment {
+                for cluster in run.clusters() {
+                    slots.push(run.emphasis_slots(&cluster).collect::<Vec<_>>());
+                }
+            }
+        }
+        slots
+    };
+    let slot = |index, count| EmphasisSlot { index, count };
+    // The fixture shapes "ffi" as one ligature glyph.
+    assert_eq!(slots("ffi"), [vec![slot(0, 3), slot(1, 3), slot(2, 3)]]);
+    // A base and its combining mark are one character.
+    assert_eq!(slots("a\u{301}").concat(), [slot(0, 1)]);
+    assert_eq!(slots("."), [vec![]]);
+}
