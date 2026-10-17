@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.36](https://github.com/fulgur-rs/shodo/compare/v0.0.35...v0.0.36) - 2026-10-17
+
+### Added
+
+- *(output)* expose per-character emphasis slots for shared clusters
+
+### Other
+
+- Merge pull request #366 from fulgur-rs/docs/public-rustdoc-review
+- clarify shodo rustdoc and remove internal references
+
 ## [0.0.35](https://github.com/fulgur-rs/shodo/compare/v0.0.34...v0.0.35) - 2026-10-17
 
 ### Fixed
