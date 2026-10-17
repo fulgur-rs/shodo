@@ -132,9 +132,7 @@ impl<'a> Frame<'a> {
     pub(crate) fn record_bounds(&self, index: usize, sat: &mut Saturation) -> Option<Bounds> {
         let center = self.baseline.add(self.shifts[index], sat);
         let record = &self.records[index];
-        // Glyph runs use their style's primary-font edges, as Blink does and as
-        // emphasis marks do, so fallback faces do not move annotations.
-        let (above, below) = record_primary_extents(self.data, record, self.runs, sat)
+        let (above, below) = record_em_extents(self.data, record, self.runs, sat)
             .or_else(|| record_extents(self.data, record, self.runs, sat))?;
         Some(Bounds {
             top: center.sub(above, sat),
@@ -329,6 +327,43 @@ pub(crate) fn record_primary_extents(
         crate::shape::orientation::RunOrientation::Upright => metrics.ascent_descent(true),
         _ => metrics.ascent_descent(false),
     };
+    Some(fixed_extents(data, a, d, sat))
+}
+
+/// Glyph edges that ruby annotations rest on, after Blink's `ComputeEmHeight`:
+/// the used face's normalized em edges rounded up to whole pixels and capped
+/// at the style's primary-font edges. Vertical lines, whose central baseline
+/// Blink centers on the em box, keep the run font edges.
+pub(crate) fn record_em_extents(
+    data: &ParagraphData,
+    record: &FragmentRecord,
+    runs: &[ShapedRun],
+    sat: &mut Saturation,
+) -> Option<(LayoutUnit, LayoutUnit)> {
+    if data.style.writing_mode != crate::geometry::WritingMode::HorizontalTb {
+        return None;
+    }
+    let RecordKind::Glyphs {
+        run, source, item, ..
+    } = &record.kind
+    else {
+        return None;
+    };
+    let run = match source {
+        GlyphSource::Overlay { run: Some(i), .. } => &runs[*i as usize],
+        _ => &data.runs[*run as usize],
+    };
+    let metrics = data.style_metrics[data.items[*item as usize].style as usize];
+    let primary = metrics.ascent_descent(false);
+    let size = run.font_size;
+    let em = if run.font == metrics.font && size == metrics.size {
+        metrics.em_ascent
+    } else {
+        crate::line::font_metrics::em_ascent(&data.fonts, run.font, size)
+            .unwrap_or(metrics.em_ascent)
+    };
+    let a = em.ceil().min(primary.0);
+    let d = (size - em).ceil().min(primary.1);
     Some(fixed_extents(data, a, d, sat))
 }
 

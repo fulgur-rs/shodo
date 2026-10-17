@@ -378,7 +378,7 @@ fn nominal_mark_overflow_uses_untrimmed_paint_edges_and_combined_square() {
 }
 
 #[test]
-fn ruby_over_fallback_base_sits_on_the_primary_ascent() {
+fn ruby_over_fallback_base_ignores_the_taller_fallback_ascent() {
     use shodo::font::{FontCollection, FontFaceDescriptor, FontOptions};
     use shodo::limits::Limits;
     use shodo::ruby::{
@@ -455,8 +455,9 @@ fn ruby_over_fallback_base_sits_on_the_primary_ascent() {
     let annotation = l.ruby_annotations().next().unwrap();
     let bottom = annotation.origin().1 + annotation.line().block_size();
     let baseline = l.baseline(BaselineKind::Alphabetic);
-    // Like Blink, and like emphasis marks: the annotation rests on the Latin
-    // primary ascent (42.76px), not on the taller CJK fallback face's ascent.
+    // The CJK face's 35.2px normalized em ascent rounds up to 36px inside the
+    // 42.76px Latin primary ascent, which the base box still reserves. The
+    // face's taller 46.41px hhea ascent no longer pushes the annotation out.
     let gap = baseline - bottom;
     assert!((gap - 40.0 * 1.069).abs() < 0.02, "{gap}");
 }

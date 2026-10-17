@@ -303,7 +303,7 @@ fn indexed_bounds_keep_atomic_overlay_and_saturated_extents() {
     };
     let mut overlay = p.data.runs[run as usize].clone();
     // Edge reshaping may select different metrics from the paragraph run, but
-    // glyph bounds use the style's primary-font edges and must ignore them.
+    // glyph bounds come from em edges capped by the primary font and ignore them.
     let metrics = std::sync::Arc::make_mut(&mut overlay.instance)
         .metrics
         .as_mut()
