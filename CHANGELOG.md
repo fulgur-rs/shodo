@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.34](https://github.com/fulgur-rs/shodo/compare/v0.0.33...v0.0.34) - 2026-10-17
+
+### Fixed
+
+- *(breaks)* treat a full-width space after a soft hyphen the same way
+- *(breaks)* take no hyphenated break at a soft hyphen before white space
+
 ## [0.0.33](https://github.com/fulgur-rs/shodo/compare/v0.0.32...v0.0.33) - 2026-10-17
 
 ### Added
