@@ -71,9 +71,9 @@ struct Case {
 
 fn cases() -> Vec<Case> {
     let mut cases = Vec::new();
-    for depth in 0..=16 {
+    for (depth, &name) in BASE_DEPTH_NAMES.iter().enumerate() {
         cases.push(Case {
-            name: BASE_DEPTH_NAMES[depth],
+            name,
             base_depth: depth,
             annotation_depth: 0,
             columns: 8,
@@ -81,9 +81,9 @@ fn cases() -> Vec<Case> {
             inline_width: 96.0,
         });
     }
-    for depth in 0..=16 {
+    for (depth, &name) in ANNOTATION_DEPTH_NAMES.iter().enumerate() {
         cases.push(Case {
-            name: ANNOTATION_DEPTH_NAMES[depth],
+            name,
             base_depth: 0,
             annotation_depth: depth,
             columns: 4,

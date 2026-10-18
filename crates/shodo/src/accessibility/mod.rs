@@ -205,12 +205,16 @@ impl<'a> AccessibleLayout<'a> {
     /// content and repeated sources. Collapsed/expanded DOM offsets normalize.
     pub fn from_source(&self, source: SourcePosition) -> Vec<AccessiblePosition> {
         match source.origin {
-            TextOrigin::Dom { node, offset } => self.from_dom_source(node, offset, source.affinity),
-            TextOrigin::Generated { node } => self.from_generated_source(node, source.affinity),
+            TextOrigin::Dom { node, offset } => {
+                self.dom_source_positions(node, offset, source.affinity)
+            }
+            TextOrigin::Generated { node } => {
+                self.generated_source_positions(node, source.affinity)
+            }
         }
     }
 
-    fn from_dom_source(
+    fn dom_source_positions(
         &self,
         node: NodeId,
         offset: u32,
@@ -246,7 +250,11 @@ impl<'a> AccessibleLayout<'a> {
         result
     }
 
-    fn from_generated_source(&self, node: NodeId, affinity: Affinity) -> Vec<AccessiblePosition> {
+    fn generated_source_positions(
+        &self,
+        node: NodeId,
+        affinity: Affinity,
+    ) -> Vec<AccessiblePosition> {
         let origin = TextOrigin::Generated { node };
         let mut result = Vec::new();
         for (line, accepted) in self.accepted.iter().enumerate() {

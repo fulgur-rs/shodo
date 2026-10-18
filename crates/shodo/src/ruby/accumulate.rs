@@ -1734,7 +1734,7 @@ mod tests {
                 }
 
                 let expected = qualifying.iter().any(|e| e.has_content);
-                assert_eq!(tree.any_content(&range), expected, "{range:?}");
+                assert_eq!(tree.any_content(&range, &mut cx), expected, "{range:?}");
                 if all_pass { fast[2] += 1 } else { slow[2] += 1 }
             }
         }

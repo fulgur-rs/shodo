@@ -83,7 +83,7 @@ fn generated_lines(
         root: style.clone(),
         ..Default::default()
     };
-    let mut builder = ParagraphBuilder::new(&paragraph_style, &limits);
+    let mut builder = ParagraphBuilder::new(&paragraph_style, limits);
     builder.with_offset_mapping(true);
     let nodes = (0..count)
         .map(|index| NodeId(10_000 + index as u64))
@@ -118,7 +118,7 @@ fn dom_lines(
         root: style.clone(),
         ..Default::default()
     };
-    let mut builder = ParagraphBuilder::new(&paragraph_style, &limits);
+    let mut builder = ParagraphBuilder::new(&paragraph_style, limits);
     builder.with_offset_mapping(true);
     let nodes = (0..count)
         .map(|index| NodeId(20_000 + index as u64))
@@ -252,7 +252,7 @@ fn main() {
         let expected = linear_generated(&oracle_layout, query);
         let actual = oracle_layout.from_source(query);
         assert_eq!(actual, expected, "single query differs for N={count}");
-        let query_sha256 = digest(&[actual.clone()]);
+        let query_sha256 = digest(std::slice::from_ref(&actual));
         for affinity in [Affinity::Upstream, Affinity::Downstream] {
             for &node in &nodes {
                 let source = SourcePosition {
