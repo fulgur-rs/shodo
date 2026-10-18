@@ -71,13 +71,24 @@ pub enum TextOrigin {
     },
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 /// Offset queries lazily retain private interval indexes. Original record order
 /// decides ambiguous source overlaps; clones start without retained indexes.
 pub struct OffsetMapping {
     units: Vec<MappingUnit>,
     generated: Vec<(Range<u32>, NodeId)>,
     index: OnceLock<MappingIndex>,
+    generated_by_node: OnceLock<Box<[GeneratedSourceRange]>>,
+}
+
+impl std::fmt::Debug for OffsetMapping {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OffsetMapping")
+            .field("units", &self.units)
+            .field("generated", &self.generated)
+            .field("index", &self.index)
+            .finish()
+    }
 }
 
 impl Clone for OffsetMapping {
@@ -86,6 +97,7 @@ impl Clone for OffsetMapping {
             units: self.units.clone(),
             generated: self.generated.clone(),
             index: OnceLock::new(),
+            generated_by_node: OnceLock::new(),
         }
     }
 }
@@ -102,6 +114,13 @@ struct MappingIndex {
     dom: BTreeMap<NodeId, RangeIndex>,
     text: RangeIndex,
     generated: RangeIndex,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct GeneratedSourceRange {
+    pub(crate) node: NodeId,
+    pub(crate) start: u32,
+    pub(crate) end: u32,
 }
 
 #[derive(Debug)]
@@ -140,7 +159,11 @@ crate::logical::logical_sizes! {
     SOURCE_GROUP_BYTES: (NodeId, Vec<(Range<u32>, usize)>) = 32;
     DOM_INDEX_BYTES: (NodeId, RangeIndex) = 56;
 }
-const GENERATED_BYTES: u64 = std::mem::size_of::<(Range<u32>, NodeId)>() as u64 + INDEX_RANGE_BYTES;
+// Reserve the source record, its text interval index, and the lazy node-ordered
+// ranges used by accessibility source inversion.
+const GENERATED_BYTES: u64 = std::mem::size_of::<(Range<u32>, NodeId)>() as u64
+    + INDEX_RANGE_BYTES
+    + std::mem::size_of::<GeneratedSourceRange>() as u64;
 
 pub(crate) const TRANSFORM_SPAN_BYTES: u64 = std::mem::size_of::<TransformSpan>() as u64;
 pub(crate) const INDIVISIBLE_BYTES: u64 = std::mem::size_of::<Range<u32>>() as u64;
@@ -301,6 +324,43 @@ impl TransformSpan {
 }
 
 impl OffsetMapping {
+    /// Generated text ranges for one source node, built only when the
+    /// accessibility inverse needs them. DOM-only mappings pay no index-build
+    /// or retained-allocation cost.
+    pub(crate) fn generated_source_ranges(&self, node: NodeId) -> &[GeneratedSourceRange] {
+        let ranges = self.generated_by_node.get_or_init(|| {
+            let mut ranges = self
+                .generated
+                .iter()
+                .filter(|(range, _)| !range.is_empty())
+                .map(|(range, node)| GeneratedSourceRange {
+                    node: *node,
+                    start: range.start,
+                    end: range.end,
+                })
+                .collect::<Vec<_>>();
+            ranges.sort_unstable_by_key(|range| (range.node, range.start, range.end));
+            let mut merged = 0;
+            for read in 0..ranges.len() {
+                let range = ranges[read];
+                if merged > 0
+                    && ranges[merged - 1].node == range.node
+                    && range.start <= ranges[merged - 1].end
+                {
+                    ranges[merged - 1].end = ranges[merged - 1].end.max(range.end);
+                } else {
+                    ranges[merged] = range;
+                    merged += 1;
+                }
+            }
+            ranges.truncate(merged);
+            ranges.into_boxed_slice()
+        });
+        let first = ranges.partition_point(|range| range.node < node);
+        let last = ranges.partition_point(|range| range.node <= node);
+        &ranges[first..last]
+    }
+
     fn index(&self) -> &MappingIndex {
         self.index.get_or_init(|| {
             let mut sources: BTreeMap<NodeId, Vec<(Range<u32>, usize)>> = BTreeMap::new();
@@ -497,6 +557,9 @@ impl OffsetMapping {
 
     fn append_generated(&mut self, text: Range<u32>, node: NodeId) {
         self.index.take();
+        if self.generated_by_node.get().is_some() {
+            self.generated_by_node.take();
+        }
         if let Some((last, last_node)) = self.generated.last_mut()
             && *last_node == node
             && last.end == text.start

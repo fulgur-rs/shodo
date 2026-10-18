@@ -204,6 +204,18 @@ impl<'a> AccessibleLayout<'a> {
     /// Source inverses may return several boundaries, particularly for generated
     /// content and repeated sources. Collapsed/expanded DOM offsets normalize.
     pub fn from_source(&self, source: SourcePosition) -> Vec<AccessiblePosition> {
+        match source.origin {
+            TextOrigin::Dom { node, offset } => self.from_dom_source(node, offset, source.affinity),
+            TextOrigin::Generated { node } => self.from_generated_source(node, source.affinity),
+        }
+    }
+
+    fn from_dom_source(
+        &self,
+        node: NodeId,
+        offset: u32,
+        affinity: Affinity,
+    ) -> Vec<AccessiblePosition> {
         let mut result = Vec::new();
         // First-line styling can give equal data ids distinct source mappings.
         // Cache by the actual shared dataset, preserving repeated accepted lines.
@@ -212,38 +224,62 @@ impl<'a> AccessibleLayout<'a> {
             let Some(mapping) = accepted.offset_mapping() else {
                 continue;
             };
-            match source.origin {
-                TextOrigin::Dom { node, offset } => {
-                    let candidates = datasets
-                        .entry(mapping as *const OffsetMapping)
-                        .or_insert_with(|| {
-                            mapping.source_candidates(node, offset, source.affinity)
-                        });
-                    let range = &self.lines[line].text_range;
-                    let first = candidates.partition_point(|&(text, _)| text < range.start);
-                    let last = candidates.partition_point(|&(text, _)| text <= range.end);
-                    let begin = result.len();
-                    for &(offset, affinity) in &candidates[first..last] {
-                        if let Some(p) = self.from_text_position(TextPosition {
-                            line,
-                            offset,
-                            affinity,
-                        }) {
-                            result.push(p);
-                        }
-                    }
-                    result[begin..]
-                        .sort_by_key(|p| (p.character, p.affinity == Affinity::Downstream));
+            let candidates = datasets
+                .entry(mapping as *const OffsetMapping)
+                .or_insert_with(|| mapping.source_candidates(node, offset, affinity));
+            let range = &self.lines[line].text_range;
+            let first = candidates.partition_point(|&(text, _)| text < range.start);
+            let last = candidates.partition_point(|&(text, _)| text <= range.end);
+            let begin = result.len();
+            for &(offset, candidate_affinity) in &candidates[first..last] {
+                if let Some(p) = self.from_text_position(TextPosition {
+                    line,
+                    offset,
+                    affinity: candidate_affinity,
+                }) {
+                    result.push(p);
                 }
-                TextOrigin::Generated { .. } => {
-                    for character in 0..=self.lines[line].characters.len() {
-                        if let Some(p) = self.position(line, character, source.affinity)
-                            && self.to_source(p).is_some_and(|s| s.origin == source.origin)
-                            && result.last() != Some(&p)
-                        {
-                            result.push(p);
-                        }
-                    }
+            }
+            result[begin..].sort_by_key(|p| (p.character, p.affinity == Affinity::Downstream));
+        }
+        result.dedup();
+        result
+    }
+
+    fn from_generated_source(&self, node: NodeId, affinity: Affinity) -> Vec<AccessiblePosition> {
+        let origin = TextOrigin::Generated { node };
+        let mut result = Vec::new();
+        for (line, accepted) in self.accepted.iter().enumerate() {
+            let Some(mapping) = accepted.offset_mapping() else {
+                continue;
+            };
+            let accessible = &self.lines[line];
+            let characters = &accessible.characters;
+            let mut candidates = Vec::new();
+            let mut include_line_end = false;
+            for source_range in mapping.generated_source_ranges(node) {
+                let start = source_range.start.max(accessible.text_range.start);
+                let end = source_range.end.min(accessible.text_range.end);
+                if start > end {
+                    continue;
+                }
+                let first = characters.partition_point(|c| c.text_range.start < start);
+                let last = characters.partition_point(|c| c.text_range.start <= end);
+                candidates
+                    .extend(first.saturating_sub(1)..last.saturating_add(1).min(characters.len()));
+                include_line_end = true;
+            }
+            if include_line_end {
+                candidates.push(characters.len());
+            }
+            candidates.sort_unstable();
+            candidates.dedup();
+            for character in candidates {
+                if let Some(p) = self.position(line, character, affinity)
+                    && self.to_source(p).is_some_and(|s| s.origin == origin)
+                    && result.last() != Some(&p)
+                {
+                    result.push(p);
                 }
             }
         }
