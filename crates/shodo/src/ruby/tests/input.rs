@@ -1,7 +1,8 @@
 //! These tests catch wrong pairing, post-transform hiding and expansion before
 //! the projected allocation guard. Expected ranges and visibility are literal.
+use crate::builder::ParagraphBuilder;
 use crate::limits::{LimitKind, Limits};
-use crate::node::{NodeId, TextSource};
+use crate::node::{InlineEdges, NodeId, TextSource};
 use crate::ruby::pairing::normalize;
 use crate::ruby::*;
 use crate::style::{InlineStyle, TextTransform};
@@ -115,6 +116,66 @@ fn ruby_hiding_uses_original_text_not_transforms() {
             n.levels[0].annotations[0].auto_hidden, hidden,
             "{base_text:?}/{annotation_text:?}/{merge:?}"
         );
+    }
+}
+
+/// Content of `text` followed by an atomic inline, under `node`.
+fn object_content(node: u64, text: &str) -> RubyContent {
+    let limits = Limits::default();
+    let style = InlineStyle::default();
+    let mut builder = ParagraphBuilder::from_inline_style(&style, &limits);
+    if !text.is_empty() {
+        builder.push_text(
+            TextSource::Dom {
+                node: NodeId(node),
+                offset: 0,
+            },
+            text,
+        );
+    }
+    builder.push_atomic(NodeId(node + 100), &style, InlineEdges::default());
+    RubyContent::from_builder(builder)
+}
+
+#[test]
+fn atomic_inlines_are_never_the_same_text() {
+    // An atomic inline has no source text, but two of them are two objects:
+    // an annotation that holds one is not hidden for matching its base.
+    for (base_content, annotation_content, hidden) in [
+        (
+            content(1, "a", TextTransform::None),
+            content(2, "a", TextTransform::None),
+            true,
+        ),
+        (object_content(1, ""), object_content(2, ""), false),
+        (object_content(1, "a"), object_content(2, "a"), false),
+        (
+            object_content(1, "a"),
+            content(2, "a", TextTransform::None),
+            false,
+        ),
+        (
+            content(1, "a", TextTransform::None),
+            object_content(2, "a"),
+            false,
+        ),
+    ] {
+        let r = Ruby::new(
+            vec![RubyBase {
+                node: NodeId(1),
+                content: base_content,
+                align: RubyAlign::default(),
+            }],
+            vec![level(vec![RubyAnnotation {
+                node: NodeId(2),
+                content: annotation_content,
+                span: RubySpan::Auto,
+                visibility: RubyVisibility::Visible,
+            }])],
+        )
+        .unwrap();
+        let n = normalize(&r, &Limits::default()).unwrap();
+        assert_eq!(n.levels[0].annotations[0].auto_hidden, hidden);
     }
 }
 

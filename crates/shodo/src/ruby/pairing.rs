@@ -1,6 +1,7 @@
 use std::ops::Range;
 
 use super::input::{Ruby, RubyAlign, RubyContent, RubyMerge, RubyStyle, RubyVisibility, span};
+use crate::builder::RawItem;
 use crate::limits::{LimitExceeded, LimitKind, Limits};
 use crate::node::NodeId;
 
@@ -71,6 +72,15 @@ pub(crate) fn normalize(ruby: &Ruby, limits: &Limits) -> Result<NormalizedRuby, 
         .enumerate()
         .filter(|(_, base)| !base.content.0.text.is_empty())
         .collect();
+    // An atomic inline has no source text, but it is an object of its own:
+    // content that holds one is never the same as other content.
+    let object_columns: Vec<usize> = ruby
+        .bases
+        .iter()
+        .enumerate()
+        .filter(|(_, base)| holds_object(&base.content))
+        .map(|(column, _)| column)
+        .collect();
     let mut bases = Vec::with_capacity(ruby.columns);
     for column in 0..ruby.columns {
         bases.push(match ruby.bases.get(column) {
@@ -105,15 +115,20 @@ pub(crate) fn normalize(ruby: &Ruby, limits: &Limits) -> Result<NormalizedRuby, 
             #[cfg(test)]
             let text = text.inspect(|_| compared += 1);
             let start = text_bases.partition_point(|(column, _)| *column < columns.start);
-            let same_text = text_bases[start..]
-                .iter()
-                .take_while(|(column, _)| *column < columns.end)
-                .flat_map(|(_, b)| {
-                    #[cfg(test)]
-                    COMPARED_BASES.with(|count| count.set(count.get() + 1));
-                    b.content.0.text.bytes()
-                })
-                .eq(text);
+            let object_start = object_columns.partition_point(|column| *column < columns.start);
+            let same_text = !holds_object(&annotation.content)
+                && !object_columns
+                    .get(object_start)
+                    .is_some_and(|column| *column < columns.end)
+                && text_bases[start..]
+                    .iter()
+                    .take_while(|(column, _)| *column < columns.end)
+                    .flat_map(|(_, b)| {
+                        #[cfg(test)]
+                        COMPARED_BASES.with(|count| count.set(count.get() + 1));
+                        b.content.0.text.bytes()
+                    })
+                    .eq(text);
             #[cfg(test)]
             COMPARED_BYTES.with(|count| count.set(count.get() + compared));
             annotations.push(NormalizedAnnotation {
@@ -150,6 +165,15 @@ pub(crate) fn normalize(ruby: &Ruby, limits: &Limits) -> Result<NormalizedRuby, 
         levels,
         metadata_items,
     })
+}
+
+/// Whether `content` holds an atomic inline of its own.
+fn holds_object(content: &RubyContent) -> bool {
+    content
+        .0
+        .items
+        .iter()
+        .any(|item| matches!(item, RawItem::Atomic { .. }))
 }
 
 fn empty(column: usize) -> NormalizedAnnotation {
