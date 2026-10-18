@@ -27,6 +27,7 @@ include = [
 
 [features]
 accesskit = ["dep:accesskit"]
+bench-counters = []
 default = ["system-fonts", "web-fonts", "complex-scripts"]
 complex-scripts = ["icu_segmenter/auto"]
 web-fonts = ["dep:wuff", "dep:flate2", "dep:brotli-decompressor"]

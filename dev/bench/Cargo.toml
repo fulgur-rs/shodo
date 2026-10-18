@@ -12,6 +12,7 @@ description = "Reproducible standalone shodo development measurements"
 default = ["complex-scripts"]
 complex-scripts = ["shodo/complex-scripts"]
 allocation-counting = []
+bench-counters = ["shodo/bench-counters"]
 
 [dependencies]
 shodo = { path = "../../crates/shodo", default-features = false }

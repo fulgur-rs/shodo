@@ -2,6 +2,18 @@
 
 use crate::limits::{Warning, WarningSink};
 
+/// Optional counts for the ruby descendant benchmark probes.
+#[cfg(feature = "bench-counters")]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RubyDescendantCounters {
+    pub completed_queries: usize,
+    pub completed_fragment_reads: usize,
+    pub completed_elapsed_ns: u64,
+    pub tree_queries: usize,
+    pub tree_fallback_fragment_reads: usize,
+    pub tree_elapsed_ns: u64,
+}
+
 /// Test-only counter updates. Discard the entire update outside tests,
 /// including amounts that call test-only index instrumentation. A wildcard binding
 /// marks the receiver as used without moving or borrowing it.
@@ -31,6 +43,8 @@ pub struct LayoutContext {
     pub(crate) edge_shapes: crate::line::windows::EdgeShapeCache,
     /// Prepared font instances of the most recent paragraph's edge windows.
     pub(crate) window_instances: crate::shape::WindowInstances,
+    #[cfg(feature = "bench-counters")]
+    pub(crate) ruby_descendant_counters: RubyDescendantCounters,
     /// Bytes of edge reshape windows requested by the current `next_line` or
     /// `intrinsic_sizes` call. First-line intrinsic passes share one budget.
     pub(crate) edge_reshape_spent: u64,
@@ -162,6 +176,16 @@ impl LayoutContext {
     /// Warnings recorded by line layout since the last call.
     pub fn take_warnings(&mut self) -> Vec<Warning> {
         self.warnings.take()
+    }
+
+    #[cfg(feature = "bench-counters")]
+    pub fn reset_ruby_descendant_counters(&mut self) {
+        self.ruby_descendant_counters = RubyDescendantCounters::default();
+    }
+
+    #[cfg(feature = "bench-counters")]
+    pub fn ruby_descendant_counters(&self) -> RubyDescendantCounters {
+        self.ruby_descendant_counters
     }
 
     /// Start one `next_line` or `intrinsic_sizes` operation: reset the edge

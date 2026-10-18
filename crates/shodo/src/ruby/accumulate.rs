@@ -1231,6 +1231,10 @@ impl Tree<'_> {
         for pos in span {
             let entry = &self.acc.entries[pos];
             count!(cx.ruby_measure_visits += 1; cx.ruby_descendant_reads += 1);
+            #[cfg(feature = "bench-counters")]
+            {
+                cx.ruby_descendant_counters.tree_fallback_fragment_reads += 1;
+            }
             if entry.present && entry.units.end <= range.end {
                 width = width.add(entry.adjustment, sat);
             }
@@ -1251,46 +1255,108 @@ impl Descendants for Tree<'_> {
         cx: &mut LayoutContext,
         sat: &mut Saturation,
     ) -> LayoutUnit {
+        #[cfg(feature = "bench-counters")]
+        let started = std::time::Instant::now();
         let span = self.span(range);
         let node = self.acc.query(span.clone());
+        #[cfg(feature = "bench-counters")]
+        {
+            cx.ruby_descendant_counters.tree_queries += 1;
+        }
         count!(cx.ruby_measure_visits += 1);
         if node.max_end <= range.end && node.forward.fits(width) {
             count!(cx.ruby_descendant_reads += 1);
+            #[cfg(feature = "bench-counters")]
+            {
+                cx.ruby_descendant_counters.tree_elapsed_ns += started.elapsed().as_nanos() as u64;
+            }
             return node.forward.total(width);
         }
-        self.add_each(span, range, width, cx, sat)
+        let result = self.add_each(span, range, width, cx, sat);
+        #[cfg(feature = "bench-counters")]
+        {
+            cx.ruby_descendant_counters.tree_elapsed_ns += started.elapsed().as_nanos() as u64;
+        }
+        result
     }
 
     /// `Bounds::union` is a min/max, so the tree's union equals the
     /// sequential one in any grouping once every present position passes
     /// the end filter; otherwise the reference loop.
     fn union_areas(&self, range: &Range<usize>, area: Bounds, cx: &mut LayoutContext) -> Bounds {
+        #[cfg(feature = "bench-counters")]
+        let started = std::time::Instant::now();
         let span = self.span(range);
         let node = self.acc.query(span.clone());
+        #[cfg(feature = "bench-counters")]
+        {
+            cx.ruby_descendant_counters.tree_queries += 1;
+        }
         count!(cx.ruby_measure_visits += 1);
         if node.max_end <= range.end {
             count!(cx.ruby_descendant_reads += 1);
+            #[cfg(feature = "bench-counters")]
+            {
+                cx.ruby_descendant_counters.tree_elapsed_ns += started.elapsed().as_nanos() as u64;
+            }
             return node.area.map_or(area, |a| area.union(a));
         }
         let mut area = area;
         for pos in span {
             let entry = &self.acc.entries[pos];
             count!(cx.ruby_measure_visits += 1; cx.ruby_descendant_reads += 1);
+            #[cfg(feature = "bench-counters")]
+            {
+                cx.ruby_descendant_counters.tree_fallback_fragment_reads += 1;
+            }
             if entry.present && entry.units.end <= range.end {
                 area = area.union(entry.whole_area);
             }
         }
+        #[cfg(feature = "bench-counters")]
+        {
+            cx.ruby_descendant_counters.tree_elapsed_ns += started.elapsed().as_nanos() as u64;
+        }
         area
     }
 
-    fn any_content(&self, range: &Range<usize>) -> bool {
+    fn any_content(&self, range: &Range<usize>, cx: &mut LayoutContext) -> bool {
+        let _ = cx;
+        #[cfg(feature = "bench-counters")]
+        let started = std::time::Instant::now();
         let span = self.span(range);
         let node = self.acc.query(span.clone());
+        #[cfg(feature = "bench-counters")]
+        {
+            cx.ruby_descendant_counters.tree_queries += 1;
+        }
         if node.max_end <= range.end {
+            #[cfg(feature = "bench-counters")]
+            {
+                cx.ruby_descendant_counters.tree_elapsed_ns += started.elapsed().as_nanos() as u64;
+            }
             return node.content;
         }
-        span.map(|pos| &self.acc.entries[pos])
-            .any(|e| e.present && e.units.end <= range.end && e.has_content)
+        for pos in span {
+            #[cfg(feature = "bench-counters")]
+            {
+                cx.ruby_descendant_counters.tree_fallback_fragment_reads += 1;
+            }
+            let entry = &self.acc.entries[pos];
+            if entry.present && entry.units.end <= range.end && entry.has_content {
+                #[cfg(feature = "bench-counters")]
+                {
+                    cx.ruby_descendant_counters.tree_elapsed_ns +=
+                        started.elapsed().as_nanos() as u64;
+                }
+                return true;
+            }
+        }
+        #[cfg(feature = "bench-counters")]
+        {
+            cx.ruby_descendant_counters.tree_elapsed_ns += started.elapsed().as_nanos() as u64;
+        }
+        false
     }
 }
 
@@ -1658,7 +1724,7 @@ mod tests {
                 }
 
                 let expected = qualifying.iter().any(|e| e.has_content);
-                assert_eq!(tree.any_content(&range), expected, "{range:?}");
+                assert_eq!(tree.any_content(&range, &mut cx), expected, "{range:?}");
                 if all_pass { fast[2] += 1 } else { slow[2] += 1 }
             }
         }

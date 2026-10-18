@@ -20,6 +20,44 @@ static ALLOC: shodo_bench::allocator::CountingAllocator<std::alloc::System> =
 
 const WARMUPS: usize = 3;
 const SAMPLES: usize = 11;
+const BASE_DEPTH_NAMES: [&str; 17] = [
+    "base-depth-0",
+    "base-depth-1",
+    "base-depth-2",
+    "base-depth-3",
+    "base-depth-4",
+    "base-depth-5",
+    "base-depth-6",
+    "base-depth-7",
+    "base-depth-8",
+    "base-depth-9",
+    "base-depth-10",
+    "base-depth-11",
+    "base-depth-12",
+    "base-depth-13",
+    "base-depth-14",
+    "base-depth-15",
+    "base-depth-16",
+];
+const ANNOTATION_DEPTH_NAMES: [&str; 17] = [
+    "annotation-depth-0",
+    "annotation-depth-1",
+    "annotation-depth-2",
+    "annotation-depth-3",
+    "annotation-depth-4",
+    "annotation-depth-5",
+    "annotation-depth-6",
+    "annotation-depth-7",
+    "annotation-depth-8",
+    "annotation-depth-9",
+    "annotation-depth-10",
+    "annotation-depth-11",
+    "annotation-depth-12",
+    "annotation-depth-13",
+    "annotation-depth-14",
+    "annotation-depth-15",
+    "annotation-depth-16",
+];
 
 #[derive(Clone, Copy)]
 struct Case {
@@ -33,12 +71,7 @@ struct Case {
 
 fn cases() -> Vec<Case> {
     let mut cases = Vec::new();
-    for (depth, name) in [
-        (0, "base-depth-0"),
-        (1, "base-depth-1"),
-        (2, "base-depth-2"),
-        (4, "base-depth-4"),
-    ] {
+    for (depth, &name) in BASE_DEPTH_NAMES.iter().enumerate() {
         cases.push(Case {
             name,
             base_depth: depth,
@@ -48,12 +81,7 @@ fn cases() -> Vec<Case> {
             inline_width: 96.0,
         });
     }
-    for (depth, name) in [
-        (0, "annotation-depth-0"),
-        (1, "annotation-depth-1"),
-        (2, "annotation-depth-2"),
-        (4, "annotation-depth-4"),
-    ] {
+    for (depth, &name) in ANNOTATION_DEPTH_NAMES.iter().enumerate() {
         cases.push(Case {
             name,
             base_depth: 0,
@@ -268,14 +296,25 @@ fn main() {
         let rejected = limit_result(case, family);
         let mut expected = None;
         let mut times = Vec::new();
+        let mut build_times = Vec::new();
         let mut allocations = Vec::new();
-        for iteration in 0..WARMUPS + SAMPLES {
+        for _ in 0..SAMPLES {
             let input = builder(case, &limits, family);
             let mut cx = LayoutContext::new();
+            let build_started = std::time::Instant::now();
+            let _paragraph = input.build(&mut cx, &fonts.collection).unwrap();
+            build_times.push(build_started.elapsed().as_nanos() as u64);
+        }
+
+        let input = builder(case, &limits, family);
+        let mut cx = LayoutContext::new();
+        let paragraph = input.build(&mut cx, &fonts.collection).unwrap();
+        for iteration in 0..WARMUPS + SAMPLES {
+            #[cfg(feature = "bench-counters")]
+            cx.reset_ruby_descendant_counters();
             #[cfg(feature = "allocation-counting")]
             let allocation_scope = (mode == "alloc").then(|| ALLOC.begin().unwrap());
             let started = (mode == "time").then(std::time::Instant::now);
-            let paragraph = input.build(&mut cx, &fonts.collection).unwrap();
             let lines = paragraph.break_all(
                 &mut cx,
                 &Default::default(),
@@ -289,6 +328,20 @@ fn main() {
             let build_warnings = format!("{:?}", paragraph.warnings());
             let layout_warnings = format!("{:?}", cx.take_warnings());
             let output_digest = digest(&lines);
+            #[cfg(feature = "bench-counters")]
+            let descendant_counters = {
+                let counters = cx.ruby_descendant_counters();
+                json!({
+                    "completed_queries": counters.completed_queries,
+                    "completed_fragment_reads": counters.completed_fragment_reads,
+                    "completed_elapsed_ns": counters.completed_elapsed_ns,
+                    "tree_queries": counters.tree_queries,
+                    "tree_fallback_fragment_reads": counters.tree_fallback_fragment_reads,
+                    "tree_elapsed_ns": counters.tree_elapsed_ns,
+                })
+            };
+            #[cfg(not(feature = "bench-counters"))]
+            let descendant_counters = Value::Null;
             let contract = (
                 output_digest.clone(),
                 build_warnings.clone(),
@@ -306,13 +359,16 @@ fn main() {
             let measurement = if mode == "time" {
                 let ns = elapsed.unwrap();
                 times.push(ns);
-                json!({"time_ns": ns})
+                json!({"build_ns": build_times[sample], "break_all_ns": ns})
             } else {
                 #[cfg(feature = "allocation-counting")]
                 {
                     let counts = allocation.unwrap();
                     allocations.push(counts.allocated_bytes);
-                    json!({"allocation": counts})
+                    json!({
+                        "build_ns": build_times[sample],
+                        "allocation": counts,
+                    })
                 }
                 #[cfg(not(feature = "allocation-counting"))]
                 unreachable!()
@@ -332,13 +388,18 @@ fn main() {
                     "build_warnings": build_warnings,
                     "layout_warnings": layout_warnings,
                     "limit_rejection": rejected,
+                    "descendant_counters": descendant_counters,
                     "measurement": measurement,
                 })
             );
         }
         if mode == "time" {
             let med = median(&mut times);
-            eprintln!("{} median_ns={med}", case.name);
+            let build_med = median(&mut build_times);
+            eprintln!(
+                "{} median_break_all_ns={med} median_build_ns={build_med}",
+                case.name
+            );
         } else {
             let med = median(&mut allocations);
             eprintln!("{} median_allocated_bytes={med}", case.name);

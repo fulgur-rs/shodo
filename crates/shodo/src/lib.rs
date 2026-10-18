@@ -152,6 +152,8 @@ pub use analysis::breaks::{LineBreakContext, LineBreakOverride, SoftBreakOpportu
 pub use analysis::first_letter::first_letter_range;
 pub use builder::{ParagraphBuilder, RichText};
 pub use context::LayoutContext;
+#[cfg(feature = "bench-counters")]
+pub use context::RubyDescendantCounters;
 pub use output::{
     AnchorFragment, AnnotationMetrics, AtomicFragment, BreakReason, Cluster, ClusterFlags,
     DecorationRect, EmphasisMark, EmphasisSlot, ForcedBreak, Fragment, Glyph, GlyphRunView,

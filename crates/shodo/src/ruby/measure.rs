@@ -365,7 +365,7 @@ pub(super) trait Descendants {
         cx: &mut LayoutContext,
     ) -> super::geometry::Bounds;
     /// Whether any such fragment has content.
-    fn any_content(&self, range: &Range<usize>) -> bool;
+    fn any_content(&self, range: &Range<usize>, cx: &mut LayoutContext) -> bool;
 }
 
 /// Completed fragments of `measure_containers`, indexed by source start so
@@ -390,6 +390,10 @@ impl<'a> Completed<'a> {
             .range((range.start, 0)..(range.end, 0))
             .map(move |(_, &index)| {
                 count!(cx.ruby_measure_visits += 1; cx.ruby_descendant_reads += 1);
+                #[cfg(feature = "bench-counters")]
+                {
+                    cx.ruby_descendant_counters.completed_fragment_reads += 1;
+                }
                 &fragments[index]
             })
             .filter(move |nested| nested.units.end <= range.end)
@@ -401,11 +405,21 @@ impl Descendants for Completed<'_> {
         &self,
         range: &Range<usize>,
         mut width: LayoutUnit,
-        _cx: &mut LayoutContext,
+        cx: &mut LayoutContext,
         sat: &mut Saturation,
     ) -> LayoutUnit {
-        for nested in self.contained(range, _cx) {
+        #[cfg(feature = "bench-counters")]
+        let started = std::time::Instant::now();
+        #[cfg(feature = "bench-counters")]
+        {
+            cx.ruby_descendant_counters.completed_queries += 1;
+        }
+        for nested in self.contained(range, cx) {
             width = width.add(nested.adjustment, sat);
+        }
+        #[cfg(feature = "bench-counters")]
+        {
+            cx.ruby_descendant_counters.completed_elapsed_ns += started.elapsed().as_nanos() as u64;
         }
         width
     }
@@ -414,21 +428,48 @@ impl Descendants for Completed<'_> {
         &self,
         range: &Range<usize>,
         mut area: super::geometry::Bounds,
-        _cx: &mut LayoutContext,
+        cx: &mut LayoutContext,
     ) -> super::geometry::Bounds {
-        for nested in self.contained(range, _cx) {
+        #[cfg(feature = "bench-counters")]
+        let started = std::time::Instant::now();
+        #[cfg(feature = "bench-counters")]
+        {
+            cx.ruby_descendant_counters.completed_queries += 1;
+        }
+        for nested in self.contained(range, cx) {
             area = area.union(nested.whole_area);
+        }
+        #[cfg(feature = "bench-counters")]
+        {
+            cx.ruby_descendant_counters.completed_elapsed_ns += started.elapsed().as_nanos() as u64;
         }
         area
     }
 
-    fn any_content(&self, range: &Range<usize>) -> bool {
-        self.index
+    fn any_content(&self, range: &Range<usize>, cx: &mut LayoutContext) -> bool {
+        let _ = cx;
+        #[cfg(feature = "bench-counters")]
+        let started = std::time::Instant::now();
+        #[cfg(feature = "bench-counters")]
+        {
+            cx.ruby_descendant_counters.completed_queries += 1;
+        }
+        let result = self
+            .index
             .range((range.start, 0)..(range.end, 0))
             .any(|(_, &i)| {
+                #[cfg(feature = "bench-counters")]
+                {
+                    cx.ruby_descendant_counters.completed_fragment_reads += 1;
+                }
                 let child = &self.fragments[i];
                 child.units.end <= range.end && child.has_content
-            })
+            });
+        #[cfg(feature = "bench-counters")]
+        {
+            cx.ruby_descendant_counters.completed_elapsed_ns += started.elapsed().as_nanos() as u64;
+        }
+        result
     }
 }
 
@@ -589,7 +630,7 @@ pub(super) fn measure_one(
     let has_content = !crate::line::metric_index::measure(data, units.clone(), atomics, cx, sat)
         .empty
         || heights.iter().any(|h| *h != LayoutUnit::ZERO)
-        || completed.any_content(&units);
+        || completed.any_content(&units, cx);
     let sides = super::geometry::level_sides(data, ruby);
     let tracks = super::geometry::tracks(
         data,

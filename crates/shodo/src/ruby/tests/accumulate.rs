@@ -159,7 +159,7 @@ impl crate::ruby::measure::Descendants for NoDescendants {
         area
     }
 
-    fn any_content(&self, _: &Range<usize>) -> bool {
+    fn any_content(&self, _: &Range<usize>, _: &mut LayoutContext) -> bool {
         false
     }
 }
