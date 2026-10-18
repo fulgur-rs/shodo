@@ -1302,6 +1302,10 @@ impl Descendants for Tree<'_> {
         let started = std::time::Instant::now();
         let span = self.span(range);
         let node = self.acc.query(span.clone());
+        #[cfg(feature = "bench-counters")]
+        {
+            cx.ruby_descendant_counters.tree_queries += 1;
+        }
         count!(cx.ruby_measure_visits += 1);
         if node.max_end <= range.end {
             count!(cx.ruby_descendant_reads += 1);
