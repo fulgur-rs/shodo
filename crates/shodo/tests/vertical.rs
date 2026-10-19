@@ -1709,6 +1709,46 @@ fn combine_all_keeps_horizontal_glyphs_and_centers_their_paint_axes() {
 }
 
 #[test]
+fn combine_all_halves_its_spare_room_in_layout_units_like_a_line() {
+    // At this font size the room left beside the digit is an odd number of
+    // layout units (1/64 px). A line centering the same digit shifts it by
+    // half the room truncated to whole units; the square does the same
+    // instead of shifting it by the exact half.
+    let em = 16.03125;
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let mut combined = style(mode, TextOrientation::Mixed);
+        combined.root.font_size = em;
+        combined.root.text_combine_upright = TextCombineUpright::All;
+        combined.root.text_autospace = shodo::style::TextAutospace::NoAutospace;
+        let line = first_line(
+            &paragraph(&combined, "1"),
+            100.0,
+            &LineOptions::default(),
+            &AtomicSizes::EMPTY,
+        );
+        let run = match line.fragment(0).unwrap() {
+            Fragment::GlyphRun(run) => run,
+            _ => panic!("combined glyph run"),
+        };
+        let natural: f32 = run.clusters().map(|cluster| cluster.shaping_advance).sum();
+        let spare_units = ((em - natural) * 64.0).round() as i32;
+        assert_eq!(spare_units % 2, 1, "{mode:?}: an odd room, {spare_units}");
+        let sign = if mode == WritingMode::VerticalRl {
+            -1.0
+        } else {
+            1.0
+        };
+        let origin = run.glyph_origin(0).unwrap();
+        let center = (spare_units / 2) as f32 / 64.0;
+        let expected = line.metrics().baseline + sign * (center - em / 2.0);
+        assert!(
+            (origin.1 - expected).abs() < 0.0001,
+            "{mode:?}: {origin:?}/{expected}"
+        );
+    }
+}
+
+#[test]
 fn combine_all_ignores_internal_letter_spacing() {
     let mut combined = style(WritingMode::VerticalRl, TextOrientation::Mixed);
     combined.root.text_combine_upright = TextCombineUpright::All;

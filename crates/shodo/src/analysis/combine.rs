@@ -265,8 +265,15 @@ pub(crate) fn geometry(
                 relative += advance;
             }
         }
-        // The centering offset is part of paint, never part of shaping.
-        let center = (span.em - natural * result.scales[span_index]) / 2.0;
+        // The centering offset is part of paint, never part of shaping. A line
+        // centers its content by halving the spare room in layout units,
+        // truncating toward zero; the square does the same, so it lands on the
+        // pixels of the same text centered in an inline-block one em wide.
+        let spare = crate::geometry::LayoutUnit::from_f32_round(
+            span.em - natural * result.scales[span_index],
+            sat,
+        );
+        let center = spare.div_i32(2).to_f32();
         for paint in result.glyphs[begin..end].iter_mut().flatten() {
             paint.x = center + paint.x * result.scales[span_index];
             paint.from = center + paint.from * result.scales[span_index];
