@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.37](https://github.com/fulgur-rs/shodo/compare/v0.0.36...v0.0.37) - 2026-10-19
+
+### Fixed
+
+- *(analysis)* center a combined square in layout units like a line
+- *(ruby)* never hide an annotation that holds an atomic inline for matching its base
+
+### Other
+
+- Merge pull request #373 from fulgur-rs/perf/shodo-62-63
+- Count area union tree queries
+- Fix performance branch lint errors
+- Index generated accessibility source lookups
+
 ## [0.0.36](https://github.com/fulgur-rs/shodo/compare/v0.0.35...v0.0.36) - 2026-10-17
 
 ### Added
