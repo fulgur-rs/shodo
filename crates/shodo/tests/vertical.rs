@@ -6,7 +6,7 @@ use shodo::geometry::{BaselineKind, Direction, PhysicalConverter, PhysicalSize, 
 use shodo::hit::{LineLayout, TextPosition};
 use shodo::limits::Limits;
 use shodo::mapping::Affinity;
-use shodo::node::{InlineEdges, NodeId, OutOfFlowKind, TextSource};
+use shodo::node::{InlineEdges, NodeId, OutOfFlowKind, Sides, TextSource};
 use shodo::style::{
     FontFamily, FontFeature, FontKerning, InlineStyle, LineOptions, ParagraphStyle, TextAutospace,
     TextCombineUpright, TextOrientation, TextSpacingTrim, VerticalAlign,
@@ -1534,6 +1534,87 @@ fn vertical_atomic_without_baseline_uses_margin_box_centre() {
         assert_eq!(atomic.baseline, 10.0);
         assert_eq!(atomic.margin_rect.block_start, 0.0);
         assert_eq!(atomic.margin_rect.block_size, 20.0);
+    }
+}
+
+#[test]
+fn vertical_atomic_baseline_is_measured_from_the_line_over_edge() {
+    // Line-over is the physical right edge in vertical-rl and vertical-lr, so
+    // it lies toward block-start in the first and toward block-end in the
+    // second. A synthesized baseline sits on the line-under edge.
+    let limits = Limits::default();
+    let fonts = FontCollection::with_options(
+        &limits,
+        FontOptions {
+            system_fonts: false,
+            ..Default::default()
+        },
+    );
+    fonts
+        .register_face(
+            include_bytes!("../../../dev/fixtures/assets/fonts/cjk.otf").to_vec(),
+            0,
+            FontFaceDescriptor {
+                family: "Shodo Fixture CJK".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    for (mode, over_is_block_end) in [
+        (WritingMode::VerticalRl, false),
+        (WritingMode::VerticalLr, true),
+    ] {
+        let style = style(mode, TextOrientation::Sideways);
+        let mut builder = ParagraphBuilder::new(&style, &limits);
+        builder
+            .push_text(TextSource::Generated { node: NodeId(1) }, "x")
+            .push_atomic(NodeId(2), &style.root, InlineEdges::default());
+        let paragraph = builder.build(&mut LayoutContext::new(), &fonts).unwrap();
+        assert_eq!(
+            paragraph.required_baseline(NodeId(2)),
+            Some(BaselineKind::Alphabetic),
+            "{mode:?}"
+        );
+        for supplied in [Some(12.0), None] {
+            let mut sizes = AtomicSizes::new();
+            sizes.insert(
+                NodeId(2),
+                AtomicSize {
+                    inline_size: 10.0,
+                    block_size: 20.0,
+                    baseline: supplied,
+                    margins: Sides {
+                        block_start: 3.0,
+                        block_end: 5.0,
+                        ..Default::default()
+                    },
+                },
+            );
+            let line = first_line(&paragraph, 100.0, &LineOptions::default(), &sizes);
+            let atomic = line
+                .fragments()
+                .find_map(|fragment| match fragment {
+                    Fragment::Atomic(atomic) => Some(atomic),
+                    _ => None,
+                })
+                .unwrap();
+            let margin = atomic.margin_rect;
+            assert_eq!(margin.block_size, 28.0, "{mode:?} {supplied:?}");
+            assert!(
+                margin.block_start >= -1.0 / 64.0
+                    && margin.block_start + margin.block_size <= line.block_size() + 1.0 / 64.0,
+                "{mode:?} {supplied:?}: the margin box lies inside the line"
+            );
+            let from_over = if over_is_block_end {
+                margin.block_start + margin.block_size - atomic.baseline
+            } else {
+                atomic.baseline - margin.block_start
+            };
+            assert!(
+                (from_over - supplied.unwrap_or(28.0)).abs() < 1.0 / 64.0,
+                "{mode:?} {supplied:?}: the baseline is {from_over} from the line-over edge"
+            );
+        }
     }
 }
 
