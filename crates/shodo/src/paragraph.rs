@@ -412,8 +412,11 @@ fn resolved_first_line_style(original: &InlineStyle, resolved: &InlineStyle) -> 
 }
 
 /// Size of an atomic inline (image, inline-block), supplied by the caller
-/// before line layout. `baseline` is measured from the top of the margin box
-/// and must be of the kind reported by [`Paragraph::required_baseline`].
+/// before line layout. `baseline` is measured from the margin box's line-over
+/// edge and must be of the kind reported by [`Paragraph::required_baseline`].
+/// Line-over is the top edge in horizontal text, the physical right edge in
+/// vertical-rl and vertical-lr, and the left edge in sideways-lr, so in
+/// vertical-lr it lies toward block-end.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct AtomicSize {
     pub inline_size: f32,

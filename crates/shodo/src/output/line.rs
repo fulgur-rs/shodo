@@ -704,7 +704,13 @@ impl Line {
                     _ => height,
                 });
                 let line_baseline = (self.baseline + self.block_shifts[index]).to_f32();
-                let top = line_baseline - baseline_from_top;
+                // The baseline is measured from the margin box's line-over
+                // edge, which is the block-end side in vertical-lr.
+                let top = if self.data.style.writing_mode.line_over_is_block_end() {
+                    line_baseline - (height - baseline_from_top)
+                } else {
+                    line_baseline - baseline_from_top
+                };
                 let start = record.inline_start.to_f32();
                 let width = record.inline_size.to_f32();
                 let m = size.margins;
