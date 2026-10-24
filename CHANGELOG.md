@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.38](https://github.com/fulgur-rs/shodo/compare/v0.0.37...v0.0.38) - 2026-10-24
+
+### Added
+
+- *(font)* add FontOptions::whole_pixel_metrics
+
+### Fixed
+
+- *(line)* measure a vertical atomic's baseline from the line-over edge
+
+### Other
+
+- Merge pull request #378 from fulgur-rs/whole-pixel-font-metrics
+
 ## [0.0.37](https://github.com/fulgur-rs/shodo/compare/v0.0.36...v0.0.37) - 2026-10-19
 
 ### Fixed
