@@ -173,6 +173,13 @@ pub struct FontOptions {
     pub match_cache_entries: usize,
     /// Source cache age in calls to `prune`, including failed file loads.
     pub source_cache_max_age: u64,
+    /// Round the ascent, descent and line gap of every face to whole pixels,
+    /// as Blink does for a font's primary metrics. Line boxes, baselines and
+    /// [`FontCollection::metrics`] then report whole-pixel values, so a caller
+    /// that compares against Chromium's layout gets the same baseline
+    /// positions. Off by default: metrics keep the font's exact values.
+    /// Document layers inherit this setting from their shared root.
+    pub whole_pixel_metrics: bool,
 }
 impl Default for FontOptions {
     fn default() -> Self {
@@ -180,6 +187,7 @@ impl Default for FontOptions {
             system_fonts: cfg!(feature = "system-fonts"),
             match_cache_entries: 256,
             source_cache_max_age: 8,
+            whole_pixel_metrics: false,
         }
     }
 }
@@ -190,6 +198,7 @@ struct Layer {
     generation: AtomicU64,
     state: Mutex<LayerState>,
     match_cache_entries: usize,
+    whole_pixel_metrics: bool,
     caches: RwLock<LayerCaches>,
     outline_bounds: Mutex<outline::Cache>,
     parent: Option<FontCollection>,
@@ -430,6 +439,7 @@ impl FontCollection {
                 limits: limits.clone(),
                 generation: AtomicU64::new(0),
                 match_cache_entries: options.match_cache_entries,
+                whole_pixel_metrics: options.whole_pixel_metrics,
                 caches: RwLock::new(LayerCaches::default()),
                 outline_bounds: Mutex::new(outline::Cache::default()),
                 state: Mutex::new(LayerState {

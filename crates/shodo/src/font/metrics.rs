@@ -141,7 +141,7 @@ impl FontCollection {
     /// built-in face and unknown identities use the documented stub metrics.
     pub fn metrics(&self, id: FontId, size: f32) -> FontMetrics {
         self.metrics_with_coords(id, size, &[])
-            .unwrap_or_else(|| stub_metrics(valid_size(size).unwrap_or(0.)))
+            .unwrap_or_else(|| self.rounded(stub_metrics(valid_size(size).unwrap_or(0.))))
     }
 
     /// Actual horizontal metrics at normalized variation coordinates, with
@@ -156,12 +156,23 @@ impl FontCollection {
         let size = valid_size(size)?;
         let data = self.font_data(id)?;
         if id.layer == self.root().layer.id && id.index == 0 {
-            return Some(stub_metrics(size));
+            return Some(self.rounded(stub_metrics(size)));
         }
         #[cfg(test)]
         super::record_metric_font_ref_open();
         let font = FontRef::from_index(data.data.as_ref(), data.index).ok()?;
-        Some(horizontal_metrics_from_font(&font, size, coords))
+        Some(self.rounded(horizontal_metrics_from_font(&font, size, coords)))
+    }
+
+    /// `metrics` with the ascent, descent and line gap rounded to whole pixels
+    /// when `FontOptions::whole_pixel_metrics` asks for it.
+    fn rounded(&self, mut metrics: FontMetrics) -> FontMetrics {
+        if self.layer.whole_pixel_metrics {
+            metrics.ascent = metrics.ascent.round();
+            metrics.descent = metrics.descent.round();
+            metrics.line_gap = metrics.line_gap.round();
+        }
+        metrics
     }
 
     /// Vertical vhea metrics with MVAR corrections at the supplied location.
@@ -194,10 +205,10 @@ impl FontCollection {
         super::record_metric_font_ref_open();
         let font = FontRef::from_index(data.data.as_ref(), data.index).ok();
         let horizontal = if id.layer == self.root().layer.id && id.index == 0 {
-            Some(stub_metrics(size))
+            Some(self.rounded(stub_metrics(size)))
         } else {
             font.as_ref()
-                .map(|font| horizontal_metrics_from_font(font, size, coords))
+                .map(|font| self.rounded(horizontal_metrics_from_font(font, size, coords)))
         };
         let vertical = font
             .as_ref()
@@ -832,6 +843,43 @@ mod tests {
             1,
             "a shaped run must reuse its acquired font data for metrics"
         );
+    }
+
+    #[test]
+    fn whole_pixel_metrics_round_the_stub_and_unknown_faces_too() {
+        let limits = Limits::default();
+        let exact = crate::test_support::fonts::collection(&limits);
+        let rounded = FontCollection::with_options(
+            &limits,
+            crate::font::FontOptions {
+                system_fonts: false,
+                whole_pixel_metrics: true,
+                ..Default::default()
+            },
+        );
+        let unknown = FontId {
+            layer: u32::MAX,
+            index: 0,
+        };
+        // The stub is 0.8em/0.2em: 8.4px and 2.1px at 10.5px.
+        let close = |a: f32, b: f32| assert!((a - b).abs() < 1e-3, "{a} vs {b}");
+        for (fonts, id, ascent, descent) in [
+            (&exact, exact.primary_font(), 8.4, 2.1),
+            (&exact, unknown, 8.4, 2.1),
+            (&rounded, rounded.primary_font(), 8.0, 2.0),
+            (&rounded, unknown, 8.0, 2.0),
+        ] {
+            let m = fonts.metrics(id, 10.5);
+            close(m.ascent, ascent);
+            close(m.descent, descent);
+            let (acquired, _) = match fonts.font_data(id) {
+                Some(data) => fonts.metrics_from_data(id, &data, 10.5, &[]),
+                None => (None, None),
+            };
+            if let Some(acquired) = acquired {
+                assert_eq!(acquired, m);
+            }
+        }
     }
 
     #[test]
