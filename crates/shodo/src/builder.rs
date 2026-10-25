@@ -135,6 +135,8 @@ pub struct ParagraphBuilder {
     pub(crate) style_bytes: u64,
     /// Index of the most recently interned or reused style.
     last_interned: u32,
+    /// Cumulative key work, including reuse that retains no new style bytes.
+    style_work: style_key::Work,
     /// Style indices of the currently open inline boxes.
     pub(crate) stack: Vec<u32>,
     pub(crate) error: Option<LimitExceeded>,
@@ -175,6 +177,7 @@ impl ParagraphBuilder {
             style_index: crate::hashing::FastMap::default(),
             style_bytes: 0,
             last_interned: 0,
+            style_work: Default::default(),
             stack: Vec::new(),
             error: None,
             warnings: WarningSink::new(limits.max_warnings),
@@ -186,6 +189,10 @@ impl ParagraphBuilder {
             edge_basis: 0.0,
             edge_template: None,
         };
+        // Also bounds the family-descriptor walk used to size owned copies.
+        if !builder.reserve_style_work((root, style.and_then(|s| s.first_line.as_ref()))) {
+            return builder;
+        }
         let data = style
             .map_or_else(
                 || crate::style::memory::inline(root),
@@ -562,6 +569,16 @@ impl ParagraphBuilder {
         self.intern_styles(style, None)
     }
 
+    fn reserve_style_work(&mut self, pair: (&InlineStyle, Option<&InlineStyle>)) -> bool {
+        match self.style_work.reserve(pair, self.limits.max_style_work) {
+            Ok(()) => true,
+            Err(error) => {
+                self.error = Some(error);
+                false
+            }
+        }
+    }
+
     pub(crate) fn intern_styles(
         &mut self,
         style: &InlineStyle,
@@ -575,6 +592,9 @@ impl ParagraphBuilder {
         // building the map key, whose cost grows with the style's size.
         let pair = (style, first_line);
         for index in [self.current_style(), self.last_interned] {
+            if !self.reserve_style_work(pair) {
+                return None;
+            }
             if self.styles.get(index as usize).is_some_and(|stored| {
                 style_key::Key((stored, self.first_line_styles.get(&index))) == style_key::Key(pair)
             }) {
@@ -587,10 +607,17 @@ impl ParagraphBuilder {
         if !self.check(self.limits.max_style_bytes, LimitKind::StyleBytes, data) {
             return None;
         }
+        if !self.reserve_style_work(pair) {
+            return None;
+        }
         let hash = style_key::fingerprint(pair, self.style_index.hasher());
         let key_bytes = style_key::BYTES;
         if let Some(bucket) = self.style_index.get(&hash) {
             for index in bucket {
+                if let Err(error) = self.style_work.reserve(pair, self.limits.max_style_work) {
+                    self.error = Some(error);
+                    return None;
+                }
                 let stored = (
                     &self.styles[*index as usize],
                     self.first_line_styles.get(index),

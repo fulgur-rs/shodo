@@ -211,6 +211,24 @@ and stops further builder input. `None` disables this budget, as does
 font/paint behavior are preserved. Code that enumerates every field in a `Limits`
 struct literal must add the new field; `..Limits::default()` remains supported.
 
+`Limits::max_style_work` separately bounds each builder's cumulative style-key
+work to 256 Mi units. Every comparison (including fast-path and collision
+candidates) and hash reserves one unit plus the incoming normal/first-line
+pair's variable payload bytes and array slots. Family slots are reserved before
+walking their name lengths, so estimating the cost is bounded too. Construction
+also reserves the root/first-line payload before sizing owned copies, even
+though only the root enters the initial hash. Equal styles
+consume work even when they retain no new bytes. Exceeding this budget returns
+`LimitKind::StyleWork` and makes the builder ignore further input. `None` and
+`Limits::unlimited()` disable this budget. It does not change style identity,
+`max_styles`, or `max_style_bytes`.
+
+Cloning a builder preserves its work counter. Restoring an immutable ruby
+snapshot charges the new builder's actual key operations, rather than replaying
+work previously performed to create the snapshot. This is a per-builder
+interning budget, not a budget for all ruby validation, inheritance or copying.
+Callers enumerating all `Limits` fields must also supply `max_style_work`.
+
 `Limits::max_mapping_bytes` defaults to 64 MiB of admitted logical transform and
 offset-mapping data per build. Checks precede new transform spans, indivisible
 ranges, width-origin records/owned strings, and DOM/generated mapping records.

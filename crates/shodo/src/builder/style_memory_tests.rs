@@ -2,6 +2,309 @@ use super::*;
 use crate::style::FontFamily;
 
 #[test]
+fn repeated_large_equal_styles_are_bounded_before_item_or_storage_limits() {
+    let style = InlineStyle {
+        font_families: vec![FontFamily::Named("x".repeat(256 * 1024))],
+        ..Default::default()
+    };
+    for forced_break in [false, true] {
+        let mut builder = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+        builder.push_atomic(NodeId(0), &style, InlineEdges::default());
+        assert_eq!(builder.error(), None);
+        let retained = builder.style_bytes;
+        for index in 1..4096 {
+            if forced_break {
+                builder.push_forced_break_with_style(NodeId(index), &style);
+            } else {
+                builder.push_atomic(NodeId(index), &style, InlineEdges::default());
+            }
+        }
+        assert!(
+            builder.error().is_some(),
+            "repeated comparison work must be bounded even when style storage does not grow"
+        );
+        assert_eq!(builder.error().unwrap().kind, LimitKind::StyleWork);
+        assert_eq!(builder.styles.len(), 2);
+        assert_eq!(builder.style_bytes, retained);
+        assert!(builder.items.len() < 4096);
+    }
+}
+
+#[test]
+fn style_work_exact_boundary_is_terminal_and_survives_builder_clone() {
+    // One operation plus a 24-byte family slot per root hash/comparison.
+    let limits = Limits {
+        max_style_work: Some(50),
+        ..Default::default()
+    };
+    let paragraph = ParagraphStyle::default();
+    let mut builder = ParagraphBuilder::new(&paragraph, &limits);
+    builder.push_atomic(NodeId(1), &paragraph.root, InlineEdges::default());
+    assert_eq!(builder.error(), None);
+    assert_eq!(builder.items.len(), 1);
+    let mut builder = builder.clone();
+    let bytes = builder.style_bytes;
+    builder.push_forced_break_with_style(NodeId(2), &paragraph.root);
+    let error = builder.error().unwrap();
+    assert_eq!(
+        error,
+        LimitExceeded {
+            kind: LimitKind::StyleWork,
+            limit: 50,
+            actual: 51
+        }
+    );
+    builder.push_text(TextSource::Generated { node: NodeId(3) }, "ignored");
+    builder.open_inline(NodeId(4), &paragraph.root, InlineEdges::default());
+    assert_eq!(builder.error(), Some(error));
+    assert_eq!(builder.items.len(), 1);
+    assert_eq!(builder.styles.len(), 1);
+    assert_eq!(builder.style_bytes, bytes);
+    assert!(builder.text.is_empty() && builder.stack.is_empty());
+    assert_eq!(builder.analyze().err(), Some(error));
+
+    let limits = Limits {
+        max_style_work: Some(24),
+        ..Default::default()
+    };
+    let rejected = ParagraphBuilder::new(&paragraph, &limits);
+    assert_eq!(rejected.error().unwrap().kind, LimitKind::StyleWork);
+    assert!(rejected.styles.is_empty() && rejected.style_index.is_empty());
+}
+
+#[test]
+fn style_work_charges_last_hit_hash_bucket_and_each_collision_candidate() {
+    let a = InlineStyle {
+        font_size: 20.0,
+        ..Default::default()
+    };
+    let c = InlineStyle {
+        font_size: 30.0,
+        ..Default::default()
+    };
+    let limits = Limits {
+        max_style_work: Some(150),
+        ..Default::default()
+    };
+    let mut builder = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+    assert_eq!(builder.intern_styles(&a, None), Some(1));
+    assert_eq!(builder.intern_styles(&a, None), Some(1));
+    assert_eq!(
+        builder.error(),
+        None,
+        "root + first insert + last hit costs 150"
+    );
+    assert_eq!(builder.intern_styles(&a, None), None);
+    assert_eq!(builder.error().unwrap().actual, 151);
+
+    for limit in [274, 275] {
+        let limits = Limits {
+            max_style_work: Some(limit),
+            ..Default::default()
+        };
+        let mut builder = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+        assert_eq!(builder.intern_styles(&a, None), Some(1));
+        assert_eq!(builder.intern_styles(&c, None), Some(2));
+        assert_eq!(builder.intern_styles(&a, None), (limit == 275).then_some(1));
+        assert_eq!(builder.error().is_none(), limit == 275);
+        assert_eq!(builder.styles.len(), 3);
+    }
+
+    let limits = Limits {
+        max_style_work: Some(150),
+        ..Default::default()
+    };
+    let mut builder = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+    let hash = style_key::fingerprint((&a, None), builder.style_index.hasher());
+    builder.style_index.insert(hash, vec![0; 12]);
+    assert_eq!(builder.intern_styles(&a, None), None);
+    assert_eq!(builder.error().unwrap().actual, 151);
+    assert_eq!(
+        builder.styles.len(),
+        1,
+        "reject during the collision walk, before retaining a style"
+    );
+}
+
+#[test]
+fn style_work_reserves_every_variable_field_and_first_line_before_comparison() {
+    use crate::style::{FontFeature, FontVariantAlternates, FontVariation, GenericFamily};
+    let cases = [
+        InlineStyle {
+            font_families: vec![FontFamily::Named("x".repeat(4096))],
+            ..Default::default()
+        },
+        InlineStyle {
+            font_families: vec![FontFamily::Generic(GenericFamily::Serif); 4096],
+            ..Default::default()
+        },
+        InlineStyle {
+            font_families: vec![FontFamily::Named(String::new()); 4096],
+            ..Default::default()
+        },
+        InlineStyle {
+            lang: Some("x".repeat(4096)),
+            ..Default::default()
+        },
+        InlineStyle {
+            hyphenate_character: Some("x".repeat(4096)),
+            ..Default::default()
+        },
+        InlineStyle {
+            font_features: vec![
+                FontFeature {
+                    tag: *b"liga",
+                    value: 1
+                };
+                4096
+            ],
+            ..Default::default()
+        },
+        InlineStyle {
+            font_variations: vec![
+                FontVariation {
+                    tag: *b"wght",
+                    value: 400.0
+                };
+                4096
+            ],
+            ..Default::default()
+        },
+        InlineStyle {
+            font_variant_alternates: FontVariantAlternates {
+                styleset: vec![1; 4096],
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        InlineStyle {
+            font_variant_alternates: FontVariantAlternates {
+                character_variant: vec![(1, 1); 4096],
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    ];
+    for style in cases {
+        for first_line in [false, true] {
+            let limits = Limits {
+                max_style_work: Some(128),
+                ..Default::default()
+            };
+            let mut builder = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+            if first_line {
+                builder.open_inline_with_first_line(
+                    NodeId(1),
+                    &InlineStyle::default(),
+                    &style,
+                    InlineEdges::default(),
+                );
+            } else {
+                builder.push_atomic(NodeId(1), &style, InlineEdges::default());
+            }
+            assert_eq!(builder.error().unwrap().kind, LimitKind::StyleWork);
+            assert_eq!(builder.styles.len(), 1);
+            assert!(builder.first_line_styles.is_empty() && builder.items.is_empty());
+        }
+    }
+}
+
+#[test]
+fn style_work_can_be_disabled_without_disabling_storage_limits() {
+    let limits = Limits {
+        max_style_work: None,
+        max_style_bytes: Some(12_000),
+        ..Default::default()
+    };
+    let style = InlineStyle {
+        font_families: vec![FontFamily::Named("x".repeat(4096))],
+        ..Default::default()
+    };
+    let mut builder = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+    for index in 0..1000 {
+        builder.push_forced_break_with_style(NodeId(index), &style);
+    }
+    assert_eq!(builder.error(), None);
+    assert_eq!(builder.styles.len(), 2);
+    let other = InlineStyle {
+        font_size: 20.0,
+        ..style
+    };
+    for font_size in [21.0, 22.0, 23.0] {
+        builder.push_atomic(
+            NodeId(1001),
+            &InlineStyle {
+                font_size,
+                ..other.clone()
+            },
+            InlineEdges::default(),
+        );
+    }
+    assert_eq!(builder.error().unwrap().kind, LimitKind::StyleBytes);
+    assert_eq!(Limits::unlimited().max_style_work, None);
+}
+
+#[test]
+fn default_style_work_allows_the_default_item_budget_with_small_reused_styles() {
+    let paragraph = ParagraphStyle::default();
+    let limits = Limits::default();
+    let mut builder = ParagraphBuilder::new(&paragraph, &limits);
+    // Reuse through the actual key path, without allocating a million items.
+    for _ in 0..limits.max_items.unwrap() {
+        assert_eq!(builder.intern_styles(&paragraph.root, None), Some(0));
+    }
+    assert_eq!(builder.error(), None);
+    assert_eq!(builder.styles.len(), 1);
+}
+
+#[test]
+fn style_work_covers_first_line_root_and_ruby_restore_and_import() {
+    let large = InlineStyle {
+        font_families: vec![FontFamily::Named("x".repeat(4096))],
+        ..Default::default()
+    };
+    let limits = Limits {
+        max_style_work: Some(128),
+        ..Default::default()
+    };
+    let paragraph = ParagraphStyle {
+        first_line: Some(large.clone()),
+        ..Default::default()
+    };
+    let builder = ParagraphBuilder::new(&paragraph, &limits);
+    assert_eq!(builder.error().unwrap().kind, LimitKind::StyleWork);
+    assert!(builder.styles.is_empty());
+
+    let source = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::unlimited());
+    let mut input = source.into_ruby_content();
+    input.limits.max_style_work = Some(24);
+    let error = ParagraphBuilder::from_ruby_content(&input, NodeId(1))
+        .err()
+        .unwrap();
+    assert_eq!(error.kind, LimitKind::StyleWork);
+
+    use crate::ruby::{Ruby, RubyAlign, RubyBase, RubyContent};
+    let content = RubyContent::text(
+        TextSource::Generated { node: NodeId(2) },
+        "base",
+        &large,
+        &Limits::unlimited(),
+    );
+    let ruby = Ruby::new(
+        vec![RubyBase {
+            node: NodeId(2),
+            content,
+            align: RubyAlign::default(),
+        }],
+        vec![],
+    )
+    .unwrap();
+    let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+    parent.push_ruby(NodeId(3), &InlineStyle::default(), ruby);
+    assert_eq!(parent.error().unwrap().kind, LimitKind::StyleWork);
+}
+
+#[test]
 fn escaped_names_fit_the_owned_data_budget_without_a_string_key() {
     let paragraph = ParagraphStyle {
         root: InlineStyle {
