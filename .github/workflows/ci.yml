@@ -121,6 +121,8 @@ jobs:
       - run: cargo test -p shodo-bench --example match_eviction_algorithms
       - run: cargo run -p shodo-bench --example match_cache_eviction -- warm 256 256 4 1024 1 2 16
       - run: cargo test -p shodo-bench --features allocation-counting --test allocator --test probe --test ruby_hit_path_allocations --test ruby_base_caret_range --test ruby_base_decoration --test style_memory --test suppressed_warning_format --test selection_allocations --test paint_geometry_allocations --test font_query_allocations --test font_descriptor_allocations --test ruby_constructor_allocations --test ruby_warning_import_allocations --test block_shift_allocations --test emphasis_extents_allocations
+      - name: Check small-allocation regressions
+        run: cargo test -p shodo-bench --features allocation-counting --test line_small_allocations --test shape_context_allocations --test punctuation_metrics --test reshape_split_allocations
       - run: cargo test -p shodo-bench --bench layout
         env:
           SHODO_BENCH_CASE: latin-short

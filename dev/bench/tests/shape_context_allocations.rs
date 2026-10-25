@@ -18,20 +18,30 @@ fn context_and_owned_edge_outputs_are_stable_with_lower_allocations() {
     let fonts = load_fonts(&limits).unwrap();
     let workloads = workload::Workloads::new(&fonts, &limits);
 
+    // Match the standalone measurement's warm font/cache state. A cold build
+    // includes dependency initialization that its warm baseline does not cover.
+    // See docs/records/2026-10-26-shodo-56-allocation-oracles.md.
+    let warm = workloads.build_context_paragraph(&fonts);
+    let warm_run = workload::layout(&warm, 50_000.0, &LineOptions::default());
+    let warm_digest = workload::digest(&warm_run, &fonts);
+    drop(warm_run);
+    drop(warm);
+
     let scope = ALLOCATOR.begin().unwrap();
     let paragraph = workloads.build_context_paragraph(&fonts);
     let build_counts = scope.finish();
     let context_run = workload::layout(&paragraph, 50_000.0, &LineOptions::default());
     assert_eq!(context_run.lines.len(), 1);
+    assert_eq!(workload::digest(&context_run, &fonts), warm_digest);
     assert_eq!(
         workload::digest(&context_run, &fonts),
         "32d61f314336e6eecc86c34a2be2c9d5cc0775a9ede93cd959581acba055a1fd",
         "context-heavy output changed",
     );
     let (context_pre_change_bytes, edge_pre_change_bytes) = if cfg!(debug_assertions) {
-        (608_155, 1_204_914)
+        (581_056, 1_201_587)
     } else {
-        (580_976, 1_200_587)
+        (581_008, 1_201_587)
     };
     let one_context_per_item_budget = context_pre_change_bytes - workload::CONTEXT_RUNS as u64 * 20;
     assert!(
@@ -39,10 +49,14 @@ fn context_and_owned_edge_outputs_are_stable_with_lower_allocations() {
         "context-heavy build should save at least one 20-byte context allocation per item; budget={one_context_per_item_budget}, counts={build_counts:?}",
     );
 
+    let edge_warm = workloads.layout_edge();
+    let edge_warm_digest = workload::digest(&edge_warm, &fonts);
+    drop(edge_warm);
     let scope = ALLOCATOR.begin().unwrap();
     let edge_run = workloads.layout_edge();
     let edge_counts = scope.finish();
     assert!(edge_run.lines.len() > 1);
+    assert_eq!(workload::digest(&edge_run, &fonts), edge_warm_digest);
     assert_eq!(
         workload::digest(&edge_run, &fonts),
         "027f72000eb0f61cdfc42caa7c911844e63d8efbfffabe88f0a5cec5f2c0eca7",
