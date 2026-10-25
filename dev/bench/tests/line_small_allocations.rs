@@ -15,31 +15,33 @@ static ALLOCATOR: CountingAllocator<System> = CountingAllocator::new(System);
 fn fixture_output_is_stable_and_uniform_bidi_allocations_drop() {
     let limits = Limits::default();
     let fonts = load_fonts(&limits).unwrap();
+    // Re-measured with SHODO-56 reverted on c686419, keeping current features
+    // and dependencies. See docs/records/2026-10-26-shodo-56-allocation-oracles.md.
     let expected = [
         (
             "uniform-ltr",
             "60973ddd5bc9955622709ea7d85227f42d88ef07932cdf04fc2e8bb6b0a8b942",
-            1_214_661_u64,
+            1_215_661_u64,
         ),
         (
             "uniform-rtl",
             "5395dda87a8461994bad8891551f3636d8a91432061c1bdd9516824f901481ab",
-            1_469_097_u64,
+            1_469_585_u64,
         ),
         (
             "mixed-levels",
             "a753376f7efdbb188b12d2eae75377e3599ff7e1655f8c7df0faa39aafc28ff6",
-            805_757_u64,
+            806_253_u64,
         ),
         (
             "no-continuation",
             "6f8d280d7c370c8754622059aeed3ffb91044ef8e4211ea7db48971d4f5c423e",
-            312_920_u64,
+            312_952_u64,
         ),
         (
             "rtl-continuation-hanging",
             "2ec7341a6d49469043168727634b2c71ce3551e248a45cb861f5043da3dc6fa0",
-            1_657_337_u64,
+            1_657_841_u64,
         ),
     ];
 

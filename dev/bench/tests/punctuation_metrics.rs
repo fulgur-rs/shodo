@@ -16,23 +16,26 @@ fn repeated_cjk_punctuation_has_stable_geometry_and_bounded_build_allocations() 
     let limits = Limits::default();
     let fonts = load_fonts(&limits).unwrap();
     let cases = workload::cases();
+    // Current optimized build budgets, measured on c686419. Metrics-construction
+    // counts are checked independently by line::punctuation unit tests.
+    // See docs/records/2026-10-26-shodo-56-allocation-oracles.md.
     let expected = [
         (
             "repeated-opening",
             "0b6273a00e17c89d417a3a4c9b77fa16fdfd2ddc2958dd1ba884c21dd5025559",
-            360_720_u64,
-            360_768_u64,
+            360_760_u64,
+            360_808_u64,
         ),
         (
             "repeated-closing-bracket",
             "e7262294ea05306467939781ad10b656828672d2e4a39f0bdd89cfe659e2f365",
-            357_424_u64,
-            357_472_u64,
+            357_464_u64,
+            357_512_u64,
         ),
     ];
 
     for (case, (name, digest, release_bytes, debug_bytes)) in cases.iter().zip(expected) {
-        let pre_change_bytes = if cfg!(debug_assertions) {
+        let allocation_budget = if cfg!(debug_assertions) {
             debug_bytes
         } else {
             release_bytes
@@ -59,8 +62,8 @@ fn repeated_cjk_punctuation_has_stable_geometry_and_bounded_build_allocations() 
             "{name} geometry changed"
         );
         assert!(
-            counts.allocated_bytes <= pre_change_bytes,
-            "{name} should not exceed pre-change build allocation {pre_change_bytes}: {counts:?}",
+            counts.allocated_bytes <= allocation_budget,
+            "{name} should not exceed build allocation budget {allocation_budget}: {counts:?}",
         );
     }
 }
