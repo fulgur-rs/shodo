@@ -332,7 +332,7 @@ scratch exceeding the current run budget's conservative storage bound. See the
 [measurement record](../records/shaping-measurements.md) and
 [historical harfrust status proposal](../records/harfrust-shaping-status-proposal.md).
 
-Shodo uses HarfRust 0.14. `FontCollection::shaper_data(id)` returns an
+Shodo uses HarfRust 0.15. `FontCollection::shaper_data(id)` returns an
 `Arc<harfrust::Font>` containing shared font bytes and layout caches. This replaces
 the earlier `Arc<harfrust::ShaperData>` return type. For direct shaping, construct
 `harfrust::ShaperFont::new(&font)` and pass a mutable `harfrust::Buffer` to
