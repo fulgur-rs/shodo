@@ -1,5 +1,23 @@
 # Draft: expose shaping completion status in harfrust
 
+Update (2026-10-25): Shodo now uses HarfRust 0.15.0. Its new lookup
+preprocessing budgets and malformed-lookup-type rejection do not bound the
+shaped output of valid MultipleSubst tables more tightly. This dependency
+update does not resolve SHODO-23, which remains deferred by user decision.
+The update enables `smallvec`'s union representation through `read-fonts` 0.46,
+reducing `fontique::FontInfo` from 96 to 88 bytes on 64-bit targets. The local
+font-index byte model now charges 88 bytes for that metadata; its existing layout
+test checks the new value.
+HarfRust now includes CBDT bitmap ink in fallback vertical-origin calculations.
+For the fixed 24px color-emoji fixture, its 1898-unit top and 2405-unit height
+center in the 2400-unit horizontal line at y=1895, instead of falling back to
+the 1900-unit ascender. The independent vertical bitmap placement test records
+the resulting 1/16px shift toward the inline start; its bitmap data, painter and
+pixel tolerance are unchanged.
+The full fixed snapshot check (`cargo run -p shodo-harness --example snapshots
+-- --output <new-directory>`) passed all 46 cases with zero changed pixels and
+no baseline updates. Its temporary report was removed after verification.
+
 Update (2026-10-13): Shodo now uses HarfRust 0.14.0, whose public
 `Buffer::allocation_successful()` reports failure of internal buffer, operation,
 or nesting limits. `shape()` returns `ShapeError` for invalid API usage; resource

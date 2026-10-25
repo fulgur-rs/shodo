@@ -115,9 +115,14 @@ fn vertical_bitmap_pixels_match_independent_upright_placement() {
     let decoded = tiny_skia::Pixmap::decode_png(png).unwrap();
 
     // Fixed font: UPEM 2048, h advance 2550, v advance 2500,
-    // vhea ascender/descender +/-1275, hhea ascender 1900; no VORG/outline.
-    // At 24px the vertical origin is (14.9375, 22.265625), after 1/64px
-    // rounding. The empty-cluster primary face is the mono fixture, whose
+    // vhea ascender/descender +/-1275, hhea ascender/descender 1900/-500;
+    // no VORG/outline. HarfRust 0.15 uses bitmap ink for the fallback origin:
+    // top=round(101*2048/109)=1898, height=round(128*2048/109)=2405.
+    // Centering in the 2400-unit horizontal line, with halves rounded down,
+    // gives y=1898+floor((2400-2405)/2)=1895 font units, rather than the
+    // 1900-unit ascender used by 0.14. At 24px the vertical origin is
+    // (14.9375, 22.203125), after 1/64px rounding.
+    // The empty-cluster primary face is the mono fixture, whose
     // vhea ascender/descender are 1900/-500. Its strut contributes 22.265625px
     // above; the color run contributes 14.94140625px below. Their union is
     // ceil-to-1/64(37.20703125) = 37.21875px wide, with baselines
@@ -134,7 +139,7 @@ fn vertical_bitmap_pixels_match_independent_upright_placement() {
     ] {
         let mut expected = tiny_skia::Pixmap::new(100, 160).unwrap();
         expected.fill(tiny_skia::Color::WHITE);
-        for y in [32.265625, 61.5625] {
+        for y in [32.203125, 61.5] {
             expected.draw_pixmap(
                 0,
                 0,

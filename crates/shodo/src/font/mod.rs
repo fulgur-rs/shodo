@@ -740,7 +740,7 @@ impl FontCollection {
     /// handles remain usable after LRU eviction or collection drop. Zero
     /// disables retention without disabling shaping.
     ///
-    /// With HarfRust 0.14 this returns `Arc<harfrust::Font>`. Prepare it with
+    /// This returns `Arc<harfrust::Font>`. Prepare it with
     /// `harfrust::ShaperFont::new`, or use `Font::instance_builder` to select
     /// variation coordinates before shaping.
     pub fn shaper_data(&self, id: FontId) -> Option<Arc<harfrust::Font>> {

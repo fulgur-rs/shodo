@@ -15,7 +15,8 @@ use std::{
 };
 
 crate::logical::logical_sizes! {
-    FONT_INFO_BYTES: FontInfo = 96;
+    // read-fonts 0.46 enables smallvec's union representation for axis storage.
+    FONT_INFO_BYTES: FontInfo = 88;
 }
 
 // Include hash bucket slack and conservative per-entry metadata. Work is
