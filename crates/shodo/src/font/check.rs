@@ -1,6 +1,6 @@
 //! Structural check of font blobs before registration.
 
-use std::{collections::HashSet, fmt};
+use std::{collections::HashMap, fmt};
 
 use crate::limits::{LimitExceeded, LimitKind, Limits};
 
@@ -49,6 +49,51 @@ pub(super) fn read_u32(data: &[u8], at: usize) -> Result<u32, FontError> {
     Ok(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
 }
 
+/// Shared by all logical faces in one blob, including aliased directories.
+#[derive(Clone, Copy, Default)]
+struct ValidationBudget {
+    work: u64,
+    lookups: u64,
+    subtables: u64,
+}
+
+impl ValidationBudget {
+    fn since(self, before: Self) -> Self {
+        Self {
+            work: self.work - before.work,
+            lookups: self.lookups - before.lookups,
+            subtables: self.subtables - before.subtables,
+        }
+    }
+
+    fn charge(&mut self, face: Self, limits: &Limits) -> Result<(), FontError> {
+        for (total, amount, limit, kind) in [
+            (
+                &mut self.lookups,
+                face.lookups,
+                limits.max_layout_lookups,
+                LimitKind::LayoutLookups,
+            ),
+            (
+                &mut self.subtables,
+                face.subtables,
+                limits.max_layout_subtables,
+                LimitKind::LayoutSubtables,
+            ),
+            (
+                &mut self.work,
+                face.work,
+                limits.max_font_cache_items,
+                LimitKind::FontCacheItems,
+            ),
+        ] {
+            *total = total.checked_add(amount).ok_or(TRUNCATED)?;
+            Limits::check(limit, kind, *total)?;
+        }
+        Ok(())
+    }
+}
+
 /// Checks a font file or collection against `limits` and returns its number
 /// of faces.
 pub(crate) fn check_font(data: &[u8], limits: &Limits) -> Result<u32, FontError> {
@@ -57,30 +102,40 @@ pub(crate) fn check_font(data: &[u8], limits: &Limits) -> Result<u32, FontError>
         LimitKind::FontBlobBytes,
         data.len() as u64,
     )?;
+    let mut budget = ValidationBudget::default();
     if data.get(0..4) == Some(b"ttcf".as_slice()) {
         let count = read_u32(data, 8)?;
         Limits::check(limits.max_ttc_faces, LimitKind::TtcFaces, u64::from(count))?;
         if count == 0 {
             return Err(FontError::Malformed("empty font collection"));
         }
-        let mut checked_faces = HashSet::new();
+        let mut checked_faces = HashMap::new();
         for i in 0..count as usize {
             let face = read_u32(data, offset(12, 4 * i)?)? as usize;
             // TTC indexes may alias the same face directory. Its bytes and
-            // structural work are identical, so validate each offset once
-            // while preserving the collection's logical face count.
-            if checked_faces.insert(face) {
-                check_face(data, face, limits)?;
+            // structural work are identical. Validate once, but charge every
+            // logical face for the downstream caches it can create.
+            if let Some(usage) = checked_faces.get(&face) {
+                budget.charge(*usage, limits)?;
+            } else {
+                let before = budget;
+                check_face(data, face, &mut budget, limits)?;
+                checked_faces.insert(face, budget.since(before));
             }
         }
         Ok(count)
     } else {
-        check_face(data, 0, limits)?;
+        check_face(data, 0, &mut budget, limits)?;
         Ok(1)
     }
 }
 
-fn check_face(data: &[u8], face: usize, limits: &Limits) -> Result<(), FontError> {
+fn check_face(
+    data: &[u8],
+    face: usize,
+    budget: &mut ValidationBudget,
+    limits: &Limits,
+) -> Result<(), FontError> {
     #[cfg(test)]
     FACE_VALIDATION_CALLS.with(|calls| calls.set(calls.get() + 1));
     if !matches!(
@@ -90,9 +145,11 @@ fn check_face(data: &[u8], face: usize, limits: &Limits) -> Result<(), FontError
         return Err(FontError::Malformed("unsupported sfnt signature"));
     }
     let num_tables = read_u16(data, offset(face, 4)?)? as usize;
-    let mut work = 0u64;
-    let mut lookups = 0u64;
-    let mut subtables = 0u64;
+    let ValidationBudget {
+        work,
+        lookups,
+        subtables,
+    } = budget;
     for i in 0..num_tables {
         let record = offset(offset(face, 12)?, 16 * i)?;
         let tag = data.get(record..offset(record, 4)?).ok_or(TRUNCATED)?;
@@ -100,17 +157,12 @@ fn check_face(data: &[u8], face: usize, limits: &Limits) -> Result<(), FontError
         let len = read_u32(data, offset(record, 12)?)? as usize;
         let table = data.get(start..offset(start, len)?).ok_or(TRUNCATED)?;
         match tag {
-            b"GSUB" | b"GPOS" => count_layout(
-                table,
-                tag == b"GSUB",
-                &mut lookups,
-                &mut subtables,
-                &mut work,
-                limits,
-            )?,
-            b"GDEF" => super::structure::check_gdef(table, &mut work, limits)?,
+            b"GSUB" | b"GPOS" => {
+                count_layout(table, tag == b"GSUB", lookups, subtables, work, limits)?
+            }
+            b"GDEF" => super::structure::check_gdef(table, work, limits)?,
             b"morx" | b"kern" | b"kerx" => {
-                super::structure::check_aat(table, tag, &mut subtables, &mut work, limits)?
+                super::structure::check_aat(table, tag, subtables, work, limits)?
             }
             b"fvar" => check_variation_axes(table, limits)?,
             _ => {}
@@ -161,7 +213,7 @@ fn count_layout(
         return Ok(());
     }
     let count = read_u16(table, list)?;
-    *lookups += u64::from(count);
+    *lookups = lookups.checked_add(u64::from(count)).ok_or(TRUNCATED)?;
     Limits::check(
         limits.max_layout_lookups,
         LimitKind::LayoutLookups,
@@ -170,7 +222,9 @@ fn count_layout(
     for i in 0..count as usize {
         let lookup = offset(list, read_u16(table, offset(list, 2 + 2 * i)?)? as usize)?;
         let declared = read_u16(table, offset(lookup, 4)?)?;
-        *subtables += u64::from(declared);
+        *subtables = subtables
+            .checked_add(u64::from(declared))
+            .ok_or(TRUNCATED)?;
         Limits::check(
             limits.max_layout_subtables,
             LimitKind::LayoutSubtables,
@@ -311,6 +365,119 @@ mod tests {
         FACE_VALIDATION_CALLS.with(|calls| calls.set(0));
         assert_eq!(check_font(&ttc, &limits()), Ok(count));
         assert_eq!(FACE_VALIDATION_CALLS.with(|calls| calls.get()), 1);
+    }
+
+    // Distinct face directories can still share all table bytes in a TTC.
+    fn shared_layout_collection(count: u32, alias_faces: bool) -> Vec<u8> {
+        let mut layout = amplifying_layout_table(1, 1);
+        // One format-2 coverage range expands to 100 glyph visits per face.
+        let end = layout.len();
+        layout[end - 4..end].copy_from_slice(&[0, 2, 0, 1]);
+        layout.extend_from_slice(&[0, 0, 0, 99, 0, 0]);
+        let mut face = build_sfnt(&[(*b"GSUB", layout)]);
+        let first = 12 + count as usize * 4;
+        let directories = if alias_faces { 1 } else { count as usize };
+        let table = first + directories * 28;
+        face[20..24].copy_from_slice(&(table as u32).to_be_bytes());
+        let mut ttc = b"ttcf\0\x01\0\0".to_vec();
+        ttc.extend_from_slice(&count.to_be_bytes());
+        for i in 0..count as usize {
+            let at = first + if alias_faces { 0 } else { i * 28 };
+            ttc.extend_from_slice(&(at as u32).to_be_bytes());
+        }
+        for _ in 0..directories {
+            ttc.extend_from_slice(&face[..28]);
+        }
+        ttc.extend_from_slice(&face[28..]);
+        ttc
+    }
+
+    #[test]
+    fn ttc_faces_share_validation_budgets_even_when_their_bytes_alias() {
+        for alias_faces in [false, true] {
+            let ttc = shared_layout_collection(64, alias_faces);
+            for (kind, below, exact) in [
+                (LimitKind::LayoutLookups, 63, 64),
+                (LimitKind::LayoutSubtables, 63, 64),
+                (LimitKind::FontCacheItems, 6399, 6400),
+            ] {
+                let mut limits = Limits::unlimited();
+                let field = match kind {
+                    LimitKind::LayoutLookups => &mut limits.max_layout_lookups,
+                    LimitKind::LayoutSubtables => &mut limits.max_layout_subtables,
+                    LimitKind::FontCacheItems => &mut limits.max_font_cache_items,
+                    _ => unreachable!(),
+                };
+                *field = Some(below);
+                assert!(
+                    matches!(check_font(&ttc, &limits), Err(FontError::Limit(e)) if e.kind == kind),
+                    "alias_faces={alias_faces}, kind={kind:?}"
+                );
+                match kind {
+                    LimitKind::LayoutLookups => limits.max_layout_lookups = Some(exact),
+                    LimitKind::LayoutSubtables => limits.max_layout_subtables = Some(exact),
+                    LimitKind::FontCacheItems => limits.max_font_cache_items = Some(exact),
+                    _ => unreachable!(),
+                }
+                assert_eq!(check_font(&ttc, &limits), Ok(64));
+                assert_eq!(check_font(&ttc, &Limits::unlimited()), Ok(64));
+            }
+        }
+    }
+
+    #[test]
+    fn ttc_validation_stops_as_soon_as_the_collection_work_budget_is_exceeded() {
+        let limits = Limits {
+            max_font_cache_items: Some(150),
+            ..Default::default()
+        };
+        for (alias_faces, expected_calls) in [(false, 2), (true, 1)] {
+            FACE_VALIDATION_CALLS.with(|calls| calls.set(0));
+            assert!(matches!(
+                check_font(&shared_layout_collection(64, alias_faces), &limits),
+                Err(FontError::Limit(e)) if e.kind == LimitKind::FontCacheItems
+            ));
+            assert_eq!(
+                FACE_VALIDATION_CALLS.with(|calls| calls.get()),
+                expected_calls
+            );
+        }
+    }
+
+    #[test]
+    fn over_budget_collections_are_rejected_before_public_registration_mutates_state() {
+        use crate::font::{FontFaceDescriptor, FontSource};
+
+        let limits = Limits {
+            max_font_cache_items: Some(150),
+            ..Default::default()
+        };
+        let descriptor = FontFaceDescriptor {
+            family: "Collection".into(),
+            ..Default::default()
+        };
+        for alias_faces in [false, true] {
+            let ttc = shared_layout_collection(64, alias_faces);
+            for entry in 0..3 {
+                let fonts = crate::test_support::fonts::collection(&limits);
+                let result = match entry {
+                    0 => fonts.register(ttc.clone()),
+                    1 => fonts.register_face(ttc.clone(), 0, descriptor.clone()),
+                    _ => fonts.register_sources(
+                        descriptor.clone(),
+                        vec![FontSource::Data(ttc.clone(), 0)],
+                    ),
+                };
+                assert!(
+                    matches!(result, Err(FontError::Limit(e)) if e.kind == LimitKind::FontCacheItems)
+                );
+                assert_eq!(fonts.generation(), 0);
+                let state = fonts.state();
+                assert_eq!(state.faces.len(), 1); // Only the built-in stub.
+                assert_eq!(state.blob_bytes, 0);
+                assert_eq!(state.descriptor_bytes, 0);
+            }
+        }
     }
 
     #[test]

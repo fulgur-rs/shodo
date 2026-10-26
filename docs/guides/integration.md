@@ -110,7 +110,12 @@ development files and pkg-config (on Debian/Ubuntu, `libfontconfig1-dev`).
 Compressed input, decoded streams and returned font blobs
 are checked against font budgets; transformed WOFF2 reconstruction may temporarily
 allocate beyond the retained-blob budget. `wuff` rejects reconstructed output above
-128 MiB. Cache entries and per-face font-cache work have separate limits.
+128 MiB. Cache entries and font-cache work have separate limits. Layout lookup,
+subtable and font-cache work budgets apply to the whole registered blob, summed
+across all logical TTC faces, including aliases. A collection whose individual
+faces fit but whose total exceeds a budget is rejected, even when registering
+only one selected face. Identical face offsets are structurally checked once;
+each logical face still consumes the collection budget.
 
 ## Usage
 

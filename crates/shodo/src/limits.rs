@@ -92,12 +92,15 @@ pub struct Limits {
     pub max_ttc_faces: Option<u64>,
     /// Variation axes in a registered font's fvar table (64).
     pub max_font_axes: Option<u64>,
-    /// Layout lookups in each registered GSUB/GPOS table (4096).
+    /// Total GSUB/GPOS layout lookups per registered font blob (4096),
+    /// summed across all logical TTC faces, including aliased faces.
     pub max_layout_lookups: Option<u64>,
-    /// Layout subtables in each registered GSUB/GPOS table (65536).
+    /// Total layout subtables per registered font blob (65536), including
+    /// AAT tables and all logical TTC faces, even when their bytes alias.
     pub max_layout_subtables: Option<u64>,
     /// Expanded coverage/class glyph visits, GDEF mark sets, and AAT cache
-    /// items per face (2^23).
+    /// items per registered font blob (2^23), summed across all logical TTC
+    /// faces, including aliased faces. Validation stops at the first excess.
     pub max_font_cache_items: Option<u64>,
     /// Retained faces in a font layer (256), including the shared built-in
     /// stub and lazily materialized platform faces.
