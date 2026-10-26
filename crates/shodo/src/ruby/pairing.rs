@@ -124,19 +124,25 @@ pub(crate) fn normalize(ruby: &Ruby, limits: &Limits) -> Result<NormalizedRuby, 
             let text = text.inspect(|_| compared += 1);
             let start = text_bases.partition_point(|(column, _)| *column < columns.start);
             let object_start = object_columns.partition_point(|column| *column < columns.start);
-            let same_text = !holds_object(&annotation.content)
+            let same_input = columns.end - columns.start == 1
+                && ruby.bases.get(columns.start).is_some_and(|base| {
+                    std::sync::Arc::ptr_eq(&base.content.0, &annotation.content.0)
+                });
+            let same_text = level.style.merge != RubyMerge::Merge
+                && !holds_object(&annotation.content)
                 && !object_columns
                     .get(object_start)
                     .is_some_and(|column| *column < columns.end)
-                && text_bases[start..]
-                    .iter()
-                    .take_while(|(column, _)| *column < columns.end)
-                    .flat_map(|(_, b)| {
-                        #[cfg(test)]
-                        COMPARED_BASES.with(|count| count.set(count.get() + 1));
-                        b.content.0.text.bytes()
-                    })
-                    .eq(text);
+                && (same_input
+                    || text_bases[start..]
+                        .iter()
+                        .take_while(|(column, _)| *column < columns.end)
+                        .flat_map(|(_, b)| {
+                            #[cfg(test)]
+                            COMPARED_BASES.with(|count| count.set(count.get() + 1));
+                            b.content.0.text.bytes()
+                        })
+                        .eq(text));
             #[cfg(test)]
             COMPARED_BYTES.with(|count| count.set(count.get() + compared));
             annotations.push(NormalizedAnnotation {
@@ -144,7 +150,7 @@ pub(crate) fn normalize(ruby: &Ruby, limits: &Limits) -> Result<NormalizedRuby, 
                 content: Some(annotation.content.clone()),
                 columns,
                 visibility: annotation.visibility,
-                auto_hidden: level.style.merge != RubyMerge::Merge && same_text,
+                auto_hidden: same_text,
             });
         }
         annotations.sort_unstable_by_key(|a| a.columns.start);
