@@ -9,6 +9,93 @@ fn cap(n: u64) -> Limits {
 }
 
 #[test]
+fn shaped_glyph_trials_check_local_and_ancestor_caps_before_charging() {
+    for (outer_cap, inner_cap) in [(8, 1), (1, 8)] {
+        let mut ledger = LimitsLedger::new(&cap(16));
+        let outer = ledger.add_scope(&cap(outer_cap), Some(0));
+        let inner = ledger.add_scope(&cap(inner_cap), Some(outer));
+        ledger.frames[0].current = inner;
+        ledger.record_item().unwrap();
+        ledger.begin_shaping();
+        let checkpoint = ledger.checkpoint();
+        ledger.shaped_glyphs(0, 1, Some(1)).unwrap();
+        assert_eq!(
+            ledger.shaped_glyphs(0, 1, Some(2)),
+            Err(LimitExceeded {
+                kind: LimitKind::ShapedGlyphs,
+                limit: 1,
+                actual: 2,
+            })
+        );
+        for owner in [0, outer, inner] {
+            assert_eq!(ledger.used(owner, LimitKind::ShapedGlyphs), 1);
+        }
+        ledger.rollback(checkpoint);
+        for owner in [0, outer, inner] {
+            assert_eq!(ledger.used(owner, LimitKind::ShapedGlyphs), 0);
+        }
+        // A discarded, admitted trial leaves room for an exact-cap candidate.
+        let checkpoint = ledger.checkpoint();
+        ledger.shaped_glyphs(0, 1, Some(1)).unwrap();
+        let selected = ledger.rollback(checkpoint);
+        ledger.commit(selected).unwrap();
+        assert_eq!(ledger.used(inner, LimitKind::ShapedGlyphs), 1);
+    }
+}
+
+#[test]
+fn shaped_glyph_trials_include_consumption_committed_after_begin_shaping() {
+    let mut ledger = LimitsLedger::new(&cap(2));
+    ledger.begin_shaping();
+    ledger.shaped_glyphs(0, 1, None).unwrap();
+    let checkpoint = ledger.checkpoint();
+    assert_eq!(
+        ledger.shaped_glyphs(0, 2, Some(2)),
+        Err(LimitExceeded {
+            kind: LimitKind::ShapedGlyphs,
+            limit: 2,
+            actual: 3,
+        })
+    );
+    assert_eq!(ledger.used(0, LimitKind::ShapedGlyphs), 1);
+    ledger.rollback(checkpoint);
+    ledger.shaped_glyphs(0, 1, None).unwrap();
+    assert_eq!(ledger.used(0, LimitKind::ShapedGlyphs), 2);
+}
+
+#[test]
+fn shaped_glyph_trials_accumulate_sibling_charges_at_the_current_ancestor() {
+    let mut ledger = LimitsLedger::new(&cap(16));
+    let outer = ledger.add_scope(&cap(3), Some(0));
+    let left = ledger.add_scope(&cap(2), Some(outer));
+    let right = ledger.add_scope(&cap(2), Some(outer));
+    for owner in [left, right] {
+        ledger.frames[0].current = owner;
+        ledger.record_item().unwrap();
+    }
+    ledger.begin_shaping();
+    ledger
+        .charge_scope(outer, LimitKind::ShapedGlyphs, 1)
+        .unwrap();
+    let checkpoint = ledger.checkpoint();
+    ledger.shaped_glyphs(0, 1, Some(1)).unwrap();
+    assert_eq!(
+        ledger.shaped_glyphs(1, 2, Some(3)),
+        Err(LimitExceeded {
+            kind: LimitKind::ShapedGlyphs,
+            limit: 3,
+            actual: 4,
+        })
+    );
+    assert_eq!(ledger.used(right, LimitKind::ShapedGlyphs), 0);
+    ledger.rollback(checkpoint);
+    assert_eq!(ledger.used(0, LimitKind::ShapedGlyphs), 1);
+    assert_eq!(ledger.used(outer, LimitKind::ShapedGlyphs), 1);
+    assert_eq!(ledger.used(left, LimitKind::ShapedGlyphs), 0);
+    ledger.shaped_glyphs(1, 2, None).unwrap();
+}
+
+#[test]
 fn siblings_charge_their_shared_root_without_sharing_local_room() {
     let mut ledger = LimitsLedger::new(&cap(5));
     let left = ledger.add_scope(&cap(3), Some(0));

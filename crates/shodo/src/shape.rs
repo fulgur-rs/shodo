@@ -409,7 +409,7 @@ pub(crate) fn shape_items_with_combined_width_reuse(
             feature_sets,
             ledger,
         );
-        if let Some(selection) = &selection {
+        if let Ok(selection) = &selection {
             if selection.use_width_feature {
                 for item in &mut items[start..end] {
                     item.width_feature = Some(tag);
@@ -433,7 +433,8 @@ pub(crate) fn shape_items_with_combined_width_reuse(
                 scoped == global || bytes <= scoped
             })
         });
-        if let Some(selection) = selection.filter(|_| windows_match) {
+        if windows_match {
+            let selection = selection?;
             ledger.commit(selection.reservations)?;
             warnings.append(selection.warnings);
             sat.saturated += selection.saturation.saturated;
@@ -508,7 +509,7 @@ fn try_shape_combined_width_group(
     limits: &Limits,
     feature_sets: &mut FeatureSets,
     ledger: &mut LimitsLedger,
-) -> Option<CombinedWidthSelection> {
+) -> Result<CombinedWidthSelection, LimitExceeded> {
     for item in group {
         feature_sets.prepare_width_feature(item, styles, tag);
     }
@@ -537,11 +538,14 @@ fn try_shape_combined_width_group(
         },
     );
     let plain_reservations = ledger.rollback(plain_checkpoint);
-    let Ok((plain, plain_runs)) = plain_result else {
-        for item in group {
-            feature_sets.discard_unselected_width_feature(item, tag);
+    let (plain, plain_runs) = match plain_result {
+        Ok(output) => output,
+        Err(error) => {
+            for item in group {
+                feature_sets.discard_unselected_width_feature(item, tag);
+            }
+            return Err(error);
         }
-        return None;
     };
     #[cfg(test)]
     COMBINED_WIDTH_TRIAL_STORE_BYTES.with(|bytes| {
@@ -581,7 +585,7 @@ fn try_shape_combined_width_group(
         for item in group {
             feature_sets.discard_unselected_width_feature(item, tag);
         }
-        return Some(CombinedWidthSelection {
+        return Ok(CombinedWidthSelection {
             glyphs: plain,
             runs: plain_runs,
             warnings: plain_warnings,
@@ -615,7 +619,7 @@ fn try_shape_combined_width_group(
     });
 
     if covered {
-        Some(CombinedWidthSelection {
+        Ok(CombinedWidthSelection {
             glyphs: narrow,
             runs: narrow_runs,
             warnings: narrow_warnings,
@@ -627,7 +631,7 @@ fn try_shape_combined_width_group(
         for item in group {
             feature_sets.discard_unselected_width_feature(item, tag);
         }
-        Some(CombinedWidthSelection {
+        Ok(CombinedWidthSelection {
             glyphs: plain,
             runs: plain_runs,
             warnings: plain_warnings,
