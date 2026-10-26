@@ -226,7 +226,8 @@ consume work even when they retain no new bytes. Exceeding this budget returns
 Cloning a builder preserves its work counter. Restoring an immutable ruby
 snapshot charges the new builder's actual key operations, rather than replaying
 work previously performed to create the snapshot. This is a per-builder
-interning budget, not a budget for all ruby validation, inheritance or copying.
+interning and wrapper-style prediction budget, not a budget for all ruby
+validation, inheritance or copying.
 Callers enumerating all `Limits` fields must also supply `max_style_work`.
 
 `Limits::max_mapping_bytes` defaults to 64 MiB of admitted logical transform and

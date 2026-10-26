@@ -41,6 +41,8 @@ pub struct Limits {
     /// Family slots are reserved before inspecting their name lengths.
     /// Construction also reserves the root/first-line payload before sizing
     /// owned copies, even though only the root enters the initial hash.
+    /// Ruby wrapper-style prediction reserves comparison and inherited-payload
+    /// work before inspecting or generating its candidates as well.
     /// This bounds interning work, independently of retained style bytes;
     /// it is not a CPU instruction count or a budget for all ruby processing.
     /// Restoring a ruby snapshot charges the new builder's actual key work,

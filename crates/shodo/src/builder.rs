@@ -569,7 +569,13 @@ impl ParagraphBuilder {
         self.intern_styles(style, None)
     }
 
-    fn reserve_style_work(&mut self, pair: (&InlineStyle, Option<&InlineStyle>)) -> bool {
+    pub(crate) fn reserve_style_work(
+        &mut self,
+        pair: (&InlineStyle, Option<&InlineStyle>),
+    ) -> bool {
+        if self.error.is_some() {
+            return false;
+        }
         match self.style_work.reserve(pair, self.limits.max_style_work) {
             Ok(()) => true,
             Err(error) => {
@@ -683,7 +689,7 @@ impl ParagraphBuilder {
         let has_first_line = self.style.first_line.is_some()
             || !self.first_line_styles.is_empty()
             || self.has_ruby_first_line();
-        crate::ruby::input::ContentInput {
+        let mut input = crate::ruby::input::ContentInput {
             style: self.style,
             limits: self.limits,
             text: self.text,
@@ -696,7 +702,13 @@ impl ParagraphBuilder {
             rubies: self.rubies,
             ruby_cost: self.ruby_cost,
             has_first_line,
-        }
+            cost: Default::default(),
+            holds_object: false,
+        };
+        let (cost, holds_object) = crate::ruby::builder::InputCost::measure(&input);
+        input.cost = cost;
+        input.holds_object = holds_object;
+        input
     }
 
     pub(crate) fn has_ruby_first_line(&self) -> bool {

@@ -260,4 +260,9 @@ pub(crate) struct ContentInput {
     pub(crate) has_first_line: bool,
     pub(crate) rubies: Vec<super::builder::RubyInput>,
     pub(crate) ruby_cost: super::builder::InputCost,
+    /// Frozen before sharing; aliases never re-walk items or style payloads.
+    /// Any future payload mutation must rebuild both cached summaries.
+    pub(crate) cost: super::builder::InputCost,
+    /// Only objects in this source stream, excluding annotation lanes.
+    pub(crate) holds_object: bool,
 }
