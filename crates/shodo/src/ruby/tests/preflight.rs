@@ -1,10 +1,485 @@
 //! Rejected input must not spend its text budget on normalization comparisons.
 use crate::ParagraphBuilder;
 use crate::limits::{LimitKind, Limits};
-use crate::node::{NodeId, TextSource};
+use crate::node::{InlineEdges, NodeId, TextSource};
 use crate::ruby::pairing::{COMPARED_BASES, COMPARED_BYTES};
 use crate::ruby::*;
 use crate::style::{InlineStyle, ParagraphStyle};
+
+fn reset_admission_visits() {
+    super::builder::SUMMARY_ITEM_VISITS.with(|n| n.set(0));
+    super::pairing::NORMALIZE_CALLS.with(|n| n.set(0));
+    super::pairing::OBJECT_ITEM_VISITS.with(|n| n.set(0));
+    COMPARED_BYTES.with(|n| n.set(0));
+    super::builder::PREPARED_MAPS.with(|n| n.set(0));
+}
+
+#[test]
+fn snapshot_summary_is_frozen_once_and_excludes_annotation_objects() {
+    let mut source = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::unlimited());
+    source.open_inline(
+        NodeId(1),
+        &InlineStyle {
+            font_size: 20.0,
+            ..Default::default()
+        },
+        InlineEdges::default(),
+    );
+    source.push_text(TextSource::Generated { node: NodeId(2) }, "a");
+    reset_admission_visits();
+    let snapshot = RubyContent::from_builder(source);
+    assert_eq!(super::builder::SUMMARY_ITEM_VISITS.with(|n| n.get()), 3);
+    let cost = super::builder::InputCost::content(&snapshot.0);
+    assert_eq!(
+        (
+            cost.text,
+            cost.items,
+            cost.styles,
+            cost.style_bytes,
+            cost.depth
+        ),
+        (1, 3, 2, 1224, 1)
+    );
+    assert!(!snapshot.0.holds_object);
+    reset_admission_visits();
+    for _ in 0..128 {
+        assert_eq!(
+            super::builder::InputCost::content(&snapshot.clone().0),
+            cost
+        );
+    }
+    assert_no_admission_payload_work();
+
+    let mut object = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::unlimited());
+    object.push_atomic(NodeId(3), &InlineStyle::default(), InlineEdges::default());
+    let object = RubyContent::from_builder(object);
+    assert!(object.0.holds_object);
+    let mut nested = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::unlimited());
+    nested.push_ruby(
+        NodeId(4),
+        &InlineStyle::default(),
+        ruby(content("a"), object, 1),
+    );
+    let nested = RubyContent::from_builder(nested);
+    assert!(
+        !nested.0.holds_object,
+        "an annotation object is not in the base source stream"
+    );
+    let cost = nested.0.cost;
+    assert_eq!(
+        (
+            cost.text,
+            cost.items,
+            cost.styles,
+            cost.style_bytes,
+            cost.depth
+        ),
+        (1, 14, 3, 2048, 2)
+    );
+    assert_eq!(super::builder::InputCost::measure(&nested.0).0, cost);
+}
+
+#[test]
+fn prepared_alias_maps_share_storage_and_intern_only_once_per_operation() {
+    for (first_line, exact) in [(false, 475), (true, 696)] {
+        for limit in [exact - 1, exact] {
+            let shared = content("");
+            let input = Ruby::new(
+                vec![
+                    RubyBase {
+                        node: NodeId(1),
+                        content: shared,
+                        align: RubyAlign::default()
+                    };
+                    2
+                ],
+                vec![],
+            )
+            .unwrap();
+            let limits = Limits {
+                max_style_work: Some(limit),
+                ..Default::default()
+            };
+            let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+            reset_admission_visits();
+            if first_line {
+                parent.push_ruby_with_first_line(
+                    NodeId(2),
+                    &InlineStyle::default(),
+                    &InlineStyle {
+                        font_size: 18.0,
+                        ..Default::default()
+                    },
+                    input,
+                );
+            } else {
+                parent.push_ruby(NodeId(2), &InlineStyle::default(), input);
+            }
+            if limit == exact {
+                assert_eq!(parent.error(), None, "{first_line}/{limit}");
+                assert_eq!(super::pairing::NORMALIZE_CALLS.with(|n| n.get()), 1);
+                assert_eq!(super::builder::PREPARED_MAPS.with(|n| n.get()), 1);
+            } else {
+                assert_eq!(
+                    parent.error().unwrap().kind,
+                    LimitKind::StyleWork,
+                    "{first_line}/{limit}"
+                );
+                assert_eq!(super::pairing::NORMALIZE_CALLS.with(|n| n.get()), 0);
+                assert!(parent.stack.is_empty() && parent.items.is_empty());
+            }
+            assert_eq!(super::builder::SUMMARY_ITEM_VISITS.with(|n| n.get()), 0);
+            assert_eq!(super::pairing::OBJECT_ITEM_VISITS.with(|n| n.get()), 0);
+        }
+    }
+}
+
+#[test]
+fn projected_raw_items_exact_boundary_and_multiple_limit_priority() {
+    for cap in [Some(14), Some(15), None] {
+        let input = Ruby::new(
+            vec![
+                RubyBase {
+                    node: NodeId(1),
+                    content: content(""),
+                    align: RubyAlign::default()
+                };
+                2
+            ],
+            vec![],
+        )
+        .unwrap();
+        let limits = Limits {
+            max_items: cap,
+            max_styles: Some(2),
+            ..Default::default()
+        };
+        let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+        reset_admission_visits();
+        parent.push_ruby(NodeId(2), &InlineStyle::default(), input);
+        if cap == Some(14) {
+            let error = parent.error().unwrap();
+            assert_eq!(
+                (error.kind, error.limit, error.actual),
+                (LimitKind::Items, 14, 15)
+            );
+            assert_no_admission_payload_work();
+        } else {
+            assert_eq!(parent.error(), None);
+            assert_eq!(parent.items.len() as u64 + parent.ruby_cost.items, 15);
+        }
+    }
+    // Earlier item admission intentionally precedes competing style failures.
+    let limits = Limits {
+        max_items: Some(4),
+        max_styles: Some(1),
+        ..Default::default()
+    };
+    let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+    parent.push_ruby(
+        NodeId(1),
+        &InlineStyle::default(),
+        Ruby::new(vec![], vec![]).unwrap(),
+    );
+    assert_eq!(parent.error().unwrap().kind, LimitKind::Items);
+}
+
+fn assert_no_admission_payload_work() {
+    assert_eq!(super::builder::SUMMARY_ITEM_VISITS.with(|n| n.get()), 0);
+    assert_eq!(super::pairing::NORMALIZE_CALLS.with(|n| n.get()), 0);
+    assert_eq!(super::pairing::OBJECT_ITEM_VISITS.with(|n| n.get()), 0);
+    assert_eq!(COMPARED_BYTES.with(|n| n.get()), 0);
+}
+
+#[test]
+fn aliased_payload_is_admitted_before_summary_walks_or_normalization() {
+    let style = InlineStyle::default();
+    let mut source = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::unlimited());
+    for _ in 0..256 {
+        source
+            .open_inline(NodeId(1), &style, InlineEdges::default())
+            .close_inline();
+    }
+    let shared = RubyContent::from_builder(source);
+    for base_aliases in [false, true] {
+        let input = if base_aliases {
+            Ruby::new(
+                vec![
+                    RubyBase {
+                        node: NodeId(1),
+                        content: shared.clone(),
+                        align: RubyAlign::default()
+                    };
+                    16
+                ],
+                vec![],
+            )
+            .unwrap()
+        } else {
+            ruby(content(""), shared.clone(), 16)
+        };
+        let limits = Limits {
+            max_items: Some(1024),
+            ..Default::default()
+        };
+        let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+        reset_admission_visits();
+        parent.push_ruby(NodeId(2), &style, input);
+        assert_eq!(parent.error().unwrap().kind, LimitKind::Items);
+        assert_no_admission_payload_work();
+        assert!(parent.items.is_empty() && parent.rubies.is_empty());
+    }
+}
+
+#[test]
+fn retained_style_and_depth_limits_precede_normalization() {
+    let mut source = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::unlimited());
+    source.open_inline(
+        NodeId(1),
+        &InlineStyle {
+            font_size: 20.0,
+            ..Default::default()
+        },
+        InlineEdges::default(),
+    );
+    let shared = RubyContent::from_builder(source);
+    for (limits, kind) in [
+        (
+            Limits {
+                max_styles: Some(8),
+                ..Default::default()
+            },
+            LimitKind::Styles,
+        ),
+        (
+            Limits {
+                max_nesting_depth: Some(2),
+                ..Default::default()
+            },
+            LimitKind::NestingDepth,
+        ),
+    ] {
+        let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+        let input = ruby(content(""), shared.clone(), 16);
+        reset_admission_visits();
+        parent.push_ruby(NodeId(2), &InlineStyle::default(), input);
+        assert_eq!(parent.error().unwrap().kind, kind);
+        assert_no_admission_payload_work();
+    }
+}
+
+#[test]
+fn imported_style_admission_preserves_dedup_before_normalization() {
+    for font_size in [16.0, 20.0] {
+        let base = RubyContent::text(
+            TextSource::Generated { node: NodeId(1) },
+            "",
+            &InlineStyle {
+                font_size,
+                ..Default::default()
+            },
+            &Limits::unlimited(),
+        );
+        let input = Ruby::new(
+            vec![RubyBase {
+                node: NodeId(1),
+                content: base,
+                align: RubyAlign::default(),
+            }],
+            vec![],
+        )
+        .unwrap();
+        let limits = Limits {
+            max_styles: Some(2),
+            ..Default::default()
+        };
+        let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+        reset_admission_visits();
+        parent.push_ruby(NodeId(2), &InlineStyle::default(), input);
+        if font_size == 20.0 {
+            assert_eq!(parent.error().unwrap().kind, LimitKind::Styles);
+            assert_no_admission_payload_work();
+        } else {
+            assert_eq!(parent.error(), None);
+            assert_eq!(parent.styles.len(), 2);
+        }
+    }
+}
+
+#[test]
+fn scope_index_bytes_and_base_own_caps_are_checked_before_normalization() {
+    for cap in [1255, 1256] {
+        let input = Ruby::new(
+            vec![RubyBase {
+                node: NodeId(1),
+                content: content(""),
+                align: RubyAlign::default(),
+            }],
+            vec![],
+        )
+        .unwrap();
+        let limits = Limits {
+            max_style_bytes: Some(cap),
+            ..Default::default()
+        };
+        let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+        reset_admission_visits();
+        parent.push_ruby(NodeId(2), &InlineStyle::default(), input);
+        if cap == 1255 {
+            let error = parent.error().unwrap();
+            assert_eq!((error.kind, error.actual), (LimitKind::StyleBytes, 1256));
+            assert_no_admission_payload_work();
+        } else {
+            assert_eq!(parent.error(), None);
+        }
+    }
+    for (limits, kind) in [
+        (
+            Limits {
+                max_items: Some(4),
+                ..Default::default()
+            },
+            LimitKind::Items,
+        ),
+        (
+            Limits {
+                max_styles: Some(1),
+                ..Default::default()
+            },
+            LimitKind::Styles,
+        ),
+        (
+            Limits {
+                max_nesting_depth: Some(1),
+                ..Default::default()
+            },
+            LimitKind::NestingDepth,
+        ),
+    ] {
+        let mut source = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+        source
+            .open_inline(NodeId(1), &InlineStyle::default(), InlineEdges::default())
+            .close_inline();
+        source
+            .push_forced_break(NodeId(2))
+            .push_forced_break(NodeId(3));
+        assert_eq!(source.error(), None);
+        let input = Ruby::new(
+            vec![RubyBase {
+                node: NodeId(4),
+                content: RubyContent::from_builder(source),
+                align: RubyAlign::default(),
+            }],
+            vec![],
+        )
+        .unwrap();
+        let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+        reset_admission_visits();
+        parent.push_ruby(NodeId(5), &InlineStyle::default(), input);
+        assert_eq!(parent.error().unwrap().kind, kind);
+        assert_no_admission_payload_work();
+    }
+}
+
+#[test]
+fn explicit_first_line_import_never_copies_discarded_inherited_payload() {
+    let paragraph = ParagraphStyle {
+        first_line: Some(InlineStyle {
+            font_families: vec![crate::style::FontFamily::Named("x".repeat(4096))],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut source = ParagraphBuilder::new(&paragraph, &Limits::default());
+    for index in 0..8 {
+        source
+            .open_inline_with_first_line(
+                NodeId(index),
+                &InlineStyle {
+                    font_size: 20.0 + index as f32,
+                    ..Default::default()
+                },
+                &InlineStyle::default(),
+                InlineEdges::default(),
+            )
+            .close_inline();
+    }
+    let shared = RubyContent::from_builder(source);
+    let input = Ruby::new(
+        vec![
+            RubyBase {
+                node: NodeId(10),
+                content: shared,
+                align: RubyAlign::default()
+            };
+            4
+        ],
+        vec![],
+    )
+    .unwrap();
+    let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+    super::builder::INHERITED_STYLE_COPIES.with(|n| n.set(0));
+    parent.push_ruby(NodeId(11), &InlineStyle::default(), input);
+    assert_eq!(parent.error(), None);
+    // Only the root lacks an explicit alternative, once per base. The eight
+    // explicit alternatives must never clone the unused 4-KiB inherited family.
+    assert_eq!(super::builder::INHERITED_STYLE_COPIES.with(|n| n.get()), 4);
+}
+
+#[test]
+fn wrapper_prediction_bounds_repeated_legacy_style_payload_before_copying() {
+    let root = InlineStyle {
+        unicode_bidi: crate::style::UnicodeBidi::Isolate,
+        font_variations: vec![
+            crate::style::FontVariation {
+                tag: *b"wght",
+                value: 0.0
+            };
+            6
+        ],
+        ..Default::default()
+    };
+    let paragraph = ParagraphStyle {
+        root: root.clone(),
+        first_line: Some(InlineStyle {
+            font_families: vec![crate::style::FontFamily::Named("x".repeat(4096))],
+            word_break: crate::style::WordBreak::BreakAll,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut source = ParagraphBuilder::new(&paragraph, &Limits::default());
+    for mask in 1..16 {
+        let mut normal = root.clone();
+        for (bit, axis) in normal.font_variations.iter_mut().enumerate() {
+            axis.value = if mask & (1 << bit) == 0 { 0.0 } else { -0.0 };
+        }
+        source
+            .open_inline(NodeId(mask), &normal, InlineEdges::default())
+            .close_inline();
+    }
+    assert_eq!(source.error(), None);
+    let input = Ruby::new(
+        vec![RubyBase {
+            node: NodeId(20),
+            content: RubyContent::from_builder(source),
+            align: RubyAlign::default(),
+        }],
+        vec![],
+    )
+    .unwrap();
+    let limits = Limits {
+        max_style_work: Some(10_000),
+        ..Default::default()
+    };
+    let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &limits);
+    super::builder::WRAPPER_INHERITED_COPIES.with(|n| n.set(0));
+    reset_admission_visits();
+    parent.push_ruby(NodeId(21), &InlineStyle::default(), input);
+    assert_eq!(parent.error().unwrap().kind, LimitKind::StyleWork);
+    assert!(super::builder::WRAPPER_INHERITED_COPIES.with(|n| n.get()) <= 2);
+    assert_eq!(super::pairing::NORMALIZE_CALLS.with(|n| n.get()), 0);
+}
 
 fn content(text: &str) -> RubyContent {
     RubyContent::text(

@@ -218,6 +218,25 @@ Nesting and projected anonymous-box allocation are checked before excess work.
 Snapshot terminal errors survive import. Original font assets and non-ruby
 snapshot expectations are unchanged.
 
+Snapshots calculate their input costs and source-stream atomic-object flag once,
+after closing unbalanced inlines and before sharing the immutable input. Aliases
+reuse these summaries; annotation-lane objects do not become base-source objects.
+Appending checks aggregate retained costs, raw imported items, wrappers, nesting
+and text offsets before allocating normalized columns or comparing source text.
+It then prepares the actual deduplicated style indices and checks their input
+budgets before normalization. Emission reuses those indices without interning
+again. Prepared index maps share storage across aliases, while resource charges
+still count every occurrence. Later analysis and shaping budgets remain in force.
+Explicit first-line alternatives bypass unused legacy calculations. Wrapper-style
+prediction reserves `max_style_work` before comparing or generating candidates,
+so a shared snapshot cannot multiply unmetered inherited-style copies.
+
+Snapshot terminal errors remain first, followed by the existing text, retained
+style-byte and metadata checks. The earlier raw-item admission can report an
+`Items` violation before a competing style/work violation when both are exceeded.
+Its `actual` preserves the first failed streaming item reservation (`limit + 1`).
+An error is terminal; no partial ruby is accepted.
+
 The [CSS Ruby Level 1 draft](https://drafts.csswg.org/css-ruby-1/) describes HTML
 anonymous boxes, grouping choices and permitted edge effects. This API receives
 normalized structure rather than performing browser HTML/CSS processing. Its

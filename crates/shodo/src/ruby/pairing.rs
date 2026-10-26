@@ -1,7 +1,6 @@
 use std::ops::Range;
 
 use super::input::{Ruby, RubyAlign, RubyContent, RubyMerge, RubyStyle, RubyVisibility, span};
-use crate::builder::RawItem;
 use crate::limits::{LimitExceeded, LimitKind, Limits};
 use crate::node::NodeId;
 
@@ -9,6 +8,8 @@ use crate::node::NodeId;
 thread_local! {
     pub(super) static COMPARED_BYTES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     pub(super) static COMPARED_BASES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    pub(super) static NORMALIZE_CALLS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    pub(super) static OBJECT_ITEM_VISITS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 #[derive(Clone, Debug)]
@@ -44,7 +45,7 @@ pub(crate) struct NormalizedRuby {
     pub(crate) metadata_items: u64,
 }
 
-pub(crate) fn normalize(ruby: &Ruby, limits: &Limits) -> Result<NormalizedRuby, LimitExceeded> {
+pub(super) fn metadata_items(ruby: &Ruby) -> u64 {
     // Count all real and anonymous records before allocating a column table.
     // Invalid spans have already been rejected by Ruby::new.
     let mut metadata_items = 1u64
@@ -63,6 +64,13 @@ pub(crate) fn normalize(ruby: &Ruby, limits: &Limits) -> Result<NormalizedRuby, 
             .saturating_add(level.annotations.len() as u64)
             .saturating_add((ruby.columns as u64).saturating_sub(occupied));
     }
+    metadata_items
+}
+
+pub(crate) fn normalize(ruby: &Ruby, limits: &Limits) -> Result<NormalizedRuby, LimitExceeded> {
+    #[cfg(test)]
+    NORMALIZE_CALLS.with(|n| n.set(n.get() + 1));
+    let metadata_items = metadata_items(ruby);
     Limits::check(limits.max_items, LimitKind::Items, metadata_items)?;
     // Empty columns contribute no bytes. Index nonempty bases once so each
     // comparison visits only bases whose bytes it actually needs to consume.
@@ -169,11 +177,7 @@ pub(crate) fn normalize(ruby: &Ruby, limits: &Limits) -> Result<NormalizedRuby, 
 
 /// Whether `content` holds an atomic inline of its own.
 fn holds_object(content: &RubyContent) -> bool {
-    content
-        .0
-        .items
-        .iter()
-        .any(|item| matches!(item, RawItem::Atomic { .. }))
+    content.0.holds_object
 }
 
 fn empty(column: usize) -> NormalizedAnnotation {
