@@ -3,7 +3,7 @@ use super::{FontFamily, InlineStyle, ParagraphStyle};
 
 crate::logical::logical_sizes! {
     INLINE_STYLE_BYTES: InlineStyle = 384;
-    FONT_FAMILY_BYTES: FontFamily = 24;
+    pub(crate) FONT_FAMILY_BYTES: FontFamily = 24;
 }
 
 fn vec_bytes<T>(values: &[T], element: u64) -> u64 {

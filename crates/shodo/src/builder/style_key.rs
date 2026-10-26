@@ -1,4 +1,5 @@
 //! Borrowed structural keys: no Debug formatting or cloned key payloads.
+use crate::limits::{LimitExceeded, LimitKind, Limits};
 use crate::style::identity::{
     InternedFloat as Float, font_style_key, same_variations, size_adjust_key,
 };
@@ -12,6 +13,61 @@ type Pair<'a> = (&'a InlineStyle, Option<&'a InlineStyle>);
 /// Bucket/allocator overhead and spare capacity follow the style budget's
 /// existing exclusions. Colliding entries conservatively each charge a hash.
 pub(super) const BYTES: u64 = (size_of::<u64>() + size_of::<u32>()) as u64;
+
+/// Actual key operations performed by one builder. Cloning a builder preserves
+/// its work; restoring an immutable ruby input starts a new operation budget.
+#[derive(Clone, Default)]
+pub(super) struct Work(u64);
+
+impl Work {
+    fn add(&mut self, amount: u64, limit: Option<u64>) -> Result<(), LimitExceeded> {
+        let actual = self.0.saturating_add(amount);
+        Limits::check(limit, LimitKind::StyleWork, actual)?;
+        self.0 = actual;
+        Ok(())
+    }
+
+    pub(super) fn reserve(
+        &mut self,
+        pair: Pair<'_>,
+        limit: Option<u64>,
+    ) -> Result<(), LimitExceeded> {
+        if limit.is_none() {
+            return Ok(());
+        }
+        self.add(1, limit)?;
+        // Keep variable fields in sync with inline_fields! below. Fixed style
+        // properties are covered by the operation unit, not owned header bytes.
+        for style in std::iter::once(pair.0).chain(pair.1) {
+            // Charge the descriptor array before walking it, including empty
+            // names and generic families. No caller-sized scan precedes this.
+            let bytes = [
+                (style.font_families.len() as u64)
+                    .saturating_mul(crate::style::memory::FONT_FAMILY_BYTES),
+                (style.font_variations.len() as u64)
+                    .saturating_mul(size_of::<FontVariation>() as u64),
+                (style.font_features.len() as u64).saturating_mul(size_of::<FontFeature>() as u64),
+                style.font_variant_alternates.styleset.len() as u64,
+                (style.font_variant_alternates.character_variant.len() as u64)
+                    .saturating_mul(size_of::<(u8, u32)>() as u64),
+                style.lang.as_ref().map_or(0, |s| s.len() as u64),
+                style
+                    .hyphenate_character
+                    .as_ref()
+                    .map_or(0, |s| s.len() as u64),
+            ]
+            .into_iter()
+            .fold(0, u64::saturating_add);
+            self.add(bytes, limit)?;
+            for family in &style.font_families {
+                if let FontFamily::Named(name) = family {
+                    self.add(name.len() as u64, limit)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
 
 #[derive(Clone, Copy)]
 pub(super) struct Key<'a>(pub(super) Pair<'a>);

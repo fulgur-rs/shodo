@@ -35,6 +35,17 @@ pub struct Limits {
     /// Counts copied values, but not allocator overhead, unused capacity or
     /// short-lived copies.
     pub max_style_bytes: Option<u64>,
+    /// Cumulative style-key work per builder (256 Mi units). Every identity
+    /// comparison and hash reserves one unit plus the incoming normal and
+    /// first-line styles' variable payload bytes, including array slots.
+    /// Family slots are reserved before inspecting their name lengths.
+    /// Construction also reserves the root/first-line payload before sizing
+    /// owned copies, even though only the root enters the initial hash.
+    /// This bounds interning work, independently of retained style bytes;
+    /// it is not a CPU instruction count or a budget for all ruby processing.
+    /// Restoring a ruby snapshot charges the new builder's actual key work,
+    /// not work already performed to create the immutable snapshot.
+    pub max_style_work: Option<u64>,
     /// Simultaneously open inline boxes at build time (512).
     pub max_nesting_depth: Option<u64>,
     /// Glyphs per paragraph build and reshape output (2^22).
@@ -121,6 +132,7 @@ impl Default for Limits {
             max_items: Some(1 << 20),
             max_styles: Some(1 << 16),
             max_style_bytes: Some(64 * MIB),
+            max_style_work: Some(256 * MIB),
             max_nesting_depth: Some(512),
             max_shaped_glyphs: Some(1 << 22),
             max_ruby_cut_work: Some(1 << 23),
@@ -159,6 +171,7 @@ impl Limits {
             max_items: None,
             max_styles: None,
             max_style_bytes: None,
+            max_style_work: None,
             max_nesting_depth: None,
             max_shaped_glyphs: None,
             max_ruby_cut_work: None,
@@ -212,6 +225,7 @@ pub enum LimitKind {
     Items,
     Styles,
     StyleBytes,
+    StyleWork,
     NestingDepth,
     ShapedGlyphs,
     RubyCutWork,
