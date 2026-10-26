@@ -39,6 +39,10 @@ mod warning_import_tests;
 mod preflight_tests;
 
 #[cfg(test)]
+#[path = "tests/shared_preparation.rs"]
+mod shared_preparation_tests;
+
+#[cfg(test)]
 #[path = "tests/cuts.rs"]
 mod cut_tests;
 

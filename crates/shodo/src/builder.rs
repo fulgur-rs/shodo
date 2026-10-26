@@ -545,6 +545,12 @@ impl ParagraphBuilder {
         self.stack.last().copied().unwrap_or(0)
     }
 
+    /// Restore the search hint after reusing an already imported style map.
+    pub(crate) fn reuse_interned_style(&mut self, index: u32) {
+        debug_assert!((index as usize) < self.styles.len());
+        self.last_interned = index;
+    }
+
     pub(crate) fn check(&mut self, limit: Option<u64>, kind: LimitKind, actual: u64) -> bool {
         if self.error.is_some() {
             return false;
@@ -977,6 +983,46 @@ mod tests {
     use crate::limits::{LimitKind, Limits, WarningKind};
     use crate::node::{InlineEdges, NodeId, TextSource};
     use crate::style::{InlineStyle, ParagraphStyle};
+
+    #[test]
+    fn shared_ruby_preparation_restores_the_last_imported_style_hint() {
+        use crate::ruby::{Ruby, RubyBase, RubyContent};
+        let make = |size| {
+            let mut builder = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+            builder
+                .open_inline(
+                    NodeId(1),
+                    &InlineStyle {
+                        font_size: size,
+                        ..Default::default()
+                    },
+                    InlineEdges::default(),
+                )
+                .close_inline();
+            RubyContent::from_builder(builder)
+        };
+        let first = make(22.0);
+        let second = make(32.0);
+        let mut parent = ParagraphBuilder::new(&ParagraphStyle::default(), &Limits::default());
+        for _ in 0..2 {
+            let ruby = Ruby::new(
+                [first.clone(), second.clone(), first.clone()]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, content)| RubyBase {
+                        node: NodeId(i as u64 + 2),
+                        content,
+                        align: Default::default(),
+                    })
+                    .collect(),
+                vec![],
+            )
+            .unwrap();
+            parent.push_ruby(NodeId(6), &InlineStyle::default(), ruby);
+            assert_eq!(parent.error(), None);
+            assert_eq!(parent.styles[parent.last_interned as usize].font_size, 22.0);
+        }
+    }
 
     fn dom(node: u64) -> TextSource {
         TextSource::Dom {

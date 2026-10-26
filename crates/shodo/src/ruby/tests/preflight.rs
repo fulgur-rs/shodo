@@ -80,8 +80,8 @@ fn snapshot_summary_is_frozen_once_and_excludes_annotation_objects() {
 }
 
 #[test]
-fn prepared_alias_maps_share_storage_and_intern_only_once_per_operation() {
-    for (first_line, exact) in [(false, 475), (true, 696)] {
+fn prepared_alias_maps_reuse_work_and_preserve_exact_budget_boundaries() {
+    for (first_line, exact) in [(false, 300), (true, 446)] {
         for limit in [exact - 1, exact] {
             let shared = content("");
             let input = Ruby::new(
@@ -421,9 +421,9 @@ fn explicit_first_line_import_never_copies_discarded_inherited_payload() {
     super::builder::INHERITED_STYLE_COPIES.with(|n| n.set(0));
     parent.push_ruby(NodeId(11), &InlineStyle::default(), input);
     assert_eq!(parent.error(), None);
-    // Only the root lacks an explicit alternative, once per base. The eight
+    // Only the root lacks an explicit alternative, once per unique input. The eight
     // explicit alternatives must never clone the unused 4-KiB inherited family.
-    assert_eq!(super::builder::INHERITED_STYLE_COPIES.with(|n| n.get()), 4);
+    assert_eq!(super::builder::INHERITED_STYLE_COPIES.with(|n| n.get()), 1);
 }
 
 #[test]

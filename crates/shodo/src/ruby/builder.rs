@@ -415,18 +415,20 @@ fn prepare_styles(
             .ok_or_else(|| b.error.expect("intern failure records its error"))?;
         b.stack.push(container);
         let mut bases = Vec::with_capacity(ruby.bases.len());
-        // Keep only one durable index map per unique snapshot. Interning still
-        // executes in its original order, so StyleWork is charged just once.
+        // Snapshot-local inheritance yields the same explicit style pairs on
+        // every occurrence. Parent style indices are append-only, so a plan
+        // prepared successfully in this append can be reused by identity.
         let mut shared =
             crate::hashing::FastMap::<*const ContentInput, std::sync::Arc<PreparedBase>>::default();
         for base in &ruby.bases {
-            let (wrapper, mapping) = prepare_base(b, &base.content)?;
             let key = std::sync::Arc::as_ptr(&base.content.0);
             let plan = match shared.get(&key) {
-                Some(plan) if plan.wrapper == wrapper && plan.mapping == mapping => {
+                Some(plan) => {
+                    b.reuse_interned_style(plan.mapping.last().copied().unwrap_or(plan.wrapper));
                     std::sync::Arc::clone(plan)
                 }
-                _ => {
+                None => {
+                    let (wrapper, mapping) = prepare_base(b, &base.content)?;
                     #[cfg(test)]
                     PREPARED_MAPS.with(|n| n.set(n.get() + 1));
                     let mut retained = mapping.clone();

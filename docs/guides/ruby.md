@@ -225,11 +225,23 @@ Appending checks aggregate retained costs, raw imported items, wrappers, nesting
 and text offsets before allocating normalized columns or comparing source text.
 It then prepares the actual deduplicated style indices and checks their input
 budgets before normalization. Emission reuses those indices without interning
-again. Prepared index maps share storage across aliases, while resource charges
-still count every occurrence. Later analysis and shaping budgets remain in force.
+again. Within one append, repeated aliases reuse successful style preparation by
+snapshot identity, including the index map and inherited first-line styles.
+Parent indices are append-only; the cache ends with that append. Retained index
+storage and its byte charges still count every occurrence, while `StyleWork`
+counts only the preparation actually performed. Inputs previously rejected by
+that work budget can therefore fit after reuse. Later analysis and shaping
+budgets remain in force.
 Explicit first-line alternatives bypass unused legacy calculations. Wrapper-style
 prediction reserves `max_style_work` before comparing or generating candidates,
 so a shared snapshot cannot multiply unmetered inherited-style copies.
+
+Pairing skips source-text equality for `RubyMerge::Merge`, which never hides
+equal readings. For a single-column annotation sharing the exact base snapshot,
+identity establishes equality without reading bytes, after excluding atomic
+objects. Independent snapshots and multi-column spans retain exact source-text
+comparison. Imported raw text/items and nested metadata are still materialized
+per occurrence; this optimization does not remove that output-size cost.
 
 Snapshot terminal errors remain first, followed by the existing text, retained
 style-byte and metadata checks. The earlier raw-item admission can report an
