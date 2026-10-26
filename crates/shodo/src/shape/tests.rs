@@ -608,11 +608,11 @@ fn combined_width_reuse_preserves_global_glyph_limit_failure() {
         (error.kind, error.limit, error.actual),
         (LimitKind::ShapedGlyphs, 3, 4)
     );
-    assert_eq!(HARFRUST_SHAPE_CALLS.with(|calls| calls.get()), 4);
+    assert_eq!(HARFRUST_SHAPE_CALLS.with(|calls| calls.get()), 3);
 }
 
 #[test]
-fn ruby_base_glyph_limits_commit_the_scoped_trial_without_reshaping() {
+fn ruby_base_glyph_limits_stop_after_the_first_combined_width_trial() {
     let limits = Limits::default();
     let fonts = crate::test_support::fonts::collection(&limits);
     fonts
@@ -679,7 +679,7 @@ fn ruby_base_glyph_limits_commit_the_scoped_trial_without_reshaping() {
         .build(&mut crate::LayoutContext::new(), &fonts)
         .unwrap_err();
     assert_eq!((error.kind, error.limit), (LimitKind::ShapedGlyphs, 1));
-    assert_eq!(HARFRUST_SHAPE_CALLS.with(|calls| calls.get()), 2);
+    assert_eq!(HARFRUST_SHAPE_CALLS.with(|calls| calls.get()), 1);
 }
 
 #[test]

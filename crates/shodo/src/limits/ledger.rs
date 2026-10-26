@@ -628,8 +628,20 @@ impl LimitsLedger {
         amount: u64,
         trial_total: Option<u64>,
     ) -> Result<(), LimitExceeded> {
+        let charge = Charge {
+            owner: self.item_owner(item),
+            kind: LimitKind::ShapedGlyphs,
+            amount,
+            shape_items: false,
+            reach: Reach::Chain,
+        };
         if let Some(total) = trial_total {
             self.frames[self.frame].trial_peak = self.frames[self.frame].trial_peak.max(total);
+        }
+        // Include local caps and output committed since shaping began, and
+        // preserve the ordinary owner-first error before the snapshot check.
+        self.check_charge(charge)?;
+        if let Some(total) = trial_total {
             for &(i, initial) in &self.frames[self.frame].shaping_start {
                 let scope = &self.scopes[i];
                 Limits::check(
@@ -638,17 +650,9 @@ impl LimitsLedger {
                     initial.saturating_add(total),
                 )?;
             }
-            self.apply_unchecked(Charge {
-                owner: self.item_owner(item),
-                kind: LimitKind::ShapedGlyphs,
-                amount,
-                shape_items: false,
-                reach: Reach::Chain,
-            });
-            Ok(())
-        } else {
-            self.item(item, LimitKind::ShapedGlyphs, amount)
         }
+        self.apply_unchecked(charge);
+        Ok(())
     }
 
     pub(crate) fn mapping_record(&mut self, bytes: u64) -> Result<(), LimitExceeded> {
