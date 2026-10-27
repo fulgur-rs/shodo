@@ -278,6 +278,29 @@ fn build_ruby(ruby: crate::ruby::Ruby, limits: &Limits) -> Result<(), LimitExcee
 }
 
 #[test]
+fn imported_ruby_base_keeps_its_decoration_work_limit() {
+    let root = Limits::unlimited();
+    let local = Limits {
+        max_decoration_work: Some(0),
+        ..Limits::unlimited()
+    };
+    let mut style = InlineStyle::default();
+    style.box_decoration_break = crate::style::BoxDecorationBreak::Clone;
+    let mut base = ParagraphBuilder::new(&ParagraphStyle::default(), &local);
+    base.open_inline(NodeId(30), &style, Default::default());
+    base.push_text(TextSource::Generated { node: NodeId(31) }, "base");
+    base.close_inline();
+    let ruby = ruby(
+        crate::ruby::RubyContent::from_builder(base),
+        content("note", &root),
+        1,
+    );
+    let error = build_ruby(ruby, &root).unwrap_err();
+    assert_eq!(error.kind, LimitKind::DecorationWork);
+    assert_eq!(error.limit, 0);
+}
+
+#[test]
 fn analysis_budget_annotation_and_ancestor_caps_precede_child_analysis() {
     let local = Limits {
         max_analysis_bytes: Some(512),

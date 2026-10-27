@@ -5,7 +5,7 @@ mod align;
 pub(crate) mod autospace;
 pub(crate) mod cache;
 pub(crate) mod completed;
-mod decoration;
+pub(crate) mod decoration;
 pub(crate) mod font_metrics;
 pub(crate) mod fragments;
 mod hyphen;
