@@ -48,6 +48,10 @@ pub struct Limits {
     /// Restoring a ruby snapshot charges the new builder's actual key work,
     /// not work already performed to create the immutable snapshot.
     pub max_style_work: Option<u64>,
+    /// Cumulative work units for preparing cloned inline decoration widths
+    /// (2^24), shared across normal, first-line and nested ruby inputs.
+    /// Includes every edge visited for saturated chains.
+    pub max_decoration_work: Option<u64>,
     /// Simultaneously open inline boxes at build time (512).
     pub max_nesting_depth: Option<u64>,
     /// Glyphs per paragraph build and reshape output (2^22).
@@ -138,6 +142,7 @@ impl Default for Limits {
             max_styles: Some(1 << 16),
             max_style_bytes: Some(64 * MIB),
             max_style_work: Some(256 * MIB),
+            max_decoration_work: Some(1 << 24),
             max_nesting_depth: Some(512),
             max_shaped_glyphs: Some(1 << 22),
             max_ruby_cut_work: Some(1 << 23),
@@ -177,6 +182,7 @@ impl Limits {
             max_styles: None,
             max_style_bytes: None,
             max_style_work: None,
+            max_decoration_work: None,
             max_nesting_depth: None,
             max_shaped_glyphs: None,
             max_ruby_cut_work: None,
@@ -231,6 +237,7 @@ pub enum LimitKind {
     Styles,
     StyleBytes,
     StyleWork,
+    DecorationWork,
     NestingDepth,
     ShapedGlyphs,
     RubyCutWork,

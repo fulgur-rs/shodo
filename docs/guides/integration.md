@@ -235,6 +235,15 @@ interning and wrapper-style prediction budget, not a budget for all ruby
 validation, inheritance or copying.
 Callers enumerating all `Limits` fields must also supply `max_style_work`.
 
+`Limits::max_decoration_work` bounds cumulative preparation of cloned inline
+decoration widths across normal, first-line and nested ruby inputs. It defaults
+to 2^24 units, including the ancestor visits needed when intermediate width
+additions would saturate. Imported ruby bases also retain their local limit.
+Exceeding it rejects the build with `LimitKind::DecorationWork`;
+`None` disables the limit. Prepared summaries are charged to the analysis-byte
+budget and allow subsequent width queries without walking clone ancestors.
+Code that enumerates every `Limits` field must add `max_decoration_work`.
+
 `Limits::max_mapping_bytes` defaults to 64 MiB of admitted logical transform and
 offset-mapping data per build. Checks precede new transform spans, indivisible
 ranges, width-origin records/owned strings, and DOM/generated mapping records.

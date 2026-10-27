@@ -113,6 +113,8 @@ pub(crate) struct InlineBoxInfo {
     /// Innermost Clone box in this box's inclusive ancestor chain.
     /// Finalized independently for each paragraph style set at build time.
     pub(crate) nearest_clone: Option<u32>,
+    /// Index into the paragraph's Clone-only decoration summaries.
+    pub(crate) clone_width_index: u32,
 }
 
 pub(crate) struct UnitList {
@@ -275,6 +277,7 @@ pub(crate) fn build_units(
                     percent_sides: *percent_sides,
                     parent: parent_box,
                     nearest_clone: None,
+                    clone_width_index: 0,
                 });
                 push(
                     UnitKind::Open { box_index },
