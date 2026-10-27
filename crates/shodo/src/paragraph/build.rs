@@ -740,24 +740,28 @@ fn build_data(
         sat,
     );
     // Reserve the retained decoration summaries before allocating inline boxes.
-    let box_count = processed
-        .items
-        .iter()
-        .filter(|item| matches!(item.kind, crate::analysis::ItemKind::OpenInline { .. }))
-        .count() as u64;
+    let summary_bytes = |item: &crate::analysis::Item| {
+        if !matches!(item.kind, crate::analysis::ItemKind::OpenInline { .. }) {
+            return 0;
+        }
+        let clone = styles[item.style as usize].box_decoration_break
+            == crate::style::BoxDecorationBreak::Clone;
+        8 + u64::from(clone)
+            * std::mem::size_of::<[crate::line::decoration::CloneWidth; 2]>() as u64
+    };
     // Alternate datasets rebuild these summaries even when shaping is reused.
     // Do not replay this reservation as part of the captured shaping costs.
     ledger.record_replay(false);
     let summary_reservation = (|| {
-        let per_box = (std::mem::size_of::<[crate::line::decoration::CloneWidth; 2]>() + 8) as u64;
         ledger.charge(
             crate::limits::LimitKind::AnalysisBytes,
-            box_count.saturating_mul(per_box),
+            processed
+                .items
+                .iter()
+                .fold(0u64, |sum, item| sum.saturating_add(summary_bytes(item))),
         )?;
         for (index, item) in processed.items.iter().enumerate() {
-            if matches!(item.kind, crate::analysis::ItemKind::OpenInline { .. }) {
-                ledger.analysis_item(index, per_box)?;
-            }
+            ledger.analysis_item(index, summary_bytes(item))?;
         }
         Ok::<_, LimitExceeded>(())
     })();
@@ -775,9 +779,10 @@ fn build_data(
         base_level,
         &breaks,
     );
-    crate::line::decoration::prepare_widths(&mut boxes, &styles, |item| {
-        ledger.item(item, crate::limits::LimitKind::DecorationWork, 1)
-    })?;
+    let clone_widths =
+        crate::line::decoration::prepare_widths(&mut boxes, &units, &styles, |item| {
+            ledger.item(item, crate::limits::LimitKind::DecorationWork, 1)
+        })?;
     for (i, unit) in units.iter_mut().enumerate() {
         let index = combine_spans.partition_point(|span| span.text.end <= unit.text.start);
         if let Some(span) = combine_spans.get_mut(index)
@@ -874,6 +879,7 @@ fn build_data(
         breaks,
         units,
         boxes,
+        clone_widths,
         base_level,
         bidi_paragraphs: bidi.paragraphs,
         mapping: processed.mapping,

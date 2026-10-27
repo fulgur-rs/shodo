@@ -110,12 +110,11 @@ pub(crate) struct InlineBoxInfo {
     /// [`crate::node::InlineEdgePercents::inline_sides`].
     pub(crate) percent_sides: u8,
     pub(crate) parent: Option<u32>,
-    /// Processed input item that owns this box's resource charges.
-    pub(crate) item_index: u32,
     /// Innermost Clone box in this box's inclusive ancestor chain.
     /// Finalized independently for each paragraph style set at build time.
     pub(crate) nearest_clone: Option<u32>,
-    pub(crate) clone_widths: [crate::line::decoration::CloneWidth; 2],
+    /// Index into the paragraph's Clone-only decoration summaries.
+    pub(crate) clone_width_index: u32,
 }
 
 pub(crate) struct UnitList {
@@ -277,9 +276,8 @@ pub(crate) fn build_units(
                     edges: *edges,
                     percent_sides: *percent_sides,
                     parent: parent_box,
-                    item_index: index,
                     nearest_clone: None,
-                    clone_widths: Default::default(),
+                    clone_width_index: 0,
                 });
                 push(
                     UnitKind::Open { box_index },

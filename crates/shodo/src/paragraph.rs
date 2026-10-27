@@ -141,6 +141,7 @@ pub(crate) struct ParagraphData {
     pub(crate) breaks: crate::analysis::breaks::BreakAnalysis,
     pub(crate) units: Vec<Unit>,
     pub(crate) boxes: Vec<InlineBoxInfo>,
+    pub(crate) clone_widths: Vec<[crate::line::decoration::CloneWidth; 2]>,
     /// Coordinate direction of the block; independent of plaintext paragraphs.
     pub(crate) base_level: u8,
     pub(crate) bidi_paragraphs: Vec<BidiParagraph>,

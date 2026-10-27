@@ -19,10 +19,25 @@ pub(crate) struct CloneWidth {
 /// an explicit work budget, so repeated queries remain constant-time.
 pub(crate) fn prepare_widths(
     boxes: &mut [crate::analysis::units::InlineBoxInfo],
+    units: &[crate::analysis::units::Unit],
     styles: &[crate::style::InlineStyle],
     mut charge: impl FnMut(usize) -> Result<(), crate::limits::LimitExceeded>,
-) -> Result<(), crate::limits::LimitExceeded> {
+) -> Result<Vec<[CloneWidth; 2]>, crate::limits::LimitExceeded> {
+    let clone_count = boxes
+        .iter()
+        .filter(|entry| {
+            styles[entry.style as usize].box_decoration_break == BoxDecorationBreak::Clone
+        })
+        .count();
+    let mut widths: Vec<[CloneWidth; 2]> = Vec::with_capacity(clone_count);
+    let mut open_items = units
+        .iter()
+        .filter(|unit| matches!(unit.kind, UnitKind::Open { .. }));
     for i in 0..boxes.len() {
+        let item_index = open_items
+            .next()
+            .expect("each inline box has an open unit")
+            .item as usize;
         let parent = boxes[i]
             .parent
             .and_then(|p| boxes[p as usize].nearest_clone);
@@ -31,8 +46,10 @@ pub(crate) fn prepare_widths(
             continue;
         }
         boxes[i].nearest_clone = Some(i as u32);
+        boxes[i].clone_width_index = widths.len() as u32;
+        let mut clone_widths = [CloneWidth::default(); 2];
         for side in 0..2 {
-            charge(boxes[i].item_index as usize)?;
+            charge(item_index)?;
             let mut conversions = Saturation::default();
             let edge = if side == 0 {
                 boxes[i].edges.inline_start_total()
@@ -41,7 +58,7 @@ pub(crate) fn prepare_widths(
             };
             let edge = LayoutUnit::from_f32_round(edge, &mut conversions);
             let parent_width = parent.map_or(CloneWidth::default(), |p| {
-                boxes[p as usize].clone_widths[side]
+                widths[boxes[p as usize].clone_width_index as usize][side]
             });
             let a = i64::from(edge.raw());
             let mut summary = CloneWidth {
@@ -60,7 +77,7 @@ pub(crate) fn prepare_widths(
                 let mut sat = Saturation::default();
                 let mut value = LayoutUnit::ZERO;
                 while let Some(index) = next {
-                    charge(boxes[i].item_index as usize)?;
+                    charge(item_index)?;
                     let entry = &boxes[index as usize];
                     let edge = if side == 0 {
                         entry.edges.inline_start_total()
@@ -73,10 +90,11 @@ pub(crate) fn prepare_widths(
                 summary.value = value;
                 summary.result_saturation = sat;
             }
-            boxes[i].clone_widths[side] = summary;
+            clone_widths[side] = summary;
         }
+        widths.push(clone_widths);
     }
-    Ok(())
+    Ok(widths)
 }
 
 #[cfg(test)]
@@ -157,7 +175,8 @@ pub(super) fn add_shared_width(
     };
     let mut next = data.boxes[common as usize].nearest_clone;
     if let Some(index) = next {
-        let summary = data.boxes[index as usize].clone_widths[usize::from(!start)];
+        let summary = data.clone_widths[data.boxes[index as usize].clone_width_index as usize]
+            [usize::from(!start)];
         if *total == LayoutUnit::ZERO {
             *total = summary.value;
             sat.absorb(summary.result_saturation);
@@ -232,7 +251,8 @@ pub(super) fn width(
         })
         .and_then(|b| data.boxes[b as usize].nearest_clone);
     next.map_or(LayoutUnit::ZERO, |b| {
-        let summary = data.boxes[b as usize].clone_widths[usize::from(!start)];
+        let summary = data.clone_widths[data.boxes[b as usize].clone_width_index as usize]
+            [usize::from(!start)];
         sat.absorb(summary.result_saturation);
         summary.value
     })
@@ -434,7 +454,8 @@ mod tests {
         }
         data.boxes[0].edges.margin.inline_start = -40_000_000.0;
         data.boxes[0].edges.padding.inline_start = 0.0;
-        prepare_widths(&mut data.boxes, &data.styles, |_| Ok(())).unwrap();
+        data.clone_widths =
+            prepare_widths(&mut data.boxes, &data.units, &data.styles, |_| Ok(())).unwrap();
         let (_, text, close) = nested_boundaries(data, 6);
         // The base starts inside the deepest wrapper, so all three Clone boxes
         // are common to the base scope and selected boundary.
@@ -474,7 +495,8 @@ mod tests {
         data.boxes[0].edges.padding.inline_start = 0.0;
         data.boxes[0].edges.margin.inline_end = -40_000_000.0;
         data.boxes[0].edges.padding.inline_end = 0.0;
-        prepare_widths(&mut data.boxes, &data.styles, |_| Ok(())).unwrap();
+        data.clone_widths =
+            prepare_widths(&mut data.boxes, &data.units, &data.styles, |_| Ok(())).unwrap();
         let (_, text, close) = nested_boundaries(data, 6);
         let scope_start = text;
         let mut expected = LayoutUnit::ZERO;
@@ -605,14 +627,15 @@ mod tests {
             entry.edges.padding.inline_end = 0.0;
         }
         let mut work = 0u64;
-        let error = prepare_widths(&mut data.boxes, &data.styles, |_| {
+        let error = prepare_widths(&mut data.boxes, &data.units, &data.styles, |_| {
             work += 1;
             Limits::check(Some(7), crate::limits::LimitKind::DecorationWork, work)
         })
         .unwrap_err();
         assert_eq!(error.kind, crate::limits::LimitKind::DecorationWork);
         assert_eq!(error.actual, 8);
-        prepare_widths(&mut data.boxes, &data.styles, |_| Ok(())).unwrap();
+        data.clone_widths =
+            prepare_widths(&mut data.boxes, &data.units, &data.styles, |_| Ok(())).unwrap();
         let boundary = data
             .units
             .iter()
@@ -687,7 +710,8 @@ mod tests {
             entry.edges.padding.inline_start = 0.0;
             entry.edges.padding.inline_end = 0.0;
         }
-        prepare_widths(&mut data.boxes, &data.styles, |_| Ok(())).unwrap();
+        data.clone_widths =
+            prepare_widths(&mut data.boxes, &data.units, &data.styles, |_| Ok(())).unwrap();
         for boundary in 0..=data.units.len() {
             for start in [true, false] {
                 let mut expected_sat = Saturation {
@@ -903,7 +927,8 @@ mod tests {
         }
         data.boxes[0].edges.margin.inline_start = -40_000_000.0;
         data.boxes[0].edges.padding.inline_start = 0.0;
-        prepare_widths(&mut data.boxes, &data.styles, |_| Ok(())).unwrap();
+        data.clone_widths =
+            prepare_widths(&mut data.boxes, &data.units, &data.styles, |_| Ok(())).unwrap();
         let boundary = data
             .units
             .iter()
