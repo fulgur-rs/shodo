@@ -1790,7 +1790,7 @@ dependencies = [
 
 [[package]]
 name = "shodo"
-version = "0.0.38"
+version = "0.0.39"
 dependencies = [
  "accesskit",
  "brotli",
@@ -1818,7 +1818,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "shodo 0.0.38",
+ "shodo 0.0.39",
  "shodo-fixtures",
 ]
 
@@ -1831,7 +1831,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "shodo 0.0.38",
+ "shodo 0.0.39",
  "skrifa 0.48.0",
 ]
 
@@ -1845,7 +1845,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "shodo 0.0.38",
+ "shodo 0.0.39",
  "shodo-fixtures",
  "skrifa 0.48.0",
  "taffy",
@@ -1869,7 +1869,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "shodo 0.0.38",
+ "shodo 0.0.39",
  "shodo-fixtures",
  "shodo-harness",
  "skrifa 0.48.0",
