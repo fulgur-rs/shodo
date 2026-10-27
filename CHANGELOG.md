@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.39](https://github.com/fulgur-rs/shodo/compare/v0.0.38...v0.0.39) - 2026-10-27
+
+### Fixed
+
+- keep allocation oracles aligned with decoration budget
+- bound cloned decoration width preparation
+- bound font validation across TTC faces
+- enforce glyph budgets during combined-width trials (SHODO-67)
+- admit shared ruby input before payload work (SHODO-65)
+- bound cumulative style interning work (SHODO-64)
+
+### Other
+
+- reuse shared ruby style preparation and skip redundant comparisons
+- *(deps)* bump HarfRust to 0.15
+
 ## [0.0.38](https://github.com/fulgur-rs/shodo/compare/v0.0.37...v0.0.38) - 2026-10-24
 
 ### Added
