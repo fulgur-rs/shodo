@@ -30,13 +30,24 @@ class ReleaseWorkflowTests(unittest.TestCase):
         # Preserve GitHub's scalar spelling, including its YAML `on` key.
         self.workflow = yaml.load(WORKFLOW.read_text(), Loader=yaml.BaseLoader)
 
-    def test_all_external_actions_in_both_jobs_use_full_commit_shas(self):
+    def test_all_external_actions_in_both_jobs_are_locked_to_full_commit_shas(self):
+        lockfile = yaml.safe_load((WORKFLOW.parent / 'actions.lock').read_text())
+        locked_actions = lockfile['workflows']['.github/workflows/release-plz.yml']
+        used_actions = set()
         for name in ['release', 'release-pr']:
             steps = [s for s in self.workflow['jobs'][name]['steps'] if 'uses' in s]
             self.assertTrue(steps)
             for step in steps:
                 with self.subTest(job=name, action=step['uses']):
-                    self.assertRegex(step['uses'], r'^[\w.-]+/[\w./-]+@[0-9a-f]{40}$')
+                    action = step['uses'].lower()
+                    used_actions.add(action)
+                    self.assertIn(action, locked_actions)
+                    dependency = lockfile['dependencies'][action]
+                    self.assertEqual(dependency['ref'], action.split('@', 1)[1])
+                    self.assertRegex(dependency['commit'], r'^sha1-[0-9a-f]{40}$')
+                    self.assertGreater(dependency['owner_id'], 0)
+                    self.assertGreater(dependency['repo_id'], 0)
+        self.assertEqual(set(locked_actions), used_actions)
 
     def test_both_jobs_use_the_same_reviewed_action_set(self):
         expected = {
