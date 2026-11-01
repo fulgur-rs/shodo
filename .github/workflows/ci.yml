@@ -31,13 +31,14 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
       - name: Install Fontconfig development files
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig1-dev
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: stable
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo fmt --all --check
@@ -66,11 +67,13 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
       - name: Install Fontconfig development files
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig1-dev
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Clear restored snapshot reports
@@ -84,7 +87,7 @@ jobs:
         run: cargo run -p shodo-harness --example snapshots -- --output target/snapshot-report
       - name: Upload snapshot report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: snapshots-${{ github.job }}
           path: |
@@ -93,7 +96,7 @@ jobs:
           if-no-files-found: warn
       # tools/browser/test_snapshots.py runs an offline Cargo build of the
       # snapshots example, so the Python checks stay where that build is fresh.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5.6.0
         with:
           python-version: '3.12'
       - run: python -m pip install -r tools/requirements.txt
@@ -107,11 +110,13 @@ jobs:
   features:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
       - name: Install Fontconfig development files
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig1-dev
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo test -p shodo --no-default-features
@@ -132,11 +137,13 @@ jobs:
   msrv:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
       - name: Install Fontconfig development files
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig1-dev
-      - uses: dtolnay/rust-toolchain@1.89.0
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.89.0
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       # The minimum supported Rust version only needs to compile; the test,
@@ -147,11 +154,12 @@ jobs:
   wasm:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v4.4.0
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: stable
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo build -p shodo --target wasm32-unknown-unknown
@@ -165,17 +173,20 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
       - name: Install Fontconfig development files
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig1-dev
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: stable
           components: llvm-tools-preview
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@88ada01c46e65c47040a0ae865537cc76fcd0e1c # cargo-llvm-cov
+        uses: taiki-e/install-action@v2.87.28
+        with:
+          tool: cargo-llvm-cov
       # The workspace tests drive shodo through the dev harness and fixtures;
       # codecov.yml keeps dev/ out of the reported numbers.
       - name: Run tests with coverage
@@ -184,14 +195,14 @@ jobs:
           cargo llvm-cov --workspace --features shodo-harness/accesskit --no-report
           cargo llvm-cov report --lcov --output-path lcov.info
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: lcov
           path: lcov.info
           if-no-files-found: error
       # Fork pull requests get no OIDC token, so a failed upload must not fail CI.
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        uses: codecov/codecov-action@v7.1.1
         with:
           files: lcov.info
           use_oidc: true

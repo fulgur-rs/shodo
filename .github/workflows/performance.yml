@@ -25,11 +25,13 @@ jobs:
   measure:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
       - name: Install Fontconfig development files
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig1-dev
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-python@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: actions/setup-python@v5.6.0
         with:
           python-version: '3.12'
       - name: Measure release builds
@@ -44,7 +46,7 @@ jobs:
             args+=(--case "$SELECTED_CASE")
           fi
           python tools/bench/run.py "${args[@]}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4.6.2
         with:
           name: performance-${{ github.sha }}-${{ inputs.case }}
           path: performance-results/
