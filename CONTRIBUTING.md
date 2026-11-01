@@ -116,6 +116,34 @@ python3 -m venv /tmp/shodo-fonttools
 
 Python is for development tooling; ordinary library users do not need it.
 
+### GitHub Actions dependencies
+
+Workflow dependencies, including transitive actions, are pinned in
+`.github/workflows/actions.lock` using
+[`gh-actions-lock`](https://github.com/github/gh-actions-lock). Install the
+same version used by the verification workflow with an authenticated GitHub CLI:
+
+```sh
+gh extension install github/gh-actions-lock --pin v0.4.0
+```
+
+After adding a workflow or changing a `uses:` reference, run from the repository
+root and commit the workflow changes together with the generated lockfile:
+
+```sh
+gh actions-lock --no-interactive
+gh actions-lock --verify --no-interactive
+```
+
+Use `gh actions-lock --relock --no-interactive` to intentionally update locked
+refs to their current upstream commits, then review the lockfile diff and run
+verification again. The tool can rewrite explicit SHA references to their release
+tags while retaining the same commit in the lockfile. For Rust toolchains, lock
+the action's `master` branch and set `with.toolchain` explicitly; generated
+toolchain branches can lose old commits when regenerated. For an offline coverage
+check, use `gh actions-lock --verify-local`; CI uses `--verify` to also check
+upstream provenance. Do not automatically accept moved or unreachable pins.
+
 ## Tests, fixtures, and expected output
 
 Add a regression test for a behavior change. Public API behavior belongs in
