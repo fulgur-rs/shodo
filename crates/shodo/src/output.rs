@@ -98,6 +98,7 @@ pub struct Line {
     pub(crate) ascent: LayoutUnit,
     pub(crate) descent: LayoutUnit,
     pub(crate) block_offset: f32,
+    pub(crate) block_start_leading: LayoutUnit,
     pub(crate) displaced: Vec<(NodeId, FloatCursor)>,
     pub(crate) fragments: Vec<FragmentRecord>,
     pub(crate) block_shifts: Vec<LayoutUnit>,
