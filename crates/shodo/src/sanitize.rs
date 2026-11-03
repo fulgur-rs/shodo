@@ -69,6 +69,10 @@ pub(crate) fn constraint<'a>(
     value.max_block_size = value
         .max_block_size
         .map(|v| layout_length(v, true, warnings, sat));
+    if let Some(metrics) = &mut value.external_metrics {
+        metrics.line_over = layout_length(metrics.line_over, true, warnings, sat);
+        metrics.line_under = layout_length(metrics.line_under, true, warnings, sat);
+    }
     value
 }
 

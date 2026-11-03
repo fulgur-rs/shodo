@@ -41,6 +41,7 @@ pub(crate) fn format(
     measure: &RubyMeasure,
     line: &mut Line,
     atomics: &AtomicSizes,
+    external: Option<crate::ExternalLineMetrics>,
     cx: &mut LayoutContext,
     sat: &mut Saturation,
 ) -> [Option<LayoutUnit>; 2] {
@@ -253,6 +254,28 @@ pub(crate) fn format(
         retained.push(children);
         heights.push(child_heights);
     }
+    let frame = if line.empty
+        && external.is_some()
+        && retained.iter().flatten().any(|child| {
+            child.visibility == super::RubyVisibility::Visible && !child.line.is_empty()
+        }) {
+        // A visible reading can make an otherwise empty base line nonempty.
+        // Recompute only the parent profiles, using the already retained child
+        // lines to establish visibility before external sizing and ruby layout.
+        drop(frame);
+        line.measure_metrics(external, true, sat);
+        Frame::new(
+            data,
+            line.units.start as usize..line.units.end as usize,
+            &line.fragments,
+            &line.overlay_runs,
+            line.baseline,
+            &line.block_shifts,
+            line.block_size,
+        )
+    } else {
+        frame
+    };
     let layout = super::geometry::layout(&frame, measure, &heights, sat);
     line.emphasis_offsets = layout.emphasis_offsets;
     let mut annotations = Vec::new();

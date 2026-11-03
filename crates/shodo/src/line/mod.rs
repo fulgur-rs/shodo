@@ -516,6 +516,7 @@ impl Paragraph {
             && sat.is_clean()
             && warning_checkpoint.unchanged(&cx.warnings)
             && constraint.max_block_size.is_none()
+            && constraint.external_metrics.is_none()
             && positions.is_none()
             && glyph_spacing.is_none()
             && displaced.is_empty()
@@ -544,13 +545,28 @@ impl Paragraph {
         line.remaining = alignment.remaining;
         line.displaced = displaced;
         reshape::apply(&mut line, &mut sat);
-        let (root_strut, trimmed_trailing) = line.measure_metrics(&mut sat);
+        let (root_strut, trimmed_trailing) =
+            line.measure_metrics(constraint.external_metrics, false, &mut sat);
         let annotation_edges = if let Some(measure) = ruby_measure {
-            crate::ruby::place::format(data, &measure, &mut line, atomics, cx, &mut sat)
+            crate::ruby::place::format(
+                data,
+                &measure,
+                &mut line,
+                atomics,
+                constraint.external_metrics,
+                cx,
+                &mut sat,
+            )
         } else {
             [None, None]
         };
-        line.measure_annotations(annotation_edges, root_strut, trimmed_trailing, &mut sat);
+        line.measure_annotations(
+            annotation_edges,
+            root_strut,
+            trimmed_trailing,
+            constraint.external_metrics,
+            &mut sat,
+        );
         cx.warnings.record_saturation(&sat);
         if constraint
             .max_block_size

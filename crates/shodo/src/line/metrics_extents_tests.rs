@@ -131,6 +131,8 @@ fn compare(line: &Line) -> Saturation {
         &line.fragments,
         &line.overlay_runs,
         true,
+        None,
+        false,
         &mut full_sat,
     );
     let bare = measure_unannotated(
@@ -138,6 +140,8 @@ fn compare(line: &Line) -> Saturation {
         range,
         &line.fragments,
         &line.overlay_runs,
+        None,
+        false,
         &mut extents_sat,
     );
     assert_eq!(

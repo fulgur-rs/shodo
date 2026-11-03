@@ -68,6 +68,71 @@ fn signature(l: &crate::Line) -> String {
     )
 }
 #[test]
+fn external_extents_invalidate_completed_height_and_alignment() {
+    let (p, _) = paragraph("alpha beta", &Limits::default(), false, false);
+    let options = LineOptions::default();
+    let mut c = LineConstraint::new(1000.);
+    let mut cx = LayoutContext::new();
+    for extents in [
+        Some(crate::ExternalLineMetrics {
+            line_over: 100.,
+            line_under: 20.,
+        }),
+        Some(crate::ExternalLineMetrics {
+            line_over: 110.,
+            line_under: 20.,
+        }),
+        Some(crate::ExternalLineMetrics {
+            line_over: 110.,
+            line_under: 30.,
+        }),
+        None,
+    ] {
+        c.external_metrics = extents;
+        c.max_block_size = Some(0.);
+        let height = reject(
+            &p,
+            &mut cx,
+            p.start_token(),
+            &options,
+            &c,
+            &AtomicSizes::EMPTY,
+        );
+        assert!(cx.completed.is_some());
+        if let Some(e) = extents {
+            assert_eq!(height, e.line_over + e.line_under);
+        }
+        c.max_block_size = Some(height);
+        let LineResult::Line(actual) =
+            p.next_line(&mut cx, p.start_token(), &options, &c, &AtomicSizes::EMPTY)
+        else {
+            panic!("accept")
+        };
+        let LineResult::Line(fresh) = p.next_line(
+            &mut LayoutContext::new(),
+            p.start_token(),
+            &options,
+            &c,
+            &AtomicSizes::EMPTY,
+        ) else {
+            panic!("fresh")
+        };
+        assert_eq!(signature(&actual), signature(&fresh));
+        // Retain this accepted geometry again before changing the input.
+        c.max_block_size = Some(0.);
+        reject(
+            &p,
+            &mut cx,
+            p.start_token(),
+            &options,
+            &c,
+            &AtomicSizes::EMPTY,
+        );
+        assert!(cx.completed.is_some());
+    }
+}
+
+#[test]
 fn geometry_dependencies_recompute_after_rejection() {
     let (p, fonts) = paragraph("alpha beta gamma delta", &Limits::default(), false, false);
     let options = LineOptions::default();

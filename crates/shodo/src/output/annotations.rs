@@ -71,6 +71,7 @@ impl Line {
         mut annotation: [Option<LayoutUnit>; 2],
         root_strut: bool,
         trimmed_trailing: Option<usize>,
+        external: Option<crate::ExternalLineMetrics>,
         sat: &mut Saturation,
     ) {
         if self.empty {
@@ -228,6 +229,19 @@ impl Line {
                 };
                 include(&mut annotation[usize::from(!before)], edge, before);
             }
+        }
+        if let Some(external) = external {
+            let over = LayoutUnit::from_f32_round(external.line_over, sat);
+            let under = LayoutUnit::from_f32_round(external.line_under, sat);
+            let (before, after) = self
+                .data
+                .style
+                .writing_mode
+                .over_under_to_block((over, under));
+            // Ruby may have shifted the root baseline since metric measurement.
+            let start = self.baseline.sub(before, sat);
+            let end = self.baseline.add(after, sat);
+            content = Some(content.map_or((start, end), |(a, b)| (a.min(start), b.max(end))));
         }
         let g = &mut self.annotation_geometry;
         let mut content = content.unwrap_or((self.baseline, self.baseline));
