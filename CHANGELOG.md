@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.40](https://github.com/fulgur-rs/shodo/compare/v0.0.39...v0.0.40) - 2026-11-03
+
+### Added
+
+- support caller-managed block-start line leading
+
+### Other
+
+- cover cached and empty-line leading contracts
+
 ## [0.0.39](https://github.com/fulgur-rs/shodo/compare/v0.0.38...v0.0.39) - 2026-11-03
 
 ### Added
