@@ -391,6 +391,7 @@ impl Line {
             ascent: LayoutUnit::from_f32_round(root_ascent, sat),
             descent: LayoutUnit::from_f32_round(root_descent, sat),
             block_offset,
+            block_start_leading: LayoutUnit::ZERO,
             displaced: Vec::new(),
             // Materialization applies edge overlays before measure_metrics
             // creates the final per-fragment shifts. No initial zeros are used.
@@ -408,6 +409,34 @@ impl Line {
             origin,
             ellipsis: None,
             remaining: LayoutUnit::ZERO,
+        }
+    }
+
+    /// Additional block-start space applied after the content was laid out.
+    /// It is part of the line advance and baseline, not its block offset.
+    /// Empty lines report zero. The space is excluded from annotation leading
+    /// that callers may reuse between lines.
+    pub fn block_start_leading(&self) -> f32 {
+        self.block_start_leading.to_f32()
+    }
+
+    pub(crate) fn apply_block_start_leading(&mut self, leading: f32, sat: &mut Saturation) {
+        if self.empty || leading == 0.0 {
+            return;
+        }
+        let leading = LayoutUnit::from_f32_round(leading, sat);
+        self.block_start_leading = leading;
+        self.baseline = self.baseline.add(leading, sat);
+        self.block_size = self.block_size.add(leading, sat);
+        self.annotation_geometry.start = self.annotation_geometry.start.add(leading, sat);
+        self.annotation_geometry.end = self.annotation_geometry.end.add(leading, sat);
+        for ruby in &mut self.ruby {
+            let offset = LayoutUnit::from_f32_round(ruby.transform.block_offset, sat);
+            ruby.transform.block_offset = offset.add(leading, sat).to_f32();
+        }
+        for combined in &mut self.combinations {
+            let offset = LayoutUnit::from_f32_round(combined.square.block_start, sat);
+            combined.square.block_start = offset.add(leading, sat).to_f32();
         }
     }
 

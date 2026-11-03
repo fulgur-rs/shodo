@@ -564,6 +564,18 @@ pub struct LineConstraint<'a> {
     /// For pagination, supply the remaining page height (or logical block
     /// extent in vertical writing). `None` permits an overflowing line.
     pub max_block_size: Option<f32>,
+    /// Additional logical block-start space before a nonempty line's content.
+    /// It is applied after internal vertical alignment and annotation layout:
+    /// content and baselines move by this amount, and the line advance grows
+    /// by the same amount without changing its block offset, text or breaks.
+    /// Empty lines remain empty; forced breaks count as nonempty. The caller
+    /// selects the target line and retains this input on retries. Managed
+    /// floats remain caller-positioned; include the accepted line's
+    /// [`Line::block_start_leading`] when placing its associated content.
+    /// Out-of-flow anchors retain the line's unchanged flow block offset.
+    /// Negative or non-finite values become zero, and positive values are
+    /// rounded to 1/64 px and clamped to `1e7` px with diagnostic warnings.
+    pub block_start_leading: f32,
     /// External occupied extents, for example an outside list marker.
     /// They enlarge existing nonempty lines without changing inline content,
     /// widths or breaks, and participate in height acceptance and annotation
@@ -600,6 +612,7 @@ impl LineConstraint<'_> {
             block_offset: 0.0,
             max_block_size: None,
             external_metrics: None,
+            block_start_leading: 0.0,
             max_graphemes: None,
             floats_placed_through: None,
             break_plan: None,

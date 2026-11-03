@@ -517,6 +517,7 @@ impl Paragraph {
             && warning_checkpoint.unchanged(&cx.warnings)
             && constraint.max_block_size.is_none()
             && constraint.external_metrics.is_none()
+            && constraint.block_start_leading == 0.0
             && positions.is_none()
             && glyph_spacing.is_none()
             && displaced.is_empty()
@@ -567,6 +568,7 @@ impl Paragraph {
             constraint.external_metrics,
             &mut sat,
         );
+        line.apply_block_start_leading(constraint.block_start_leading, &mut sat);
         cx.warnings.record_saturation(&sat);
         if constraint
             .max_block_size

@@ -66,6 +66,7 @@ pub(crate) fn constraint<'a>(
     value.available_inline_size = layout_length(value.available_inline_size, true, warnings, sat);
     value.inline_start_offset = layout_length(value.inline_start_offset, true, warnings, sat);
     value.block_offset = layout_length(value.block_offset, false, warnings, sat);
+    value.block_start_leading = layout_length(value.block_start_leading, true, warnings, sat);
     value.max_block_size = value
         .max_block_size
         .map(|v| layout_length(v, true, warnings, sat));
