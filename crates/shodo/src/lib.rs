@@ -161,8 +161,8 @@ pub use output::{
     RubyTransform, TextCombination, Truncation,
 };
 pub use paragraph::{
-    AtomicIntrinsic, AtomicIntrinsics, AtomicSize, AtomicSizes, BreakPlan, BreakToken, FloatClear,
-    FloatCursor, FloatIntrinsic, FloatSide, IntrinsicSizes, LineConstraint, LineResult, Paragraph,
-    ParagraphAnalysis,
+    AtomicIntrinsic, AtomicIntrinsics, AtomicSize, AtomicSizes, BreakPlan, BreakToken,
+    ExternalLineMetrics, FloatClear, FloatCursor, FloatIntrinsic, FloatSide, IntrinsicSizes,
+    LineConstraint, LineResult, Paragraph, ParagraphAnalysis,
 };
 pub use shape::orientation::GlyphOrientation;

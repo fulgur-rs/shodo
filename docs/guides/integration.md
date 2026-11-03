@@ -196,6 +196,49 @@ the available size after insets have been subtracted by the caller.
 Ruby readings are retained child Lines; compose their transforms before physical
 conversion and keep their source datasets separate. See the [ruby contract](ruby.md).
 
+### Outside elements contributing to a line
+
+Use `LineConstraint::external_metrics` for a caller-managed element, such as an
+outside list marker, whose occupied size should enlarge a body line without
+entering its inline content:
+
+```rust,ignore
+constraint.external_metrics = Some(shodo::ExternalLineMetrics {
+    line_over: 30.0,
+    line_under: 0.0,
+});
+```
+
+The distances extend from the root dominant baseline (`Line::metrics().baseline`)
+toward line-over and line-under. Line-over is block-end in `vertical-lr`, and
+block-start in the other writing modes. Resolve the element's size, margins and
+baseline alignment into these distances before calling shodo; they use the
+selected `::first-line` dataset's root baseline when that style applies.
+
+External metrics participate in baseline and line-height calculation before
+top/bottom alignment, and in `max_block_size` rejection. They also occupy space
+in `Line::annotation_metrics()`, so their area is not reusable leading. They do
+not add a fragment or a source position, alter whitespace or line breaks, or
+change inline/intrinsic widths. Paint the external element using the accepted
+line's baseline and the caller's own position. Ruby annotation lanes do not
+inherit the parent's external metrics.
+
+The caller selects the paragraph and the calls to which these metrics apply.
+For an outside marker on the first body line, retain the input across float and
+height retries until a nonempty line is accepted, then clear it for subsequent
+lines. A block event, an empty line, or an empty paragraph does not consume the
+external contribution or create a new line; a forced-break line is nonempty.
+Empty/no-body-line marker placement remains caller policy. `break_all` does not
+accept this per-line input; use `next_line` or the `lines` constraint callback.
+
+`None` disables the contribution. `Some` with both distances zero still reserves
+the baseline point and can change a line with negative half-leading. Negative
+or non-finite values become zero; values above `1e7` px are clamped. Distances
+are rounded to 1/64 px and corrections produce layout warnings. Changing the
+input on a retry recomputes the affected geometry; width-only break plans remain
+valid. Existing exhaustive `LineConstraint` literals need the new field; prefer
+`LineConstraint::new(width)` and struct update syntax for defaults.
+
 Read build warnings through `Paragraph::warnings()` and line layout warnings through `LayoutContext::take_warnings()`. Resource limit violations are returned as `LimitExceeded`.
 
 `Limits::max_style_bytes` bounds logical owned style data and builder interning

@@ -510,9 +510,20 @@ pub(crate) fn measure(
     units: Range<usize>,
     records: &[FragmentRecord],
     overlay_runs: &[crate::shape::ShapedRun],
+    external: Option<crate::ExternalLineMetrics>,
+    visible_ruby: bool,
     sat: &mut Saturation,
 ) -> LineMetrics {
-    measure_profile::<true>(data, units, records, overlay_runs, false, sat)
+    measure_profile::<true>(
+        data,
+        units,
+        records,
+        overlay_runs,
+        false,
+        external,
+        visible_ruby,
+        sat,
+    )
 }
 
 pub(crate) fn measure_unannotated(
@@ -520,21 +531,35 @@ pub(crate) fn measure_unannotated(
     units: Range<usize>,
     records: &[FragmentRecord],
     overlay_runs: &[crate::shape::ShapedRun],
+    external: Option<crate::ExternalLineMetrics>,
+    visible_ruby: bool,
     sat: &mut Saturation,
 ) -> LineExtents {
-    let metrics = measure_profile::<false>(data, units, records, overlay_runs, true, sat);
+    let metrics = measure_profile::<false>(
+        data,
+        units,
+        records,
+        overlay_runs,
+        true,
+        external,
+        visible_ruby,
+        sat,
+    );
     LineExtents {
         baseline: metrics.baseline,
         block_size: metrics.block_size,
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn measure_profile<const KEEP_SHIFTS: bool>(
     data: &ParagraphData,
     units: Range<usize>,
     records: &[FragmentRecord],
     overlay_runs: &[crate::shape::ShapedRun],
     exclude_emphasis: bool,
+    external: Option<crate::ExternalLineMetrics>,
+    visible_ruby: bool,
     sat: &mut Saturation,
 ) -> LineMetrics {
     let quirk = data
@@ -550,7 +575,7 @@ fn measure_profile<const KEEP_SHIFTS: bool>(
     };
     let mut resolver = ProfileResolver::new(data, units.clone());
     resolver.exclude_emphasis = exclude_emphasis;
-    let mut empty = true;
+    let mut empty = !visible_ruby;
     let mut groups: crate::hashing::FastMap<u32, (f32, f32)> = crate::hashing::FastMap::default();
     let mut ghosts: crate::hashing::FastMap<u32, (f32, f32)> = crate::hashing::FastMap::default();
     let mut combination_bases = Vec::new();
@@ -678,6 +703,10 @@ fn measure_profile<const KEEP_SHIFTS: bool>(
             shifts.push(base);
             memberships.push((group, own_group));
         }
+    }
+    if !empty && let Some(external) = external {
+        above = above.max(external.line_over);
+        below = below.max(external.line_under);
     }
     if above == f32::NEG_INFINITY {
         above = 0.0;

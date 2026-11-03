@@ -13,6 +13,7 @@ pub(crate) struct Key {
     width: u32,
     inline_offset: u32,
     block_offset: u32,
+    external_metrics: Option<(u32, u32)>,
     options: LineOptions,
     graphemes: Option<usize>,
     floats: Option<FloatCursor>,
@@ -35,6 +36,9 @@ impl Key {
             width: c.available_inline_size.to_bits(),
             inline_offset: c.inline_start_offset.to_bits(),
             block_offset: c.block_offset.to_bits(),
+            external_metrics: c
+                .external_metrics
+                .map(|e| (e.line_over.to_bits(), e.line_under.to_bits())),
             options,
             graphemes: c.max_graphemes,
             floats: c.floats_placed_through,

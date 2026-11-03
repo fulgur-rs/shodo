@@ -130,9 +130,9 @@ pub(crate) fn normalize(ruby: &Ruby, limits: &Limits) -> Result<NormalizedRuby, 
                 });
             let same_text = level.style.merge != RubyMerge::Merge
                 && !holds_object(&annotation.content)
-                && !object_columns
+                && object_columns
                     .get(object_start)
-                    .is_some_and(|column| *column < columns.end)
+                    .is_none_or(|column| *column >= columns.end)
                 && (same_input
                     || text_bases[start..]
                         .iter()

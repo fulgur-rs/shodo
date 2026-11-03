@@ -534,6 +534,22 @@ pub struct BreakPlan {
     pub(crate) ends: Vec<u32>,
 }
 
+/// Occupied extents of a caller-managed element outside the inline stream.
+///
+/// Both distances are measured in px from the root dominant baseline returned
+/// by [`Line::metrics`], toward line-over and line-under respectively. Over is
+/// block-end in vertical-lr and block-start in the other writing modes. Resolve
+/// any element-specific baseline alignment before supplying these distances.
+/// Values are nonnegative, rounded to 1/64 px, and clamped to `1e7` px;
+/// non-finite or negative values become zero, with diagnostic warnings.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ExternalLineMetrics {
+    /// Occupied distance from the root baseline toward line-over.
+    pub line_over: f32,
+    /// Occupied distance from the root baseline toward line-under.
+    pub line_under: f32,
+}
+
 /// Space available to one line.
 #[derive(Clone, Copy, Debug)]
 pub struct LineConstraint<'a> {
@@ -547,6 +563,15 @@ pub struct LineConstraint<'a> {
     /// For pagination, supply the remaining page height (or logical block
     /// extent in vertical writing). `None` permits an overflowing line.
     pub max_block_size: Option<f32>,
+    /// External occupied extents, for example an outside list marker.
+    /// They enlarge existing nonempty lines without changing inline content,
+    /// widths or breaks, and participate in height acceptance and annotation
+    /// leading reservations. Empty lines remain empty; no line is synthesized.
+    /// A forced break counts as nonempty. The caller selects the target line
+    /// and supplies the same input on retries until that line is accepted.
+    /// `None` disables the contribution. `Some` with zero extents still
+    /// includes the baseline point and can affect negative half-leading.
+    pub external_metrics: Option<ExternalLineMetrics>,
     /// Processed Unicode grapheme clusters per line. When set, normal line
     /// break opportunities, forced breaks, and available width do not end
     /// the line. Atomic inlines, preserved tabs, and newlines count as one
@@ -573,6 +598,7 @@ impl LineConstraint<'_> {
             inline_start_offset: 0.0,
             block_offset: 0.0,
             max_block_size: None,
+            external_metrics: None,
             max_graphemes: None,
             floats_placed_through: None,
             break_plan: None,

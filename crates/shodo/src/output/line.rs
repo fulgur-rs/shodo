@@ -411,12 +411,19 @@ impl Line {
         }
     }
 
-    pub(crate) fn measure_metrics(&mut self, sat: &mut Saturation) -> (bool, Option<usize>) {
+    pub(crate) fn measure_metrics(
+        &mut self,
+        external: Option<crate::ExternalLineMetrics>,
+        visible_ruby: bool,
+        sat: &mut Saturation,
+    ) -> (bool, Option<usize>) {
         let metrics = crate::line::metrics::measure(
             &self.data,
             self.units.start as usize..self.units.end as usize,
             &self.fragments,
             &self.overlay_runs,
+            external,
+            visible_ruby,
             sat,
         );
         // Only accepted materialization needs the emphasis-free profile.
@@ -434,6 +441,8 @@ impl Line {
                 self.units.start as usize..self.units.end as usize,
                 &self.fragments,
                 &self.overlay_runs,
+                external,
+                visible_ruby,
                 sat,
             );
             (bare.baseline, bare.block_size)
