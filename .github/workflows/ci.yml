@@ -138,6 +138,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4.4.0
+      - name: Free space for MSRV workspace binaries
+        # Hundreds of all-target binaries can exhaust the hosted image's
+        # remaining disk. These preinstalled SDKs are unused by this Rust job.
+        run: |
+          df -h .
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet
+          df -h .
       - name: Install Fontconfig development files
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig1-dev
       - uses: dtolnay/rust-toolchain@master
