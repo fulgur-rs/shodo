@@ -111,6 +111,11 @@ fn height_retries_do_not_reuse_a_different_leading() {
         ),
         LineResult::BlockSizeExceeded { .. }
     ));
+    c.max_block_size = None;
+    let cached = accept(&p, &mut cx, &c, &AtomicSizes::EMPTY);
+    assert_eq!(cached.metrics(), line.metrics());
+    assert_eq!(cached.block_size(), line.block_size());
+    assert_eq!(cached.block_start_leading(), 9.);
     c.block_start_leading = 0.;
     assert_eq!(
         accept(&p, &mut cx, &c, &AtomicSizes::EMPTY).block_size(),
@@ -277,5 +282,42 @@ fn leading_is_sanitized_and_survives_ellipsis() {
     line.truncate_with_ellipsis(&mut cx, 20.);
     assert_eq!(line.metrics(), metrics);
     assert_eq!(line.block_size(), advance);
+    assert_eq!(line.block_start_leading(), 9.);
+}
+
+#[test]
+fn an_empty_inline_closure_before_a_block_does_not_consume_leading() {
+    let root = style();
+    let p = build(&root, |b| {
+        b.open_inline(NodeId(1), &root.root, InlineEdges::default());
+        b.push_block_in_inline(NodeId(2));
+        b.close_inline();
+        b.push_text(TextSource::Generated { node: NodeId(3) }, "z");
+    });
+    let mut c = LineConstraint::new(100.);
+    c.block_start_leading = 9.;
+    let mut cx = LayoutContext::new();
+    let empty = accept(&p, &mut cx, &c, &AtomicSizes::EMPTY);
+    assert!(empty.is_empty());
+    assert_eq!(empty.block_size(), 0.);
+    assert_eq!(empty.block_start_leading(), 0.);
+    let LineResult::BlockInInline { token_after, .. } = p.next_line(
+        &mut cx,
+        empty.break_token(),
+        &LineOptions::default(),
+        &c,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!("expected block")
+    };
+    let LineResult::Line(line) = p.next_line(
+        &mut cx,
+        token_after,
+        &LineOptions::default(),
+        &c,
+        &AtomicSizes::EMPTY,
+    ) else {
+        panic!("expected text line")
+    };
     assert_eq!(line.block_start_leading(), 9.);
 }
