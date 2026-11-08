@@ -637,7 +637,8 @@ fn build_bidi(
     let mut hanging_continuations = Vec::new();
     // A PDI held back for the `Close` right after it, to go after that edge.
     let mut pending_pdi: Option<Piece> = None;
-    let mut line_end_pdis: Vec<Piece> = Vec::new();
+    // Separators that go after the line's cloned end edges.
+    let mut line_end_seps: Vec<Piece> = Vec::new();
     for (k, i) in units.clone().enumerate() {
         let unit = &data.units[i];
         let w = widths[k];
@@ -681,7 +682,14 @@ fn build_bidi(
                 edge: None,
                 tab: None,
             };
-            if initiator {
+            if i >= bidi_start {
+                // UAX #9 L1 gives a line-end control the paragraph level;
+                // zero-width at that level, it goes to the line end, after
+                // every closing edge (cloned ones too, as when a forced break
+                // splits the box) it would otherwise sit between, and belongs
+                // to no box there.
+                line_end_seps.push(Piece { owner: None, ..sep });
+            } else if initiator {
                 // Before the start edges of the isolating box and its
                 // descendants just pushed: its own `Open`, or the cloned
                 // edges that start a line after a forced break.
@@ -694,17 +702,11 @@ fn build_bidi(
                     }
                 }
                 pieces.insert(at, sep);
-            } else if let Some(b) = scope {
-                if i + 1 < units.end
-                    && matches!(data.units[i + 1].kind, UnitKind::Close { box_index } if box_index == b)
-                {
-                    pending_pdi = Some(sep);
-                } else {
-                    // A PDI reissued before a forced break: the box goes on,
-                    // so the separator follows any cloned end edges at the
-                    // line end.
-                    line_end_pdis.push(sep);
-                }
+            } else if let Some(b) = scope
+                && i + 1 < units.end
+                && matches!(data.units[i + 1].kind, UnitKind::Close { box_index } if box_index == b)
+            {
+                pending_pdi = Some(sep);
             } else {
                 pieces.push(sep);
             }
@@ -858,7 +860,7 @@ fn build_bidi(
             tab: None,
         });
     }
-    pieces.append(&mut line_end_pdis);
+    pieces.append(&mut line_end_seps);
     continuations.extend(
         hanging_continuations
             .into_iter()

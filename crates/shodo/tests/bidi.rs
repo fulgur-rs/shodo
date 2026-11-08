@@ -901,6 +901,48 @@ fn a_cloned_isolate_split_by_a_forced_break_keeps_its_edges_on_each_line() {
 }
 
 #[test]
+fn line_end_isolate_controls_do_not_split_the_boxes_around_them() {
+    // `AB<span rtl isolate><span ltr><span ltr isolate>CD</span></span></span>`
+    // with 3px/7px inline padding on each box, in a left-to-right paragraph.
+    // The line-end PDIs take the paragraph level (UAX #9 L1) and must not
+    // split the middle span from its closing edge: each box is one fragment.
+    // Chromium puts the outer two at (20, 50) and (27, 40).
+    let isolate = |direction| InlineStyle {
+        direction,
+        unicode_bidi: UnicodeBidi::Isolate,
+        font_size: 10.0,
+        ..InlineStyle::default()
+    };
+    let line = one_line(Direction::Ltr, |b| {
+        b.push_text(dom(1), "AB")
+            .open_inline(NodeId(2), &isolate(Direction::Rtl), padded_3_7())
+            .open_inline(
+                NodeId(3),
+                &InlineStyle {
+                    font_size: 10.0,
+                    ..InlineStyle::default()
+                },
+                padded_3_7(),
+            )
+            .open_inline(NodeId(4), &isolate(Direction::Ltr), padded_3_7())
+            .push_text(dom(5), "CD")
+            .close_inline()
+            .close_inline()
+            .close_inline();
+    });
+    let mut boxes: Vec<_> = layout_summary(&line)
+        .into_iter()
+        .filter(|(name, ..)| name.starts_with("box"))
+        .collect();
+    boxes.sort_by(|a, b| a.0.cmp(&b.0));
+    let names: Vec<_> = boxes.iter().map(|(name, ..)| name.as_str()).collect();
+    assert_eq!(names, ["box2", "box3", "box4"], "{boxes:?}");
+    assert_eq!((boxes[0].1, boxes[0].2), (20.0, 50.0));
+    assert_eq!((boxes[1].1, boxes[1].2), (27.0, 40.0));
+    assert_eq!(boxes[2].2, 30.0);
+}
+
+#[test]
 fn an_isolate_at_the_line_end_keeps_its_place() {
     // `AB<span style="unicode-bidi: isolate"> CD</span> ` in a right-to-left
     // paragraph: `AB` from the right edge, the isolate on its left, and the
