@@ -717,3 +717,250 @@ fn preserved_hanging_space_keeps_its_box_owner_after_bidi_level_reset() {
         assert_eq!(runs.last().unwrap().glyphs().next().unwrap().advance, 10.0);
     }
 }
+
+/// `(inline_start, inline_size)` of each glyph run and inline box, in
+/// fragment order, tagged with the box node or the run's text range start.
+fn layout_summary(line: &Line) -> Vec<(String, f32, f32)> {
+    line.fragments()
+        .filter_map(|f| match f {
+            Fragment::GlyphRun(r) => Some((
+                format!("run@{}", r.text_range().start),
+                r.inline_start(),
+                r.inline_size(),
+            )),
+            Fragment::InlineBox(b) => Some((
+                format!("box{}", b.node.0),
+                b.rect.inline_start,
+                b.rect.inline_size,
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn an_isolate_stays_apart_from_the_text_after_it_in_a_right_to_left_paragraph() {
+    // `<div dir=rtl><span style="unicode-bidi: isolate">CD </span>AB</div>`:
+    // the isolate is a neutral at the paragraph level, so it comes first
+    // from the right edge and `AB` follows on its left (as in Chromium).
+    // Without the isolate, the Latin text forms one left-to-right run with
+    // `AB` on the right.
+    let line = one_line(Direction::Rtl, |b| {
+        b.open_inline(NodeId(1), &rtl_isolate(), padded_3_7())
+            .push_text(dom(2), "CD ")
+            .close_inline()
+            .push_text(dom(3), "AB");
+    });
+    assert_eq!(line.text(), "\u{2067}CD \u{2069}AB");
+    let boxes = boxes(&line);
+    assert_eq!(boxes.len(), 1, "the isolating box stays one fragment");
+    assert_eq!(
+        (boxes[0].rect.inline_start, boxes[0].rect.inline_size),
+        (0.0, 40.0)
+    );
+    assert_eq!(
+        (boxes[0].has_start_edge, boxes[0].has_end_edge),
+        (true, true)
+    );
+    let runs = runs(&line);
+    let ab = runs.iter().find(|r| r.text_range().start == 9).unwrap();
+    assert_eq!((ab.inline_start(), ab.bidi_level()), (40.0, 2));
+}
+
+#[test]
+fn a_nested_isolate_separates_only_its_own_box() {
+    // `<span>` holds the isolate and `EF `. The isolate is a neutral, so
+    // `EF AB` resolves to one left-to-right run left of it, and the outer
+    // box splits around `AB`. The isolate's own controls belong to the
+    // outer box, so they do not split the inner box.
+    let line = one_line(Direction::Rtl, |b| {
+        b.open_inline(
+            NodeId(1),
+            &InlineStyle {
+                direction: Direction::Rtl,
+                font_size: 10.0,
+                ..InlineStyle::default()
+            },
+            InlineEdges::default(),
+        )
+        .open_inline(NodeId(2), &rtl_isolate(), InlineEdges::default())
+        .push_text(dom(3), "CD ")
+        .close_inline()
+        .push_text(dom(4), "EF ")
+        .close_inline()
+        .push_text(dom(5), "AB");
+    });
+    let summary = layout_summary(&line);
+    let at = |name: &str| {
+        summary
+            .iter()
+            .filter(|(n, ..)| n == name)
+            .map(|(_, start, size)| (*start, *size))
+            .collect::<Vec<_>>()
+    };
+    // Chromium: isolate at the right edge, then `AB`, then `EF ` (the
+    // outer box spans 80px from the right edge).
+    assert_eq!(at("box2"), [(0.0, 30.0)]);
+    assert_eq!(at("box1"), [(0.0, 30.0), (50.0, 30.0)]);
+}
+
+#[test]
+fn isolate_controls_split_by_a_forced_break_still_separate_each_line() {
+    // `<span style="unicode-bidi: isolate"><b>CD<br>EF</b> GH</span>AB`: the
+    // break closes and reopens the isolate inside `<b>`, so each line has a
+    // control away from the isolating box's edges. Each box stays one
+    // fragment per line, and on the second line the isolate is still first
+    // from the right with `AB` after it (Chromium: the left-to-right `EF GH`
+    // puts GH at 0 and EF at 30, then AB at 50).
+    let lines = all_lines(Direction::Rtl, 200.0, |b| {
+        b.open_inline(NodeId(1), &rtl_isolate(), InlineEdges::default())
+            .open_inline(
+                NodeId(2),
+                &InlineStyle {
+                    direction: Direction::Rtl,
+                    font_size: 10.0,
+                    ..InlineStyle::default()
+                },
+                InlineEdges::default(),
+            )
+            .push_text(dom(3), "CD")
+            .push_forced_break(NodeId(4))
+            .push_text(dom(5), "EF")
+            .close_inline()
+            .push_text(dom(6), " GH")
+            .close_inline()
+            .push_text(dom(7), "AB");
+    });
+    assert_eq!(lines.len(), 2);
+    for (line, want) in lines.iter().zip([
+        vec![("box1", 0.0, 20.0), ("box2", 0.0, 20.0)],
+        vec![("box1", 0.0, 50.0), ("box2", 30.0, 20.0)],
+    ]) {
+        let mut got: Vec<_> = layout_summary(line)
+            .into_iter()
+            .filter(|(n, ..)| n.starts_with("box"))
+            .collect();
+        got.sort_by(|a, b| a.0.cmp(&b.0));
+        let want: Vec<_> = want
+            .into_iter()
+            .map(|(n, start, size)| (n.to_owned(), start, size))
+            .collect();
+        assert_eq!(got, want, "{:?}", line.text());
+    }
+    let runs = runs(&lines[1]);
+    let starts: Vec<(char, f32)> = runs
+        .iter()
+        .map(|r| {
+            let text = &lines[1].text()[r.text_range()];
+            let first = text.chars().find(|c| c.is_alphabetic()).unwrap();
+            (first, r.inline_start())
+        })
+        .collect();
+    assert!(starts.contains(&('A', 50.0)), "{starts:?}");
+}
+
+#[test]
+fn a_cloned_isolate_split_by_a_forced_break_keeps_its_edges_on_each_line() {
+    // With `box-decoration-break: clone`, both lines of `CD<br>EF` in a
+    // padded span carry the span's 3px/7px padding. Nothing sits beside the
+    // span, so isolating it must not change the geometry: the controls
+    // reissued around the break go outside the cloned edges.
+    let geometry = |unicode_bidi| {
+        let lines = all_lines(Direction::Rtl, 200.0, |b| {
+            b.open_inline(
+                NodeId(1),
+                &InlineStyle {
+                    box_decoration_break: shodo::style::BoxDecorationBreak::Clone,
+                    unicode_bidi,
+                    ..rtl_isolate()
+                },
+                padded_3_7(),
+            )
+            .push_text(dom(2), "CD")
+            .push_forced_break(NodeId(3))
+            .push_text(dom(4), "EF")
+            .close_inline();
+        });
+        lines
+            .iter()
+            .map(|line| {
+                layout_summary(line)
+                    .into_iter()
+                    .map(|(name, start, size)| (name.starts_with("box"), start, size))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    };
+    let isolated = geometry(UnicodeBidi::Isolate);
+    assert_eq!(isolated.len(), 2);
+    for line in &isolated {
+        assert_eq!(line.iter().filter(|(is_box, ..)| *is_box).count(), 1);
+        assert!(line.contains(&(true, 0.0, 30.0)), "{line:?}");
+    }
+    assert_eq!(isolated, geometry(UnicodeBidi::Normal));
+}
+
+#[test]
+fn line_end_isolate_controls_do_not_split_the_boxes_around_them() {
+    // `AB<span rtl isolate><span ltr><span ltr isolate>CD</span></span></span>`
+    // with 3px/7px inline padding on each box, in a left-to-right paragraph.
+    // The line-end PDIs take the paragraph level (UAX #9 L1) and must not
+    // split the middle span from its closing edge: each box is one fragment.
+    // Chromium puts the outer two at (20, 50) and (27, 40).
+    let isolate = |direction| InlineStyle {
+        direction,
+        unicode_bidi: UnicodeBidi::Isolate,
+        font_size: 10.0,
+        ..InlineStyle::default()
+    };
+    let line = one_line(Direction::Ltr, |b| {
+        b.push_text(dom(1), "AB")
+            .open_inline(NodeId(2), &isolate(Direction::Rtl), padded_3_7())
+            .open_inline(
+                NodeId(3),
+                &InlineStyle {
+                    font_size: 10.0,
+                    ..InlineStyle::default()
+                },
+                padded_3_7(),
+            )
+            .open_inline(NodeId(4), &isolate(Direction::Ltr), padded_3_7())
+            .push_text(dom(5), "CD")
+            .close_inline()
+            .close_inline()
+            .close_inline();
+    });
+    let mut boxes: Vec<_> = layout_summary(&line)
+        .into_iter()
+        .filter(|(name, ..)| name.starts_with("box"))
+        .collect();
+    boxes.sort_by(|a, b| a.0.cmp(&b.0));
+    let names: Vec<_> = boxes.iter().map(|(name, ..)| name.as_str()).collect();
+    assert_eq!(names, ["box2", "box3", "box4"], "{boxes:?}");
+    assert_eq!((boxes[0].1, boxes[0].2), (20.0, 50.0));
+    assert_eq!((boxes[1].1, boxes[1].2), (27.0, 40.0));
+    assert_eq!(boxes[2].2, 30.0);
+}
+
+#[test]
+fn an_isolate_at_the_line_end_keeps_its_place() {
+    // `AB<span style="unicode-bidi: isolate"> CD</span> ` in a right-to-left
+    // paragraph: `AB` from the right edge, the isolate on its left, and the
+    // line-end PDI and space take the paragraph level (UAX #9 L1).
+    let line = one_line(Direction::Rtl, |b| {
+        b.push_text(dom(1), "AB")
+            .open_inline(NodeId(2), &rtl_isolate(), InlineEdges::default())
+            .push_text(dom(3), " CD")
+            .close_inline()
+            .push_text(dom(4), " ");
+    });
+    let boxes = boxes(&line);
+    assert_eq!(boxes.len(), 1);
+    assert_eq!(
+        (boxes[0].rect.inline_start, boxes[0].rect.inline_size),
+        (20.0, 30.0)
+    );
+    let runs = runs(&line);
+    let ab = runs.iter().find(|r| r.text_range().start == 0).unwrap();
+    assert_eq!(ab.inline_start(), 0.0);
+}

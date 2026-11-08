@@ -90,7 +90,9 @@ impl NeighborIndex {
                     false
                 };
                 // Match retained bidi pieces: source-only controls do not enter
-                // L2 reordering. An empty column's reserved closing slot does.
+                // L2 reordering, but isolate initiators and PDI do (they keep
+                // an isolate apart from its neighbours). An empty column's
+                // reserved closing slot does too.
                 let piece = content
                     || empty
                     || matches!(
@@ -99,7 +101,9 @@ impl NeighborIndex {
                             | UnitKind::Close { .. }
                             | UnitKind::Float { .. }
                             | UnitKind::Absolute { .. }
-                    );
+                    )
+                    || matches!(u.kind, UnitKind::BidiControl)
+                        && crate::line::fragments::isolate_control(data, u).is_some();
                 piece.then_some((i, u.level, content || empty))
             }),
         );

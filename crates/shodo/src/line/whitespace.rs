@@ -170,8 +170,9 @@ pub(crate) fn trailing_advance(
     sum
 }
 
-/// UAX #9 L1 resets logical trailing whitespace regardless of CSS hanging.
-/// Inline edges and zero-width anchors do not end that whitespace sequence.
+/// UAX #9 L1 resets logical trailing whitespace and isolate controls
+/// regardless of CSS hanging. Inline edges and zero-width anchors do not end
+/// that sequence.
 pub(super) fn bidi_trailing(data: &ParagraphData, start: usize, end: usize) -> usize {
     let mut begin = end;
     for i in (start..end).rev() {
@@ -192,6 +193,13 @@ pub(super) fn bidi_trailing(data: &ParagraphData, start: usize, end: usize) -> u
                 if data.combine_at_text(data.units[i].text.start).is_some() {
                     break;
                 }
+                begin = i;
+            }
+            // L1 also resets isolate initiators and PDI in that sequence;
+            // other controls (removed by X9) are skipped like edges.
+            UnitKind::BidiControl
+                if super::fragments::isolate_control(data, &data.units[i]).is_some() =>
+            {
                 begin = i;
             }
             UnitKind::Close { .. }

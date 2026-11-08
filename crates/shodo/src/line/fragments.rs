@@ -453,6 +453,33 @@ struct Piece {
     tab: Option<u32>,
 }
 
+/// For an isolate initiator (LRI, RLI, FSI) `Some(true)`, for a PDI
+/// `Some(false)`, and `None` for any other bidi control unit.
+pub(crate) fn isolate_control(data: &ParagraphData, unit: &Unit) -> Option<bool> {
+    match &data.text[unit.text.start as usize..unit.text.end as usize] {
+        "\u{2066}" | "\u{2067}" | "\u{2068}" => Some(true),
+        "\u{2069}" => Some(false),
+        _ => None,
+    }
+}
+
+/// The box whose `unicode-bidi` generated an isolate control: the nearest
+/// box in the control's ancestor chain with the control's node. The controls
+/// reissued around a forced break sit inside the innermost open box, which
+/// may be a descendant of the isolating one.
+fn isolating_box(data: &ParagraphData, unit: &Unit) -> Option<u32> {
+    let node = data.items[unit.item as usize].node?;
+    let mut b = unit.parent_box;
+    while let Some(x) = b {
+        let info = &data.boxes[x as usize];
+        if info.node == node {
+            return Some(x);
+        }
+        b = info.parent;
+    }
+    None
+}
+
 fn inside(data: &ParagraphData, mut b: Option<u32>, target: u32) -> bool {
     while let Some(x) = b {
         if x == target {
@@ -581,6 +608,12 @@ fn build_bidi(
     // Level and owner of the last piece that is neither a hanging space nor
     // an out-of-flow anchor.
     let mut last_kept: Option<(u8, Option<u32>)> = None;
+    // Cloned start edges take the level of the line's first content, as an
+    // `Open` does; a reissued isolate initiator there has the outer level.
+    let start_level = data.units[units.clone()]
+        .iter()
+        .find(|u| !matches!(u.kind, UnitKind::BidiControl))
+        .map_or(data.units[units.start].level, |u| u.level);
     for b in super::decoration::chain(data, units.start)
         .into_iter()
         .rev()
@@ -592,7 +625,7 @@ fn build_bidi(
                 data.boxes[b as usize].edges.inline_start_total(),
                 &mut Default::default(),
             ),
-            level: data.units[units.start].level,
+            level: start_level,
             owner: Some(b),
             edge: Some((b, true)),
             tab: None,
@@ -602,6 +635,10 @@ fn build_bidi(
     let mut hanging_shared = None;
     let mut continuations = Vec::new();
     let mut hanging_continuations = Vec::new();
+    // A PDI held back for the `Close` right after it, to go after that edge.
+    let mut pending_pdi: Option<Piece> = None;
+    // Separators that go after the line's cloned end edges.
+    let mut line_end_seps: Vec<Piece> = Vec::new();
     for (k, i) in units.clone().enumerate() {
         let unit = &data.units[i];
         let w = widths[k];
@@ -611,6 +648,8 @@ fn build_bidi(
         // before L1, so it is applied here, per line and per unit.
         let level = match &unit.kind {
             UnitKind::Cluster { .. } if i >= bidi_start => base,
+            // The zero-width isolate controls `bidi_trailing` takes in.
+            UnitKind::BidiControl if i >= bidi_start && w == LayoutUnit::ZERO => base,
             UnitKind::Tab if data.combine_at_text(unit.text.start).is_none() => base,
             // A box end after the hanging spaces stays with the box's
             // content: it takes the level of the box's last piece before
@@ -621,6 +660,58 @@ fn build_bidi(
             },
             _ => unit.level,
         };
+        // UAX #9 keeps isolate initiators and PDI (X9 removes only the
+        // embedding and override controls), at the level outside their
+        // isolate. As zero-width pieces they keep the isolate's content
+        // apart from neighbours of the same level when L2 reverses runs;
+        // without them the isolate would be reversed together with the text
+        // beside it. The controls of an isolating box sit outside that box's
+        // edges, so the box stays one visual group.
+        if matches!(unit.kind, UnitKind::BidiControl)
+            && w == LayoutUnit::ZERO
+            && let Some(initiator) = isolate_control(data, unit)
+        {
+            // The separator belongs outside the isolating box, so it splits
+            // neither that box nor a box nested in it.
+            let scope = isolating_box(data, unit);
+            let sep = Piece {
+                record: None,
+                width: LayoutUnit::ZERO,
+                level,
+                owner: scope.map_or(unit.parent_box, |b| data.boxes[b as usize].parent),
+                edge: None,
+                tab: None,
+            };
+            if i >= bidi_start {
+                // UAX #9 L1 gives a line-end control the paragraph level;
+                // zero-width at that level, it goes to the line end, after
+                // every closing edge (cloned ones too, as when a forced break
+                // splits the box) it would otherwise sit between, and belongs
+                // to no box there.
+                line_end_seps.push(Piece { owner: None, ..sep });
+            } else if initiator {
+                // Before the start edges of the isolating box and its
+                // descendants just pushed: its own `Open`, or the cloned
+                // edges that start a line after a forced break.
+                let mut at = pieces.len();
+                if let Some(b) = scope {
+                    while at > 0
+                        && matches!(pieces[at - 1].edge, Some((x, true)) if inside(data, Some(x), b))
+                    {
+                        at -= 1;
+                    }
+                }
+                pieces.insert(at, sep);
+            } else if let Some(b) = scope
+                && i + 1 < units.end
+                && matches!(data.units[i + 1].kind, UnitKind::Close { box_index } if box_index == b)
+            {
+                pending_pdi = Some(sep);
+            } else {
+                pieces.push(sep);
+            }
+            continue;
+        }
         let record = |kind: RecordKind| FragmentRecord {
             kind,
             inline_start: LayoutUnit::ZERO,
@@ -748,6 +839,10 @@ fn build_bidi(
         };
         last_kept = Some((piece.level, piece.owner));
         pieces.push(piece);
+        // Only the `Close` after a held PDI gets here with one pending.
+        if let Some(sep) = pending_pdi.take() {
+            pieces.push(sep);
+        }
     }
     for b in super::decoration::chain(data, units.end)
         .into_iter()
@@ -765,6 +860,7 @@ fn build_bidi(
             tab: None,
         });
     }
+    pieces.append(&mut line_end_seps);
     continuations.extend(
         hanging_continuations
             .into_iter()
