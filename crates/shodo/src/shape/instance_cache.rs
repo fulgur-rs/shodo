@@ -1,14 +1,14 @@
 //! Bounded preparation reuse within one shape_inputs call. Keys borrow the
 //! paragraph's immutable input; only fully initialized instances are shared.
 //! `WindowInstances` extends the same reuse across the line-edge window
-//! shapes of one paragraph.
+//! shapes of every paragraph of a layout context.
 use super::instance::{ResolutionWarning, RunInstance};
 use crate::{
     font::FontMatch,
     limits::WarningSink,
     style::{
         InlineStyle,
-        identity::{authored_float, same_instance_inputs, same_variations},
+        identity::{InstanceInputs, authored_float, same_variations},
     },
 };
 use std::{ops::Deref, sync::Arc};
@@ -25,7 +25,7 @@ type Resolved = (skrifa::instance::Location, Arc<RunInstance>, f32);
 #[derive(Clone, Copy)]
 pub(super) struct Key<'items, 'styles> {
     pub(super) found: &'items FontMatch,
-    pub(super) style: &'styles InlineStyle,
+    pub(super) style: InstanceInputs<'styles>,
     pub(super) script: [u8; 4],
 }
 impl Key<'_, '_> {
@@ -40,8 +40,7 @@ impl Key<'_, '_> {
                         &other.found.variations,
                         authored_float,
                     )))
-            && (std::ptr::eq(self.style, other.style)
-                || same_instance_inputs(self.style, other.style))
+            && self.style.same(other.style)
     }
 }
 
@@ -218,26 +217,66 @@ fn eligible(key: Key<'_, '_>, features: &Arc<[harfrust::Feature]>) -> bool {
     eligible
 }
 
+/// The instance inputs of the style that prepared a window entry. Families,
+/// features and hyphen strings can be large and must not stay alive solely
+/// through this context's window cache.
+struct OwnedInstanceInputs {
+    font_size: f32,
+    font_size_adjust: Option<crate::style::FontSizeAdjust>,
+    font_optical_sizing: bool,
+    font_variations: Vec<crate::style::FontVariation>,
+    lang: Option<String>,
+}
+
+impl OwnedInstanceInputs {
+    fn new(inputs: InstanceInputs<'_>) -> Self {
+        Self {
+            font_size: inputs.font_size,
+            font_size_adjust: inputs.font_size_adjust,
+            font_optical_sizing: inputs.font_optical_sizing,
+            font_variations: inputs.font_variations.to_vec(),
+            lang: inputs.lang.map(str::to_owned),
+        }
+    }
+
+    fn view(&self) -> InstanceInputs<'_> {
+        InstanceInputs {
+            font_size: self.font_size,
+            font_size_adjust: self.font_size_adjust,
+            font_optical_sizing: self.font_optical_sizing,
+            font_variations: &self.font_variations,
+            lang: self.lang.as_deref(),
+        }
+    }
+
+    /// Heap bytes held.
+    fn bytes(&self) -> usize {
+        self.font_variations.capacity() * size_of::<crate::style::FontVariation>()
+            + self.lang.as_ref().map_or(0, String::capacity)
+    }
+}
+
 struct WindowEntry {
     found: Arc<FontMatch>,
-    style: u32,
+    style: OwnedInstanceInputs,
     script: [u8; 4],
     resolved: Resolved,
     warning: Option<ResolutionWarning>,
     bytes: usize,
 }
 
-/// Prepared instances of the most recent paragraph's line-edge windows.
+/// Prepared instances of recent line-edge windows.
 ///
 /// A line scan shapes a window at many break candidates, and each call used
 /// to resolve the instance and read the font metrics again although the
-/// window repeats an input the paragraph already prepared. Entries are keyed
-/// by the paragraph's own style index and font match, so they are dropped
-/// whenever a window of another paragraph is shaped. Bounds and eligibility
-/// are those of `InstanceCache`.
+/// window repeats an input already prepared. Documents of many short
+/// paragraphs (table cells) shape one window per paragraph, so entries are
+/// keyed by face and instance inputs alone and serve every paragraph of the
+/// context. A face id names one registered face for the lifetime of its layer
+/// and layer ids are never reused, so an entry never matches another face.
+/// Bounds and eligibility are those of `InstanceCache`.
 #[derive(Default)]
 pub(crate) struct WindowInstances {
-    owner: Option<(u64, usize)>,
     entries: Vec<WindowEntry>,
     bytes: usize,
 }
@@ -252,28 +291,14 @@ impl std::fmt::Debug for WindowInstances {
 }
 
 impl WindowInstances {
-    pub(crate) fn begin(&mut self, data: &crate::paragraph::ParagraphData) {
-        let owner = (
-            data.id,
-            data as *const crate::paragraph::ParagraphData as usize,
-        );
-        if self.owner != Some(owner) {
-            self.clear();
-            self.owner = Some(owner);
-        }
-    }
-
     pub(crate) fn clear(&mut self) {
         *self = Self::default();
     }
 
-    /// `styles` must be the styles of the paragraph passed to `begin`.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn resolve<'s>(
         &'s mut self,
         found: &Arc<FontMatch>,
-        style: u32,
-        styles: &[InlineStyle],
+        style: &InlineStyle,
         script: [u8; 4],
         features: &Arc<[harfrust::Feature]>,
         warnings: &mut WarningSink,
@@ -281,7 +306,7 @@ impl WindowInstances {
     ) -> Cached<'s> {
         let key = Key {
             found,
-            style: &styles[style as usize],
+            style: style.instance_inputs(),
             script,
         };
         let prepared = match lookup_or_prepare(
@@ -291,7 +316,7 @@ impl WindowInstances {
                 Some((
                     Key {
                         found: &entry.found,
-                        style: &styles[entry.style as usize],
+                        style: entry.style.view(),
                         script: entry.script,
                     },
                     &entry.resolved,
@@ -310,6 +335,11 @@ impl WindowInstances {
             warning,
             bytes,
         } = prepared;
+        let style = OwnedInstanceInputs::new(style.instance_inputs());
+        let bytes = bytes + style.bytes();
+        if bytes > BYTES {
+            return Cached::Owned(resolved);
+        }
         // FIFO eviction, as in `InstanceCache`; entries stay in insertion order.
         while self.bytes + bytes > BYTES || self.entries.len() == ENTRIES {
             let evicted = self.entries.remove(0);
@@ -378,12 +408,12 @@ mod tests {
             assert_eq!(
                 Key {
                     found: &found,
-                    style: &a,
+                    style: a.instance_inputs(),
                     script: *b"Latn"
                 }
                 .matches(Key {
                     found: &found,
-                    style: &b,
+                    style: b.instance_inputs(),
                     script: *b"Latn"
                 }),
                 expected
@@ -408,7 +438,7 @@ mod tests {
             let value = cache.resolve(
                 Key {
                     found: &found,
-                    style,
+                    style: style.instance_inputs(),
                     script: *b"Latn",
                 },
                 &features,
@@ -441,7 +471,7 @@ mod tests {
             let value = cache.resolve(
                 Key {
                     found: &found,
-                    style,
+                    style: style.instance_inputs(),
                     script: *b"Latn",
                 },
                 &features,
@@ -461,7 +491,7 @@ mod tests {
             let value = cache.resolve(
                 Key {
                     found: &found,
-                    style: &large,
+                    style: large.instance_inputs(),
                     script: *b"Latn",
                 },
                 &features,
@@ -483,7 +513,7 @@ mod tests {
             cache.resolve(
                 Key {
                     found: &found,
-                    style: &style,
+                    style: style.instance_inputs(),
                     script: *b"Latn"
                 },
                 &features,
@@ -505,7 +535,7 @@ mod tests {
             let value = cache.resolve(
                 Key {
                     found: &found,
-                    style: &style,
+                    style: style.instance_inputs(),
                     script: *b"Latn",
                 },
                 &features,

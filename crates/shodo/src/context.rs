@@ -41,7 +41,7 @@ pub struct LayoutContext {
     pub(crate) completed: Option<Box<crate::line::completed::CompletedLine>>,
     pub(crate) ruby_ranges: crate::line::range::RangeCache,
     pub(crate) edge_shapes: crate::line::windows::EdgeShapeCache,
-    /// Prepared font instances of the most recent paragraph's edge windows.
+    /// Prepared font instances of recent edge windows, shared by paragraphs.
     pub(crate) window_instances: crate::shape::WindowInstances,
     #[cfg(feature = "bench-counters")]
     pub(crate) ruby_descendant_counters: RubyDescendantCounters,

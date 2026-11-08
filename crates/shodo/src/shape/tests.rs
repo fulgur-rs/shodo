@@ -4290,3 +4290,62 @@ fn edge_windows_of_one_paragraph_reuse_prepared_instances() {
     .unwrap();
     assert_eq!(instance::INSTANCE_BUILDS.with(std::cell::Cell::get), 2);
 }
+
+/// Many short paragraphs (table cells) shape one edge window each. Their
+/// prepared instances depend on the face and the instance inputs of the
+/// style, not on the paragraph, so later paragraphs of the same fonts reuse
+/// them.
+#[test]
+fn edge_windows_of_later_paragraphs_reuse_prepared_instances() {
+    use crate::node::{NodeId, TextSource};
+    let (first, fonts, style) = mixed_instance_paragraph("a水b");
+    let build = |text: &str, style: &crate::style::ParagraphStyle| {
+        let mut builder = crate::ParagraphBuilder::new(style, &Limits::default());
+        builder.push_text(TextSource::Generated { node: NodeId(1) }, text);
+        builder
+            .build(&mut crate::LayoutContext::new(), &fonts)
+            .unwrap()
+    };
+    let window = |p: &crate::Paragraph, cx: &mut crate::LayoutContext| {
+        let mut unit = p.data.units[0].clone();
+        unit.text = unit.text.start..p.data.units[2].text.end;
+        shape_window(
+            &p.data,
+            &unit,
+            cx,
+            &mut crate::limits::WarningSink::default(),
+            &mut Saturation::default(),
+        )
+        .unwrap()
+    };
+    let mut cx = crate::LayoutContext::new();
+    instance::INSTANCE_BUILDS.with(|count| count.set(0));
+    window(&first, &mut cx);
+    assert_eq!(instance::INSTANCE_BUILDS.with(std::cell::Cell::get), 2);
+    // Another paragraph with the same fonts and instance inputs prepares
+    // nothing, and its window matches a cold context's.
+    let second = build("b水a", &style);
+    instance::INSTANCE_BUILDS.with(|count| count.set(0));
+    let (glyphs, runs) = window(&second, &mut cx);
+    assert_eq!(instance::INSTANCE_BUILDS.with(std::cell::Cell::get), 0);
+    let (cold_glyphs, cold_runs) = window(&second, &mut crate::LayoutContext::new());
+    assert_eq!(glyphs.id, cold_glyphs.id);
+    assert_eq!(glyphs.advance, cold_glyphs.advance);
+    assert_eq!(runs.len(), cold_runs.len());
+    for (run, cold) in runs.iter().zip(&cold_runs) {
+        assert_eq!(run.instance.coords, cold.instance.coords);
+        assert_eq!(run.instance.metrics, cold.instance.metrics);
+        assert_eq!(run.instance.features, cold.instance.features);
+    }
+    // A different instance input (the size) prepares its own instances.
+    let mut larger = style.clone();
+    larger.root.font_size *= 2.0;
+    let third = build("a水b", &larger);
+    instance::INSTANCE_BUILDS.with(|count| count.set(0));
+    let (_, runs) = window(&third, &mut cx);
+    assert_eq!(instance::INSTANCE_BUILDS.with(std::cell::Cell::get), 2);
+    let (_, cold_runs) = window(&third, &mut crate::LayoutContext::new());
+    for (run, cold) in runs.iter().zip(&cold_runs) {
+        assert_eq!(run.instance.metrics, cold.instance.metrics);
+    }
+}
