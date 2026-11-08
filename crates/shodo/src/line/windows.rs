@@ -775,6 +775,162 @@ fn window_budget_warning(cx: &mut LayoutContext) {
     );
 }
 
+/// Shapes `range` for the edge cache without charging the line budget or
+/// reporting anything: `None` unless the result is clean.
+fn shape_quietly(
+    data: &ParagraphData,
+    range: &Range<usize>,
+    cx: &mut LayoutContext,
+    mut sat: Saturation,
+    budget: Option<u64>,
+) -> Option<WindowHandle> {
+    let key = (range.start, range.end, budget);
+    cx.edge_shapes.begin(data);
+    if let Some(hit) = cx.edge_shapes.get(&key) {
+        return Some(WindowHandle::Shared(std::sync::Arc::clone(hit)));
+    }
+    let mut unit = data.units[range.start].clone();
+    unit.text = unit.text.start..data.units[range.end - 1].text.end;
+    #[cfg(test)]
+    {
+        data.edge_shape_calls
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        data.edge_shape_bytes.fetch_add(
+            (unit.text.end - unit.text.start) as usize,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
+    let mut warnings = WarningSink::new(data.limits.max_warnings);
+    let before = sat;
+    let shaped =
+        crate::shape::shape_window_edit(data, &unit, budget, None, cx, &mut warnings, &mut sat)?;
+    (warnings.take().is_empty() && sat == before).then_some(WindowHandle::Owned(shaped))
+}
+
+/// The glyphs of `probe` before `boundary`, when they are the shaping of the
+/// text before `boundary` on its own: one left-to-right run whose glyph at
+/// the boundary is safe to break and to concatenate. HarfBuzz guarantees the
+/// same glyphs and positions on each side of such a glyph.
+fn safe_prefix(
+    data: &ParagraphData,
+    probe: &OwnedShapedWindow,
+    window: &Range<usize>,
+    boundary: u32,
+) -> Option<OwnedShapedWindow> {
+    let (store, runs) = probe;
+    let [run] = runs.as_slice() else {
+        return None;
+    };
+    let at = store.cluster.iter().position(|c| *c >= boundary)?;
+    if at == 0
+        || store.flags[at] & 3 != 0
+        || store.spacing.is_some()
+        || store.leading.is_some()
+        || run.glyphs != (0..store.len() as u32)
+        || !store.cluster.is_sorted()
+    {
+        return None;
+    }
+    let mut prefix = store.clone();
+    prefix.id.truncate(at);
+    prefix.advance.truncate(at);
+    prefix.pen.truncate(at);
+    prefix.offset_inline.truncate(at);
+    prefix.offset_block.truncate(at);
+    prefix.cluster.truncate(at);
+    prefix.flags.truncate(at);
+    let mut run = run.clone();
+    run.glyphs = 0..at as u32;
+    run.text.end = data.units[window.end - 1].text.end;
+    Some((prefix, vec![run]))
+}
+
+/// When the right-hand probe of `range` will find its boundary safe, its
+/// prefix is the shape of `range`: shape only the probe and cache both, so
+/// the loop in `materialize` finds them there. The loop still charges the
+/// line budget and reports exactly as if it had shaped each window itself.
+fn prefill_from_probe(
+    data: &ParagraphData,
+    line: &Range<usize>,
+    range: &Range<usize>,
+    cx: &mut LayoutContext,
+    sat: Saturation,
+    budget: Option<u64>,
+) {
+    #[cfg(test)]
+    if PROBE_PREFIX_DISABLED.with(std::cell::Cell::get) {
+        return;
+    }
+    let Some(next) = first(data, range.end, line.end) else {
+        return;
+    };
+    if !compatible(data, range.end - 1, next) {
+        return;
+    }
+    let key = (range.start, range.end, budget);
+    cx.edge_shapes.begin(data);
+    if cx.edge_shapes.get(&key).is_some() {
+        return;
+    }
+    let probe = range.start..clipped_group(data, next, line).end;
+    let Some(tested) = shape_quietly(data, &probe, cx, sat, budget) else {
+        return;
+    };
+    // The loop shapes this probe next whether or not its prefix is usable;
+    // keep it, so a probe shaped here is never shaped twice.
+    let probe_key = (probe.start, probe.end, budget);
+    if let WindowHandle::Owned(probe) = &tested {
+        cx.edge_shapes
+            .insert(probe_key, &std::sync::Arc::new(probe.clone()));
+    }
+    let Some(prefix) = safe_prefix(data, &tested, range, data.units[next].text.start) else {
+        return;
+    };
+    #[cfg(test)]
+    assert_same_window(data, range, cx, sat, budget, &prefix);
+    cx.edge_shapes.insert(key, &std::sync::Arc::new(prefix));
+}
+
+/// Every prefix taken in tests must equal shaping its window on its own.
+#[cfg(test)]
+fn assert_same_window(
+    data: &ParagraphData,
+    range: &Range<usize>,
+    cx: &mut LayoutContext,
+    mut sat: Saturation,
+    budget: Option<u64>,
+    prefix: &OwnedShapedWindow,
+) {
+    let mut unit = data.units[range.start].clone();
+    unit.text = unit.text.start..data.units[range.end - 1].text.end;
+    let mut warnings = WarningSink::new(data.limits.max_warnings);
+    let (store, runs) =
+        crate::shape::shape_window_edit(data, &unit, budget, None, cx, &mut warnings, &mut sat)
+            .expect("the window shapes on its own");
+    assert!(warnings.take().is_empty());
+    let (expected, actual) = (&store, &prefix.0);
+    assert_eq!(expected.id, actual.id);
+    assert_eq!(expected.advance, actual.advance);
+    assert_eq!(expected.pen, actual.pen);
+    assert_eq!(expected.offset_inline, actual.offset_inline);
+    assert_eq!(expected.offset_block, actual.offset_block);
+    assert_eq!(expected.cluster, actual.cluster);
+    assert_eq!(expected.flags, actual.flags);
+    assert_eq!(expected.spacing, actual.spacing);
+    assert_eq!(expected.leading, actual.leading);
+    assert_eq!(runs.len(), prefix.1.len());
+    for (expected, actual) in runs.iter().zip(&prefix.1) {
+        assert_eq!(expected.shaping_input, actual.shaping_input);
+        assert_eq!(expected.glyphs, actual.glyphs);
+        assert_eq!(expected.text, actual.text);
+        assert_eq!(expected.item, actual.item);
+        assert_eq!(expected.orientation, actual.orientation);
+        assert_eq!(expected.font, actual.font);
+        assert_eq!(expected.font_size.to_bits(), actual.font_size.to_bits());
+        assert!(std::sync::Arc::ptr_eq(&expected.instance, &actual.instance));
+    }
+}
+
 /// Re-shape to original safe boundaries, then check new concatenation flags.
 /// A right-hand probe detects a changed join without submitting raw markers.
 fn materialize<T: WindowOutput>(
@@ -797,6 +953,9 @@ fn materialize<T: WindowOutput>(
                 "resource-split shaping cluster retained whole at line edge",
             );
             return None;
+        }
+        if replacement.is_none() {
+            prefill_from_probe(data, line, &range, cx, *sat, budget);
         }
         let mut shaped = shape(data, &range, cx, sat, budget, replacement)?;
         if shaped.0.flags.first().is_some_and(|f| f & 2 != 0)
@@ -1110,3 +1269,12 @@ mod edge_shape_cache_tests;
 
 #[cfg(test)]
 mod candidate_tests;
+
+#[cfg(test)]
+std::thread_local! {
+    /// Shape every window on its own instead of taking a safe probe's prefix.
+    pub(crate) static PROBE_PREFIX_DISABLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+mod probe_prefix_tests;

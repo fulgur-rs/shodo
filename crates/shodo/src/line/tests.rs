@@ -637,11 +637,27 @@ fn edge_window_shapes_are_reused_across_candidates_and_relayouts() {
     // to concatenate, so more distinct windows are needed than in 0.12.
     // Check the cache invariant directly instead of assuming a window count.
     assert!(first_calls > 0, "fixture did not exercise edge shaping");
+    // Windows taken from a safe probe's prefix are cached without a shape
+    // call of their own, so the cache may hold more windows than calls.
+    assert!(
+        first_calls <= cx.edge_shapes.len(),
+        "a distinct edge window was shaped more than once"
+    );
+    // Shaping every window on its own, each distinct window is shaped once.
+    crate::line::windows::PROBE_PREFIX_DISABLED.with(|d| d.set(true));
+    let mut b = ParagraphBuilder::new(&style, &Limits::default());
+    b.push_text(TextSource::Generated { node: NodeId(1) }, &text);
+    let p = b.build(&mut LayoutContext::new(), &fonts).unwrap();
+    let mut cx = LayoutContext::new();
+    let alone = p.break_all(&mut cx, &LineOptions::default(), 200.0, &AtomicSizes::EMPTY);
+    crate::line::windows::PROBE_PREFIX_DISABLED.with(|d| d.set(false));
+    assert_eq!(summary(&alone), summary(&first));
     assert_eq!(
-        first_calls,
+        calls(&p),
         cx.edge_shapes.len(),
         "a distinct edge window was shaped more than once"
     );
+    assert!(first_calls < calls(&p), "probe prefixes saved no shape");
 }
 
 /// `shrink_to` is the documented way to release a context's retained memory;
