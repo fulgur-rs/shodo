@@ -860,6 +860,47 @@ fn isolate_controls_split_by_a_forced_break_still_separate_each_line() {
 }
 
 #[test]
+fn a_cloned_isolate_split_by_a_forced_break_keeps_its_edges_on_each_line() {
+    // With `box-decoration-break: clone`, both lines of `CD<br>EF` in a
+    // padded span carry the span's 3px/7px padding. Nothing sits beside the
+    // span, so isolating it must not change the geometry: the controls
+    // reissued around the break go outside the cloned edges.
+    let geometry = |unicode_bidi| {
+        let lines = all_lines(Direction::Rtl, 200.0, |b| {
+            b.open_inline(
+                NodeId(1),
+                &InlineStyle {
+                    box_decoration_break: shodo::style::BoxDecorationBreak::Clone,
+                    unicode_bidi,
+                    ..rtl_isolate()
+                },
+                padded_3_7(),
+            )
+            .push_text(dom(2), "CD")
+            .push_forced_break(NodeId(3))
+            .push_text(dom(4), "EF")
+            .close_inline();
+        });
+        lines
+            .iter()
+            .map(|line| {
+                layout_summary(line)
+                    .into_iter()
+                    .map(|(name, start, size)| (name.starts_with("box"), start, size))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    };
+    let isolated = geometry(UnicodeBidi::Isolate);
+    assert_eq!(isolated.len(), 2);
+    for line in &isolated {
+        assert_eq!(line.iter().filter(|(is_box, ..)| *is_box).count(), 1);
+        assert!(line.contains(&(true, 0.0, 30.0)), "{line:?}");
+    }
+    assert_eq!(isolated, geometry(UnicodeBidi::Normal));
+}
+
+#[test]
 fn an_isolate_at_the_line_end_keeps_its_place() {
     // `AB<span style="unicode-bidi: isolate"> CD</span> ` in a right-to-left
     // paragraph: `AB` from the right edge, the isolate on its left, and the

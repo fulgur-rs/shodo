@@ -608,6 +608,12 @@ fn build_bidi(
     // Level and owner of the last piece that is neither a hanging space nor
     // an out-of-flow anchor.
     let mut last_kept: Option<(u8, Option<u32>)> = None;
+    // Cloned start edges take the level of the line's first content, as an
+    // `Open` does; a reissued isolate initiator there has the outer level.
+    let start_level = data.units[units.clone()]
+        .iter()
+        .find(|u| !matches!(u.kind, UnitKind::BidiControl))
+        .map_or(data.units[units.start].level, |u| u.level);
     for b in super::decoration::chain(data, units.start)
         .into_iter()
         .rev()
@@ -619,7 +625,7 @@ fn build_bidi(
                 data.boxes[b as usize].edges.inline_start_total(),
                 &mut Default::default(),
             ),
-            level: data.units[units.start].level,
+            level: start_level,
             owner: Some(b),
             edge: Some((b, true)),
             tab: None,
@@ -631,6 +637,7 @@ fn build_bidi(
     let mut hanging_continuations = Vec::new();
     // A PDI held back for the `Close` right after it, to go after that edge.
     let mut pending_pdi: Option<Piece> = None;
+    let mut line_end_pdis: Vec<Piece> = Vec::new();
     for (k, i) in units.clone().enumerate() {
         let unit = &data.units[i];
         let w = widths[k];
@@ -675,18 +682,29 @@ fn build_bidi(
                 tab: None,
             };
             if initiator {
-                if let Some(b) = scope
-                    && pieces.last().is_some_and(|p| p.edge == Some((b, true)))
-                {
-                    pieces.insert(pieces.len() - 1, sep);
-                } else {
-                    pieces.push(sep);
+                // Before the start edges of the isolating box and its
+                // descendants just pushed: its own `Open`, or the cloned
+                // edges that start a line after a forced break.
+                let mut at = pieces.len();
+                if let Some(b) = scope {
+                    while at > 0
+                        && matches!(pieces[at - 1].edge, Some((x, true)) if inside(data, Some(x), b))
+                    {
+                        at -= 1;
+                    }
                 }
-            } else if let Some(b) = scope
-                && i + 1 < units.end
-                && matches!(data.units[i + 1].kind, UnitKind::Close { box_index } if box_index == b)
-            {
-                pending_pdi = Some(sep);
+                pieces.insert(at, sep);
+            } else if let Some(b) = scope {
+                if i + 1 < units.end
+                    && matches!(data.units[i + 1].kind, UnitKind::Close { box_index } if box_index == b)
+                {
+                    pending_pdi = Some(sep);
+                } else {
+                    // A PDI reissued before a forced break: the box goes on,
+                    // so the separator follows any cloned end edges at the
+                    // line end.
+                    line_end_pdis.push(sep);
+                }
             } else {
                 pieces.push(sep);
             }
@@ -840,6 +858,7 @@ fn build_bidi(
             tab: None,
         });
     }
+    pieces.append(&mut line_end_pdis);
     continuations.extend(
         hanging_continuations
             .into_iter()
