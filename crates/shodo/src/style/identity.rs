@@ -90,9 +90,40 @@ fn same_resolution_inputs<T: PartialEq>(
         && same_variations(&a.font_variations, &b.font_variations, &float)
 }
 
-/// Only inputs consumed by instance resolution, using authored float bits.
-pub(crate) fn same_instance_inputs(a: &InlineStyle, b: &InlineStyle) -> bool {
-    same_resolution_inputs(a, b, authored_float) && a.lang == b.lang
+/// The fields of a style that instance resolution consumes, so that a cache
+/// can keep them without the rest of the style.
+#[derive(Clone, Copy)]
+pub(crate) struct InstanceInputs<'a> {
+    pub(crate) font_size: f32,
+    pub(crate) font_size_adjust: Option<FontSizeAdjust>,
+    pub(crate) font_optical_sizing: bool,
+    pub(crate) font_variations: &'a [FontVariation],
+    pub(crate) lang: Option<&'a str>,
+}
+
+impl InstanceInputs<'_> {
+    /// Whether instance resolution sees the same inputs, by authored float
+    /// bits (signed zeros and NaN payloads differ).
+    pub(crate) fn same(self, other: InstanceInputs<'_>) -> bool {
+        authored_float(self.font_size) == authored_float(other.font_size)
+            && size_adjust_key(self.font_size_adjust, authored_float)
+                == size_adjust_key(other.font_size_adjust, authored_float)
+            && self.font_optical_sizing == other.font_optical_sizing
+            && same_variations(self.font_variations, other.font_variations, authored_float)
+            && self.lang == other.lang
+    }
+}
+
+impl InlineStyle {
+    pub(crate) fn instance_inputs(&self) -> InstanceInputs<'_> {
+        InstanceInputs {
+            font_size: self.font_size,
+            font_size_adjust: self.font_size_adjust,
+            font_optical_sizing: self.font_optical_sizing,
+            font_variations: &self.font_variations,
+            lang: self.lang.as_deref(),
+        }
+    }
 }
 
 /// Matching and instance inputs consumed by metrics. Emphasis needs an em box;

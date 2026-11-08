@@ -825,7 +825,7 @@ fn shape_inputs<'a>(
                     None => instance_cache.resolve(
                         instance_cache::Key {
                             found,
-                            style,
+                            style: style.instance_inputs(),
                             script: original.script,
                         },
                         &features,

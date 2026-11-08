@@ -8,7 +8,7 @@ use crate::{
     limits::WarningSink,
     style::{
         InlineStyle,
-        identity::{authored_float, same_instance_inputs, same_variations},
+        identity::{InstanceInputs, authored_float, same_variations},
     },
 };
 use std::{ops::Deref, sync::Arc};
@@ -25,7 +25,7 @@ type Resolved = (skrifa::instance::Location, Arc<RunInstance>, f32);
 #[derive(Clone, Copy)]
 pub(super) struct Key<'items, 'styles> {
     pub(super) found: &'items FontMatch,
-    pub(super) style: &'styles InlineStyle,
+    pub(super) style: InstanceInputs<'styles>,
     pub(super) script: [u8; 4],
 }
 impl Key<'_, '_> {
@@ -40,8 +40,7 @@ impl Key<'_, '_> {
                         &other.found.variations,
                         authored_float,
                     )))
-            && (std::ptr::eq(self.style, other.style)
-                || same_instance_inputs(self.style, other.style))
+            && self.style.same(other.style)
     }
 }
 
@@ -218,11 +217,48 @@ fn eligible(key: Key<'_, '_>, features: &Arc<[harfrust::Feature]>) -> bool {
     eligible
 }
 
+/// The instance inputs of the style that prepared a window entry. Families,
+/// features and hyphen strings can be large and must not stay alive solely
+/// through this context's window cache.
+struct OwnedInstanceInputs {
+    font_size: f32,
+    font_size_adjust: Option<crate::style::FontSizeAdjust>,
+    font_optical_sizing: bool,
+    font_variations: Vec<crate::style::FontVariation>,
+    lang: Option<String>,
+}
+
+impl OwnedInstanceInputs {
+    fn new(inputs: InstanceInputs<'_>) -> Self {
+        Self {
+            font_size: inputs.font_size,
+            font_size_adjust: inputs.font_size_adjust,
+            font_optical_sizing: inputs.font_optical_sizing,
+            font_variations: inputs.font_variations.to_vec(),
+            lang: inputs.lang.map(str::to_owned),
+        }
+    }
+
+    fn view(&self) -> InstanceInputs<'_> {
+        InstanceInputs {
+            font_size: self.font_size,
+            font_size_adjust: self.font_size_adjust,
+            font_optical_sizing: self.font_optical_sizing,
+            font_variations: &self.font_variations,
+            lang: self.lang.as_deref(),
+        }
+    }
+
+    /// Heap bytes held.
+    fn bytes(&self) -> usize {
+        self.font_variations.capacity() * size_of::<crate::style::FontVariation>()
+            + self.lang.as_ref().map_or(0, String::capacity)
+    }
+}
+
 struct WindowEntry {
     found: Arc<FontMatch>,
-    /// The instance inputs of the style that prepared the entry, the only
-    /// fields `same_instance_inputs` compares.
-    style: InlineStyle,
+    style: OwnedInstanceInputs,
     script: [u8; 4],
     resolved: Resolved,
     warning: Option<ResolutionWarning>,
@@ -270,7 +306,7 @@ impl WindowInstances {
     ) -> Cached<'s> {
         let key = Key {
             found,
-            style,
+            style: style.instance_inputs(),
             script,
         };
         let prepared = match lookup_or_prepare(
@@ -280,7 +316,7 @@ impl WindowInstances {
                 Some((
                     Key {
                         found: &entry.found,
-                        style: &entry.style,
+                        style: entry.style.view(),
                         script: entry.script,
                     },
                     &entry.resolved,
@@ -299,8 +335,8 @@ impl WindowInstances {
             warning,
             bytes,
         } = prepared;
-        let style = instance_style(style);
-        let bytes = bytes + style_bytes(&style);
+        let style = OwnedInstanceInputs::new(style.instance_inputs());
+        let bytes = bytes + style.bytes();
         if bytes > BYTES {
             return Cached::Owned(resolved);
         }
@@ -320,28 +356,6 @@ impl WindowInstances {
         self.bytes += bytes;
         Cached::Borrowed(&self.entries.last().expect("inserted instance").resolved)
     }
-}
-
-/// Keep exactly the inputs compared by `same_instance_inputs`. Families,
-/// features and hyphen strings can be large and must not stay alive solely
-/// through this context's window cache.
-fn instance_style(style: &InlineStyle) -> InlineStyle {
-    let mut kept = InlineStyle {
-        font_families: Vec::new(),
-        font_size: style.font_size,
-        font_size_adjust: style.font_size_adjust,
-        font_optical_sizing: style.font_optical_sizing,
-        ..Default::default()
-    };
-    kept.font_variations.clone_from(&style.font_variations);
-    kept.lang.clone_from(&style.lang);
-    kept
-}
-
-/// Heap bytes held by a style from `instance_style`.
-fn style_bytes(style: &InlineStyle) -> usize {
-    style.font_variations.capacity() * size_of::<crate::style::FontVariation>()
-        + style.lang.as_ref().map_or(0, String::capacity)
 }
 
 fn retained_bytes(resolved: &Resolved) -> usize {
@@ -394,12 +408,12 @@ mod tests {
             assert_eq!(
                 Key {
                     found: &found,
-                    style: &a,
+                    style: a.instance_inputs(),
                     script: *b"Latn"
                 }
                 .matches(Key {
                     found: &found,
-                    style: &b,
+                    style: b.instance_inputs(),
                     script: *b"Latn"
                 }),
                 expected
@@ -424,7 +438,7 @@ mod tests {
             let value = cache.resolve(
                 Key {
                     found: &found,
-                    style,
+                    style: style.instance_inputs(),
                     script: *b"Latn",
                 },
                 &features,
@@ -457,7 +471,7 @@ mod tests {
             let value = cache.resolve(
                 Key {
                     found: &found,
-                    style,
+                    style: style.instance_inputs(),
                     script: *b"Latn",
                 },
                 &features,
@@ -477,7 +491,7 @@ mod tests {
             let value = cache.resolve(
                 Key {
                     found: &found,
-                    style: &large,
+                    style: large.instance_inputs(),
                     script: *b"Latn",
                 },
                 &features,
@@ -499,7 +513,7 @@ mod tests {
             cache.resolve(
                 Key {
                     found: &found,
-                    style: &style,
+                    style: style.instance_inputs(),
                     script: *b"Latn"
                 },
                 &features,
@@ -521,7 +535,7 @@ mod tests {
             let value = cache.resolve(
                 Key {
                     found: &found,
-                    style: &style,
+                    style: style.instance_inputs(),
                     script: *b"Latn",
                 },
                 &features,
