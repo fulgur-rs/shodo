@@ -819,15 +819,9 @@ fn shape_inputs<'a>(
                     ((shaper, instance, size), warning, inline_coords)
                 };
                 match window_instances.as_deref_mut() {
-                    Some(cache) => cache.resolve(
-                        found,
-                        original.style,
-                        styles,
-                        original.script,
-                        &features,
-                        warnings,
-                        prepare,
-                    ),
+                    Some(cache) => {
+                        cache.resolve(found, style, original.script, &features, warnings, prepare)
+                    }
                     None => instance_cache.resolve(
                         instance_cache::Key {
                             found,
@@ -1335,7 +1329,6 @@ pub(crate) fn shape_window_edit(
     let result =
         if replacement.is_none() && input::can_borrow(&data.shape_items[index..], &unit.text) {
             let mut instances = std::mem::take(&mut cx.window_instances);
-            instances.begin(data);
             let result = shape_inputs(
                 cx,
                 input::clipped_items(&data.shape_items[index..], unit.text.clone()),

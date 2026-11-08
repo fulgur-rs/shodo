@@ -1,7 +1,7 @@
 //! Bounded preparation reuse within one shape_inputs call. Keys borrow the
 //! paragraph's immutable input; only fully initialized instances are shared.
 //! `WindowInstances` extends the same reuse across the line-edge window
-//! shapes of one paragraph.
+//! shapes of every paragraph of a layout context.
 use super::instance::{ResolutionWarning, RunInstance};
 use crate::{
     font::FontMatch,
@@ -220,24 +220,27 @@ fn eligible(key: Key<'_, '_>, features: &Arc<[harfrust::Feature]>) -> bool {
 
 struct WindowEntry {
     found: Arc<FontMatch>,
-    style: u32,
+    /// The instance inputs of the style that prepared the entry, the only
+    /// fields `same_instance_inputs` compares.
+    style: InlineStyle,
     script: [u8; 4],
     resolved: Resolved,
     warning: Option<ResolutionWarning>,
     bytes: usize,
 }
 
-/// Prepared instances of the most recent paragraph's line-edge windows.
+/// Prepared instances of recent line-edge windows.
 ///
 /// A line scan shapes a window at many break candidates, and each call used
 /// to resolve the instance and read the font metrics again although the
-/// window repeats an input the paragraph already prepared. Entries are keyed
-/// by the paragraph's own style index and font match, so they are dropped
-/// whenever a window of another paragraph is shaped. Bounds and eligibility
-/// are those of `InstanceCache`.
+/// window repeats an input already prepared. Documents of many short
+/// paragraphs (table cells) shape one window per paragraph, so entries are
+/// keyed by face and instance inputs alone and serve every paragraph of the
+/// context. A face id names one registered face for the lifetime of its layer
+/// and layer ids are never reused, so an entry never matches another face.
+/// Bounds and eligibility are those of `InstanceCache`.
 #[derive(Default)]
 pub(crate) struct WindowInstances {
-    owner: Option<(u64, usize)>,
     entries: Vec<WindowEntry>,
     bytes: usize,
 }
@@ -252,28 +255,14 @@ impl std::fmt::Debug for WindowInstances {
 }
 
 impl WindowInstances {
-    pub(crate) fn begin(&mut self, data: &crate::paragraph::ParagraphData) {
-        let owner = (
-            data.id,
-            data as *const crate::paragraph::ParagraphData as usize,
-        );
-        if self.owner != Some(owner) {
-            self.clear();
-            self.owner = Some(owner);
-        }
-    }
-
     pub(crate) fn clear(&mut self) {
         *self = Self::default();
     }
 
-    /// `styles` must be the styles of the paragraph passed to `begin`.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn resolve<'s>(
         &'s mut self,
         found: &Arc<FontMatch>,
-        style: u32,
-        styles: &[InlineStyle],
+        style: &InlineStyle,
         script: [u8; 4],
         features: &Arc<[harfrust::Feature]>,
         warnings: &mut WarningSink,
@@ -281,7 +270,7 @@ impl WindowInstances {
     ) -> Cached<'s> {
         let key = Key {
             found,
-            style: &styles[style as usize],
+            style,
             script,
         };
         let prepared = match lookup_or_prepare(
@@ -291,7 +280,7 @@ impl WindowInstances {
                 Some((
                     Key {
                         found: &entry.found,
-                        style: &styles[entry.style as usize],
+                        style: &entry.style,
                         script: entry.script,
                     },
                     &entry.resolved,
@@ -310,6 +299,11 @@ impl WindowInstances {
             warning,
             bytes,
         } = prepared;
+        let style = instance_style(style);
+        let bytes = bytes + style_bytes(&style);
+        if bytes > BYTES {
+            return Cached::Owned(resolved);
+        }
         // FIFO eviction, as in `InstanceCache`; entries stay in insertion order.
         while self.bytes + bytes > BYTES || self.entries.len() == ENTRIES {
             let evicted = self.entries.remove(0);
@@ -326,6 +320,28 @@ impl WindowInstances {
         self.bytes += bytes;
         Cached::Borrowed(&self.entries.last().expect("inserted instance").resolved)
     }
+}
+
+/// Keep exactly the inputs compared by `same_instance_inputs`. Families,
+/// features and hyphen strings can be large and must not stay alive solely
+/// through this context's window cache.
+fn instance_style(style: &InlineStyle) -> InlineStyle {
+    let mut kept = InlineStyle {
+        font_families: Vec::new(),
+        font_size: style.font_size,
+        font_size_adjust: style.font_size_adjust,
+        font_optical_sizing: style.font_optical_sizing,
+        ..Default::default()
+    };
+    kept.font_variations.clone_from(&style.font_variations);
+    kept.lang.clone_from(&style.lang);
+    kept
+}
+
+/// Heap bytes held by a style from `instance_style`.
+fn style_bytes(style: &InlineStyle) -> usize {
+    style.font_variations.capacity() * size_of::<crate::style::FontVariation>()
+        + style.lang.as_ref().map_or(0, String::capacity)
 }
 
 fn retained_bytes(resolved: &Resolved) -> usize {
